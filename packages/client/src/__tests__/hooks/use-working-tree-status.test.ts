@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { renderHook } from '@testing-library/react';
 
@@ -19,12 +19,12 @@ const { useGitStatusForThreadMock, fetchForThread, fetchProjectStatus, storeStat
   };
 })();
 
-vi.mock('@/data/git-status/hooks', () => ({
+mock.module('@/data/git-status/hooks', () => ({
   useGitStatusForThread: useGitStatusForThreadMock,
   useProjectGitStatus: (projectId: string | null | undefined) =>
     projectId ? storeState.statusByProject[projectId] : undefined,
 }));
-vi.mock('@/data/git-status/actions', () => ({
+mock.module('@/data/git-status/actions', () => ({
   fetchForThread: storeState.fetchForThread,
   fetchProjectStatus: storeState.fetchProjectStatus,
 }));

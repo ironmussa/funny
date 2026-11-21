@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { err, ok } from 'neverthrow';
@@ -11,11 +11,11 @@ const mocks = (() => ({
   fetch: vi.fn(),
   terminal: vi.fn(),
 }))();
-vi.mock('@/lib/api/system', () => ({
+mock.module('@/lib/api/system', () => ({
   systemApi: { providerSetupStatus: mocks.status, installProviderTool: mocks.install },
 }));
-vi.mock('@/data/runner/queries', () => ({ refreshRunnerProviders: mocks.fetch }));
-vi.mock('@/lib/open-terminal-tab', () => ({ openProviderLoginTerminal: mocks.terminal }));
+mock.module('@/data/runner/queries', () => ({ refreshRunnerProviders: mocks.fetch }));
+mock.module('@/lib/open-terminal-tab', () => ({ openProviderLoginTerminal: mocks.terminal }));
 const missing = {
   provider: 'gemini',
   state: 'missing',

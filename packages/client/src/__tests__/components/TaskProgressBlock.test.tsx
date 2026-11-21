@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, setSystemTime, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, setSystemTime, vi, mock } from 'bun:test';
 
 import type { TaskProgress } from '@funny/shared/task-progress';
 import { act, screen } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { PROGRESS_POLL_MS } from '@/hooks/use-progress-file';
 import { renderWithProviders } from '../helpers/render';
 
 const apiMock = (() => ({ readFile: vi.fn() }))();
-vi.mock('@/lib/api', () => ({ api: apiMock }));
+mock.module('@/lib/api', () => ({ api: apiMock }));
 
 const PATH = '/tmp/funny-u1/task-lint.json';
 

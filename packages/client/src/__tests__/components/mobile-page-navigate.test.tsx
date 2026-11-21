@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -7,38 +7,38 @@ import { getNavigate } from '@/stores/thread-store-internals';
 
 // Store-driven actions must update the mobile route and open the target thread.
 
-vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
+mock.module('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
-vi.mock('@/hooks/use-ws', () => ({
+mock.module('@/hooks/use-ws', () => ({
   useWS: () => {},
   getActiveWS: () => null,
   subscribeActiveWS: () => () => {},
   sendTerminalRealtime: () => {},
 }));
 
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: (selector: (s: any) => any) =>
     selector({ loadProjects: () => Promise.resolve(), projects: [] }),
 }));
 
-vi.mock('@/stores/thread-context', () => ({
+mock.module('@/stores/thread-context', () => ({
   ThreadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
+mock.module('@/components/ui/sonner', () => ({ Toaster: () => null }));
 
-vi.mock('@/components/mobile/ProjectListView', () => ({
+mock.module('@/components/mobile/ProjectListView', () => ({
   ProjectListView: () => <div data-testid="screen-projects" />,
 }));
-vi.mock('@/components/mobile/ThreadListView', () => ({
+mock.module('@/components/mobile/ThreadListView', () => ({
   ThreadListView: ({ projectId }: { projectId: string }) => (
     <div data-testid={`screen-threads-${projectId}`} />
   ),
 }));
-vi.mock('@/components/mobile/NewThreadView', () => ({
+mock.module('@/components/mobile/NewThreadView', () => ({
   NewThreadView: () => <div data-testid="screen-new-thread" />,
 }));
-vi.mock('@/components/mobile/ChatView', () => ({
+mock.module('@/components/mobile/ChatView', () => ({
   ChatView: ({ projectId, threadId }: { projectId: string; threadId: string }) => (
     <div data-testid={`screen-chat-${projectId}-${threadId}`} />
   ),

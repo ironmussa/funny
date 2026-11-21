@@ -1,23 +1,23 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 // Window events must go through jsdom (see the helper).
 import { runAllTimersAsync } from '@funny/test-kit';
 
 const loaded: string[] = [];
 
-vi.mock('@/components/CommandPalette', () => {
+mock.module('@/components/CommandPalette', () => {
   loaded.push('command-palette');
   return { CommandPalette: () => null };
 });
-vi.mock('@/components/FileSearchDialog', () => {
+mock.module('@/components/FileSearchDialog', () => {
   loaded.push('file-search');
   return { FileSearchDialog: () => null };
 });
-vi.mock('@/components/AllThreadsView', () => {
+mock.module('@/components/AllThreadsView', () => {
   loaded.push('all-threads');
   return { AllThreadsView: () => null };
 });
-vi.mock('@/components/TextSearchDialog', () => {
+mock.module('@/components/TextSearchDialog', () => {
   loaded.push('text-search');
   return { TextSearchDialog: () => null };
 });

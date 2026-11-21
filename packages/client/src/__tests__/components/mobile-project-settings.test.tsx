@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -10,7 +10,7 @@ import { useProjectStore } from '@/stores/project-store';
 // Mobile project settings: the list shows every project option, tapping one
 // drills into its page, and Back returns to the list (not out of settings).
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
     i18n: { language: 'en' },
@@ -18,18 +18,18 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: (selector: (s: any) => any) =>
     selector({ projects: [{ id: 'p1', name: 'Proj', role: 'owner', userId: 'u1' }] }),
 }));
 
-vi.mock('@/stores/auth-store', () => ({
+mock.module('@/stores/auth-store', () => ({
   useAuthStore: (selector: (s: any) => any) => selector({ user: { id: 'u1', role: 'user' } }),
 }));
 
 // Render each settings page as a marker so we can assert which one is shown,
 // without pulling in Monaco / heavy panels.
-vi.mock('@/components/settings/SettingsPageContent', () => ({
+mock.module('@/components/settings/SettingsPageContent', () => ({
   SettingsPageContent: ({ page }: { page: string }) => (
     <div data-testid="settings-page-content" data-page={page} />
   ),

@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 
 const listThreadsWithSessions = vi.fn((_userId: string): string[] => []);
-vi.mock('../../services/browser-session-manager.js', () => ({
+mock.module('../../services/browser-session-manager.js', () => ({
   browserSessionManager: { listThreadsWithSessions },
 }));
 

@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const metric = (() => vi.fn())();
 const info = (() => vi.fn())();
-vi.mock('../../../lib/telemetry.js', () => ({ metric }));
-vi.mock('../../../lib/logger.js', () => ({ log: { info } }));
+mock.module('../../../lib/telemetry.js', () => ({ metric }));
+mock.module('../../../lib/logger.js', () => ({ log: { info } }));
 
 import { recordBashCheck } from '../../../services/checks/bash-check-metric.js';
 

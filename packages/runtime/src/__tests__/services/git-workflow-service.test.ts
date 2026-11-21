@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -7,12 +7,12 @@ const mocks = (() => ({
   getPipelineForProject: vi.fn(),
 }))();
 
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
-vi.mock('../../services/pipeline-manager.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
+mock.module('../../services/pipeline-manager.js', () => ({
   getPipelineForProject: mocks.getPipelineForProject,
 }));
-vi.mock('../../services/project-hooks-service.js', () => ({ listHooks: () => [] }));
-vi.mock('../../services/workflow-event-helpers.js', () => ({ emitWorkflowEvent: vi.fn() }));
+mock.module('../../services/project-hooks-service.js', () => ({ listHooks: () => [] }));
+mock.module('../../services/workflow-event-helpers.js', () => ({ emitWorkflowEvent: vi.fn() }));
 
 import { executeWorkflow } from '../../services/git-workflow-service.js';
 

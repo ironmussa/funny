@@ -10,9 +10,9 @@
  * exactly the failure mode we just fixed.
  */
 
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
-vi.mock('@/lib/client-logger', () => ({
+mock.module('@/lib/client-logger', () => ({
   createClientLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 

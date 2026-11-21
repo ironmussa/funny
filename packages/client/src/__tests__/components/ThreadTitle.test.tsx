@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { screen } from '@testing-library/react';
 
@@ -6,7 +6,7 @@ import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
     i18n: { language: 'en' },

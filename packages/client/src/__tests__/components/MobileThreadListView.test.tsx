@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from 'bun:test';
+import { beforeEach, expect, test, vi, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
 import { act, fireEvent, screen } from '@testing-library/react';
@@ -12,7 +12,7 @@ import { useAppStore } from '@/stores/app-store';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: ({
     count,
     estimateSize,
@@ -43,11 +43,11 @@ vi.mock('@tanstack/react-virtual', () => ({
 }));
 
 const { threads } = (() => ({ threads: new Array<Thread>() }))();
-vi.mock('@/lib/thread-selectors', () => ({ useThreadsForProject: () => threads }));
+mock.module('@/lib/thread-selectors', () => ({ useThreadsForProject: () => threads }));
 
 const ensureStatus = (() => vi.fn())();
 const actualDataGitStatusActions = { ...(await import('@/data/git-status/actions')) };
-vi.mock('@/data/git-status/actions', () => ({
+mock.module('@/data/git-status/actions', () => ({
   ...actualDataGitStatusActions,
   ensureStatusForThreads: ensureStatus,
 }));

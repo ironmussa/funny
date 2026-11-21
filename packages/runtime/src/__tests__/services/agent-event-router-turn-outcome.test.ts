@@ -2,7 +2,7 @@
  * Every finished run records how the latest user turn ended (`turn_outcome`),
  * so a stopped turn still reads as stopped after later turns or a reload.
  */
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -16,7 +16,7 @@ import {
 } from '../helpers/builders.js';
 
 const saveThreadEvent = (() => vi.fn(async () => undefined))();
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { getProject: vi.fn(async () => ({ id: 'p-1', path: '/tmp/proj' })) },
     threadEvents: { saveThreadEvent },

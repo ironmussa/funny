@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -20,8 +20,8 @@ const mocks = ((): ThreadModeMocks => ({
   save: vi.fn(),
 }))();
 
-vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => true }));
-vi.mock('@/data/runner/hooks', () => ({
+mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => true }));
+mock.module('@/data/runner/hooks', () => ({
   useProjectSandbox: () => {
     mocks.sandboxReads += 1;
     return {
@@ -30,12 +30,12 @@ vi.mock('@/data/runner/hooks', () => ({
     };
   },
 }));
-vi.mock('@/data/runner/actions', () => ({ saveProjectSandbox: mocks.save }));
-vi.mock('@/stores/auth-store', () => ({
+mock.module('@/data/runner/actions', () => ({ saveProjectSandbox: mocks.save }));
+mock.module('@/stores/auth-store', () => ({
   useAuthStore: (select: (s: { user: { id: string } }) => unknown) =>
     select({ user: { id: 'alice' } }),
 }));
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
 }));
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
@@ -8,7 +8,7 @@ import { useRankedFileSearch } from '@/hooks/use-ranked-file-search';
 
 const { searchFiles } = (() => ({ searchFiles: vi.fn() }))();
 
-vi.mock('@/lib/api', () => ({ api: { searchFiles } }));
+mock.module('@/lib/api', () => ({ api: { searchFiles } }));
 
 const response = {
   matches: [{ path: 'src/app.ts', indices: [4, 5, 6] }],

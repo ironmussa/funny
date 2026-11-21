@@ -3,14 +3,14 @@
  * and the disconnected screen is the only place a session error shows then.
  */
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, cleanup, render, screen } from '@testing-library/react';
 
-vi.mock('@/lib/browser-session-client', () => ({
+mock.module('@/lib/browser-session-client', () => ({
   browserSessionClient: { heartbeat: vi.fn(), input: vi.fn() },
 }));
-vi.mock('@/components/browser-panel/BrowserSessionCanvas', () => ({
+mock.module('@/components/browser-panel/BrowserSessionCanvas', () => ({
   BrowserSessionCanvas: () => <canvas />,
 }));
 

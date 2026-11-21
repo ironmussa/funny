@@ -1,17 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const mocks = (() => ({
   emitToUser: vi.fn(),
   invalidateProjectStatus: vi.fn(),
 }))();
 
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
-vi.mock('../../services/git-runtime-service.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
+mock.module('../../services/git-runtime-service.js', () => ({
   GIT_STATUS_CACHE_TTL_MS: 2_000,
   gitStatusCache: new Map(),
   gitRuntimeService: { invalidateProjectStatus: mocks.invalidateProjectStatus },
 }));
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   metric: vi.fn(),
   startSpan: vi.fn(() => ({ end: vi.fn() })),
 }));

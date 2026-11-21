@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Thread, ThreadRuntime } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
@@ -10,15 +10,15 @@ interface ThreadRef {
 
 const thread = ((): ThreadRef => ({ current: {} }))();
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/api', () => ({
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/lib/api', () => ({
   api: { listProjectMembers: () => okAsync({ members: [] }) },
 }));
-vi.mock('@/lib/api/threads', () => ({
+mock.module('@/lib/api/threads', () => ({
   threadsApi: { listThreadShares: () => okAsync([]) },
 }));
 const actualStoresThreadContext = { ...(await import('@/stores/thread-context')) };
-vi.mock('@/stores/thread-context', () => ({
+mock.module('@/stores/thread-context', () => ({
   ...actualStoresThreadContext,
   useThreadSelector: (selector: (t: unknown) => unknown) => selector(thread.current),
 }));

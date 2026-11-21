@@ -1,4 +1,4 @@
-import { afterAll, expect, test, vi } from 'bun:test';
+import { afterAll, expect, test, vi, mock } from 'bun:test';
 
 /**
  * A tool call is silent until its tool returns, and some run long (a
@@ -11,7 +11,7 @@ import { afterAll, expect, test, vi } from 'bun:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

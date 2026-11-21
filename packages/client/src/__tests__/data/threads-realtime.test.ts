@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
 import { runAllTimersAsync } from '@funny/test-kit';
@@ -24,7 +24,7 @@ const mockApi = (() => ({
   getThread: vi.fn(),
   getThreadEvents: vi.fn(),
 }))();
-vi.mock('@/lib/api', () => ({ api: mockApi }));
+mock.module('@/lib/api', () => ({ api: mockApi }));
 
 function thread(id: string, overrides: Partial<Thread> = {}): Thread {
   return buildThread({

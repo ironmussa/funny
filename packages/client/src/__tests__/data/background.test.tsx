@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Job, Watcher } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -20,15 +20,15 @@ const api = (() => ({
   listWatchers: vi.fn(),
   cancelWatcher: vi.fn(),
 }))();
-vi.mock('@/lib/api/jobs', () => ({
+mock.module('@/lib/api/jobs', () => ({
   jobsApi: { listJobs: api.listJobs, cancelJob: api.cancelJob },
 }));
-vi.mock('@/lib/api/watchers', () => ({
+mock.module('@/lib/api/watchers', () => ({
   watchersApi: { listWatchers: api.listWatchers, cancelWatcher: api.cancelWatcher },
 }));
 
 const effects = (() => ({ emit: vi.fn() }))();
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -29,7 +29,7 @@ const apiMocks = (() => ({
   readFile: vi.fn(() => Promise.resolve({ isErr: () => true })),
 }))();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: { language: 'en' },
@@ -37,7 +37,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/components/VirtualDiff', () => ({
+mock.module('@/components/VirtualDiff', () => ({
   VirtualDiff: ({
     'data-testid': testId,
     unifiedDiff,
@@ -47,21 +47,21 @@ vi.mock('@/components/VirtualDiff', () => ({
   }) => <div data-testid={testId ?? 'virtual-diff'} data-unified-diff={unifiedDiff ?? ''} />,
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getFileDiff: apiMocks.getFileDiff,
     readFile: apiMocks.readFile,
   },
 }));
 
-vi.mock('@/stores/thread-context', () => ({
+mock.module('@/stores/thread-context', () => ({
   useThreadId: () => 'thread-1',
   useThreadProjectId: () => undefined,
   useThreadWorktreePath: () => undefined,
   useThreadSelector: () => undefined,
 }));
 
-vi.mock('@/stores/project-store', () => ({
+mock.module('@/stores/project-store', () => ({
   useProjectStore: Object.assign(
     (selector: (state: { projects: never[] }) => unknown) => selector({ projects: [] }),
     {
@@ -71,7 +71,7 @@ vi.mock('@/stores/project-store', () => ({
   ),
 }));
 
-vi.mock('@/stores/settings-store', () => ({
+mock.module('@/stores/settings-store', () => ({
   DIFF_ROW_HEIGHT_PX: { small: 18, default: 20, large: 23 },
   editorLabels: { cursor: 'Cursor' },
   useSettingsStore: Object.assign(

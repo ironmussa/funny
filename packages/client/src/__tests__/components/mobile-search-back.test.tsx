@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -8,16 +8,16 @@ import { MemoryRouter } from 'react-router-dom';
 // jump all the way back to the project's thread list. Previously ChatView's
 // onBack always went to the `threads` screen, dropping the user out of search.
 
-vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
+mock.module('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
-vi.mock('@/hooks/use-ws', () => ({
+mock.module('@/hooks/use-ws', () => ({
   useWS: () => {},
   getActiveWS: () => null,
   subscribeActiveWS: () => () => {},
   sendTerminalRealtime: () => {},
 }));
 
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: (selector: (s: any) => any) =>
     selector({
       loadProjects: () => Promise.resolve(),
@@ -25,19 +25,19 @@ vi.mock('@/stores/app-store', () => ({
     }),
 }));
 
-vi.mock('@/stores/thread-context', () => ({
+mock.module('@/stores/thread-context', () => ({
   ThreadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
+mock.module('@/components/ui/sonner', () => ({ Toaster: () => null }));
 
-vi.mock('@/components/mobile/ProjectListView', () => ({
+mock.module('@/components/mobile/ProjectListView', () => ({
   ProjectListView: ({ onSelect }: { onSelect: (id: string) => void }) => (
     <button data-testid="select-project" onClick={() => onSelect('p1')} />
   ),
 }));
 
-vi.mock('@/components/mobile/ThreadListView', () => ({
+mock.module('@/components/mobile/ThreadListView', () => ({
   ThreadListView: ({ onSearch }: { onSearch: () => void }) => (
     <div data-testid="screen-threads">
       <button data-testid="open-search" onClick={onSearch} />
@@ -45,11 +45,11 @@ vi.mock('@/components/mobile/ThreadListView', () => ({
   ),
 }));
 
-vi.mock('@/components/mobile/NewThreadView', () => ({
+mock.module('@/components/mobile/NewThreadView', () => ({
   NewThreadView: () => <div data-testid="screen-new-thread" />,
 }));
 
-vi.mock('@/components/mobile/SearchView', () => ({
+mock.module('@/components/mobile/SearchView', () => ({
   SearchView: ({
     query,
     onSelectThread,
@@ -63,7 +63,7 @@ vi.mock('@/components/mobile/SearchView', () => ({
   ),
 }));
 
-vi.mock('@/components/mobile/ChatView', () => ({
+mock.module('@/components/mobile/ChatView', () => ({
   ChatView: ({ onBack }: { onBack: () => void }) => (
     <button data-testid="chat-back" onClick={onBack} />
   ),

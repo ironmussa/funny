@@ -7,7 +7,7 @@
  * `draftMessages[0]` threw "undefined is not an object".
  */
 
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { mocked, waitFor } from '@funny/test-kit';
 
@@ -41,15 +41,15 @@ const mocks = (() => ({
   },
 }))();
 
-vi.mock('../../services/agent-resources/resolver.js', () => ({
+mock.module('../../services/agent-resources/resolver.js', () => ({
   resolveAgentResources: mocks.resolveAgentResources,
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/agent-runner-control.js', () => ({
+mock.module('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(async () => undefined),
   stopAgent: vi.fn(async () => undefined),
   isAgentRunning: vi.fn(() => false),
@@ -58,36 +58,36 @@ vi.mock('../../services/agent-runner-control.js', () => ({
   respondToPermission: vi.fn(async () => false),
 }));
 
-vi.mock('../../services/ingest-mapper.js', () => ({
+mock.module('../../services/ingest-mapper.js', () => ({
   cleanupExternalThread: vi.fn(),
 }));
 
-vi.mock('../../services/permission-rules-client.js', () => ({
+mock.module('../../services/permission-rules-client.js', () => ({
   listPermissionRules: vi.fn(async (): Promise<any[]> => []),
   createPermissionRule: vi.fn(async () => undefined),
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emit: vi.fn(), emitToUser: vi.fn() },
 }));
 
-vi.mock('../../utils/file-mentions.js', () => ({
+mock.module('../../utils/file-mentions.js', () => ({
   augmentPromptWithFiles: vi.fn(async (content: string) => content),
   augmentPromptWithSymbols: vi.fn(async (content: string) => content),
   hydrateReferencedFiles: vi.fn(async (content: string) => content),
   stripInlineReferencedContent: vi.fn((content: string) => content),
 }));
 
-vi.mock('../../services/thread-manager.js', () => mocks.tm);
-vi.mock('../../services/thread-service/staged-uploads.js', () => ({
+mock.module('../../services/thread-manager.js', () => mocks.tm);
+mock.module('../../services/thread-service/staged-uploads.js', () => ({
   releaseStagedUploads: mocks.releaseStagedUploads,
   adoptStagedUploads: mocks.adoptStagedUploads,
 }));
-vi.mock('../../services/remote-thread-data-client.js', () => ({
+mock.module('../../services/remote-thread-data-client.js', () => ({
   invalidateThreadCache: mocks.invalidateThreadCache,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: mocks.projects,
     agentProfiles: { resolveEffectiveProfile: vi.fn(async () => ({})) },

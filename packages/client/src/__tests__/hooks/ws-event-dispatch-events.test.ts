@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 // Window events must go through jsdom (see the helper).
 import { mocked, waitFor } from '@funny/test-kit';
@@ -46,7 +46,7 @@ const {
   };
 })();
 
-vi.mock('@/stores/commit-progress-store', () => ({
+mock.module('@/stores/commit-progress-store', () => ({
   useCommitProgressStore: {
     getState: () => ({
       startCommit: mockStartCommit,
@@ -58,23 +58,23 @@ vi.mock('@/stores/commit-progress-store', () => ({
   },
 }));
 
-vi.mock('@/stores/review-pane-store', () => ({
+mock.module('@/stores/review-pane-store', () => ({
   useReviewPaneStore: {
     getState: () => ({ notifyDirty: mockNotifyDirty }),
   },
 }));
 
-vi.mock('@/data/projects/branches', () => ({
+mock.module('@/data/projects/branches', () => ({
   fetchProjectBranches: mockFetchProjectBranches,
 }));
 
-vi.mock('@/stores/runner-status-store', () => ({
+mock.module('@/stores/runner-status-store', () => ({
   useRunnerStatusStore: {
     getState: () => ({ setStatus: mockSetRunnerStatus }),
   },
 }));
 
-vi.mock('@/stores/terminal-store', () => ({
+mock.module('@/stores/terminal-store', () => ({
   useTerminalStore: {
     getState: () => ({
       emitPtyData: mockEmitPtyData,
@@ -92,7 +92,7 @@ const gitActionOverrides = (() => {
   return overrides;
 })();
 const actualDataGitStatusActions = { ...(await import('@/data/git-status/actions')) };
-vi.mock('@/data/git-status/actions', () => {
+mock.module('@/data/git-status/actions', () => {
   const real = actualDataGitStatusActions;
   const wrapped: Record<string, (...args: any[]) => unknown> = {};
   for (const [name, fn] of Object.entries(real)) {
@@ -101,30 +101,30 @@ vi.mock('@/data/git-status/actions', () => {
   return wrapped;
 });
 
-vi.mock('@/hooks/dispatch-test-events', () => ({
+mock.module('@/hooks/dispatch-test-events', () => ({
   dispatchTestEvent: mockDispatchTestEvent,
 }));
 
-vi.mock('@/hooks/dispatch-browser-session-events', () => ({
+mock.module('@/hooks/dispatch-browser-session-events', () => ({
   dispatchBrowserSessionEvent: mockDispatchBrowserSessionEvent,
 }));
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: {
     error: mockToastError,
     success: mockToastSuccess,
   },
 }));
 
-vi.mock('@/hooks/use-notifications', () => ({
+mock.module('@/hooks/use-notifications', () => ({
   showAgentNotification: mockShowAgentNotification,
 }));
 
-vi.mock('@/hooks/use-preview-window', () => ({
+mock.module('@/hooks/use-preview-window', () => ({
   closePreviewForCommand: vi.fn(),
 }));
 
-vi.mock('@/stores/settings-store', () => ({
+mock.module('@/stores/settings-store', () => ({
   useSettingsStore: {
     getState: () => ({
       notificationsEnabled: true,
@@ -134,7 +134,7 @@ vi.mock('@/stores/settings-store', () => ({
 }));
 
 const actualStoresThreadStoreInternals = { ...(await import('@/stores/thread-store-internals')) };
-vi.mock('@/stores/thread-store-internals', () => {
+mock.module('@/stores/thread-store-internals', () => {
   const actual = actualStoresThreadStoreInternals;
   return {
     ...actual,

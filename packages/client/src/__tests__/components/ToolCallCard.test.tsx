@@ -1,8 +1,8 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: { language: 'en' },
@@ -10,13 +10,13 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/stores/thread-context', () => ({
+mock.module('@/stores/thread-context', () => ({
   useThreadProjectId: () => undefined,
   useThreadWorktreePath: () => undefined,
   useThreadSelector: () => undefined,
 }));
 
-vi.mock('@/stores/project-store', () => {
+mock.module('@/stores/project-store', () => {
   const useProjectStore = Object.assign(
     (selector: (state: { projects: never[] }) => unknown) => selector({ projects: [] }),
     { subscribe: () => () => {} },
@@ -25,13 +25,13 @@ vi.mock('@/stores/project-store', () => {
 });
 
 const actualSettingsStore = { ...(await import('@/stores/settings-store')) };
-vi.mock('@/stores/settings-store', () => ({
+mock.module('@/stores/settings-store', () => ({
   ...actualSettingsStore,
   useSettingsStore: (selector: (state: { defaultEditor: string }) => unknown) =>
     selector({ defaultEditor: 'cursor' }),
 }));
 
-vi.mock('@/components/tool-cards/dispatch', () => ({
+mock.module('@/components/tool-cards/dispatch', () => ({
   dispatchToolCard: () => null,
 }));
 

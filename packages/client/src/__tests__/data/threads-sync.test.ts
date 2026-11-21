@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -27,10 +27,10 @@ const mockApi = (() => ({
   archiveThread: vi.fn(),
   updateThreadStage: vi.fn(),
 }))();
-vi.mock('@/lib/api', () => ({ api: mockApi }));
+mock.module('@/lib/api', () => ({ api: mockApi }));
 
 const emitted = ((): unknown[] => [])();
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects: { emit: (effect: unknown) => emitted.push(effect) } } },
 }));
 

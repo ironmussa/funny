@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, screen } from '@testing-library/react';
 
@@ -17,20 +17,20 @@ const mocks = (() => ({
   trackFileSelection: vi.fn(),
 }))();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/hooks/use-ranked-file-search', () => ({
+mock.module('@/hooks/use-ranked-file-search', () => ({
   useRankedFileSearch: mocks.rankedSearch,
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { trackFileSelection: mocks.trackFileSelection },
 }));
 
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 32,
     getVirtualItems: () =>

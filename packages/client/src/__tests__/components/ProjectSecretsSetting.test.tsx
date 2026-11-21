@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
@@ -26,17 +26,17 @@ const mocks = ((): SecretMocks => ({
   canSteer: true,
 }))();
 
-vi.mock('@/data/projects/hooks', () => ({
+mock.module('@/data/projects/hooks', () => ({
   useCanManageProject: () => mocks.canManage,
   useCanSteerProject: () => mocks.canSteer,
 }));
-vi.mock('@/data/project-secrets/hooks', () => ({ useProjectSecrets: () => mocks.secrets }));
-vi.mock('@/data/project-secrets/actions', () => ({
+mock.module('@/data/project-secrets/hooks', () => ({ useProjectSecrets: () => mocks.secrets }));
+mock.module('@/data/project-secrets/actions', () => ({
   setProjectSecret: (input: unknown) => mocks.set(input),
   deleteProjectSecret: (...args: unknown[]) => mocks.remove(...args),
 }));
-vi.mock('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
-vi.mock('react-i18next', () => ({
+mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (_k: string, fallback?: string, vars?: Record<string, unknown>) =>
       (fallback ?? _k).replace(/\{\{(\w+)\}\}/g, (_m, name) => String(vars?.[name] ?? '')),

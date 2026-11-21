@@ -1,11 +1,11 @@
-import { vi, describe, test, expect, beforeEach } from 'bun:test';
+import { vi, describe, test, expect, beforeEach, mock } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { mocked } from '@funny/test-kit';
 
-vi.mock('../git/process.js', () => ({
+mock.module('../git/process.js', () => ({
   executeShell: vi.fn(),
   execute: vi.fn(),
   gitRead: vi.fn(),
@@ -13,17 +13,17 @@ vi.mock('../git/process.js', () => ({
   SHELL: 'sh',
 }));
 
-vi.mock('../ports/config-reader.js', () => ({
+mock.module('../ports/config-reader.js', () => ({
   readProjectConfig: vi.fn(),
 }));
-vi.mock('../ports/port-allocator.js', () => ({
+mock.module('../ports/port-allocator.js', () => ({
   allocatePorts: vi.fn(),
 }));
-vi.mock('../ports/env-writer.js', () => ({
+mock.module('../ports/env-writer.js', () => ({
   copyAndOverrideEnv: vi.fn(),
   readAllocatedPorts: vi.fn(),
 }));
-vi.mock('../git/worktree.js', () => ({
+mock.module('../git/worktree.js', () => ({
   getWorktreeBasePaths: vi.fn(),
 }));
 

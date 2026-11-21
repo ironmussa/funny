@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -8,16 +8,16 @@ import { mockT } from '../helpers/mock-i18n';
 const mockListWorktrees = (() => vi.fn())();
 const mockListBranches = (() => vi.fn())();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { listWorktrees: mockListWorktrees, listBranches: mockListBranches },
 }));
 
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: <T,>(sel: (s: { selectedProjectId: string }) => T): T =>
     sel({ selectedProjectId: 'p1' }),
 }));

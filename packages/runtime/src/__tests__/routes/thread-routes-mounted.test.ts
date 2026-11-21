@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 import { errAsync, okAsync } from 'neverthrow';
@@ -27,25 +27,25 @@ const mocks = (() => ({
   updateQueuedMessage: vi.fn(),
 }))();
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   metric: vi.fn(),
   startSpan: vi.fn(() => ({ end: vi.fn() })),
 }));
 
-vi.mock('../../middleware/tracing.js', () => ({
+mock.module('../../middleware/tracing.js', () => ({
   requestSpan: vi.fn(() => ({ end: vi.fn() })),
 }));
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
   updateToolCallOutput: mocks.updateToolCallOutput,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { isProjectInOrg: mocks.isProjectInOrg },
     threadEvents: { getThreadEvents: mocks.getThreadEvents },
@@ -53,12 +53,12 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../services/thread-service/create.js', () => ({
+mock.module('../../services/thread-service/create.js', () => ({
   createIdleThread: mocks.createIdleThread,
   createAndStartThread: mocks.createAndStartThread,
 }));
 
-vi.mock('../../services/thread-service/messaging.js', () => ({
+mock.module('../../services/thread-service/messaging.js', () => ({
   sendMessage: mocks.sendMessage,
   stopThread: mocks.stopThread,
   approveToolCall: mocks.approveToolCall,
@@ -67,20 +67,20 @@ vi.mock('../../services/thread-service/messaging.js', () => ({
   updateQueuedMessage: mocks.updateQueuedMessage,
 }));
 
-vi.mock('../../services/thread-service/fork.js', () => ({
+mock.module('../../services/thread-service/fork.js', () => ({
   forkThread: mocks.forkThread,
 }));
 
-vi.mock('../../services/thread-service/upload.js', () => ({
+mock.module('../../services/thread-service/upload.js', () => ({
   uploadFile: mocks.uploadFile,
 }));
 
-vi.mock('../../services/thread-service/rewind.js', () => ({
+mock.module('../../services/thread-service/rewind.js', () => ({
   forkAndRewind: mocks.forkAndRewind,
   rewindCode: mocks.rewindCode,
 }));
 
-vi.mock('../../services/thread-service/update.js', () => ({
+mock.module('../../services/thread-service/update.js', () => ({
   convertToWorktree: mocks.convertToWorktree,
 }));
 

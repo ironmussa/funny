@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 
@@ -8,7 +8,7 @@ import { buildReviewThread } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
 
 const viewport = (() => ({ mobile: false }))();
-vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
+mock.module('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
 
 interface DiffPropsRef {
   current: Record<string, any> | null;
@@ -16,7 +16,7 @@ interface DiffPropsRef {
 
 const diffProps = ((): DiffPropsRef => ({ current: null }))();
 
-vi.mock('@/components/VirtualDiff', () => ({
+mock.module('@/components/VirtualDiff', () => ({
   VirtualDiff: (props: { 'data-testid'?: string; viewMode?: string }) => {
     diffProps.current = props;
     return (
@@ -25,7 +25,7 @@ vi.mock('@/components/VirtualDiff', () => ({
   },
 }));
 
-vi.mock('@/components/thread/MessageContent', () => ({
+mock.module('@/components/thread/MessageContent', () => ({
   MessageContent: ({ content }: { content: string }) => (
     <article data-testid="rendered-markdown">{content}</article>
   ),

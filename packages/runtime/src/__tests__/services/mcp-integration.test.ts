@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi, beforeEach } from 'bun:test';
+import { afterEach, describe, expect, test, vi, beforeEach, mock } from 'bun:test';
 
 import { stubEnv, unstubAllEnvs } from '@funny/test-kit';
 
@@ -9,12 +9,12 @@ const fsMocks = (() => ({
 
 const executeMock = (() => vi.fn())();
 
-vi.mock('node:fs/promises', () => ({
+mock.module('node:fs/promises', () => ({
   readFile: fsMocks.readFile,
   writeFile: fsMocks.writeFile,
 }));
 
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   execute: executeMock,
   ProcessExecutionError: class ProcessExecutionError extends Error {
     exitCode: number;
@@ -27,7 +27,7 @@ vi.mock('@funny/core/git', () => ({
   },
 }));
 
-vi.mock('../../utils/claude-binary.js', () => ({
+mock.module('../../utils/claude-binary.js', () => ({
   getClaudeBinaryPath: () => '/usr/bin/claude',
 }));
 

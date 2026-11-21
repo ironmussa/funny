@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { advanceTimersByTimeAsync, expectRejection } from '@funny/test-kit';
 
-vi.mock('../../services/grpc-operation-outbox.js', () => ({
+mock.module('../../services/grpc-operation-outbox.js', () => ({
   GrpcOperationOutbox: class {
     enqueue = vi.fn();
     pending = vi.fn(() => []);

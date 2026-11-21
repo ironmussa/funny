@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 const mocks = (() => ({
   startWatching: vi.fn(),
@@ -11,27 +11,27 @@ const mocks = (() => ({
   getThreadTrace: vi.fn(() => undefined),
 }))();
 
-vi.mock('../../services/git-watcher-service.js', () => ({
+mock.module('../../services/git-watcher-service.js', () => ({
   startWatching: mocks.startWatching,
   stopWatching: mocks.stopWatching,
 }));
 
-vi.mock('../../services/pipeline-manager.js', () => ({
+mock.module('../../services/pipeline-manager.js', () => ({
   getPipelineForProject: mocks.getPipelineForProject,
   startPipelineRun: mocks.startPipelineRun,
 }));
 
-vi.mock('../../services/git-workflow-service.js', () => ({
+mock.module('../../services/git-workflow-service.js', () => ({
   isWorkflowActive: mocks.isWorkflowActive,
 }));
 
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   metric: mocks.metric,
   startSpan: mocks.startSpan,
   getThreadTrace: mocks.getThreadTrace,
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

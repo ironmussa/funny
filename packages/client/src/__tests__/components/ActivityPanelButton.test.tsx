@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Job, Watcher } from '@funny/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -19,9 +19,9 @@ import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
 const actions = (() => ({ cancelJob: vi.fn(), cancelWatcher: vi.fn() }))();
-vi.mock('@/data/background/actions', () => actions);
+mock.module('@/data/background/actions', () => actions);
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -165,12 +165,12 @@ const activityActions = (() => ({
   dismissActivity: vi.fn(),
   clearFinishedActivities: vi.fn(),
 }))();
-vi.mock('@/data/activities/actions', () => activityActions);
+mock.module('@/data/activities/actions', () => activityActions);
 
 const navigate = (() => vi.fn())();
 // bun has no importOriginal: copy the real module before mocking it.
 const actualRouter = { ...(await import('react-router-dom')) };
-vi.mock('react-router-dom', () => ({
+mock.module('react-router-dom', () => ({
   ...actualRouter,
   useNavigate: () => navigate,
 }));

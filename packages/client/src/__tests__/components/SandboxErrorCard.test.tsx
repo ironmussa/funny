@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import type { ThreadEvent } from '@funny/shared';
 import { screen } from '@testing-library/react';
@@ -8,7 +8,7 @@ import { SandboxErrorCard } from '@/components/thread/SandboxErrorCard';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));

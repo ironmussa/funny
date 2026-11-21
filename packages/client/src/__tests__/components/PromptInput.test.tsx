@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { screen, fireEvent, waitFor, type RenderResult } from '@testing-library/react';
@@ -9,7 +9,7 @@ import { installTestDataLayer } from '../helpers/data-layer-harness';
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 const actualLibApiSystem = { ...(await import('@/lib/api/system')) };
-vi.mock('@/lib/api/system', () => {
+mock.module('@/lib/api/system', () => {
   const actual = actualLibApiSystem;
   return {
     ...actual,
@@ -36,17 +36,17 @@ vi.mock('@/lib/api/system', () => {
 });
 
 // The model picker, sandbox toggle and branch context load these on mount.
-vi.mock('@/lib/api/infra', () => ({
+mock.module('@/lib/api/infra', () => ({
   infraApi: {
     listInfraConnections: vi.fn(() => okAsync({ connections: [] })),
     getProjectSandbox: vi.fn(() => okAsync({ settings: null })),
   },
 }));
-vi.mock('@/lib/api/profile', () => ({
+mock.module('@/lib/api/profile', () => ({
   profileApi: { getProfile: vi.fn(() => okAsync({})), updateProfile: vi.fn(() => okAsync({})) },
 }));
 const actualLibApiProjects = { ...(await import('@/lib/api/projects')) };
-vi.mock('@/lib/api/projects', () => {
+mock.module('@/lib/api/projects', () => {
   const actual = actualLibApiProjects;
   return {
     projectsApi: {
@@ -60,7 +60,7 @@ vi.mock('@/lib/api/projects', () => {
 
 // ── Mocks ───────────────────────────────────────────────────────
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
     i18n: { language: 'en' },
@@ -93,18 +93,18 @@ const apiMock = {
   cancelQueuedMessage: vi.fn().mockReturnValue(okAsync({ ok: true, queuedCount: 0 })),
 };
 
-vi.mock('@/lib/api', () => ({ api: apiMock }));
+mock.module('@/lib/api', () => ({ api: apiMock }));
 
 // The queue data layer calls threadsApi directly; route it to the mocked api.
-vi.mock('@/lib/api/threads', () => ({ threadsApi: apiMock }));
+mock.module('@/lib/api/threads', () => ({ threadsApi: apiMock }));
 
-vi.mock('@/components/ImageLightbox', () => ({
+mock.module('@/components/ImageLightbox', () => ({
   ImageLightbox: () => null,
 }));
 
 // Mock PromptEditor with a simple textarea to avoid TipTap contentEditable complexities
 let mockEditorContent = '';
-vi.mock('@/components/prompt-editor/PromptEditor', () => {
+mock.module('@/components/prompt-editor/PromptEditor', () => {
   const { forwardRef, useImperativeHandle, useState, useRef, useEffect } = require('react');
   return {
     PromptEditor: forwardRef(function MockPromptEditor(props: any, ref: any) {
@@ -181,7 +181,7 @@ vi.mock('@/components/prompt-editor/PromptEditor', () => {
 });
 
 // Mock serialize to work with the mock editor's simple JSON
-vi.mock('@/components/prompt-editor/serialize', () => ({
+mock.module('@/components/prompt-editor/serialize', () => ({
   serializeEditorContent: (json: any) => {
     const text = json?.content?.[0]?.content?.[0]?.text ?? '';
     return { text, fileReferences: [], symbolReferences: [], slashCommand: undefined };

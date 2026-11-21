@@ -1,4 +1,13 @@
-import { beforeEach, describe, expect, setDefaultTimeout, test, vi, type Mock } from 'bun:test';
+import {
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+  vi,
+  type Mock,
+  mock,
+} from 'bun:test';
 
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -21,10 +30,10 @@ const apiMock = (() => ({
   githubIssueComments: vi.fn(),
 }))();
 const logError = (() => vi.fn())();
-vi.mock('@/lib/client-logger', () => ({
+mock.module('@/lib/client-logger', () => ({
   createClientLogger: () => ({ error: logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
-vi.mock('@/lib/api', () => ({ api: apiMock }));
+mock.module('@/lib/api', () => ({ api: apiMock }));
 
 // The caller's issue factory (change factory-manual-queue): none by default.
 interface FactoryMocks {
@@ -48,7 +57,7 @@ const factory = ((): FactoryMocks => ({
   control: vi.fn(),
   retry: vi.fn(),
 }))();
-vi.mock('@/data/factory/hooks', () => ({
+mock.module('@/data/factory/hooks', () => ({
   useFactorySettings: () => factory.settings,
   useFactorySettingsFailed: () => factory.settingsFailed,
   useFactoryRuns: () => factory.runs,
@@ -58,13 +67,13 @@ vi.mock('@/data/factory/hooks', () => ({
   ],
   useFactoryBlockers: () => factory.blockers,
 }));
-vi.mock('@/data/factory/actions', () => ({
+mock.module('@/data/factory/actions', () => ({
   sendIssuesToFactory: (...args: unknown[]) => factory.send(...args),
   controlFactoryRun: (...args: unknown[]) => factory.control(...args),
   retryFactorySettings: (...args: unknown[]) => factory.retry(...args),
 }));
 const actualProjectHooks = { ...(await import('@/data/projects/hooks')) };
-vi.mock('@/data/projects/hooks', () => ({
+mock.module('@/data/projects/hooks', () => ({
   ...actualProjectHooks,
   useCanSteerProject: () => factory.canSteer,
 }));
@@ -77,7 +86,7 @@ const t = (
   typeof fallback === 'string' && vars
     ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, name) => String(vars[name] ?? ''))
     : mockT(key, fallback);
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));

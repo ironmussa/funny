@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterAll } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterAll, mock } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,17 +16,17 @@ const mocks = (() => ({
 
 // Scratch directories live under the home dir — point it at a temp dir.
 const actualNodeOs = { ...(await import('node:os')) };
-vi.mock('node:os', () => ({
+mock.module('node:os', () => ({
   ...actualNodeOs,
   homedir: () => mocks.home,
 }));
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
   getThreadWithMessages: mocks.getThreadWithMessages,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       getProject: mocks.getProject,

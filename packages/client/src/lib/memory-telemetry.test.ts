@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'bun:test';
+import { beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 
 import type { MemoryProfilerSample } from '@abbacchio/browser-transport';
 import { mocked } from '@funny/test-kit';
@@ -6,7 +6,7 @@ import { mocked } from '@funny/test-kit';
 import { MEMORY_METRIC_PREFIX, publishMemorySample } from './memory-telemetry';
 import { metric } from './telemetry';
 
-vi.mock('./telemetry', () => ({ metric: vi.fn() }));
+mock.module('./telemetry', () => ({ metric: vi.fn() }));
 
 const metricMock = mocked(metric);
 

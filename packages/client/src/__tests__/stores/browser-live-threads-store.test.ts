@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { errAsync, okAsync } from 'neverthrow';
 
 const liveThreads = (() => vi.fn())();
-vi.mock('@/lib/api/browser-sessions', () => ({ browserSessionsApi: { liveThreads } }));
+mock.module('@/lib/api/browser-sessions', () => ({ browserSessionsApi: { liveThreads } }));
 
 import {
   loadLiveBrowserThreads,

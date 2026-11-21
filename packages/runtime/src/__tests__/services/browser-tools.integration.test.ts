@@ -5,7 +5,7 @@
  * Skipped when no Playwright Chromium is installed.
  */
 
-import { afterAll, beforeAll, describe, expect, test, vi } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test, vi, mock } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server } from 'http';
 import { tmpdir } from 'os';
@@ -20,10 +20,10 @@ const dataDir = (() => {
   return dir;
 })();
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
 
 import { resolveChromiumBinary } from '../../services/browser-automation/browser-host.js';
 import {

@@ -6,13 +6,13 @@
  *
  * We mock all side-effecting imports at the top so vitest can load the module.
  */
-import { describe, test, expect, vi } from 'bun:test';
+import { describe, test, expect, vi, mock } from 'bun:test';
 
 // Mock bun:sqlite and all heavy imports so the module can load in vitest
-vi.mock('bun:sqlite', () => ({
+mock.module('bun:sqlite', () => ({
   Database: vi.fn(),
 }));
-vi.mock('../../db/index.js', () => ({
+mock.module('../../db/index.js', () => ({
   db: {
     select: vi.fn(() => ({
       from: vi.fn(() => ({ where: vi.fn(() => ({ all: vi.fn(() => []), get: vi.fn() })) })),
@@ -22,22 +22,22 @@ vi.mock('../../db/index.js', () => ({
     delete: vi.fn(() => ({ where: vi.fn(() => ({ run: vi.fn() })) })),
   },
 }));
-vi.mock('../../services/agent-runner-control.js', () => ({
+mock.module('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(),
   isAgentRunning: vi.fn(() => false),
 }));
-vi.mock('../../services/thread-service/create.js', () => ({
+mock.module('../../services/thread-service/create.js', () => ({
   createAndStartThread: vi.fn(),
 }));
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emitToUser: vi.fn(), broadcast: vi.fn() },
 }));
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: vi.fn(),
   getThreadWithMessages: vi.fn(),
   updateThread: vi.fn(),
 }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 

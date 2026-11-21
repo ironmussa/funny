@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, render, screen } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -8,13 +8,13 @@ import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { expectInstance } from '../helpers/builders-components';
 
 const state = (() => ({ projectId: 'one', remote: vi.fn() }))();
-vi.mock('@/lib/api', () => ({ api: { projectGetRemoteUrl: state.remote } }));
-vi.mock('@/stores/project-store', () => ({
+mock.module('@/lib/api', () => ({ api: { projectGetRemoteUrl: state.remote } }));
+mock.module('@/stores/project-store', () => ({
   useProjectStore: (selector: (value: { selectedProjectId: string }) => unknown) =>
     selector({ selectedProjectId: state.projectId }),
 }));
-vi.mock('@/stores/thread-context', () => ({ useThreadProjectId: () => null }));
-vi.mock('react-i18next', () => ({
+mock.module('@/stores/thread-context', () => ({ useThreadProjectId: () => null }));
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (_key: string, fallback: string) => fallback }),
 }));
 

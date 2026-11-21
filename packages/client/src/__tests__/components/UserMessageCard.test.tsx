@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { UserMessageCard } from '@/components/thread/UserMessageCard';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -18,11 +18,11 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/components/ui/dropdown-menu', () => {
+mock.module('@/components/ui/dropdown-menu', () => {
   return {
     DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,

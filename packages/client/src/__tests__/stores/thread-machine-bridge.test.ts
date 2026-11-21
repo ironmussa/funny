@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import type { ThreadWithMessages } from '@funny/shared';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
@@ -13,7 +13,7 @@ const { mockGetThread, mockGetThreadEvents } = (() => ({
   mockGetThreadEvents: vi.fn(),
 }))();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getThread: mockGetThread,
     getThreadEvents: mockGetThreadEvents,

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { screen, waitFor } from '@testing-library/react';
@@ -23,10 +23,10 @@ const context = ((): ReviewPaneContextMock => ({
   viewerReadOnly: false,
   basePath: '/second/feature',
 }))();
-vi.mock('@/components/review-pane/ReviewPaneStateContext', () => ({
+mock.module('@/components/review-pane/ReviewPaneStateContext', () => ({
   useReviewPaneContext: () => context,
 }));
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { listWorktrees: vi.fn(), listBranches: vi.fn() },
 }));
 

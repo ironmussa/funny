@@ -1,8 +1,8 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { act, renderHook } from '@testing-library/react';
 
-vi.mock('@/data/runner/hooks', () => ({
+mock.module('@/data/runner/hooks', () => ({
   useProjectSandbox: () => ({ loading: false, sandbox: null }),
 }));
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { ThreadWithMessages } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -10,7 +10,7 @@ import { buildThreadWithMessages } from '@/data/threads/testing';
 import { api } from '@/lib/api';
 import { threadDataMachine, type ThreadDataSnapshot } from '@/machines/thread-data-machine';
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getThread: vi.fn(),
     getThreadEvents: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-vi.mock('@/lib/client-logger', () => ({
+mock.module('@/lib/client-logger', () => ({
   createClientLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),

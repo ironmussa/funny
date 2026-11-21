@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -24,7 +24,7 @@ const mocks = ((): SandboxMocks => ({
   navigate: vi.fn(),
 }))();
 
-vi.mock('@/data/runner/hooks', () => ({
+mock.module('@/data/runner/hooks', () => ({
   useSandboxConnections: () => ({ connections: mocks.connections, loading: false }),
   useSandboxProviders: () => [
     {
@@ -43,12 +43,12 @@ vi.mock('@/data/runner/hooks', () => ({
     sandbox: mocks.settings ? { settings: mocks.settings, connection: undefined } : null,
   }),
 }));
-vi.mock('@/data/runner/actions', () => ({
+mock.module('@/data/runner/actions', () => ({
   saveProjectSandbox: mocks.save,
   clearProjectSandbox: mocks.clear,
 }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
-vi.mock('@/stores/auth-store', () => ({
+mock.module('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
+mock.module('@/stores/auth-store', () => ({
   useAuthStore: (select: (s: { user: { id: string } }) => unknown) =>
     select({ user: { id: 'alice' } }),
 }));

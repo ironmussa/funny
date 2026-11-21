@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 
@@ -10,7 +10,7 @@ import type { HonoEnv } from '../../types/hono-env.js';
 
 // Mock Better Auth
 const mockGetSession = vi.fn<() => Promise<any | null>>(() => Promise.resolve(null));
-vi.mock('../../lib/auth.js', () => ({
+mock.module('../../lib/auth.js', () => ({
   auth: {
     api: {
       getSession: mockGetSession,

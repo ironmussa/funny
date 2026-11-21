@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Automation, AutomationRun, InboxItem } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -31,10 +31,10 @@ const api = (() => ({
   getAutomationInbox: vi.fn(),
   triageRun: vi.fn(),
 }))();
-vi.mock('@/lib/api/automations', () => ({ automationsApi: api }));
+mock.module('@/lib/api/automations', () => ({ automationsApi: api }));
 
 const effects = (() => ({ emit: vi.fn() }))();
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 

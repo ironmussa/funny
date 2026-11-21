@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked, stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { renderHook } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { useProjectStore } from '@/stores/project-store';
 
 // Spy on the scroll helper; keep the rest of utils real.
 const actualUtils = { ...(await import('@/lib/utils')) };
-vi.mock('@/lib/utils', () => ({ ...actualUtils, scrollSidebarItemIntoView: vi.fn() }));
+mock.module('@/lib/utils', () => ({ ...actualUtils, scrollSidebarItemIntoView: vi.fn() }));
 import { scrollSidebarItemIntoView } from '@/lib/utils';
 
 function wrapperFor(route: string) {

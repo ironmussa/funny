@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 import { ResultAsync, okAsync } from 'neverthrow';
@@ -11,7 +11,7 @@ const mocks = (() => ({
 }))();
 
 const actualGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => {
+mock.module('@funny/core/git', () => {
   const actual = actualGit;
   return {
     ...actual,
@@ -21,15 +21,15 @@ vi.mock('@funny/core/git', () => {
   };
 });
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
 }));
 
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   startSpan: vi.fn(() => ({ end: vi.fn() })),
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { warn: vi.fn() },
 }));
 

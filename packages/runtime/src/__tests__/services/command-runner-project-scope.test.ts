@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       getProject: vi.fn().mockResolvedValue({ id: 'project-a', userId: 'user-a' }),
@@ -8,13 +8,13 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: {
     emitToUser: vi.fn(),
   },
 }));
 
-vi.mock('../../services/shutdown-manager.js', () => ({
+mock.module('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
   shutdownManager: {
     register: vi.fn(),

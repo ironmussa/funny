@@ -1,20 +1,20 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, mock } from 'bun:test';
 
 import { act, render, screen, cleanup } from '@testing-library/react';
 
-vi.mock('@/components/browser-panel/BrowserUrlBar', () => ({
+mock.module('@/components/browser-panel/BrowserUrlBar', () => ({
   BrowserUrlBar: () => <div>URL bar</div>,
 }));
-vi.mock('@/components/browser-panel/BrowserViewport', () => ({
+mock.module('@/components/browser-panel/BrowserViewport', () => ({
   BrowserViewport: () => <div>Viewport</div>,
 }));
-vi.mock('@/components/browser-panel/ToolToolbar', () => ({
+mock.module('@/components/browser-panel/ToolToolbar', () => ({
   ToolToolbar: () => <div>Annotation tools</div>,
 }));
-vi.mock('@/components/browser-panel/AnnotationList', () => ({
+mock.module('@/components/browser-panel/AnnotationList', () => ({
   AnnotationList: () => <div>Annotation list</div>,
 }));
-vi.mock('@/components/browser-panel/SendDialog', () => ({
+mock.module('@/components/browser-panel/SendDialog', () => ({
   BrowserPanelFooter: () => <button>Send annotations</button>,
 }));
 

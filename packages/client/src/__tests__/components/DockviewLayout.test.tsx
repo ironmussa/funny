@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { render } from '@testing-library/react';
 import type { DockviewReadyEvent } from 'dockview-react';
@@ -15,11 +15,11 @@ const dockviewMock = ((): DockviewMockState => ({
   readyCalled: false,
 }))();
 
-vi.mock('next-themes', () => ({
+mock.module('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),
 }));
 
-vi.mock('dockview-react', () => ({
+mock.module('dockview-react', () => ({
   DockviewReact: (props: { onReady?: (event: DockviewReadyEvent) => void }) => {
     if (!dockviewMock.readyCalled) {
       dockviewMock.readyCalled = true;

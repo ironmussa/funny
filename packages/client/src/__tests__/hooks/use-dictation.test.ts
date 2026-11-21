@@ -8,7 +8,7 @@ const apiMocks = (() => ({
   getTranscribeToken: vi.fn(),
 }))();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: apiMocks,
 }));
 

@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { processError } from '@funny/shared/errors';
 import { waitFor } from '@funny/test-kit';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 const core = (() => ({ lookupPRForBranch: vi.fn() }))();
-vi.mock('@funny/core/git', () => core);
+mock.module('@funny/core/git', () => core);
 
 import {
   resetPRInfoCacheForTests,

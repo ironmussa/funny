@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { screen, waitFor } from '@testing-library/react';
@@ -13,7 +13,7 @@ import { renderWithProviders } from '../helpers/render';
 
 // ── Mocks ───────────────────────────────────────────────────────
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallbackOrOpts?: string | Record<string, any>) =>
       typeof fallbackOrOpts === 'string' ? fallbackOrOpts : key,
@@ -22,7 +22,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/lib/api', async () => {
+mock.module('@/lib/api', async () => {
   const { okAsync: ok } = await import('neverthrow');
   return {
     api: {
@@ -62,23 +62,23 @@ vi.mock('@/lib/api', async () => {
 });
 
 // Mock utils — only getFileName is needed now (ReactDiffViewer was removed)
-vi.mock('@/components/tool-cards/utils', () => ({
+mock.module('@/components/tool-cards/utils', () => ({
   getFileName: (filePath: string) => filePath.split('/').pop() ?? filePath,
 }));
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
   },
 }));
 
-vi.mock('@/hooks/use-auto-refresh-diff', () => ({
+mock.module('@/hooks/use-auto-refresh-diff', () => ({
   useAutoRefreshDiff: vi.fn(),
 }));
 
 // Mock @tanstack/react-virtual so the virtualizer renders all items in jsdom (no layout)
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: (opts: any) => ({
     getVirtualItems: () =>
       Array.from({ length: opts.count }, (_, i) => ({

@@ -1,9 +1,9 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import { stubEnv, unstubAllEnvs } from '@funny/test-kit';
 
 // Mock claude-binary before importing provider-detection
-vi.mock('../../utils/claude-binary.js', () => ({
+mock.module('../../utils/claude-binary.js', () => ({
   checkClaudeBinaryAvailability: () => ({ available: false, error: 'not found' }),
   validateClaudeBinary: () => {
     throw new Error('not found');
@@ -13,8 +13,8 @@ vi.mock('../../utils/claude-binary.js', () => ({
 const mocks = (() => ({ codex: vi.fn() }))();
 
 // SDK import and native CLI resolution are separate checks.
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({}));
-vi.mock('@openai/codex-sdk', () => ({ Codex: mocks.codex }));
+mock.module('@anthropic-ai/claude-agent-sdk', () => ({}));
+mock.module('@openai/codex-sdk', () => ({ Codex: mocks.codex }));
 
 import {
   getAvailableProviders,

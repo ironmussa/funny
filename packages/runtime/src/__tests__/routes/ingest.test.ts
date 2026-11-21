@@ -1,11 +1,11 @@
-import { describe, test, expect, vi, beforeEach, afterAll } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterAll, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 
 // Mock the ingest mapper
 const defaultHandleIngestEvent = () => ({ threadId: 'test-thread-1' });
 const mockHandleIngestEvent = vi.fn(defaultHandleIngestEvent);
-vi.mock('../../services/ingest-mapper.js', () => ({
+mock.module('../../services/ingest-mapper.js', () => ({
   handleIngestEvent: mockHandleIngestEvent,
 }));
 

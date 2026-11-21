@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { GitStatusInfo, Thread } from '@funny/shared';
 import { act, screen } from '@testing-library/react';
@@ -11,7 +11,7 @@ import { buildThread } from '@/data/threads/testing';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -19,7 +19,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: ({
     count,
     estimateSize,
@@ -41,7 +41,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-sidebar-actions', () => ({
+mock.module('@/hooks/use-sidebar-actions', () => ({
   useSidebarActions: () => ({
     archiveConfirm: null,
     setArchiveConfirm: vi.fn(),
@@ -67,7 +67,7 @@ vi.mock('@/hooks/use-sidebar-actions', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-minute-tick', () => ({
+mock.module('@/hooks/use-minute-tick', () => ({
   useMinuteTick: () => {},
 }));
 

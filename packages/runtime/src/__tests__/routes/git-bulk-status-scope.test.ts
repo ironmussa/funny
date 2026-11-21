@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 import { ok, okAsync } from 'neverthrow';
@@ -11,7 +11,7 @@ const mocks = (() => ({
 }))();
 
 const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => {
+mock.module('@funny/core/git', () => {
   const actual = actualFunnyCoreGit;
   return {
     ...actual,
@@ -21,21 +21,21 @@ vi.mock('@funny/core/git', () => {
   };
 });
 
-vi.mock('../../services/thread-manager.js', () => ({ listThreads: mocks.listThreads }));
-vi.mock('../../services/git-service.js', () => ({ resolveIdentity: vi.fn(async () => null) }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
-vi.mock('../../lib/telemetry.js', () => ({ startSpan: vi.fn(() => ({ end: vi.fn() })) }));
-vi.mock('../../middleware/tracing.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({ listThreads: mocks.listThreads }));
+mock.module('../../services/git-service.js', () => ({ resolveIdentity: vi.fn(async () => null) }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../lib/telemetry.js', () => ({ startSpan: vi.fn(() => ({ end: vi.fn() })) }));
+mock.module('../../middleware/tracing.js', () => ({
   requestSpan: vi.fn(() => ({ end: vi.fn(), traceId: 't', spanId: 's' })),
 }));
-vi.mock('../../utils/route-helpers.js', () => ({
+mock.module('../../utils/route-helpers.js', () => ({
   requireProject: vi.fn(async () => ok({ id: 'p1', path: '/repo' })),
   requireThread: vi.fn(),
   steerFromContext: vi.fn(),
   isSteerGrantFor: vi.fn(),
 }));
 const actualRoutesGitHelpers = { ...(await import('../../routes/git/helpers.js')) };
-vi.mock('../../routes/git/helpers.js', () => {
+mock.module('../../routes/git/helpers.js', () => {
   const actual = actualRoutesGitHelpers;
   return {
     ...actual,

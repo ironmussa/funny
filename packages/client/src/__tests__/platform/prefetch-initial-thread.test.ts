@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { prefetchInitialThread } from '@/platform/prefetch-initial-thread';
 
@@ -7,8 +7,8 @@ const { prefetch, readStorage } = (() => ({
   readStorage: vi.fn<() => string | null>(),
 }))();
 
-vi.mock('@/stores/thread-machine-bridge', () => ({ prefetchThreadData: prefetch }));
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/stores/thread-machine-bridge', () => ({ prefetchThreadData: prefetch }));
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { storage: { read: readStorage } } },
 }));
 

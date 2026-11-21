@@ -4,7 +4,7 @@
  * the user owns.
  */
 
-import { afterAll, describe, expect, test, vi } from 'bun:test';
+import { afterAll, describe, expect, test, vi, mock } from 'bun:test';
 import { execFileSync } from 'child_process';
 import { rmSync } from 'fs';
 
@@ -23,13 +23,13 @@ const mocks = (() => ({
   ),
 }))();
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/browser-session-manager.js', () => ({
+mock.module('../../services/browser-session-manager.js', () => ({
   browserSessionManager: { openForThread: mocks.openForThread },
 }));
-vi.mock('../../services/thread-manager.js', () => ({ getThread: mocks.getThread }));
+mock.module('../../services/thread-manager.js', () => ({ getThread: mocks.getThread }));
 
 import {
   browserOpenEnv,

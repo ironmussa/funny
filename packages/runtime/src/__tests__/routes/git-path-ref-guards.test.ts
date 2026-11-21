@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 /**
  * Security regression tests for the git read routes reachable by steer
  * sharees:
@@ -27,12 +27,12 @@ const mocks = (() => ({
   getCommitFileDiff: vi.fn(),
 }))();
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
   listThreads: vi.fn(async () => ({ threads: [] })),
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       getProject: mocks.getProject,
@@ -43,7 +43,7 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => {
+mock.module('@funny/core/git', () => {
   const actual = actualFunnyCoreGit;
   return {
     ...actual,
@@ -55,12 +55,12 @@ vi.mock('@funny/core/git', () => {
   };
 });
 
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   metric: vi.fn(),
   startSpan: vi.fn(() => ({ end: vi.fn() })),
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

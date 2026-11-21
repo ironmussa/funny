@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { Hono } from 'hono';
@@ -15,7 +15,7 @@ const mocks = (() => ({
   getRemoteUrl: vi.fn(),
 }))();
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { getProject: mocks.getProject },
     profile: { getGithubToken: mocks.getGithubToken },
@@ -23,7 +23,7 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   ...actualFunnyCoreGit,
   getRemoteUrl: mocks.getRemoteUrl,
   // The `gh auth token` fallback must never see the host's real gh CLI.

@@ -1,32 +1,32 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { render, screen } from '@testing-library/react';
 
 import { GraphPanel, IssuesPanel, PRsPanel } from '@/components/review-pane/panels/ChangesPanel';
 
 const context = (() => ({ reviewSubTab: 'changes', reviewPaneOpen: true }))();
-vi.mock('@/components/review-pane/ReviewPaneStateContext', () => ({
+mock.module('@/components/review-pane/ReviewPaneStateContext', () => ({
   useReviewPaneContext: () => context,
 }));
-vi.mock('@/components/CommitGraphTab', () => ({
+mock.module('@/components/CommitGraphTab', () => ({
   CommitGraphTab: ({ visible }: { visible: boolean }) => (
     <div data-testid="graph" data-fetch-enabled={visible} />
   ),
 }));
-vi.mock('@/components/PullRequestsTab', () => ({
+mock.module('@/components/PullRequestsTab', () => ({
   PullRequestsTab: ({ visible }: { visible: boolean }) => (
     <div data-testid="prs" data-fetch-enabled={visible} />
   ),
 }));
-vi.mock('@/components/IssuesTab', () => ({
+mock.module('@/components/IssuesTab', () => ({
   IssuesTab: ({ visible }: { visible: boolean }) => (
     <div data-testid="issues" data-fetch-enabled={visible} />
   ),
 }));
-vi.mock('@/components/review-pane/ReviewChangesTab', () => ({
+mock.module('@/components/review-pane/ReviewChangesTab', () => ({
   ReviewChangesTabContent: () => null,
 }));
-vi.mock('@/components/review-pane/StashTab', () => ({ StashTab: () => null }));
+mock.module('@/components/review-pane/StashTab', () => ({ StashTab: () => null }));
 
 const panels = [
   ['graph', GraphPanel],

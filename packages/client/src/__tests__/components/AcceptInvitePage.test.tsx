@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 
@@ -13,9 +13,9 @@ const apiMock = (() => ({
   verifyInviteLink: vi.fn(),
 }))();
 
-vi.mock('@/lib/api', () => ({ api: apiMock }));
+mock.module('@/lib/api', () => ({ api: apiMock }));
 
-vi.mock('@/lib/auth-client', () => ({
+mock.module('@/lib/auth-client', () => ({
   authClient: { signIn: { username: vi.fn() } },
 }));
 

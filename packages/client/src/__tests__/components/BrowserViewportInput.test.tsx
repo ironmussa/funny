@@ -3,15 +3,15 @@
  * Shift, Backspace…) and mouse events carry modifiers and held buttons.
  */
 
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
 const input = (() => vi.fn())();
-vi.mock('@/lib/browser-session-client', () => ({
+mock.module('@/lib/browser-session-client', () => ({
   browserSessionClient: { input, heartbeat: vi.fn() },
 }));
-vi.mock('@/components/browser-panel/BrowserSessionCanvas', () => ({
+mock.module('@/components/browser-panel/BrowserSessionCanvas', () => ({
   BrowserSessionCanvas: ({ canvasRef }: { canvasRef: React.RefObject<HTMLCanvasElement> }) => (
     <canvas ref={canvasRef} />
   ),

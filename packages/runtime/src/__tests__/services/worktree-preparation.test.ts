@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -17,20 +17,22 @@ const mocks = (() => ({
   sendRemoteData: vi.fn(async (_type: string, _payload: Record<string, any>) => ({ ok: true })),
 }))();
 
-vi.mock('../../services/remote-data-channel.js', () => ({ sendRemoteData: mocks.sendRemoteData }));
+mock.module('../../services/remote-data-channel.js', () => ({
+  sendRemoteData: mocks.sendRemoteData,
+}));
 
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   createWorktree: mocks.createWorktree,
   configuredWorktreeRoot: () => '/fast',
 }));
-vi.mock('@funny/core/ports', () => ({ setupWorktree: mocks.setupWorktree }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('@funny/core/ports', () => ({ setupWorktree: mocks.setupWorktree }));
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emit: vi.fn(), emitToUser: mocks.emitToUser },
 }));
-vi.mock('../../lib/telemetry.js', () => {
+mock.module('../../lib/telemetry.js', () => {
   let n = 0;
   return {
     startSpan: (

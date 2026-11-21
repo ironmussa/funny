@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 /**
@@ -17,12 +17,12 @@ import { renderWithProviders } from '../helpers/render';
 
 const executeCodexCommand = vi.fn();
 
-vi.mock('@/hooks/use-codex-commands', () => ({
+mock.module('@/hooks/use-codex-commands', () => ({
   useCodexCommands: () => executeCodexCommand,
 }));
 
 const actualLibApiSystem = { ...(await import('@/lib/api/system')) };
-vi.mock('@/lib/api/system', () => {
+mock.module('@/lib/api/system', () => {
   const actual = actualLibApiSystem;
   return {
     ...actual,
@@ -30,11 +30,11 @@ vi.mock('@/lib/api/system', () => {
   };
 });
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: { warning: vi.fn(), error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string | { defaultValue?: string }) =>
       typeof fallback === 'string' ? fallback : (fallback?.defaultValue ?? key),
@@ -43,17 +43,17 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/components/ImageLightbox', () => ({ ImageLightbox: () => null }));
-vi.mock('@/components/ProviderSetupDialog', () => ({
+mock.module('@/components/ImageLightbox', () => ({ ImageLightbox: () => null }));
+mock.module('@/components/ProviderSetupDialog', () => ({
   ProviderSetupDialog: () => <div data-testid="provider-setup-dialog" />,
 }));
-vi.mock('@/components/PromptSelectors', () => ({
+mock.module('@/components/PromptSelectors', () => ({
   ModelSelect: () => null,
   ModeSelect: () => null,
   TemplateSelect: () => null,
 }));
 
-vi.mock('@/components/prompt-editor/PromptEditor', () => {
+mock.module('@/components/prompt-editor/PromptEditor', () => {
   const { forwardRef, useImperativeHandle, useRef, useState } = require('react');
   return {
     PromptEditor: forwardRef(function MockPromptEditor(props: any, ref: any) {
@@ -96,7 +96,7 @@ vi.mock('@/components/prompt-editor/PromptEditor', () => {
   };
 });
 
-vi.mock('@/components/prompt-editor/serialize', () => ({
+mock.module('@/components/prompt-editor/serialize', () => ({
   serializeEditorContent: (json: any) => ({
     text: json?.text ?? '',
     fileReferences: json?.text?.includes('@file') ? [{ path: 'src/a.ts', type: 'file' }] : [],

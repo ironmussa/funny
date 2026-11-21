@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -10,8 +10,8 @@ const mocks = (() => ({
   disconnectGithubApp: vi.fn(),
 }))();
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/api', () => ({ api: mocks }));
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/lib/api', () => ({ api: mocks }));
 
 import { GithubAppSettings } from '@/components/settings/GithubAppSettings';
 

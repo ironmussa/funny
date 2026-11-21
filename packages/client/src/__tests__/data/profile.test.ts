@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { UserProfile } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { mocked } from '@funny/test-kit';
 import { errAsync, okAsync } from 'neverthrow';
 
-vi.mock('@/lib/api/profile', () => ({
+mock.module('@/lib/api/profile', () => ({
   profileApi: {
     getProfile: vi.fn(),
     updateProfile: vi.fn(),

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { mocked, waitFor } from '@funny/test-kit';
 
@@ -46,58 +46,58 @@ const mocks = (() => ({
   })),
 }))();
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emit: vi.fn(), emitToUser: vi.fn() },
 }));
 
-vi.mock('nanoid', () => ({ nanoid: () => 'fixed-thread-id' }));
+mock.module('nanoid', () => ({ nanoid: () => 'fixed-thread-id' }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/thread-manager.js', () => mocks.tm);
+mock.module('../../services/thread-manager.js', () => mocks.tm);
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: mocks.projects, profile: mocks.profile }),
 }));
 
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: mocks.threadEventBus,
 }));
 
-vi.mock('../../services/agent-runner-control.js', () => ({
+mock.module('../../services/agent-runner-control.js', () => ({
   startAgent: mocks.startAgent,
 }));
 
-vi.mock('../../services/permission-rules-client.js', () => ({
+mock.module('../../services/permission-rules-client.js', () => ({
   listPermissionRules: mocks.listPermissionRules,
 }));
 
-vi.mock('../../services/podman-service.js', () => ({
+mock.module('../../services/podman-service.js', () => ({
   launchContainer: mocks.launchContainer,
 }));
 
-vi.mock('../../lib/ssrf-guard.js', () => ({
+mock.module('../../lib/ssrf-guard.js', () => ({
   safeFetchUserUrl: mocks.safeFetchUserUrl,
 }));
 
-vi.mock('../../utils/file-mentions.js', () => ({
+mock.module('../../utils/file-mentions.js', () => ({
   augmentPromptWithFiles: vi.fn(async (content: string) => content),
   augmentPromptWithSymbols: vi.fn(async (content: string) => content),
   stripInlineReferencedContent: vi.fn((content: string) => content),
 }));
 
-vi.mock('../../services/thread-service/staged-uploads.js', () => ({
+mock.module('../../services/thread-service/staged-uploads.js', () => ({
   releaseStagedUploads: mocks.releaseStagedUploads,
   adoptStagedUploads: mocks.adoptStagedUploads,
   copyThreadUploads: mocks.copyThreadUploads,
 }));
 
-vi.mock('fs/promises', () => ({ mkdir: mocks.mkdir, stat: mocks.stat }));
+mock.module('fs/promises', () => ({ mkdir: mocks.mkdir, stat: mocks.stat }));
 
 const actualShellEscape = { ...(await import('../../services/thread-service/shell-escape.js')) };
-vi.mock('../../services/thread-service/shell-escape.js', () => {
+mock.module('../../services/thread-service/shell-escape.js', () => {
   const actual = actualShellEscape;
   return {
     ...actual,
@@ -105,7 +105,7 @@ vi.mock('../../services/thread-service/shell-escape.js', () => {
   };
 });
 
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   getCurrentBranch: mocks.getCurrentBranch,
   createWorktree: mocks.createWorktree,
   configuredWorktreeRoot: () => null,
@@ -115,7 +115,7 @@ vi.mock('@funny/core/git', () => ({
   isContainedPath: (base: string, full: string) => full.startsWith(`${base}/`),
 }));
 
-vi.mock('@funny/core/ports', () => ({
+mock.module('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 

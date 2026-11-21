@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { DomainError } from '@funny/shared/errors';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -11,7 +11,7 @@ import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-
 import { renderWithProviders } from '../helpers/render';
 
 const api = (() => ({ listSchedulerRuns: vi.fn(), refreshScheduler: vi.fn() }))();
-vi.mock('@/lib/api', () => ({ api }));
+mock.module('@/lib/api', () => ({ api }));
 
 const failure: DomainError = { type: 'INTERNAL', message: 'scheduler offline' };
 const run = (threadId: string, lastEventAtMs: number) => ({

@@ -5,7 +5,7 @@
  * `@agentclientprotocol/sdk/unstable` so every branch is exercised without shelling out.
  */
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { EventEmitter } from 'events';
 import { Readable, Writable } from 'stream';
 
@@ -38,8 +38,8 @@ const { spawnMock, mockInitialize, mockNewSession } = (() => ({
   mockNewSession: vi.fn(),
 }))();
 
-vi.mock('child_process', () => ({ spawn: spawnMock }));
-vi.mock('@agentclientprotocol/sdk/unstable', () => {
+mock.module('child_process', () => ({ spawn: spawnMock }));
+mock.module('@agentclientprotocol/sdk/unstable', () => {
   const methods = {
     agent: { initialize: 'initialize', session: { new: 'session/new' } },
     client: {

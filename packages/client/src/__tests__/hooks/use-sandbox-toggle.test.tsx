@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, render, renderHook, screen, fireEvent } from '@testing-library/react';
 
@@ -7,7 +7,7 @@ const state = (() => {
   return { byProject };
 })();
 
-vi.mock('@/data/runner/hooks', () => ({
+mock.module('@/data/runner/hooks', () => ({
   useProjectSandbox: (projectId: string | null | undefined) => {
     const configured = projectId ? state.byProject[projectId] : undefined;
     return {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { FileDiffSummary } from '@funny/shared';
 import { badRequest } from '@funny/shared/errors';
@@ -18,13 +18,13 @@ const { gitApiMock, fetchForThread } = (() => ({
   fetchForThread: vi.fn(),
 }))();
 
-vi.mock('@/lib/api/git', () => ({
+mock.module('@/lib/api/git', () => ({
   gitApi: gitApiMock,
 }));
 
-vi.mock('@/data/git-status/actions', () => ({ fetchForThread, fetchProjectStatus: vi.fn() }));
+mock.module('@/data/git-status/actions', () => ({ fetchForThread, fetchProjectStatus: vi.fn() }));
 
-vi.mock('@/hooks/use-auto-refresh-diff', () => ({
+mock.module('@/hooks/use-auto-refresh-diff', () => ({
   useAutoRefreshDiff: vi.fn(),
 }));
 

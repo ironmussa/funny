@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -19,13 +19,13 @@ const mocks = ((): IndicatorMocks => ({
   control: vi.fn(),
 }))();
 
-vi.mock('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
-vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
-vi.mock('@/data/factory/actions', () => ({
+mock.module('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
+mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
+mock.module('@/data/factory/actions', () => ({
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
 }));
-vi.mock('@/lib/toast-error', () => ({ toastError: vi.fn() }));
-vi.mock('react-i18next', () => ({
+mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (_k: string, fallback?: string, vars?: Record<string, unknown>) =>
       (fallback ?? _k).replace(/\{\{(\w+)\}\}/g, (_m, name) => String(vars?.[name] ?? '')),

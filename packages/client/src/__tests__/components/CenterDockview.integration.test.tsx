@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -6,7 +6,7 @@ import { useState } from 'react';
 
 import { CenterDockview } from '@/components/CenterDockview';
 
-vi.mock('next-themes', () => ({
+mock.module('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),
 }));
 

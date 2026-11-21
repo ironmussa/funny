@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync, stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
@@ -29,7 +29,7 @@ const h = (() => ({
   shutdown: vi.fn(),
 }))();
 
-vi.mock('../../services/grpc-team-transport.js', () => ({
+mock.module('../../services/grpc-team-transport.js', () => ({
   GrpcTeamTransport: class {
     request = h.request;
     start = h.start;
@@ -37,23 +37,23 @@ vi.mock('../../services/grpc-team-transport.js', () => ({
     publish = vi.fn();
   },
 }));
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { onEvent: vi.fn(() => () => {}) },
 }));
 // Runner-installed provider extensions are loaded from DATA_DIR on connect;
 // keep the developer's ~/.funny/extensions out of the test.
 const actualDataDir = { ...(await import('../../lib/data-dir.js')) };
-vi.mock('../../lib/data-dir.js', () => ({
+mock.module('../../lib/data-dir.js', () => ({
   ...actualDataDir,
   DATA_DIR: '/nonexistent/funny-team-client-test',
 }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { listProjects: vi.fn(async () => []) } }),
 }));
-vi.mock('../../services/runner-credentials.js', () => ({
+mock.module('../../services/runner-credentials.js', () => ({
   clearRunnerCredentials: vi.fn(),
   loadRunnerCredentials: vi.fn(() => null),
   saveRunnerCredentials: vi.fn(),

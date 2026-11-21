@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -16,7 +16,7 @@ const mocks = (() => ({
   },
 }))();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     listSandboxProviders: mocks.listSandboxProviders,
     addInfraConnection: mocks.addInfraConnection,
@@ -26,10 +26,10 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-vi.mock('@/data/runner/hooks', () => ({ useSandboxConnections: () => mocks.storeState }));
-vi.mock('@/data/runner/queries', () => ({ refreshSandboxConnections: mocks.fetch }));
+mock.module('@/data/runner/hooks', () => ({ useSandboxConnections: () => mocks.storeState }));
+mock.module('@/data/runner/queries', () => ({ refreshSandboxConnections: mocks.fetch }));
 
 import { SandboxesSettings } from '@/components/settings/SandboxesSettings';
 

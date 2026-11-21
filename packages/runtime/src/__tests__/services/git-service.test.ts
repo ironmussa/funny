@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -16,11 +16,11 @@ const mocks = (() => ({
   emit: vi.fn(),
 }))();
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     profile: {
       getGitIdentity: mocks.getGitIdentity,
@@ -30,7 +30,7 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 const actualGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => {
+mock.module('@funny/core/git', () => {
   const actual = actualGit;
   return {
     ...actual,
@@ -39,7 +39,7 @@ vi.mock('@funny/core/git', () => {
   };
 });
 
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: { emit: mocks.emit, on: vi.fn() },
 }));
 

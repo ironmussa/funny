@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
@@ -14,21 +14,21 @@ const mocks = (() => ({
   prepareSandboxGithub: vi.fn(),
 }))();
 
-vi.mock('../../utils/route-helpers.js', () => ({
+mock.module('../../utils/route-helpers.js', () => ({
   requireThread: mocks.requireThread,
   requireProject: mocks.requireProject,
 }));
-vi.mock('../../routes/github/helpers.js', () => ({
+mock.module('../../routes/github/helpers.js', () => ({
   resolveGithubToken: mocks.resolveGithubToken,
 }));
-vi.mock('../../services/sandbox-checkout.js', () => ({
+mock.module('../../services/sandbox-checkout.js', () => ({
   checkoutProjectIntoSandbox: mocks.checkout,
 }));
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   updateThread: mocks.updateThread,
 }));
-vi.mock('../../services/sandbox-runner.js', () => ({ isSandboxRunner: mocks.isSandboxRunner }));
-vi.mock('../../services/sandbox-github-auth.js', () => ({
+mock.module('../../services/sandbox-runner.js', () => ({ isSandboxRunner: mocks.isSandboxRunner }));
+mock.module('../../services/sandbox-github-auth.js', () => ({
   prepareSandboxGithub: mocks.prepareSandboxGithub,
 }));
 

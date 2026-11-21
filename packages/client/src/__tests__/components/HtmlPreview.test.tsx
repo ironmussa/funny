@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
@@ -7,13 +7,13 @@ import { MonacoEditorDialog } from '@/components/MonacoEditorDialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildHtmlPreview, isHtmlFile } from '@/lib/html-preview';
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getFileBlame: vi.fn(async () => ({ isOk: () => false, error: { message: 'untracked' } })),
     getFileHistory: vi.fn(async () => ({ isOk: () => true, value: [] })),
   },
 }));
-vi.mock('@/components/MonacoCodeView', () => ({
+mock.module('@/components/MonacoCodeView', () => ({
   MonacoCodeView: ({ content }: { content: string }) => (
     <pre data-testid="code-view">{content}</pre>
   ),

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { act, screen, waitFor } from '@testing-library/react';
 
@@ -19,7 +19,7 @@ Object.defineProperty(globalThis, 'IntersectionObserver', {
 
 // ── Mocks ───────────────────────────────────────────────────────
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallbackOrOpts?: string | Record<string, any>) =>
       typeof fallbackOrOpts === 'string' ? fallbackOrOpts : key,
@@ -28,7 +28,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/lib/api', async () => {
+mock.module('@/lib/api', async () => {
   const { okAsync } = await import('neverthrow');
   return {
     api: {
@@ -46,19 +46,19 @@ vi.mock('@/lib/api', async () => {
   };
 });
 
-vi.mock('@/components/ImageLightbox', () => ({
+mock.module('@/components/ImageLightbox', () => ({
   ImageLightbox: () => null,
 }));
 
-vi.mock('@/components/thread/ProjectHeader', () => ({
+mock.module('@/components/thread/ProjectHeader', () => ({
   ProjectHeader: () => <div data-testid="project-header" />,
 }));
 
-vi.mock('@/components/thread/NewThreadInput', () => ({
+mock.module('@/components/thread/NewThreadInput', () => ({
   NewThreadInput: () => <div data-testid="new-thread-input" />,
 }));
 
-vi.mock('@/components/thread/AgentStatusCards', () => ({
+mock.module('@/components/thread/AgentStatusCards', () => ({
   AgentResultCard: ({ status, cost }: any) => (
     <div data-testid="agent-result-card">
       {status} - ${cost}
@@ -68,16 +68,16 @@ vi.mock('@/components/thread/AgentStatusCards', () => ({
   AgentStoppedCard: () => <div data-testid="agent-stopped-card" />,
 }));
 
-vi.mock('@/hooks/use-minute-tick', () => ({
+mock.module('@/hooks/use-minute-tick', () => ({
   useMinuteTick: () => {},
 }));
 
-vi.mock('@/hooks/use-todo-panel', () => ({
+mock.module('@/hooks/use-todo-panel', () => ({
   useTodoSnapshots: () => [],
 }));
 
 const actualStoresSettingsStore = { ...(await import('@/stores/settings-store')) };
-vi.mock('@/stores/settings-store', () => {
+mock.module('@/stores/settings-store', () => {
   const actual = actualStoresSettingsStore;
   return {
     ...actual,
@@ -88,19 +88,19 @@ vi.mock('@/stores/settings-store', () => {
   };
 });
 
-vi.mock('@/components/ToolCallCard', () => ({
+mock.module('@/components/ToolCallCard', () => ({
   ToolCallCard: ({ name }: any) => <div data-testid="tool-call-card">{name}</div>,
 }));
 
-vi.mock('@/components/ToolCallGroup', () => ({
+mock.module('@/components/ToolCallGroup', () => ({
   ToolCallGroup: ({ name }: any) => <div data-testid="tool-call-group">{name}</div>,
 }));
 
-vi.mock('@/components/PromptInput', () => ({
+mock.module('@/components/PromptInput', () => ({
   PromptInput: () => <div data-testid="prompt-input" />,
 }));
 
-vi.mock('motion/react', () => {
+mock.module('motion/react', () => {
   const filterMotionProps = (props: any) =>
     Object.fromEntries(
       Object.entries(props).filter(
@@ -119,11 +119,11 @@ vi.mock('motion/react', () => {
   };
 });
 
-vi.mock('react-markdown', () => ({
+mock.module('react-markdown', () => ({
   default: ({ children }: any) => <div>{children}</div>,
 }));
 
-vi.mock('remark-gfm', () => ({
+mock.module('remark-gfm', () => ({
   default: [],
 }));
 

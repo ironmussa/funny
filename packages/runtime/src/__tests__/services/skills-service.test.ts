@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 /** The part of a `Dirent` the skills scan reads. */
 interface DirEntry {
@@ -19,7 +19,7 @@ const { rmSync, unlinkSync, existsSync, readFileSync, readdirSync, writeFileSync
 }))();
 
 const actualFs = { ...(await import('fs')) };
-vi.mock('fs', () => {
+mock.module('fs', () => {
   const actual = actualFs;
   return {
     ...actual,

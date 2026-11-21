@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 /**
  * Regression: per-thread message handling must stay strictly sequential.
@@ -15,7 +15,7 @@ import { AgentStateTracker } from '../../services/agent-state.js';
 import { createMessageHandler, createOrchestrator } from '../helpers/builders-handlers.js';
 import { createThreadManagerFake, createWsBrokerFake } from '../helpers/builders.js';
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { getProject: vi.fn() } }),
 }));
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -19,7 +19,7 @@ const mockCreateIdleThread = (() => vi.fn())();
 const mockRunWorkflow = (() => vi.fn())();
 const mockListThreads = (() => vi.fn())();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -28,7 +28,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 const actualReactRouterDom = { ...(await import('react-router-dom')) };
-vi.mock('react-router-dom', () => {
+mock.module('react-router-dom', () => {
   const actual = actualReactRouterDom;
   return {
     ...actual,
@@ -36,14 +36,14 @@ vi.mock('react-router-dom', () => {
   };
 });
 
-vi.mock('@/hooks/use-thread-creation', () => ({
+mock.module('@/hooks/use-thread-creation', () => ({
   useThreadCreation: () => ({
     creating: false,
     createThread: mockCreateThread,
   }),
 }));
 
-vi.mock('@/hooks/use-save-backlog-on-leave', () => ({
+mock.module('@/hooks/use-save-backlog-on-leave', () => ({
   useSaveBacklogOnLeave: () => ({
     blocker: { state: 'unblocked' },
     savingBacklog: false,
@@ -53,14 +53,14 @@ vi.mock('@/hooks/use-save-backlog-on-leave', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-branch-switch', () => ({
+mock.module('@/hooks/use-branch-switch', () => ({
   useBranchSwitch: () => ({
     ensureBranch: vi.fn().mockResolvedValue(true),
     branchSwitchDialog: null,
   }),
 }));
 
-vi.mock('@/lib/api', async () => {
+mock.module('@/lib/api', async () => {
   const { okAsync: okAsyncResult } = await import('neverthrow');
   return {
     api: {
@@ -73,7 +73,7 @@ vi.mock('@/lib/api', async () => {
   };
 });
 
-vi.mock('@/components/PromptInput', () => ({
+mock.module('@/components/PromptInput', () => ({
   PromptInput: (props: {
     onSubmit?: (prompt: string, opts: { model: string; mode: string; threadMode: string }) => void;
     onWorktreeModeChange?: (value: boolean) => void;

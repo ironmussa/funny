@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
 /**
  * Reproducción del bug observado en Abbacchio (11 warnings "invariant re-select"
@@ -23,7 +23,7 @@ const { mockGetThread, mockGetThreadEvents, mockListThreads, mockStartSpan } = (
   mockStartSpan: vi.fn(),
 }))();
 
-vi.mock('@/lib/api/threads', () => ({
+mock.module('@/lib/api/threads', () => ({
   threadsApi: {
     sendMessage: vi.fn(),
     stopThread: vi.fn(),
@@ -42,23 +42,23 @@ vi.mock('@/lib/api/threads', () => ({
   },
 }));
 
-vi.mock('@/stores/store-bridge', () => ({
+mock.module('@/stores/store-bridge', () => ({
   expandProject: vi.fn(),
   selectProject: vi.fn(),
   getProjectPath: vi.fn(),
   registerThreadStore: vi.fn(),
 }));
 
-vi.mock('@/stores/ui-store', () => ({
+mock.module('@/stores/ui-store', () => ({
   useUIStore: { getState: () => ({ selectProject: vi.fn() }), subscribe: vi.fn() },
 }));
 
-vi.mock('@/lib/telemetry', () => ({
+mock.module('@/lib/telemetry', () => ({
   startSpan: mockStartSpan,
   metric: vi.fn(),
 }));
 
-vi.mock('@/stores/thread-ws-handlers', () => ({
+mock.module('@/stores/thread-ws-handlers', () => ({
   handleWSInit: vi.fn(),
   handleWSMessage: vi.fn(),
   handleWSToolCall: vi.fn(),

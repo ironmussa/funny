@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, render } from '@testing-library/react';
@@ -12,7 +12,7 @@ import { buildIntersectionEntry } from '../helpers/builders-components';
 // when frozen (the memory goal), rather than relying on DOM text (the captured
 // static HTML legitimately still contains the rendered markup).
 const live = (() => ({ mounts: 0 }))();
-vi.mock('@/components/thread/MessageContent', () => ({
+mock.module('@/components/thread/MessageContent', () => ({
   MessageContent: ({ content }: { content: string }) => {
     useEffect(() => {
       live.mounts += 1;

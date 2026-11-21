@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { render, screen, waitFor, within } from '@testing-library/react';
 
@@ -15,11 +15,11 @@ const dockviewMock = ((): DockviewMockState => ({
   readyCalled: false,
 }))();
 
-vi.mock('next-themes', () => ({
+mock.module('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),
 }));
 
-vi.mock('dockview-react', async () => {
+mock.module('dockview-react', async () => {
   const React = await import('react');
 
   return {

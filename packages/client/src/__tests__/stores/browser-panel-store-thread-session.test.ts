@@ -4,7 +4,7 @@
  * closes or the user switches threads, and attaches when the agent opens one.
  */
 
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -24,7 +24,7 @@ const mocks = ((): BrowserPanelMocks => ({
   urlThreadId: null,
 }))();
 
-vi.mock('@/lib/browser-session-client', () => ({
+mock.module('@/lib/browser-session-client', () => ({
   browserSessionClient: {
     open: mocks.open,
     close: mocks.close,
@@ -32,8 +32,8 @@ vi.mock('@/lib/browser-session-client', () => ({
     input: mocks.input,
   },
 }));
-vi.mock('@/lib/browser-session-frames', () => ({ clearLatestFrame: vi.fn() }));
-vi.mock('@/stores/thread-store', () => ({ getUrlThreadId: () => mocks.urlThreadId }));
+mock.module('@/lib/browser-session-frames', () => ({ clearLatestFrame: vi.fn() }));
+mock.module('@/stores/thread-store', () => ({ getUrlThreadId: () => mocks.urlThreadId }));
 
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 

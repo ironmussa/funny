@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { GitHubPR, GitStatusInfo, PRDetail, Thread, ThreadWithMessages } from '@funny/shared';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
@@ -20,21 +20,21 @@ const githubApiMock = (() => ({
 }))();
 
 const logError = (() => vi.fn())();
-vi.mock('@/lib/client-logger', () => ({
+mock.module('@/lib/client-logger', () => ({
   createClientLogger: () => ({ error: logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: apiMock,
 }));
-vi.mock('@/lib/api/github', () => ({
+mock.module('@/lib/api/github', () => ({
   githubApi: githubApiMock,
 }));
 
-vi.mock('@/components/PinnedPRCard', () => ({
+mock.module('@/components/PinnedPRCard', () => ({
   PinnedPRCard: ({ pr }: { pr: GitHubPR }) => <div data-testid={`pinned-pr-${pr.number}`} />,
 }));
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },

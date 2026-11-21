@@ -9,7 +9,7 @@
  * before rejecting, otherwise freshly-created projects fail with
  * "Access denied: directory not in a registered project".
  */
-import { describe, expect, test, vi, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -24,17 +24,17 @@ const { mockSpawnPty, mockGetLocalProjects, mockListProjects, mockGetThread, moc
   }))();
 
 const actualNodeFs = { ...(await import('node:fs')) };
-vi.mock('node:fs', () => ({
+mock.module('node:fs', () => ({
   ...actualNodeFs,
   mkdirSync: mockMkdir,
   statSync: mockStat,
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/pty-manager.js', () => ({
+mock.module('../../services/pty-manager.js', () => ({
   assertSessionAccess: vi.fn(() => true),
   writePty: vi.fn(),
   killPty: vi.fn(),
@@ -44,21 +44,21 @@ vi.mock('../../services/pty-manager.js', () => ({
   spawnPty: mockSpawnPty,
 }));
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mockGetThread,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { listProjects: mockListProjects },
   }),
 }));
 
-vi.mock('../../services/thread-context.js', () => ({
+mock.module('../../services/thread-context.js', () => ({
   scratchPathFor: (userId: string, threadId: string) => `/tmp/scratch/${userId}/${threadId}`,
 }));
 
-vi.mock('../../services/team-client.js', () => ({
+mock.module('../../services/team-client.js', () => ({
   getLocalProjects: mockGetLocalProjects,
 }));
 

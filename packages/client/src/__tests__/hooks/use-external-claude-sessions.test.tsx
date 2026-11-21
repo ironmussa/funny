@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
@@ -11,7 +11,7 @@ import {
 } from '@/hooks/use-external-claude-sessions';
 import { api } from '@/lib/api';
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     listExternalClaudeSessions: vi.fn(),
   },

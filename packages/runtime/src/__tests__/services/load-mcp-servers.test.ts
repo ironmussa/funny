@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { McpServer } from '@funny/shared';
 import { okAsync } from 'neverthrow';
@@ -7,7 +7,7 @@ const { listMcpServers, listConfiguredClaudeMcpServers } = (() => ({
   listMcpServers: vi.fn(),
   listConfiguredClaudeMcpServers: vi.fn(),
 }))();
-vi.mock('../../services/mcp-service.js', () => ({
+mock.module('../../services/mcp-service.js', () => ({
   listMcpServers,
   listConfiguredClaudeMcpServers,
 }));

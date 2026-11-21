@@ -6,7 +6,7 @@
  * round-trip so a stale (post-logout / post-revoke) session can't perform
  * destructive writes during the 15-second cache window.
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 
@@ -18,7 +18,7 @@ process.env.TEAM_SERVER_URL = 'http://server.test';
 process.env.WS_TUNNEL_ONLY = 'false';
 
 // Stub the lib/auth.js dynamic import so Better Auth doesn't initialise.
-vi.mock('../../lib/auth.js', () => ({
+mock.module('../../lib/auth.js', () => ({
   auth: { api: { getSession: vi.fn().mockResolvedValue(null) } },
 }));
 

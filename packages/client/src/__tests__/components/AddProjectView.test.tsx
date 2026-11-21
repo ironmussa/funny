@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi, type Mock } from 'bun:test';
+import { afterEach, beforeEach, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { err, ok } from 'neverthrow';
@@ -23,20 +23,20 @@ const mocks = ((): AddProjectMocks => ({
   toast: vi.fn(),
   orgId: null,
 }))();
-vi.mock('@/lib/api', () => ({ api: mocks }));
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/lib/api', () => ({ api: mocks }));
+mock.module('@/stores/app-store', () => ({
   useAppStore: (select: (s: typeof mocks) => unknown) => select(mocks),
 }));
-vi.mock('@/stores/auth-store', () => ({
+mock.module('@/stores/auth-store', () => ({
   useAuthStore: { getState: () => ({ activeOrgId: mocks.orgId }) },
 }));
-vi.mock('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
-vi.mock('sonner', () => ({ toast: { error: mocks.toast, success: vi.fn() } }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('@/lib/url', () => ({ buildPath: (path: string) => path }));
-vi.mock('@/components/CloneRepoView', () => ({ CloneRepoView: () => null }));
-vi.mock('@/components/FolderPicker', () => ({ FolderPicker: () => null }));
-vi.mock('@/components/ui/tooltip', () => ({
+mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
+mock.module('sonner', () => ({ toast: { error: mocks.toast, success: vi.fn() } }));
+mock.module('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+mock.module('@/lib/url', () => ({ buildPath: (path: string) => path }));
+mock.module('@/components/CloneRepoView', () => ({ CloneRepoView: () => null }));
+mock.module('@/components/FolderPicker', () => ({ FolderPicker: () => null }));
+mock.module('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => children,
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => children,
   TooltipContent: () => null,

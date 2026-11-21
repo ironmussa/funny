@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeAll, afterAll, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 /**
  * Security HI-2 regression tests — `requirePickerPath` / `requireProjectPath`
  * must follow realpath so a symlink in $HOME (or a project tree) can't be
@@ -25,12 +25,12 @@ const { FAKE_HOME } = await (async () => {
 })();
 
 const actualOs = { ...(await import('os')) };
-vi.mock('os', () => ({ ...actualOs, homedir: vi.fn(() => FAKE_HOME) }));
+mock.module('os', () => ({ ...actualOs, homedir: vi.fn(() => FAKE_HOME) }));
 
 // Stub the service registry so requireProjectPath() can pretend the test
 // owns a project at `${FAKE_HOME}/proj`.
 const { mockListProjects } = (() => ({ mockListProjects: vi.fn() }))();
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { listProjects: mockListProjects } }),
 }));
 

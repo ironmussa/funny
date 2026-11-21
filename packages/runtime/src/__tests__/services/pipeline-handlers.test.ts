@@ -4,14 +4,14 @@
  * Tests that pipeline handlers are correctly registered in the
  * handler-registry and respond to the expected events.
  */
-import { beforeEach, describe, test, expect, vi } from 'bun:test';
+import { beforeEach, describe, test, expect, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 
 // ── Mocks ────────────────────────────────────────────────────
 
-vi.mock('bun:sqlite', () => ({ Database: vi.fn() }));
-vi.mock('../../db/index.js', () => ({
+mock.module('bun:sqlite', () => ({ Database: vi.fn() }));
+mock.module('../../db/index.js', () => ({
   db: {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -28,35 +28,35 @@ vi.mock('../../db/index.js', () => ({
     delete: vi.fn(() => ({ where: vi.fn(() => ({ run: vi.fn() })) })),
   },
 }));
-vi.mock('../../services/agent-runner-control.js', () => ({
+mock.module('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(),
   isAgentRunning: vi.fn(() => false),
 }));
-vi.mock('../../services/thread-service/create.js', () => ({
+mock.module('../../services/thread-service/create.js', () => ({
   createAndStartThread: vi.fn(),
 }));
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emitToUser: vi.fn(), broadcast: vi.fn() },
 }));
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: vi.fn(),
   getThreadWithMessages: vi.fn(),
   updateThread: vi.fn(),
 }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: {
     on: vi.fn(),
     removeListener: vi.fn(),
   },
 }));
-vi.mock('../../services/pipeline-manager.js', () => ({
+mock.module('../../services/pipeline-manager.js', () => ({
   getPipelineForProject: vi.fn(() => Promise.resolve(null)),
   startPipelineRun: vi.fn(),
 }));
-vi.mock('../../services/git-workflow-service.js', () => ({
+mock.module('../../services/git-workflow-service.js', () => ({
   isWorkflowActive: vi.fn(() => false),
 }));
 

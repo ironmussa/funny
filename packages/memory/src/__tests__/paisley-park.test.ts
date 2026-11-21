@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, vi, mock } from 'bun:test';
 
 import { PaisleyPark, destroyAllInstances, getPaisleyPark } from '../index.js';
 import type { StorageConfig } from '../types.js';
 
 // Mock createEmbeddingProvider to always return NullEmbeddingProvider
 // (avoids hitting real Ollama/OpenAI in tests)
-vi.mock('../embedding.js', () => ({
+mock.module('../embedding.js', () => ({
   createEmbeddingProvider: vi.fn().mockResolvedValue({
     embed: vi.fn().mockResolvedValue(new Float32Array(0)),
     embedBatch: vi

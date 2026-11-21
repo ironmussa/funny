@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 import { EventEmitter } from 'events';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -15,13 +15,13 @@ const mocks = (() => ({
   bundled: vi.fn(),
   exists: vi.fn(),
 }))();
-vi.mock('@funny/core/agents', () => ({ discoverPiModels: mocks.piModels }));
-vi.mock('child_process', () => ({ spawn: mocks.spawn }));
-vi.mock('fs', () => ({ existsSync: mocks.exists, mkdirSync: mocks.mkdir }));
-vi.mock('../../utils/codex-binary.js', () => ({ bundledCodexBinary: mocks.bundled }));
-vi.mock('../../lib/data-dir.js', () => ({ DATA_DIR: '/tmp/provider-setup-test' }));
-vi.mock('../../utils/claude-binary.js', () => ({ resetBinaryCache: vi.fn() }));
-vi.mock('../../utils/provider-detection.js', () => ({
+mock.module('@funny/core/agents', () => ({ discoverPiModels: mocks.piModels }));
+mock.module('child_process', () => ({ spawn: mocks.spawn }));
+mock.module('fs', () => ({ existsSync: mocks.exists, mkdirSync: mocks.mkdir }));
+mock.module('../../utils/codex-binary.js', () => ({ bundledCodexBinary: mocks.bundled }));
+mock.module('../../lib/data-dir.js', () => ({ DATA_DIR: '/tmp/provider-setup-test' }));
+mock.module('../../utils/claude-binary.js', () => ({ resetBinaryCache: vi.fn() }));
+mock.module('../../utils/provider-detection.js', () => ({
   resetProviderCache: vi.fn(),
   getAvailableProviders: async () => new Map([['claude', { sdkAvailable: true }]]),
 }));

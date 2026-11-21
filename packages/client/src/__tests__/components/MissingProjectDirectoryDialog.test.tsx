@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ok, err, type Ok } from 'neverthrow';
@@ -26,12 +26,12 @@ const mocks = (() => ({
     revealNonce: 0,
   },
 }))();
-vi.mock('@/lib/api/projects', () => ({ projectsApi: { listBranches: mocks.listBranches } }));
-vi.mock('@/stores/project-store', () => ({
+mock.module('@/lib/api/projects', () => ({ projectsApi: { listBranches: mocks.listBranches } }));
+mock.module('@/stores/project-store', () => ({
   useProjectStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
 }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('@/lib/url', () => ({ buildPath: (path: string) => path }));
+mock.module('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+mock.module('@/lib/url', () => ({ buildPath: (path: string) => path }));
 
 function Location() {
   return <output data-testid="location">{useLocation().pathname}</output>;

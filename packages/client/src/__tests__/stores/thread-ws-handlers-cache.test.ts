@@ -10,7 +10,7 @@
  * on `invalidateThreadData` must fire.
  */
 
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { getContextUsageStore } from '@/data/context-usage/store';
 import { seedContextUsage } from '@/data/context-usage/testing';
@@ -26,7 +26,7 @@ const { mockInvalidate, mockBuffer } = (() => ({
   mockBuffer: vi.fn(),
 }))();
 
-vi.mock('@/stores/thread-machine-bridge', () => ({
+mock.module('@/stores/thread-machine-bridge', () => ({
   invalidateThreadData: mockInvalidate,
   // Echo back the data status so tests can drive transitions directly.
   transitionThreadStatus: vi.fn(
@@ -38,11 +38,11 @@ vi.mock('@/stores/thread-machine-bridge', () => ({
   })),
 }));
 
-vi.mock('@/stores/thread-read-store', () => ({
+mock.module('@/stores/thread-read-store', () => ({
   useThreadReadStore: { getState: () => ({ markRead: vi.fn() }) },
 }));
 
-vi.mock('@/stores/thread-store-internals', () => ({
+mock.module('@/stores/thread-store-internals', () => ({
   bufferWSEvent: mockBuffer,
   getNavigate: vi.fn(),
   getProjectIdForThread: vi.fn(() => null),
@@ -51,7 +51,7 @@ vi.mock('@/stores/thread-store-internals', () => ({
   setUrlThreadId: vi.fn(),
 }));
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const {
   handleWSMessage,

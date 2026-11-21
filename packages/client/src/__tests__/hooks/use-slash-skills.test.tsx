@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -9,7 +9,7 @@ const { listAgentResourcesMock } = (() => ({
   listAgentResourcesMock: vi.fn(),
 }))();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { listAgentResources: listAgentResourcesMock },
 }));
 

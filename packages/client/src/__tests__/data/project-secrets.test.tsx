@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
@@ -14,7 +14,7 @@ const api = (() => ({
   setProjectSecret: vi.fn(),
   deleteProjectSecret: vi.fn(),
 }))();
-vi.mock('@/lib/api/project-secrets', () => ({ projectSecretsApi: api }));
+mock.module('@/lib/api/project-secrets', () => ({ projectSecretsApi: api }));
 
 const secret = (over: Partial<ProjectSecretSummary> = {}): ProjectSecretSummary => ({
   id: 's1',

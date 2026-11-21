@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
@@ -46,13 +46,13 @@ const {
 
 // Mock the API barrel (for any leftover consumers) and the specific sub-modules
 // the store now imports directly.
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { ...mockProjectsApi, ...mockThreadsApi },
 }));
-vi.mock('@/lib/api/projects', () => ({ projectsApi: mockProjectsApi }));
-vi.mock('@/lib/api/threads', () => ({ threadsApi: mockThreadsApi }));
+mock.module('@/lib/api/projects', () => ({ projectsApi: mockProjectsApi }));
+mock.module('@/lib/api/threads', () => ({ threadsApi: mockThreadsApi }));
 
-vi.mock('@/stores/store-bridge', () => ({
+mock.module('@/stores/store-bridge', () => ({
   batchUpdateThreads: (...args: any[]) => mockBatchUpdateThreads(...args),
   ensureThreadsLoaded: (projectId: string) => {
     // Mimic the bridge logic: only call loadThreadsForProject if not already loaded
@@ -65,7 +65,7 @@ vi.mock('@/stores/store-bridge', () => ({
   registerProjectStore: vi.fn(),
 }));
 
-vi.mock('@/data/git-status/actions', () => ({
+mock.module('@/data/git-status/actions', () => ({
   fetchForProject: (...args: unknown[]) => mockFetchForProject(...args),
 }));
 

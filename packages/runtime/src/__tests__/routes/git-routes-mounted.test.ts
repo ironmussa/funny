@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
@@ -63,7 +63,7 @@ const mocks = (() => ({
 }))();
 
 const actualFs = { ...(await import('fs')) };
-vi.mock('fs', () => {
+mock.module('fs', () => {
   const actual = actualFs;
   return {
     ...actual,
@@ -72,12 +72,12 @@ vi.mock('fs', () => {
   };
 });
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
   listThreads: mocks.listThreads,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       getProject: mocks.getProject,
@@ -88,7 +88,7 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => {
+mock.module('@funny/core/git', () => {
   const actual = actualFunnyCoreGit;
   return {
     ...actual,
@@ -125,7 +125,7 @@ vi.mock('@funny/core/git', () => {
 });
 
 const actualRoutesGitHelpers = { ...(await import('../../routes/git/helpers.js')) };
-vi.mock('../../routes/git/helpers.js', () => {
+mock.module('../../routes/git/helpers.js', () => {
   const actual = actualRoutesGitHelpers;
   return {
     ...actual,
@@ -137,13 +137,13 @@ vi.mock('../../routes/git/helpers.js', () => {
   };
 });
 
-vi.mock('../../services/git-workflow-service.js', () => ({
+mock.module('../../services/git-workflow-service.js', () => ({
   executeWorkflow: mocks.executeWorkflow,
   isWorkflowActive: mocks.isWorkflowActive,
 }));
 
 const actualServicesGitService = { ...(await import('../../services/git-service.js')) };
-vi.mock('../../services/git-service.js', () => {
+mock.module('../../services/git-service.js', () => {
   const actual = actualServicesGitService;
   const resolveIdentity = vi.fn(async (_userId: string, _projectId?: string) => undefined);
   return {
@@ -165,12 +165,12 @@ vi.mock('../../services/git-service.js', () => {
   };
 });
 
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   metric: vi.fn(),
   startSpan: vi.fn(() => ({ end: vi.fn() })),
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

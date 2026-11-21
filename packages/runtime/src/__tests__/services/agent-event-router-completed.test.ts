@@ -12,7 +12,7 @@
  * runs for the same thread emit normally.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -28,7 +28,7 @@ import {
 
 // ── Mocks ────────────────────────────────────────────────────────
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { getProject: vi.fn(async () => ({ id: 'p-1', path: '/tmp/proj' })) },
   }),

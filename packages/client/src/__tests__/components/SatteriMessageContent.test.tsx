@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -7,7 +7,7 @@ const markdown = (() => ({
   renderReadyMarkdownToSafeHtml: vi.fn(),
 }))();
 
-vi.mock('@/lib/satteri-markdown', () => markdown);
+mock.module('@/lib/satteri-markdown', () => markdown);
 
 import { SatteriMessageContent } from '@/components/thread/SatteriMessageContent';
 

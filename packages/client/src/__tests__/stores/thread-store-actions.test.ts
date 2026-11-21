@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { AgentModel, Message, PermissionMode } from '@funny/shared';
 import { mocked } from '@funny/test-kit';
@@ -51,7 +51,7 @@ const {
   mockCleanupThreadActor: vi.fn(),
 }))();
 
-vi.mock('@/lib/api/threads', () => ({
+mock.module('@/lib/api/threads', () => ({
   threadsApi: {
     sendMessage: mockSendMessage,
     stopThread: mockStopThread,
@@ -73,14 +73,14 @@ vi.mock('@/lib/api/threads', () => ({
   },
 }));
 
-vi.mock('@/stores/store-bridge', () => ({
+mock.module('@/stores/store-bridge', () => ({
   expandProject: vi.fn(),
   selectProject: vi.fn(),
   getProjectPath: vi.fn(),
   registerThreadStore: vi.fn(),
 }));
 
-vi.mock('@/stores/thread-machine-bridge', () => ({
+mock.module('@/stores/thread-machine-bridge', () => ({
   transitionThreadStatus: vi.fn().mockReturnValue('running'),
   cleanupThreadActor: mockCleanupThreadActor,
   loadThreadData: mockLoadThreadData,
@@ -90,15 +90,15 @@ vi.mock('@/stores/thread-machine-bridge', () => ({
   invalidateThreadData: vi.fn(),
 }));
 
-vi.mock('@/stores/thread-read-store', () => ({
+mock.module('@/stores/thread-read-store', () => ({
   useThreadReadStore: { getState: () => ({ markRead: vi.fn() }) },
 }));
 
-vi.mock('@/stores/ui-store', () => ({
+mock.module('@/stores/ui-store', () => ({
   useUIStore: { getState: () => ({ selectProject: vi.fn() }), subscribe: vi.fn() },
 }));
 
-vi.mock('@/stores/thread-ws-handlers', () => ({
+mock.module('@/stores/thread-ws-handlers', () => ({
   handleWSInit: vi.fn(),
   handleWSMessage: vi.fn(),
   handleWSToolCall: vi.fn(),
@@ -112,7 +112,7 @@ vi.mock('@/stores/thread-ws-handlers', () => ({
   handleWSContextUsage: vi.fn(),
 }));
 
-vi.mock('@/stores/thread-store-internals', () => ({
+mock.module('@/stores/thread-store-internals', () => ({
   nextSelectGeneration: vi.fn().mockReturnValue(1),
   getSelectGeneration: vi.fn().mockReturnValue(1),
   getBufferedInitInfo: vi.fn(),

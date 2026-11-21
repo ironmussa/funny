@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -8,9 +8,9 @@ import { useAppStore } from '@/stores/app-store';
 
 const listArchivedThreads = (() => vi.fn())();
 
-vi.mock('@/lib/api', () => ({ api: { listArchivedThreads } }));
-vi.mock('@/components/ThreadPowerline', () => ({ ThreadPowerline: () => null }));
-vi.mock('@/components/VirtualThreadList', () => ({
+mock.module('@/lib/api', () => ({ api: { listArchivedThreads } }));
+mock.module('@/components/ThreadPowerline', () => ({ ThreadPowerline: () => null }));
+mock.module('@/components/VirtualThreadList', () => ({
   VirtualThreadList: ({
     threads,
     onEndReached,

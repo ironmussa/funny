@@ -4,7 +4,7 @@
  * user. Without the gate, any authenticated user who learned another
  * tenant's `ptyId` could inject keystrokes into their running shell.
  */
-import { describe, expect, test, vi, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, mock } from 'bun:test';
 
 // Mock pty-manager BEFORE importing the handler so its `import * as
 // ptyManager` resolves to the stubs.
@@ -26,7 +26,7 @@ const {
   mockSpawnPty: vi.fn(),
 }))();
 
-vi.mock('../../services/pty-manager.js', () => ({
+mock.module('../../services/pty-manager.js', () => ({
   assertSessionAccess: mockAssertSessionAccess,
   writePty: mockWritePty,
   killPty: mockKillPty,
@@ -36,17 +36,17 @@ vi.mock('../../services/pty-manager.js', () => ({
   spawnPty: mockSpawnPty,
 }));
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: vi.fn(),
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { listProjects: vi.fn().mockResolvedValue([]) },
   }),
 }));
 
-vi.mock('../../services/thread-context.js', () => ({
+mock.module('../../services/thread-context.js', () => ({
   scratchPathFor: (userId: string, threadId: string) => `/tmp/scratch/${userId}/${threadId}`,
 }));
 

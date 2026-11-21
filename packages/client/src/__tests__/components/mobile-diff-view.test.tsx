@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { FileDiffSummary } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FileCode } from 'lucide-react';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
     i18n: { language: 'en' },
@@ -14,7 +14,7 @@ vi.mock('react-i18next', () => ({
 
 // Stub the heavy diff renderer (Monaco/VirtualDiff). We only assert the mobile
 // chrome + navigation + that read-only/unified props are threaded through.
-vi.mock('@/components/tool-cards/ExpandedDiffDialog', () => ({
+mock.module('@/components/tool-cards/ExpandedDiffDialog', () => ({
   ExpandedDiffView: (props: {
     filePath: string;
     initialViewMode?: string;
@@ -35,10 +35,10 @@ vi.mock('@/components/tool-cards/ExpandedDiffDialog', () => ({
 
 // Controllable viewport switch for the presenter test.
 let mockIsMobile = true;
-vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => mockIsMobile }));
+mock.module('@/hooks/use-mobile', () => ({ useIsMobile: () => mockIsMobile }));
 
 // Desktop modal stub so the presenter test doesn't pull in Radix Dialog + FileTree.
-vi.mock('@/components/review-pane/DiffViewerModal', () => ({
+mock.module('@/components/review-pane/DiffViewerModal', () => ({
   DiffViewerModal: (p: { expandedFile: string | null }) =>
     p.expandedFile ? <div data-testid="expanded-diff-overlay" /> : null,
 }));

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { flushAsyncUpdates } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, fallback?: string, options?: Record<string, unknown>) => {
       if (!fallback) return _key;
@@ -18,13 +18,13 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('next-themes', () => ({
+mock.module('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'dark' }),
 }));
 
-vi.mock('@/lib/monaco-setup', () => ({}));
+mock.module('@/lib/monaco-setup', () => ({}));
 
-vi.mock('@monaco-editor/react', () => ({
+mock.module('@monaco-editor/react', () => ({
   Editor: ({
     value,
     onChange,
@@ -40,7 +40,7 @@ vi.mock('@monaco-editor/react', () => ({
   ),
 }));
 
-vi.mock('react-markdown', () => ({
+mock.module('react-markdown', () => ({
   default: ({ children }: { children: string }) => <div>{children}</div>,
 }));
 

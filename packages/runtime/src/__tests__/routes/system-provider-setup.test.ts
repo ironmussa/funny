@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'bun:test';
+import { beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 
@@ -9,22 +9,22 @@ const mocks = (() => ({
   providerKey: vi.fn(),
 }))();
 
-vi.mock('@funny/core/git', () => ({ getNativeGit: vi.fn() }));
-vi.mock('../../lib/data-dir.js', () => ({ DATA_DIR: '/tmp/provider-route-test' }));
-vi.mock('../../lib/logger.js', () => ({ log: { info: vi.fn(), warn: vi.fn() } }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: {} }));
-vi.mock('../../utils/claude-binary.js', () => ({ resetBinaryCache: vi.fn() }));
-vi.mock('../../utils/provider-detection.js', () => ({
+mock.module('@funny/core/git', () => ({ getNativeGit: vi.fn() }));
+mock.module('../../lib/data-dir.js', () => ({ DATA_DIR: '/tmp/provider-route-test' }));
+mock.module('../../lib/logger.js', () => ({ log: { info: vi.fn(), warn: vi.fn() } }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: {} }));
+mock.module('../../utils/claude-binary.js', () => ({ resetBinaryCache: vi.fn() }));
+mock.module('../../utils/provider-detection.js', () => ({
   getAvailableProviders: vi.fn(),
   resetProviderCache: vi.fn(),
 }));
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     profile: { getProviderKey: mocks.providerKey },
     agentProfiles: { resolveEffectiveProfile: mocks.resolveProfile },
   }),
 }));
-vi.mock('../../services/provider-setup.js', () => ({
+mock.module('../../services/provider-setup.js', () => ({
   isInstallableProvider: (provider: string) => ['claude', 'codex'].includes(provider),
   providerSetupStatus: mocks.setupStatus,
   startProviderInstall: mocks.startInstall,

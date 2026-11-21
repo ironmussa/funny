@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, screen } from '@testing-library/react';
 
@@ -6,7 +6,7 @@ import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, fallbackOrOpts?: string | Record<string, any>) =>
       typeof fallbackOrOpts === 'string' ? fallbackOrOpts : fallbackOrOpts?.defaultValue || _key,

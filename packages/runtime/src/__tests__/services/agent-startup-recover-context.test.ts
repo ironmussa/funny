@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const mocks = (() => ({
   tm: {
@@ -10,9 +10,9 @@ const mocks = (() => ({
   },
 }))();
 
-vi.mock('../../services/thread-manager.js', () => mocks.tm);
+mock.module('../../services/thread-manager.js', () => mocks.tm);
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn() },
 }));
 

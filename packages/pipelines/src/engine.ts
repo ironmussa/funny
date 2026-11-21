@@ -1,15 +1,20 @@
 /**
- * Lightweight, function-based pipeline engine.
+ * Pipeline types and builders, and the `runPipeline` entry point.
  *
- * Pipelines are sequences of named nodes. Each node is an async function
- * that receives context + AbortSignal and returns updated context.
- * Nodes can be conditionally skipped via guards.
- * A single optional loop boundary allows review→fix cycles.
+ * A pipeline is a graph of named nodes. Each node is a function that
+ * receives the context, an AbortSignal and its run info, and returns the
+ * updated context. Nodes form the graph through `dependsOn` (a plain list
+ * is a chain), may be skipped by a `when` guard, join by `triggerRule`,
+ * repeat a region with `loop`, and share limits across runs through
+ * `concurrency`. The scheduler that runs the graph is in `scheduler.ts`.
  *
- * Effect coordinates cancellation, retry waits, and bounded DAG concurrency.
+ * Effect coordinates cancellation, retry waits, and node interruption.
  */
 
-import { Cause, Effect, Exit, Result } from 'effect';
+import type { Batch, ConcurrencyGate } from './gate.js';
+import type { Journal, ResumeInfo } from './journal.js';
+import { runGraph } from './scheduler.js';
+import { SUB_PIPELINE_PARENT_CB } from './symbols.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -18,7 +23,34 @@ import { Cause, Effect, Exit, Result } from 'effect';
  * Async implementations must honor the signal and release owned resources on abort.
  * Effect can interrupt the wait, but cannot stop side effects in an uncooperative callback.
  */
-export type NodeFn<T> = (ctx: T, signal: AbortSignal) => T | Promise<T>;
+export type NodeFn<T> = (ctx: T, signal: AbortSignal, info: NodeRunInfo) => T | Promise<T>;
+
+/** What the engine tells a node about the execution it is running. */
+export interface NodeRunInfo {
+  /**
+   * The visit of the innermost loop region the node belongs to, from 1
+   * (always 1 outside loops). Hosts expose it to templates as `LOOP_ITERATION`.
+   */
+  iteration: number;
+  /**
+   * The visits of every loop region around the node, outermost first, joined
+   * by dots ("1" outside loops). Identifies this execution in the journal.
+   */
+  visit: string;
+  /**
+   * Set when the run resumes an execution that started but never finished:
+   * what was recorded for it, including what it checkpointed, so the node can
+   * adopt the work it had started.
+   */
+  resume?: ResumeInfo;
+  /** Record data about the work in progress (e.g. the thread started) in the journal. */
+  checkpoint(data: unknown): Promise<void>;
+  /**
+   * Set when this node leads a batch: the other runs it executes for. Settle
+   * each member before the node ends; members left unsettled wait again.
+   */
+  batch?: Batch;
+}
 
 /**
  * A guard function: returns true to run the node, false to skip.
@@ -70,17 +102,99 @@ export interface PipelineNode<T> {
   /** Optional retry configuration. If absent, the node runs exactly once. */
   retry?: NodeRetryConfig<T>;
   /**
-   * IDs of nodes that must complete before this one starts (DAG edges).
+   * IDs of nodes that must finish before this one starts (graph edges).
    *
-   * Presence of this field on ANY node switches the engine into DAG mode
-   * (level-by-level parallel execution); absence everywhere preserves the
-   * legacy sequential behavior. A node with `dependsOn: []` is a root and
-   * runs in the first level. See `runPipeline` for the routing rule.
+   * When no node declares it, each node depends on the previous one, so the
+   * pipeline runs in declaration order. Once any node declares it, a node
+   * without it (or with `dependsOn: []`) is a root and starts at once.
    */
   dependsOn?: string[];
+  /**
+   * How the node joins its dependencies. Default `all_success`.
+   * - `all_success`: no dependency failed (a skipped dependency counts as done).
+   * - `all_done`: every dependency finished, whatever its result.
+   * - `one_success`: at least one dependency succeeded; the node starts on the
+   *   first success without waiting for (or cancelling) the others.
+   * A node whose rule can no longer be satisfied is skipped, and a node it
+   * skips counts as failed for dependents with `all_success`.
+   */
+  triggerRule?: TriggerRule;
+  /**
+   * What a failure of this node does to the run. Default `fail`: the run
+   * fails. `continue`: the node is marked failed and the joins decide.
+   */
+  onError?: NodeOnError;
+  /**
+   * Repeat a region after this node: every node on a path from `loop.backTo`
+   * to this one. Checked after this node succeeds; see `NodeLoop`.
+   */
+  loop?: NodeLoop<T>;
+  /**
+   * Limit how many executions of nodes in `group` run at once, across every
+   * run that shares the gate (`PipelineRunOptions.gate`). The node waits for
+   * a slot after its `when` guard passes, reported as `waiting_slot`, and
+   * holds it until its work has stopped (retries included).
+   */
+  concurrency?: NodeConcurrency<T>;
 }
 
-/** Loop configuration — allows jumping back to a previous node. */
+/** A node's concurrency group. See `PipelineNode.concurrency`. */
+export interface NodeConcurrency<T> {
+  /**
+   * The group. A function receives the run's initial context, never node
+   * outputs, so a resumed run asks for the same group.
+   */
+  group: string | ((initial: T) => string);
+  /** Executions of the group allowed at once. The gate may replace it. */
+  limit: number;
+  /**
+   * Run the node once for several runs waiting on the group (limit 1). The
+   * leader's node gets `info.batch` and settles each member; a member's node
+   * does not execute and completes with the outcome settled for it.
+   */
+  batch?: NodeBatch<T>;
+}
+
+/** A batching concurrency group. See `NodeConcurrency.batch`. */
+export interface NodeBatch<T> {
+  /** Most runs in one batch, the leader included. */
+  max: number;
+  /** How long the leader waits for more members before it starts. */
+  waitMs: number;
+  /**
+   * A member's result context from the output its leader settled. Default:
+   * the member's input, unchanged.
+   */
+  adopt?: (input: T, output: unknown) => T;
+}
+
+/**
+ * A loop declared on a node X. When X succeeds and `until` is false, the
+ * region (the nodes on a path from `backTo` to X, both included) runs again,
+ * and `backTo` reads X's result. Nodes outside the region that depend on it
+ * wait until the loop exits. Once X has run `maxIterations` visits with
+ * `until` still false, X fails with "loop exhausted" and its `onError`
+ * applies. The regions of a pipeline must be nested or disjoint.
+ */
+export interface NodeLoop<T> {
+  /** The first node of the region: X itself or one of its dependencies. */
+  backTo: string;
+  /** Return true to exit the loop. */
+  until: GuardFn<T>;
+  /** Visits before the loop is exhausted. Default: 10. */
+  maxIterations?: number;
+}
+
+/** How a node joins its dependencies. See `PipelineNode.triggerRule`. */
+export type TriggerRule = 'all_success' | 'all_done' | 'one_success';
+
+/** What a node failure does to the run. See `PipelineNode.onError`. */
+export type NodeOnError = 'fail' | 'continue';
+
+/**
+ * Pipeline-level loop: a region from `from` to the last declared node.
+ * Equivalent to a `NodeLoop` on the last node; kept for existing callers.
+ */
 export interface PipelineLoop<T> {
   /** Name of the node to jump back to. */
   from: string;
@@ -96,13 +210,13 @@ export interface PipelineDefinition<T> {
   nodes: PipelineNode<T>[];
   loop?: PipelineLoop<T>;
   /**
-   * How to fold the results of nodes that ran concurrently within one DAG
-   * level back into a single context. Receives the shared `base` context the
-   * level started from and the post-execute contexts of every node that
-   * completed in that level (in declaration order, regardless of which
-   * finished first — keeping the merge deterministic).
+   * How to fold the results of several nodes into one context: for a node
+   * with several dependencies, and for the run's result when it ends on
+   * several branches. Receives the first result as `base` and every result
+   * in declaration order, regardless of which finished first, so the merge
+   * is deterministic.
    *
-   * Only consulted in DAG mode. If omitted, a default merge folds each
+   * If omitted, a default merge folds each
    * result's `outputs` map over the base (the convention used by the YAML
    * compiler, where every node writes only its own `outputs[id]`).
    */
@@ -110,7 +224,13 @@ export interface PipelineDefinition<T> {
 }
 
 /** State change notification types. */
-export type PipelineStateKind = 'entering' | 'completed' | 'skipped' | 'error' | 'terminal';
+export type PipelineStateKind =
+  | 'waiting_slot'
+  | 'entering'
+  | 'completed'
+  | 'skipped'
+  | 'error'
+  | 'terminal';
 
 /** Emitted when a node changes state. */
 export interface PipelineStateChange<T> {
@@ -130,11 +250,28 @@ export type OnStateChange<T> = (change: PipelineStateChange<T>) => void;
 export interface PipelineRunOptions<T> {
   signal?: AbortSignal;
   onStateChange?: OnStateChange<T>;
-  /** Override maxIterations from the loop config. */
+  /**
+   * After a node is aborted (the run was cancelled, or another branch failed
+   * it), how long to wait for its work to stop before the run ends anyway.
+   * A node that honors its signal stops sooner. Default: 5000.
+   */
+  stopGraceMs?: number;
+  /**
+   * Grants concurrency-group slots. Default: one in-memory gate shared by
+   * every run of the process (`defaultConcurrencyGate`).
+   */
+  gate?: ConcurrencyGate;
+  /**
+   * Records node executions, and replays the recorded ones when the run
+   * starts (see `journal.ts`). Without one, nothing is recorded or resumed.
+   */
+  journal?: Journal<T>;
+  /** Identifies the run in slot holders (`<runId>/<nodeId>/<visit>`). Default: a random id. */
+  runId?: string;
+  /** Override maxIterations of the pipeline-level `loop` (not of node loops). */
   maxIterations?: number;
   /**
-   * Max nodes to run concurrently within a single DAG level. Ignored in
-   * sequential mode. Default: 8.
+   * Max nodes of this run in flight at once. Default: 8.
    */
   maxConcurrency?: number;
 }
@@ -157,9 +294,9 @@ export interface PipelineRunResult<T> {
 export function node<T>(
   name: string,
   execute: NodeFn<T>,
-  opts?: { when?: GuardFn<T>; retry?: NodeRetryConfig<T>; dependsOn?: string[] },
+  opts?: Omit<PipelineNode<T>, 'name' | 'execute'>,
 ): PipelineNode<T> {
-  return { name, execute, when: opts?.when, retry: opts?.retry, dependsOn: opts?.dependsOn };
+  return { ...opts, name, execute };
 }
 
 /**
@@ -205,8 +342,7 @@ export function subPipeline<T>(
   return { name, execute, when: opts?.when };
 }
 
-/** Symbol used internally to pass parent onStateChange to sub-pipelines. */
-export const SUB_PIPELINE_PARENT_CB = Symbol.for('pipeline:parentStateChange');
+export { SUB_PIPELINE_PARENT_CB } from './symbols.js';
 
 /** Create a pipeline definition. */
 export function definePipeline<T>(def: PipelineDefinition<T>): PipelineDefinition<T> {
@@ -230,413 +366,22 @@ export function compose<T>(...groups: PipelineNode<T>[][]): PipelineNode<T>[] {
   return groups.flat();
 }
 
-// Capture synchronous throws as well as rejected promises at the callback boundary.
-const invoke = <A>(fn: (signal: AbortSignal) => A | Promise<A>) =>
-  Effect.tryPromise({
-    try: async (abortSignal) => fn(abortSignal),
-    catch: (error) => (error instanceof Error ? error : new Error(String(error))),
-  });
-
 // ── Runtime ──────────────────────────────────────────────────
 
 /**
  * Execute a pipeline definition with the given initial context.
  *
- * The pipeline runs nodes sequentially. When all nodes complete and
- * a loop is defined, it checks loop.until(ctx). If false, it jumps
- * back to loop.from and increments the iteration counter.
+ * Every pipeline runs as a graph on a ready-queue scheduler
+ * (`scheduler.ts`): a node starts as soon as its dependencies have
+ * finished, bounded by `maxConcurrency`. When no node declares
+ * `dependsOn`, each node depends on the previous one, so a plain list
+ * runs in declaration order. A loop repeats its region (the nodes on a
+ * path from `loop.from` to the last node) until `loop.until` holds.
  */
-export async function runPipeline<T>(
+export function runPipeline<T>(
   pipeline: PipelineDefinition<T>,
   initialCtx: T,
   opts: PipelineRunOptions<T> = {},
 ): Promise<PipelineRunResult<T>> {
-  // DAG mode: any node declaring `dependsOn` opts the whole pipeline into
-  // level-by-level parallel execution. Loops are not yet supported over a
-  // DAG (Phase 3.1) — when a loop is present we fall back to the sequential
-  // path below, which stays valid because the YAML compiler emits DAG
-  // pipelines already topologically sorted.
-  if (!pipeline.loop && pipeline.nodes.some((n) => n.dependsOn !== undefined)) {
-    return runDag(pipeline, initialCtx, opts);
-  }
-
-  const { signal, onStateChange } = opts;
-  const maxIter = opts.maxIterations ?? pipeline.loop?.maxIterations ?? 10;
-
-  let ctx = initialCtx;
-  let iteration = 1;
-
-  const emit = (change: PipelineStateChange<T>) => onStateChange?.(change);
-
-  // Attach onStateChange to context so sub-pipelines can forward events.
-  // Use a shallow copy to avoid mutating the caller's context (which would
-  // cause infinite recursion when a subPipeline's onStateChange overwrites
-  // the parent's callback on the same object).
-  if (onStateChange) {
-    ctx = { ...ctx, [SUB_PIPELINE_PARENT_CB]: onStateChange } as T;
-  }
-
-  // Resolve loop start index
-  const loopFromIndex = pipeline.loop
-    ? pipeline.nodes.findIndex((n) => n.name === pipeline.loop!.from)
-    : -1;
-
-  // Start from the first node
-  let nodeIndex = 0;
-
-  while (nodeIndex < pipeline.nodes.length) {
-    const currentNode = pipeline.nodes[nodeIndex];
-
-    // Check cancellation
-    if (signal?.aborted) {
-      emit({ kind: 'terminal', nodeName: currentNode.name, ctx, iteration, outcome: 'cancelled' });
-      return { outcome: 'cancelled', ctx, iterations: iteration };
-    }
-
-    // Guard + retry + emits are shared with the DAG path via runSingleNode.
-    const res = await runSingleNode(currentNode, ctx, { signal, emit, iteration });
-    ctx = res.ctx;
-
-    if (res.status === 'cancelled') {
-      emit({ kind: 'terminal', nodeName: currentNode.name, ctx, iteration, outcome: 'cancelled' });
-      return { outcome: 'cancelled', ctx, iterations: iteration };
-    }
-
-    if (res.status === 'skipped') {
-      nodeIndex++;
-      continue;
-    }
-
-    if (res.status === 'error') {
-      emit({
-        kind: 'terminal',
-        nodeName: currentNode.name,
-        ctx,
-        iteration,
-        error: res.error,
-        outcome: 'failed',
-      });
-      return { outcome: 'failed', ctx, error: res.error, iterations: iteration };
-    }
-
-    nodeIndex++;
-
-    // Check for loop boundary — after the last node
-    if (nodeIndex >= pipeline.nodes.length && pipeline.loop && loopFromIndex >= 0) {
-      const condition = await Effect.runPromiseExit(
-        invoke(() => pipeline.loop!.until(ctx)),
-        { signal },
-      );
-      if (signal?.aborted) {
-        emit({
-          kind: 'terminal',
-          nodeName: currentNode.name,
-          ctx,
-          iteration,
-          outcome: 'cancelled',
-        });
-        return { outcome: 'cancelled', ctx, iterations: iteration };
-      }
-      if (Exit.isFailure(condition)) {
-        const cause = Cause.squash(condition.cause);
-        const error = cause instanceof Error ? cause.message : String(cause);
-        emit({
-          kind: 'terminal',
-          nodeName: currentNode.name,
-          ctx,
-          iteration,
-          outcome: 'failed',
-          error,
-        });
-        return { outcome: 'failed', ctx, iterations: iteration, error };
-      }
-      if (!condition.value) {
-        iteration++;
-        if (iteration > maxIter) {
-          const errorMsg = `Max iterations reached (${maxIter})`;
-          emit({
-            kind: 'terminal',
-            nodeName: currentNode.name,
-            ctx,
-            iteration: iteration - 1,
-            error: errorMsg,
-            outcome: 'failed',
-          });
-          return { outcome: 'failed', ctx, error: errorMsg, iterations: iteration - 1 };
-        }
-        // Jump back to loop start
-        nodeIndex = loopFromIndex;
-        continue;
-      }
-    }
-  }
-
-  // All nodes completed, loop exited (or no loop)
-  const lastNode = pipeline.nodes[pipeline.nodes.length - 1];
-  emit({
-    kind: 'terminal',
-    nodeName: lastNode?.name ?? pipeline.name,
-    ctx,
-    iteration,
-    outcome: 'completed',
-  });
-  return { outcome: 'completed', ctx, iterations: iteration };
-}
-
-// ── Single-node execution (shared by sequential + DAG paths) ─
-
-/** Outcome of running one node, before the caller decides pipeline flow. */
-interface SingleNodeResult<T> {
-  /** Context after the node ran (unchanged if skipped). */
-  ctx: T;
-  status: 'completed' | 'skipped' | 'error' | 'cancelled';
-  /** Set when status === 'error'. */
-  error?: string;
-}
-
-/**
- * Run a single node: evaluate its `when` guard, execute with retry, and emit
- * `entering` / `completed` / `skipped` / `error` state changes. Does NOT emit
- * `terminal` — that's the caller's job, since terminal outcome depends on
- * pipeline-level flow (sequential vs DAG level).
- *
- * Effect owns interruptible callback execution and retry waits. Both execution
- * paths share the same retry / guard / emit semantics.
- */
-async function runSingleNode<T>(
-  node: PipelineNode<T>,
-  ctxIn: T,
-  params: { signal?: AbortSignal; emit: (c: PipelineStateChange<T>) => void; iteration: number },
-): Promise<SingleNodeResult<T>> {
-  const { signal, emit, iteration } = params;
-  let ctx = ctxIn;
-  if (signal?.aborted) return { ctx, status: 'cancelled' };
-
-  const execution = Effect.gen(function* () {
-    if (node.when && !(yield* invoke(() => node.when!(ctx)))) {
-      return 'skipped' as const;
-    }
-    emit({ kind: 'entering', nodeName: node.name, ctx, iteration });
-    const retry = node.retry;
-    const maxAttempts = retry
-      ? Math.max(
-          1,
-          typeof retry.maxAttempts === 'function' ? retry.maxAttempts(ctx) : retry.maxAttempts,
-        )
-      : 1;
-
-    for (let attempt = 1; ; attempt++) {
-      const result = yield* Effect.result(
-        invoke((abortSignal) => {
-          const next = node.execute(ctx, abortSignal);
-          // A synchronous node can commit its result and request cancellation in
-          // the same call. Preserve that completed work, but never adopt a late
-          // Promise result after interruption.
-          if (!next || typeof (next as Promise<T>).then !== 'function') ctx = next as T;
-          return next;
-        }),
-      );
-      if (Result.isSuccess(result)) {
-        ctx = result.success;
-        return 'completed' as const;
-      }
-      const error = result.failure;
-      if (!retry || attempt >= maxAttempts) return yield* Effect.fail(error);
-      if (retry.shouldRetry && !(yield* invoke(() => retry.shouldRetry!(error, ctx, attempt)))) {
-        return yield* Effect.fail(error);
-      }
-      if (retry.beforeRetry) {
-        ctx = yield* invoke(() => retry.beforeRetry!(error, ctx, attempt));
-      }
-      const delay = typeof retry.delayMs === 'function' ? retry.delayMs(ctx) : (retry.delayMs ?? 0);
-      if (delay > 0) yield* Effect.sleep(delay);
-    }
-  });
-
-  const exit = await Effect.runPromiseExit(execution, { signal });
-  if (signal?.aborted) return { ctx, status: 'cancelled' };
-  if (Exit.isFailure(exit)) {
-    const cause = Cause.squash(exit.cause);
-    const error = cause instanceof Error ? cause.message : String(cause);
-    emit({ kind: 'error', nodeName: node.name, ctx, iteration, error });
-    return { ctx, status: 'error', error };
-  }
-  emit({ kind: exit.value, nodeName: node.name, ctx, iteration });
-  return { ctx, status: exit.value };
-}
-
-// ── DAG execution (level-by-level parallel) ─────────────────
-
-/**
- * Group nodes into topological levels: level(n) = 0 when it has no
- * dependencies, otherwise 1 + max(level of its deps). All nodes in the same
- * level are mutually independent and safe to run concurrently. Declaration
- * order is preserved within each level so merges stay deterministic.
- *
- * Throws on cycles or references to unknown nodes.
- */
-export function computeLevels<T>(nodes: PipelineNode<T>[]): PipelineNode<T>[][] {
-  const byName = new Map(nodes.map((n) => [n.name, n]));
-  const levelOf = new Map<string, number>();
-
-  const resolve = (name: string, path: string[]): number => {
-    const cached = levelOf.get(name);
-    if (cached !== undefined) return cached;
-    if (path.includes(name)) {
-      throw new Error(`Cycle detected: ${[...path, name].join(' → ')}`);
-    }
-    const n = byName.get(name);
-    if (!n) throw new Error(`Node "${name}" referenced in dependsOn does not exist`);
-    const deps = n.dependsOn ?? [];
-    const level =
-      deps.length === 0 ? 0 : 1 + Math.max(...deps.map((d) => resolve(d, [...path, name])));
-    levelOf.set(name, level);
-    return level;
-  };
-
-  for (const n of nodes) resolve(n.name, []);
-
-  const maxLevel = levelOf.size === 0 ? -1 : Math.max(...levelOf.values());
-  const levels: PipelineNode<T>[][] = Array.from({ length: maxLevel + 1 }, () => []);
-  for (const n of nodes) levels[levelOf.get(n.name)!].push(n);
-  return levels;
-}
-
-/**
- * Default level-merge: fold each result's `outputs` map over the base. Used
- * when a DAG pipeline doesn't supply its own `mergeContexts`. Matches the
- * convention that every node writes only its own `outputs[id]`, so the folds
- * never collide. Non-`outputs` fields are taken from the base.
- */
-function defaultMerge<T>(base: T, results: T[]): T {
-  const baseOutputs = (base as Record<string, unknown>).outputs;
-  if (baseOutputs === undefined || typeof baseOutputs !== 'object') {
-    // No `outputs` convention — nothing safe to merge; keep the base.
-    return base;
-  }
-  const merged: Record<string, unknown> = { ...(baseOutputs as Record<string, unknown>) };
-  for (const r of results) {
-    const ro = (r as Record<string, unknown>).outputs;
-    if (ro && typeof ro === 'object') Object.assign(merged, ro);
-  }
-  return { ...base, outputs: merged };
-}
-
-/**
- * Execute a pipeline as a DAG: nodes are grouped into topological levels and
- * each level runs concurrently (bounded by `maxConcurrency`). After a level
- * settles, the completed nodes' contexts are merged back into one. A node
- * failure fails the whole pipeline once its level settles (use the YAML
- * `on_error: continue` to tolerate a failure — that turns into an empty
- * output instead of a thrown error). Loops are not supported here.
- */
-async function runDag<T>(
-  pipeline: PipelineDefinition<T>,
-  initialCtx: T,
-  opts: PipelineRunOptions<T>,
-): Promise<PipelineRunResult<T>> {
-  const { signal, onStateChange } = opts;
-  const emit = (change: PipelineStateChange<T>) => onStateChange?.(change);
-  const merge = pipeline.mergeContexts ?? defaultMerge;
-  const concurrency = Math.max(1, Math.floor(opts.maxConcurrency ?? 8));
-
-  let ctx = initialCtx;
-  if (onStateChange) {
-    ctx = { ...ctx, [SUB_PIPELINE_PARENT_CB]: onStateChange } as T;
-  }
-
-  let levels: PipelineNode<T>[][];
-  try {
-    levels = computeLevels(pipeline.nodes);
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    emit({
-      kind: 'terminal',
-      nodeName: pipeline.name,
-      ctx,
-      iteration: 1,
-      error: errorMsg,
-      outcome: 'failed',
-    });
-    return { outcome: 'failed', ctx, error: errorMsg, iterations: 1 };
-  }
-
-  for (const level of levels) {
-    if (signal?.aborted) {
-      emit({
-        kind: 'terminal',
-        nodeName: level[0]?.name ?? pipeline.name,
-        ctx,
-        iteration: 1,
-        outcome: 'cancelled',
-      });
-      return { outcome: 'cancelled', ctx, iterations: 1 };
-    }
-
-    const base = ctx;
-    // Each node owns its cancellation boundary. Collect all outcomes, preserving
-    // declaration order and partial outputs instead of failing the level early.
-    const settled = await Effect.runPromise(
-      Effect.forEach(
-        level,
-        (n) =>
-          Effect.exit(
-            Effect.tryPromise({
-              try: () => runSingleNode(n, base, { signal, emit, iteration: 1 }),
-              catch: (error) => error,
-            }),
-          ),
-        { concurrency },
-      ),
-    );
-
-    const completed: T[] = [];
-    let firstError: { name: string; error: string } | undefined;
-    settled.forEach((s, i) => {
-      if (Exit.isSuccess(s)) {
-        const r = s.value;
-        if (r.status === 'error') {
-          if (!firstError) firstError = { name: level[i].name, error: r.error ?? 'node failed' };
-        } else if (r.status === 'completed') {
-          completed.push(r.ctx);
-        }
-        // 'skipped' contributes no output.
-      } else if (!firstError) {
-        const cause = Cause.squash(s.cause);
-        const reason = cause instanceof Error ? cause.message : String(cause);
-        firstError = { name: level[i].name, error: reason };
-      }
-    });
-
-    // Fold whatever completed back in, even on failure, so the terminal
-    // event carries partial outputs for debugging.
-    ctx = merge(base, completed);
-
-    if (signal?.aborted) {
-      emit({ kind: 'terminal', nodeName: pipeline.name, ctx, iteration: 1, outcome: 'cancelled' });
-      return { outcome: 'cancelled', ctx, iterations: 1 };
-    }
-
-    if (firstError) {
-      emit({
-        kind: 'terminal',
-        nodeName: firstError.name,
-        ctx,
-        iteration: 1,
-        error: firstError.error,
-        outcome: 'failed',
-      });
-      return { outcome: 'failed', ctx, error: firstError.error, iterations: 1 };
-    }
-  }
-
-  const lastNode = pipeline.nodes[pipeline.nodes.length - 1];
-  emit({
-    kind: 'terminal',
-    nodeName: lastNode?.name ?? pipeline.name,
-    ctx,
-    iteration: 1,
-    outcome: 'completed',
-  });
-  return { outcome: 'completed', ctx, iterations: 1 };
+  return runGraph(pipeline, initialCtx, opts);
 }

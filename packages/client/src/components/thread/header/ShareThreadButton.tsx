@@ -27,7 +27,11 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { threadsApi, type ShareLevel, type ThreadShareGrant } from '@/lib/api/threads';
 import { createClientLogger } from '@/lib/client-logger';
-import { getThreadRoute, steerReachesRepository } from '@/lib/thread-variant';
+import {
+  getThreadRoute,
+  steerReachesProjectSecrets,
+  steerReachesRepository,
+} from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -226,6 +230,7 @@ export function ShareThreadButton({
           </div>
           <p className="text-muted-foreground mt-1.5 text-[11px]">{LEVEL_HINT[level]}</p>
           <SteerRepositoryWarning level={level} />
+          <SteerSecretsWarning level={level} />
         </div>
 
         <div className="min-w-0 px-6 pt-4">
@@ -333,6 +338,18 @@ export function ShareThreadButton({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Shown when choosing Editor on a project thread: its agent holds the project's secrets. */
+function SteerSecretsWarning({ level }: { level: ShareLevel }) {
+  const applies = useThreadSelector((t) => steerReachesProjectSecrets(t));
+  if (level !== 'steer' || !applies) return null;
+  return (
+    <p className="text-status-warning mt-1.5 text-xs" data-testid="share-steer-secrets-warning">
+      The agent of this thread starts with the project&apos;s secrets, your personal ones included.
+      An editor can reach them through the agent.
+    </p>
   );
 }
 

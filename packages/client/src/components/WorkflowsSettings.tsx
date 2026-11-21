@@ -1,8 +1,9 @@
-import type {
-  WorkflowDefinitionResponse,
-  WorkflowDiagnostic,
-  WorkflowGraphDto,
-  WorkflowSummary,
+import {
+  isErrorDiagnostic,
+  type WorkflowDefinitionResponse,
+  type WorkflowDiagnostic,
+  type WorkflowGraphDto,
+  type WorkflowSummary,
 } from '@funny/shared/types/workflows';
 import {
   ACTION_KEYS,
@@ -11,14 +12,11 @@ import {
   type ParsedNode,
   type ParsedWorkflow,
   type WorkflowGraph,
-  type WorkflowGraphNodeData,
 } from '@funny/workflows/browser';
 import {
   Background,
   Controls,
-  Handle,
   MiniMap,
-  Position,
   ReactFlow,
   ReactFlowProvider,
   addEdge,
@@ -26,16 +24,12 @@ import {
   useNodesState,
   type Connection,
   type Edge,
-  type Node,
-  type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
   AlertCircle,
-  Circle,
-  CircleCheck,
+  AlertTriangle,
   CircleDashed,
-  CircleX,
   GitBranch,
   Play,
   RefreshCw,
@@ -56,12 +50,7 @@ import { useAppStore } from '@/stores/app-store';
 import { useActiveThreadView } from '@/stores/thread-context';
 import { useWorkflowRunStore } from '@/stores/workflow-run-store';
 
-type WorkflowNodeData = WorkflowGraphNodeData &
-  Record<string, unknown> & {
-    runStatus?: string;
-    dimmed?: boolean;
-  };
-type WorkflowNode = Node<WorkflowNodeData, 'workflowNode'>;
+import { decorateGraph, WorkflowNodeView, type WorkflowNode } from './workflows/WorkflowNodeView';
 
 const nodeTypes = { workflowNode: WorkflowNodeView };
 
@@ -179,8 +168,11 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     applyGraph(result.value.graph as WorkflowGraph, setNodes, setEdges, runStates, filter);
   }, [filter, runStates, setEdges, setNodes, source]);
 
+  // Warnings are shown but block nothing; only errors stop saving and running.
+  const hasErrors = useMemo(() => diagnostics.some(isErrorDiagnostic), [diagnostics]);
+
   const saveWorkflow = useCallback(async () => {
-    if (!selectedProjectId || !selectedName || diagnostics.length > 0) return;
+    if (!selectedProjectId || !selectedName || hasErrors) return;
     const result = await api.saveWorkflow(selectedProjectId, selectedName, source);
     if (result.isErr()) {
       toast.error(result.error.message);
@@ -199,8 +191,8 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     });
     void loadList();
   }, [
-    diagnostics.length,
     filter,
+    hasErrors,
     loadList,
     runStates,
     selectedName,
@@ -211,7 +203,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
   ]);
 
   const runWorkflow = useCallback(async () => {
-    if (!selectedName || diagnostics.length > 0 || !selectedThreadId) return;
+    if (!selectedName || hasErrors || !selectedThreadId) return;
     let inputs: Record<string, unknown>;
     try {
       inputs = JSON.parse(inputsSource) as Record<string, unknown>;
@@ -229,7 +221,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     }
     setActiveRun(result.value.runId);
     toast.success('Workflow started');
-  }, [diagnostics.length, inputsSource, selectedName, selectedThreadId, setActiveRun]);
+  }, [hasErrors, inputsSource, selectedName, selectedThreadId, setActiveRun]);
 
   const cancelRun = useCallback(async () => {
     if (!activeRunId) return;
@@ -298,11 +290,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
         <Button variant="outline" size="sm" onClick={() => void refreshFromSource()}>
           <RefreshCw className="size-4" />
         </Button>
-        <Button
-          size="sm"
-          onClick={() => void saveWorkflow()}
-          disabled={!selectedName || diagnostics.length > 0}
-        >
+        <Button size="sm" onClick={() => void saveWorkflow()} disabled={!selectedName || hasErrors}>
           <Save className="size-4" />
           Save
         </Button>
@@ -310,7 +298,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
           size="sm"
           variant="secondary"
           onClick={() => void runWorkflow()}
-          disabled={!selectedName || diagnostics.length > 0 || !selectedThreadId}
+          disabled={!selectedName || hasErrors || !selectedThreadId}
         >
           <Play className="size-4" />
           Run
@@ -645,9 +633,16 @@ function SourcePanel({
           {diagnostics.map((diagnostic) => (
             <div
               key={`${diagnostic.path}-${diagnostic.message}`}
-              className="text-destructive flex gap-2 text-xs"
+              data-severity={isErrorDiagnostic(diagnostic) ? 'error' : 'warning'}
+              className={`flex gap-2 text-xs ${
+                isErrorDiagnostic(diagnostic) ? 'text-destructive' : 'text-status-warning'
+              }`}
             >
-              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              {isErrorDiagnostic(diagnostic) ? (
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              ) : (
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              )}
               <span>
                 {diagnostic.path}: {diagnostic.message}
               </span>
@@ -656,43 +651,6 @@ function SourcePanel({
         </div>
       ) : null}
     </section>
-  );
-}
-
-function WorkflowNodeView({ data }: NodeProps<WorkflowNode>) {
-  const status = data.runStatus;
-  const StatusIcon =
-    status === 'completed'
-      ? CircleCheck
-      : status === 'failed'
-        ? CircleX
-        : status === 'running' || status === 'waiting_approval'
-          ? CircleDashed
-          : status === 'skipped'
-            ? Circle
-            : Circle;
-
-  return (
-    <div
-      className={cn(
-        'border-border bg-background min-w-52 rounded-md border p-3 shadow-sm',
-        data.dimmed && 'opacity-35',
-        status === 'running' && 'border-status-info',
-        status === 'waiting_approval' && 'border-status-warning',
-        status === 'completed' && 'border-status-success',
-        status === 'failed' && 'border-status-error',
-      )}
-    >
-      <Handle type="target" position={Position.Left} />
-      <div className="flex items-start gap-2">
-        <StatusIcon className="mt-0.5 size-4 shrink-0" />
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{data.label}</div>
-          <div className="text-muted-foreground truncate text-xs">{data.actionType}</div>
-        </div>
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
   );
 }
 
@@ -730,26 +688,9 @@ function applyGraph(
   runStates: ReturnType<typeof useWorkflowRunStore.getState>['runs'][string] | undefined,
   filter: string,
 ) {
-  const normalized = filter.trim().toLowerCase();
-  setNodes(
-    (graph.nodes as WorkflowNode[]).map((node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        runStatus: runStates?.[node.id]?.status,
-        dimmed:
-          normalized.length > 0 &&
-          !`${node.id} ${node.data.actionType}`.toLowerCase().includes(normalized),
-      },
-    })),
-  );
-  setEdges(
-    (graph.edges as Edge[]).map((edge) => ({
-      ...edge,
-      animated: edge.label === 'loop',
-      type: edge.label === 'loop' ? 'smoothstep' : undefined,
-    })),
-  );
+  const { nodes, edges } = decorateGraph(graph, runStates, filter);
+  setNodes(nodes);
+  setEdges(edges);
 }
 
 function actionOf(node: ParsedNode): { type: keyof ParsedNode; value: unknown } {

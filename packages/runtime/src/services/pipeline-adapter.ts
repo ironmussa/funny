@@ -589,6 +589,7 @@ export class RuntimeProgressReporter implements ProgressReporter {
 
 function workflowStatusOf(data: StepProgressData): WorkflowNodeRunStatus {
   if (data.metadata?.workflowStatus === 'waiting_approval') return 'waiting_approval';
+  if (data.metadata?.workflowStatus === 'waiting_slot') return 'waiting_slot';
   return data.status;
 }
 

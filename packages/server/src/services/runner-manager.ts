@@ -23,6 +23,7 @@ import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { runners, runnerTasks, runnerProjectAssignments } from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import { interruptActivitiesOfRunner } from './activities/activity-service.js';
 import {
   bindSandboxRunner,
   canRunnerAccessProject,
@@ -31,6 +32,23 @@ import {
 } from './runner-scope.js';
 
 const HEARTBEAT_TIMEOUT_MS = 60_000;
+
+/**
+ * A deleted runner never reports again: bump the scope policy, and mark its
+ * running activities `interrupted` (track-background-activities, design D4).
+ */
+async function onRunnersDeleted(runnerIds: string[]): Promise<void> {
+  await runnersDeleted(runnerIds);
+  for (const runnerId of runnerIds) {
+    await interruptActivitiesOfRunner(runnerId).catch((error) =>
+      log.warn('Failed to interrupt the activities of a deleted runner', {
+        namespace: 'activities',
+        runnerId,
+        error: (error as Error).message,
+      }),
+    );
+  }
+}
 
 // ── Per-runner advertised providers (provider-manifest-loader §3.2) ──────────
 // External providers a runner installed, advertised on register + heartbeat.
@@ -641,8 +659,18 @@ export async function getRunnerPublicMediaUrl(runnerId: string): Promise<string 
 export async function removeRunner(runnerId: string): Promise<void> {
   await db.delete(runnerProjectAssignments).where(eq(runnerProjectAssignments.runnerId, runnerId));
   await db.delete(runners).where(eq(runners.id, runnerId));
-  await runnersDeleted([runnerId]);
+  await onRunnersDeleted([runnerId]);
   log.info('Runner removed', { namespace: 'runner', runnerId });
+}
+
+/** Deletes runners with their project assignments, then runs the deletion hooks. */
+async function deleteRunners(runnerIds: string[]): Promise<void> {
+  if (runnerIds.length === 0) return;
+  await db
+    .delete(runnerProjectAssignments)
+    .where(inArray(runnerProjectAssignments.runnerId, runnerIds));
+  await db.delete(runners).where(inArray(runners.id, runnerIds));
+  await onRunnersDeleted(runnerIds);
 }
 
 /** Remove all runners that have been offline longer than the given threshold. */
@@ -654,11 +682,7 @@ export async function purgeOfflineRunners(olderThanMs = 60_000): Promise<number>
     .where(and(eq(runners.status, 'offline'), lt(runners.lastHeartbeatAt, cutoff)));
 
   const staleIds = stale.map((r) => r.id);
-  await db
-    .delete(runnerProjectAssignments)
-    .where(inArray(runnerProjectAssignments.runnerId, staleIds));
-  await db.delete(runners).where(inArray(runners.id, staleIds));
-  await runnersDeleted(staleIds);
+  await deleteRunners(staleIds);
 
   if (stale.length > 0) {
     log.info(`Purged ${stale.length} stale offline runner(s)`, {
@@ -725,11 +749,7 @@ export async function purgeStaleRunners(): Promise<void> {
   if (stale.length === 0) return;
 
   const staleIds = stale.map((r) => r.id);
-  await db
-    .delete(runnerProjectAssignments)
-    .where(inArray(runnerProjectAssignments.runnerId, staleIds));
-  await db.delete(runners).where(inArray(runners.id, staleIds));
-  await runnersDeleted(staleIds);
+  await deleteRunners(staleIds);
   log.info(`Purged ${staleIds.length} stale runner(s)`, {
     namespace: 'runner',
   });
@@ -767,7 +787,7 @@ export async function removeRunnerForUser(runnerId: string, userId: string): Pro
   if (!rows[0]) return false;
 
   await db.delete(runners).where(eq(runners.id, runnerId));
-  await runnersDeleted([runnerId]);
+  await onRunnersDeleted([runnerId]);
   log.info('Runner removed by owner', {
     namespace: 'runner',
     runnerId,

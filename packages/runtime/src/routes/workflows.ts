@@ -11,6 +11,7 @@ import path from 'node:path';
 
 import type {
   WorkflowDefinitionResponse,
+  WorkflowDiagnostic,
   WorkflowListResponse,
   WorkflowSaveResponse,
   WorkflowValidateResponse,
@@ -257,7 +258,7 @@ function definitionOf(entry: WorkflowCatalogEntry): WorkflowDefinitionResponse {
     yaml: entry.yaml,
     parsed: entry.workflow,
     graph: workflowToGraph(entry.workflow),
-    diagnostics: [],
+    diagnostics: asWarnings(entry.warnings),
   };
 }
 
@@ -285,8 +286,15 @@ function validateWorkflowYaml(yaml: string): WorkflowValidateResponse {
     ok: true,
     parsed: result.workflow,
     graph: workflowToGraph(result.workflow),
-    diagnostics: [],
+    diagnostics: asWarnings(result.warnings),
   };
+}
+
+/** Parse warnings as diagnostics that block neither saving nor running. */
+function asWarnings(
+  issues: ReadonlyArray<{ path: string; message: string }>,
+): WorkflowDiagnostic[] {
+  return issues.map((issue) => ({ ...issue, severity: 'warning' }));
 }
 
 function requiredInputsMissing(

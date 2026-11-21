@@ -86,13 +86,19 @@ Every operation SHALL have a typed request and outcome, a deadline, and explicit
 
 ### Requirement: Idempotent persistent mutations
 
-Every retryable mutation that can create or modify durable state SHALL carry an idempotency key scoped to the authenticated runner and operation. The runner SHALL retain unconfirmed mutations in a durable outbox, and the server SHALL retain enough deduplication state to return the original outcome when a request is repeated after disconnection.
+Every retryable mutation that can create or modify durable state SHALL carry an idempotency key scoped to the authenticated runner and operation. The runner SHALL retain unconfirmed mutations in a durable outbox, and the server SHALL retain a serializable outcome for every accepted mutation so it can return the original outcome when a request is repeated after disconnection.
 
 #### Scenario: Disconnect after mutation execution
 
 - **WHEN** the server commits a mutation but the connection fails before the runner receives its outcome
 - **THEN** the runner SHALL retry the mutation with the same idempotency key
 - **AND** the server SHALL return the original outcome without applying the mutation a second time
+
+#### Scenario: Fire-and-forget mutation completes
+
+- **WHEN** the server commits a persistent mutation whose application handler otherwise has no response body
+- **THEN** the server SHALL persist and return a serializable success acknowledgement
+- **AND** the idempotency claim SHALL transition out of its in-progress state
 
 #### Scenario: Runner restarts with pending mutations
 
@@ -156,38 +162,17 @@ The server SHALL maintain at most one active gRPC session for a runner identity.
 
 ### Requirement: Compatibility gate before production rollout
 
-The implementation SHALL prove interoperability between the selected central-server runtime and a Rust gRPC client before enabling production runner traffic. The gate SHALL cover prolonged bidirectional streaming, metadata and status trailers, cancellation, deadlines, slow-consumer backpressure, binary payload limits, reconnect behavior, production ingress traversal, and coexistence with the existing application listener.
+The implementation SHALL prove interoperability between the selected central-server runtime and a Rust gRPC client before removing the legacy runner transport. The gate SHALL cover prolonged bidirectional streaming, metadata and status trailers, cancellation, deadlines, slow-consumer backpressure, binary payload limits, reconnect behavior, production ingress traversal, and coexistence with the existing application listener.
 
 #### Scenario: Compatibility suite passes
 
 - **WHEN** every required interoperability and ingress test passes under sustained and failure-injected conditions
-- **THEN** direct gRPC handling in the central-server runtime MAY proceed to canary rollout
+- **THEN** the legacy runner transport MAY be removed
 
 #### Scenario: Direct runtime support fails the gate
 
 - **WHEN** any required behavior cannot be made reliable in the central-server runtime
-- **THEN** production rollout SHALL remain disabled
-- **AND** the implementation SHALL use a compatible gRPC gateway boundary or stop the change without weakening the protocol requirements
-
-### Requirement: Reversible coexistence and rollout
-
-The server SHALL support legacy Socket.IO runners and gRPC runners concurrently during migration, while each runner uses exactly one selected transport. Protocol-specific health, connection, error, retry, backlog, and latency signals SHALL be observable, and rollout SHALL be reversible without losing accepted durable operations.
-
-#### Scenario: Mixed runner fleet
-
-- **WHEN** legacy and gRPC-capable runners are connected during migration
-- **THEN** the server SHALL route work to each runner through its active protocol without duplicate dispatch or duplicate event publication
-
-#### Scenario: Canary rollback
-
-- **WHEN** gRPC canary health violates a configured rollout threshold
-- **THEN** operators SHALL be able to stop assigning new gRPC sessions and return eligible runners to the legacy protocol
-- **AND** already accepted durable mutations SHALL remain recoverable
-
-#### Scenario: Protocol-level diagnostics
-
-- **WHEN** operators inspect runner transport health
-- **THEN** they SHALL be able to distinguish protocol version and observe connection state, reconnects, typed failures, stream backlog, gaps, and end-to-end latency without exposing credentials or payload content
+- **THEN** the legacy runner transport SHALL remain available until the implementation uses a compatible gRPC gateway boundary or stops the change without weakening the protocol requirements
 
 ### Requirement: Browser transport remains compatible
 
@@ -197,3 +182,24 @@ This capability SHALL NOT require browsers to speak native gRPC. Existing browse
 
 - **WHEN** a browser uses an existing supported API or realtime interaction whose target runner selected gRPC
 - **THEN** the user-visible behavior SHALL remain compatible without requiring a native gRPC browser client
+
+### Requirement: gRPC-only runner transport
+
+Every runner-to-central-server control command, data operation, agent event, proxied HTTP request, and terminal interaction SHALL use the authenticated gRPC transport. Runner team mode SHALL require a gRPC endpoint and SHALL fail explicitly when it is missing or unavailable instead of selecting runner Socket.IO or direct runner HTTP as a fallback.
+
+#### Scenario: Runner starts without a gRPC endpoint
+
+- **WHEN** team mode is enabled but no runner gRPC endpoint is configured
+- **THEN** the runner SHALL report a configuration error and SHALL NOT connect through the legacy runner Socket.IO namespace
+
+#### Scenario: Active gRPC transport disconnects
+
+- **WHEN** an active runner gRPC session disconnects or receives a retryable transport failure
+- **THEN** the runner SHALL use the gRPC transport's bounded reconnection behavior
+- **AND** it SHALL NOT switch to runner Socket.IO or direct HTTP
+
+#### Scenario: Browser targets a runner
+
+- **WHEN** a browser sends a supported terminal, session, data, event, or tunneled HTTP operation to a runner
+- **THEN** the central server SHALL dispatch the runner-facing portion through the active gRPC session
+- **AND** browser-facing Socket.IO and HTTP behavior SHALL remain compatible

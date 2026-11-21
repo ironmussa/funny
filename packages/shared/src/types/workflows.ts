@@ -6,11 +6,23 @@ export type WorkflowNodeRunStatus =
   | 'completed'
   | 'skipped'
   | 'failed'
-  | 'waiting_approval';
+  | 'waiting_approval'
+  /** Waiting for a slot of its concurrency group (another run holds it). */
+  | 'waiting_slot';
 
 export interface WorkflowDiagnostic {
   path: string;
   message: string;
+  /**
+   * An `error` makes the workflow invalid (it cannot be saved or run); a
+   * `warning` is shown but blocks nothing. Missing means `error`.
+   */
+  severity?: 'error' | 'warning';
+}
+
+/** Whether a diagnostic makes the workflow invalid (missing severity is an error). */
+export function isErrorDiagnostic(diagnostic: WorkflowDiagnostic): boolean {
+  return diagnostic.severity !== 'warning';
 }
 
 export interface WorkflowSummary {

@@ -2066,6 +2066,118 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'metrics', 'TEXT');
     },
   },
+  {
+    // workflow-dag-engine: the engine's journal (one row per node execution,
+    // replayed when a run resumes; deleted with its factory run) and
+    // concurrency-group leases and waiters
+    // shared across server instances. Epoch-ms columns are BIGINT on Postgres.
+    name: '103_workflow_journal_and_leases',
+    async up() {
+      const epoch = sql.raw(ctx().dialect === 'pg' ? 'BIGINT' : 'INTEGER');
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS workflow_node_executions (
+          run_id TEXT NOT NULL REFERENCES factory_runs(id) ON DELETE CASCADE,
+          node_id TEXT NOT NULL,
+          visit TEXT NOT NULL,
+          attempt INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          output TEXT,
+          error TEXT,
+          data TEXT,
+          started_at ${epoch} NOT NULL,
+          finished_at ${epoch},
+          PRIMARY KEY (run_id, node_id, visit, attempt)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS workflow_concurrency_leases (
+          group_key TEXT NOT NULL,
+          holder TEXT NOT NULL,
+          expires_at ${epoch} NOT NULL,
+          acquired_at ${epoch} NOT NULL,
+          PRIMARY KEY (group_key, holder)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS workflow_concurrency_waiters (
+          group_key TEXT NOT NULL,
+          holder TEXT NOT NULL,
+          slot_limit INTEGER NOT NULL,
+          priority INTEGER NOT NULL DEFAULT 0,
+          requested_at ${epoch} NOT NULL,
+          expires_at ${epoch} NOT NULL,
+          batch_max INTEGER,
+          batch_wait_ms INTEGER,
+          input TEXT,
+          leader TEXT,
+          outcome TEXT,
+          PRIMARY KEY (group_key, holder)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_workflow_waiters_order
+        ON workflow_concurrency_waiters (group_key, priority, requested_at)
+      `);
+    },
+  },
+  {
+    // Project secrets (openspec project-secrets). `user_id` is '' for shared
+    // rows so the unique index also covers them.
+    name: '104_project_secrets',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_secrets (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          scope TEXT NOT NULL,
+          user_id TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL,
+          ciphertext TEXT NOT NULL,
+          allow_in_sandbox INTEGER NOT NULL DEFAULT 0,
+          updated_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS project_secrets_scope_name
+        ON project_secrets (project_id, scope, user_id, name)
+      `);
+    },
+  },
+  {
+    // track-background-activities: user-started background operations (clone,
+    // worktree setup, git workflow) and their outcome. No foreign keys: a row
+    // outlives its thread and project.
+    name: '105_activities',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS activities (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          runner_id TEXT,
+          kind TEXT NOT NULL,
+          project_id TEXT,
+          thread_id TEXT,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'running',
+          step TEXT,
+          error TEXT,
+          input TEXT NOT NULL DEFAULT '{}',
+          result_ref TEXT,
+          started_at TEXT NOT NULL,
+          ended_at TEXT,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(
+        sql`CREATE INDEX IF NOT EXISTS idx_activities_user_started ON activities (user_id, started_at)`,
+      );
+      await ctx().exec(
+        sql`CREATE INDEX IF NOT EXISTS idx_activities_runner_status ON activities (runner_id, status)`,
+      );
+    },
+  },
 ];
 
 /**

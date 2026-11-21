@@ -49,6 +49,7 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
   'data:get_provider_key',
   'data:get_github_token',
   'data:get_github_app_token',
+  'data:get_project_secrets',
   'data:get_minimax_api_key',
   'data:update_profile',
   'data:resolve_agent_execution_profile',
@@ -72,6 +73,9 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
   'data:create_permission_rule',
   'data:find_permission_rule',
   'data:list_permission_rules',
+  'data:activity_start',
+  'data:activity_update',
+  'data:activity_reconcile',
 ] as const;
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
@@ -203,6 +207,9 @@ const persistentMutations = new Set([
   'jobUpdate',
   'jobDeleteByThread',
   'createPermissionRule',
+  'activityStart',
+  'activityUpdate',
+  'activityReconcile',
 ]);
 
 type OperationValue = Record<string, any>;
@@ -298,6 +305,7 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:get_provider_key': ['getProviderKey', (input) => ({ provider: input.provider })],
   'data:get_github_token': ['getGithubToken', (input) => ({ projectId: input.projectId ?? '' })],
   'data:get_github_app_token': ['getGithubAppToken', inputThreadId],
+  'data:get_project_secrets': ['getProjectSecrets', inputThreadId],
   'data:get_minimax_api_key': ['getMinimaxApiKey', noValue],
   'data:update_profile': ['updateProfile', (_input, payload) => ({ updates: payload })],
   'data:resolve_agent_execution_profile': ['resolveAgentExecutionProfile', inputProjectId],
@@ -341,6 +349,15 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:create_permission_rule': ['createPermissionRule', asPayload],
   'data:find_permission_rule': ['findPermissionRule', asPayload],
   'data:list_permission_rules': ['listPermissionRules', asPayload],
+  'data:activity_start': ['activityStart', (_input, payload) => ({ activity: payload })],
+  'data:activity_update': [
+    'activityUpdate',
+    (_input, payload) => ({ activityId: payload.id, patch: payload.patch }),
+  ],
+  'data:activity_reconcile': [
+    'activityReconcile',
+    (_input, payload) => ({ liveActivityIds: payload.liveIds ?? [] }),
+  ],
 };
 
 export function mapRunnerOperation(

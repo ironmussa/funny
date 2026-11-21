@@ -168,3 +168,29 @@ test('returns to the form when the clone cannot start', async () => {
     'cloneRepo',
   );
 });
+
+test('a retried clone opens the form filled from the failed activity and starts nothing', async () => {
+  render(
+    <MemoryRouter>
+      <CloneRepoView
+        initialValues={{
+          cloneUrl: 'https://github.com/acme/widget.git',
+          destinationPath: '/home/me/code',
+          name: 'widget',
+        }}
+      />
+    </MemoryRouter>,
+  );
+  const destination = (await screen.findByTestId('clone-config-destination')) as HTMLInputElement;
+  expect(destination.value).toBe('/home/me/code');
+  expect(screen.getByText('acme/widget')).toBeInTheDocument();
+  expect(mocks.api.cloneRepo).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByTestId('clone-config-submit'));
+  await waitFor(() => expect(mocks.api.cloneRepo).toHaveBeenCalledTimes(1));
+  expect(mocks.api.cloneRepo.mock.calls[0].slice(0, 3)).toEqual([
+    'https://github.com/acme/widget.git',
+    '/home/me/code',
+    'widget',
+  ]);
+});

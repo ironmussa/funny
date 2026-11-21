@@ -25,6 +25,8 @@ export function serializeWorkflow(workflow: ParsedWorkflow): string {
 function normalizeNodeForYaml(node: ParsedNode): JsonObject {
   const out: JsonObject = { id: node.id };
   if (node.depends_on.length > 0) out.depends_on = node.depends_on;
+  if (node.trigger_rule) out.trigger_rule = node.trigger_rule;
+  if (node.concurrency) out.concurrency = node.concurrency;
   if (node.when) out.when = node.when;
   if (node.on_error !== 'fail') out.on_error = node.on_error;
   if (node.retry) out.retry = node.retry;

@@ -79,6 +79,15 @@ const mocks = (() => ({
   runSensitivePathBypass: vi.fn(),
   syncClaudeProjectAssets: vi.fn(),
   captureGitCheckpoint: vi.fn(async (..._args: unknown[]) => undefined),
+  getProjectSecrets: vi.fn(
+    async (
+      _threadId: string,
+    ): Promise<{
+      secrets?: { name: string; value: string }[];
+      error?: string;
+      message?: string;
+    } | null> => ({ secrets: [] }),
+  ),
 }))();
 
 vi.mock('../../lib/logger.js', () => ({
@@ -144,6 +153,10 @@ vi.mock('../../services/permission-rules-client.js', () => ({
 
 vi.mock('../../services/sensitive-path-bypass.js', () => ({
   runSensitivePathBypass: (...args: unknown[]) => mocks.runSensitivePathBypass(...args),
+}));
+
+vi.mock('../../services/remote-project-identity-client.js', () => ({
+  remoteGetProjectSecrets: (threadId: string) => mocks.getProjectSecrets(threadId),
 }));
 
 vi.mock('../../services/git-checkpoints.js', () => ({
@@ -279,6 +292,7 @@ describe('AgentLifecycleManager', () => {
     mocks.getProviderKey.mockResolvedValue(undefined);
     mocks.findPermissionRule.mockResolvedValue(undefined);
     mocks.resolveEffectiveProfile.mockResolvedValue(noResolvedProfile);
+    mocks.getProjectSecrets.mockResolvedValue({ secrets: [] });
     mocks.runSensitivePathBypass.mockResolvedValue({ output: 'bypassed' });
     mocks.startSpan.mockReturnValue({
       traceId: 'trace-1',
@@ -895,6 +909,102 @@ describe('AgentLifecycleManager', () => {
       // of the template marker rather than a fully undefined prefix.)
       expect(call.systemPrefix ?? '').not.toMatch(/\[AGENT TEMPLATE\]/);
       expect(call.disallowedTools).toBeUndefined();
+    });
+  });
+
+  describe('startAgent — project secrets', () => {
+    test('puts the project secrets in the agent env', async () => {
+      mocks.getProjectSecrets.mockResolvedValue({
+        secrets: [{ name: 'STRIPE_KEY', value: 'sk-live-12345678' }],
+      });
+
+      const call = await startWithStatus('pending', { id: 'thread-secrets' }, 'codex');
+
+      expect(mocks.getProjectSecrets).toHaveBeenCalledWith('thread-secrets');
+      expect(call.env).toEqual({ STRIPE_KEY: 'sk-live-12345678' });
+    });
+
+    test('a secret never replaces a variable funny sets or the agent profile sets', async () => {
+      mocks.getProviderKey.mockImplementation(async (_userId, keyId) =>
+        keyId === 'gemini' ? 'real-gemini-key' : undefined,
+      );
+      mocks.resolveEffectiveProfile.mockResolvedValue({
+        profile: {
+          id: 'profile-1',
+          name: 'Work',
+          provider: 'gemini',
+          config: { claude: { configDir: '/tmp/unused' } },
+          createdAt: '2026-06-24T00:00:00.000Z',
+          updatedAt: '2026-06-24T00:00:00.000Z',
+        },
+        env: { FROM_PROFILE: 'profile-value' },
+      });
+      mocks.getProjectSecrets.mockResolvedValue({
+        secrets: [
+          { name: 'GEMINI_API_KEY', value: 'from-a-secret' },
+          { name: 'FROM_PROFILE', value: 'from-a-secret' },
+          { name: 'DATABASE_URL', value: 'postgres://project' },
+        ],
+      });
+
+      const call = await startWithStatus('pending', { id: 'thread-secrets-order' }, 'gemini');
+
+      expect(call.env).toEqual({
+        GEMINI_API_KEY: 'real-gemini-key',
+        FROM_PROFILE: 'profile-value',
+        DATABASE_URL: 'postgres://project',
+      });
+    });
+
+    test('a scratch thread asks for no secrets', async () => {
+      mocks.threadManager.getThread.mockResolvedValue({
+        id: 'scratch-secrets',
+        userId: 'user-1',
+        projectId: '',
+        isScratch: true,
+        status: 'pending',
+        mode: 'local',
+        sessionId: null,
+        cost: 0,
+      });
+      mocks.getProject.mockResolvedValue(null);
+      mocks.resolveThreadCwd.mockReturnValue(ok(scratchPathFor('user-1', 'scratch-secrets')));
+      // An earlier test leaves mkdirSync throwing (clearAllMocks keeps
+      // implementations) and the env tests below count on it, so it is put back.
+      const mkdirBefore = mocks.mkdirSync.getMockImplementation();
+      mocks.mkdirSync.mockImplementation(() => undefined);
+      try {
+        await createManager().startAgent('scratch-secrets', 'try regex', '/ignored', 'sonnet');
+      } finally {
+        mocks.mkdirSync.mockImplementation(mkdirBefore ?? (() => undefined));
+      }
+
+      expect(mocks.getProjectSecrets).not.toHaveBeenCalled();
+      expect(mocks.orchestrator.startAgent).toHaveBeenCalled();
+    });
+
+    test('a secret that cannot be read stops the start and the thread shows why', async () => {
+      seedProjectThread();
+      mocks.getProjectSecrets.mockResolvedValue({
+        error: 'undecryptable',
+        message: 'The project secret STRIPE_KEY cannot be decrypted.',
+      });
+
+      await expect(createManager().startAgent('thread-1', 'hello', '/tmp/repo')).rejects.toThrow(
+        'STRIPE_KEY cannot be decrypted',
+      );
+
+      expect(mocks.orchestrator.startAgent).not.toHaveBeenCalled();
+      expect(mocks.threadManager.updateThread).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ status: 'failed' }),
+      );
+      expect(mocks.eventRouter.emitWSToUser).toHaveBeenCalledWith(
+        'thread-1',
+        'user-1',
+        'agent:error',
+        { error: 'The project secret STRIPE_KEY cannot be decrypted.' },
+      );
     });
   });
 

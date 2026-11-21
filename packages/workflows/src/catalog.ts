@@ -2,7 +2,7 @@ import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { formatParseError, parseWorkflowYaml } from './parse.js';
+import { formatParseError, parseWorkflowYaml, type WorkflowIssue } from './parse.js';
 import type { ParsedWorkflow } from './schema.js';
 
 export type WorkflowSource = 'built-in' | 'user';
@@ -13,6 +13,8 @@ export interface WorkflowCatalogEntry {
   filePath: string;
   workflow: ParsedWorkflow;
   yaml: string;
+  /** Parse warnings of the workflow (they block nothing). */
+  warnings: WorkflowIssue[];
 }
 
 export interface WorkflowCatalogLoadOptions {
@@ -78,6 +80,11 @@ async function mergeLayer(
       warnings.push(`Skipped ${source} workflow at ${filePath}: ${note}`);
       continue;
     }
+    for (const w of result.warnings) {
+      warnings.push(
+        `Warning in ${source} workflow ${result.workflow.name} (${filePath}) at ${w.path}: ${w.message}`,
+      );
+    }
 
     const existing = acc.get(result.workflow.name);
     if (!existing || sourceRank(source) > sourceRank(existing.source)) {
@@ -87,6 +94,7 @@ async function mergeLayer(
         filePath,
         workflow: result.workflow,
         yaml,
+        warnings: result.warnings,
       });
     }
   }

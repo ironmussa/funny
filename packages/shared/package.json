@@ -65,7 +65,10 @@
     "./lib/sliding-window-hits": "./src/lib/sliding-window-hits.ts",
     "./async": "./src/async.ts",
     "./stale-while-revalidate": "./src/stale-while-revalidate.ts",
-    "./github-app-token": "./src/github-app-token.ts"
+    "./github-app-token": "./src/github-app-token.ts",
+    "./project-secrets": "./src/project-secrets.ts",
+    "./activities": "./src/activities/kinds.ts",
+    "./activity-machine": "./src/activity-machine.ts"
   },
   "scripts": {
     "test": "bun test"

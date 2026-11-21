@@ -335,6 +335,31 @@ nodes:
     );
   });
 
+  test('a workflow with a parse warning still runs, and the warning is in the selection event', async () => {
+    overrideOnBase(
+      customWorkflow.replace(
+        "      prompt: 'Use the team-implement skill on issue {{issue_number}}.'\n",
+        "      prompt: 'Use the team-implement skill on issue {{issue_number}}.'\n    on_error: continue\n",
+      ),
+    );
+    const outcome = await runImplementStep(spec(), {
+      cwd: work,
+      agents: fakeAgents([writesHello]),
+      pullRequests: fakeGitHub(),
+      print: (line) => printed.push(line),
+    });
+
+    expect(outcome.kind).toBe('pr_opened');
+    const selected = readFileSync(join(root, 'events.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+      .find((e) => e.event_type === 'factory.workflow_selected');
+    expect(selected.data.warnings).toEqual([
+      expect.stringContaining('nodes.1.trigger_rule: "commit" is skipped if "implement" fails'),
+    ]);
+  });
+
   test('a repository without one gets the default workflow', async () => {
     const agents = fakeAgents([writesHello]);
 

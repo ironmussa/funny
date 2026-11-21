@@ -1,7 +1,7 @@
 import type { Job, Watcher } from '@funny/shared';
 
 import type { DataLayer } from '../data-layer';
-import { createEntityStore, type EntityStore } from '../entities';
+import { ownEntityStore, type EntityStore } from '../entities';
 import { getDataLayer } from '../runtime';
 
 /**
@@ -10,20 +10,10 @@ import { getDataLayer } from '../runtime';
  * its list endpoint and by the `job:*` / `watcher:*` realtime events.
  */
 
-function own<T extends { id: string }>(layer: DataLayer, name: string): EntityStore<T> {
-  return layer.own(name, () => {
-    const data = createEntityStore<T>(layer, name);
-    return {
-      value: data,
-      dispose: () => void data.collection.cleanup({ dependents: true }).catch(() => undefined),
-    };
-  });
-}
-
 export function getJobsData(layer: DataLayer = getDataLayer()): EntityStore<Job> {
-  return own<Job>(layer, 'jobs');
+  return ownEntityStore<Job>(layer, 'jobs');
 }
 
 export function getWatchersData(layer: DataLayer = getDataLayer()): EntityStore<Watcher> {
-  return own<Watcher>(layer, 'watchers');
+  return ownEntityStore<Watcher>(layer, 'watchers');
 }

@@ -16,8 +16,15 @@ import {
   git,
   isSafeGitRefArg,
 } from '@funny/core/git';
-import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
+import type {
+  WSEvent,
+  AgentProvider,
+  AgentModel,
+  PermissionMode,
+  ThreadStatus,
+} from '@funny/shared';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
+import { isThreadStatus } from '@funny/shared/thread-machine';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -227,6 +234,7 @@ async function autoStartIdleThread(
           userId: thread.userId,
           threadId,
           flow: 'idle-start',
+          projectId: thread.projectId,
         });
         if (wtResult.isErr()) {
           await tm.updateThread(threadId, { status: 'failed' });
@@ -482,6 +490,22 @@ export function convertToWorktree(
   );
 }
 
+/**
+ * The status a thread returns to once its worktree is ready. Converting starts
+ * no agent, so the thread goes back to where it was instead of `pending`,
+ * which the UI shows as a launch in progress. An agent the conversion stopped
+ * leaves the thread `stopped`.
+ */
+function statusAfterConvert(
+  prior: string | null | undefined,
+  agentWasRunning: boolean,
+): ThreadStatus {
+  if (!prior || !isThreadStatus(prior)) return agentWasRunning ? 'stopped' : 'pending';
+  if (agentWasRunning || prior === 'running' || prior === 'waiting') return 'stopped';
+  if (prior === 'setting_up') return 'pending';
+  return prior;
+}
+
 async function convertToWorktreeImpl(
   threadId: string,
   userId: string,
@@ -504,7 +528,9 @@ async function convertToWorktreeImpl(
   const projectPath = pathResult.value;
 
   // Stop the agent if running
-  if (isAgentRunning(threadId)) {
+  const agentWasRunning = isAgentRunning(threadId);
+  const settledStatus = statusAfterConvert(thread.status, agentWasRunning);
+  if (agentWasRunning) {
     try {
       await stopAgent(threadId);
     } catch (err) {
@@ -540,6 +566,7 @@ async function convertToWorktreeImpl(
         userId,
         threadId,
         flow: 'convert',
+        projectId: thread.projectId,
       });
       if (wtResult.isErr()) {
         await tm.updateThread(threadId, { status: 'failed' });
@@ -557,7 +584,7 @@ async function convertToWorktreeImpl(
         branch: branchName,
         baseBranch: resolvedBaseBranch,
         worktreePath: wtPath,
-        status: 'pending',
+        status: settledStatus,
         sessionId: null,
         contextRecoveryReason: 'worktree-convert',
       });
@@ -571,7 +598,7 @@ async function convertToWorktreeImpl(
         branch: branchName,
         baseBranch: resolvedBaseBranch,
         worktreePath: wtPath,
-        status: 'pending',
+        status: settledStatus,
       });
     } catch (err) {
       log.error('Background convert-to-worktree failed', { threadId, error: String(err) });

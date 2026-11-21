@@ -143,3 +143,17 @@ export function createEntityStore<T extends Entity>(
     },
   };
 }
+
+/**
+ * The layer's one entity store named `name`, created on first use and disposed
+ * with the layer.
+ */
+export function ownEntityStore<T extends Entity>(layer: DataLayer, name: string): EntityStore<T> {
+  return layer.own(name, () => {
+    const data = createEntityStore<T>(layer, name);
+    return {
+      value: data,
+      dispose: () => void data.collection.cleanup({ dependents: true }).catch(() => undefined),
+    };
+  });
+}

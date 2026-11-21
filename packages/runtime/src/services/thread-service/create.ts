@@ -567,6 +567,7 @@ async function setupWorktreeAndStartAgent(
       userId: params.userId,
       threadId,
       flow: 'create',
+      projectId: ctx.projectId,
     });
     if (wtResult.isErr()) {
       await markThreadFailed(params.userId, threadId);

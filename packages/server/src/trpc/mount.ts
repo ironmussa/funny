@@ -11,6 +11,7 @@ import type { Context, Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { createActivitiesPort } from './ports/activities.js';
 import { agentTemplatesPort } from './ports/agent-templates.js';
 import { authzPort } from './ports/authz.js';
 import { automationsPort } from './ports/automations.js';
@@ -23,6 +24,7 @@ import { personalTokensPort } from './ports/personal-tokens.js';
 import { pipelinesPort } from './ports/pipelines.js';
 import { profilePort } from './ports/profile.js';
 import { createProjectRunnersPort } from './ports/project-runners.js';
+import { projectSecretsPort } from './ports/project-secrets.js';
 import { createProjectsPort } from './ports/projects.js';
 import { runnersPort } from './ports/runners.js';
 import { settingsPort } from './ports/settings.js';
@@ -43,6 +45,7 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     agentTemplates: agentTemplatesPort,
     watchers: watchersPort,
     jobs: jobsPort,
+    activities: createActivitiesPort(c.env?.runnerPresence),
     designs: designsPort,
     analytics: analyticsPort,
     push: pushPort,
@@ -55,6 +58,7 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
       presence: c.env?.runnerPresence,
     }),
     factory: factoryPort,
+    projectSecrets: projectSecretsPort,
     threadAccess: threadAccessPort,
     authz: authzPort,
   };

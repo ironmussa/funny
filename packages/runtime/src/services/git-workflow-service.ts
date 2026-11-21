@@ -18,6 +18,7 @@ import type {
 } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
+import { beginActivity, type ActivityHandle } from './activity-tracker.js';
 import { getActionPipeline, deriveSteps, type GitPipelineContext } from './git-pipelines.js';
 import { getPipelineForProject } from './pipeline-manager.js';
 import { listHooks } from './project-hooks-service.js';
@@ -92,6 +93,13 @@ const TITLES: Record<GitWorkflowAction, string> = {
   'create-pr': 'Creating pull request',
 };
 
+/** The message of a failed workflow: the pipeline's error, else the failed step's. */
+function workflowFailure(error: string | undefined, steps: GitWorkflowProgressStep[]): string {
+  if (error) return error;
+  const failed = steps.find((s) => s.status === 'failed');
+  return failed?.error || (failed ? `${failed.label} failed` : 'Workflow failed');
+}
+
 function isCommitAction(action: GitWorkflowAction): boolean {
   return ['commit', 'amend', 'commit-push', 'commit-pr', 'commit-merge'].includes(action);
 }
@@ -106,6 +114,19 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
   const workflowId = crypto.randomUUID();
   const abortController = new AbortController();
   activeWorkflows.set(params.contextId, abortController);
+  // Thread workflows (the review pane) are tracked as activities
+  // (track-background-activities); project-scoped ones are not.
+  const activity: ActivityHandle | null = params.threadId
+    ? beginActivity({
+        id: workflowId,
+        kind: 'git.workflow',
+        userId: params.userId,
+        projectId: params.projectId,
+        threadId: params.threadId,
+        title: TITLES[params.action],
+        input: { action: params.action },
+      })
+    : null;
 
   // Launch the workflow asynchronously so we can await the pipeline config
   void (async () => {
@@ -129,6 +150,10 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
     const setStep = (stepId: string, update: Partial<GitWorkflowProgressStep>) => {
       steps = markStep(steps, stepId, update);
       emit('step_update');
+      if (update.status === 'running') {
+        const label = steps.find((s) => s.id === stepId)?.label;
+        if (label) activity?.step(label);
+      }
     };
 
     // Build the unified context
@@ -208,7 +233,10 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
       });
     }
 
+    // The process-wide in-memory gate and no journal (a workflow is not resumed
+    // after a restart); `runId` names this workflow in the gate's slot holders.
     const pipelineOpts: PipelineRunOptions<GitPipelineContext> = {
+      runId: workflowId,
       signal: abortController.signal,
       maxIterations: pipelineConfig?.maxIterations,
     };
@@ -217,6 +245,8 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
       .then((result) => {
         if (result.outcome === 'completed') {
           emit('completed');
+          const prUrl = result.ctx?.prUrl;
+          activity?.succeed(prUrl ? { prUrl } : undefined);
           if (params.threadId) {
             void emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
               workflowId,
@@ -226,6 +256,7 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
           }
         } else {
           emit('failed');
+          activity?.fail(workflowFailure(result.error, steps));
           if (params.threadId) {
             void emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
               workflowId,
@@ -243,6 +274,7 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
           error: String(err),
         });
         emit('failed');
+        activity?.fail(String(err));
         if (params.threadId) {
           void emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
             workflowId,
@@ -266,6 +298,7 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
     // The client was told the workflow started (it got the id back) and waits
     // for its end: without this its buttons stayed disabled until a reload.
     emitProgress(params.userId, params.contextId, workflowId, 'failed', params.action, []);
+    activity?.fail(String(err));
   });
 
   return { workflowId };

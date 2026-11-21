@@ -333,6 +333,80 @@ export const factoryRuns = sqliteTable('factory_runs', {
   metrics: text('metrics'),
 });
 
+/**
+ * The workflow engine's journal on the server (change workflow-dag-engine,
+ * D6): one row per node execution of a run, keyed by node, visit path and
+ * attempt. A run that starts again replays its rows instead of repeating
+ * recorded work. `output` and `data` are JSON; times are epoch-ms. The only
+ * server host is the issue factory, so rows hang off `factory_runs`.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const workflowNodeExecutions = sqliteTable(
+  'workflow_node_executions',
+  {
+    runId: text('run_id')
+      .notNull()
+      .references(() => factoryRuns.id, { onDelete: 'cascade' }),
+    nodeId: text('node_id').notNull(),
+    visit: text('visit').notNull(),
+    attempt: integer('attempt').notNull(),
+    status: text('status').notNull(),
+    output: text('output'),
+    error: text('error'),
+    data: text('data'),
+    startedAt: integer('started_at').notNull(),
+    finishedAt: integer('finished_at'),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.nodeId, t.visit, t.attempt] })],
+);
+
+/**
+ * Concurrency-group slots shared across server instances (D5): a lease per
+ * holder (`<runId>/<nodeId>/<visit>`), renewed while the node runs and
+ * expired when its server stops renewing it.
+ */
+// fallow-ignore-next-line code-duplication
+export const workflowConcurrencyLeases = sqliteTable(
+  'workflow_concurrency_leases',
+  {
+    groupKey: text('group_key').notNull(),
+    holder: text('holder').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+    acquiredAt: integer('acquired_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.groupKey, t.holder] })],
+);
+
+/**
+ * Requests waiting for a concurrency-group slot, granted to the first
+ * waiter by `priority` then `requested_at` (D5). A batching group (D5b)
+ * records the leader a waiter was gathered by and the outcome it settled.
+ */
+// fallow-ignore-next-line code-duplication
+export const workflowConcurrencyWaiters = sqliteTable(
+  'workflow_concurrency_waiters',
+  {
+    groupKey: text('group_key').notNull(),
+    holder: text('holder').notNull(),
+    /** The limit this waiter's node declares (the host may have replaced it). */
+    slotLimit: integer('slot_limit').notNull(),
+    priority: integer('priority').notNull().default(0),
+    requestedAt: integer('requested_at').notNull(),
+    /** Renewed while the waiting server is alive; an expired waiter is dropped. */
+    expiresAt: integer('expires_at').notNull(),
+    batchMax: integer('batch_max'),
+    batchWaitMs: integer('batch_wait_ms'),
+    /** JSON: the waiter's input to the node, for a batch leader. */
+    input: text('input'),
+    /** The leader holder that gathered this waiter into its batch, or null. */
+    leader: text('leader'),
+    /** JSON `SettledOutcome` the leader settled, or null while pending. */
+    outcome: text('outcome'),
+  },
+  (t) => [primaryKey({ columns: [t.groupKey, t.holder] })],
+);
+
 export const watchers = sqliteTable('watchers', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
@@ -372,6 +446,35 @@ export const jobs = sqliteTable('jobs', {
   startedAt: text('started_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+// fallow-ignore-start code-duplication -- every table is declared once per dialect (SQLite and PostgreSQL)
+export const activities = sqliteTable(
+  'activities',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    runnerId: text('runner_id'),
+    kind: text('kind').notNull(),
+    projectId: text('project_id'),
+    threadId: text('thread_id'),
+    title: text('title').notNull(),
+    status: text('status').notNull().default('running'),
+    step: text('step'),
+    error: text('error'),
+    // JSON of the kind's input (shared/src/activities/kinds.ts).
+    input: text('input').notNull().default('{}'),
+    // JSON `ActivityResultRef`.
+    resultRef: text('result_ref'),
+    startedAt: text('started_at').notNull(),
+    endedAt: text('ended_at'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_activities_user_started').on(table.userId, table.startedAt),
+    index('idx_activities_runner_status').on(table.runnerId, table.status),
+  ],
+);
+// fallow-ignore-end code-duplication
 
 export const userProfiles = sqliteTable('user_profiles', {
   id: text('id').primaryKey(),
@@ -1122,3 +1225,29 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
   p256dh: text('p256dh').notNull(),
   auth: text('auth').notNull(),
 });
+
+/**
+ * Project secrets (openspec `project-secrets`): named values handed to the
+ * project's agents as environment variables. `scope = 'project'` rows are
+ * shared by the members and carry `user_id = ''` (not NULL: a unique index
+ * treats NULLs as distinct, which would allow duplicate shared names);
+ * `scope = 'user'` rows belong to one member. `ciphertext` is keyring-encrypted.
+ */
+export const projectSecrets = sqliteTable(
+  'project_secrets',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull(),
+    userId: text('user_id').notNull().default(''),
+    name: text('name').notNull(),
+    ciphertext: text('ciphertext').notNull(),
+    allowInSandbox: integer('allow_in_sandbox').notNull().default(0),
+    updatedBy: text('updated_by').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('project_secrets_scope_name').on(t.projectId, t.scope, t.userId, t.name)],
+);

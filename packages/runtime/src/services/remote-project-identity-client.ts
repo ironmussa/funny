@@ -76,6 +76,18 @@ class RemoteProjectIdentityClient {
   } | null> {
     return this.request('data:get_github_app_token', { threadId });
   }
+  /**
+   * The project secrets the agent of `threadId` starts with (project-secrets),
+   * or the server's reason for not delivering them.
+   */
+  getProjectSecrets(threadId: string): Promise<{
+    secrets?: { name: string; value: string }[];
+    error?: string;
+    message?: string;
+    secretName?: string;
+  } | null> {
+    return this.request('data:get_project_secrets', { threadId });
+  }
   getMinimaxApiKey(userId: string): Promise<string | null> {
     return this.getProviderKey(userId, 'minimax');
   }
@@ -158,6 +170,9 @@ export const remoteGetGithubToken = remoteProjectIdentityClient.getGithubToken.b
   remoteProjectIdentityClient,
 );
 export const remoteGetGithubAppToken = remoteProjectIdentityClient.getGithubAppToken.bind(
+  remoteProjectIdentityClient,
+);
+export const remoteGetProjectSecrets = remoteProjectIdentityClient.getProjectSecrets.bind(
   remoteProjectIdentityClient,
 );
 export const remoteUpdateProfile = remoteProjectIdentityClient.updateProfile.bind(

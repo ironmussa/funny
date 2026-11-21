@@ -37,7 +37,7 @@ import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { factoryRuns, factorySettings } from '../../db/schema.js';
+import { factoryRuns, factorySettings, workflowNodeExecutions } from '../../db/schema.js';
 
 const THREAD_IDS_SCHEMA = z.array(z.string());
 
@@ -706,6 +706,10 @@ export function createFactoryRunsRepository(
      * the steps to replay — a retry or a take-over. Resolves whether it was
      * reopenable; the unique index refuses it while another run of the issue
      * is in flight (a storage error).
+     *
+     * The run's journal is cleared: the reopened attempt replays `threadIds`
+     * by call order (the steps the retry or take-over chose), then journals
+     * its own executions for a resume after a restart.
      */
     reopen(runId: string, threadIds: string[]): ResultAsync<boolean, FactoryRunsError> {
       return updateFromParked(runId, {
@@ -715,7 +719,14 @@ export function createFactoryRunsRepository(
         launchStartedAt: null,
         threadIds: JSON.stringify(threadIds),
         failureReason: null,
-      });
+      }).andThen((reopened) =>
+        reopened
+          ? ResultAsync.fromPromise(
+              db.delete(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, runId)),
+              storage,
+            ).map(() => true)
+          : okAsync(false),
+      );
     },
 
     /** Drop a run that never started (its launch failed before any agent ran). */

@@ -58,10 +58,18 @@ fn rust_bindings_match_shared_golden_wire() {
             }
             "runner.v2.OperationsRequest" => {
                 let value: v2::OperationsRequest = assert_round_trip(&wire);
-                assert_eq!(
-                    value.metadata.and_then(|metadata| metadata.idempotency_key),
-                    Some("runner-fixture:insert-message:1".into())
-                );
+                match fixture.name.as_str() {
+                    "operation_activity_reconcile" => match value.operation {
+                        Some(v2::operations_request::Operation::ActivityReconcile(reconcile)) => {
+                            assert_eq!(reconcile.live_activity_ids, vec!["clone-1", "git-2"]);
+                        }
+                        _ => panic!("activity fixture must contain a reconcile"),
+                    },
+                    _ => assert_eq!(
+                        value.metadata.and_then(|metadata| metadata.idempotency_key),
+                        Some("runner-fixture:insert-message:1".into())
+                    ),
+                }
             }
             "runner.v2.EventsResponse" => {
                 let value: v2::EventsResponse = assert_round_trip(&wire);

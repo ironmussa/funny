@@ -16,6 +16,7 @@
 import { describe, expect, test, vi } from 'bun:test';
 
 import { node, type PipelineDefinition, type ProgressReporter } from '@funny/pipelines';
+import { waitFor } from '@funny/test-kit';
 import {
   SchedulerPipelineDispatcher,
   type ContextBuilder,
@@ -300,6 +301,56 @@ describe('SchedulerPipelineDispatcher', () => {
     // Initial = first tick at construction. Final must be later because the
     // engine emits at least 'entering' + 'completed' state changes.
     expect(final).toBeGreaterThan(initial);
+  });
+
+  test('a node waiting for its group slot is reported through the context reporter', async () => {
+    // Two runs of a node in a limit-1 group: the second waits until the first
+    // releases its slot. The dispatcher reports the wait through `progressOf`.
+    const group = `dispatcher-test-${Math.random()}`;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const pipeline: PipelineDefinition<YamlPipelineContext> = {
+      name: 'grouped',
+      nodes: [
+        node<YamlPipelineContext>(
+          'merge',
+          async (ctx) => {
+            if (calls++ === 0) await held;
+            return ctx;
+          },
+          { concurrency: { group, limit: 1 } },
+        ),
+      ],
+    };
+    const reported: Array<[string, unknown]> = [];
+    const contextReporter: ProgressReporter = {
+      onStepProgress: (stepId, data) => reported.push([stepId, data]),
+      onPipelineEvent: () => {},
+    };
+    const builder = makeContextBuilder(fakeProvider());
+    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+      pipelines: makeLoader(pipeline),
+      contextBuilder: { build: builder.build, progressOf: () => contextReporter },
+      log: silentLog(),
+    });
+
+    const first = await dispatcher.dispatch(baseInput());
+    const second = await dispatcher.dispatch(baseInput({ threadId: 't2' }));
+    if (!first.ok || !second.ok) throw new Error('dispatch failed');
+    await waitFor(() =>
+      expect(reported).toContainEqual([
+        'merge',
+        { status: 'pending', metadata: { workflowStatus: 'waiting_slot' } },
+      ]),
+    );
+    expect(reported).toHaveLength(1);
+
+    release();
+    expect(await first.handle.finished).toEqual({ kind: 'completed' });
+    expect(await second.handle.finished).toEqual({ kind: 'completed' });
   });
 
   test('active map tracks runs and cleans up on settle', async () => {

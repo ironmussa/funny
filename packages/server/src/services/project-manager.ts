@@ -9,7 +9,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import { repos } from '../db/repos.js';
-import { projectMembers } from '../db/schema.js';
+import { projectMembers, projectSecrets } from '../db/schema.js';
 import { log } from '../lib/logger.js';
 
 // unified-rbac-grants Phase 4: dual-write membership into `resource_grants`
@@ -70,6 +70,17 @@ export async function removeMember(projectId: string, userId: string): Promise<v
     .delete(projectMembers)
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
   await grants.deleteGrant(userId, 'project', projectId);
+  // Their personal project secrets would never be delivered again; they should
+  // not outlive the membership either (project-secrets).
+  await db
+    .delete(projectSecrets)
+    .where(
+      and(
+        eq(projectSecrets.projectId, projectId),
+        eq(projectSecrets.scope, 'user'),
+        eq(projectSecrets.userId, userId),
+      ),
+    );
   log.info('Member removed from project', { namespace: 'project', projectId, userId });
 }
 

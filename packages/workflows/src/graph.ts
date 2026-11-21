@@ -1,4 +1,5 @@
 import { ACTION_KEYS, type ParsedNode, type ParsedWorkflow } from './schema.js';
+import { regionOf } from './validate.js';
 
 export interface WorkflowGraphPosition {
   x: number;
@@ -13,6 +14,10 @@ export interface WorkflowGraphNodeData {
   description?: string;
   when?: string;
   onError: ParsedNode['on_error'];
+  /** How the node joins its dependencies; absent means the default, `all_success`. */
+  triggerRule?: ParsedNode['trigger_rule'];
+  /** The node's concurrency group (its template, as written) and limit. */
+  concurrency?: ParsedNode['concurrency'];
   retry?: ParsedNode['retry'];
   loop?: ParsedNode['loop'];
   approval?: ParsedNode['approval'];
@@ -33,6 +38,8 @@ export interface WorkflowGraphEdge {
   target: string;
   label?: string;
   kind: WorkflowGraphEdgeKind;
+  /** For a loop edge: every node of the loop's region, in declaration order. */
+  region?: string[];
 }
 
 export interface WorkflowGraph {
@@ -58,6 +65,8 @@ export function workflowToGraph(workflow: ParsedWorkflow): WorkflowGraph {
         actionType: action.type,
         when: node.when,
         onError: node.on_error,
+        triggerRule: node.trigger_rule,
+        concurrency: node.concurrency,
         retry: node.retry,
         loop: node.loop,
         approval: node.approval,
@@ -67,6 +76,8 @@ export function workflowToGraph(workflow: ParsedWorkflow): WorkflowGraph {
     };
   });
 
+  const depsOf = new Map(workflow.nodes.map((n) => [n.id, n.depends_on]));
+  const order = workflow.nodes.map((n) => n.id);
   const edges: WorkflowGraphEdge[] = [];
   for (const node of workflow.nodes) {
     for (const dep of node.depends_on) {
@@ -79,12 +90,14 @@ export function workflowToGraph(workflow: ParsedWorkflow): WorkflowGraph {
     }
     if (node.loop) {
       const target = node.loop.back_to ?? node.id;
+      const members = regionOf(target, node.id, depsOf) ?? new Set([node.id]);
       edges.push({
         id: `loop:${node.id}->${target}`,
         source: node.id,
         target,
-        label: 'loop',
+        label: `loop ×${node.loop.max_iterations}`,
         kind: 'loop',
+        region: order.filter((id) => members.has(id)),
       });
     }
     if (node.pipeline?.name) {

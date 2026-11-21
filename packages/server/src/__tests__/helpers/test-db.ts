@@ -338,6 +338,23 @@ export function createTestDb() {
     sql`CREATE UNIQUE INDEX IF NOT EXISTS factory_settings_project_user ON factory_settings (project_id, user_id)`,
   );
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_secrets (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      scope TEXT NOT NULL,
+      user_id TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      ciphertext TEXT NOT NULL,
+      allow_in_sandbox INTEGER NOT NULL DEFAULT 0,
+      updated_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  testDb.run(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS project_secrets_scope_name ON project_secrets (project_id, scope, user_id, name)`,
+  );
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS factory_runs (
       id TEXT PRIMARY KEY,
       factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
@@ -363,6 +380,46 @@ export function createTestDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
     WHERE state NOT IN ('merged', 'failed', 'stopped')
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS workflow_node_executions (
+      run_id TEXT NOT NULL REFERENCES factory_runs(id) ON DELETE CASCADE,
+      node_id TEXT NOT NULL,
+      visit TEXT NOT NULL,
+      attempt INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      output TEXT,
+      error TEXT,
+      data TEXT,
+      started_at INTEGER NOT NULL,
+      finished_at INTEGER,
+      PRIMARY KEY (run_id, node_id, visit, attempt)
+    )
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS workflow_concurrency_leases (
+      group_key TEXT NOT NULL,
+      holder TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      acquired_at INTEGER NOT NULL,
+      PRIMARY KEY (group_key, holder)
+    )
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS workflow_concurrency_waiters (
+      group_key TEXT NOT NULL,
+      holder TEXT NOT NULL,
+      slot_limit INTEGER NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 0,
+      requested_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      batch_max INTEGER,
+      batch_wait_ms INTEGER,
+      input TEXT,
+      leader TEXT,
+      outcome TEXT,
+      PRIMARY KEY (group_key, holder)
+    )
   `);
 
   testDb.run(sql`

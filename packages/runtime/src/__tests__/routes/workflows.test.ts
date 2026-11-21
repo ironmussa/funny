@@ -43,6 +43,18 @@ import { workflowRuntimeRoutes } from '../../routes/workflows.js';
 
 let workDir: string;
 
+/** A flow whose `notify` depends on an `on_error: continue` node with the default join. */
+const CONTINUE_FLOW = (name: string) => `
+name: ${name}
+nodes:
+  - id: tests
+    run_command: { command: bun test }
+    on_error: continue
+  - id: notify
+    depends_on: [tests]
+    notify: { message: done }
+`;
+
 function makeApp(userId: string | null = 'user-1') {
   const app = new Hono<HonoEnv>();
   app.use('*', async (c, next) => {
@@ -112,6 +124,36 @@ describe('workflowRuntimeRoutes', () => {
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.diagnostics.length).toBeGreaterThan(0);
+  });
+
+  test('a valid flow returns its warnings without failing validation', async () => {
+    const res = await makeApp().request('/workflows/validate', {
+      method: 'POST',
+      body: JSON.stringify({ yaml: CONTINUE_FLOW('review') }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.diagnostics).toEqual([
+      expect.objectContaining({ path: 'nodes.1.trigger_rule', severity: 'warning' }),
+    ]);
+  });
+
+  test('saving a flow with only warnings succeeds and returns them', async () => {
+    const res = await makeApp().request('/workflows/review', {
+      method: 'PUT',
+      body: JSON.stringify({ projectId: 'project-1', yaml: CONTINUE_FLOW('review') }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.workflow.diagnostics).toEqual([
+      expect.objectContaining({ path: 'nodes.1.trigger_rule', severity: 'warning' }),
+    ]);
+
+    const read = await makeApp().request('/workflows/review?projectId=project-1');
+    expect((await read.json()).diagnostics).toHaveLength(1);
   });
 
   test('saves project overrides to .funny/workflows', async () => {

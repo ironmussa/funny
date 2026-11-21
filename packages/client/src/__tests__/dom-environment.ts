@@ -85,6 +85,19 @@ for (const key of Object.getOwnPropertyNames(win)) {
 assign('window', globalThis);
 assign('self', globalThis);
 
+// A failing matcher prints its received value with Bun's inspector, which walks
+// a jsdom node's whole object graph (document, window, every property): 26 MB
+// for a small <div>, about 2 s for a dialog. A `waitFor` whose first polls fail
+// pays that on every poll while blocking the event loop, so the test times out
+// under load. Print a node as its markup instead.
+const MAX_INSPECTED_MARKUP = 300;
+Reflect.set(win.Node.prototype, Symbol.for('nodejs.util.inspect.custom'), function (this: Node) {
+  const markup = this instanceof win.Element ? this.outerHTML : this.nodeName;
+  return markup.length > MAX_INSPECTED_MARKUP
+    ? `${markup.slice(0, MAX_INSPECTED_MARKUP)}…`
+    : markup;
+});
+
 // `window` is Bun's global, an EventTarget of its own whose dispatchEvent
 // rejects jsdom's Event / CustomEvent ("must be an instance of Event"), and
 // which never sees the DOM events that bubble from `document` to jsdom's

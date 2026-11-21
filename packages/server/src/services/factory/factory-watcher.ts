@@ -23,6 +23,7 @@
  */
 
 import type { IssueBlocker } from '@funny/core/github-app';
+import type { ConcurrencyGate } from '@funny/pipelines';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 import { and, eq } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
@@ -109,6 +110,8 @@ export interface FactoryWatcherDeps {
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
+  /** The flows' concurrency gate (tests); default: database leases. */
+  gate?: ConcurrencyGate;
 }
 
 /** How often each factory polls GitHub while the server is up. */
@@ -164,6 +167,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     waitThread: d.waitThread,
     loadFlow: d.loadFlow,
     notify: d.notify,
+    gate: d.gate,
     reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
     stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
     followUp:

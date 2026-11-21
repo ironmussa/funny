@@ -85,4 +85,48 @@ nodes:
       'merge',
     ]);
   });
+
+  test('loop edges carry their region and max iterations; nodes carry join rule and group', () => {
+    const parsed = parseWorkflowYaml(`
+name: regions
+nodes:
+  - id: implement
+    notify: { message: a }
+  - id: side
+    notify: { message: b }
+  - id: ci
+    depends_on: [implement]
+    notify: { message: c }
+    loop: { until: 'true', back_to: implement, max_iterations: 3 }
+  - id: merge
+    depends_on: [ci, side]
+    trigger_rule: all_done
+    concurrency: { group: 'merge-{{repo}}', limit: 1 }
+    notify: { message: d }
+    loop: { until: 'true', back_to: implement }
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const graph = workflowToGraph(parsed.workflow);
+    const loops = graph.edges.filter((e) => e.kind === 'loop');
+    expect(loops).toEqual([
+      expect.objectContaining({
+        source: 'ci',
+        target: 'implement',
+        label: 'loop ×3',
+        region: ['implement', 'ci'],
+      }),
+      expect.objectContaining({
+        source: 'merge',
+        target: 'implement',
+        label: 'loop ×10',
+        // `side` feeds merge but is not on a path from implement.
+        region: ['implement', 'ci', 'merge'],
+      }),
+    ]);
+    const merge = graph.nodes.find((n) => n.id === 'merge')?.data;
+    expect(merge?.triggerRule).toBe('all_done');
+    expect(merge?.concurrency).toEqual({ group: 'merge-{{repo}}', limit: 1 });
+    expect(graph.nodes.find((n) => n.id === 'ci')?.data.triggerRule).toBeUndefined();
+  });
 });

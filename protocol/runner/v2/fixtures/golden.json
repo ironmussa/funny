@@ -154,5 +154,25 @@
       }
     },
     "wireHex": "0a020813120a7465726d696e616c2d311a160a14636f7272656c6174696f6e2d7465726d696e616c6a0b0808120768656c6c6f0d0a"
+  },
+  {
+    "name": "operation_activity_reconcile",
+    "messageType": "runner.v2.OperationsRequest",
+    "protoJson": {
+      "session": {
+        "sessionEpoch": "20"
+      },
+      "metadata": {
+        "correlationId": "correlation-activity",
+        "deadline": "2030-01-02T03:04:05.006Z"
+      },
+      "activityReconcile": {
+        "liveActivityIds": [
+          "clone-1",
+          "git-2"
+        ]
+      }
+    },
+    "wireHex": "0a02081412230a14636f7272656c6174696f6e2d6163746976697479120b08a5aaf5860710809bee02ca05100a07636c6f6e652d310a056769742d32"
   }
 ]

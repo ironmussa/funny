@@ -6,14 +6,7 @@
  */
 import { describe, test, expect, vi } from 'bun:test';
 
-import {
-  definePipeline,
-  node,
-  runPipeline,
-  compose,
-  subPipeline,
-  computeLevels,
-} from '../engine.js';
+import { definePipeline, node, runPipeline, compose, subPipeline } from '../engine.js';
 
 describe('Pipeline Engine', () => {
   test('sequential pipeline runs nodes in order', async () => {
@@ -378,8 +371,7 @@ describe('Pipeline Engine', () => {
     });
   });
 
-  // ── Phase 3: DAG parallel execution ───────────────────────
-  describe('DAG mode (dependsOn)', () => {
+  describe('graphs (dependsOn)', () => {
     type Ctx = { outputs: Record<string, unknown> };
     const init = (): Ctx => ({ outputs: {} });
 
@@ -403,24 +395,25 @@ describe('Pipeline Engine', () => {
         { dependsOn: deps },
       );
 
-    test('computeLevels groups a diamond into topological levels', () => {
-      const levels = computeLevels<Ctx>([
-        trackNode('a', []),
-        trackNode('b', ['a']),
-        trackNode('c', ['a']),
-        trackNode('d', ['b', 'c']),
-      ]);
-      expect(levels.map((l) => l.map((n) => n.name))).toEqual([['a'], ['b', 'c'], ['d']]);
-    });
-
-    test('computeLevels throws on a cycle', () => {
-      expect(() => computeLevels<Ctx>([trackNode('a', ['b']), trackNode('b', ['a'])])).toThrow(
-        /Cycle detected/,
+    test('a cycle fails the run before any node runs, naming the path', async () => {
+      const result = await runPipeline(
+        definePipeline<Ctx>({
+          name: 'cycle',
+          nodes: [trackNode('a', ['b']), trackNode('b', ['a'])],
+        }),
+        init(),
       );
+      expect(result.outcome).toBe('failed');
+      expect(result.error).toMatch(/Cycle detected: a → b → a/);
     });
 
-    test('computeLevels throws on an unknown dependency', () => {
-      expect(() => computeLevels<Ctx>([trackNode('a', ['ghost'])])).toThrow(/does not exist/);
+    test('an unknown dependency fails the run before any node runs', async () => {
+      const result = await runPipeline(
+        definePipeline<Ctx>({ name: 'ghost', nodes: [trackNode('a', ['ghost'])] }),
+        init(),
+      );
+      expect(result.outcome).toBe('failed');
+      expect(result.error).toMatch(/"ghost".*does not exist/);
     });
 
     test('independent nodes run concurrently (wall-clock ≈ max, not sum)', async () => {
@@ -495,7 +488,7 @@ describe('Pipeline Engine', () => {
       expect(result.ctx.outputs.last).toBe('b');
     });
 
-    test('a node failure fails the pipeline after its level settles', async () => {
+    test('a node failure fails the pipeline', async () => {
       const result = await runPipeline(
         definePipeline<Ctx>({
           name: 'boom',
@@ -516,7 +509,7 @@ describe('Pipeline Engine', () => {
       expect(result.error).toMatch(/b exploded/);
     });
 
-    test('maxConcurrency caps in-flight nodes within a level', async () => {
+    test('maxConcurrency caps in-flight nodes', async () => {
       const active = { n: 0 };
       const max = { n: 0 };
       const pipeline = definePipeline<Ctx>({
@@ -552,10 +545,10 @@ describe('Pipeline Engine', () => {
       expect(result.ctx.outputs).toEqual({ a: 'a' });
     });
 
-    test('backward-compat: no dependsOn anywhere stays sequential', async () => {
+    test('no dependsOn anywhere runs as a chain', async () => {
       const active = { n: 0 };
       const max = { n: 0 };
-      // No dependsOn ⇒ legacy sequential path; nodes never overlap.
+      // No dependsOn ⇒ an implicit chain; nodes never overlap.
       const seqNode = (name: string) =>
         node<Ctx>(name, async (ctx) => {
           active.n++;
@@ -689,7 +682,7 @@ describe('Effect pipeline cancellation', () => {
     expect(execute).not.toHaveBeenCalled();
   }, 1000);
 
-  test('DAG cancellation does not launch queued nodes and preserves completed outputs', async () => {
+  test('graph cancellation does not launch queued nodes and preserves completed outputs', async () => {
     const controller = new AbortController();
     const started = Promise.withResolvers<void>();
     const queued = vi.fn((ctx) => ctx);

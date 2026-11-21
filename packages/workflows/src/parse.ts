@@ -11,6 +11,7 @@
 import { parse as parseYaml, YAMLParseError } from 'yaml';
 
 import { workflowSchema, type ParsedWorkflow } from './schema.js';
+import { workflowWarnings } from './warnings.js';
 
 export interface ParseError {
   /** One-line summary suitable for logs / UI. */
@@ -22,15 +23,43 @@ export interface ParseError {
   issues: Array<{ path: string; message: string }>;
 }
 
-export type ParseResult = { ok: true; workflow: ParsedWorkflow } | { ok: false; error: ParseError };
+export type ParseResult =
+  | {
+      ok: true;
+      workflow: ParsedWorkflow;
+      /** What loads and runs but likely is not what the author meant; blocks nothing. */
+      warnings: WorkflowIssue[];
+    }
+  | { ok: false; error: ParseError };
+
+/** One problem a host finds in a workflow the schema accepted. */
+export interface WorkflowIssue {
+  /** Where, e.g. `nodes.3.spawn_agent` or `(root)`. */
+  path: string;
+  message: string;
+}
+
+export interface ParseOptions {
+  /**
+   * Rules of the host that will run the workflow (e.g. the factory refuses
+   * two parallel steps continuing one thread). Runs after the schema;
+   * any issue it returns fails the parse.
+   */
+  validate?: (workflow: ParsedWorkflow) => WorkflowIssue[];
+}
 
 /**
  * Parse a YAML workflow definition.
  *
  * @param source - Raw YAML text.
  * @param origin - Optional label (e.g. file path) used in error messages.
+ * @param options - Host rules to apply after the schema (`validate`).
  */
-export function parseWorkflowYaml(source: string, origin = '<inline>'): ParseResult {
+export function parseWorkflowYaml(
+  source: string,
+  origin = '<inline>',
+  options: ParseOptions = {},
+): ParseResult {
   // 1. YAML → JS object.
   let raw: unknown;
   try {
@@ -76,7 +105,16 @@ export function parseWorkflowYaml(source: string, origin = '<inline>'): ParseRes
     };
   }
 
-  return { ok: true, workflow: parsed.data };
+  // 3. Host rules.
+  const issues = options.validate?.(parsed.data) ?? [];
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      error: { message: `Workflow ${origin} is not allowed here`, issues },
+    };
+  }
+
+  return { ok: true, workflow: parsed.data, warnings: workflowWarnings(parsed.data) };
 }
 
 /**

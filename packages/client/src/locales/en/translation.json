@@ -1625,7 +1625,8 @@
     "automationTriggerFailed": "Couldn't start the automation run.",
     "commentDeleteFailed": "Couldn't delete the comment.",
     "approvalRespondFailed": "Couldn't send your answer. The approval is still waiting.",
-    "projectUpdateFailed": "Couldn't update the project. Your change was undone."
+    "projectUpdateFailed": "Couldn't update the project. Your change was undone.",
+    "activityDismissFailed": "Couldn't remove it."
   },
   "agentResources": {
     "subtitle": "Skills, slash commands, and MCP servers scoped to each provider.",
@@ -1761,5 +1762,65 @@
       "conflictRate": "Runs with a conflict",
       "agentFixes": "Agent fixes per run"
     }
+  },
+  "projectSecrets": {
+    "title": "Secrets",
+    "description": "Values the agents of this project get as environment variables. A value is stored encrypted and is never shown again here.",
+    "noticeReaders": "Anyone who can start threads on this project can read a shared secret through their agent, and so can someone you share a thread with as an editor.",
+    "noticeRedaction": "Values an agent prints are replaced with [secret:NAME] in what is saved and shown, as a best effort: the model still sees them, and an encoded or split value is not caught.",
+    "shared": "Shared",
+    "sharedDesc": "For every member. Only a project admin can change them.",
+    "mine": "Mine",
+    "mineDesc": "Only for your threads. One with the name of a shared secret takes its place.",
+    "add": "Add secret",
+    "empty": "No secrets yet.",
+    "overridesShared": "Overrides shared",
+    "overriddenByYours": "Overridden by yours",
+    "updatedOn": "Updated {{date}}",
+    "sandbox": "Sandboxes",
+    "sandboxLabel": "Give {{name}} to sandbox agents",
+    "replace": "Replace",
+    "replaceTitle": "Replace {{name}}",
+    "addSharedTitle": "Add a shared secret",
+    "addPersonalTitle": "Add a personal secret",
+    "sharedDialogDesc": "Every member who can start threads on this project gets it in their agents.",
+    "personalDialogDesc": "Only the agents of your own threads on this project get it.",
+    "name": "Name",
+    "value": "Value",
+    "multiline": "Multi-line",
+    "multilineUnmasked": "A multi-line value is shown as you type.",
+    "storedPlaceholder": "Stored, type a new value to replace",
+    "showValue": "Show value",
+    "hideValue": "Hide value",
+    "sandboxTitle": "Available in sandboxes",
+    "sandboxDesc": "A sandbox agent can read whatever it receives, and so can anyone you share the thread with as an editor.",
+    "save": "Save secret",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "Agents started from now on will not get {{name}}.",
+    "deleteOverrideDescription": "Your agents will get the shared value of {{name}} again.",
+    "nameProblem": {
+      "empty": "A secret needs a name.",
+      "too-long": "A secret name has at most 128 characters.",
+      "invalid-shape": "A secret name is an environment variable name: letters, digits and underscores, not starting with a digit.",
+      "reserved": "This name is reserved: it changes how processes start, or funny, git or the agent provider uses it."
+    },
+    "valueProblem": {
+      "empty": "A secret needs a value.",
+      "too-large": "A secret value has at most 32 KiB."
+    }
+  },
+  "activity": {
+    "title": "Activity",
+    "tabActivity": "Activity",
+    "tabJobs": "Jobs",
+    "tabWatchers": "Watchers",
+    "empty": "No activity yet.",
+    "interrupted": "Interrupted: the runner stopped before it finished.",
+    "runnerOffline": "Runner offline",
+    "retry": "Retry",
+    "dismiss": "Dismiss",
+    "clearFinished": "Clear finished",
+    "failedToast": "{{title}} failed",
+    "openPanel": "View"
   }
 }

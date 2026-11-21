@@ -11,10 +11,15 @@
  * - `spawn_agent` starts a thread on the enabler's runner (the caller's
  *   `launch`, i.e. `startThreadOnRunner`, so runner isolation and the
  *   project ↔ runner binding apply) and resolves from the thread's durable
- *   terminal status. Agent steps are numbered in call order: a resumed run
- *   (after a server restart) re-runs the flow, and the N-th agent step finds
- *   the thread it already started instead of starting another; a flow's control
- *   flow depends only on step results, so the order is the same.
+ *   terminal status. A resumed run (after a server restart) does not start
+ *   work twice:
+ *   - With the engine's journal (change workflow-dag-engine, D6), a finished
+ *     step is not called again, and an unfinished one gets what it
+ *     checkpointed (`StepCheckpoint`): the thread it started, the launch it
+ *     was making, or the follow-up it was sending; it adopts that work.
+ *   - Without journal rows (a run from before the journal, or one a retry or
+ *     take-over reopened), agent steps are numbered in call order and the
+ *     N-th finds the thread `threadIds[N]` recorded (`legacyReplay`).
  * - Every agent step after the first CONTINUES the run's first thread with a
  *   follow-up message (when `continuation` is given), so a CI fix keeps the
  *   context of the implementation instead of starting cold. Such a step is
@@ -95,6 +100,11 @@ export interface FactoryActionProviderDeps {
   github: Pick<FactoryGithubPort, 'findPullRequest' | 'pullRequests'>;
   /** Write the run's progress; ignored once the run is terminal (e.g. stopped). */
   record(input: UpdateRunInput): Promise<void>;
+  /**
+   * Replay agent steps by call order from `threadIds` (the run has no journal
+   * rows). Default true; false when the engine's journal resumes the run.
+   */
+  legacyReplay?: boolean;
   signal: AbortSignal;
 }
 
@@ -114,6 +124,34 @@ interface StepThread {
   /** A step recorded before a resume, retry or take-over. */
   replayed?: boolean;
 }
+
+/**
+ * What an agent step records in the journal about its work in progress, so
+ * a resumed execution adopts it instead of starting it again.
+ */
+const STEP_CHECKPOINT = z.discriminatedUnion('phase', [
+  /** A launch was being made since `since`; its thread may exist. */
+  z.object({ phase: z.literal('launching'), since: z.string() }),
+  /** A follow-up was being sent to `threadId` since `since`. */
+  z.object({
+    phase: z.literal('following-up'),
+    threadId: z.string(),
+    since: z.string(),
+    before: z.string().nullable(),
+  }),
+  /** The step's thread, and what its wait waits for when a follow-up runs it again. */
+  z.object({
+    phase: z.literal('thread'),
+    threadId: z.string(),
+    after: z.object({ completedAt: z.string().nullable(), sentAt: z.string() }).optional(),
+  }),
+]);
+type StepCheckpoint = z.infer<typeof STEP_CHECKPOINT>;
+
+/** Record a checkpoint of the step in progress (a no-op outside a journaled run). */
+type Checkpoint = (state: StepCheckpoint) => Promise<void>;
+
+const noCheckpoint: Checkpoint = async () => {};
 
 /** Allowance for the runner's clock when comparing its timestamps with the server's. */
 const CLOCK_SLACK_MS = 60 * 1000;
@@ -237,6 +275,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     continuation: FactoryContinuation,
     first: string,
     opts: SpawnAgentOpts,
+    checkpoint: Checkpoint = noCheckpoint,
   ): Promise<StepThread | ActionResult> {
     const since = pendingLaunch;
     pendingLaunch = null;
@@ -249,6 +288,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     }
     const before = await continuation.completedAt(first);
     const sentAt = new Date().toISOString();
+    await checkpoint({ phase: 'following-up', threadId: first, since: sentAt, before });
     await deps.record({ launchStartedAt: sentAt });
     const sent = await continuation.followUp(first, prompted(opts));
     if (sent.isErr()) {
@@ -258,7 +298,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     // A follow-up once the pull request is open is a fix (CI or conflict), not new work.
     if (prUrl)
       await count({ ...metrics, agentFixes: metrics.agentFixes + 1 }, { event: 'agent_fix' });
-    return { threadId: await recordThread(first), after: { completedAt: before, sentAt } };
+    const after = { completedAt: before, sentAt };
+    await checkpoint({ phase: 'thread', threadId: first, after });
+    return { threadId: await recordThread(first), after };
   }
 
   /**
@@ -278,8 +320,13 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   }
 
   /** Start a new thread for this step, marked first so a crash in between is adopted. */
-  async function launchNew(opts: SpawnAgentOpts): Promise<StepThread | ActionResult> {
-    await deps.record({ launchStartedAt: new Date().toISOString() });
+  async function launchNew(
+    opts: SpawnAgentOpts,
+    checkpoint: Checkpoint = noCheckpoint,
+  ): Promise<StepThread | ActionResult> {
+    const since = new Date().toISOString();
+    await checkpoint({ phase: 'launching', since });
+    await deps.record({ launchStartedAt: since });
     const launched = await deps.launch({
       projectId: scope.projectId,
       title,
@@ -289,7 +336,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       model: opts.model ?? undefined,
     });
     const threadId = launched.isOk() ? launched.value.threadId : undefined;
-    if (threadId) return { threadId: await recordThread(threadId) };
+    if (threadId) {
+      await checkpoint({ phase: 'thread', threadId });
+      return { threadId: await recordThread(threadId) };
+    }
     await deps.record({ launchStartedAt: null });
     return {
       ok: false,
@@ -297,6 +347,54 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         ? `The agent could not start: ${launched.error.message}`
         : 'The agent could not start: the runner returned no thread.',
     };
+  }
+
+  /** Record `threadId` in the display list unless a resumed step already did. */
+  const rememberThread = async (threadId: string) =>
+    threadIds.includes(threadId) ? threadId : recordThread(threadId);
+
+  /**
+   * The work a resumed journaled step checkpointed, adopted: its thread, or
+   * the thread its interrupted launch started, or its follow-up when it was
+   * sent. Undefined when there is nothing to adopt and the step starts over.
+   */
+  async function adoptCheckpoint(
+    state: StepCheckpoint,
+    checkpoint: Checkpoint,
+  ): Promise<StepThread | undefined> {
+    if (state.phase === 'thread') {
+      return { threadId: await rememberThread(state.threadId), after: state.after };
+    }
+    if (state.phase === 'launching') {
+      const found = await deps.findLaunched(titlePrefix, state.since);
+      if (!found) return undefined;
+      await checkpoint({ phase: 'thread', threadId: found });
+      return { threadId: await rememberThread(found) };
+    }
+    const continuation = deps.continuation;
+    if (!continuation || !(await continuation.followedUpSince(state.threadId, state.since))) {
+      return undefined;
+    }
+    // Sent before the interruption: wait for that run, do not send it twice.
+    const after = { completedAt: state.before, sentAt: state.since };
+    await checkpoint({ phase: 'thread', threadId: state.threadId, after });
+    return { threadId: await rememberThread(state.threadId), after };
+  }
+
+  /** A journaled step's thread: adopted from its checkpoint, a follow-up, or new. */
+  async function journaledThreadFor(opts: SpawnAgentOpts): Promise<StepThread | ActionResult> {
+    const execution = opts.execution;
+    const checkpoint: Checkpoint = execution
+      ? (state) => execution.checkpoint(state)
+      : noCheckpoint;
+    // The journal resumes the run; the launch marker belongs to the numbering path.
+    pendingLaunch = null;
+    const saved = STEP_CHECKPOINT.safeParse(execution?.resume?.recorded.data);
+    const adopted = saved.success ? await adoptCheckpoint(saved.data, checkpoint) : undefined;
+    if (adopted) return adopted;
+    const first = threadIds[0];
+    if (first && deps.continuation) return followUp(deps.continuation, first, opts, checkpoint);
+    return launchNew(opts, checkpoint);
   }
 
   /** The thread of the current agent step: recorded, continued, adopted, or new. */
@@ -312,7 +410,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   return {
     async spawnAgent(opts) {
       const index = agentSteps++;
-      const step = await threadFor(opts, index);
+      const step =
+        (deps.legacyReplay ?? true) ? await threadFor(opts, index) : await journaledThreadFor(opts);
       if (!('threadId' in step)) return step;
       // A replayed step that a LATER recorded step continued on the same thread
       // finished before that one started: waiting on the thread now would read

@@ -9,6 +9,7 @@
  */
 
 import type {
+  Activity,
   AgentExecutionProfileResponse,
   AgentTemplate,
   Automation,
@@ -36,6 +37,7 @@ import type {
   Watcher,
 } from '@funny/shared';
 import type { Capability, Role } from '@funny/shared/auth/roles';
+import type { RemovedActivities } from '@funny/shared/contracts/activities';
 import type {
   AgentTemplateBody,
   UpdateAgentTemplateBody,
@@ -76,6 +78,10 @@ import type {
   UpdatePipelineRequest,
 } from '@funny/shared/contracts/pipelines';
 import type { ProfileResponse } from '@funny/shared/contracts/profile';
+import type {
+  ProjectSecretSummary,
+  SetProjectSecretInput,
+} from '@funny/shared/contracts/project-secrets';
 import type {
   ListProjectsQuery,
   ProjectCommandBody,
@@ -242,6 +248,15 @@ export interface WatchersPort {
   list(userId: string): PortResult<Watcher[]>;
   /** Stops a live watcher of the caller (404 otherwise); terminal ones stay as they are. */
   cancel(userId: string, id: string): PortResult<Watcher>;
+}
+
+export interface ActivitiesPort {
+  /** The caller's activities, newest first. */
+  list(userId: string): PortResult<Activity[]>;
+  /** 404 when it is not the caller's; 409 for a running one whose runner is connected. */
+  dismiss(userId: string, id: string): PortResult<RemovedActivities>;
+  /** Deletes the caller's finished activities; running ones stay. */
+  clearFinished(userId: string): PortResult<RemovedActivities>;
 }
 
 export interface JobsPort {
@@ -467,6 +482,20 @@ export interface AuthzPort {
   adminRefused(userId: string, path: string, role: string | null): void;
 }
 
+/**
+ * A project's secrets (openspec project-secrets). No method returns a value.
+ * The procedure checked `view` to list and `steer` to write; the port demands
+ * `manage` for a shared secret (403) and keeps personal ones to the caller.
+ */
+export interface ProjectSecretsPort {
+  /** The project's shared secrets plus the caller's own, by name. */
+  list(userId: string, projectId: string): PortResult<ProjectSecretSummary[]>;
+  /** Creates the secret or changes the one with this name and scope; audited. */
+  set(userId: string, input: SetProjectSecretInput): PortResult<ProjectSecretSummary>;
+  /** 404 when the secret is not visible to the caller; audited. */
+  remove(userId: string, projectId: string, id: string): PortResult<Ok>;
+}
+
 export interface ApiPorts {
   automations: AutomationsPort;
   pipelines: PipelinesPort;
@@ -476,6 +505,7 @@ export interface ApiPorts {
   agentTemplates: AgentTemplatesPort;
   watchers: WatchersPort;
   jobs: JobsPort;
+  activities: ActivitiesPort;
   designs: DesignsPort;
   analytics: AnalyticsPort;
   push: PushPort;
@@ -485,6 +515,7 @@ export interface ApiPorts {
   personalTokens: PersonalTokensPort;
   projectRunners: ProjectRunnersPort;
   factory: FactoryPort;
+  projectSecrets: ProjectSecretsPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

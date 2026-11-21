@@ -1269,7 +1269,8 @@
     "checkoutBlocked": "No se puede cambiar a la rama \"{{branch}}\" — tienes cambios sin confirmar que se perderían. Rama actual: {{currentBranch}}. Confirma o guarda tus cambios, o usa el modo worktree.",
     "compactConfirmTitle": "¿Compactar la conversación?",
     "compactConfirmBody": "Esto resume la conversación actual para liberar contexto. Los mensajes anteriores se condensan y el detalle completo deja de estar disponible para el agente.",
-    "compactConfirmAction": "Compactar"
+    "compactConfirmAction": "Compactar",
+    "agentProfileHint": "Perfil de ejecución de este proyecto. Cámbialo en Ajustes > Perfiles de agente."
   },
   "switchBranch": {
     "title": "Cambiar rama",

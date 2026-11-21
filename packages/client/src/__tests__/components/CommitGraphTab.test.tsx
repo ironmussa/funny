@@ -7,6 +7,7 @@ import {
   GraphCommitTime,
   GraphGutterHorizontalScroller,
   GraphWipRow,
+  RebaseCopyLinksOverlay,
 } from '@/components/CommitGraphTab';
 import {
   graphGutterViewportWidth,
@@ -784,5 +785,53 @@ describe('rebaseEventScopeLabel', () => {
     expect(rebaseEventScopeLabel({ branch: 'feature/auth', onto: null })).toBe('feature/auth');
     expect(rebaseEventScopeLabel({ branch: null, onto: 'main' })).toBe('onto main');
     expect(rebaseEventScopeLabel({ branch: null, onto: null })).toBeNull();
+  });
+});
+
+describe('RebaseCopyLinksOverlay', () => {
+  // Five rows: `copy-1` (row 1) was rebased from `orig-1` (row 3).
+  const entries = ['head', 'copy-1', 'mid', 'orig-1', 'tail'].map(
+    (hash) => ({ hash, refs: [], headBranch: null }) as any,
+  );
+  const layoutRows = entries.map(() => ({ commitLane: 0 }) as any);
+  const links = [
+    {
+      event: null,
+      sourceHash: 'orig-1',
+      sourceShortHash: 'orig1',
+      targetHash: 'copy-1',
+      targetShortHash: 'copy1',
+      subject: 'feature',
+    },
+  ];
+  const renderOverlay = (renderedRange: { start: number; end: number } | null) =>
+    renderWithProviders(
+      <RebaseCopyLinksOverlay
+        renderedRange={renderedRange}
+        links={links}
+        entries={entries}
+        layoutRows={layoutRows}
+        gutterWidth={40}
+        graphViewportWidth={40}
+        graphScrollLeft={0}
+        rowHeightFor={() => 24}
+      />,
+    );
+
+  test('draws nothing before the virtualizer has rendered rows', () => {
+    // Regression: the links painted on an empty History list, a frame before
+    // the commit rows, whenever the tab was first shown.
+    renderOverlay(null);
+    expect(screen.queryByTestId('graph-rebase-copy-links')).toBeNull();
+  });
+
+  test('draws a link that crosses the rendered rows', () => {
+    renderOverlay({ start: 2, end: 4 });
+    expect(screen.getByTestId('graph-rebase-copy-links')).toBeTruthy();
+  });
+
+  test('skips a link whose rows are all outside the rendered range', () => {
+    renderOverlay({ start: 4, end: 4 });
+    expect(screen.queryByTestId('graph-rebase-copy-links')).toBeNull();
   });
 });

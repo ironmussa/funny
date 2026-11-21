@@ -752,6 +752,14 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
             }}
           >
             <RebaseCopyLinksOverlay
+              renderedRange={
+                virtualItems.length > 0
+                  ? {
+                      start: virtualItems[0].index,
+                      end: virtualItems[virtualItems.length - 1].index,
+                    }
+                  : null
+              }
               links={rebaseCopyLinks}
               entries={displayEntries}
               layoutRows={layout.rows}
@@ -876,7 +884,8 @@ function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: 
   return (rowHeight - refsContentH) / 2 + chipLineH / 2;
 }
 
-function RebaseCopyLinksOverlay({
+export function RebaseCopyLinksOverlay({
+  renderedRange,
   links,
   entries,
   layoutRows,
@@ -885,6 +894,13 @@ function RebaseCopyLinksOverlay({
   graphScrollLeft,
   rowHeightFor,
 }: {
+  /**
+   * Indices of the rows the virtualizer has rendered, or null before it has
+   * measured the scroll element (first mount, or the tab was hidden). The
+   * links are laid out for the whole list, so without this gate they would
+   * paint on an otherwise empty list until the rows arrive a frame later.
+   */
+  renderedRange: { start: number; end: number } | null;
   links: RebaseCopyLink[];
   entries: GraphEntry[];
   layoutRows: GraphRow[];
@@ -894,12 +910,13 @@ function RebaseCopyLinksOverlay({
   rowHeightFor: (entry: GraphEntry) => number;
 }) {
   const markerId = useId();
-  if (links.length === 0) return null;
+  if (links.length === 0 || !renderedRange) return null;
 
   let nextTop = 0;
   const rowsByHash = new Map<
     string,
     {
+      index: number;
       top: number;
       nodeY: number;
       lane: number;
@@ -911,6 +928,7 @@ function RebaseCopyLinksOverlay({
     const height = rowHeightFor(entry);
     if (row) {
       rowsByHash.set(entry.hash, {
+        index,
         top: nextTop,
         nodeY: nodeYForRow(entry, height),
         lane: row.commitLane,
@@ -927,7 +945,13 @@ function RebaseCopyLinksOverlay({
   for (const link of links) {
     const source = rowsByHash.get(link.sourceHash);
     const target = rowsByHash.get(link.targetHash);
-    if (source && target) visibleLinks.push({ link, source, target });
+    if (!source || !target) continue;
+    // Only links that cross a rendered row: one between two off-screen rows
+    // would be drawn with nothing around it.
+    const first = Math.min(source.index, target.index);
+    const last = Math.max(source.index, target.index);
+    if (last < renderedRange.start || first > renderedRange.end) continue;
+    visibleLinks.push({ link, source, target });
   }
   if (visibleLinks.length === 0) return null;
 

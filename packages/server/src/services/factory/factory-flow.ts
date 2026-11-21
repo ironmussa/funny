@@ -49,6 +49,8 @@ export interface FactoryFlow {
   name: string;
   source: 'repository' | 'built-in';
   pipeline: PipelineDefinition<YamlPipelineContext>;
+  /** Parse warnings of the flow: logged by the caller, they block nothing. */
+  warnings: WorkflowIssue[];
 }
 
 type FlowNode = ParsedWorkflow['nodes'][number];
@@ -104,6 +106,7 @@ function compile(
       name: parsed.workflow.name,
       source,
       pipeline: compileYamlPipeline(parsed.workflow),
+      warnings: parsed.warnings,
     });
   } catch (error) {
     return err({

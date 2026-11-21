@@ -306,6 +306,7 @@ export type {
   WorkflowCancelResponse,
   WorkflowNodeRunState,
 } from './types/workflows.js';
+export { isErrorDiagnostic } from './types/workflows.js';
 
 export type {
   AutomationSchedule,

@@ -345,6 +345,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       await flowUnavailable(job, flow.error);
       return 'not-started';
     }
+    for (const warning of flow.value.warnings) {
+      log.warn('Issue factory flow has a warning', {
+        namespace: 'factory',
+        factoryId: job.factory.id,
+        runId: job.run.id,
+        flow: flow.value.name,
+        path: warning.path,
+        warning: warning.message,
+      });
+    }
     const trace: FlowTrace = {
       agentsRan: job.run.threadIds.length > 0,
       prOpen: job.run.prUrl !== null,

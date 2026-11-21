@@ -40,6 +40,8 @@ export type FactoryWorkflow =
       /** The override's path in the repository, when it is the repository's. */
       path?: string;
       pipeline: PipelineDefinition<YamlPipelineContext>;
+      /** Parse warnings of the workflow (`path: message`); they block nothing. */
+      warnings: string[];
     }
   | { ok: false; failure: FailureKind; reason: string };
 
@@ -75,7 +77,13 @@ function fromOverride(path: string, yaml: string): FactoryWorkflow {
   }
   const compiled = compile(parsed.workflow);
   if (!compiled.ok) return invalidOverride(path, compiled.reason);
-  return { ok: true, source: 'repository', path, pipeline: compiled.pipeline };
+  return {
+    ok: true,
+    source: 'repository',
+    path,
+    pipeline: compiled.pipeline,
+    warnings: parsed.warnings.map((w) => `${w.path}: ${w.message}`),
+  };
 }
 
 async function builtIn(): Promise<FactoryWorkflow> {
@@ -91,7 +99,12 @@ async function builtIn(): Promise<FactoryWorkflow> {
   }
   const compiled = compile(entry.workflow);
   if (!compiled.ok) return { ok: false, failure: 'infra', reason: compiled.reason };
-  return { ok: true, source: 'built-in', pipeline: compiled.pipeline };
+  return {
+    ok: true,
+    source: 'built-in',
+    pipeline: compiled.pipeline,
+    warnings: entry.warnings.map((w) => `${w.path}: ${w.message}`),
+  };
 }
 
 function compile(

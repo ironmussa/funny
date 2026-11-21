@@ -4,12 +4,13 @@
  * and resuming a run after a restart — fake GitHub + fake launcher + fake
  * poll + scripted thread outcomes, real test DB.
  */
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import type { CiState } from '@funny/core/github-app';
 import type { IssueBlocker } from '@funny/core/github-app';
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 
+import { log } from '../../../lib/logger.js';
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
 import type { FactoryMergeOutcome } from '../../../services/factory/factory-pull-requests.js';
@@ -864,6 +865,45 @@ describe('factory flow', () => {
     await eventually(factoryId, (r) => r.state === 'waiting_human');
     expect(launcher.calls[0]!.body.prompt).toBe('CUSTOM 7');
     expect(github.fileReads).toEqual(['.funny/workflows/issue-to-merge.yaml']);
+  });
+
+  test('a flow with a parse warning is logged and still runs', async () => {
+    const custom = [
+      'name: issue-to-merge',
+      'inputs:',
+      '  issue_number: { type: string, required: true }',
+      'nodes:',
+      '  - id: only',
+      '    spawn_agent:',
+      '      prompt: CUSTOM {{issue_number}}',
+      '    on_error: continue',
+      '  - id: after',
+      '    depends_on: [only]',
+      '    notify: { message: done }',
+    ].join('\n');
+    const warned: Array<{ message: unknown; meta: unknown }> = [];
+    const record = (message: unknown, meta?: unknown) => {
+      warned.push({ message, meta });
+      return log;
+    };
+    // SAFETY: the factory calls log.warn(message, meta); `record` takes exactly that shape.
+    const warn = spyOn(log, 'warn').mockImplementation(record as typeof log.warn);
+    try {
+      const { factoryId, launcher } = await runFlow(
+        { files: { '.funny/workflows/issue-to-merge.yaml': custom } },
+        finishedThreads('completed'),
+      );
+      await eventually(factoryId, (r) => r.state !== 'queued' && r.state !== 'working');
+      expect(launcher.calls[0]!.body.prompt).toBe('CUSTOM 7');
+      const logged = warned.find((w) => w.message === 'Issue factory flow has a warning');
+      expect(logged?.meta).toMatchObject({
+        flow: 'issue-to-merge',
+        path: 'nodes.1.trigger_rule',
+        warning: expect.stringContaining('"after" is skipped if "only" fails'),
+      });
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test('the built-in issue-to-pr flow leaves the open pull request for a person', async () => {

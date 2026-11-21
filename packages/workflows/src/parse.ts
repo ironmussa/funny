@@ -11,6 +11,7 @@
 import { parse as parseYaml, YAMLParseError } from 'yaml';
 
 import { workflowSchema, type ParsedWorkflow } from './schema.js';
+import { workflowWarnings } from './warnings.js';
 
 export interface ParseError {
   /** One-line summary suitable for logs / UI. */
@@ -22,7 +23,14 @@ export interface ParseError {
   issues: Array<{ path: string; message: string }>;
 }
 
-export type ParseResult = { ok: true; workflow: ParsedWorkflow } | { ok: false; error: ParseError };
+export type ParseResult =
+  | {
+      ok: true;
+      workflow: ParsedWorkflow;
+      /** What loads and runs but likely is not what the author meant; blocks nothing. */
+      warnings: WorkflowIssue[];
+    }
+  | { ok: false; error: ParseError };
 
 /** One problem a host finds in a workflow the schema accepted. */
 export interface WorkflowIssue {
@@ -106,7 +114,7 @@ export function parseWorkflowYaml(
     };
   }
 
-  return { ok: true, workflow: parsed.data };
+  return { ok: true, workflow: parsed.data, warnings: workflowWarnings(parsed.data) };
 }
 
 /**

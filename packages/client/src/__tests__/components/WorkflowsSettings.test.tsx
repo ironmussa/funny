@@ -191,5 +191,48 @@ describe('WorkflowsSettings', () => {
     });
 
     expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /run/i })).toBeDisabled();
+  });
+
+  test('shows warnings without blocking save or run', async () => {
+    apiMocks.getWorkflow.mockReturnValue(
+      okAsync(
+        definition([
+          {
+            path: 'nodes.1.trigger_rule',
+            message: '"judge" is skipped if "proposer-b" fails (on_error: continue).',
+            severity: 'warning',
+          },
+        ]),
+      ),
+    );
+
+    render(<WorkflowsSettings />);
+
+    const warning = await screen.findByText(/nodes\.1\.trigger_rule/);
+    expect(warning.closest('[data-severity]')).toHaveAttribute('data-severity', 'warning');
+    expect(screen.getByRole('button', { name: /run/i })).toBeEnabled();
+    const save = screen.getByRole('button', { name: /save/i });
+    expect(save).toBeEnabled();
+
+    fireEvent.click(save);
+    await waitFor(() => expect(apiMocks.saveWorkflow).toHaveBeenCalled());
+  });
+
+  test('one error among warnings still blocks save and run', async () => {
+    apiMocks.getWorkflow.mockReturnValue(
+      okAsync(
+        definition([
+          { path: 'nodes.1.trigger_rule', message: 'skipped', severity: 'warning' },
+          { path: 'nodes.0', message: 'invalid', severity: 'error' },
+        ]),
+      ),
+    );
+
+    render(<WorkflowsSettings />);
+
+    await screen.findByText(/nodes\.0:/);
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /run/i })).toBeDisabled();
   });
 });

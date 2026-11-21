@@ -90,7 +90,12 @@ export async function runImplementStep(
           step_name: stepId,
           error: progress.error || undefined,
         }),
-      (source, path) => report('factory.workflow_selected', { source, path: path || undefined }),
+      (source, path, warnings) =>
+        report('factory.workflow_selected', {
+          source,
+          path: path || undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        }),
     );
   } catch (err) {
     // Whatever went wrong, the step still ends with an outcome and a marker.
@@ -112,11 +117,15 @@ async function runWorkflow(
   cwd: string,
   provider: WorkspaceActionProvider,
   onStepProgress: (stepId: string, progress: StepProgressData) => void,
-  onWorkflowChosen: (source: 'repository' | 'built-in', path?: string) => void,
+  onWorkflowChosen: (
+    source: 'repository' | 'built-in',
+    path: string | undefined,
+    warnings: string[],
+  ) => void,
 ): Promise<ImplementOutcome> {
   const workflow = await loadFactoryWorkflow(cwd, spec.base);
   if (!workflow.ok) return { kind: 'failed', failure: workflow.failure, reason: workflow.reason };
-  onWorkflowChosen(workflow.source, workflow.path);
+  onWorkflowChosen(workflow.source, workflow.path, workflow.warnings);
 
   const ctx: YamlPipelineContext = {
     provider,

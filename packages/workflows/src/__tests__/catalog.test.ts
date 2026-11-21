@@ -90,6 +90,31 @@ nodes:
     expect(commit?.workflow.description).toBe('Project override');
   });
 
+  test('a user workflow with a parse warning loads and reports the warning', async () => {
+    const workflowsDir = path.join(workDir, '.funny', 'workflows');
+    await mkdir(workflowsDir, { recursive: true });
+    await writeFile(
+      path.join(workflowsDir, 'review.yaml'),
+      `
+name: review
+nodes:
+  - id: tests
+    run_command: { command: bun test }
+    on_error: continue
+  - id: notify
+    depends_on: [tests]
+    notify: { message: done }
+`,
+      'utf8',
+    );
+
+    const result = await loadWorkflowCatalog({ repoRoot: workDir });
+    expect(result.workflows.get('review')?.warnings).toEqual([
+      expect.objectContaining({ path: 'nodes.1.trigger_rule' }),
+    ]);
+    expect(result.warnings).toEqual([expect.stringContaining('Warning in user workflow review')]);
+  });
+
   test('legacy .funny/pipelines files are ignored', async () => {
     const legacyDir = path.join(workDir, '.funny', 'pipelines');
     await mkdir(legacyDir, { recursive: true });

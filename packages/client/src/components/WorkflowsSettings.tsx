@@ -1,8 +1,9 @@
-import type {
-  WorkflowDefinitionResponse,
-  WorkflowDiagnostic,
-  WorkflowGraphDto,
-  WorkflowSummary,
+import {
+  isErrorDiagnostic,
+  type WorkflowDefinitionResponse,
+  type WorkflowDiagnostic,
+  type WorkflowGraphDto,
+  type WorkflowSummary,
 } from '@funny/shared/types/workflows';
 import {
   ACTION_KEYS,
@@ -27,6 +28,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import {
   AlertCircle,
+  AlertTriangle,
   CircleDashed,
   GitBranch,
   Play,
@@ -166,8 +168,11 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     applyGraph(result.value.graph as WorkflowGraph, setNodes, setEdges, runStates, filter);
   }, [filter, runStates, setEdges, setNodes, source]);
 
+  // Warnings are shown but block nothing; only errors stop saving and running.
+  const hasErrors = useMemo(() => diagnostics.some(isErrorDiagnostic), [diagnostics]);
+
   const saveWorkflow = useCallback(async () => {
-    if (!selectedProjectId || !selectedName || diagnostics.length > 0) return;
+    if (!selectedProjectId || !selectedName || hasErrors) return;
     const result = await api.saveWorkflow(selectedProjectId, selectedName, source);
     if (result.isErr()) {
       toast.error(result.error.message);
@@ -186,8 +191,8 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     });
     void loadList();
   }, [
-    diagnostics.length,
     filter,
+    hasErrors,
     loadList,
     runStates,
     selectedName,
@@ -198,7 +203,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
   ]);
 
   const runWorkflow = useCallback(async () => {
-    if (!selectedName || diagnostics.length > 0 || !selectedThreadId) return;
+    if (!selectedName || hasErrors || !selectedThreadId) return;
     let inputs: Record<string, unknown>;
     try {
       inputs = JSON.parse(inputsSource) as Record<string, unknown>;
@@ -216,7 +221,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     }
     setActiveRun(result.value.runId);
     toast.success('Workflow started');
-  }, [diagnostics.length, inputsSource, selectedName, selectedThreadId, setActiveRun]);
+  }, [hasErrors, inputsSource, selectedName, selectedThreadId, setActiveRun]);
 
   const cancelRun = useCallback(async () => {
     if (!activeRunId) return;
@@ -285,11 +290,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
         <Button variant="outline" size="sm" onClick={() => void refreshFromSource()}>
           <RefreshCw className="size-4" />
         </Button>
-        <Button
-          size="sm"
-          onClick={() => void saveWorkflow()}
-          disabled={!selectedName || diagnostics.length > 0}
-        >
+        <Button size="sm" onClick={() => void saveWorkflow()} disabled={!selectedName || hasErrors}>
           <Save className="size-4" />
           Save
         </Button>
@@ -297,7 +298,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
           size="sm"
           variant="secondary"
           onClick={() => void runWorkflow()}
-          disabled={!selectedName || diagnostics.length > 0 || !selectedThreadId}
+          disabled={!selectedName || hasErrors || !selectedThreadId}
         >
           <Play className="size-4" />
           Run
@@ -632,9 +633,16 @@ function SourcePanel({
           {diagnostics.map((diagnostic) => (
             <div
               key={`${diagnostic.path}-${diagnostic.message}`}
-              className="text-destructive flex gap-2 text-xs"
+              data-severity={isErrorDiagnostic(diagnostic) ? 'error' : 'warning'}
+              className={`flex gap-2 text-xs ${
+                isErrorDiagnostic(diagnostic) ? 'text-destructive' : 'text-status-warning'
+              }`}
             >
-              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              {isErrorDiagnostic(diagnostic) ? (
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              ) : (
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              )}
               <span>
                 {diagnostic.path}: {diagnostic.message}
               </span>

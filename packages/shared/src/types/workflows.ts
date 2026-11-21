@@ -13,6 +13,16 @@ export type WorkflowNodeRunStatus =
 export interface WorkflowDiagnostic {
   path: string;
   message: string;
+  /**
+   * An `error` makes the workflow invalid (it cannot be saved or run); a
+   * `warning` is shown but blocks nothing. Missing means `error`.
+   */
+  severity?: 'error' | 'warning';
+}
+
+/** Whether a diagnostic makes the workflow invalid (missing severity is an error). */
+export function isErrorDiagnostic(diagnostic: WorkflowDiagnostic): boolean {
+  return diagnostic.severity !== 'warning';
 }
 
 export interface WorkflowSummary {

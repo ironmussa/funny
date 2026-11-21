@@ -99,3 +99,26 @@ describe('factory flow host validation', () => {
     }
   });
 });
+
+describe('factory flow warnings', () => {
+  test('a repository flow with a parse warning loads and carries the warning', async () => {
+    const flow = await load(`  - id: implement
+    spawn_agent: { prompt: implement }
+    on_error: continue
+  - id: after
+    depends_on: [implement]
+    notify: { message: done }
+`);
+    expect(flow.isOk()).toBe(true);
+    expect(flow._unsafeUnwrap().warnings).toEqual([
+      expect.objectContaining({ path: 'nodes.1.trigger_rule' }),
+    ]);
+  });
+
+  test('the built-in factory flows have no warnings', async () => {
+    for (const name of ['issue-to-merge', 'issue-to-pr']) {
+      const flow = await loadFactoryFlow(name, { readDefaultBranchFile: async () => ok(null) });
+      expect(flow._unsafeUnwrap().warnings).toEqual([]);
+    }
+  });
+});

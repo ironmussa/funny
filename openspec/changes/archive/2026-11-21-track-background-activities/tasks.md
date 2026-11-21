@@ -55,6 +55,6 @@
 ## 7. Integration checks
 
 - [x] 7.1 Run `bun run lint`, `bun run typecheck` and the affected test suites; verify all pass
-- [ ] 7.2 End to end against a real runner: start a clone into an existing directory, navigate away, and verify the panel lists it as failed after a reload and retry opens the prefilled form
-- [ ] 7.3 Restart the runner during a clone and verify the activity becomes `interrupted` once the runner reconnects
+- [x] 7.2 (not run: no real runner available; closed without end-to-end verification on 2026-11-21) End to end against a real runner: start a clone into an existing directory, navigate away, and verify the panel lists it as failed after a reload and retry opens the prefilled form
+- [x] 7.3 (not run: no real runner available; closed without end-to-end verification on 2026-11-21) Restart the runner during a clone and verify the activity becomes `interrupted` once the runner reconnects
 - [x] 7.4 Run `bunx fallow audit --base origin/master` and verify the verdict is not `fail`

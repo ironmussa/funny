@@ -6,10 +6,13 @@ import type {
 } from '@funny/shared/contracts/factory';
 
 import { factoryApi } from '@/lib/api/factory';
+import { createClientLogger } from '@/lib/client-logger';
 
 import type { DataLayer } from '../data-layer';
-import { unwrapResult } from '../query-client';
+import { unwrapResult, type QueryStatusView } from '../query-client';
 import { getDataLayer } from '../runtime';
+
+const log = createClientLogger('factory');
 
 /**
  * The caller's issue factory settings for one project, as a session query. It
@@ -21,12 +24,38 @@ import { getDataLayer } from '../runtime';
 
 const factorySettingsKey = (projectId: string) => ['factory', 'settings', projectId] as const;
 
+/** How often a failed settings read is tried again while something shows it. */
+export const FACTORY_SETTINGS_RETRY_MS = 15_000;
+
+/**
+ * Retries are off in the data layer, and a failed read leaves no settings,
+ * which reads as "no factory": the Issues tab would hide its checkboxes until
+ * something else refetched. So a reader polls only while the read has failed.
+ */
 export function factorySettingsQuery(projectId: string) {
   return {
     queryKey: factorySettingsKey(projectId),
-    queryFn: (): Promise<FactorySettings | null> => unwrapResult(factoryApi.getSettings(projectId)),
+    queryFn: (): Promise<FactorySettings | null> =>
+      unwrapResult(factoryApi.getSettings(projectId)).catch((error: unknown) => {
+        log.warn('failed to load factory settings', {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }),
     staleTime: 30_000,
+    refetchInterval: (query: QueryStatusView) =>
+      query.state.status === 'error' ? FACTORY_SETTINGS_RETRY_MS : false,
   };
+}
+
+/** Read the settings again now (the Issues tab's retry after a failed read). */
+export function refetchFactorySettings(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): Promise<void> {
+  if (layer.disposed) return Promise.resolve();
+  return layer.queryClient.refetchQueries({ queryKey: factorySettingsKey(projectId), exact: true });
 }
 
 const factoryRunsKey = (projectId: string) => ['factory', 'runs', projectId] as const;

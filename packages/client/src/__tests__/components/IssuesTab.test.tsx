@@ -29,23 +29,28 @@ vi.mock('@/lib/api', () => ({ api: apiMock }));
 // The caller's issue factory (change factory-manual-queue): none by default.
 interface FactoryMocks {
   settings: FactorySettings | null;
+  settingsFailed: boolean;
   runs: FactoryRun[];
   blockers: Array<{ issue: number; blockers: Array<{ issue: number; inFactory: boolean }> }>;
   canSteer: boolean;
   send: Mock;
   control: Mock;
+  retry: Mock;
 }
 
 const factory = vi.hoisted((): FactoryMocks => ({
   settings: null,
+  settingsFailed: false,
   runs: [],
   blockers: [],
   canSteer: true,
   send: vi.fn(),
   control: vi.fn(),
+  retry: vi.fn(),
 }));
 vi.mock('@/data/factory/hooks', () => ({
   useFactorySettings: () => factory.settings,
+  useFactorySettingsFailed: () => factory.settingsFailed,
   useFactoryRuns: () => factory.runs,
   useFactoryFlows: () => [
     { name: 'issue-to-merge', source: 'built-in' },
@@ -56,6 +61,7 @@ vi.mock('@/data/factory/hooks', () => ({
 vi.mock('@/data/factory/actions', () => ({
   sendIssuesToFactory: (...args: unknown[]) => factory.send(...args),
   controlFactoryRun: (...args: unknown[]) => factory.control(...args),
+  retryFactorySettings: (...args: unknown[]) => factory.retry(...args),
 }));
 vi.mock('@/data/projects/hooks', async (original) => ({
   ...(await original<typeof import('@/data/projects/hooks')>()),
@@ -253,6 +259,8 @@ describe('IssuesTab and the issue factory', () => {
     vi.clearAllMocks();
     useProjectStore.setState({ selectedProjectId: 'project-1' });
     factory.settings = factorySettings();
+    factory.settingsFailed = false;
+    factory.retry.mockResolvedValue(undefined);
     factory.runs = [];
     factory.blockers = [];
     factory.canSteer = true;
@@ -277,6 +285,24 @@ describe('IssuesTab and the issue factory', () => {
     showIssues([issue(1)]);
     await screen.findByTestId('issue-item-1');
     expect(screen.queryByTestId('issue-select-1')).toBeNull();
+  });
+
+  test('when the factory settings fail to load, the tab says so and retries on demand', async () => {
+    factory.settings = null;
+    factory.settingsFailed = true;
+    showIssues([issue(1)]);
+    await screen.findByTestId('issue-item-1');
+    expect(screen.queryByTestId('issue-select-1')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('issues-factory-retry'));
+    expect(factory.retry).toHaveBeenCalledWith('project-1');
+  });
+
+  test('without a factory the failed-load notice stays hidden', async () => {
+    factory.settings = null;
+    showIssues([issue(1)]);
+    await screen.findByTestId('issue-item-1');
+    expect(screen.queryByTestId('issues-factory-unavailable')).toBeNull();
   });
 
   test('selected issues are sent with the chosen flow', async () => {

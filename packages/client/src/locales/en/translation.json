@@ -643,7 +643,8 @@
       "catppuccin": "Catppuccin",
       "sunrise": "Sunrise",
       "monochrome": "Monochrome",
-      "monochromeDark": "Monochrome Dark"
+      "monochromeDark": "Monochrome Dark",
+      "minimal": "Minimal"
     },
     "threads": "Threads",
     "defaultThreadMode": "Default thread mode",

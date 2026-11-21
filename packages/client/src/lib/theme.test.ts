@@ -12,6 +12,7 @@ describe('isLightTheme', () => {
     sunrise: true,
     monochrome: true,
     'monochrome-dark': false,
+    minimal: false,
   };
 
   test.each(THEMES.map((t) => [t, expected[t]] as const))('%s → light=%s', (theme, light) => {

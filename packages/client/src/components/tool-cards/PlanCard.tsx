@@ -40,12 +40,12 @@ export function PlanCard({
   if (!plan) return null;
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-xs">
+    <div className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-xs">
       {/* Header */}
       {!hideLabel && (
         <div className="flex items-center justify-between px-3 py-1.5 text-xs">
           <div className="flex items-center gap-2">
-            <FileCode2 className="icon-xs text-muted-foreground shrink-0" />
+            <FileCode2 className="icon-xs text-tool-icon-edit shrink-0" />
             <span className="text-foreground font-medium">{t('tools.plan')}</span>
             {displayTime && (
               <span className="text-muted-foreground/50 text-[10px] tabular-nums">

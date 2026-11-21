@@ -40,7 +40,7 @@ export function BashCard({
   const command = useMemo(() => commandToText(parsed.command), [parsed.command]);
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm">
       <button
         type="button"
         aria-expanded={expanded}
@@ -50,7 +50,7 @@ export function BashCard({
         <ChevronRight
           className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
-        {!hideLabel && <Terminal className="icon-xs text-muted-foreground shrink-0" />}
+        {!hideLabel && <Terminal className="icon-xs text-tool-icon-run shrink-0" />}
         {!hideLabel && (
           <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.runCommand')}

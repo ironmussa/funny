@@ -89,7 +89,7 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
     <div
       className={cn(
         'max-w-full overflow-hidden rounded-lg border text-sm',
-        isError ? 'border-destructive/50' : 'border-border',
+        isError ? 'border-destructive/50' : 'border-tool-card-border',
       )}
       data-testid={`mcp-tool-card-${mcp.server}-${mcp.tool}`}
     >
@@ -278,7 +278,7 @@ function McpToolCardHeader({
         />
         {!hideLabel && (
           <>
-            <Plug className="icon-xs text-muted-foreground shrink-0" />
+            <Plug className="icon-xs text-tool-icon-other shrink-0" />
             <span className="text-foreground shrink-0 font-mono font-medium">{label}</span>
           </>
         )}

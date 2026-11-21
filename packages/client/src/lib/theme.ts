@@ -12,6 +12,7 @@ export const THEMES = [
   'sunrise',
   'monochrome',
   'monochrome-dark',
+  'minimal',
 ] as const;
 
 export type ThemeName = (typeof THEMES)[number];

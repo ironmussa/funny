@@ -33,15 +33,15 @@ export type DisplayThreadStatus = ThreadStatus | 'runner_offline';
 
 export const statusConfig: Record<DisplayThreadStatus, { icon: typeof Clock; className: string }> =
   {
-    setting_up: { icon: Loader2, className: 'text-gray-400 animate-spin' },
+    setting_up: { icon: Loader2, className: 'text-thread-icon-running animate-spin' },
     idle: { icon: CircleDot, className: 'text-gray-400' },
     // A pending thread is always about to start (between worktree setup and the
     // agent's first `running` status), so it shares the running spinner instead
     // of flashing a different icon mid-launch.
-    pending: { icon: Loader2, className: 'text-gray-400 animate-spin' },
-    running: { icon: Loader2, className: 'text-gray-400 animate-spin' },
+    pending: { icon: Loader2, className: 'text-thread-icon-running animate-spin' },
+    running: { icon: Loader2, className: 'text-thread-icon-running animate-spin' },
     waiting: { icon: Clock, className: 'text-yellow-400' },
-    completed: { icon: CheckCircle2, className: 'text-gray-400' },
+    completed: { icon: CheckCircle2, className: 'text-thread-icon-completed' },
     failed: { icon: XCircle, className: 'text-red-400' },
     stopped: { icon: CircleStop, className: 'text-red-400' },
     interrupted: { icon: AlertTriangle, className: 'text-orange-400' },

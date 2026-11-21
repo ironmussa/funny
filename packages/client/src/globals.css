@@ -55,6 +55,18 @@
   --color-status-neutral: hsl(var(--status-neutral));
   --color-status-violet: hsl(var(--status-violet));
 
+  /* Opt-in theme hooks. A theme sets the raw variable (a full color, e.g.
+     `hsl(var(--status-info))`); every other theme falls back to the look it
+     always had. Used by the Minimal theme. */
+  --color-tool-card-border: var(--tool-card-border, hsl(var(--border)));
+  --color-tool-icon-read: var(--tool-icon-read, hsl(var(--muted-foreground)));
+  --color-tool-icon-edit: var(--tool-icon-edit, hsl(var(--muted-foreground)));
+  --color-tool-icon-run: var(--tool-icon-run, hsl(var(--muted-foreground)));
+  --color-tool-icon-agent: var(--tool-icon-agent, hsl(var(--muted-foreground)));
+  --color-tool-icon-other: var(--tool-icon-other, hsl(var(--muted-foreground)));
+  --color-thread-icon-running: var(--thread-icon-running, var(--color-gray-400));
+  --color-thread-icon-completed: var(--thread-icon-completed, var(--color-gray-400));
+
   --color-diff-added: hsl(var(--diff-added));
   --color-diff-removed: hsl(var(--diff-removed));
 
@@ -896,6 +908,84 @@ mark.md-search-match[data-active='true'] {
     /* Terminal ANSI — Monochrome Dark (Tokyo Night-inspired vivid palette
        for clear distinction between prompt, errors, paths, and info on a
        near-black background) */
+    --terminal-black: #15161e;
+    --terminal-red: #f7768e;
+    --terminal-green: #9ece6a;
+    --terminal-yellow: #e0af68;
+    --terminal-blue: #7aa2f7;
+    --terminal-magenta: #bb9af7;
+    --terminal-cyan: #7dcfff;
+    --terminal-white: #c0caf5;
+    --terminal-bright-black: #545c7e;
+    --terminal-bright-red: #ff7a93;
+    --terminal-bright-green: #b9f27c;
+    --terminal-bright-yellow: #ff9e64;
+    --terminal-bright-blue: #7da6ff;
+    --terminal-bright-magenta: #c099ff;
+    --terminal-bright-cyan: #b4f9f8;
+    --terminal-bright-white: #ffffff;
+    --terminal-selection: #2e3c64;
+  }
+
+  /* ── Minimal (Dark) ───────────────────────────────────────────
+     The near-black surfaces of Monochrome Dark with less chrome: tool cards
+     without borders, colored status and tool icons, and a powerline that is
+     plain text separated by slashes. */
+  .theme-minimal {
+    --font-sans: 'Noto Sans', sans-serif;
+    --font-mono-explorer: 'Noto Sans Mono', ui-monospace, monospace;
+    --background: 0 0% 4%;
+    --foreground: 0 0% 93%;
+    --card: 0 0% 3%;
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 0 0% 93%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 93%;
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 40%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-primary: 0 0% 93%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 8%;
+    --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-border: 0 0% 12%;
+    --sidebar-ring: 0 0% 40%;
+
+    --status-success: 142 65% 55%;
+    --status-error: 0 80% 64%;
+    --status-warning: 38 92% 56%;
+    --status-info: 213 90% 66%;
+    --status-pending: 48 95% 58%;
+    --status-interrupted: 25 90% 58%;
+    --status-neutral: 0 0% 50%;
+    --status-violet: 263 85% 74%;
+
+    --diff-added: 142 50% 55%;
+    --diff-removed: 0 55% 60%;
+
+    --tool-card-border: transparent;
+    --tool-icon-read: hsl(var(--status-info));
+    --tool-icon-edit: hsl(var(--status-warning));
+    --tool-icon-run: hsl(var(--status-success));
+    --tool-icon-agent: hsl(var(--status-violet));
+    --tool-icon-other: hsl(190 80% 60%);
+    --thread-icon-running: hsl(var(--status-info));
+    --thread-icon-completed: hsl(var(--status-success));
+
+    --powerline-variant: plain;
+
     --terminal-black: #15161e;
     --terminal-red: #f7768e;
     --terminal-green: #9ece6a;

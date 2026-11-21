@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   Check,
   CheckCircle2,
   Cloud,
@@ -101,6 +102,41 @@ function branchNameForRef(ref: FoldedRef): string | null {
 
 function displayNameForRef(ref: FoldedRef): string {
   return ref.kind === 'remote' ? remoteBranchName(ref.name) : ref.name;
+}
+
+/** True when `ref` is the local branch the open thread works on. */
+export function isThreadBranchRef(
+  ref: FoldedRef,
+  threadBranch: string | null | undefined,
+): boolean {
+  return !!threadBranch && ref.kind === 'local' && ref.name === threadBranch;
+}
+
+/**
+ * Small arrow in front of the chip of the branch the open thread lives on, so
+ * clicking a thread shows where it sits in the history.
+ */
+function ThreadBranchMarker({ branch }: { branch: string }) {
+  const { t } = useTranslation();
+  const label = t('graph.threadBranchMarker', {
+    branch,
+    defaultValue: `This thread works on ${branch}`,
+  });
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          className="text-primary inline-flex shrink-0 items-center"
+          data-testid="graph-thread-branch-marker"
+        >
+          <ArrowRight className="icon-xs" strokeWidth={3} aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 function renderRefIcon(ref: FoldedRef) {
@@ -438,6 +474,7 @@ function GraphRefChip({
   textColor,
   hasSearchQuery,
   searchQuery,
+  isThreadBranch,
   onPushBranch,
   onPullCurrentBranch,
 }: {
@@ -449,6 +486,7 @@ function GraphRefChip({
   textColor: string;
   hasSearchQuery: boolean;
   searchQuery: string;
+  isThreadBranch: boolean;
   onPushBranch: (branch: string) => void;
   onPullCurrentBranch: (branch: string) => void;
 }) {
@@ -460,10 +498,12 @@ function GraphRefChip({
       className={cn(
         'inline-flex h-[0.9375rem] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
         isMergedRef(ref) && 'opacity-60',
+        isThreadBranch && 'ring-primary ring-1',
       )}
       style={{ backgroundColor: color, color: textColor }}
       data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
       data-merged={isMergedRef(ref) || undefined}
+      data-thread-branch={isThreadBranch || undefined}
     >
       <Popover>
         <PopoverTrigger asChild>
@@ -518,6 +558,7 @@ export function GraphRefChips({
   actionInProgress,
   color,
   searchQuery,
+  threadBranch = null,
   onPushBranch,
   onPullCurrentBranch,
 }: {
@@ -527,6 +568,8 @@ export function GraphRefChips({
   actionInProgress: string | null;
   color: string;
   searchQuery: string;
+  /** Branch the open thread works on; its chip gets an arrow marker. */
+  threadBranch?: string | null;
   onPushBranch: (branch: string) => void;
   onPullCurrentBranch: (branch: string) => void;
 }) {
@@ -543,8 +586,9 @@ export function GraphRefChips({
       {refs.map((ref) => {
         const branchName = branchNameForRef(ref);
         const summary = branchName ? branchSummaryByName.get(branchName) : undefined;
+        const isThreadBranch = isThreadBranchRef(ref, threadBranch);
 
-        return (
+        const chip = (
           <GraphRefChip
             key={`${ref.kind}:${ref.name}`}
             ref={ref}
@@ -555,9 +599,20 @@ export function GraphRefChips({
             textColor={textColor}
             hasSearchQuery={hasSearchQuery}
             searchQuery={searchQuery}
+            isThreadBranch={isThreadBranch}
             onPushBranch={onPushBranch}
             onPullCurrentBranch={onPullCurrentBranch}
           />
+        );
+        if (!isThreadBranch) return chip;
+        return (
+          <div
+            key={`${ref.kind}:${ref.name}`}
+            className="flex max-w-full min-w-0 items-center gap-0.5"
+          >
+            <ThreadBranchMarker branch={ref.name} />
+            {chip}
+          </div>
         );
       })}
     </div>

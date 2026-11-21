@@ -11,7 +11,9 @@ import { ProjectConfigSettings } from '@/components/ProjectConfigSettings';
 import { ProjectAgentExecutionProfileSettings } from '@/components/settings/AgentExecutionProfilesSettings';
 import { type SettingsItemId } from '@/components/settings/items';
 import { ProjectCollaborators } from '@/components/settings/ProjectCollaborators';
+import { ProjectFactorySettings } from '@/components/settings/ProjectFactorySettings';
 import { ProjectRunnerSettings } from '@/components/settings/ProjectRunnerSettings';
+import { ProjectSecuritySettings } from '@/components/settings/ProjectSecuritySettings';
 import { SkillsSettings } from '@/components/SkillsSettings';
 import { StartupCommandsSettings } from '@/components/StartupCommandsSettings';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -61,6 +63,10 @@ export function SettingsPageContent({ page, label }: Props) {
       return <PipelineSettings />;
     case 'archived-threads':
       return <ArchivedThreadsSettings />;
+    case 'factory':
+      return <ProjectFactorySettings />;
+    case 'security':
+      return <ProjectSecuritySettings />;
     case 'collaborators':
       return <ProjectCollaborators />;
     case 'runner':

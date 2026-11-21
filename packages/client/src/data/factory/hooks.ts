@@ -1,4 +1,5 @@
 import type {
+  FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryRun,
@@ -10,6 +11,7 @@ import {
   activeFactoryRunsQuery,
   NO_ACTIVE_FACTORY_RUNS,
   factoryBlockersQuery,
+  factoryFlowDefinitionQuery,
   factoryFlowsQuery,
   factoryRunsQuery,
   factorySettingsQuery,
@@ -67,6 +69,15 @@ export function useActiveFactoryRunForThread(thread: {
 /** The flows a send may pick; `undefined` while loading. */
 export function useFactoryFlows(projectId: string): FactoryFlowOption[] | undefined {
   return useDataQuery(factoryFlowsQuery(projectId)).data;
+}
+
+/** One flow's YAML while `flowName` is set; `undefined` while loading or none is chosen. */
+export function useFactoryFlowDefinition(
+  projectId: string,
+  flowName: string | null,
+): { definition: FactoryFlowDefinition | undefined; error: Error | null } {
+  const { data, error } = useDataQuery(factoryFlowDefinitionQuery(projectId, flowName));
+  return { definition: data, error: error ?? null };
 }
 
 /** The open blockers of `issueNumbers`; empty while none are selected. */

@@ -277,6 +277,25 @@ export function getThreadRoute(thread: Pick<Thread, 'id' | 'projectId' | 'isScra
   return `/projects/${thread.projectId}/threads/${thread.id}`;
 }
 
+// ── Sidebar visibility ───────────────────────────────────────────
+
+type ThreadSidebarLike = Pick<Thread, 'archived' | 'status' | 'stage' | 'parentThreadId'>;
+
+/**
+ * True for a thread parked in the backlog: created with "send to backlog" (or
+ * saved there when leaving the compose form) and never started. It lives on
+ * the Kanban board until someone launches it. A fork is also created idle in
+ * the backlog stage, but the user opens it right away, so it is not one.
+ */
+function isBacklogItem(thread: ThreadSidebarLike): boolean {
+  return thread.status === 'idle' && thread.stage === 'backlog' && !thread.parentThreadId;
+}
+
+/** Whether a project thread is listed in the sidebar. */
+export function showsInSidebar(thread: ThreadSidebarLike): boolean {
+  return !thread.archived && !isBacklogItem(thread);
+}
+
 // ── Sidebar storage discriminator ────────────────────────────────
 
 /**

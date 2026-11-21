@@ -207,7 +207,7 @@ export function NewThreadInput({
       if (isAbandoned()) return;
 
       if (kind === 'idle') {
-        toast.success(t('toast.threadCreated', { title: thread?.title ?? '' }));
+        toast.success(t('toast.sentToBacklog', { title: thread?.title ?? '' }));
         if (onCreated) {
           onCreated(threadId);
         } else {
@@ -339,9 +339,11 @@ export function NewThreadInput({
       // this component). Idle threads and design-view creates stay on this
       // screen, so pinning there would strand the loader forever. Mirrors the
       // navigation conditions in onSuccess above.
+      // "Send to backlog" creates an idle thread just like idle-only mode:
+      // it stays on this screen (toast only), so it must not pin the loader.
       const willNavigateAway = shouldNavigateAfterCreate(
         !!onCreated,
-        newThreadIdleOnly,
+        newThreadIdleOnly || opts.sendToBacklog === true,
         newThreadIsScratch,
         !!activeDesignId,
       );

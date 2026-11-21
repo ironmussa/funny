@@ -1187,6 +1187,7 @@
     "threadArchived": "Hilo archivado exitosamente",
     "threadDeleted": "Hilo \"{{title}}\" eliminado",
     "threadCreated": "Hilo \"{{title}}\" creado",
+    "sentToBacklog": "\"{{title}}\" enviado al backlog",
     "projectRenamed": "Proyecto renombrado a \"{{name}}\"",
     "threadRenamed": "Hilo renombrado a \"{{title}}\"",
     "projectDeleted": "Proyecto \"{{name}}\" eliminado",

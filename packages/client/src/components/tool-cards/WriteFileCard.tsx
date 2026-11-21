@@ -64,7 +64,10 @@ export function WriteFileCard({
   }, [content, hljsLang]);
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
+    <div
+      data-expanded={expanded}
+      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm data-[expanded=true]:border"
+    >
       <div className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs">
         <button
           type="button"

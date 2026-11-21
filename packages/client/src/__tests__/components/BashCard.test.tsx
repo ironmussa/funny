@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'bun:test';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { BashCard } from '@/components/tool-cards/BashCard';
 
@@ -46,6 +46,18 @@ describe('BashCard', () => {
     expect(screen.getByText('bun test')).toBeInTheDocument();
     expect(screen.getByText('tests passed')).toBeInTheDocument();
   });
+});
+
+// A theme can hide a collapsed card's outline (Minimal sets
+// --tool-card-border-width: 0px); an open card always gets its border back.
+test('BashCard marks its container expanded so it keeps a border when open', () => {
+  const { container } = render(<BashCard parsed={{ command: 'bun test' }} output="ok" />);
+  const card = container.firstElementChild!;
+  expect(card).toHaveAttribute('data-expanded', 'false');
+  expect(card.className).toContain('data-[expanded=true]:border');
+
+  fireEvent.click(screen.getByRole('button', { name: /tools\.runCommand/i }));
+  expect(card).toHaveAttribute('data-expanded', 'true');
 });
 
 describe('BashCard search output', () => {

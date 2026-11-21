@@ -58,6 +58,9 @@
   /* Opt-in theme hooks. A theme sets the raw variable (a full color, e.g.
      `hsl(var(--status-info))`); every other theme falls back to the look it
      always had. Used by the Minimal theme. */
+  /* Sidebar thread titles follow the row's tone (muted, foreground on hover)
+     unless a theme pins them. */
+  --color-thread-title: var(--thread-title, currentColor);
   --color-thread-icon-running: var(--thread-icon-running, var(--color-gray-400));
   --color-thread-icon-completed: var(--thread-icon-completed, var(--color-gray-400));
 
@@ -946,6 +949,7 @@ mark.md-search-match[data-active='true'] {
     /* Width, not color: the base layer forces every `border-*` element to
        the theme's border color with !important. */
     --tool-card-border-width: 0px;
+    --thread-title: hsl(var(--foreground));
     --thread-icon-running: hsl(var(--status-info));
     --thread-icon-completed: hsl(var(--status-success));
 

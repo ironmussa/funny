@@ -103,7 +103,7 @@ export function ThreadItemTitleRow({
         title={thread.title}
         search={search}
         density="compact"
-        className="text-sm leading-tight"
+        className="text-thread-title text-sm leading-tight"
         badgeTestId={`thread-item-attachments-${thread.id}`}
       />
       {titleBadge}

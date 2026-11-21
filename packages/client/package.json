@@ -8,10 +8,11 @@
     "dev:test": "vite --mode test",
     "build": "bun check && vite build",
     "preview": "vite preview",
-    "test": "vitest run --project unit",
-    "test:coverage": "vitest run --project unit --coverage",
+    "test": "bun test --parallel",
+    "test:coverage": "bun ../../scripts/coverage-gate.ts --min 80 --parallel",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:storybook": "vitest run --project storybook"
   },
   "dependencies": {
     "@abbacchio/browser-transport": "^0.3.0",
@@ -103,6 +104,7 @@
   "devDependencies": {
     "@chromatic-com/storybook": "^5.0.1",
     "@funny/client-benchmark": "workspace:*",
+    "@funny/test-kit": "workspace:*",
     "@storybook/addon-a11y": "^10.6.5",
     "@storybook/addon-docs": "^10.6.5",
     "@storybook/addon-onboarding": "^10.6.5",
@@ -123,13 +125,14 @@
     "@tiptap/react": "^3.32.2",
     "@tiptap/suggestion": "^3.32.2",
     "@types/color": "^4.2.1",
+    "@types/jsdom": "^28",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/browser-playwright": "^5.1.0",
-    "@vitest/coverage-v8": "^5.1.0",
     "@welldone-software/why-did-you-render": "^10.0.1",
+    "bun-types": "^1.4.0",
     "jsdom": "^29.1.1",
     "monaco-editor": "^0.57.0",
     "oxc-transform-react": "^0.158.0",

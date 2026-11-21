@@ -1,10 +1,11 @@
+import { describe, test, expect, beforeEach } from 'bun:test';
+
 /**
  * Integration tests verifying tiered rate limits are applied to the correct route groups.
  * Tests that /api/threads/*, /api/git/*, and /api/worktrees/* have the stricter
  * mutationRateLimit (200/min) while other /api/* routes use the default (5000/min).
  */
 import { Hono } from 'hono';
-import { describe, test, expect, beforeEach } from 'vitest';
 
 import { defaultRateLimit, mutationRateLimit } from '../../middleware/rate-limit.js';
 

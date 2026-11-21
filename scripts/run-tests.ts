@@ -38,15 +38,10 @@ export interface TestPackage {
   testScript?: string;
 }
 
-/**
- * A suite to run: the whole suite, (vitest only) the tests related to
- * `related`, or (`bun test` only) the test files in `testFiles`.
- */
+/** A suite to run: the whole suite, or (`bun test` only) the test files in `testFiles`. */
 export interface TestRun {
   pkg: TestPackage;
-  /** Absolute paths for `vitest related`; null runs the whole suite. */
-  related: string[] | null;
-  /** Package-relative `./` test files a test-impact map selected. */
+  /** Package-relative `./` test files a test-impact map selected; absent runs the whole suite. */
   testFiles?: string[];
   /** Why a suite that could have been narrowed runs whole. */
   note?: string;
@@ -56,7 +51,8 @@ export interface TestRun {
 export type Narrower = (pkg: TestPackage, files: readonly string[]) => Narrowing;
 
 interface TestResult extends TestPackage {
-  related: boolean;
+  /** Ran only part of the suite (`testFiles`). */
+  narrowed: boolean;
   code: number;
   durationMs: number;
 }
@@ -78,13 +74,10 @@ const DEPENDENCY_INPUT = /^(package\.json|bun\.lock)$/;
 
 /**
  * Files inside a package that can change the result of tests that never import
- * them: anything outside `src/` (manifest, vitest/tsconfig, fixtures) and setup
+ * them: anything outside `src/` (manifest, bunfig/tsconfig, fixtures) and setup
  * files. A change to one runs the package's whole suite.
  */
 const SUITE_INPUT = /^packages\/[^/]+\/(?!src\/)|\/setup\.[cm]?[jt]sx?$/;
-
-/** `vitest run` in a test script, which `vitest related` can replace. */
-const VITEST_RUN = /\bvitest run\b/;
 
 /** `packages/<name>` for a repo-relative path inside a package, else null. */
 function packageDirOf(file: string): string | null {
@@ -166,13 +159,10 @@ export function declaredExternalDeps(packages: readonly TestPackage[]): Set<stri
  * `package.json` change touches (see `lockfile-changes.ts`). Undefined keeps
  * those files global, as does null ("cannot tell").
  *
- * A vitest suite runs only the tests related to the changed source files
- * (`vitest related`, which follows imports across packages), unless it is
- * affected through a dependency change or a suite input (config, manifest,
- * setup file), which no import graph shows: then it runs whole.
- *
- * Under the same conditions, `narrow` can cut a `bun test` suite down to the
- * test files a test-impact map selects; a suite left with none is dropped.
+ * `narrow` can cut a `bun test` suite down to the test files a test-impact
+ * map selects; a suite left with none is dropped. A suite affected through a
+ * dependency change or a suite input (config, manifest, setup file), which no
+ * map shows, runs whole.
  */
 export function planTests(
   files: readonly string[],
@@ -182,7 +172,7 @@ export function planTests(
   narrow?: Narrower,
 ): TestRun[] {
   const testable = packages.filter((pkg) => pkg.hasTest);
-  const whole = (pkg: TestPackage): TestRun => ({ pkg, related: null });
+  const whole = (pkg: TestPackage): TestRun => ({ pkg });
   if (changedDeps === null) return testable.map(whole);
   const isGlobal = (file: string) =>
     GLOBAL_INPUT.test(file) && !(changedDeps && DEPENDENCY_INPUT.test(file));
@@ -202,19 +192,13 @@ export function planTests(
     }
   }
 
-  const sources = packageFiles.flatMap((file) => {
-    if (SUITE_INPUT.test(file)) return [];
-    const path = join(root, file);
-    return existsSync(path) ? [path] : [];
-  });
   const narrowed = (pkg: TestPackage): TestRun[] => {
     const script = pkg.testScript ?? '';
     if (reaches(pkg.dir, wholeDirs, depsOf)) return [whole(pkg)];
-    if (VITEST_RUN.test(script)) return [{ pkg, related: sources }];
     if (!narrow || !BUN_TEST.test(script)) return [whole(pkg)];
     const narrowing = narrow(pkg, files);
     if ('whole' in narrowing) return [{ ...whole(pkg), note: narrowing.whole }];
-    return narrowing.tests.length > 0 ? [{ pkg, related: null, testFiles: narrowing.tests }] : [];
+    return narrowing.tests.length > 0 ? [{ pkg, testFiles: narrowing.tests }] : [];
   };
   return testable.flatMap((pkg) => (reaches(pkg.dir, changedDirs, depsOf) ? narrowed(pkg) : []));
 }
@@ -224,7 +208,7 @@ export function impactNarrower(heads: readonly string[], root = ROOT): Narrower 
   return (pkg, files) => narrowPackage(pkg.dir, files, heads, { root });
 }
 
-/** The packages `planTests` selects (whole or related). */
+/** The packages `planTests` selects (whole or narrowed). */
 export function selectAffectedPackages(
   files: readonly string[],
   packages: readonly TestPackage[],
@@ -235,54 +219,29 @@ export function selectAffectedPackages(
 
 const shellQuote = (arg: string) => `'${arg.replaceAll("'", `'\\''`)}'`;
 
-/** The runtime's check runner uses the same reporter. */
-const PROGRESS_REPORTER = join(
-  import.meta.dir,
-  '../packages/runtime/src/services/checks/vitest-progress-reporter.mjs',
-);
-
-interface CommandOptions {
-  /** Add the progress reporter to a vitest suite's default one. */
-  progress?: boolean;
-  /** Cap a vitest suite's workers (`--maxWorkers`). */
-  maxWorkers?: number;
-}
-
-/** vitest flags for `options`, or an empty string. */
-function vitestFlags({ progress, maxWorkers }: CommandOptions): string {
-  const flags = [
-    progress && `--reporter=default --reporter=${shellQuote(PROGRESS_REPORTER)}`,
-    maxWorkers && `--maxWorkers=${maxWorkers}`,
-  ];
-  return flags.filter(Boolean).join(' ');
-}
+/** `--parallel` without a worker count in a `bun test` script. */
+const BUN_PARALLEL = /(\bbun test\b[^&|;]*?)--parallel(?![=\w-])/;
 
 /**
- * The command for a run: the package's `test` script, narrowed for `related`,
- * with the vitest flags `options` asks for added to a vitest suite.
+ * The command for a run: the package's `test` script, narrowed to `testFiles`,
+ * with a `bun test --parallel` suite capped at `maxWorkers` workers.
  */
-function testCommand(run: TestRun, options: CommandOptions = {}): string[] {
-  const script = run.pkg.testScript ?? '';
+export function testCommand(run: TestRun, maxWorkers?: number): string[] {
+  let script = run.pkg.testScript ?? '';
+  const capped = maxWorkers !== undefined && BUN_PARALLEL.test(script);
+  if (capped) script = script.replace(BUN_PARALLEL, `$1--parallel=${maxWorkers}`);
   if (run.testFiles) return ['sh', '-c', [script, ...run.testFiles.map(shellQuote)].join(' ')];
-  const flags = VITEST_RUN.test(script) ? vitestFlags(options) : '';
-  if (!run.related && !flags) return ['bun', 'run', 'test'];
-  let command = run.related
-    ? script.replace(VITEST_RUN, 'vitest related --run --passWithNoTests')
-    : script;
-  if (flags) command = command.replace(/\bvitest (run|related)\b/, (match) => `${match} ${flags}`);
-  return ['sh', '-c', [command, ...(run.related ?? []).map(shellQuote)].join(' ')];
+  return capped ? ['sh', '-c', script] : ['bun', 'run', 'test'];
 }
 
 /** Suites run at once; `FUNNY_TEST_CONCURRENCY` overrides it. */
 export const DEFAULT_CONCURRENCY = 4;
 
 /**
- * Workers for each vitest suite when `concurrency` suites run at once: an equal
- * share of the cores. Left to vitest (about one per core) a suite oversubscribes
- * the machine next to the others, and every file then pays more for its jsdom
- * environment and imports: on 20 cores, 60 client test files took 117 s with
- * vitest's default and 94 s with 4 workers. Undefined (vitest's default) when
- * suites run one at a time.
+ * Workers for each `bun test --parallel` suite when `concurrency` suites run at
+ * once: an equal share of the cores. Left to bun (one per core) a suite
+ * oversubscribes the machine next to the others. Undefined (bun's default)
+ * when suites run one at a time.
  */
 export function workersPerSuite(concurrency: number, cores = availableParallelism()) {
   return concurrency > 1 ? Math.max(1, Math.floor(cores / concurrency)) : undefined;
@@ -296,14 +255,13 @@ function concurrencyFrom(env: Record<string, string | undefined>): number {
 /** A run's name with how much of the suite it covers. */
 export function runLabel(run: TestRun): string {
   if (run.testFiles) return `${run.pkg.name} (${run.testFiles.length} test files)`;
-  return `${run.pkg.name}${run.related ? ' (related tests)' : ''}`;
+  return run.pkg.name;
 }
 const label = runLabel;
 
 /**
- * Runs one suite, handing every output line to `onLine` (and, when `onLine` is
- * given, adding the progress reporter to a vitest suite), with a vitest suite's
- * workers capped at `maxWorkers`. With `buffered`, its
+ * Runs one suite, handing every output line to `onLine`, with a `bun test
+ * --parallel` suite's workers capped at `maxWorkers`. With `buffered`, its
  * output is collected and printed in one block when it ends, so suites running
  * side by side do not interleave; otherwise it streams through. Reporter event
  * lines are never printed.
@@ -324,7 +282,7 @@ async function runPackageTests(
   const env = testSuiteEnv(process.env);
   // `sh -c` does not get the bin dirs `bun run` adds to PATH.
   const bins = [join(root, pkg.dir, 'node_modules', '.bin'), join(root, 'node_modules', '.bin')];
-  const proc = Bun.spawn(testCommand(run, { progress: Boolean(onLine), maxWorkers }), {
+  const proc = Bun.spawn(testCommand(run, maxWorkers), {
     cwd: join(root, pkg.dir),
     env: { ...env, PATH: [...bins, env.PATH].filter(Boolean).join(':') },
     stdout: 'pipe',
@@ -338,7 +296,7 @@ async function runPackageTests(
     onLine,
     hide: isEventLine,
   });
-  return { ...pkg, related: Boolean(run.related || run.testFiles), code, durationMs };
+  return { ...pkg, narrowed: Boolean(run.testFiles), code, durationMs };
 }
 
 function printSummary(results: readonly TestResult[]): void {
@@ -346,7 +304,7 @@ function printSummary(results: readonly TestResult[]): void {
   for (const result of results) {
     const status = result.code === 0 ? 'PASS' : `FAIL (${result.code})`;
     const seconds = (result.durationMs / 1000).toFixed(1);
-    const scope = result.related ? ' (related)' : '';
+    const scope = result.narrowed ? ' (narrowed)' : '';
     console.log(`${status.padEnd(10)} ${result.name}${scope} ${seconds}s`);
   }
 }
@@ -363,7 +321,7 @@ export async function runTests(
   concurrency = concurrencyFrom(process.env),
   progressPath = process.env.FUNNY_TEST_PROGRESS,
 ): Promise<number> {
-  const queue = runs.map((run) => ('pkg' in run ? run : { pkg: run, related: null }));
+  const queue = runs.map((run): TestRun => ('pkg' in run ? run : { pkg: run }));
   const results: TestResult[] = new Array(queue.length);
   const buffered = concurrency > 1 && queue.length > 1;
   const maxWorkers = workersPerSuite(Math.min(concurrency, queue.length));
@@ -372,7 +330,7 @@ export async function runTests(
         progressPath,
         queue.map((run) => ({
           name: run.pkg.name,
-          related: Boolean(run.related || run.testFiles),
+          related: Boolean(run.testFiles),
         })),
         { concurrency },
       )

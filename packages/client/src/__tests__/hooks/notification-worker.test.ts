@@ -1,7 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-
-import { describe, expect, test, vi } from 'vitest';
 
 const source = readFileSync('public/notification-sw.js', 'utf8');
 

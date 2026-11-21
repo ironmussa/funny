@@ -1,3 +1,6 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 /**
  * Pipeline orchestration tests.
  *
@@ -6,17 +9,16 @@
  * the review-fix sub-pipeline, which startPipelineRun lazy-imports.
  */
 import { okAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // ── Mocks ─────────────────────────────────────────────────────
 
 const mockEmitToUser = vi.fn();
 
-const serviceMocks = vi.hoisted(() => ({
+const serviceMocks = (() => ({
   createRun: vi.fn().mockResolvedValue('run-1'),
   updateRun: vi.fn().mockResolvedValue(undefined),
   getProject: vi.fn(),
-}));
+}))();
 
 vi.mock('bun:sqlite', () => ({ Database: vi.fn() }));
 vi.mock('nanoid', () => {
@@ -308,7 +310,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('no-ops when reviewer thread is missing', async () => {
-      vi.mocked(tm.getThread).mockResolvedValue(undefined);
+      mocked(tm.getThread).mockImplementation(async () => undefined);
 
       await cleanupReviewerThread('missing', 'proj-1');
 
@@ -316,7 +318,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('no-ops when project is missing', async () => {
-      vi.mocked(tm.getThread).mockResolvedValue({
+      mocked(tm.getThread).mockImplementation(async () => ({
         id: 'rev-1',
         projectId: 'proj-1',
         userId: 'user-1',
@@ -324,7 +326,7 @@ describe('Pipeline Orchestration', () => {
         mode: 'worktree',
         worktreePath: '/tmp/repo/.worktrees/rev',
         branch: 'review/fix',
-      });
+      }));
       serviceMocks.getProject.mockResolvedValue(undefined);
 
       await cleanupReviewerThread('rev-1', 'proj-1');
@@ -333,7 +335,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('archives reviewer worktree and removes git artifacts', async () => {
-      vi.mocked(tm.getThread).mockResolvedValue({
+      mocked(tm.getThread).mockImplementation(async () => ({
         id: 'rev-1',
         projectId: 'proj-1',
         userId: 'user-1',
@@ -341,7 +343,7 @@ describe('Pipeline Orchestration', () => {
         mode: 'worktree',
         worktreePath: '/tmp/repo/.worktrees/rev',
         branch: 'review/fix',
-      });
+      }));
 
       await cleanupReviewerThread('rev-1', 'proj-1');
 
@@ -356,7 +358,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('archives local reviewer thread without git cleanup', async () => {
-      vi.mocked(tm.getThread).mockResolvedValue({
+      mocked(tm.getThread).mockImplementation(async () => ({
         id: 'rev-local',
         projectId: 'proj-1',
         userId: 'user-1',
@@ -364,7 +366,7 @@ describe('Pipeline Orchestration', () => {
         mode: 'local',
         worktreePath: null,
         branch: 'main',
-      });
+      }));
 
       await cleanupReviewerThread('rev-local', 'proj-1');
 

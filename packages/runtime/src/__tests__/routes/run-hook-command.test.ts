@@ -1,3 +1,5 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 /**
  * Tests for the run-hook-command route behavior with neverthrow Result.
  * Re-creates a minimal route (same logic as git.ts) to avoid importing
@@ -5,7 +7,6 @@
  */
 import { Hono } from 'hono';
 import { ok, err } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // Mock runHookCommand and listHooks
 const mockRunHookCommand = vi.fn();

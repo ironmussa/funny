@@ -1,6 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   pipelines: {
     getPipelineForProject: vi.fn(),
     createPipeline: vi.fn(),
@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
     updatePipeline: vi.fn(),
     deletePipeline: vi.fn(),
   },
-}));
+}))();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ pipelines: mocks.pipelines }),

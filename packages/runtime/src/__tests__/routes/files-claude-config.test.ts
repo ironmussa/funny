@@ -2,22 +2,20 @@
  * Regression tests for editing ~/.claude/settings.json via the internal editor.
  */
 
+import { afterAll, beforeAll, describe, expect, test, vi } from 'bun:test';
 import { existsSync, rmSync } from 'fs';
 import { join } from 'path';
 
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
-const { FAKE_HOME } = await vi.hoisted(async () => {
+const { FAKE_HOME } = await (async () => {
   const pathMod = await import('path');
-  const osMod = await vi.importActual<typeof import('os')>('os');
+  const osMod = await import('os');
   return { FAKE_HOME: pathMod.join(osMod.tmpdir(), `funny-claude-files-${Date.now()}`) };
-});
+})();
 
-vi.mock('os', async () => {
-  const actual = await vi.importActual<typeof import('os')>('os');
-  return { ...actual, homedir: () => FAKE_HOME };
-});
+const actualOs = { ...(await import('os')) };
+vi.mock('os', () => ({ ...actualOs, homedir: () => FAKE_HOME }));
 
 import filesRoutes from '../../routes/files.js';
 import { resetServices, setServices } from '../../services/service-registry.js';

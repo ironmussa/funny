@@ -3,9 +3,10 @@
  * panel, for scratch threads too.
  */
 
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),

@@ -3,7 +3,7 @@
  * literal. Honours `ADMIN_PASSWORD` env when strong enough, otherwise
  * generates a random one and asks the caller to surface it via 0600 file.
  */
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { resolveAdminPassword } from '../../lib/admin-password.js';
 

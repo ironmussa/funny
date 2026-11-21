@@ -1,3 +1,5 @@
+import { describe, test, expect } from 'bun:test';
+
 /**
  * Query helpers for the GitHub routes (`routes/github/query.ts`). Their values
  * are interpolated into GitHub API URLs, so `state` and `sort` must be one of
@@ -6,7 +8,6 @@
 import type { DomainError } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
 import type { Result } from 'neverthrow';
-import { describe, test, expect } from 'vitest';
 
 import {
   positiveIntParam,

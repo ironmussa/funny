@@ -6,7 +6,7 @@
  * relies on: its name, its inputs, and a draft pull request against the base.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { loadWorkflowCatalog } from '../catalog.js';
 

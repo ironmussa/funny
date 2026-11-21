@@ -6,7 +6,7 @@
  * errors with diagnostic paths.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { formatParseError, parseWorkflowYaml } from '../parse.js';
 

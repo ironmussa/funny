@@ -7,9 +7,11 @@
  * `draftMessages[0]` threw "undefined is not an object".
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { mocked, waitFor } from '@funny/test-kit';
+
+const mocks = (() => ({
   releaseStagedUploads: vi.fn(),
   resolveAgentResources: vi.fn(),
   invalidateThreadCache: vi.fn(),
@@ -37,7 +39,7 @@ const mocks = vi.hoisted(() => ({
     cancel: vi.fn(async (): Promise<any> => undefined),
     update: vi.fn(async (): Promise<any> => undefined),
   },
-}));
+}))();
 
 vi.mock('../../services/agent-resources/resolver.js', () => ({
   resolveAgentResources: mocks.resolveAgentResources,
@@ -140,11 +142,11 @@ describe('respondPermissionRequest', () => {
   });
 
   test('resumes the exact live request once without starting another agent', async () => {
-    vi.mocked(getPendingPermission).mockReturnValue({
+    mocked(getPendingPermission).mockReturnValue({
       toolName: 'Bash',
       toolInput: 'git status',
     });
-    vi.mocked(respondToPermission).mockResolvedValue(true);
+    mocked(respondToPermission).mockResolvedValue(true);
 
     const result = await respondPermissionRequest({
       threadId: 't-permission',
@@ -164,7 +166,7 @@ describe('respondPermissionRequest', () => {
   });
 
   test('rejects a stale request before it can reach the live process', async () => {
-    vi.mocked(getPendingPermission).mockReturnValue(undefined);
+    mocked(getPendingPermission).mockReturnValue(undefined);
 
     const result = await respondPermissionRequest({
       threadId: 't-permission',
@@ -180,11 +182,11 @@ describe('respondPermissionRequest', () => {
   });
 
   test('keeps a request actionable when always-allow rule persistence fails', async () => {
-    vi.mocked(getPendingPermission).mockReturnValue({
+    mocked(getPendingPermission).mockReturnValue({
       toolName: 'Bash',
       toolInput: 'git status',
     });
-    vi.mocked(createPermissionRule).mockResolvedValue(null);
+    mocked(createPermissionRule).mockResolvedValue(null);
 
     const result = await respondPermissionRequest({
       threadId: 't-permission',
@@ -201,12 +203,12 @@ describe('respondPermissionRequest', () => {
   });
 
   test('persists an always-allow rule before resuming the live request', async () => {
-    vi.mocked(getPendingPermission).mockReturnValue({
+    mocked(getPendingPermission).mockReturnValue({
       toolName: 'Bash',
       toolInput: 'git status',
     });
-    vi.mocked(createPermissionRule).mockResolvedValue(buildPermissionRule({ id: 'rule-1' }));
-    vi.mocked(respondToPermission).mockResolvedValue(true);
+    mocked(createPermissionRule).mockResolvedValue(buildPermissionRule({ id: 'rule-1' }));
+    mocked(respondToPermission).mockResolvedValue(true);
 
     const result = await respondPermissionRequest({
       threadId: 't-permission',
@@ -253,8 +255,8 @@ describe('respondPermissionRequest', () => {
   });
 
   test('returns 409 when the live process no longer accepts the request', async () => {
-    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Read', toolInput: '' });
-    vi.mocked(respondToPermission).mockResolvedValue(false);
+    mocked(getPendingPermission).mockReturnValue({ toolName: 'Read', toolInput: '' });
+    mocked(respondToPermission).mockResolvedValue(false);
     const result = await respondPermissionRequest({
       threadId: 't-permission',
       userId: 'u-1',
@@ -268,8 +270,8 @@ describe('respondPermissionRequest', () => {
   });
 
   test('still resumes and emits running when storage reports the request stale', async () => {
-    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Read', toolInput: '' });
-    vi.mocked(respondToPermission).mockResolvedValue(true);
+    mocked(getPendingPermission).mockReturnValue({ toolName: 'Read', toolInput: '' });
+    mocked(respondToPermission).mockResolvedValue(true);
     mocks.tm.resolvePendingPermissionRequest.mockResolvedValueOnce(false);
     const result = await respondPermissionRequest({
       threadId: 't-permission',
@@ -299,9 +301,9 @@ describe('respondPermissionRequest', () => {
       mode: 'worktree',
       worktreePath: '/wt/one',
     });
-    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Edit', toolInput: 'x' });
-    vi.mocked(createPermissionRule).mockResolvedValue(buildPermissionRule({ id: 'rule-1' }));
-    vi.mocked(respondToPermission).mockResolvedValue(true);
+    mocked(getPendingPermission).mockReturnValue({ toolName: 'Edit', toolInput: 'x' });
+    mocked(createPermissionRule).mockResolvedValue(buildPermissionRule({ id: 'rule-1' }));
+    mocked(respondToPermission).mockResolvedValue(true);
     const result = await respondPermissionRequest({
       threadId: 't-permission',
       userId: 'u-1',
@@ -320,7 +322,7 @@ describe('respondPermissionRequest', () => {
 
   test('always-allow returns 400 when the thread cwd cannot be resolved', async () => {
     mocks.projects.getProject.mockResolvedValue(null);
-    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Bash', toolInput: 'ls' });
+    mocked(getPendingPermission).mockReturnValue({ toolName: 'Bash', toolInput: 'ls' });
     const result = await respondPermissionRequest({
       threadId: 't-permission',
       userId: 'u-1',
@@ -370,7 +372,7 @@ describe('sendMessage — slash-command guardrail', () => {
   });
 
   test('rejects an unknown slash command with a 400 instead of sending it', async () => {
-    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));
+    mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));
 
     const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content: '/compcat' });
 
@@ -390,14 +392,14 @@ describe('sendMessage — slash-command guardrail', () => {
         mode: 'worktree',
         worktreePath: '/projects/worktree',
       });
-      vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'skills']));
+      mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'skills']));
       mocks.resolveAgentResources.mockResolvedValue(
         ok({ resources: [{ name: 'openspec-propose', kind: 'skill', usable: true }] }),
       );
       const content = `/openspec-propose${args}`;
       const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content });
       expect(result.isOk()).toBe(true);
-      expect(vi.mocked(startAgent).mock.calls[0][1]).toBe(
+      expect(mocked(startAgent).mock.calls[0][1]).toBe(
         `Use the openspec-propose skill.${args ? `\n\n${args.trimStart()}` : ''}`,
       );
       expect(mocks.resolveAgentResources).toHaveBeenCalledWith(
@@ -414,7 +416,7 @@ describe('sendMessage — slash-command guardrail', () => {
   test.each(['team:review', 'security-review'])(
     'accepts the Claude catalog command %s without rewriting it',
     async (name) => {
-      vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
+      mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
       mocks.resolveAgentResources.mockResolvedValue(
         ok({ resources: [{ name, kind: 'slash-command', usable: true }] }),
       );
@@ -425,12 +427,12 @@ describe('sendMessage — slash-command guardrail', () => {
         content,
       });
       expect(result.isOk()).toBe(true);
-      expect(vi.mocked(startAgent).mock.calls[0][1]).toBe(content);
+      expect(mocked(startAgent).mock.calls[0][1]).toBe(content);
     },
   );
 
   test('allows a known slash command through to the agent', async () => {
-    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));
+    mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));
 
     const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content: '/compact' });
 
@@ -449,7 +451,7 @@ describe('sendMessage — slash-command guardrail', () => {
         status: 'completed',
         worktreePath: '/projects/test',
       });
-      vi.mocked(getSupportedSlashCommands).mockReturnValue(
+      mocked(getSupportedSlashCommands).mockReturnValue(
         switchProvider ? new Set(['openspec-propose']) : undefined,
       );
       mocks.resolveAgentResources.mockResolvedValue(
@@ -464,14 +466,14 @@ describe('sendMessage — slash-command guardrail', () => {
       });
 
       expect(result.isOk()).toBe(true);
-      expect(vi.mocked(startAgent).mock.calls[0][1]).toBe(
+      expect(mocked(startAgent).mock.calls[0][1]).toBe(
         'Use the openspec-propose skill.\n\nbuild a dashboard',
       );
     },
   );
 
   test('allows any slash command when no command list was captured (cannot validate)', async () => {
-    vi.mocked(getSupportedSlashCommands).mockReturnValue(undefined);
+    mocked(getSupportedSlashCommands).mockReturnValue(undefined);
 
     const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content: '/whatever' });
 
@@ -480,7 +482,7 @@ describe('sendMessage — slash-command guardrail', () => {
   });
 
   test('does not treat a normal prompt as a command', async () => {
-    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
+    mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
 
     const result = await sendMessage({
       threadId: 't-cmd',
@@ -586,7 +588,7 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(result.isOk()).toBe(true);
     expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
     expect(mocks.tm.updateMessage).toHaveBeenCalledWith('msg-draft', expect.any(Object));
-    expect(vi.mocked(startAgent).mock.calls[0][5]).toEqual(images);
+    expect(mocked(startAgent).mock.calls[0][5]).toEqual(images);
   });
 
   test('sets title from prompt when idle thread has no initialPrompt (live view draft)', async () => {
@@ -702,7 +704,7 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.tm.insertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ role: 'user', content: 'hola' }),
     );
-    expect(vi.mocked(startAgent).mock.calls[0][1]).toBe('Fix the login bug\n\nhola');
+    expect(mocked(startAgent).mock.calls[0][1]).toBe('Fix the login bug\n\nhola');
   });
 
   test("a retried sandbox thread: the agent sees the preceding prompt's images, only the new ones are saved", async () => {
@@ -737,7 +739,7 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.tm.insertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ content: 'hola', images: JSON.stringify([image('new')]) }),
     );
-    expect(vi.mocked(startAgent).mock.calls[0][5]).toEqual([image('initial'), image('new')]);
+    expect(mocked(startAgent).mock.calls[0][5]).toEqual([image('initial'), image('new')]);
   });
 
   describe('a message the server already saved (savedMessageId)', () => {
@@ -990,12 +992,12 @@ describe('sendMessage — queue and interactive tool flows', () => {
     vi.clearAllMocks();
     mocks.projects.resolveProjectPath.mockResolvedValue(ok('/projects/test'));
     mocks.projects.getProject.mockResolvedValue({ followUpMode: 'queue', path: '/projects/test' });
-    vi.mocked(isAgentRunning).mockReturnValue(false);
+    mocked(isAgentRunning).mockReturnValue(false);
   });
 
   test('queues the resolved Codex skill invocation with its arguments', async () => {
-    vi.mocked(isAgentRunning).mockReturnValue(true);
-    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
+    mocked(isAgentRunning).mockReturnValue(true);
+    mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
     mocks.tm.getThread.mockResolvedValue({
       id: 't-running',
       projectId: 'p-1',
@@ -1028,7 +1030,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
   });
 
   test('queues follow-up when agent is running and project uses queue mode', async () => {
-    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocked(isAgentRunning).mockReturnValue(true);
     mocks.messageQueue.enqueue.mockResolvedValue({ id: 'queued-1' });
     mocks.messageQueue.queueCount.mockResolvedValue(2);
     mocks.messageQueue.peek.mockResolvedValue({ content: 'second message' });
@@ -1082,7 +1084,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
       followUpMode: 'steer',
       path: '/projects/test',
     });
-    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocked(isAgentRunning).mockReturnValue(true);
 
     mocks.tm.getThread.mockResolvedValue({
       id: 't-running',
@@ -1108,7 +1110,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
     expect(mocks.messageQueue.enqueue).not.toHaveBeenCalled();
     expect(startAgent).toHaveBeenCalledTimes(1);
     // steer is the 13th positional arg (index 12) of startAgent.
-    const call = vi.mocked(startAgent).mock.calls.at(-1);
+    const call = mocked(startAgent).mock.calls.at(-1);
     expect(call?.[0]).toBe('t-running');
     expect(call?.[12]).toBe(true);
   });
@@ -1118,7 +1120,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
       followUpMode: 'steer',
       path: '/projects/test',
     });
-    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocked(isAgentRunning).mockReturnValue(true);
     mocks.messageQueue.enqueue.mockResolvedValue({ id: 'queued-1' });
     mocks.messageQueue.queueCount.mockResolvedValue(1);
     mocks.messageQueue.peek.mockResolvedValue({ content: 'go left instead' });
@@ -1154,7 +1156,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
       followUpMode: 'steer',
       path: '/projects/test',
     });
-    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocked(isAgentRunning).mockReturnValue(true);
 
     mocks.tm.getThread.mockResolvedValue({
       id: 't-running',
@@ -1179,7 +1181,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
     expect(result.isOk()).toBe(true);
     expect(mocks.messageQueue.enqueue).not.toHaveBeenCalled();
     expect(startAgent).toHaveBeenCalledTimes(1);
-    const call = vi.mocked(startAgent).mock.calls.at(-1);
+    const call = mocked(startAgent).mock.calls.at(-1);
     expect(call?.[12]).toBe(true); // steer flag
   });
 
@@ -1260,7 +1262,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
     }
 
     expect(result.isOk()).toBe(true);
-    const call = vi.mocked(startAgent).mock.calls.at(-1);
+    const call = mocked(startAgent).mock.calls.at(-1);
     expect(call?.[4]).toBe('autoEdit');
     expect(call?.[10]).toBe(true); // message already persisted
   });
@@ -1330,7 +1332,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
   });
 
   test('queues with broadcast emit when thread has no userId', async () => {
-    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocked(isAgentRunning).mockReturnValue(true);
     mocks.messageQueue.enqueue.mockResolvedValue({ id: 'queued-1' });
     mocks.messageQueue.queueCount.mockResolvedValue(1);
     mocks.messageQueue.peek.mockResolvedValue({ content: 'queued' });
@@ -1389,7 +1391,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
   });
 
   test('logs but does not fail when background startAgent rejects', async () => {
-    vi.mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
+    mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
     mocks.tm.getThread.mockResolvedValue({
       id: 't-running',
       userId: 'u-1',
@@ -1410,7 +1412,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
     });
 
     expect(result.isOk()).toBe(true);
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(startAgent).toHaveBeenCalled();
     });
   });
@@ -1556,7 +1558,7 @@ describe('approveToolCall', () => {
   });
 
   test('continues approval flow when always-allow rule persistence fails', async () => {
-    vi.mocked(createPermissionRule).mockRejectedValueOnce(new Error('network error'));
+    mocked(createPermissionRule).mockRejectedValueOnce(new Error('network error'));
 
     const result = await approveToolCall({
       threadId: 't-1',
@@ -1572,7 +1574,7 @@ describe('approveToolCall', () => {
   });
 
   test('merges always-allow permission rules into approved tool restart', async () => {
-    vi.mocked(listPermissionRules).mockResolvedValue([
+    mocked(listPermissionRules).mockResolvedValue([
       buildPermissionRule({ toolName: 'Read', decision: 'allow' }),
     ]);
 
@@ -1611,9 +1613,9 @@ describe('approveToolCall', () => {
   });
 
   test('uses the full default tool list when allowedTools is omitted', async () => {
-    vi.mocked(listPermissionRules).mockResolvedValue([]);
+    mocked(listPermissionRules).mockResolvedValue([]);
     await approveToolCall({ threadId: 't-1', userId: 'u-1', toolName: 'Bash', approved: true });
-    expect(vi.mocked(startAgent).mock.calls[0][7]).toEqual([
+    expect(mocked(startAgent).mock.calls[0][7]).toEqual([
       'Read',
       'Edit',
       'Write',
@@ -1629,7 +1631,7 @@ describe('approveToolCall', () => {
   });
 
   test('approved: appends tool once, filters it from disallowed, applies defaults', async () => {
-    vi.mocked(listPermissionRules).mockResolvedValue([]);
+    mocked(listPermissionRules).mockResolvedValue([]);
     mocks.tm.getThread.mockResolvedValue({
       id: 't-1',
       userId: 'u-1',
@@ -1730,7 +1732,7 @@ describe('approveToolCall', () => {
   });
 
   test('propagates startAgent failures as a 500 error', async () => {
-    vi.mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
+    mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
     const result = await approveToolCall({
       threadId: 't-1',
       userId: 'u-1',

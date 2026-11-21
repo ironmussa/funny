@@ -15,8 +15,9 @@
  *     tool_use+tool_result pair on the next non-thought event.
  */
 
+import { describe, expect, test } from 'bun:test';
+
 import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
-import { describe, expect, test } from 'vitest';
 
 import { CursorACPProcess } from '../agents/cursor-acp.js';
 import type { CLIMessage } from '../agents/types.js';

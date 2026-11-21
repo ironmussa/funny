@@ -49,9 +49,8 @@
     "start": "bun run dist/index.js",
     "db:push": "bunx drizzle-kit push",
     "db:studio": "bunx drizzle-kit studio",
-    "test": "bun --bun vitest run",
-    "test:coverage": "bun --bun vitest run --coverage",
-    "test:bun": "bun --bun vitest run",
+    "test": "bun test --parallel --timeout 20000",
+    "test:coverage": "bun ../../scripts/coverage-gate.ts --min 65 --parallel --timeout 20000",
     "lint:promises": "node ./scripts/lint-promises.mjs src/",
     "prepublishOnly": "bun run build"
   },
@@ -83,17 +82,15 @@
     "@funny/evflow": "workspace:*",
     "@funny/pipelines": "workspace:*",
     "@funny/shared": "workspace:*",
+    "@funny/test-kit": "workspace:*",
     "@funny/thread-scheduler": "workspace:*",
     "@funny/workflows": "workspace:*",
     "@types/bun": "^1.4.0",
     "@types/pg": "^8.18.0",
-    "@vitest/coverage-istanbul": "^5.1.0",
-    "@vitest/coverage-v8": "^5.1.0",
     "drizzle-kit": "^0.31.9",
     "eslint": "^10.6.0",
     "typescript-eslint": "^8.63.0",
-    "typescript-eslint-typescript": "npm:typescript@5.9.3",
-    "vitest": "^5.1.0"
+    "typescript-eslint-typescript": "npm:typescript@5.9.3"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0",

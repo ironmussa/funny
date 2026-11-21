@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { RunnerTransportService } from '@funny/shared/runner-v2/control';
-import { describe, expect, test } from 'vitest';
 
 import { grpcMethodDefinition } from '../../services/grpc-runner-client.js';
 

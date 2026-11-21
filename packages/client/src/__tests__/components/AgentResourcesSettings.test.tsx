@@ -1,11 +1,12 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { AgentResource } from '@funny/shared';
 import { render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { mockT } from '../helpers/mock-i18n';
 
-const mockListAgentResources = vi.hoisted(() => vi.fn());
+const mockListAgentResources = (() => vi.fn())();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),

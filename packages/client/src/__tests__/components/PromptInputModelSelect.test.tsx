@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { act, fireEvent, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { ModelSelect } from '@/components/PromptInputUI';
 

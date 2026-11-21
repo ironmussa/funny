@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import type { GitStatusInfo, Thread } from '@funny/shared';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { activeFactoryRunsQuery } from '@/data/factory/queries';

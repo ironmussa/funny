@@ -6,11 +6,10 @@
 // If @funny/native-git isn't built/loadable, the suite is skipped — never
 // silently degrades to a CLI-only run that wouldn't catch native regressions.
 
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, unlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import {
   getBlame,

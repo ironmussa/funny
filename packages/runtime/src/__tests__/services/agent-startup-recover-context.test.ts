@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   tm: {
     getThread: vi.fn(),
     getThreadWithMessages: vi.fn(),
@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   threadManager: {
     updateThread: vi.fn(),
   },
-}));
+}))();
 
 vi.mock('../../services/thread-manager.js', () => mocks.tm);
 

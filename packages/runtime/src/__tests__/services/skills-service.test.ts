@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
 /** The part of a `Dirent` the skills scan reads. */
 interface DirEntry {
@@ -9,19 +9,18 @@ interface DirEntry {
 }
 
 // Mock fs so removeSkill's filesystem calls are observable and never touch disk.
-const { rmSync, unlinkSync, existsSync, readFileSync, readdirSync, writeFileSync } = vi.hoisted(
-  () => ({
-    rmSync: vi.fn(),
-    unlinkSync: vi.fn(),
-    existsSync: vi.fn(() => false),
-    readFileSync: vi.fn(() => '{}'),
-    readdirSync: vi.fn<(path?: string) => DirEntry[]>(() => []),
-    writeFileSync: vi.fn(),
-  }),
-);
+const { rmSync, unlinkSync, existsSync, readFileSync, readdirSync, writeFileSync } = (() => ({
+  rmSync: vi.fn(),
+  unlinkSync: vi.fn(),
+  existsSync: vi.fn(() => false),
+  readFileSync: vi.fn(() => '{}'),
+  readdirSync: vi.fn<(path?: string) => DirEntry[]>(() => []),
+  writeFileSync: vi.fn(),
+}))();
 
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs')>();
+const actualFs = { ...(await import('fs')) };
+vi.mock('fs', () => {
+  const actual = actualFs;
   return {
     ...actual,
     rmSync,

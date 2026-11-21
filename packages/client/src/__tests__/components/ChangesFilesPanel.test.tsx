@@ -1,7 +1,8 @@
+import { describe, expect, it, vi } from 'bun:test';
+
 import type { FileDiffSummary } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { type ComponentProps, type ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
 
 import { ChangesFilesPanel } from '@/components/review-pane/ChangesFilesPanel';
 

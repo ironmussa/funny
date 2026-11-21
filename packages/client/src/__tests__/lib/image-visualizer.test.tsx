@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
 import { render, cleanup } from '@testing-library/react';
 import { createElement } from 'react';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { __resetVisualizerRegistry, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';

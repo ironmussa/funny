@@ -1,8 +1,7 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { GrpcOperationOutbox } from '../../services/grpc-operation-outbox.js';
 

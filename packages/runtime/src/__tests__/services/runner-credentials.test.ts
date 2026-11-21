@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 /**
  * Regression tests for persisted runner credentials.
  *
@@ -10,8 +11,6 @@
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import {
   clearRunnerCredentials,

@@ -1,9 +1,10 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { GraphPanel, IssuesPanel, PRsPanel } from '@/components/review-pane/panels/ChangesPanel';
 
-const context = vi.hoisted(() => ({ reviewSubTab: 'changes', reviewPaneOpen: true }));
+const context = (() => ({ reviewSubTab: 'changes', reviewPaneOpen: true }))();
 vi.mock('@/components/review-pane/ReviewPaneStateContext', () => ({
   useReviewPaneContext: () => context,
 }));

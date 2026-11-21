@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useRunnerProviders, useSandboxConnections } from '@/data/runner/hooks';
 import {
@@ -11,7 +12,7 @@ import {
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({ getProviders: vi.fn(), listInfraConnections: vi.fn() }));
+const api = (() => ({ getProviders: vi.fn(), listInfraConnections: vi.fn() }))();
 vi.mock('@/lib/api/system', () => ({ systemApi: { getProviders: api.getProviders } }));
 vi.mock('@/lib/api/infra', () => ({
   infraApi: { listInfraConnections: api.listInfraConnections },
@@ -68,6 +69,6 @@ describe('sandbox connections', () => {
     expect(api.listInfraConnections).not.toHaveBeenCalled();
 
     await act(() => refreshSandboxConnections());
-    await waitFor(() => expect(result.current.connections).toEqual([{ id: 'c1' }]));
+    await waitFor(() => expect<unknown>(result.current.connections).toEqual([{ id: 'c1' }]));
   });
 });

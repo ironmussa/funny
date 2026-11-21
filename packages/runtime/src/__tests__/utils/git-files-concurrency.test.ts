@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const h = vi.hoisted(() => ({ readdir: vi.fn() }));
+const h = (() => ({ readdir: vi.fn() }))();
 vi.mock('fs/promises', () => ({ readdir: h.readdir }));
 vi.mock('@funny/core/git', () => ({ getNativeGit: vi.fn(), gitRead: vi.fn() }));
 vi.mock('../../lib/logger.js', () => ({ log: { warn: vi.fn() } }));

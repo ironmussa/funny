@@ -1,6 +1,8 @@
+import { afterEach, beforeEach, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import { CenterDockview } from '@/components/CenterDockview';
 
@@ -10,11 +12,11 @@ vi.mock('next-themes', () => ({
 
 beforeEach(() => {
   localStorage.clear();
-  vi.stubGlobal('PointerEvent', MouseEvent);
+  stubGlobal('PointerEvent', MouseEvent);
 });
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 // Real Dockview + a debounced layout save: generous waits so the test stays

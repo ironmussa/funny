@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 interface ThreadModeMocks {
   settings: null | {
@@ -10,14 +11,14 @@ interface ThreadModeMocks {
     mode: 'local' | 'worktree' | 'sandbox';
   };
   sandboxReads: number;
-  save: Mock;
+  save: Mock<(...args: any[]) => any>;
 }
 
-const mocks = vi.hoisted((): ThreadModeMocks => ({
+const mocks = ((): ThreadModeMocks => ({
   settings: null,
   sandboxReads: 0,
   save: vi.fn(),
-}));
+}))();
 
 vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => true }));
 vi.mock('@/data/runner/hooks', () => ({

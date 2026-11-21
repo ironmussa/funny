@@ -33,6 +33,7 @@
   "entry": [
     "packages/runtime/src/services/checks/vitest-progress-reporter.mjs",
     "packages/runtime/src/services/checks/run-cli.ts",
-    "scripts/guards/vitest-only.ts"
+    "packages/client/src/__tests__/dom-environment.ts",
+    "scripts/coverage-gate.ts"
   ]
 }

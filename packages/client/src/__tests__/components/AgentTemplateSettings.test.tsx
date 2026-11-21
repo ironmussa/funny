@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { AgentTemplate } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { seedTemplates } from '@/data/templates/testing';
@@ -9,9 +10,10 @@ import { useAuthStore } from '@/stores/auth-store';
 
 import { flushAsyncUpdates } from '../helpers/render';
 
-const actions = vi.hoisted(() => ({ duplicateTemplate: vi.fn() }));
-vi.mock('@/data/templates/actions', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+const actions = (() => ({ duplicateTemplate: vi.fn() }))();
+const actualDataTemplatesActions = { ...(await import('@/data/templates/actions')) };
+vi.mock('@/data/templates/actions', () => ({
+  ...actualDataTemplatesActions,
   duplicateTemplate: actions.duplicateTemplate,
 }));
 vi.mock('@/lib/api/agent-templates', () => ({

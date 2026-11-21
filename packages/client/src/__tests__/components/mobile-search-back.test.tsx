@@ -1,8 +1,7 @@
+import { describe, test, expect, vi } from 'bun:test';
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, test, expect, vi } from 'vitest';
-
-import { MobilePage } from '@/components/MobilePage';
 
 // Regression: on mobile, opening a thread from the search results and then
 // pressing Back must return to the search screen (with the query intact), not
@@ -11,7 +10,12 @@ import { MobilePage } from '@/components/MobilePage';
 
 vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
-vi.mock('@/hooks/use-ws', () => ({ useWS: () => {} }));
+vi.mock('@/hooks/use-ws', () => ({
+  useWS: () => {},
+  getActiveWS: () => null,
+  subscribeActiveWS: () => () => {},
+  sendTerminalRealtime: () => {},
+}));
 
 vi.mock('@/stores/app-store', () => ({
   useAppStore: (selector: (s: any) => any) =>
@@ -64,6 +68,9 @@ vi.mock('@/components/mobile/ChatView', () => ({
     <button data-testid="chat-back" onClick={onBack} />
   ),
 }));
+
+// Imported after the mocks, which bun does not hoist.
+const { MobilePage } = await import('@/components/MobilePage');
 
 describe('MobilePage search → result → back', () => {
   test('Back from a chat opened via search returns to the search screen', async () => {

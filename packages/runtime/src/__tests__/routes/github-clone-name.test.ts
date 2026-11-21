@@ -1,10 +1,10 @@
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { Hono } from 'hono';
 import { ok } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 
 /**
  * Regression (#179): POST /clone validated `destinationPath` against the
@@ -13,11 +13,11 @@ import { describe, test, expect, vi, beforeEach, afterEach, type MockInstance } 
  * directory name — given or derived from the URL — must be one path segment.
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   createProject: vi.fn(),
   projectNameExists: vi.fn(async () => false),
   requirePickerPath: vi.fn(async (_path: string): Promise<Response | null> => null),
-}));
+}))();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
@@ -64,7 +64,7 @@ function postClone(body: Record<string, unknown>) {
 
 describe('POST /clone directory name', () => {
   let parentDir: string;
-  let spawn: MockInstance<typeof Bun.spawn>;
+  let spawn: Mock<typeof Bun.spawn>;
 
   beforeEach(() => {
     parentDir = mkdtempSync(join(tmpdir(), 'funny-clone-name-'));

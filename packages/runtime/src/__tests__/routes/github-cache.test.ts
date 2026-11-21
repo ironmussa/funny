@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
 import { FRESH_TTL_MS, _resetGithubCache } from '../../routes/github/github-cache.js';
 import { githubApiFetch } from '../../routes/github/helpers.js';
@@ -39,12 +41,12 @@ describe('githubApiFetch caching', () => {
       if (!next) throw new Error(`unexpected GitHub call: ${url}`);
       return next;
     });
-    vi.stubGlobal('fetch', fetchMock);
+    stubGlobal('fetch', fetchMock);
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test('serves the fresh window from cache without a second network call', async () => {

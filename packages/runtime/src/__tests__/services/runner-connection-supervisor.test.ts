@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
 import {
   RunnerConnectionSupervisor,
@@ -49,7 +49,7 @@ describe('RunnerConnectionSupervisor', () => {
     supervisor.activate(options());
     supervisor.activate(options());
     expect(transports[0]?.shutdown).toHaveBeenCalledWith('runner connection replaced');
-    expect(transports[1]?.start).toHaveBeenCalledOnce();
+    expect(transports[1]?.start).toHaveBeenCalledTimes(1);
 
     supervisor.shutdown('done');
     expect(transports[1]?.shutdown).toHaveBeenCalledWith('done');

@@ -1,14 +1,16 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { stubGlobal } from '@funny/test-kit';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ok, okAsync } from 'neverthrow';
 import { StrictMode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { mockT } from '../helpers/mock-i18n';
 
-const mockListMcpServers = vi.hoisted(() => vi.fn());
+const mockListMcpServers = (() => vi.fn())();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -175,7 +177,7 @@ describe('AvailableMcpServers', () => {
     const idleCallbacks = new Map<number, (deadline: IdleDeadlineStub) => void>();
     const canceled = new Set<number>();
     let nextIdleId = 1;
-    vi.stubGlobal(
+    stubGlobal(
       'requestIdleCallback',
       vi.fn((cb: (deadline: IdleDeadlineStub) => void) => {
         const id = nextIdleId++;
@@ -183,7 +185,7 @@ describe('AvailableMcpServers', () => {
         return id;
       }),
     );
-    vi.stubGlobal(
+    stubGlobal(
       'cancelIdleCallback',
       vi.fn((id: number) => {
         canceled.add(id);
@@ -210,12 +212,12 @@ describe('AvailableMcpServers', () => {
       expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex', 'p1');
     } finally {
       if (originalRequestIdleCallback) {
-        vi.stubGlobal('requestIdleCallback', originalRequestIdleCallback);
+        stubGlobal('requestIdleCallback', originalRequestIdleCallback);
       } else {
         Reflect.deleteProperty(globalThis, 'requestIdleCallback');
       }
       if (originalCancelIdleCallback) {
-        vi.stubGlobal('cancelIdleCallback', originalCancelIdleCallback);
+        stubGlobal('cancelIdleCallback', originalCancelIdleCallback);
       } else {
         Reflect.deleteProperty(globalThis, 'cancelIdleCallback');
       }
@@ -250,14 +252,14 @@ describe('AvailableMcpServers', () => {
     const originalRequestIdleCallback = globalThis.requestIdleCallback;
     const originalCancelIdleCallback = globalThis.cancelIdleCallback;
     const idleCallbacks: Array<(deadline: IdleDeadlineStub) => void> = [];
-    vi.stubGlobal(
+    stubGlobal(
       'requestIdleCallback',
       vi.fn((cb: (deadline: IdleDeadlineStub) => void) => {
         idleCallbacks.push(cb);
         return idleCallbacks.length;
       }),
     );
-    vi.stubGlobal('cancelIdleCallback', vi.fn());
+    stubGlobal('cancelIdleCallback', vi.fn());
     const claudeLoad = deferred<any>();
     const codexLoad = deferred<any>();
     mockListMcpServers.mockImplementation((_projectPath, provider) =>
@@ -298,12 +300,12 @@ describe('AvailableMcpServers', () => {
     expect(screen.getByTestId('available-mcp-codex-mcp')).toBeInTheDocument();
     expect(screen.queryByTestId('available-mcp-claude-mcp')).not.toBeInTheDocument();
     if (originalRequestIdleCallback) {
-      vi.stubGlobal('requestIdleCallback', originalRequestIdleCallback);
+      stubGlobal('requestIdleCallback', originalRequestIdleCallback);
     } else {
       Reflect.deleteProperty(globalThis, 'requestIdleCallback');
     }
     if (originalCancelIdleCallback) {
-      vi.stubGlobal('cancelIdleCallback', originalCancelIdleCallback);
+      stubGlobal('cancelIdleCallback', originalCancelIdleCallback);
     } else {
       Reflect.deleteProperty(globalThis, 'cancelIdleCallback');
     }

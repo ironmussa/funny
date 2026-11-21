@@ -1,8 +1,10 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef, useEffect, useImperativeHandle, type Ref } from 'react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
+import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import {
   loadThreadScrollFetchOptions,
   saveThreadScrollPosition,
@@ -39,7 +41,7 @@ interface MessageListLifecycle {
   hasHiddenItems: boolean;
 }
 
-const memoizedMessageListLifecycle = vi.hoisted((): MessageListLifecycle => ({
+const memoizedMessageListLifecycle = ((): MessageListLifecycle => ({
   mounts: 0,
   unmounts: 0,
   captureScrollAnchorCalls: 0,
@@ -50,7 +52,7 @@ const memoizedMessageListLifecycle = vi.hoisted((): MessageListLifecycle => ({
   visibleAnchor: null,
   restoreScrollAnchorResult: true,
   hasHiddenItems: false,
-}));
+}))();
 
 vi.mock('@/components/thread/MemoizedMessageList', () => ({
   EMPTY_MESSAGES: [],
@@ -118,11 +120,16 @@ vi.mock('@/components/thread/WaitingCards', () => ({
   WaitingActions: () => null,
   PermissionApprovalCard: () => null,
   ProviderErrorCard: () => null,
+  CodexSdkApprovalUnavailableCard: () => null,
+  PermissionContinuationLostCard: () => null,
 }));
 
 vi.mock('@/components/D4CAnimation', () => ({
   D4CAnimation: () => null,
 }));
+
+// Imported after the mocks, which bun does not hoist.
+const { MessageStream } = await import('@/components/thread/MessageStream');
 
 function makeMessages(assistantContent: string) {
   return [
@@ -181,11 +188,11 @@ function userScroll(viewport: HTMLElement, top: number) {
 describe('MessageStream sticky bottom', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    stubGlobal('IntersectionObserver', MockIntersectionObserver);
+    stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       return setTimeout(() => cb(performance.now()), 0);
     });
-    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
     window.localStorage.clear();
     memoizedMessageListLifecycle.mounts = 0;
     memoizedMessageListLifecycle.unmounts = 0;
@@ -201,7 +208,7 @@ describe('MessageStream sticky bottom', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test('isolates the thread scroller from browser anchoring and overscroll chaining', () => {
@@ -250,7 +257,7 @@ describe('MessageStream sticky bottom', () => {
       trigger: () => void;
     }> = [];
 
-    vi.stubGlobal(
+    stubGlobal(
       'ResizeObserver',
       class TestResizeObserver {
         private readonly callback: ResizeObserverCallback;
@@ -1476,11 +1483,11 @@ describe('MessageStream sticky bottom', () => {
 
 describe('MessageStream viewer selection', () => {
   beforeEach(() => {
-    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+    stubGlobal('IntersectionObserver', MockIntersectionObserver);
     window.localStorage.clear();
   });
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     // The stream is still mounted here (cleanup runs after this hook).
     act(() => useSettingsStore.getState().setThreadViewer('virtual'));
   });

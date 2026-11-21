@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { shouldForceColdPathRecovery } from '../../services/agent-startup/cold-path-guard.js';
 

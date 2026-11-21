@@ -8,11 +8,12 @@
  * it without re-enrolling.
  */
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { advanceTimersByTimeAsync, stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -39,12 +40,12 @@ describe('runner-enrollment client', () => {
   afterEach(() => {
     vi.useRealTimers();
     stdoutSpy.mockRestore();
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test('starts, polls until approved, returns delivered credentials', async () => {
     let pollCount = 0;
-    vi.stubGlobal(
+    stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
@@ -73,7 +74,7 @@ describe('runner-enrollment client', () => {
 
     const promise = enrollRunner('http://server.test');
     // Drive the internal sleeps (two 1s poll intervals) to completion.
-    await vi.advanceTimersByTimeAsync(5000);
+    await advanceTimersByTimeAsync(5000);
     const creds = await promise;
 
     expect(creds).toEqual({
@@ -90,7 +91,7 @@ describe('runner-enrollment client', () => {
 
   test('restarts enrollment with a fresh code when one expires (404)', async () => {
     let startCount = 0;
-    vi.stubGlobal(
+    stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
@@ -119,7 +120,7 @@ describe('runner-enrollment client', () => {
     );
 
     const promise = enrollRunner('http://server.test');
-    await vi.advanceTimersByTimeAsync(5000);
+    await advanceTimersByTimeAsync(5000);
     const creds = await promise;
 
     expect(creds.runnerId).toBe('runner-xyz');

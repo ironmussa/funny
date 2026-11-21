@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, setSystemTime, vi } from 'bun:test';
+
 import type { PRDetail } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PRSummaryCard } from '@/components/PRSummaryCard';
 import { createDataLayer } from '@/data/data-layer';
@@ -66,7 +67,7 @@ function makeDetail(overrides: Partial<PRDetail> = {}): PRDetail {
 describe('PRSummaryCard', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:31:00.000Z'));
+    setSystemTime(new Date('2026-01-01T00:31:00.000Z'));
     // Fresh detail and threads, so the card's mount fetch is skipped.
     replaceDataLayer(createDataLayer({ userId: null }));
     seedPR('project-1', 51, { detail: makeDetail(), threads: [] });

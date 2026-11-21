@@ -1,6 +1,7 @@
+import { describe, expect, test } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { describe, expect, test } from 'vitest';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 

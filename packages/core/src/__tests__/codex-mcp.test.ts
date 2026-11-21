@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { FUNNY_TOOL_TIMEOUT_SEC, toCodexMcpConfig } from '../agents/codex-mcp.js';
 

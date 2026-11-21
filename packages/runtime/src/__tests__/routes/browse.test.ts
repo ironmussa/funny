@@ -1,8 +1,8 @@
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { readdirSync } from 'fs';
 import { homedir } from 'os';
 
 import { Hono } from 'hono';
-import { describe, test, expect, beforeEach } from 'vitest';
 
 describe('Browse Routes', () => {
   let app: Hono;

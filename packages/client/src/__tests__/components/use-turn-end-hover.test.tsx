@@ -1,6 +1,7 @@
+import { describe, expect, test } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useRef } from 'react';
-import { describe, expect, test } from 'vitest';
 
 import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
 

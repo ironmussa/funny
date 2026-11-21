@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const send = vi.hoisted(() => vi.fn());
+const send = (() => vi.fn())();
 vi.mock('@/lib/realtime/browser-session-realtime', () => ({
   sendBrowserSessionRealtime: send,
 }));

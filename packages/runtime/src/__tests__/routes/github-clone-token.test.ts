@@ -1,12 +1,13 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import type { WSEvent } from '@funny/shared';
 import { processError } from '@funny/shared/errors';
+import { waitFor } from '@funny/test-kit';
 import { Hono } from 'hono';
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 /**
  * Regression (#181): POST /clone ran `git clone https://x-access-token:<PAT>@…`,
@@ -17,15 +18,16 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const TOKEN = 'ghp_secret_token';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   cloneRepository: vi.fn(),
   createProject: vi.fn(),
   emitToUser: vi.fn<(userId: string, event: WSEvent) => void>(),
   logError: vi.fn(),
-}));
+}))();
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@funny/core/git')>()),
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => ({
+  ...actualFunnyCoreGit,
   cloneRepository: mocks.cloneRepository,
 }));
 
@@ -69,9 +71,7 @@ function progressEvents() {
 
 /** The clone's last event (`done` or `failed`), once the background job ends. */
 async function outcome() {
-  await vi.waitFor(() =>
-    expect(progressEvents().some((e) => e.data.status !== 'running')).toBe(true),
-  );
+  await waitFor(() => expect(progressEvents().some((e) => e.data.status !== 'running')).toBe(true));
   return progressEvents().at(-1)!.data;
 }
 

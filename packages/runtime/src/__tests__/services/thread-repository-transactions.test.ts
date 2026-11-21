@@ -1,3 +1,5 @@
+import { describe, test, expect, beforeEach } from 'bun:test';
+
 /**
  * Integration tests for thread-repository transaction safety.
  * Verifies that createThread and updateThread are atomic:
@@ -7,7 +9,6 @@
  * between the test DB helper and the evolving schema.
  */
 import { sql } from 'drizzle-orm';
-import { describe, test, expect, beforeEach } from 'vitest';
 
 import { createTestDb, seedProject } from '../helpers/test-db.js';
 

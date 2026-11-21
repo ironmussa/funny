@@ -1,9 +1,10 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 /**
  * GraphRefChips — a branch whose PR is merged reads as merged, not as pending
  * work (after a squash merge its lane never joins the base branch).
  */
 import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
 import { findThreadBranchRowIndex } from '@/components/CommitGraphTab';

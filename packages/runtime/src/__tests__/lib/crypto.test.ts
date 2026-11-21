@@ -6,7 +6,7 @@
  * data — that path is exercised in the server suite where a legacy
  * `encryption.key` is seeded.
  */
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { encrypt, decrypt } from '../../lib/crypto.js';
 

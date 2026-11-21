@@ -1,4 +1,6 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 import { useTerminalStore } from '@/stores/terminal-store';
 import type { TerminalTab } from '@/stores/terminal-store';
@@ -398,7 +400,7 @@ describe('useTerminalStore', () => {
       const callback = vi.fn();
       useTerminalStore.getState().registerPtyCallback('pty-buffered', callback);
 
-      await vi.waitFor(() => {
+      await waitFor(() => {
         expect(callback).toHaveBeenCalledWith('early chunk');
       });
     });

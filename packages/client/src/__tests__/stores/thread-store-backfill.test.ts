@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useThreadStore } from '@/stores/thread-store';
@@ -39,7 +39,7 @@ describe('back-fill subscriber: selectedThreadId realignment', () => {
     // Selection stays put — the in-flight selectThread owns it.
     expect(state.selectedThreadId).toBe('url-thread');
     // The safety-net mirror still happens.
-    expect(state.threadDataById['stale-thread']).toBe(state.activeThread);
+    expect<unknown>(state.threadDataById['stale-thread']).toBe(state.activeThread);
   });
 
   test('still realigns selectedThreadId when no selection is in flight', () => {
@@ -51,6 +51,6 @@ describe('back-fill subscriber: selectedThreadId realignment', () => {
     const state = useThreadStore.getState();
     // Legacy safety net: align selection to the directly-written activeThread.
     expect(state.selectedThreadId).toBe('new-thread');
-    expect(state.threadDataById['new-thread']).toBe(state.activeThread);
+    expect<unknown>(state.threadDataById['new-thread']).toBe(state.activeThread);
   });
 });

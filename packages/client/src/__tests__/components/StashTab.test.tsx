@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { StashTab } from '@/components/review-pane/StashTab';
 import { stashBranch, type UseStashStateResult } from '@/hooks/use-stash-state';

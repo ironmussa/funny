@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { BranchPRInfo } from '@funny/core/git';
-import { describe, test, expect } from 'vitest';
 
 import { buildLogPayload, parseLogPagingFrom, refsToHide } from '../../routes/git/log.js';
 

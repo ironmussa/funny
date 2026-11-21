@@ -1,12 +1,14 @@
+import { beforeEach, describe, expect, it, vi } from 'bun:test';
+
 import type { MemoryProfilerSample } from '@abbacchio/browser-transport';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mocked } from '@funny/test-kit';
 
 import { MEMORY_METRIC_PREFIX, publishMemorySample } from './memory-telemetry';
 import { metric } from './telemetry';
 
 vi.mock('./telemetry', () => ({ metric: vi.fn() }));
 
-const metricMock = vi.mocked(metric);
+const metricMock = mocked(metric);
 
 function sampleWith(overrides: Partial<MemoryProfilerSample> = {}): MemoryProfilerSample {
   return {

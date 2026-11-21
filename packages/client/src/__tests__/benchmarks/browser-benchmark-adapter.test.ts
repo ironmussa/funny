@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { BENCHMARK_PROTOCOL_VERSION, type BenchmarkWorkloadName } from '@funny/client-benchmark';
-import { describe, expect, test } from 'vitest';
 
 import { createBrowserBenchmarkAdapter } from '@/benchmarks/browser-benchmark-adapter';
 

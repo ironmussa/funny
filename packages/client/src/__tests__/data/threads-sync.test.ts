@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { DataLayer } from '@/data/data-layer';
 import { setDataLayerSession, getDataLayer } from '@/data/runtime';
@@ -19,16 +20,16 @@ import { buildThread } from '@/data/threads/testing';
 
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const mockApi = vi.hoisted(() => ({
+const mockApi = (() => ({
   listThreads: vi.fn(),
   listScratchThreads: vi.fn(),
   listSharedWithMe: vi.fn(),
   archiveThread: vi.fn(),
   updateThreadStage: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api', () => ({ api: mockApi }));
 
-const emitted = vi.hoisted((): unknown[] => []);
+const emitted = ((): unknown[] => [])();
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects: { emit: (effect: unknown) => emitted.push(effect) } } },
 }));
@@ -344,7 +345,7 @@ describe('optimistic writes', () => {
     const row = visible('t1')!;
     expect(Object.keys(row).some((key) => key.startsWith('$'))).toBe(false);
     expect(visible('t1')).toBe(row);
-    expect(row).toBe(data().getSynced('t1'));
+    expect<unknown>(row).toBe(data().getSynced('t1'));
   });
 
   test('other rows keep receiving synced updates while a write is pending', () => {

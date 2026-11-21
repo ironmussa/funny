@@ -1,10 +1,11 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
 import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useCommitActions } from '@/hooks/use-commit-actions';
 
-const { api, toastSuccess, toastErrorFn, fetchForThread, fetchProjectStatus } = vi.hoisted(() => ({
+const { api, toastSuccess, toastErrorFn, fetchForThread, fetchProjectStatus } = (() => ({
   api: {
     checkoutCommit: vi.fn(),
     projectCheckoutCommit: vi.fn(),
@@ -27,7 +28,7 @@ const { api, toastSuccess, toastErrorFn, fetchForThread, fetchProjectStatus } = 
   toastErrorFn: vi.fn(),
   fetchForThread: vi.fn(),
   fetchProjectStatus: vi.fn(),
-}));
+}))();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),

@@ -1,12 +1,13 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 
-const { listAgentResourcesMock } = vi.hoisted(() => ({
+const { listAgentResourcesMock } = (() => ({
   listAgentResourcesMock: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({
   api: { listAgentResources: listAgentResourcesMock },

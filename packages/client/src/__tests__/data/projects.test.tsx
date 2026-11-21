@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Project } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
   deleteProject,
@@ -17,16 +18,16 @@ import { seedProjects } from '@/data/projects/testing';
 
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({
+const api = (() => ({
   listProjects: vi.fn(),
   renameProject: vi.fn(),
   updateProject: vi.fn(),
   deleteProject: vi.fn(),
   reorderProjects: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/projects', () => ({ projectsApi: api }));
 
-const effects = vi.hoisted(() => ({ emit: vi.fn() }));
+const effects = (() => ({ emit: vi.fn() }))();
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));

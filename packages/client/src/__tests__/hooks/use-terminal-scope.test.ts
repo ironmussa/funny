@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { resolveTerminalScope } from '@/hooks/use-terminal-scope';

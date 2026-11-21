@@ -1,5 +1,6 @@
+import { describe, test, expect, vi } from 'bun:test';
+
 import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
-import { describe, test, expect, vi } from 'vitest';
 
 import {
   getDisplayThreadStatus,

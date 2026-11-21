@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import type { IAgentProcess } from '../agents/interfaces.js';
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';

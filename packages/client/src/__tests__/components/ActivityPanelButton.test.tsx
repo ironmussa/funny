@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Job, Watcher } from '@funny/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ActivityPanelButton } from '@/components/sidebar/ActivityPanelButton';
 import { applyActivitiesRemoved } from '@/data/activities/apply-event';
@@ -17,7 +18,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-const actions = vi.hoisted(() => ({ cancelJob: vi.fn(), cancelWatcher: vi.fn() }));
+const actions = (() => ({ cancelJob: vi.fn(), cancelWatcher: vi.fn() }))();
 vi.mock('@/data/background/actions', () => actions);
 
 vi.mock('react-i18next', () => ({
@@ -160,15 +161,17 @@ describe('ActivityPanelButton: jobs and watchers', () => {
   });
 });
 
-const activityActions = vi.hoisted(() => ({
+const activityActions = (() => ({
   dismissActivity: vi.fn(),
   clearFinishedActivities: vi.fn(),
-}));
+}))();
 vi.mock('@/data/activities/actions', () => activityActions);
 
-const navigate = vi.hoisted(() => vi.fn());
-vi.mock('react-router-dom', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react-router-dom')>()),
+const navigate = (() => vi.fn())();
+// bun has no importOriginal: copy the real module before mocking it.
+const actualRouter = { ...(await import('react-router-dom')) };
+vi.mock('react-router-dom', () => ({
+  ...actualRouter,
   useNavigate: () => navigate,
 }));
 

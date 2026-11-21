@@ -11,12 +11,14 @@
  * This drives initTeamMode end-to-end with a mocked gRPC transport, fetch, enrollment
  * client, and credentials store.
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
 // ── Mocks (hoisted) ────────────────────────────────────────
 // All mock fns + state live in a hoisted block so the vi.mock factories (which
 // are hoisted to the top of the module) can reference them safely.
-const h = vi.hoisted(() => {
+const h = (() => {
   const credStore: { value: null | Record<string, unknown> } = { value: null };
   return {
     credStore,
@@ -36,7 +38,7 @@ const h = vi.hoisted(() => {
       credStore.value = null;
     }),
   };
-});
+})();
 // loadRunnerCredentials is referenced via h in the vi.mock factory below.
 const { enrollRunner, saveRunnerCredentials, clearRunnerCredentials } = h;
 
@@ -52,8 +54,9 @@ vi.mock('../../services/ws-broker.js', () => ({
 }));
 // Runner-installed provider extensions are loaded from DATA_DIR on connect;
 // keep the developer's ~/.funny/extensions out of the test.
-vi.mock('../../lib/data-dir.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/data-dir.js')>()),
+const actualDataDir = { ...(await import('../../lib/data-dir.js')) };
+vi.mock('../../lib/data-dir.js', () => ({
+  ...actualDataDir,
   DATA_DIR: '/nonexistent/funny-team-client-test',
 }));
 vi.mock('../../lib/logger.js', () => ({
@@ -74,8 +77,9 @@ vi.mock('../../services/grpc-team-transport.js', () => ({
   },
 }));
 
-import { getRunnerForwardingKey, getRunnerOwnerUserId } from '../../lib/runner-keys.js';
-import { initTeamMode, shutdownTeamMode } from '../../services/team-client.js';
+// Imported after the mocks so team-client's import-time state sees them.
+const { getRunnerForwardingKey, getRunnerOwnerUserId } = await import('../../lib/runner-keys.js');
+const { initTeamMode, shutdownTeamMode } = await import('../../services/team-client.js');
 
 describe('team-client device-link fallback on 401', () => {
   beforeEach(() => {
@@ -86,7 +90,7 @@ describe('team-client device-link fallback on 401', () => {
     process.env.RUNNER_AUTH_SECRET = 'stale-secret';
     delete process.env.RUNNER_INVITE_TOKEN;
 
-    vi.stubGlobal(
+    stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo) => {
         const url = String(input);
@@ -105,7 +109,7 @@ describe('team-client device-link fallback on 401', () => {
 
   afterEach(() => {
     shutdownTeamMode();
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     delete process.env.RUNNER_AUTH_SECRET;
     delete process.env.RUNNER_GRPC_ENDPOINT;
   });

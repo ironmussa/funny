@@ -1,13 +1,14 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useReviewState } from '@/hooks/use-review-state';
 
 // ── Peer-hook spies (stable across renders) ─────────────────────
-const { refreshSpy, abortSpy } = vi.hoisted(() => ({
+const { refreshSpy, abortSpy } = (() => ({
   refreshSpy: vi.fn(),
   abortSpy: vi.fn(),
-}));
+}))();
 
 vi.mock('@/hooks/use-diff-data', () => ({
   useDiffData: () => ({

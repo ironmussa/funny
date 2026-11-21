@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, test, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, test, vi, beforeEach } from 'bun:test';
 
-const fsMocks = vi.hoisted(() => ({
+import { stubEnv, unstubAllEnvs } from '@funny/test-kit';
+
+const fsMocks = (() => ({
   readFile: vi.fn(),
   writeFile: vi.fn(),
-}));
+}))();
 
-const executeMock = vi.hoisted(() => vi.fn());
+const executeMock = (() => vi.fn())();
 
 vi.mock('node:fs/promises', () => ({
   readFile: fsMocks.readFile,
@@ -65,14 +67,14 @@ function useClaudeConfigStore(initial: Record<string, unknown>) {
 
 describe('MCP list + toggle integration', () => {
   afterEach(() => {
-    vi.unstubAllEnvs();
+    unstubAllEnvs();
   });
 
   beforeEach(() => {
     // Hermetic: funny's runner exports CODEX_BINARY_PATH (bundled SDK binary),
     // which would otherwise replace the bare `codex` command these tests assert.
-    vi.stubEnv('CODEX_BINARY_PATH', '');
-    vi.stubEnv('CODEX_BIN', '');
+    stubEnv('CODEX_BINARY_PATH', '');
+    stubEnv('CODEX_BIN', '');
     fsMocks.readFile.mockReset();
     fsMocks.writeFile.mockReset();
     executeMock.mockReset();

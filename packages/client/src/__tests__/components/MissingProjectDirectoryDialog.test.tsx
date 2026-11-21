@@ -1,14 +1,15 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ok, err, type Ok } from 'neverthrow';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { MissingProjectDirectoryDialog } from '@/components/MissingProjectDirectoryDialog';
 import { seedProjects } from '@/data/projects/testing';
 
 import { expectInstance } from '../helpers/builders-components';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   listBranches: vi.fn(),
   state: {
     projects: [
@@ -24,7 +25,7 @@ const mocks = vi.hoisted(() => ({
     selectedProjectId: 'p1',
     revealNonce: 0,
   },
-}));
+}))();
 vi.mock('@/lib/api/projects', () => ({ projectsApi: { listBranches: mocks.listBranches } }));
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),

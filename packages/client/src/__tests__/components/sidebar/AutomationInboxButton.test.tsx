@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, render } from '@testing-library/react';
 import { ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const mockLoadInbox = vi.hoisted(() => vi.fn());
+const mockLoadInbox = (() => vi.fn())();
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
@@ -47,7 +48,7 @@ describe('AutomationInboxButton', () => {
     mockLoadInbox.mockReturnValue(ResultAsync.fromSafePromise(load));
 
     const { unmount } = render(<AutomationInboxButton />);
-    expect(mockLoadInbox).toHaveBeenCalledOnce();
+    expect(mockLoadInbox).toHaveBeenCalledTimes(1);
 
     unmount();
     await act(async () => {

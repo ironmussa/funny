@@ -9,11 +9,13 @@
  *   - Loops, retries, and approvals work as documented
  */
 
+import { describe, expect, test, vi } from 'bun:test';
+
 import { runPipeline, nullReporter } from '@funny/pipelines';
+import { mocked } from '@funny/test-kit';
 import { parseWorkflowYaml } from '@funny/workflows';
 import type { ActionProvider } from '@funny/workflows/compiler';
 import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
-import { describe, expect, test, vi } from 'vitest';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -150,14 +152,14 @@ nodes:
 
     const result = await runPipeline(pipeline, ctxOf(provider, { branch: 'feature/x' }));
     expect(result.outcome).toBe('completed');
-    expect(provider.spawnAgent).toHaveBeenCalledOnce();
-    expect(provider.runCommand).toHaveBeenCalledOnce();
-    expect(provider.gitCommit).toHaveBeenCalledOnce();
+    expect(provider.spawnAgent).toHaveBeenCalledTimes(1);
+    expect(provider.runCommand).toHaveBeenCalledTimes(1);
+    expect(provider.gitCommit).toHaveBeenCalledTimes(1);
     expect(provider.gitPush).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'feature/x', setUpstream: true }),
     );
-    expect(provider.createPr).toHaveBeenCalledOnce();
-    expect(provider.notify).toHaveBeenCalledOnce();
+    expect(provider.createPr).toHaveBeenCalledTimes(1);
+    expect(provider.notify).toHaveBeenCalledTimes(1);
   });
 
   test('topologically sorts depends_on out of declaration order', async () => {
@@ -178,7 +180,7 @@ nodes:
 
     await runPipeline(pipeline, ctxOf(provider));
 
-    const calls = vi.mocked(provider.notify).mock.calls;
+    const calls = mocked(provider.notify).mock.calls;
     expect(calls.map((c) => c[0].message)).toEqual(['a', 'b', 'c']);
   });
 
@@ -211,7 +213,7 @@ nodes:
     expect(provider.notify).not.toHaveBeenCalled();
 
     await runPipeline(pipeline, ctxOf(provider, { flag: 'yes' }));
-    expect(provider.notify).toHaveBeenCalledOnce();
+    expect(provider.notify).toHaveBeenCalledTimes(1);
   });
 
   test('JSONata predicate sees prior node structured outputs', async () => {
@@ -321,7 +323,7 @@ nodes:
     expect(provider.requestApproval).toHaveBeenCalledWith(
       expect.objectContaining({ gateId: 'confirm', captureResponse: true }),
     );
-    expect(provider.gitPush).toHaveBeenCalledOnce();
+    expect(provider.gitPush).toHaveBeenCalledTimes(1);
   });
 
   test('approval rejection aborts the pipeline before the next node', async () => {
@@ -552,9 +554,9 @@ nodes:
       expect(result.outcome).toBe('failed');
       expect(result.error).toMatch(/B exploded/);
       // judge must NOT have run (its level never started).
-      const judgeCalled = vi
-        .mocked(spawnAgent)
-        .mock.calls.some((c) => String(c[0].prompt).includes('|'));
+      const judgeCalled = mocked(spawnAgent).mock.calls.some((c) =>
+        String(c[0].prompt).includes('|'),
+      );
       expect(judgeCalled).toBe(false);
     });
   });

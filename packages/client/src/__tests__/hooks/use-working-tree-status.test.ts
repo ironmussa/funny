@@ -1,24 +1,23 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 
-const { useGitStatusForThreadMock, fetchForThread, fetchProjectStatus, storeState } = vi.hoisted(
-  () => {
-    const statusByProject: Record<string, unknown> = {};
-    const storeState = {
-      statusByProject,
-      fetchForThread: vi.fn(),
-      fetchProjectStatus: vi.fn(),
-    };
-    return {
-      useGitStatusForThreadMock: vi.fn(),
-      fetchForThread: storeState.fetchForThread,
-      fetchProjectStatus: storeState.fetchProjectStatus,
-      storeState,
-    };
-  },
-);
+const { useGitStatusForThreadMock, fetchForThread, fetchProjectStatus, storeState } = (() => {
+  const statusByProject: Record<string, unknown> = {};
+  const storeState = {
+    statusByProject,
+    fetchForThread: vi.fn(),
+    fetchProjectStatus: vi.fn(),
+  };
+  return {
+    useGitStatusForThreadMock: vi.fn(),
+    fetchForThread: storeState.fetchForThread,
+    fetchProjectStatus: storeState.fetchProjectStatus,
+    storeState,
+  };
+})();
 
 vi.mock('@/data/git-status/hooks', () => ({
   useGitStatusForThread: useGitStatusForThreadMock,

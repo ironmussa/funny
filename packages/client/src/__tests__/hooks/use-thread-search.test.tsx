@@ -1,5 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
@@ -12,12 +14,12 @@ beforeEach(() => {
   viewport.innerHTML =
     '<div data-item-key="one">Con respaldo disponible</div><div data-item-key="two">Otro respaldo</div>';
   document.body.append(viewport);
-  vi.stubGlobal('CSS', { escape: (value: string) => value });
+  stubGlobal('CSS', { escape: (value: string) => value });
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(() => {
   viewport.remove();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 function setup() {

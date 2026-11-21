@@ -3,9 +3,9 @@
  * panel-owned vs thread-bound reaping, detach, and thread deletion.
  */
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({ emitToUser: vi.fn() }));
+const mocks = (() => ({ emitToUser: vi.fn() }))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

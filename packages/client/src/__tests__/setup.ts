@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
+import { afterAll, afterEach, vi } from 'bun:test';
+
 import { cleanup } from '@testing-library/react';
-import { afterAll, vi } from 'vitest';
 
 // Polyfill requestIdleCallback / cancelIdleCallback (not in jsdom). Backed by a
 // near-zero setTimeout so idle-deferred work (sidebar git status, MCP server
@@ -44,6 +45,8 @@ HTMLCanvasElement.prototype.getContext = () => null;
 // Mock window.matchMedia (used by settings-store, main.tsx)
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
+  // Tests replace it (stubGlobal, defineProperty) for other queries.
+  configurable: true,
   value: (query: string) => ({
     matches: query === '(prefers-color-scheme: dark)',
     media: query,
@@ -54,6 +57,12 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: () => {},
     dispatchEvent: () => false,
   }),
+});
+
+// Unmount what each test rendered, as @testing-library/react does on its own
+// under vitest's globals.
+afterEach(() => {
+  cleanup();
 });
 
 // Radix FocusScope dispatches a CustomEvent from a setTimeout(0) when it

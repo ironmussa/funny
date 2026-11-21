@@ -1,13 +1,14 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { FileDiffSummary } from '@funny/shared';
 import { badRequest } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, ok, okAsync } from 'neverthrow';
 import { useState } from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useDiffData } from '@/hooks/use-diff-data';
 
-const { gitApiMock, fetchForThread } = vi.hoisted(() => ({
+const { gitApiMock, fetchForThread } = (() => ({
   gitApiMock: {
     getDiffSummary: vi.fn(),
     getFileDiff: vi.fn(),
@@ -15,7 +16,7 @@ const { gitApiMock, fetchForThread } = vi.hoisted(() => ({
     projectFileDiff: vi.fn(),
   },
   fetchForThread: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api/git', () => ({
   gitApi: gitApiMock,

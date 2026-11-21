@@ -1,6 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ProjectSettingsView } from '@/components/mobile/ProjectSettingsView';
 import { buildProject, seedProjects } from '@/data/projects/testing';
@@ -83,7 +84,7 @@ describe('ProjectSettingsView — list → detail → back', () => {
 
     // Back from the list exits settings.
     fireEvent.click(screen.getByTestId('mobile-project-settings-back'));
-    expect(onBack).toHaveBeenCalledOnce();
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });
 

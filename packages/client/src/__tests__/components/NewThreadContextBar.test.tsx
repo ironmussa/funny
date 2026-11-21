@@ -1,6 +1,7 @@
+import { beforeEach, expect, test, vi } from 'bun:test';
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, expect, test, vi } from 'vitest';
 
 import { PromptContextBar } from '@/components/prompt-input/PromptChrome';
 import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
@@ -9,8 +10,8 @@ import { buildProject, seedProjects } from '@/data/projects/testing';
 
 import { expectInstance } from '../helpers/builders-components';
 
-const remote = vi.hoisted(() => vi.fn());
-const branchState = vi.hoisted(() => ({
+const remote = (() => vi.fn())();
+const branchState = (() => ({
   branches: ['main', 'develop'],
   remoteBranches: [],
   defaultBranch: 'main',
@@ -18,8 +19,8 @@ const branchState = vi.hoisted(() => ({
   selectedBranch: 'main',
   currentBranch: 'main',
   setSelectedBranch: vi.fn(),
-}));
-const ensureBranch = vi.hoisted(() => vi.fn());
+}))();
+const ensureBranch = (() => vi.fn())();
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: () => ({
     measure: vi.fn(),

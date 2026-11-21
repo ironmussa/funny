@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const h = vi.hoisted(() => ({
+import { advanceTimersByTimeAsync, stubGlobal, unstubAllGlobals } from '@funny/test-kit';
+
+const h = (() => ({
   request: vi.fn(async (eventType: string, payload: Record<string, any>) => {
     if (eventType === 'data:get_thread') {
       return {
@@ -25,7 +27,7 @@ const h = vi.hoisted(() => ({
   }),
   start: vi.fn(),
   shutdown: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/grpc-team-transport.js', () => ({
   GrpcTeamTransport: class {
@@ -40,8 +42,9 @@ vi.mock('../../services/ws-broker.js', () => ({
 }));
 // Runner-installed provider extensions are loaded from DATA_DIR on connect;
 // keep the developer's ~/.funny/extensions out of the test.
-vi.mock('../../lib/data-dir.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/data-dir.js')>()),
+const actualDataDir = { ...(await import('../../lib/data-dir.js')) };
+vi.mock('../../lib/data-dir.js', () => ({
+  ...actualDataDir,
   DATA_DIR: '/nonexistent/funny-team-client-test',
 }));
 vi.mock('../../lib/logger.js', () => ({
@@ -81,7 +84,7 @@ describe('team-client', () => {
     vi.clearAllMocks();
     process.env.RUNNER_AUTH_SECRET = 'test-secret';
     process.env.RUNNER_GRPC_ENDPOINT = 'grpc.test:50051';
-    vi.stubGlobal(
+    stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo) => {
         const url = String(input);
@@ -96,7 +99,7 @@ describe('team-client', () => {
 
   afterEach(() => {
     shutdownTeamMode();
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     delete process.env.RUNNER_AUTH_SECRET;
     delete process.env.RUNNER_GRPC_ENDPOINT;
     vi.useRealTimers();
@@ -157,12 +160,12 @@ describe('team-client', () => {
   });
 
   test('remoteUpdateMessage debounces gRPC operations and flushes latest content', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.useFakeTimers();
     await initTeamMode('http://127.0.0.1:3001');
     await remoteUpdateMessage('m1', 'Hello');
     await remoteUpdateMessage('m1', 'Hello world');
     expect(h.request).not.toHaveBeenCalledWith('data:update_message', expect.anything());
-    await vi.advanceTimersByTimeAsync(110);
+    await advanceTimersByTimeAsync(110);
     expect(h.request).toHaveBeenCalledWith('data:update_message', {
       payload: { messageId: 'm1', content: 'Hello world' },
     });

@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { BashCard } from '@/components/tool-cards/BashCard';
 

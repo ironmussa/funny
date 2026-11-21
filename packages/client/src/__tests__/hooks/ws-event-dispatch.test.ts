@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
 import { clearWSDispatchState } from '@/hooks/ws-event-dispatch';
 import { useThreadStore } from '@/stores/thread-store';
@@ -12,18 +14,18 @@ const rafCallbacks: Array<() => void> = [];
 
 beforeEach(() => {
   rafCallbacks.length = 0;
-  vi.stubGlobal('requestAnimationFrame', (cb: () => void) => {
+  stubGlobal('requestAnimationFrame', (cb: () => void) => {
     rafCallbacks.push(cb);
     return rafCallbacks.length;
   });
-  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+  stubGlobal('cancelAnimationFrame', (id: number) => {
     rafCallbacks[id - 1] = () => {};
   });
 });
 
 afterEach(() => {
   clearWSDispatchState();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 function drainRaf() {

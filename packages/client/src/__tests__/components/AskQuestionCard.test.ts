@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { reduceQuestionTab } from '@/components/tool-cards/question-tab-state';
 

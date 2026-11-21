@@ -1,7 +1,7 @@
 /**
  * Failure and cancellation across parallel branches.
  */
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
 import { definePipeline, node, runPipeline, type PipelineNode } from '../engine.js';
 

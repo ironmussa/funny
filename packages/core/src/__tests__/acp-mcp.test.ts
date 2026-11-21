@@ -8,7 +8,7 @@
  * arrays, so we always emit defaults.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { toACPMcpServers } from '../agents/acp-mcp.js';
 

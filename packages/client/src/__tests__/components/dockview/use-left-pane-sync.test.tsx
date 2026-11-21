@@ -1,7 +1,8 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { renderHook } from '@testing-library/react';
 import type { DockviewApi } from 'dockview-react';
 import type { MutableRefObject } from 'react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { useLeftPaneSync } from '@/components/dockview/use-left-pane-sync';
 

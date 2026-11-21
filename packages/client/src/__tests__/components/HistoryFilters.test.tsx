@@ -1,6 +1,7 @@
+import { beforeAll, afterAll, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { beforeAll, afterAll, describe, expect, test, vi } from 'vitest';
 
 import { HistoryFilters } from '@/components/commit-graph/HistoryFilters';
 import type { GraphBranchScope } from '@/lib/api/git';

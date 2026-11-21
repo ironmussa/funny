@@ -1,5 +1,41 @@
-# This package's tests run on vitest (`bun run test`). `bun test` would use
-# Bun's native runner, which ignores the vitest config and can hang forever;
-# the preload stops it at once with the right command.
+# Client unit tests run on `bun test` with a jsdom window per test file
+# (`--isolate`, or `--parallel`, which implies it). Storybook interaction tests
+# still run on vitest's browser mode (`bun run test:storybook`).
 [test]
-preload = ["../../scripts/guards/vitest-only.ts"]
+root = "./src"
+preload = [
+  "./src/__tests__/dom-environment.ts",
+  "./src/__tests__/vite-query-imports.ts",
+  "./src/__tests__/setup.ts",
+]
+
+# Coverage measures the testable logic layers (lib, stores, hooks, machines),
+# not every UI component shell, as the vitest config did. The gate is
+# `bun run test:coverage` (scripts/coverage-gate.ts, "All files" line %).
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = [
+  "src/__tests__/**",
+  "src/components/**",
+  "src/data/**",
+  "src/platform/**",
+  "src/navigation/**",
+  "src/visualizers/**",
+  "src/benchmarks/**",
+  "src/test-fixtures/**",
+  "src/i18n/**",
+  "src/main.tsx",
+  "src/App.tsx",
+  "src/wdyr.ts",
+  # Thin fetch wrappers / heavy browser integrations, covered by E2E instead.
+  "src/lib/api/**",
+  "src/lib/diff/**",
+  "src/lib/monaco-setup.ts",
+  "src/lib/markdown-components.tsx",
+  "src/lib/file-icons.tsx",
+  # Dev-only or socket singleton, exercised via E2E / integration tests.
+  "src/stores/test-store.ts",
+  "src/stores/thread-history-store.ts",
+  "src/hooks/use-ws.ts",
+  "../**",
+  "**/node_modules/**",
+]

@@ -1,10 +1,11 @@
-import { okAsync, errAsync } from 'neverthrow';
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { describe, expect, test, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { okAsync, errAsync } from 'neverthrow';
+
+const mocks = (() => ({
   getThread: vi.fn(),
   createAndStartThread: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,

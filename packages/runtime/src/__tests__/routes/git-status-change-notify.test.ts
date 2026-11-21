@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   emitToUser: vi.fn(),
   invalidateProjectStatus: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
 vi.mock('../../services/git-runtime-service.js', () => ({

@@ -2,11 +2,10 @@
 // diff-summary scans share one run, and no cached/in-flight read survives a
 // gitWrite (stage, commit, …) so the review pane never shows pre-write state.
 
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { getDiffSummary, getStatusSummary, invalidateStatusCache } from '../git/index.js';
 import { executeSync, getGitWriteGeneration, gitWrite } from '../git/process.js';

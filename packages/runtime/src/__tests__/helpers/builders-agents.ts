@@ -2,12 +2,12 @@
  * Test helpers for the agent lifecycle, runner and browser-automation tests.
  */
 
+import { expect, vi } from 'bun:test';
 import { EventEmitter } from 'node:events';
 
 import type { IAgentProcess } from '@funny/core/agents';
 import { ChromeSession } from '@funny/core/chrome';
 import type { Page } from 'playwright';
-import { expect, vi } from 'vitest';
 
 import type { BrowserHost, BrowserTab } from '../../services/browser-automation/browser-host.js';
 import { RefGenerations } from '../../services/browser-automation/snapshot-refs.js';

@@ -1,20 +1,15 @@
+import { afterAll, beforeAll, describe, expect, test, vi } from 'bun:test';
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Schema } from '@tiptap/pm/model';
 import { findSuggestionMatch } from '@tiptap/suggestion';
 import { createRef, StrictMode } from 'react';
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
-import {
-  buildSlashSuggestionItems,
-  buildWorkflowSuggestionItems,
-  getSuggestionLoadingLabel,
-  PromptEditor,
-  type PromptEditorHandle,
-  WORKFLOW_SUGGESTION_MATCH_OPTIONS,
-} from '@/components/prompt-editor/PromptEditor';
+import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 
-vi.mock('@/lib/api', async () => {
-  const actual = await vi.importActual<{ api: Record<string, unknown> }>('@/lib/api');
+const actualLibApi = { ...(await import('@/lib/api')) };
+vi.mock('@/lib/api', () => {
+  const actual = actualLibApi;
   return {
     ...actual,
     api: {
@@ -26,6 +21,14 @@ vi.mock('@/lib/api', async () => {
     },
   };
 });
+
+const {
+  buildSlashSuggestionItems,
+  buildWorkflowSuggestionItems,
+  getSuggestionLoadingLabel,
+  PromptEditor,
+  WORKFLOW_SUGGESTION_MATCH_OPTIONS,
+} = await import('@/components/prompt-editor/PromptEditor');
 
 const rangeGetClientRectsDescriptor = Object.getOwnPropertyDescriptor(
   Range.prototype,

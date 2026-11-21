@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { err, ok } from 'neverthrow';
-import { describe, expect, test } from 'vitest';
 
 import { createActivityTracker } from '../../services/activity-tracker.js';
 

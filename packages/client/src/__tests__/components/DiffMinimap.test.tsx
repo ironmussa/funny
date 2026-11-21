@@ -1,5 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { DiffMinimap } from '@/components/virtual-diff/DiffMinimap';
 
@@ -24,11 +26,11 @@ class TestResizeObserver implements ResizeObserver {
 describe('DiffMinimap', () => {
   beforeEach(() => {
     resizeObservers.length = 0;
-    vi.stubGlobal('ResizeObserver', TestResizeObserver);
+    stubGlobal('ResizeObserver', TestResizeObserver);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test('exposes scrollbar semantics and supports keyboard scrolling', () => {

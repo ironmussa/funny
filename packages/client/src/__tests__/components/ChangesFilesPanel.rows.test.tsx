@@ -1,10 +1,11 @@
+import { beforeEach, describe, expect, it, vi } from 'bun:test';
+
 import type { FileDiffSummary } from '@funny/shared';
+import { mocked } from '@funny/test-kit';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { type ComponentProps, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TreeRow } from '@/components/FileTree';
-import { ChangesFilesPanel } from '@/components/review-pane/ChangesFilesPanel';
 
 // Characterization tests for the virtualized row renderer of the Changes
 // file list: they pin the exact markup and per-row behavior so splitting the
@@ -80,6 +81,10 @@ vi.mock('@/lib/editor-utils', () => ({
   openFileInExternalEditor: (p: string) => openExternal(p),
   openFileInInternalEditor: (p: string) => openInternal(p),
 }));
+
+// Imported after the mocks: the real editor-utils pulls in @/lib/api, which
+// initializes i18n at import time and would translate every label.
+const { ChangesFilesPanel } = await import('@/components/review-pane/ChangesFilesPanel');
 
 function f(path: string, extra: Partial<FileDiffSummary> = {}): FileDiffSummary {
   return { path, status: 'modified', staged: false, additions: 1, deletions: 2, ...extra };
@@ -199,7 +204,7 @@ function isUpdater<T>(action: SetStateAction<T>): action is (prev: T) => T {
 
 /** Apply a captured `setState` updater to a seed value. */
 function applyUpdater<T>(setter: Dispatch<SetStateAction<T>>, seed: NoInfer<T>): T {
-  const action = vi.mocked(setter).mock.calls.at(-1)![0];
+  const action = mocked(setter).mock.calls.at(-1)![0];
   if (!isUpdater(action)) throw new Error('expected a setState updater');
   return action(seed);
 }
@@ -323,7 +328,7 @@ describe('ChangesFilesPanel row behavior', () => {
     fireEvent.click(screen.getByTestId('review-folder-ignore-src/a-option-/src'));
     expect(props.handleOpenDirectory).toHaveBeenCalledWith('src', false);
     expect(props.handleDiscardFolder).toHaveBeenCalledWith('src');
-    expect(vi.mocked(props.handleIgnore).mock.calls).toEqual([['/src'], ['/src']]);
+    expect(mocked(props.handleIgnore).mock.calls).toEqual([['/src'], ['/src']]);
   });
 
   it('routes file menu actions', () => {
@@ -357,13 +362,13 @@ describe('ChangesFilesPanel row behavior', () => {
     expect(props.handleStageFile).toHaveBeenCalledWith(files.added.path);
     expect(props.handleUnstageFile).toHaveBeenCalledWith(files.modified.path);
     expect(props.handleRevertFile).toHaveBeenCalledWith(files.added.path);
-    expect(vi.mocked(props.handleIgnore).mock.calls).toEqual([
+    expect(mocked(props.handleIgnore).mock.calls).toEqual([
       [files.added.path],
       ['/src/a'],
       ['/src'],
       ['*.ts'],
     ]);
-    expect(vi.mocked(props.handleCopyPath).mock.calls).toEqual([
+    expect(mocked(props.handleCopyPath).mock.calls).toEqual([
       [files.added.path, false],
       [files.added.path, true],
     ]);

@@ -1,3 +1,5 @@
+import { describe, test, expect, beforeEach } from 'bun:test';
+
 /**
  * Pipeline DB CRUD tests.
  *
@@ -8,7 +10,6 @@
  * These tests depend on bun:sqlite and are excluded from vitest (run with bun test).
  */
 import { eq } from 'drizzle-orm';
-import { describe, test, expect, beforeEach } from 'vitest';
 
 import { createTestDb, seedProject, seedThread, seedPipeline } from '../helpers/test-db.js';
 

@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 /**
  * sandbox-runner.ts — an agent profile's machine paths do not apply on a
  * sandbox runner (a laptop CLAUDE_CONFIG_DIR made every resume fail there).
@@ -6,7 +8,6 @@ import type {
   AgentExecutionProfileResponse,
   ResolvedAgentExecutionProfileResponse,
 } from '@funny/shared';
-import { describe, expect, test } from 'vitest';
 
 import { isSandboxRunner, profileForThisRunner } from '../../services/sandbox-runner.js';
 

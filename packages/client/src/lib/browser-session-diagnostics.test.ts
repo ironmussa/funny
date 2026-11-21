@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'bun:test';
 
+// Window events must go through jsdom (see the helper).
 import {
   clearBrowserSessionDiagnostics,
   getBrowserSessionDiagnostics,

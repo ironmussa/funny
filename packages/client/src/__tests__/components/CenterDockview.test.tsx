@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import { render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { CenterDockview } from '@/components/CenterDockview';
 import type { RightTabSpec } from '@/components/DockviewLayout';
@@ -9,10 +10,10 @@ interface DockviewMockState {
   readyCalled: boolean;
 }
 
-const dockviewMock = vi.hoisted((): DockviewMockState => ({
+const dockviewMock = ((): DockviewMockState => ({
   api: undefined,
   readyCalled: false,
-}));
+}))();
 
 vi.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),

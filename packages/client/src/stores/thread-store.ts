@@ -361,6 +361,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   selectedThreadId: null,
   threadDataById: {},
   activeThread: null,
+  threadLoadFailedId: null,
   setupProgressByThread: {},
 
   // Thread lists load through the data layer (`src/data/threads`): rows and
@@ -429,7 +430,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // `selectedThreadId` drives the sidebar highlight and the ThreadList
       // re-select guard — it must paint immediately so the click feels
       // instant. It's cheap (one string), so keep it synchronous/urgent.
-      set({ selectedThreadId: threadId });
+      set({ selectedThreadId: threadId, threadLoadFailedId: null });
       notifyThreadSelected(threadId);
 
       // Phase boundary for a memory profiling run: the heavy MessageStream
@@ -483,13 +484,19 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       let snapshot;
       try {
         snapshot = await loadThreadData(threadId);
-      } catch {
+      } catch (error) {
         metric('thread.select.network_ms', Date.now() - startMs, {
           attributes: { 'thread.from_cache': fromCache ? '1' : '0' },
         });
         if (getSelectGeneration() === gen) {
+          selectLog.warn('thread load failed', {
+            threadId,
+            error: error instanceof Error ? error.message : String(error),
+          });
           clearWSBuffer(threadId);
-          set({ selectedThreadId: null, activeThread: null });
+          // Record the failure: the URL still names this thread, so without it
+          // the view would wait on a payload that is never coming.
+          set({ selectedThreadId: null, activeThread: null, threadLoadFailedId: threadId });
           // Drop any half-populated entry too so a retry starts clean.
           _evictIfUnreferenced(threadId);
         }

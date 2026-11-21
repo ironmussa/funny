@@ -254,4 +254,20 @@ describe('selectThread — stuck selectingThreadId (reproduces "invariant re-sel
     expect(state.activeThread?.id).toBe(threadB.id);
     expect(getSelectingThreadId()).toBeNull();
   });
+  test('a failed load records the thread so the view can stop waiting', async () => {
+    const { errAsync } = await import('neverthrow');
+    mockGetThread.mockReturnValue(errAsync({ type: 'NOT_FOUND', message: 'Thread not found' }));
+    mockGetThreadEvents.mockReturnValue(errAsync({ type: 'NOT_FOUND', message: 'not found' }));
+
+    await useThreadStore.getState().selectThread('thread-gone');
+
+    expect(useThreadStore.getState().threadLoadFailedId).toBe('thread-gone');
+    expect(useThreadStore.getState().activeThread).toBeNull();
+
+    // The next selection clears it.
+    mockGetThread.mockReturnValue(okAsync(threadB));
+    mockGetThreadEvents.mockReturnValue(okAsync({ events: [] }));
+    await useThreadStore.getState().selectThread(threadB.id);
+    expect(useThreadStore.getState().threadLoadFailedId).toBeNull();
+  });
 });

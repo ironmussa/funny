@@ -40,7 +40,7 @@ export function PlanCard({
   if (!plan) return null;
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-xs">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-xs">
       {/* Header */}
       {!hideLabel && (
         <div className="flex items-center justify-between px-3 py-1.5 text-xs">

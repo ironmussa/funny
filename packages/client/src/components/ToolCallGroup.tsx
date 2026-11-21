@@ -45,6 +45,13 @@ function toolCallGroupAreEqual(prev: ToolCallGroupProps, next: ToolCallGroupProp
   return true;
 }
 
+/** The group's header icon, by the tool's kind. */
+function groupIcon(name: string): typeof Wrench {
+  if (isTodoToolName(name)) return ListTodo;
+  if (name === 'Task' || name === 'Agent') return Bot;
+  return Wrench;
+}
+
 export const ToolCallGroup = memo(function ToolCallGroup({
   name,
   calls,
@@ -57,7 +64,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
     name === 'Bash' && calls.some((call) => call.author === 'shell'),
   );
   const isTodo = isTodoToolName(name);
-  const Icon = isTodo ? ListTodo : name === 'Task' || name === 'Agent' ? Bot : Wrench;
+  const GroupIcon = groupIcon(name);
   const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
   const displayTime = useMemo(
     () => (timestamp ? timeAgo(timestamp, t, now) : null),
@@ -65,7 +72,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
   );
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
       <button
         type="button"
         aria-expanded={expanded}
@@ -76,7 +83,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
           <ChevronRight
             className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
-          <Icon className="icon-xs text-muted-foreground shrink-0" />
+          <GroupIcon className="icon-xs text-muted-foreground shrink-0" />
           <span className="text-foreground shrink-0 font-mono font-medium">{label}</span>
           <span className="bg-muted-foreground/20 text-muted-foreground inline-flex items-center justify-center rounded-full px-1.5 text-xs leading-4 font-medium">
             ×{calls.length}

@@ -1621,6 +1621,10 @@ function GraphCommitRow({
   // matches the rendered DOM exactly — otherwise line-height/padding rounding
   // leaves the leader line a couple px off the chip's true center.
   const hasRefs = foldedRefs.length > 0;
+  const hasThreadBranch = useMemo(
+    () => foldedRefs.some((ref) => isThreadBranchRef(ref, threadBranch)),
+    [foldedRefs, threadBranch],
+  );
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const chipCenterY = nodeYForRow(entry, rowHeight);
@@ -1685,7 +1689,7 @@ function GraphCommitRow({
                   x2={leaderLine.x2}
                   y2={chipCenterY}
                   stroke={lanePastel}
-                  strokeWidth={1.6}
+                  strokeWidth={hasThreadBranch ? 3 : 1.6}
                   strokeLinecap="round"
                 />
               </svg>

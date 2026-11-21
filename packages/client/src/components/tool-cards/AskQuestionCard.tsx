@@ -300,7 +300,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   if (!hasQuestions) return null;
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
         {!hideLabel && <MessageCircleQuestion className="icon-xs text-muted-foreground shrink-0" />}

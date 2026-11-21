@@ -1,7 +1,7 @@
 import { FolderOpen, Rocket, Plus } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -10,6 +10,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { useQueuedCount } from '@/data/queue/hooks';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { forgetLastRoute } from '@/hooks/use-route-sync';
 import { useSandboxRetry } from '@/hooks/use-sandbox-retry';
 import { useSandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
 import { sandboxSetupFailed } from '@/lib/thread-variant';
@@ -17,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadCore } from '@/stores/thread-context';
+import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { NewThreadInput } from './thread/NewThreadInput';
@@ -46,7 +48,12 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const activeThread = useThreadCore();
   // Which thread is active is the URL's call, not the async selectedThreadId.
-  const activeThreadId = useActiveThreadId();
+  const urlThreadId = useActiveThreadId();
+  // A thread that failed to load (deleted, no access, timeout) is treated as no
+  // thread at all: the view falls back to the regular "select or add a project"
+  // screen, and the effect below leaves the dead route.
+  const loadFailed = useThreadStore((s) => !!urlThreadId && s.threadLoadFailedId === urlThreadId);
+  const activeThreadId = loadFailed ? null : urlThreadId;
   const isThreadSwitching =
     !!activeThreadId && !!activeThread && activeThread.id !== activeThreadId;
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -56,8 +63,10 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
   // Prompt handed over by NewThreadInput so the conversation layout stays put
   // while the freshly created thread loads.
+  const location = useLocation();
+  const navigate = useNavigate();
   const { pendingPrompt, pendingMetadata } =
-    (useLocation().state as {
+    (location.state as {
       pendingPrompt?: string;
       pendingMetadata?: PreparationMessageMetadata;
     } | null) ?? {};
@@ -65,6 +74,13 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   useEffect(() => {
     if (!activeThreadId || activeThread) onReady?.();
   }, [activeThread, activeThreadId, onReady]);
+
+  useEffect(() => {
+    if (!loadFailed) return;
+    // Otherwise the root path would restore this dead route on the next visit.
+    forgetLastRoute(location.pathname);
+    navigate('/', { replace: true });
+  }, [loadFailed, location.pathname, navigate]);
 
   // Scratch compose: no project / no header — just the prompt input.
   if (newThreadIsScratch && !activeThreadId) {

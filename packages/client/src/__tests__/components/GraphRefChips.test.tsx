@@ -102,6 +102,13 @@ describe('GraphRefChips', () => {
     expect(screen.getByTestId('graph-ref-chip-local:master')).not.toHaveAttribute(
       'data-thread-branch',
     );
+    // The arrow takes the chip's color, and the chip's outline is a darker
+    // shade of that same color (not the theme's primary).
+    expect(screen.getByTestId('graph-thread-branch-marker')).toHaveStyle({ color: '#a5b4fc' });
+    expect(screen.getByTestId('graph-ref-chip-local:funny/fix-issues').style.boxShadow).toMatch(
+      /#6b75a4|rgb\(107, 117, 164\)/,
+    );
+    expect(screen.getByTestId('graph-ref-chip-local:master').style.boxShadow).toBe('');
   });
 
   test('shows no arrow without an open thread branch', () => {

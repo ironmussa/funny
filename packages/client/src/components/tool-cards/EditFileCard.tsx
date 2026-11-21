@@ -400,7 +400,7 @@ export function EditFileCard({
   }, [fontSize, hasDiff, unifiedDiff]);
 
   return (
-    <div className="border-border w-full min-w-0 overflow-hidden rounded-lg border text-sm">
+    <div className="border-border w-full min-w-0 overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
       <div className="flex w-full items-center overflow-hidden">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <button

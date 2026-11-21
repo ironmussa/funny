@@ -35,6 +35,12 @@ export interface ThreadState {
    * @deprecated read from `threadDataById[selectedThreadId]` directly.
    */
   activeThread: ThreadWithMessages | null;
+  /**
+   * The thread whose last `selectThread` load failed (deleted, no access, or
+   * the request timed out). The view shows a static "could not load" state
+   * for it instead of a spinner. Cleared by the next selection.
+   */
+  threadLoadFailedId: string | null;
   /** Setup progress keyed by threadId — survives thread switches */
   setupProgressByThread: Record<string, import('@/components/GitProgressModal').GitProgressStep[]>;
 

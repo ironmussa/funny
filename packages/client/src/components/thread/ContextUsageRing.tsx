@@ -26,6 +26,53 @@ const STROKE = 1.25;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRC = 2 * Math.PI * RADIUS;
 
+/** Ring color: red past 80 % used, amber past 60 %. */
+function ringColor(clamped: number): string {
+  if (clamped > 80) return 'stroke-status-error';
+  if (clamped > 60) return 'stroke-status-warning';
+  return 'stroke-muted-foreground';
+}
+
+/** The used fraction as a ring around an empty track. */
+function UsageRing({ clamped }: { clamped: number }) {
+  const dash = (clamped / 100) * CIRC;
+  return (
+    <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0 -rotate-90">
+      <circle
+        cx={SIZE / 2}
+        cy={SIZE / 2}
+        r={RADIUS}
+        fill="none"
+        strokeWidth={STROKE}
+        className="stroke-muted"
+      />
+      <circle
+        cx={SIZE / 2}
+        cy={SIZE / 2}
+        r={RADIUS}
+        fill="none"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${CIRC}`}
+        className={ringColor(clamped)}
+      />
+    </svg>
+  );
+}
+
+/** Tokens used and left, when both counts are known. */
+function TokenLine({ usedTokens, maxTokens }: { usedTokens?: number; maxTokens?: number }) {
+  if (typeof usedTokens !== 'number' || typeof maxTokens !== 'number' || maxTokens <= 0) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground mt-1 text-xs">
+      {formatTokens(usedTokens)} / {formatTokens(maxTokens)} tokens used ·{' '}
+      {formatTokens(Math.max(0, maxTokens - usedTokens))} left
+    </p>
+  );
+}
+
 export function ContextUsageRing({
   pct,
   usedTokens,
@@ -40,17 +87,6 @@ export function ContextUsageRing({
   const account = useThreadAgentAccount(threadId, agentProfileId);
   const clamped = Math.max(0, Math.min(100, pct));
   const remaining = Math.max(0, Math.round(100 - clamped));
-  const dash = (clamped / 100) * CIRC;
-  const showTokens =
-    typeof usedTokens === 'number' && typeof maxTokens === 'number' && maxTokens > 0;
-  const remainingTokens = showTokens ? Math.max(0, maxTokens - usedTokens) : 0;
-
-  const color =
-    clamped > 80
-      ? 'stroke-status-error'
-      : clamped > 60
-        ? 'stroke-status-warning'
-        : 'stroke-muted-foreground';
 
   return (
     <HoverCard openDelay={150} closeDelay={50}>
@@ -66,31 +102,7 @@ export function ContextUsageRing({
             disabled && 'cursor-not-allowed opacity-50',
           )}
         >
-          <svg
-            width={SIZE}
-            height={SIZE}
-            viewBox={`0 0 ${SIZE} ${SIZE}`}
-            className="shrink-0 -rotate-90"
-          >
-            <circle
-              cx={SIZE / 2}
-              cy={SIZE / 2}
-              r={RADIUS}
-              fill="none"
-              strokeWidth={STROKE}
-              className="stroke-muted"
-            />
-            <circle
-              cx={SIZE / 2}
-              cy={SIZE / 2}
-              r={RADIUS}
-              fill="none"
-              strokeWidth={STROKE}
-              strokeLinecap="round"
-              strokeDasharray={`${dash} ${CIRC}`}
-              className={color}
-            />
-          </svg>
+          <UsageRing clamped={clamped} />
           <span className="leading-none tabular-nums">{Math.round(clamped)}% de contexto</span>
         </button>
       </HoverCardTrigger>
@@ -101,12 +113,7 @@ export function ContextUsageRing({
       >
         {threadId && <AgentAccountSummary account={account} profileName={agentProfileName} />}
         <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
-        {showTokens && (
-          <p className="text-muted-foreground mt-1 text-xs">
-            {formatTokens(usedTokens)} / {formatTokens(maxTokens)} tokens used ·{' '}
-            {formatTokens(remainingTokens)} left
-          </p>
-        )}
+        <TokenLine usedTokens={usedTokens} maxTokens={maxTokens} />
         <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>
         {breakdown && <ContextBreakdownPanel breakdown={breakdown} />}
       </HoverCardContent>

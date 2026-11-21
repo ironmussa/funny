@@ -58,8 +58,9 @@ describe('statusConfig', () => {
     expect(statusConfig.running.className).toContain('animate-spin');
   });
 
-  test('completed has gray color class', () => {
-    expect(statusConfig.completed.className).toContain('gray');
+  // A theme-driven token: gray by default, colored where a theme opts in (Minimal).
+  test('completed uses the themeable completed-icon color', () => {
+    expect(statusConfig.completed.className).toContain('text-thread-icon-completed');
   });
 
   test('failed has red color class', () => {

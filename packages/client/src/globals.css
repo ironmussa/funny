@@ -55,6 +55,12 @@
   --color-status-neutral: hsl(var(--status-neutral));
   --color-status-violet: hsl(var(--status-violet));
 
+  /* Opt-in theme hooks. A theme sets the raw variable (a full color, e.g.
+     `hsl(var(--status-info))`); every other theme falls back to the look it
+     always had. Used by the Minimal theme. */
+  --color-thread-icon-running: var(--thread-icon-running, var(--color-gray-400));
+  --color-thread-icon-completed: var(--thread-icon-completed, var(--color-gray-400));
+
   --color-diff-added: hsl(var(--diff-added));
   --color-diff-removed: hsl(var(--diff-removed));
 
@@ -403,6 +409,9 @@ mark.md-search-match[data-active='true'] {
 
 @layer base {
   :root {
+    /* Tool card outline; a theme sets 0px to drop it (Minimal). */
+    --tool-card-border-width: 1px;
+
     --scrollbar-size: 6px;
     --font-sans: 'Geist Sans', 'Geist Sans Fallback', sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -849,7 +858,9 @@ mark.md-search-match[data-active='true'] {
   }
 
   /* ── Monochrome Dark (Black & White) ─────────────────────── */
-  .theme-monochrome-dark {
+  /* Minimal starts from these surfaces; its overrides follow this block. */
+  .theme-monochrome-dark,
+  .theme-minimal {
     --font-sans: 'Noto Sans', sans-serif;
     --font-mono-explorer: 'Noto Sans Mono', ui-monospace, monospace;
     --background: 0 0% 4%;
@@ -913,6 +924,32 @@ mark.md-search-match[data-active='true'] {
     --terminal-bright-cyan: #b4f9f8;
     --terminal-bright-white: #ffffff;
     --terminal-selection: #2e3c64;
+  }
+
+  /* ── Minimal (Dark) ───────────────────────────────────────────
+     The near-black surfaces of Monochrome Dark (shared above) with less
+     chrome: tool cards without borders, colored status and tool icons, and a
+     powerline that is plain text separated by slashes. */
+  .theme-minimal {
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --status-success: 142 65% 55%;
+    --status-error: 0 80% 64%;
+    --status-warning: 38 92% 56%;
+    --status-info: 213 90% 66%;
+    --status-pending: 48 95% 58%;
+    --status-interrupted: 25 90% 58%;
+    --status-neutral: 0 0% 50%;
+    --status-violet: 263 85% 74%;
+
+    /* Width, not color: the base layer forces every `border-*` element to
+       the theme's border color with !important. */
+    --tool-card-border-width: 0px;
+    --thread-icon-running: hsl(var(--status-info));
+    --thread-icon-completed: hsl(var(--status-success));
+
+    --powerline-variant: plain;
   }
 
   /* ── Sunrise (Warm Light) ──────────────────────────────────── */

@@ -10,18 +10,56 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tool
 
 type PowerlineVariant = 'arrow' | 'chips' | 'plain';
 
+function readThemeVariant(): PowerlineVariant {
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue('--powerline-variant')
+    .trim();
+  if (raw === 'chips' || raw === 'plain') return raw;
+  return 'arrow';
+}
+
+// One cached value and one observer for every bar on screen: the sidebar renders
+// many, and reading computed style on each render would force style recalcs.
+let cachedVariant: PowerlineVariant | null = null;
+const variantListeners = new Set<() => void>();
+let themeObserver: MutationObserver | null = null;
+
+/** The theme class lives on `<html>`; re-read the variant whenever it changes. */
+function subscribeThemeVariant(onChange: () => void): () => void {
+  variantListeners.add(onChange);
+  if (!themeObserver) {
+    // Nothing watched the theme until now, so the cache may be stale; React
+    // re-reads the snapshot after subscribing.
+    cachedVariant = readThemeVariant();
+    themeObserver = new MutationObserver(() => {
+      const next = readThemeVariant();
+      if (next === cachedVariant) return;
+      cachedVariant = next;
+      for (const listener of variantListeners) listener();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+  }
+  return () => {
+    variantListeners.delete(onChange);
+    if (variantListeners.size === 0) {
+      themeObserver?.disconnect();
+      themeObserver = null;
+      cachedVariant = null;
+    }
+  };
+}
+
+function themeVariantSnapshot(): PowerlineVariant {
+  cachedVariant ??= readThemeVariant();
+  return cachedVariant;
+}
+
 /** Read --powerline-variant from the current theme CSS (defaults to 'arrow'). */
 function useThemeVariant(): PowerlineVariant {
-  const [variant, setVariant] = React.useState<PowerlineVariant>('arrow');
-  React.useEffect(() => {
-    const raw = getComputedStyle(document.documentElement)
-      .getPropertyValue('--powerline-variant')
-      .trim();
-    if (raw === 'chips') setVariant('chips');
-    else if (raw === 'plain') setVariant('plain');
-    else setVariant('arrow');
-  }, []);
-  return variant;
+  return React.useSyncExternalStore(subscribeThemeVariant, themeVariantSnapshot, () => 'arrow');
 }
 
 export interface PowerlineSegmentData {

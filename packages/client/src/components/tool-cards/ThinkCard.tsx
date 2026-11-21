@@ -38,7 +38,7 @@ export function ThinkCard({
   if (!content) return null;
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
       <div className="flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
         {!hideLabel && <Brain className="icon-xs text-muted-foreground shrink-0" />}
         {!hideLabel && (

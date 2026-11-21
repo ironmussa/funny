@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   Check,
   CheckCircle2,
   Cloud,
@@ -17,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { contrastText } from '@/components/ui/project-chip';
+import { contrastText, darkenHex } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { githubBranchUrl } from '@/lib/github-url';
@@ -113,10 +112,11 @@ export function isThreadBranchRef(
 }
 
 /**
- * Small arrow in front of the chip of the branch the open thread lives on, so
- * clicking a thread shows where it sits in the history.
+ * Arrowhead in front of the chip of the branch the open thread lives on, so
+ * clicking a thread shows where it sits in the history. Only the head is drawn:
+ * the row's leader line is the shaft, so the two read as one arrow.
  */
-function ThreadBranchMarker({ branch }: { branch: string }) {
+function ThreadBranchMarker({ branch, color }: { branch: string; color: string }) {
   const { t } = useTranslation();
   const label = t('graph.threadBranchMarker', {
     branch,
@@ -128,10 +128,18 @@ function ThreadBranchMarker({ branch }: { branch: string }) {
         <span
           role="img"
           aria-label={label}
-          className="text-primary inline-flex shrink-0 items-center"
+          className="inline-flex shrink-0 items-center"
+          style={{ color }}
           data-testid="graph-thread-branch-marker"
         >
-          <ArrowRight className="icon-xs" strokeWidth={3} aria-hidden="true" />
+          <svg
+            viewBox="0 0 7 10"
+            className="h-[0.625rem] w-[0.4375rem]"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M0 0 L7 5 L0 10 Z" />
+          </svg>
         </span>
       </TooltipTrigger>
       <TooltipContent side="top">{label}</TooltipContent>
@@ -498,9 +506,13 @@ function GraphRefChip({
       className={cn(
         'inline-flex h-[0.9375rem] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
         isMergedRef(ref) && 'opacity-60',
-        isThreadBranch && 'ring-primary ring-1',
       )}
-      style={{ backgroundColor: color, color: textColor }}
+      style={{
+        backgroundColor: color,
+        color: textColor,
+        // The thread's chip is outlined in a darker shade of its own color.
+        boxShadow: isThreadBranch ? `0 0 0 1.5px ${darkenHex(color, 0.35)}` : undefined,
+      }}
       data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
       data-merged={isMergedRef(ref) || undefined}
       data-thread-branch={isThreadBranch || undefined}
@@ -610,7 +622,7 @@ export function GraphRefChips({
             key={`${ref.kind}:${ref.name}`}
             className="flex max-w-full min-w-0 items-center gap-0.5"
           >
-            <ThreadBranchMarker branch={ref.name} />
+            <ThreadBranchMarker branch={ref.name} color={color} />
             {chip}
           </div>
         );

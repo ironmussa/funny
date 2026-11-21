@@ -12,6 +12,7 @@ import { resolve } from 'path';
 import { getSchema } from '@funny/shared/db/schema';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { admin, bearer, username, organization } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 
@@ -20,7 +21,7 @@ import { audit } from './audit.js';
 import { resolveCorsOrigins } from './cors-origins.js';
 import { ensureDataDir } from './data-dir.js';
 import { log } from './logger.js';
-import { validatePasswordStrength } from './password-policy.js';
+import { validateAuthRequestPassword, validatePasswordStrength } from './password-policy.js';
 import { getAuthSecret } from './server-secrets.js';
 
 /**
@@ -165,6 +166,23 @@ export async function initBetterAuth(): Promise<void> {
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
+      // Keep Better Auth's own length check in line with the policy; the hook
+      // below enforces the full policy, including on `/admin/create-user`,
+      // where Better Auth checks no minimum at all.
+      minPasswordLength: 10,
+    },
+    hooks: {
+      // Issue #201: every endpoint that sets a password (change, reset,
+      // admin create / set) must clear the same policy as invite registration.
+      before: createAuthMiddleware(async (ctx) => {
+        const policy = validateAuthRequestPassword(ctx.path, ctx.body);
+        if (!policy.ok) {
+          throw new APIError('BAD_REQUEST', {
+            code: 'PASSWORD_POLICY',
+            message: policy.reason ?? 'Password does not meet the password policy',
+          });
+        }
+      }),
     },
     session: {
       expiresIn: 7 * 24 * 60 * 60, // 7 days

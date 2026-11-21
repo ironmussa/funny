@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
+import type { ContextBreakdown } from '@funny/shared';
 import { mocked } from '@funny/test-kit';
 
 import { getContextUsageStore } from '@/data/context-usage/store';
@@ -9,7 +10,7 @@ import {
   buildThreadWithMessages,
   type ThreadIndexFields,
 } from '@/data/threads/testing';
-import { loadContextUsage } from '@/lib/context-usage-storage';
+import { loadContextUsage, saveContextUsage } from '@/lib/context-usage-storage';
 
 const { mockInvalidate, mockBuffer, mockMarkRead, mockToastError } = (() => ({
   mockInvalidate: vi.fn(),
@@ -257,6 +258,38 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
     expect(getContextUsageStore().read(THREAD_ID)).toMatchObject(expected);
     // Persisted so the ring survives a reload (the runtime keeps usage in memory only).
     expect(loadContextUsage(THREAD_ID)).toEqual(expected);
+  });
+
+  test('handleWSContextUsage keeps the saved breakdown when a running thread reports before it is selected', () => {
+    // A fresh tab: nothing in the session, last turn's snapshot in storage.
+    const breakdown: ContextBreakdown = {
+      totalTokens: 90_000,
+      maxTokens: 1_000_000,
+      percentage: 9,
+      model: 'claude-opus-5-5',
+      categories: [{ id: 'messages', name: 'Messages', tokens: 90_000, kind: 'used' }],
+      mcpServers: [],
+      memoryFiles: [],
+      capturedAt: '2026-11-21T08:48:58.000Z',
+    };
+    seedContextUsage({});
+    saveContextUsage(THREAD_ID, {
+      cumulativeInputTokens: 90_000,
+      lastInputTokens: 90_000,
+      lastOutputTokens: 0,
+      breakdown,
+    });
+
+    // The running turn's per-message event carries no breakdown.
+    handleWSContextUsage(THREAD_ID, {
+      inputTokens: 114_000,
+      outputTokens: 20,
+      cumulativeInputTokens: 114_000,
+    });
+
+    expect(getContextUsageStore().read(THREAD_ID)?.breakdown).toEqual(breakdown);
+    expect(loadContextUsage(THREAD_ID)?.breakdown).toEqual(breakdown);
+    expect(loadContextUsage(THREAD_ID)?.cumulativeInputTokens).toBe(114_000);
   });
 
   test('handleWSStatus schedules project refresh for unknown sidebar thread', async () => {

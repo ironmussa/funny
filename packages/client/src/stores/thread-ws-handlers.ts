@@ -29,7 +29,11 @@ import type {
 import { toast } from 'sonner';
 
 import { applyAgentAccountEvent } from '@/data/agent-account/store';
-import { applyContextUsageEvent, resetContextUsage } from '@/data/context-usage/store';
+import {
+  applyContextUsageEvent,
+  resetContextUsage,
+  restoreContextUsage,
+} from '@/data/context-usage/store';
 import { applyQueueSummary } from '@/data/queue/store';
 import {
   isThreadListed,
@@ -40,7 +44,7 @@ import {
 import i18n from '@/i18n/config';
 import { saveAgentAccounts } from '@/lib/agent-account-storage';
 import { createClientLogger } from '@/lib/client-logger';
-import { saveContextUsage } from '@/lib/context-usage-storage';
+import { loadContextUsage, saveContextUsage } from '@/lib/context-usage-storage';
 import { buildPath } from '@/lib/url';
 
 import { settlePreSendState } from './optimistic-run-state';
@@ -1054,6 +1058,11 @@ export function handleWSCompactBoundary(
 // ── Context usage ───────────────────────────────────────────────
 
 export function handleWSContextUsage(threadId: string, data: WSContextUsageData): void {
+  // A running thread's per-message events (no breakdown) can arrive in a fresh
+  // tab before the thread is selected. Restore the saved snapshot first, or the
+  // event creates a row without the breakdown, selecting the thread no longer
+  // restores, and the save below overwrites the stored breakdown.
+  restoreContextUsage(threadId, () => loadContextUsage(threadId));
   // Persist across page reloads — the runtime only keeps usage in memory.
   saveContextUsage(threadId, applyContextUsageEvent(threadId, data));
 }

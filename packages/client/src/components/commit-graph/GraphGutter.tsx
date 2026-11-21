@@ -4,9 +4,14 @@ import type { GraphRow } from '@/lib/git-graph-lanes';
 import { graphLanePastel } from '@/lib/graph-colors';
 
 // Wide enough that an avatar node sits inside a single lane without colliding
-// with neighbouring rails. The node radius is derived from the row height (which
-// itself scales with the font-size setting), so the graph scales with the text.
+// with neighbouring rails.
 export const LANE_WIDTH = 16;
+/**
+ * Radius of every commit node. Fixed (not derived from the row height) so rows
+ * that are taller because they carry branch/tag chips keep the same node size
+ * as every other row, and the node column stays aligned.
+ */
+export const GRAPH_NODE_RADIUS = 6;
 const STROKE_WIDTH = 1.6;
 
 interface Props {
@@ -19,10 +24,12 @@ interface Props {
   avatarUrl?: string;
   /** Author name — used to render initials in the node when no avatar is available. */
   authorName?: string;
-  /** Committer avatar shown as a secondary badge when it differs from the author. */
-  committerAvatarUrl?: string;
-  /** Committer name — used to render initials in the badge when no avatar is available. */
-  committerName?: string;
+  /**
+   * The committer differs from the author → the node's ring is drawn dashed.
+   * Same radius and center as any other node, so the column stays aligned; the
+   * committer's identity is shown in the node tooltip.
+   */
+  distinctCommitter?: boolean;
   /**
    * Draw a dashed stub from the node up to the top edge — used on the HEAD row to
    * connect it to the "Uncommitted changes" (WIP) node sitting above the list.
@@ -59,8 +66,7 @@ export const GraphGutter = memo(function GraphGutter({
   height,
   avatarUrl,
   authorName,
-  committerAvatarUrl,
-  committerName,
+  distinctCommitter,
   connectUp,
   nodeYFrac = 0.5,
 }: Props) {
@@ -70,19 +76,14 @@ export const GraphGutter = memo(function GraphGutter({
   // onto the (possibly raised) node center so segments still land on the node.
   const segY = (frac: number) => (frac === 0.5 ? y(nodeYFrac) : y(frac));
   const clipId = useId();
-  const committerClipId = useId();
   const nodeX = laneX(row.commitLane);
   const nodeY = y(nodeYFrac);
   const nodeColor = graphLanePastel(row.nodeColor);
   const initials = avatarUrl ? '' : initialsOf(authorName ?? '');
-  const committerInitials = committerAvatarUrl ? '' : initialsOf(committerName ?? '');
-  // Node scales with the row height (capped to the lane width so it never spills
-  // into a neighbouring rail). Plain dot is half the avatar size.
-  const avatarR = Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(height * 0.15)));
+  const avatarR = GRAPH_NODE_RADIUS;
+  // Plain dot is half the avatar size.
   const dotR = Math.max(3, Math.round(avatarR / 2));
-  const badgeR = Math.max(4, Math.round(avatarR * 0.56));
-  const badgeX = nodeX + avatarR * 0.62;
-  const badgeY = nodeY + avatarR * 0.62;
+  const ringDash = distinctCommitter ? '2 1.5' : undefined;
 
   return (
     <svg
@@ -177,6 +178,7 @@ export const GraphGutter = memo(function GraphGutter({
             fill="none"
             stroke={nodeColor}
             strokeWidth={STROKE_WIDTH}
+            strokeDasharray={ringDash}
           />
         </g>
       ) : initials ? (
@@ -193,6 +195,7 @@ export const GraphGutter = memo(function GraphGutter({
             fill="none"
             stroke={nodeColor}
             strokeWidth={STROKE_WIDTH}
+            strokeDasharray={ringDash}
           />
           <text
             x={nodeX}
@@ -217,54 +220,6 @@ export const GraphGutter = memo(function GraphGutter({
           strokeWidth={1}
         />
       )}
-      {committerName ? (
-        <g>
-          <circle
-            cx={badgeX}
-            cy={badgeY}
-            r={badgeR + 1.5}
-            fill="hsl(var(--background))"
-            stroke={nodeColor}
-            strokeWidth={1}
-          />
-          {committerAvatarUrl ? (
-            <>
-              <defs>
-                <clipPath id={committerClipId}>
-                  <circle cx={badgeX} cy={badgeY} r={badgeR} />
-                </clipPath>
-              </defs>
-              <image
-                href={committerAvatarUrl}
-                x={badgeX - badgeR}
-                y={badgeY - badgeR}
-                width={badgeR * 2}
-                height={badgeR * 2}
-                clipPath={`url(#${committerClipId})`}
-                preserveAspectRatio="xMidYMid slice"
-              />
-            </>
-          ) : committerInitials ? (
-            <>
-              <circle cx={badgeX} cy={badgeY} r={badgeR} fill={nodeColor} fillOpacity={0.28} />
-              <text
-                x={badgeX}
-                y={badgeY}
-                textAnchor="middle"
-                dominantBaseline="central"
-                className="font-sans"
-                fontSize={Math.max(4, badgeR + 1)}
-                fontWeight={700}
-                fill={nodeColor}
-              >
-                {committerInitials}
-              </text>
-            </>
-          ) : (
-            <circle cx={badgeX} cy={badgeY} r={Math.max(2.5, badgeR - 1)} fill={nodeColor} />
-          )}
-        </g>
-      ) : null}
     </svg>
   );
 });

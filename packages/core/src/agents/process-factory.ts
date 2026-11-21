@@ -15,6 +15,7 @@ import {
   type GateableAcpProvider,
 } from '@funny/shared/provider-manifests';
 
+import { AntigravityACPProcess } from './antigravity-acp.js';
 import { CodexSDKProcess } from './codex-sdk.js';
 import { CursorACPProcess } from './cursor-acp.js';
 import { DeepAgentProcess } from './deepagent-process.js';
@@ -45,6 +46,7 @@ const ACP_BUILTIN_PROCESSES: Record<GateableAcpProvider, ProcessConstructor> = {
   gemini: GeminiACPProcess,
   cursor: CursorACPProcess,
   opencode: OpenCodeACPProcess,
+  antigravity: AntigravityACPProcess,
 };
 
 /**

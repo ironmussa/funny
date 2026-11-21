@@ -42,6 +42,7 @@ export type KnownProvider =
   | 'pi'
   | 'cursor'
   | 'opencode'
+  | 'antigravity'
   | 'deepagent'
   | 'llm-api'
   | 'external';

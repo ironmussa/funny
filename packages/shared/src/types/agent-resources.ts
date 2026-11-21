@@ -138,6 +138,7 @@ export const PROVIDER_RESOURCE_DESCRIPTORS: Record<KnownProvider, ProviderResour
   pi: { ...DEFAULT_PROVIDER_RESOURCE_DESCRIPTOR },
   cursor: { ...DEFAULT_PROVIDER_RESOURCE_DESCRIPTOR },
   opencode: { ...DEFAULT_PROVIDER_RESOURCE_DESCRIPTOR },
+  antigravity: { ...DEFAULT_PROVIDER_RESOURCE_DESCRIPTOR },
   deepagent: {
     skills: ['deepagent-template'],
     builtinCommands: 'session',

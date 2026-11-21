@@ -217,7 +217,8 @@
       "deepagentGemini25pro": "Gemini 2.5 Pro",
       "deepagentGemini3flash": "Gemini 3 Flash",
       "deepagentGemini3pro": "Gemini 3 Pro",
-      "opencodeDefault": "opencode (configured default)"
+      "opencodeDefault": "opencode (configured default)",
+      "antigravityDefault": "Antigravity (configured default)"
     },
     "prOpen": "PR #{{number}}",
     "prMerged": "PR #{{number}} (merged)",

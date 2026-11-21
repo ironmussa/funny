@@ -111,6 +111,7 @@ const AGENT_MARKERS = [
   'OPENCODE',
   'CURSOR_AGENT',
   'AUGMENT_AGENT',
+  'ANTIGRAVITY_AGENT',
 ];
 
 /** The env a check step runs with: CI, no colors, no agent markers. */

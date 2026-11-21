@@ -20,6 +20,9 @@ const PROVIDER_INSTALLS = {
   gemini: { package: '@google/gemini-cli', binary: 'gemini', login: 'gemini' },
   cursor: { package: null, binary: 'cursor-agent', login: 'cursor-agent login' },
   opencode: { package: 'opencode-ai', binary: 'opencode', login: 'opencode auth login' },
+  // Google ships agy as a native binary with no npm package: install it by hand
+  // on the runner. `agy acp --login` signs in with Google and exits.
+  antigravity: { package: null, binary: 'agy', login: 'agy acp --login' },
 } as const;
 
 type ProviderId = keyof typeof PROVIDER_INSTALLS;
@@ -30,6 +33,12 @@ const binDir = join(installRoot, 'node_modules', '.bin');
 
 export function isInstallableProvider(id: string): id is ProviderId {
   return Object.hasOwn(PROVIDER_INSTALLS, id);
+}
+
+/** Whether funny can install the provider itself: an npm package, or Cursor's script off Windows. */
+function canInstall(id: ProviderId): boolean {
+  if (id === 'cursor') return process.platform !== 'win32';
+  return PROVIDER_INSTALLS[id].package !== null;
 }
 
 export function activateProviderTools(): void {
@@ -75,6 +84,7 @@ function providerBinary(id: ProviderId): string | null {
     codex: process.env.CODEX_BINARY_PATH ?? process.env.CODEX_BIN,
     gemini: process.env.GEMINI_BINARY_PATH ?? process.env.ACP_GEMINI_BIN,
     cursor: process.env.CURSOR_BINARY_PATH ?? process.env.ACP_CURSOR_BIN,
+    antigravity: process.env.AGY_BINARY_PATH ?? process.env.ACP_ANTIGRAVITY_BIN,
   };
   // Bun's default lookup can retain the startup PATH after process.env.PATH changes.
   return Bun.which(overrides[id] ?? PROVIDER_INSTALLS[id].binary, { PATH: process.env.PATH });
@@ -180,7 +190,7 @@ export async function providerSetupStatus(
   return {
     provider: id,
     state: binary ? 'installed' : bundled ? 'bundled' : 'missing',
-    installable: id !== 'cursor' || process.platform !== 'win32',
+    installable: canInstall(id),
     login: PROVIDER_INSTALLS[id].login,
     loginCommand: binary ? loginCommand(id, binary, profileEnv) : undefined,
     loginShell: process.platform === 'win32' ? 'powershell' : 'bash',
@@ -189,7 +199,7 @@ export async function providerSetupStatus(
 }
 
 export function startProviderInstall(id: string): boolean {
-  if (!isInstallableProvider(id) || (id === 'cursor' && process.platform === 'win32')) return false;
+  if (!isInstallableProvider(id) || !canInstall(id)) return false;
   // A single package directory is shared, so serialize package-manager writes.
   if ([...jobs.values()].some((job) => job.state === 'installing')) return false;
   jobs.set(id, { state: 'installing' });

@@ -6,15 +6,8 @@
 
 import { afterAll, describe, expect, test, vi, mock } from 'bun:test';
 import { execFileSync } from 'child_process';
-import { rmSync } from 'fs';
 
 import { waitFor } from '@funny/test-kit';
-
-const dataDir = (() => {
-  const dir = `${process.env.TMPDIR ?? '/tmp'}/funny-open-url-${Date.now()}`;
-  process.env.FUNNY_DATA_DIR = dir;
-  return dir;
-})();
 
 const mocks = (() => ({
   openForThread: vi.fn(async () => null),
@@ -40,7 +33,6 @@ import {
 describe('$BROWSER bridge', () => {
   afterAll(() => {
     closeOpenUrlWatchers();
-    rmSync(dataDir, { recursive: true, force: true });
   });
 
   test('parses drop files', () => {

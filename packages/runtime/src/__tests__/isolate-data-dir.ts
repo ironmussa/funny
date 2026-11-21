@@ -8,10 +8,16 @@
  * such a test writes into the user's `~/.funny`, and a PTY daemon it spawns
  * replaces the user's `pty.sock`.
  */
-import { mkdtempSync } from 'node:fs';
+import { afterAll } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 if (!process.env.FUNNY_DATA_DIR) {
-  process.env.FUNNY_DATA_DIR = mkdtempSync(join(tmpdir(), 'funny-runtime-test-'));
+  const dataDir = mkdtempSync(join(tmpdir(), 'funny-runtime-test-'));
+  process.env.FUNNY_DATA_DIR = dataDir;
+  // The preload runs once per test file, so this removes that file's dir after
+  // its last test; without it every run leaves one behind per file. (Bun does
+  // not fire `exit` for a test file's global.)
+  afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
 }

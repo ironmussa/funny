@@ -14,12 +14,6 @@ import { join } from 'path';
 import { mocked, waitFor } from '@funny/test-kit';
 import type { Result } from 'neverthrow';
 
-const dataDir = (() => {
-  const dir = `${process.env.TMPDIR ?? '/tmp'}/funny-browser-tools-${Date.now()}`;
-  process.env.FUNNY_DATA_DIR = dir;
-  return dir;
-})();
-
 mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -116,7 +110,6 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
   afterAll(async () => {
     await browserSessionManager.closeAll();
     server?.close();
-    rmSync(dataDir, { recursive: true, force: true });
   });
 
   test('tools other than open fail before a session exists', async () => {

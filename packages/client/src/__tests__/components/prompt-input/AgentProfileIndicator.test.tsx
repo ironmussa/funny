@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 import type { AgentExecutionProfileResponse } from '@funny/shared';
 import { screen } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { getDataLayer, replaceDataLayer } from '@/data/runtime';
 import { mockT } from '../../helpers/mock-i18n';
 import { renderWithProviders } from '../../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));

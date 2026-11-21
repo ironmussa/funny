@@ -1,6 +1,7 @@
-import type { FileDiffSummary, ThreadEvent } from '@funny/shared';
+import type { ThreadEvent } from '@funny/shared';
 import type { Ref, RefObject } from 'react';
 
+import type { SessionChanges } from '@/lib/session-changes-from-events';
 import type { CompactionEvent } from '@/stores/thread-store';
 
 export interface MemoizedMessageListHandle {
@@ -41,8 +42,8 @@ export interface MemoizedMessageListProps {
   rewindDisabledReason?: string;
   scrollRef: RefObject<HTMLElement | null>;
   /** Per-session changed files, keyed by the session's user-message id.
-   *  Each entry renders a changed-files summary at the end of that session. */
-  sessionChanges?: Map<string, FileDiffSummary[]>;
+   *  Each entry renders a changed-files summary where its snapshot was taken. */
+  sessionChanges?: Map<string, SessionChanges>;
   /** Whether the agent is running (disables the latest session's revert). */
   changeSummaryRunning?: boolean;
   /** Called after a revert so the diff data refetches. */

@@ -36,4 +36,44 @@ describe('buildVirtualRows turn-end bars', () => {
       'a1',
     ]);
   });
+
+  test('places a session summary where it was taken, above a run woken without a new prompt', () => {
+    // A background job finished after the turn and woke the agent with no
+    // user message, so the woken run belongs to the same section as `u1`.
+    const items: RenderItem[] = [
+      message('u1', 'user', 'si', '2026-10-30T20:00:00.000Z'),
+      message('a1', 'assistant', 'Done', '2026-10-30T20:00:30.000Z'),
+      {
+        type: 'toolcall',
+        tc: { id: 'bg1', name: 'Background', input: '{}', timestamp: '2026-10-30T20:03:00.000Z' },
+      },
+      message('a2', 'assistant', 'Re-checking', '2026-10-30T20:03:10.000Z'),
+    ];
+    const file = { path: 'src/a.ts', status: 'modified', staged: false } as const;
+    const sessionChanges = new Map([
+      ['u1', { files: [file], createdAt: '2026-10-30T20:00:31.000Z' }],
+    ]);
+
+    const rows = buildVirtualRows(items, sessionChanges);
+
+    expect(rows.map((row) => row.key)).toEqual(['u1', 'a1', 'session-summary-u1', 'bg1', 'a2']);
+  });
+
+  test('a summary without a snapshot time stays at the end of its section', () => {
+    const items: RenderItem[] = [
+      message('u1', 'user', 'First', '2026-10-30T20:00:00.000Z'),
+      message('a1', 'assistant', 'Answer', '2026-10-30T20:00:30.000Z'),
+      message('u2', 'user', 'Second', '2026-10-30T20:05:00.000Z'),
+    ];
+    const file = { path: 'src/a.ts', status: 'modified', staged: false } as const;
+    const rows = buildVirtualRows(items, new Map([['u1', { files: [file], createdAt: '' }]]));
+
+    expect(rows.map((row) => row.key)).toEqual([
+      'u1',
+      'a1',
+      'session-summary-u1',
+      'turn-end-u1',
+      'u2',
+    ]);
+  });
 });

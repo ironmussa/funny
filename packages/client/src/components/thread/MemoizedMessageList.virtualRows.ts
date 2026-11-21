@@ -6,6 +6,7 @@ import {
   getItemTimestamp,
   type RenderItem,
 } from '@/lib/render-items';
+import type { SessionChanges } from '@/lib/session-changes-from-events';
 import { buildToolCallDiffFallbacks } from '@/lib/tool-call-diff-fallbacks';
 
 export type MessageItem = Extract<RenderItem, { type: 'message' }>;
@@ -49,22 +50,40 @@ export function getLeadingUserItem(
 
 export function buildVirtualRows(
   groupedItems: RenderItem[],
-  sessionChanges?: Map<string, FileDiffSummary[]>,
+  sessionChanges?: Map<string, SessionChanges>,
 ): VirtualRow[] {
   const rows: VirtualRow[] = [];
   let currentUser: MessageItem | null = null;
   let currentSessionItems: RenderItem[] = [];
+  /** Index in `rows` of the current session's user-message row. */
+  let sectionStart = -1;
 
+  // The card goes where its snapshot was taken: after the session's items up
+  // to the run that produced it. A background job or watcher wakes the agent
+  // without a new user message, so the woken run's items land in the same
+  // section and must stay below the card, not above it.
   const appendSessionSummary = () => {
     if (!currentUser) return;
-    const files = sessionChanges?.get(currentUser.msg.id);
-    if (!files || files.length === 0) return;
-    rows.push({
+    const changes = sessionChanges?.get(currentUser.msg.id);
+    if (!changes || changes.files.length === 0) return;
+    let insertAt = rows.length;
+    if (changes.createdAt) {
+      for (let i = sectionStart + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.type !== 'item') continue;
+        const ts = getItemTimestamp(row.item);
+        if (ts && ts > changes.createdAt) {
+          insertAt = i;
+          break;
+        }
+      }
+    }
+    rows.splice(insertAt, 0, {
       type: 'session-summary',
       key: `session-summary-${currentUser.msg.id}`,
       userItem: currentUser,
-      files,
-      fallbackDiffs: buildToolCallDiffFallbacks(currentSessionItems, files),
+      files: changes.files,
+      fallbackDiffs: buildToolCallDiffFallbacks(currentSessionItems, changes.files),
       isLastSection: false,
     });
   };
@@ -100,6 +119,7 @@ export function buildVirtualRows(
       appendTurnEnd();
       currentUser = item as MessageItem;
       currentSessionItems = [];
+      sectionStart = rows.length;
     } else if (currentUser) {
       currentSessionItems.push(item);
     }

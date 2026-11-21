@@ -46,7 +46,7 @@ export interface MessageStreamProps {
   rewindDisabledReason?: string;
   model?: string;
   permissionMode?: string;
-  sessionChanges?: Map<string, import('@funny/shared').FileDiffSummary[]>;
+  sessionChanges?: Map<string, import('@/lib/session-changes-from-events').SessionChanges>;
   onSessionReverted?: () => void;
   pagination?: {
     hasMore: boolean;

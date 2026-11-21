@@ -1,7 +1,9 @@
 import type { ContextBreakdown } from '@funny/shared';
 
+import { AgentAccountSummary } from '@/components/thread/AgentAccountSummary';
 import { ContextBreakdownPanel, formatTokens } from '@/components/thread/ContextBreakdownPanel';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useThreadAgentAccount } from '@/data/agent-account/hooks';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -12,6 +14,11 @@ interface Props {
   breakdown?: ContextBreakdown;
   onCompact?: () => void;
   disabled?: boolean;
+  /** The thread whose account (profile, login, plan usage) heads the card. */
+  threadId?: string;
+  /** The thread's recorded execution profile, used before a run reports its account. */
+  agentProfileId?: string | null;
+  agentProfileName?: string | null;
 }
 
 const SIZE = 12;
@@ -26,7 +33,11 @@ export function ContextUsageRing({
   breakdown,
   onCompact,
   disabled,
+  threadId,
+  agentProfileId,
+  agentProfileName,
 }: Props) {
+  const account = useThreadAgentAccount(threadId, agentProfileId);
   const clamped = Math.max(0, Math.min(100, pct));
   const remaining = Math.max(0, Math.round(100 - clamped));
   const dash = (clamped / 100) * CIRC;
@@ -86,8 +97,9 @@ export function ContextUsageRing({
       <HoverCardContent
         side="top"
         align="end"
-        className={cn('text-sm', breakdown ? 'w-80' : 'w-64')}
+        className={cn('text-sm', breakdown || account ? 'w-80' : 'w-64')}
       >
+        {threadId && <AgentAccountSummary account={account} profileName={agentProfileName} />}
         <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
         {showTokens && (
           <p className="text-muted-foreground mt-1 text-xs">

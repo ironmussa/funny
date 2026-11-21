@@ -910,6 +910,50 @@ export interface WSRateLimitData {
   info: WSRateLimitInfo;
 }
 
+/** The provider account a run is logged in with (Claude SDK `accountInfo()`). */
+export interface AgentAccountInfo {
+  email?: string;
+  organization?: string;
+  subscriptionType?: string;
+  /** `firstParty` for an Anthropic login; Bedrock / Vertex / … otherwise. */
+  apiProvider?: string;
+}
+
+/** One plan rate-limit window: `utilization` is 0-100, `resetsAt` ISO 8601. */
+export interface AgentPlanUsageWindow {
+  /** `five_hour`, `seven_day`, `seven_day_opus`, … or `model:<display name>`. */
+  key: string;
+  /** Server-supplied label (per-model windows only). */
+  label?: string;
+  utilization: number | null;
+  resetsAt: string | null;
+}
+
+/** Claude.ai plan usage of the account (Claude SDK `/usage`). */
+export interface AgentPlanUsage {
+  windows: AgentPlanUsageWindow[];
+  extraUsage?: {
+    usedCredits: number | null;
+    monthlyLimit: number | null;
+    utilization: number | null;
+    currency?: string | null;
+  };
+}
+
+/**
+ * The account a run uses, sent at session start and after every turn.
+ * `profileId` / `profileName` name the funny execution profile
+ * (CLAUDE_CONFIG_DIR); both null for the runner's default Claude login.
+ * `usage` is absent when plan limits do not apply (API key, Bedrock, …) or the
+ * request failed.
+ */
+export interface WSAgentAccountData {
+  profileId: string | null;
+  profileName: string | null;
+  account: AgentAccountInfo;
+  usage?: AgentPlanUsage;
+}
+
 export interface WSAutomationRunUpdatedData {
   automationId: string;
   runId: string;
@@ -1045,6 +1089,7 @@ export type WSEvent =
   | { type: 'agent:compact_boundary'; threadId: string; data: WSCompactBoundaryData }
   | { type: 'agent:context_usage'; threadId: string; data: WSContextUsageData }
   | { type: 'agent:rate_limit'; threadId: string; data: WSRateLimitData }
+  | { type: 'agent:account'; threadId: string; data: WSAgentAccountData }
   | { type: 'command:output'; threadId: string; data: WSCommandOutputData }
   | { type: 'command:status'; threadId: string; data: WSCommandStatusData }
   | { type: 'automation:run_started'; threadId: string; data: WSAutomationRunStartedData }

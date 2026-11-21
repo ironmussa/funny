@@ -86,6 +86,9 @@ export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:job_get': 'refs',
   'data:job_update': 'refs',
   'data:job_delete_by_thread': 'refs',
+  // An activity with neither a thread nor a project is projectless work
+  // (see `isProjectlessWork`).
+  'data:activity_start': 'refs',
 
   'data:create_project': 'projectless',
 
@@ -105,6 +108,10 @@ export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:create_permission_rule': 'user',
   'data:find_permission_rule': 'user',
   'data:list_permission_rules': 'user',
+  // Only the row's own runner can write it (compare-and-set on runner_id).
+  'data:activity_update': 'user',
+  // Touches only the calling runner's rows.
+  'data:activity_reconcile': 'user',
 
   'data:list_projects': 'list',
   'data:search_threads': 'list',
@@ -350,23 +357,23 @@ export async function assertRunnerDataScope(
   const rule = Object.hasOwn(DATA_SCOPE_RULES, type) ? DATA_SCOPE_RULES[type] : undefined;
   if (!rule) return { ok: false, reason: `no scope rule for ${String(type)}` };
 
+  // Projectless work (a scratch thread, a clone) is served only by general runners.
+  const effectiveRule = isProjectlessWork(type, data) ? 'projectless' : rule;
   const boundThread = await sandboxThreadOfRunner(runnerId);
-  if (boundThread) return sandboxDataScope(boundThread, type, rule, data);
+  if (boundThread) return sandboxDataScope(boundThread, type, effectiveRule, data);
   if (SANDBOX_ONLY_TYPES.has(type)) {
     return { ok: false, reason: `${type} is for sandbox runners only` };
   }
-
-  const isScratchCreate =
-    type === 'data:create_thread' && !str(data?.payload?.projectId) && !str(data?.projectId);
-  if (rule === 'projectless' || isScratchCreate) {
+  if (effectiveRule === 'projectless') {
     return (await canRunnerServeProjectless(runnerId))
       ? { ok: true }
-      : {
-          ok: false,
-          reason: `${type} is projectless work (general runners only)`,
-        };
+      : { ok: false, reason: `${type} is projectless work (general runners only)` };
   }
+  return refsScope(runnerId, data);
+}
 
+/** `refs` scope: every referenced project, and any referenced scratch thread. */
+async function refsScope(runnerId: string, data: any): Promise<DataScopeDecision> {
   const { projectIds, projectless } = await referencedProjects(data);
   for (const projectId of projectIds) {
     if (!(await canRunnerAccessProject(runnerId, projectId))) {
@@ -377,6 +384,17 @@ export async function assertRunnerDataScope(
     return { ok: false, reason: 'scratch thread outside runner scope' };
   }
   return { ok: true };
+}
+
+/**
+ * Work that names no project: a scratch thread being created, or an activity
+ * started with neither a thread nor a project (a clone).
+ */
+function isProjectlessWork(type: string, data: any): boolean {
+  const projectId = str(data?.payload?.projectId) ?? str(data?.projectId);
+  if (type === 'data:create_thread') return !projectId;
+  if (type === 'data:activity_start') return !projectId && !str(data?.payload?.threadId);
+  return false;
 }
 
 /**

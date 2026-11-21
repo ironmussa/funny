@@ -5,6 +5,7 @@
  */
 
 import {
+  createActivityRepository,
   createCommentRepository,
   createDesignRepository,
   createGrantRepository,
@@ -34,6 +35,7 @@ const comments = lazy(() => createCommentRepository(deps));
 const stageHistory = lazy(() => createStageHistoryRepository(deps));
 
 export const repos = {
+  activities: lazy(() => createActivityRepository(deps)),
   comments,
   designs: lazy(() => createDesignRepository(deps)),
   grants: lazy(() => createGrantRepository(deps)),

@@ -234,6 +234,7 @@ async function autoStartIdleThread(
           userId: thread.userId,
           threadId,
           flow: 'idle-start',
+          projectId: thread.projectId,
         });
         if (wtResult.isErr()) {
           await tm.updateThread(threadId, { status: 'failed' });
@@ -565,6 +566,7 @@ async function convertToWorktreeImpl(
         userId,
         threadId,
         flow: 'convert',
+        projectId: thread.projectId,
       });
       if (wtResult.isErr()) {
         await tm.updateThread(threadId, { status: 'failed' });

@@ -73,6 +73,9 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
   'data:create_permission_rule',
   'data:find_permission_rule',
   'data:list_permission_rules',
+  'data:activity_start',
+  'data:activity_update',
+  'data:activity_reconcile',
 ] as const;
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
@@ -204,6 +207,9 @@ const persistentMutations = new Set([
   'jobUpdate',
   'jobDeleteByThread',
   'createPermissionRule',
+  'activityStart',
+  'activityUpdate',
+  'activityReconcile',
 ]);
 
 type OperationValue = Record<string, any>;
@@ -343,6 +349,15 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:create_permission_rule': ['createPermissionRule', asPayload],
   'data:find_permission_rule': ['findPermissionRule', asPayload],
   'data:list_permission_rules': ['listPermissionRules', asPayload],
+  'data:activity_start': ['activityStart', (_input, payload) => ({ activity: payload })],
+  'data:activity_update': [
+    'activityUpdate',
+    (_input, payload) => ({ activityId: payload.id, patch: payload.patch }),
+  ],
+  'data:activity_reconcile': [
+    'activityReconcile',
+    (_input, payload) => ({ liveActivityIds: payload.liveIds ?? [] }),
+  ],
 };
 
 export function mapRunnerOperation(

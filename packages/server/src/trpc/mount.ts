@@ -11,6 +11,7 @@ import type { Context, Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { createActivitiesPort } from './ports/activities.js';
 import { agentTemplatesPort } from './ports/agent-templates.js';
 import { authzPort } from './ports/authz.js';
 import { automationsPort } from './ports/automations.js';
@@ -44,6 +45,7 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     agentTemplates: agentTemplatesPort,
     watchers: watchersPort,
     jobs: jobsPort,
+    activities: createActivitiesPort(c.env?.runnerPresence),
     designs: designsPort,
     analytics: analyticsPort,
     push: pushPort,

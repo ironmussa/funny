@@ -26,6 +26,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { recordHistogram, startSpan, type SpanHandle } from '../../lib/telemetry.js';
+import { trackActivity } from '../activity-tracker.js';
 import { createSetupProgressEmitter } from './helpers.js';
 
 export type WorktreeFlow = 'create' | 'idle-start' | 'convert';
@@ -37,6 +38,8 @@ export interface PrepareWorktreeParams {
   userId: string;
   threadId: string;
   flow: WorktreeFlow;
+  /** The thread's project, recorded on its activity. */
+  projectId?: string;
 }
 
 type SetupResult = Awaited<ReturnType<typeof setupWorktree>>;
@@ -53,6 +56,36 @@ const MAX_ERROR_CHARS = 500;
 export async function prepareWorktree(
   params: PrepareWorktreeParams,
 ): Promise<Result<string, DomainError>> {
+  // Tracked as an activity (track-background-activities): a failed postCreate
+  // command fails the activity, though the thread still gets its worktree.
+  let setupErrors: string[] = [];
+  return trackActivity(
+    {
+      kind: 'worktree.setup',
+      userId: params.userId,
+      projectId: params.projectId,
+      threadId: params.threadId,
+      title: `Set up worktree ${params.branchName}`,
+      input: { branch: params.branchName, baseBranch: params.baseBranch },
+    },
+    (activity) =>
+      runPreparation(
+        params,
+        (label) => activity.step(label),
+        (errors) => (setupErrors = errors),
+      ),
+    {
+      failureOf: () =>
+        setupErrors.length > 0 ? `Setup failed: ${setupErrors.join('; ').slice(0, 2000)}` : null,
+    },
+  );
+}
+
+async function runPreparation(
+  params: PrepareWorktreeParams,
+  onStep: (label: string) => void,
+  onSetupErrors: (errors: string[]) => void,
+): Promise<Result<string, DomainError>> {
   const { projectPath, branchName, baseBranch, userId, threadId, flow } = params;
   const root = startSpan('worktree.prepare', {
     attributes: {
@@ -66,6 +99,7 @@ export async function prepareWorktree(
   const onProgress: SetupProgressFn = (step, label, status, error) => {
     steps.record(step, label, status, error);
     emitToUser(step, label, status, error);
+    if (status === 'running') onStep(label);
   };
 
   let outcome: 'ok' | 'create_failed' | 'error' = 'error';
@@ -82,6 +116,7 @@ export async function prepareWorktree(
       setupWorktree(projectPath, worktreePath, onProgress),
     );
     root.attributes['post_create.errors'] = setup.isOk() ? setup.value.postCreateErrors.length : 0;
+    onSetupErrors(setup.isOk() ? setup.value.postCreateErrors.map(String) : []);
     logSetupProblems(threadId, flow, setup);
     outcome = 'ok';
     return ok(worktreePath);

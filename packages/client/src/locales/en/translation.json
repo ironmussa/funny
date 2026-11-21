@@ -1625,7 +1625,8 @@
     "automationTriggerFailed": "Couldn't start the automation run.",
     "commentDeleteFailed": "Couldn't delete the comment.",
     "approvalRespondFailed": "Couldn't send your answer. The approval is still waiting.",
-    "projectUpdateFailed": "Couldn't update the project. Your change was undone."
+    "projectUpdateFailed": "Couldn't update the project. Your change was undone.",
+    "activityDismissFailed": "Couldn't remove it."
   },
   "agentResources": {
     "subtitle": "Skills, slash commands, and MCP servers scoped to each provider.",
@@ -1807,5 +1808,19 @@
       "empty": "A secret needs a value.",
       "too-large": "A secret value has at most 32 KiB."
     }
+  },
+  "activity": {
+    "title": "Activity",
+    "tabActivity": "Activity",
+    "tabJobs": "Jobs",
+    "tabWatchers": "Watchers",
+    "empty": "No activity yet.",
+    "interrupted": "Interrupted: the runner stopped before it finished.",
+    "runnerOffline": "Runner offline",
+    "retry": "Retry",
+    "dismiss": "Dismiss",
+    "clearFinished": "Clear finished",
+    "failedToast": "{{title}} failed",
+    "openPanel": "View"
   }
 }

@@ -16,6 +16,7 @@ const SESSION_SOURCES = new Set([
   'agent-templates',
   'jobs',
   'watchers',
+  'activities',
   'automation-inbox',
   'runner-providers',
   'sandbox-connections',

@@ -149,6 +149,12 @@ describe('GrpcOperationsAdapter mapping', () => {
       'data:create_permission_rule': { kind: 'createPermissionRule', value: P },
       'data:find_permission_rule': { kind: 'findPermissionRule', value: P },
       'data:list_permission_rules': { kind: 'listPermissionRules', value: P },
+      'data:activity_start': { kind: 'activityStart', value: { activity: P } },
+      'data:activity_update': {
+        kind: 'activityUpdate',
+        value: { activityId: 'i1', patch: { x: 1 } },
+      },
+      'data:activity_reconcile': { kind: 'activityReconcile', value: { liveActivityIds: [] } },
     };
     expect(Object.keys(expected).sort()).toEqual([...RUNNER_OPERATION_EVENT_TYPES].sort());
     for (const eventType of RUNNER_OPERATION_EVENT_TYPES) {

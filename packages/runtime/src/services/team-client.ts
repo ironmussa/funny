@@ -34,6 +34,7 @@ import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { clearRunnerKeys, configureRunnerKeys } from '../lib/runner-keys.js';
 import { resolveProviderAvailability } from '../utils/provider-detection.js';
+import { reconcileActivities } from './activity-tracker.js';
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 import { GrpcTeamTransport, type GrpcTerminalCommand } from './grpc-team-transport.js';
 import { configureRemoteDataTransport } from './remote-data-channel.js';
@@ -334,6 +335,9 @@ async function connectGrpc(endpoint: string): Promise<void> {
         namespace: 'runner',
         runnerId: state.runnerId,
       });
+      // The server interrupts this runner's activities that are not listed
+      // (track-background-activities, design D4).
+      void reconcileActivities();
     },
     onDisconnected: (error) => {
       log.warn('Runner gRPC session disconnected', {

@@ -447,6 +447,35 @@ export const jobs = sqliteTable('jobs', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// fallow-ignore-start code-duplication -- every table is declared once per dialect (SQLite and PostgreSQL)
+export const activities = sqliteTable(
+  'activities',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    runnerId: text('runner_id'),
+    kind: text('kind').notNull(),
+    projectId: text('project_id'),
+    threadId: text('thread_id'),
+    title: text('title').notNull(),
+    status: text('status').notNull().default('running'),
+    step: text('step'),
+    error: text('error'),
+    // JSON of the kind's input (shared/src/activities/kinds.ts).
+    input: text('input').notNull().default('{}'),
+    // JSON `ActivityResultRef`.
+    resultRef: text('result_ref'),
+    startedAt: text('started_at').notNull(),
+    endedAt: text('ended_at'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_activities_user_started').on(table.userId, table.startedAt),
+    index('idx_activities_runner_status').on(table.runnerId, table.status),
+  ],
+);
+// fallow-ignore-end code-duplication
+
 export const userProfiles = sqliteTable('user_profiles', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().unique(),

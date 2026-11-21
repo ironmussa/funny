@@ -44,9 +44,13 @@ export const RUNNER_GRPC_WS_MAX_BUFFERED_BYTES = 16 * 1024 * 1024;
  * the runner owner's browser sessions, never persisted). Both ends enforce it.
  * `clone:progress` belongs to no thread: as a thread-scoped event the server
  * refused it (no thread `clone:<id>`), so the clone view never got progress.
+ * `activity:progress` is an activity's transient percentage
+ * (track-background-activities); the rows themselves go through the data channel.
  */
 export function isRunnerUserEventType(type: string): boolean {
-  return type.startsWith('browser-session:') || type === 'clone:progress';
+  return (
+    type.startsWith('browser-session:') || type === 'clone:progress' || type === 'activity:progress'
+  );
 }
 
 /**

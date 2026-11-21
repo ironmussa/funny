@@ -684,6 +684,27 @@ pub struct JobDeleteByThread {
     #[prost(string, tag="1")]
     pub thread_id: ::prost::alloc::string::String,
 }
+/// Background activities (track-background-activities). The server takes the
+/// user and runner from the session, never from the payload.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ActivityStart {
+    #[prost(message, optional, tag="1")]
+    pub activity: ::core::option::Option<::prost_types::Struct>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ActivityUpdate {
+    #[prost(string, tag="1")]
+    pub activity_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="2")]
+    pub patch: ::core::option::Option<::prost_types::Struct>,
+}
+/// The ids the runner is still running; its other `running` activities become
+/// `interrupted`. Sent on every (re)connect.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ActivityReconcile {
+    #[prost(string, repeated, tag="1")]
+    pub live_activity_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct CreatePermissionRule {
     #[prost(string, tag="1")]
@@ -715,7 +736,7 @@ pub struct OperationsRequest {
     pub session: ::core::option::Option<SessionContext>,
     #[prost(message, optional, tag="2")]
     pub metadata: ::core::option::Option<RequestMetadata>,
-    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86")]
+    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89")]
     pub operation: ::core::option::Option<operations_request::Operation>,
 }
 /// Nested message and enum types in `OperationsRequest`.
@@ -850,6 +871,12 @@ pub mod operations_request {
         GetGithubAppToken(super::GetGithubAppToken),
         #[prost(message, tag="86")]
         GetProjectSecrets(super::GetProjectSecrets),
+        #[prost(message, tag="87")]
+        ActivityStart(super::ActivityStart),
+        #[prost(message, tag="88")]
+        ActivityUpdate(super::ActivityUpdate),
+        #[prost(message, tag="89")]
+        ActivityReconcile(super::ActivityReconcile),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]

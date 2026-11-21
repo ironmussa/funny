@@ -10,6 +10,7 @@
  * (`scripts/fitness/check-trpc-api.ts`).
  */
 
+import { activitiesRouter } from './routers/activities.js';
 import { agentTemplatesRouter } from './routers/agent-templates.js';
 import { automationsRouter } from './routers/automations.js';
 import { jobsRouter, watchersRouter } from './routers/background.js';
@@ -36,6 +37,7 @@ export const appRouter = router({
   agentTemplates: agentTemplatesRouter,
   watchers: watchersRouter,
   jobs: jobsRouter,
+  activities: activitiesRouter,
   designs: designsRouter,
   analytics: analyticsRouter,
   push: pushRouter,
@@ -61,6 +63,7 @@ export {
 } from './failure.js';
 export type { ApiFailure } from './failure.js';
 export type {
+  ActivitiesPort,
   AgentTemplatesPort,
   AnalyticsPort,
   ApiCaller,

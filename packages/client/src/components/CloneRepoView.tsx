@@ -48,9 +48,35 @@ type ViewState =
 
 interface CloneRepoViewProps {
   onCloningChange?: (cloning: boolean) => void;
+  /** Values of an earlier clone to retry: the form opens filled with them. */
+  initialValues?: { cloneUrl: string; destinationPath: string; name?: string };
 }
 
-export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
+/** The repository a retried clone names, from its clone URL. */
+function repoFromCloneUrl(cloneUrl: string, name?: string): GitHubRepo {
+  const path = cloneUrl
+    .replace(/\.git$/, '')
+    .replace(/^[a-z]+:\/\/[^/]+\//i, '')
+    .replace(/^[^@]+@[^:]+:/, '');
+  const fullName = path || name || cloneUrl;
+  const [owner = '', repoName = fullName] = fullName.split('/');
+  return {
+    id: 0,
+    full_name: fullName,
+    name: repoName,
+    description: null,
+    private: false,
+    html_url: cloneUrl.replace(/\.git$/, ''),
+    clone_url: cloneUrl,
+    language: null,
+    updated_at: '',
+    stargazers_count: 0,
+    default_branch: '',
+    owner: { login: owner, avatar_url: '' },
+  };
+}
+
+export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewProps = {}) {
   const { t } = useTranslation();
   const now = useMinuteTick();
   const navigate = useNavigate();
@@ -93,9 +119,15 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   const pageRef = useRef(1);
 
   // Clone config state
-  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
-  const [destinationPath, setDestinationPath] = useState('');
-  const [projectName, setProjectName] = useState('');
+  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(() =>
+    initialValues ? repoFromCloneUrl(initialValues.cloneUrl, initialValues.name) : null,
+  );
+  const [destinationPath, setDestinationPath] = useState(initialValues?.destinationPath ?? '');
+  const [projectName, setProjectName] = useState(
+    () =>
+      initialValues?.name ?? (initialValues ? repoFromCloneUrl(initialValues.cloneUrl).name : ''),
+  );
+  const retryingRef = useRef(!!initialValues);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [_isCloning, setIsCloning] = useState(false);
 
@@ -162,7 +194,9 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
       if (result.value.connected) {
         setTokenSource(result.value.source ?? 'profile');
         await loadGhUser();
-        setView('repos');
+        // A retried clone goes straight to its filled form.
+        setView(retryingRef.current ? 'clone-config' : 'repos');
+        retryingRef.current = false;
       } else {
         setTokenSource(null);
         setView('connect');

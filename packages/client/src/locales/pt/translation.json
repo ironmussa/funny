@@ -1584,7 +1584,8 @@
     "automationTriggerFailed": "Não foi possível iniciar a execução da automação.",
     "commentDeleteFailed": "Não foi possível excluir o comentário.",
     "approvalRespondFailed": "Não foi possível enviar sua resposta. A aprovação continua pendente.",
-    "projectUpdateFailed": "Não foi possível atualizar o projeto. Sua alteração foi desfeita."
+    "projectUpdateFailed": "Não foi possível atualizar o projeto. Sua alteração foi desfeita.",
+    "activityDismissFailed": "Não foi possível remover."
   },
   "agentResources": {
     "subtitle": "Skills, comandos e servidores MCP por provedor.",
@@ -1766,5 +1767,19 @@
       "empty": "Um segredo precisa de um valor.",
       "too-large": "O valor de um segredo tem no máximo 32 KiB."
     }
+  },
+  "activity": {
+    "title": "Atividade",
+    "tabActivity": "Atividade",
+    "tabJobs": "Jobs",
+    "tabWatchers": "Watchers",
+    "empty": "Ainda não há atividade.",
+    "interrupted": "Interrompida: o runner parou antes de terminar.",
+    "runnerOffline": "Runner offline",
+    "retry": "Tentar novamente",
+    "dismiss": "Descartar",
+    "clearFinished": "Limpar concluídas",
+    "failedToast": "Falhou: {{title}}",
+    "openPanel": "Ver"
   }
 }

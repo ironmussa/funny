@@ -772,35 +772,18 @@ describe('MemoizedMessageList virtualization', () => {
     }
   });
 
-  test('does not compensate first row measurements during manual scroll', async () => {
-    render(<Harness messages={makeMessages(4)} />);
+  test('keeps TanStack scroll compensation for rows measured above the viewport', async () => {
+    const { getByTestId } = render(<Harness messages={makeMessages(4)} />);
 
     await waitFor(() =>
-      expect(virtualizerMockState.instance?.shouldAdjustScrollPositionOnItemSizeChange).toEqual(
-        expect.any(Function),
-      ),
+      expect(getByTestId('viewport').querySelector('[data-item-key="m0"]')).toBeTruthy(),
     );
 
-    const virtualizer = virtualizerMockState.instance;
-    const item = {
-      key: 'm0',
-      index: 0,
-      start: 120,
-      end: 220,
-      size: 100,
-      lane: 0,
-    };
-
-    virtualizer.isScrolling = true;
-    virtualizer.scrollOffset = 240;
-    virtualizer.itemSizeCache.clear();
-    expect(virtualizer.shouldAdjustScrollPositionOnItemSizeChange(item, 80, virtualizer)).toBe(
-      false,
-    );
-
-    virtualizer.isScrolling = false;
-    expect(virtualizer.shouldAdjustScrollPositionOnItemSizeChange(item, 80, virtualizer)).toBe(
-      true,
+    // TanStack's default compensates a row's first measurement above the
+    // viewport, also during a manual scroll. Overriding it to skip that case
+    // made the view jump to older messages when scrolling up past a tall row.
+    expect(virtualizerMockState.instance?.shouldAdjustScrollPositionOnItemSizeChange).toBe(
+      undefined,
     );
   });
 

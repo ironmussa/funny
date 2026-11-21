@@ -7,9 +7,11 @@ import {
   useLayoutEffect,
   useCallback,
   useMemo,
+  useReducer,
   memo,
   useImperativeHandle,
 } from 'react';
+import { flushSync } from 'react-dom';
 
 import { findNearestPrecedingUserMessageItem } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
@@ -20,19 +22,20 @@ import {
   useListFontConfig,
   useListScrollMargin,
   usePretextWarmup,
+  useSyncRenderOnScrollCorrection,
 } from './MemoizedMessageList.hooks';
 import {
   buildFallbackVirtualItems,
+  createRowEstimateCache,
   estimateItemHeight,
-  estimateVirtualRowHeight,
   getRowBottomFromRenderedOffset,
   getMeasuredLastRowBottom,
   getObservedBlockSize,
   getVirtualContentHeight,
   INITIAL_FALLBACK_RENDER_COUNT,
-  shouldAdjustScrollPositionOnItemSizeChange,
   VIRTUAL_OVERSCAN,
   VIRTUAL_ROW_GAP_PX,
+  type RowEstimateCache,
 } from './MemoizedMessageList.measurement';
 import { UserMessageRenderer, VirtualRowContent } from './MemoizedMessageList.renderers';
 import type {
@@ -199,6 +202,11 @@ export const MemoizedMessageList = memo(
       heightCacheRef.current = new Map();
     }
     const heightCache = heightCacheRef.current;
+    const rowEstimateCacheRef = useRef<RowEstimateCache | null>(null);
+    if (rowEstimateCacheRef.current === null) {
+      rowEstimateCacheRef.current = createRowEstimateCache();
+    }
+    const rowEstimateCache = rowEstimateCacheRef.current;
     const {
       measuredRowBottomCache,
       measuredContentBottom,
@@ -220,8 +228,6 @@ export const MemoizedMessageList = memo(
     const prevRowBottomKeyRef = useRef(rowBottomKey);
     // Signature seen by the last measurement pass; null until the first one.
     const prevRowsSignatureRef = useRef<string | null>(null);
-
-    usePretextWarmup(groupedItems, fontConfig);
 
     const virtualRows = useMemo(
       () => buildVirtualRows(groupedItems, sessionChanges),
@@ -250,6 +256,12 @@ export const MemoizedMessageList = memo(
       [groupedItems, virtualRows],
     );
 
+    const scrollTopAtLastScrollEventRef = useRef<number | null>(null);
+    const renderOnScrollCorrection = useSyncRenderOnScrollCorrection(
+      scrollRef,
+      scrollTopAtLastScrollEventRef,
+    );
+
     const rowVirtualizer = useVirtualizer({
       count: virtualRows.length,
       getScrollElement: () => scrollRef.current,
@@ -258,7 +270,7 @@ export const MemoizedMessageList = memo(
         const row = virtualRows[index];
         return (
           heightCache.get(row?.key ?? '') ??
-          estimateVirtualRowHeight(row, containerWidth, fontConfig)
+          rowEstimateCache.estimate(row, containerWidth, fontConfig, layoutKey)
         );
       },
       gap: VIRTUAL_ROW_GAP_PX,
@@ -282,9 +294,13 @@ export const MemoizedMessageList = memo(
       // Scroll events re-render through React's scheduler instead of a
       // synchronous flushSync, so mounting rows never blocks the scroll handler.
       useFlushSync: false,
+      onChange: renderOnScrollCorrection,
     });
-    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange =
-      shouldAdjustScrollPositionOnItemSizeChange;
+    // No `shouldAdjustScrollPositionOnItemSizeChange` override: TanStack's
+    // default compensates the first measurement of a row above the viewport,
+    // which is what keeps scrolling up stable. Skipping it while the user
+    // scrolls made a tall row (a diff, a long error list) push the content
+    // down by its estimate error, so the view jumped to older messages.
 
     const resetAndMeasureMountedRows = useCallback(() => {
       const mountedRows = itemContainerRef.current?.querySelectorAll<HTMLElement>(
@@ -477,6 +493,18 @@ export const MemoizedMessageList = memo(
       [leadingStickySpacerHeight, rowKeyIndexMap, rowVirtualizer, scrollRef],
     );
 
+    // Text estimates change once pretext has prepared the texts. Apply them in
+    // one commit and keep the row at the top of the viewport where it is. A
+    // render is enough: the virtualizer reads `estimateSize` again for every
+    // unmeasured row whenever `getItemKey` is a new function.
+    const [, renderWithNewEstimates] = useReducer((count: number) => count + 1, 0);
+    usePretextWarmup(groupedItems, fontConfig, () => {
+      const anchor = captureVisibleAnchor();
+      rowEstimateCache.clear();
+      flushSync(renderWithNewEstimates);
+      if (anchor) restoreScrollAnchor(anchor);
+    });
+
     const stickyScrollOffset =
       rowVirtualizer.scrollOffset ?? scrollRef.current?.scrollTop ?? listScrollMargin;
     // A response can grow beyond its cached virtual size before the
@@ -622,6 +650,7 @@ export const MemoizedMessageList = memo(
     });
 
     const handleViewportScroll = useEffectEvent(() => {
+      scrollTopAtLastScrollEventRef.current = scrollRef.current?.scrollTop ?? null;
       applyStickyPush();
       updateMountedSectionVisibility();
     });
@@ -637,6 +666,7 @@ export const MemoizedMessageList = memo(
       if (subscribedViewportRef.current === viewport) return;
       subscribedViewportRef.current?.removeEventListener('scroll', handleViewportScroll);
       subscribedViewportRef.current = viewport;
+      scrollTopAtLastScrollEventRef.current = viewport?.scrollTop ?? null;
       viewport?.addEventListener('scroll', handleViewportScroll, { passive: true });
 
       return () => {

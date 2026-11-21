@@ -1,5 +1,5 @@
 import { AUTO_RESUME_MESSAGE_AUTHOR } from '@funny/shared';
-import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
+import type { VirtualItem } from '@tanstack/react-virtual';
 
 import { getCachedPrepared, isPretextReady, layoutSync } from '@/hooks/use-pretext';
 import { analyzeMarkdown } from '@/lib/markdown-to-plaintext';
@@ -150,6 +150,54 @@ export function estimateVirtualRowHeight(
   return estimateItemHeight(row.item, containerWidth, fonts);
 }
 
+/** What an estimate was computed from; a different value means the row needs a new one. */
+function getRowEstimateInput(row: VirtualRow | undefined): number {
+  if (row?.type !== 'item') return 0;
+  if (row.item.type === 'message') return row.item.msg.content?.length ?? 0;
+  if (row.item.type === 'toolcall-run') return row.item.items.length;
+  return 0;
+}
+
+export interface RowEstimateCache {
+  estimate: (
+    row: VirtualRow | undefined,
+    containerWidth: number,
+    fonts: FontConfig,
+    layoutKey: string,
+  ) => number;
+  clear: () => void;
+}
+
+/**
+ * Keeps the estimated height of an unmeasured row the same from one render to
+ * the next. The virtualizer asks for every unmeasured row's estimate on each
+ * render, and a text estimate changes once pretext has prepared that text. A
+ * row above the viewport that changed its estimate moved everything below it,
+ * with no scroll correction: the view jumped on the first scroll after the
+ * thread opened. An estimate now changes only with the layout, with the row's
+ * content, or after `clear()`, whose caller keeps the scroll position.
+ */
+export function createRowEstimateCache(): RowEstimateCache {
+  const entries = new Map<string, { layoutKey: string; input: number; size: number }>();
+
+  return {
+    estimate(row, containerWidth, fonts, layoutKey) {
+      if (!row) return estimateVirtualRowHeight(row, containerWidth, fonts);
+
+      const input = getRowEstimateInput(row);
+      const cached = entries.get(row.key);
+      if (cached && cached.layoutKey === layoutKey && cached.input === input) return cached.size;
+
+      const size = estimateVirtualRowHeight(row, containerWidth, fonts);
+      entries.set(row.key, { layoutKey, input, size });
+      return size;
+    },
+    clear() {
+      entries.clear();
+    },
+  };
+}
+
 export function getObservedBlockSize(entry: ResizeObserverEntry | undefined) {
   const size = entry?.borderBoxSize as
     | ResizeObserverSize
@@ -237,24 +285,4 @@ export function getVirtualContentHeight({
         measuredContentBottom,
         fallbackContentHeight + leadingStickySpacerHeight,
       );
-}
-
-export function shouldAdjustScrollPositionOnItemSizeChange<
-  TScrollElement extends Element | Window,
-  TItemElement extends Element,
->(item: VirtualItem, _delta: number, instance: Virtualizer<TScrollElement, TItemElement>) {
-  // TanStack keeps programmatic scroll state on the instance. Preserve those
-  // adjustments for scrollToIndex/scrollToOffset, but avoid first-measurement
-  // scrollTop writes while the user is actively scrolling by hand.
-  const isProgrammaticScroll = Boolean(
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    (instance as unknown as { scrollState?: unknown }).scrollState,
-  );
-  const isFirstMeasurement = !instance.itemSizeCache.has(item.key);
-
-  if (isFirstMeasurement && instance.isScrolling && !isProgrammaticScroll) {
-    return false;
-  }
-
-  return item.start < (instance.scrollOffset ?? 0);
 }

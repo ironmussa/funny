@@ -76,7 +76,7 @@ function ancestorsOf(id: string, depsOf: Map<string, string[]>): Set<string> {
  * Two agent steps neither of which depends on the other (directly or not)
  * could run at once and both drive the run's one thread: refused, naming both.
  */
-export function agentStepIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
+function agentStepIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
   const depsOf = new Map(workflow.nodes.map((n) => [n.id, n.depends_on]));
   const agents = workflow.nodes
     .map((node, index) => ({ node, index, ancestors: ancestorsOf(node.id, depsOf) }))

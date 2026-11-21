@@ -47,11 +47,17 @@ const JOIN_LABEL = {
   one_success: 'one success',
 } as const;
 
+const STATUS_BORDER: Partial<Record<WorkflowNodeRunState['status'], string>> = {
+  running: 'border-status-info',
+  waiting_approval: 'border-status-warning',
+  waiting_slot: 'border-status-warning border-dashed',
+  completed: 'border-status-success',
+  failed: 'border-status-error',
+};
+
 export function WorkflowNodeView({ id, data }: NodeProps<WorkflowNode>) {
   const status = data.runStatus;
   const StatusIcon = (status && STATUS_ICON[status]) || Circle;
-  const join =
-    data.triggerRule && data.triggerRule !== 'all_success' ? JOIN_LABEL[data.triggerRule] : null;
 
   return (
     <div
@@ -61,11 +67,7 @@ export function WorkflowNodeView({ id, data }: NodeProps<WorkflowNode>) {
         'border-border bg-background min-w-52 rounded-md border p-3 shadow-sm',
         data.dimmed && 'opacity-35',
         (data.loops?.length ?? 0) > 0 && 'ring-status-info/30 ring-2 ring-offset-1',
-        status === 'running' && 'border-status-info',
-        (status === 'waiting_approval' || status === 'waiting_slot') && 'border-status-warning',
-        status === 'waiting_slot' && 'border-dashed',
-        status === 'completed' && 'border-status-success',
-        status === 'failed' && 'border-status-error',
+        status && STATUS_BORDER[status],
       )}
     >
       <Handle type="target" position={Position.Left} />
@@ -84,26 +86,36 @@ export function WorkflowNodeView({ id, data }: NodeProps<WorkflowNode>) {
           Waiting for a slot{data.concurrency ? ` of ${data.concurrency.group}` : ''}
         </div>
       ) : null}
-      {join || data.concurrency || data.loops?.length ? (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {data.loops?.map((loop) => (
-            <Badge key={loop} testId={`workflow-node-loop-${id}-${loop}`} icon={Repeat}>
-              loop {loop}
-            </Badge>
-          ))}
-          {join ? (
-            <Badge testId={`workflow-node-join-${id}`} icon={Merge}>
-              {join}
-            </Badge>
-          ) : null}
-          {data.concurrency ? (
-            <Badge testId={`workflow-node-group-${id}`} icon={Users}>
-              {data.concurrency.group} ≤ {data.concurrency.limit}
-            </Badge>
-          ) : null}
-        </div>
-      ) : null}
+      <NodeBadges id={id} data={data} />
       <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+/** The node's loops, a join rule other than the default, and its concurrency group. */
+function NodeBadges({ id, data }: { id: string; data: WorkflowNodeData }) {
+  const join =
+    data.triggerRule && data.triggerRule !== 'all_success' ? JOIN_LABEL[data.triggerRule] : null;
+  const loops = data.loops ?? [];
+  if (!join && !data.concurrency && loops.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {loops.map((loop) => (
+        <Badge key={loop} testId={`workflow-node-loop-${id}-${loop}`} icon={Repeat}>
+          loop {loop}
+        </Badge>
+      ))}
+      {join ? (
+        <Badge testId={`workflow-node-join-${id}`} icon={Merge}>
+          {join}
+        </Badge>
+      ) : null}
+      {data.concurrency ? (
+        <Badge testId={`workflow-node-group-${id}`} icon={Users}>
+          {data.concurrency.group} ≤ {data.concurrency.limit}
+        </Badge>
+      ) : null}
     </div>
   );
 }

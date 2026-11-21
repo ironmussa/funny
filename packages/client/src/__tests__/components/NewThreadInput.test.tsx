@@ -396,17 +396,19 @@ describe('NewThreadInput', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('shows worktree branch preview when worktree mode is enabled', async () => {
+  test('shows the worktree branch preview as a powerline segment in worktree mode', async () => {
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
     await flushAsyncUpdates();
 
-    fireEvent.click(screen.getByTestId('mock-worktree-toggle'));
     fireEvent.click(screen.getByTestId('mock-content-change'));
+    // Local mode: no preview.
+    expect(screen.queryByTestId('worktree-preview')).not.toBeInTheDocument();
 
-    expect(screen.getByTestId('worktree-preview')).toBeInTheDocument();
-    expect(screen.getByTestId('worktree-preview')).toHaveTextContent(
-      'my-project/build-feature-x-xxxxxx',
-    );
+    fireEvent.click(screen.getByTestId('mock-worktree-toggle'));
+
+    const preview = screen.getByTestId('worktree-preview');
+    expect(screen.getByTestId('new-thread-powerline')).toContainElement(preview);
+    expect(preview).toHaveTextContent('my-project/build-feature-x-xxxxxx');
   });
 
   test('reloads available MCP servers only when the selected provider changes', async () => {

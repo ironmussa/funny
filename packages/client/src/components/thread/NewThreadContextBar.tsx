@@ -1,6 +1,6 @@
 import type { Project } from '@funny/shared';
 import { SiGithub } from '@icons-pack/react-simple-icons';
-import { FolderOpen, GitBranch, Globe, Loader2 } from 'lucide-react';
+import { FolderOpen, GitBranch, GitFork, Globe, Loader2 } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,11 @@ import { BranchPicker } from '../SearchablePicker';
 interface NewThreadContextBarProps {
   /** Project the new thread targets. When omitted, only the branch picker (if any) renders. */
   projectId?: string;
+  /**
+   * Name the new worktree branch will get (preview, e.g. `proj/title-xxxxxx`).
+   * Shown as the last powerline segment; omit it outside worktree mode.
+   */
+  worktreeBranch?: string | null;
 }
 
 /**
@@ -30,7 +35,7 @@ interface NewThreadContextBarProps {
  * Used by both the main compose screen (`NewThreadInput`) and the kanban
  * "Add thread" dialog (`SlideUpPrompt`) so the bar stays consistent.
  */
-export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
+export function NewThreadContextBar({ projectId, worktreeBranch }: NewThreadContextBarProps) {
   const projects = useProjects();
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
@@ -75,6 +80,7 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
         loading={loading}
         branchCount={branches.length}
         selectedBranch={selectedBranch}
+        worktreeBranch={worktreeBranch}
         renderBranchTrigger={(trigger) => (
           <BranchPicker
             trigger={trigger}
@@ -101,6 +107,7 @@ function NewThreadPowerline({
   loading,
   branchCount,
   selectedBranch,
+  worktreeBranch,
   renderBranchTrigger,
 }: {
   project?: Pick<Project, 'name' | 'color' | 'path'>;
@@ -109,6 +116,7 @@ function NewThreadPowerline({
   loading: boolean;
   branchCount: number;
   selectedBranch: string;
+  worktreeBranch?: string | null;
   renderBranchTrigger: (trigger: ReactElement) => ReactNode;
 }) {
   const { t } = useTranslation();
@@ -137,6 +145,15 @@ function NewThreadPowerline({
             renderBranchTrigger,
           ),
     );
+  }
+  if (worktreeBranch) {
+    segments.push({
+      key: 'worktree-branch',
+      icon: GitFork,
+      label: worktreeBranch,
+      color: darkenHex(baseColor, 0.25),
+      testId: 'worktree-preview',
+    });
   }
 
   return (

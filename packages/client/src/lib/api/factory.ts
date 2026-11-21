@@ -10,7 +10,6 @@ import type {
 import { trpc, trpcCall } from './_trpc';
 
 export type {
-  FactoryFlowDefinition,
   FactoryMode,
   FactoryQueueClearResult,
   FactoryRun,

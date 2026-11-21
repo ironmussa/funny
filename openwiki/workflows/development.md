@@ -27,7 +27,7 @@ Production start: `bun start` (runs `bin/funny.js` against built `dist/` output)
 
 ## TypeScript
 
-Workspace typecheck and client build scripts use Bun 1.4.4 or newer. Type checks, including `typecheck:proofs`, use `bun check`; client builds run it before Vite. TypeScript remains a development dependency of `evflow` for its `tsserverlibrary` editor plugin, and the runtime retains the TypeScript 5 alias required by its ESLint tooling. Bun 1.4.4 reports seven unused `@ts-expect-error` directives in the proof tests; these assertions remain enabled and fail until the checker supports the expected constraints. The canonical repository check is:
+Workspace typecheck and client build scripts use Bun 1.4.4 or newer. Type checks use `bun check`, and client builds run it before Vite. The exception is `typecheck:proofs`, which stays on `tsc` and checks the proof type tests and then the whole server. TypeScript remains a development dependency of `evflow` for its `tsserverlibrary` editor plugin, and the runtime retains the TypeScript 5 alias required by its ESLint tooling. `bun check` (1.4.4 to 1.4.6 canary) reports seven unused `@ts-expect-error` directives in the proof tests: it lets a name from one generic callback stand for a name from another call, so a proof used outside its scope would type-check. That is why `typecheck:proofs` runs `tsc`, on the server code too. The canonical repository check is:
 
 ```bash
 bun run typecheck

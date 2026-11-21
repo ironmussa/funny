@@ -237,15 +237,17 @@ A project keeps named secret values on the server and hands them to its agents a
 
 ## TypeScript
 
-**Always use `bun` for type checking instead of `tsc`.** This project uses Bun as its runtime and Bun includes a built-in TypeScript type checker. Do not install or use `tsc` / `typescript` CLI directly.
+**Use `bun` for type checking, not `tsc`.** Bun includes a TypeScript type checker (`bun check`).
 
 ```bash
-# Type check a specific package
-cd packages/runtime && bun --check src/index.ts
+# The whole repository (baseline diff + remote-connector + proofs)
+bun run typecheck
 
-# Or use bunx to check files
-bunx tsc --noEmit
+# One project
+bun check -p packages/runtime/tsconfig.json
 ```
+
+**One exception: the server's gdp-ts proofs stay on `tsc`** (`bun run typecheck:proofs`, which checks `packages/server/type-tests/` and then the whole server). `bun check` does not keep a name from one generic callback (`withRunnerFor`, `withForkInputs`, …) distinct from a name of another call, so using a proof outside its scope type-checks under it. Do not move `typecheck:proofs` to `bun check` while `bun check -p packages/server/tsconfig.proofs.json` reports unused `@ts-expect-error` directives.
 
 ## Key Patterns
 
@@ -344,11 +346,11 @@ To verify your changes compile correctly, use build or type-check commands inste
 # Check that the client builds without errors
 bun run build
 
-# Type-check a specific file
-bun --check packages/runtime/src/index.ts
+# Type-check one project
+bun check -p packages/runtime/tsconfig.json
 
 # Type-check the whole project
-bunx tsc --noEmit
+bun run typecheck
 ```
 
 ## UI Rules

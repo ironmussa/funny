@@ -126,7 +126,7 @@
     "typecheck:refresh": "bun scripts/fitness/check-typecheck.ts --refresh",
     "doctor": "react-doctor --project packages/client",
     "lint:proofs": "bun scripts/fitness/check-proof-lint.ts",
-    "typecheck:proofs": "tsc -p packages/server/tsconfig.proofs.json --noEmit",
+    "typecheck:proofs": "tsc -p packages/server/tsconfig.proofs.json --noEmit && tsc -p packages/server/tsconfig.json --noEmit",
     "fitness:trpc-api": "bun scripts/fitness/check-trpc-api.ts --self-test",
     "factory": "bash scripts/factory.sh",
     "factory:start": "bun packages/orchestrator/src/bin/orchestrator.ts start",

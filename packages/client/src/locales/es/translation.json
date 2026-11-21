@@ -568,6 +568,7 @@
     "commitCount_one": "{{count}} commit",
     "commitCount_other": "{{count}} commits",
     "currentBranch": "{{ref}} (rama actual)",
+    "threadBranchMarker": "Este hilo trabaja en {{branch}}",
     "pullRequest": "PR #{{number}} ({{state}})",
     "pullRequestMerged": "PR #{{number}} mergeado — su código ya está en la rama base",
     "nodeAuthor": "Autor: {{author}}",

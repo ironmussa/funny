@@ -1,4 +1,4 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, initialsOf, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
-import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
+import { GraphRefChips, isThreadBranchRef } from '@/components/commit-graph/GraphRefChips';
 import {
   DEFAULT_GRAPH_BRANCH_SCOPE,
   HistoryFilters,
@@ -104,7 +104,11 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { shortTimeAgo } from '@/lib/thread-utils';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
+import {
+  useThreadProjectId,
+  useThreadSelector,
+  useThreadViewSelect,
+} from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('commit-graph');
@@ -197,6 +201,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const threadProjectId = useThreadProjectId();
   const lightThread = useThreadById(effectiveThreadId);
   const threadIsScratch = useThreadSelector((t) => t?.isScratch);
+  const threadBranchField = useThreadViewSelect(effectiveThreadId, (t) => t?.branch ?? null);
   const gitThread = effectiveThreadId
     ? {
         projectId: threadProjectId ?? lightThread?.projectId ?? '',
@@ -636,6 +641,19 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     [branchSummaries],
   );
 
+  // The branch the open thread works on: its own branch, or (a local thread
+  // with no recorded branch) the branch checked out where it runs.
+  const threadBranch = effectiveThreadId
+    ? threadBranchField || branchSummaries.find((b) => b.isCurrent)?.branch || null
+    : null;
+  useScrollToThreadBranch({
+    threadId: effectiveThreadId,
+    threadBranch,
+    entries: displayEntries,
+    visible: !!visible,
+    virtualizer,
+  });
+
   const { branchActionInProgress, pushBranch, pullCurrentBranch } = useBranchActions({
     hasGitContext,
     effectiveThreadId,
@@ -829,6 +847,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   unpulled={unpulled.has(entry.hash) || inferredUnpulled.has(entry.hash)}
                   connectToWip={!!wipStatus && virtualRow.index === 0}
                   searchQuery={searchQuery}
+                  threadBranch={threadBranch}
                   transform={virtualRow.start}
                   rowHeight={rowHeightFor(entry)}
                   onSelect={() => setSelectedHash(selectedHash === entry.hash ? null : entry.hash)}
@@ -873,6 +892,49 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       <RebaseEventDialog event={selectedRebaseEvent} onClose={() => setSelectedRebaseEvent(null)} />
     </div>
   );
+}
+
+/** Index of the row whose chips include the local branch `branch`, or -1. */
+export function findThreadBranchRowIndex(
+  entries: readonly Pick<GraphEntry, 'refs' | 'headBranch'>[],
+  branch: string | null,
+): number {
+  if (!branch) return -1;
+  return entries.findIndex((entry) =>
+    foldGraphRefs(entry.refs, entry.headBranch).some((ref) => isThreadBranchRef(ref, branch)),
+  );
+}
+
+/**
+ * Brings the open thread's branch tip into view once per thread (and again if
+ * its branch changes), so selecting a thread shows where it sits in the
+ * history. Later scrolling by the user is left alone.
+ */
+function useScrollToThreadBranch({
+  threadId,
+  threadBranch,
+  entries,
+  visible,
+  virtualizer,
+}: {
+  threadId: string | undefined;
+  threadBranch: string | null;
+  entries: readonly GraphEntry[];
+  visible: boolean;
+  virtualizer: Pick<Virtualizer<HTMLDivElement, Element>, 'scrollToIndex'>;
+}) {
+  const scrolledKeyRef = useRef<string | null>(null);
+  const index = useMemo(
+    () => findThreadBranchRowIndex(entries, threadBranch),
+    [entries, threadBranch],
+  );
+  useEffect(() => {
+    if (!visible || !threadId || !threadBranch || index < 0) return;
+    const key = `${threadId}::${threadBranch}`;
+    if (scrolledKeyRef.current === key) return;
+    scrolledKeyRef.current = key;
+    virtualizer.scrollToIndex(index, { align: 'center' });
+  }, [visible, threadId, threadBranch, index, virtualizer]);
 }
 
 function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: number): number {
@@ -1418,6 +1480,7 @@ function GraphCommitRow({
   unpulled,
   connectToWip,
   searchQuery,
+  threadBranch,
   transform,
   rowHeight,
   onSelect,
@@ -1452,6 +1515,8 @@ function GraphCommitRow({
   connectToWip: boolean;
   /** Active filter query — highlights matching substrings in the title & refs. */
   searchQuery: string;
+  /** Branch the open thread works on; its chip gets an arrow marker. */
+  threadBranch: string | null;
   transform: number;
   rowHeight: number;
   onSelect: () => void;
@@ -1750,6 +1815,7 @@ function GraphCommitRow({
                 actionInProgress={branchActionInProgress}
                 color={lanePastel}
                 searchQuery={searchQuery}
+                threadBranch={threadBranch}
                 onPushBranch={onPushBranch}
                 onPullCurrentBranch={onPullCurrentBranch}
               />

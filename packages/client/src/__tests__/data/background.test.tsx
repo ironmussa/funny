@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Job, Watcher } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { cancelJob, cancelWatcher } from '@/data/background/actions';
 import { useJobsById, useThreadJobsById } from '@/data/background/hooks';
@@ -13,12 +14,12 @@ import { seedBackgroundActivity } from '@/data/background/testing';
 import { buildJob, buildWatcher } from '../helpers/builders-lib';
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({
+const api = (() => ({
   listJobs: vi.fn(),
   cancelJob: vi.fn(),
   listWatchers: vi.fn(),
   cancelWatcher: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/jobs', () => ({
   jobsApi: { listJobs: api.listJobs, cancelJob: api.cancelJob },
 }));
@@ -26,7 +27,7 @@ vi.mock('@/lib/api/watchers', () => ({
   watchersApi: { listWatchers: api.listWatchers, cancelWatcher: api.cancelWatcher },
 }));
 
-const effects = vi.hoisted(() => ({ emit: vi.fn() }));
+const effects = (() => ({ emit: vi.fn() }))();
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));

@@ -1,3 +1,5 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 /**
  * Reopening the Issues / PRs tab cleared the list and showed the spinner until
  * GitHub answered again. The rows now stay while page 1 reloads; they are
@@ -6,7 +8,6 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { describe, expect, test, vi } from 'vitest';
 
 import { type FetchGitHubListPage, usePagedGitHubList } from '@/hooks/use-paged-github-list';
 

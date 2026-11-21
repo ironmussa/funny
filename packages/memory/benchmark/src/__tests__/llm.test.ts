@@ -1,15 +1,17 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
 import { createConfig, llmChat } from '../config.js';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => unstubAllGlobals());
 it('uses Chat Completions for localhost, preserving messages and authentication', async () => {
   const fetchMock = vi
     .fn()
     .mockResolvedValue(
       Response.json({ choices: [{ message: { content: 'answer' } }], usage: { total_tokens: 7 } }),
     );
-  vi.stubGlobal('fetch', fetchMock);
+  stubGlobal('fetch', fetchMock);
   const messages = [
     { role: 'system' as const, content: 'system' },
     { role: 'user' as const, content: 'question' },

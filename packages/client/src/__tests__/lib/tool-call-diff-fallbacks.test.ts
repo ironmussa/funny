@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { FileDiffSummary } from '@funny/shared';
-import { describe, expect, test } from 'vitest';
 
 import { buildToolCallDiffFallbacks } from '@/lib/tool-call-diff-fallbacks';
 

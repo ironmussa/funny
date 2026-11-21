@@ -1,9 +1,10 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { waitFor } from '@funny/test-kit';
 
 import type {
   ProjectSearchProvider,
@@ -71,7 +72,7 @@ describe('tgrep project search provider', () => {
     rmSync(join(root, 'before.txt'));
     writeFileSync(join(root, 'after.txt'), '');
     provider.refreshGitStatus();
-    await vi.waitFor(() => expect(provider.listFiles()._unsafeUnwrap()).toEqual(['after.txt']));
+    await waitFor(() => expect(provider.listFiles()._unsafeUnwrap()).toEqual(['after.txt']));
     expect(provider.version).toBeGreaterThan(version);
   });
 
@@ -98,7 +99,7 @@ describe('tgrep project search provider', () => {
     expect(failure._unsafeUnwrapErr().message).toBe('tgrep content search unavailable');
     expect(provider.health().scanState).toBe('failed');
     expect(provider.listFiles().isOk()).toBe(true);
-    expect(dispose).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledTimes(1);
     expect((await provider.searchText({ query: 'retry' })).isOk()).toBe(true);
     expect(factory).toHaveBeenCalledTimes(2);
   });
@@ -117,7 +118,7 @@ describe('tgrep project search provider', () => {
     await provider[action]();
     resolve(empty);
     expect((await pending).isErr()).toBe(true);
-    expect(dispose).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledTimes(1);
   });
 
   test('rejects blank queries and operations after disposal', async () => {

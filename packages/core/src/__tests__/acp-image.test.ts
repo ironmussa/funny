@@ -5,7 +5,7 @@
  * mixed/junk input so an upload pipeline glitch can't crash the prompt.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { toACPImageBlocks } from '../agents/acp-image.js';
 

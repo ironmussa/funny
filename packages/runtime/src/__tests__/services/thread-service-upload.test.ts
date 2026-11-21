@@ -1,12 +1,11 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   requireThreadCwd: vi.fn(),
-}));
+}))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

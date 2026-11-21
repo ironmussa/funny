@@ -1,6 +1,5 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 import { createServer, type Socket } from 'node:net';
-
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { tgrepRpc } from '../../services/tgrep-rpc.js';
 

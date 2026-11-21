@@ -1,10 +1,9 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi } from 'bun:test';
+
 import { createStore } from 'zustand/vanilla';
 
-import * as projectsRead from '@/data/projects/read';
 import { buildProject, seedProjects } from '@/data/projects/testing';
 import { setSourceMembers } from '@/data/threads/list-meta';
-import * as threadsRead from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
 
 /**
@@ -17,16 +16,16 @@ function createMockStore<T extends object>(initialState: T) {
   return createStore<T>()(() => ({ ...initialState }));
 }
 
-// We need a fresh module for each test to reset the internal refs.
-async function freshBridge() {
-  // Clear the cached module so we get fresh lazy refs
-  const modulePath = '@/stores/store-bridge';
-  vi.resetModules();
-  // Reuse the already-loaded data layer instead of re-importing TanStack DB
-  // on every reset: that import alone can exceed the test timeout in a full run.
-  vi.doMock('@/data/threads/read', () => threadsRead);
-  vi.doMock('@/data/projects/read', () => projectsRead);
-  return import(modulePath);
+// We need a fresh module for each test to reset the internal refs. bun has no
+// vi.resetModules(): a query string loads a new instance of store-bridge, which
+// still shares the already-loaded data layer (re-importing TanStack DB on every
+// test can exceed the test timeout in a full run).
+let freshCount = 0;
+async function freshBridge(): Promise<typeof import('@/stores/store-bridge')> {
+  freshCount += 1;
+  return (await import(
+    `@/stores/store-bridge?fresh=${freshCount}`
+  )) as typeof import('@/stores/store-bridge');
 }
 
 describe('store-bridge', () => {
@@ -132,7 +131,7 @@ describe('store-bridge', () => {
     test('selectProject sets selectedProjectId on project store', async () => {
       const bridge = await freshBridge();
 
-      const projectStore = createMockStore({
+      const projectStore = createMockStore<{ selectedProjectId: string | null }>({
         selectedProjectId: null,
       });
 

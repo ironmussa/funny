@@ -1,3 +1,5 @@
+import { afterAll, expect, test, vi } from 'bun:test';
+
 /**
  * A tool call is silent until its tool returns, and some run long (a
  * synchronous `funny_run_checks` takes up to 30 min). The listener disables
@@ -8,7 +10,6 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { afterAll, expect, test, vi } from 'vitest';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

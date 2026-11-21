@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 import { openScopeTerminal } from '@/lib/open-terminal-tab';
 import {

@@ -1,11 +1,13 @@
-import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi, afterEach } from 'bun:test';
+
+import { advanceTimersByTimeAsync, stubEnv, stubGlobal } from '@funny/test-kit';
 
 // Mock fetch globally before importing the store
 const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
+stubGlobal('fetch', mockFetch);
 
 // Mock import.meta.env
-vi.stubEnv('VITE_SERVER_PORT', '3001');
+stubEnv('VITE_SERVER_PORT', '3001');
 
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
@@ -15,7 +17,7 @@ async function openCircuit() {
   useCircuitBreakerStore.getState().recordFailure();
   useCircuitBreakerStore.getState().recordFailure();
   useCircuitBreakerStore.getState().recordFailure();
-  await vi.advanceTimersByTimeAsync(0);
+  await advanceTimersByTimeAsync(0);
 }
 
 describe('useCircuitBreakerStore', () => {
@@ -93,7 +95,7 @@ describe('useCircuitBreakerStore', () => {
       useCircuitBreakerStore.getState().recordFailure();
       useCircuitBreakerStore.getState().recordFailure();
       useCircuitBreakerStore.getState().recordFailure();
-      await vi.advanceTimersByTimeAsync(0);
+      await advanceTimersByTimeAsync(0);
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(useCircuitBreakerStore.getState().state).toBe('closed');
@@ -103,7 +105,7 @@ describe('useCircuitBreakerStore', () => {
     test('runs a single probe for failures arriving while one is in flight', async () => {
       mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
       for (let i = 0; i < 6; i++) useCircuitBreakerStore.getState().recordFailure();
-      await vi.advanceTimersByTimeAsync(0);
+      await advanceTimersByTimeAsync(0);
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(useCircuitBreakerStore.getState().state).toBe('open');
@@ -268,7 +270,7 @@ describe('useCircuitBreakerStore', () => {
       mockFetch.mockResolvedValueOnce({ ok: true });
 
       // Advance time by the cooldown period (15000ms)
-      await vi.advanceTimersByTimeAsync(15000);
+      await advanceTimersByTimeAsync(15000);
 
       // The auto-probe should have been triggered, transitioning through half-open to closed
       expect(mockFetch).toHaveBeenCalled();

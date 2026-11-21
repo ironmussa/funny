@@ -1,6 +1,7 @@
+import { afterEach, describe, expect, it, vi } from 'bun:test';
+
 import type { ThreadWithMessages } from '@funny/shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   findProviderAuthError,
@@ -14,9 +15,9 @@ interface ThreadStoreState {
   threadDataById: Record<string, ThreadWithMessages>;
 }
 
-const state = vi.hoisted((): ThreadStoreState => ({
+const state = ((): ThreadStoreState => ({
   threadDataById: {},
-}));
+}))();
 vi.mock('@/stores/thread-store', () => ({
   useThreadStore: (select: (s: typeof state) => unknown) => select(state),
 }));

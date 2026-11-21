@@ -1,5 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { FailureCode } from '@funny/shared/runner-v2/common';
-import { describe, expect, test, vi } from 'vitest';
+import { waitFor } from '@funny/test-kit';
 
 import { RunnerTunnelAdapter } from '../../services/runner-tunnel-adapter.js';
 
@@ -29,7 +31,7 @@ describe('RunnerTunnelAdapter', () => {
     adapter.receive({ tunnelId: 't1', end: { finalSequence: '2' } });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(handle).toHaveBeenCalledOnce();
+    expect(handle).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith(
       'tunnel',
       expect.objectContaining({
@@ -69,7 +71,7 @@ describe('RunnerTunnelAdapter', () => {
     const adapter = new RunnerTunnelAdapter({ send }, handle);
     adapter.receive({ tunnelId: 't1', requestStart: { method: 'GET', path: '/', headers: [] } });
     adapter.receive({ tunnelId: 't1', end: {} });
-    await vi.waitFor(() => expect(handle).toHaveBeenCalledOnce());
+    await waitFor(() => expect(handle).toHaveBeenCalledTimes(1));
 
     adapter.receive({ tunnelId: 't1', cancel: { reason: 'deadline exceeded' } });
 

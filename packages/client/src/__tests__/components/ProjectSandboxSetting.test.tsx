@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 interface SandboxMocks {
   connections: Array<{ id: string; provider: string; label: string }>;
@@ -10,18 +11,18 @@ interface SandboxMocks {
     sizeId: string;
     mode: 'local' | 'worktree' | 'sandbox';
   };
-  save: Mock;
-  clear: Mock;
-  navigate: Mock;
+  save: Mock<(...args: any[]) => any>;
+  clear: Mock<(...args: any[]) => any>;
+  navigate: Mock<(...args: any[]) => any>;
 }
 
-const mocks = vi.hoisted((): SandboxMocks => ({
+const mocks = ((): SandboxMocks => ({
   connections: [],
   settings: null,
   save: vi.fn(),
   clear: vi.fn(),
   navigate: vi.fn(),
-}));
+}))();
 
 vi.mock('@/data/runner/hooks', () => ({
   useSandboxConnections: () => ({ connections: mocks.connections, loading: false }),

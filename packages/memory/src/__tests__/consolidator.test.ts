@@ -1,5 +1,7 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'bun:test';
+
+import { mocked, stubGlobal } from '@funny/test-kit';
 import type { Client } from '@libsql/client';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
   checkAdmission,
@@ -18,7 +20,7 @@ describe('consolidator', () => {
   };
 
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
+    stubGlobal('fetch', vi.fn());
     markConsolidated(); // reset counter
   });
 
@@ -71,7 +73,7 @@ describe('consolidator', () => {
     });
 
     it('calls LLM for non-obvious content', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(
+      mocked(fetch).mockResolvedValueOnce(
         new Response(JSON.stringify({ choices: [{ message: { content: 'ACCEPT' } }] }), {
           status: 200,
         }),
@@ -85,7 +87,7 @@ describe('consolidator', () => {
     });
 
     it('rejects when LLM says REJECT', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(
+      mocked(fetch).mockResolvedValueOnce(
         new Response(JSON.stringify({ choices: [{ message: { content: 'REJECT' } }] }), {
           status: 200,
         }),
@@ -100,7 +102,7 @@ describe('consolidator', () => {
     });
 
     it('admits by default if LLM fails (fail open)', async () => {
-      vi.mocked(fetch).mockRejectedValueOnce(new Error('Connection refused'));
+      mocked(fetch).mockRejectedValueOnce(new Error('Connection refused'));
 
       const result = await checkAdmission(
         llmConfig,

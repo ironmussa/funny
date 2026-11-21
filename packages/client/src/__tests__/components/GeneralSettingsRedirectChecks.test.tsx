@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Project } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
 import { ok } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { GeneralSettings } from '@/components/GeneralSettings';
 import { buildProject, seedProjects } from '@/data/projects/testing';

@@ -3,7 +3,9 @@
  * while hidden / busy, and the re-run when history changes mid-refresh.
  * The reload is a controllable promise actor; time uses vitest fake timers.
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 import { createActor, fromPromise } from 'xstate';
 
 import {
@@ -21,7 +23,7 @@ function makeActor(visible = true) {
   actor.start();
   const finishRefresh = async () => {
     resolvers.shift()?.();
-    await vi.advanceTimersByTimeAsync(0);
+    await advanceTimersByTimeAsync(0);
   };
   return { actor, refresh, finishRefresh };
 }
@@ -37,12 +39,12 @@ describe('historyRefreshMachine', () => {
   test('collapses a burst of invalidations into one refresh', async () => {
     const { actor, refresh, finishRefresh } = makeActor();
     actor.send({ type: 'INVALIDATED' });
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS - 1);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS - 1);
     actor.send({ type: 'INVALIDATED' });
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS - 1);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS - 1);
     expect(refresh).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(1);
+    await advanceTimersByTimeAsync(1);
     expect(refresh).toHaveBeenCalledTimes(1);
     await finishRefresh();
     expect(actor.getSnapshot().value).toBe('fresh');
@@ -53,7 +55,7 @@ describe('historyRefreshMachine', () => {
     const { actor, refresh } = makeActor(false);
     actor.send({ type: 'INVALIDATED' });
     actor.send({ type: 'INVALIDATED' });
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS * 4);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS * 4);
     expect(actor.getSnapshot().value).toBe('stale');
     expect(refresh).not.toHaveBeenCalled();
 
@@ -66,7 +68,7 @@ describe('historyRefreshMachine', () => {
     const { actor, refresh } = makeActor();
     actor.send({ type: 'BUSY', busy: true });
     actor.send({ type: 'INVALIDATED' });
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
     expect(refresh).not.toHaveBeenCalled();
 
     actor.send({ type: 'BUSY', busy: false });
@@ -77,7 +79,7 @@ describe('historyRefreshMachine', () => {
   test('a change during a refresh triggers exactly one more refresh', async () => {
     const { actor, refresh, finishRefresh } = makeActor();
     actor.send({ type: 'INVALIDATED' });
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
     expect(refresh).toHaveBeenCalledTimes(1);
 
     actor.send({ type: 'INVALIDATED' });
@@ -98,7 +100,7 @@ describe('historyRefreshMachine', () => {
     );
     actor.start();
     actor.send({ type: 'INVALIDATED' });
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS * 4);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS * 4);
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(actor.getSnapshot().value).toBe('fresh');
     actor.stop();
@@ -107,7 +109,7 @@ describe('historyRefreshMachine', () => {
   test('RESET drops a pending refresh (the new context loads itself)', async () => {
     const { actor, refresh } = makeActor(false);
     actor.send({ type: 'INVALIDATED' });
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
     actor.send({ type: 'RESET' });
     actor.send({ type: 'VISIBILITY', visible: true });
     expect(refresh).not.toHaveBeenCalled();

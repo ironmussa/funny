@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'bun:test';
 
 import { RelationshipGraph } from '../graph.js';
 import { makeFact } from './helpers.js';

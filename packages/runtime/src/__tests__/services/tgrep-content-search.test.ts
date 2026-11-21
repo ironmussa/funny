@@ -1,9 +1,10 @@
+import { expect, test, vi } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { expect, test, vi } from 'vitest';
+import { waitFor } from '@funny/test-kit';
 
 import type { ProjectSearchProvider } from '../../services/project-search-provider.js';
 import { TgrepContentSearch } from '../../services/tgrep-content-search.js';
@@ -89,19 +90,19 @@ test.skipIf(!binary)(
         pids.push(Number(/"pid"\s*:\s*(\d+)/.exec(info)![1]));
       }
       await provider.rescan();
-      await vi.waitFor(async () => expect(await readdir(state)).toHaveLength(2));
+      await waitFor(async () => expect(await readdir(state)).toHaveLength(2));
       await provider.searchText({ query: 'hello', wholeWord: true });
       const after = await readdir(state);
       expect(after.filter((dir) => !before.includes(dir))).toHaveLength(1);
       provider.dispose();
       clients.forEach((value) => value.dispose());
-      await vi.waitFor(async () => expect(await readdir(state)).toEqual([]));
+      await waitFor(async () => expect(await readdir(state)).toEqual([]));
       for (const pid of pids) expect(() => process.kill(pid, 0)).toThrow();
       const cancelled = client(main);
       const pending = cancelled.search({ query: 'hello' });
       cancelled.dispose();
       await expect(pending).rejects.toThrow();
-      await vi.waitFor(async () => expect(await readdir(state)).toEqual([]));
+      await waitFor(async () => expect(await readdir(state)).toEqual([]));
     } finally {
       provider?.dispose();
       clients.forEach((value) => value.dispose());

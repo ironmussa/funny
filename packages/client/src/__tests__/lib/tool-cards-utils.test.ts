@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import {
   formatInput,
@@ -152,7 +152,7 @@ describe('getTodos', () => {
       { content: 'Task 1', status: 'pending', activeForm: 'Doing task 1' },
       { content: 'Task 2', status: 'completed', activeForm: 'Doing task 2' },
     ];
-    expect(getTodos({ todos })).toEqual(todos);
+    expect<unknown>(getTodos({ todos })).toEqual(todos);
   });
 
   test('returns null when todos is not an array', () => {

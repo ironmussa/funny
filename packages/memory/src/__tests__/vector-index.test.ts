@@ -1,5 +1,6 @@
+import { describe, it, expect, beforeEach } from 'bun:test';
+
 import type { Client } from '@libsql/client';
-import { describe, it, expect, beforeEach } from 'vitest';
 
 import { insertFact } from '../storage.js';
 import { VectorIndex } from '../vector-index.js';

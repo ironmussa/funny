@@ -177,7 +177,8 @@ These exist to diagnose production-only issues without redeploying. They're docu
 bun run dev       # Start Vite dev server (port 5173)
 bun run build     # Type-check (tsc -b) + production build
 bun run preview   # Preview production build
-bun run test      # Run Vitest tests
+bun run test      # Unit tests (bun test, jsdom)
+bun run test:storybook  # Storybook interaction tests (vitest browser mode)
 ```
 
 ## Tech Stack

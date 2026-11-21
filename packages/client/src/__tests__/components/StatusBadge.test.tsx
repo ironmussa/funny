@@ -1,6 +1,7 @@
+import { describe, test, expect, vi } from 'bun:test';
+
 import type { ThreadStatus } from '@funny/shared';
 import { screen } from '@testing-library/react';
-import { describe, test, expect, vi } from 'vitest';
 
 import { StatusBadge } from '@/components/StatusBadge';
 

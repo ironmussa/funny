@@ -76,7 +76,7 @@ export const SLOW_TEST_MS = 10_000;
 const testProgressSuiteSchema = z.object({
   name: z.string(),
   status: suiteStatus,
-  /** Ran only the tests related to the changed files (`vitest related`). */
+  /** Ran only the test files related to the changed files (a test-impact map's selection). */
   related: z.boolean().default(false),
   /** Epoch milliseconds. */
   startedAt: z.number().optional(),

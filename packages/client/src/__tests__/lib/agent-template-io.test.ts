@@ -1,5 +1,6 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { AgentTemplate } from '@funny/shared';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { exportTemplate, parseTemplateFromJson } from '@/lib/agent-template-io';
 
@@ -32,7 +33,7 @@ describe('parseTemplateFromJson', () => {
       template: { name: 'Reviewer', model: 'sonnet' },
     });
 
-    expect(parseTemplateFromJson(json)).toEqual({ name: 'Reviewer', model: 'sonnet' });
+    expect<unknown>(parseTemplateFromJson(json)).toEqual({ name: 'Reviewer', model: 'sonnet' });
   });
 
   test('returns error strings for invalid payloads', () => {

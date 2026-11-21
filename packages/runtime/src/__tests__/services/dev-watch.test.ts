@@ -1,7 +1,6 @@
+import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-
-import { describe, expect, test } from 'vitest';
 
 const ROOT = join(import.meta.dirname, '../../../../..');
 const source = readFileSync(join(ROOT, 'packages/runtime/src/dev-watch.ts'), 'utf-8');

@@ -1,14 +1,15 @@
+import { afterEach, beforeEach, describe, expect, test, setSystemTime, vi } from 'bun:test';
+
 import type { TestProgress } from '@funny/shared/test-progress';
 import { act, screen } from '@testing-library/react';
 import { ok, err } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { TestProgressBlock } from '@/components/TestProgressBlock';
 import { TEST_PROGRESS_POLL_MS } from '@/hooks/use-test-progress';
 
 import { renderWithProviders } from '../helpers/render';
 
-const apiMock = vi.hoisted(() => ({ readFile: vi.fn() }));
+const apiMock = (() => ({ readFile: vi.fn() }))();
 vi.mock('@/lib/api', () => ({ api: apiMock }));
 
 const PATH = '/tmp/funny-u1/test-progress.json';
@@ -71,10 +72,9 @@ const flush = () => act(async () => {});
 
 describe('TestProgressBlock', () => {
   beforeEach(() => {
-    vi.useFakeTimers({
-      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
-    });
-    vi.setSystemTime(10_000);
+    // bun fakes setTimeout/setInterval and Date together (vitest's `toFake` list).
+    vi.useFakeTimers();
+    setSystemTime(10_000);
     apiMock.readFile.mockReset();
   });
   afterEach(() => vi.useRealTimers());

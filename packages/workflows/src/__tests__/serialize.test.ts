@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { parseWorkflowYaml } from '../parse.js';
 import { serializeWorkflow } from '../serialize.js';

@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { IdleReapPolicy } from '@funny/core/agents';
-import { describe, test, expect } from 'vitest';
 
 import { IdleReaper, loadIdleReaperConfig } from '../../services/idle-reaper.js';
 

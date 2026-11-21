@@ -7,8 +7,9 @@
  * proxy layer is not in scope.
  */
 
+import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { Hono } from 'hono';
-import { describe, test, expect, beforeEach } from 'vitest';
 
 import { pipelineRuntimeRoutes } from '../../routes/pipelines.js';
 import { pipelineApprovalStore } from '../../services/pipeline-approval-store.js';

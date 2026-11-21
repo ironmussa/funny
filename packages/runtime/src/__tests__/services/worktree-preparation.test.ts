@@ -1,6 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   createWorktree: vi.fn(),
   setupWorktree: vi.fn(),
   emitToUser: vi.fn(),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     parentSpanId?: string;
   }>,
   histograms: [] as Array<{ name: string; attributes?: Record<string, unknown> }>,
-}));
+}))();
 
 vi.mock('@funny/core/git', () => ({
   createWorktree: mocks.createWorktree,
@@ -116,8 +116,9 @@ describe('prepareWorktree', () => {
       'worktree.root_configured': true,
       'post_create.errors': 1,
     });
-    expect(root.attributes).toHaveProperty('create.ms');
-    expect(root.attributes).toHaveProperty('post_create.ms');
+    // An array path: bun reads a dotted string as a nested path, never as one key.
+    expect(root.attributes).toHaveProperty(['create.ms']);
+    expect(root.attributes).toHaveProperty(['post_create.ms']);
     // Phases and steps hang off the root span.
     const children = mocks.spans.filter((s) => s.name !== 'worktree.prepare');
     expect(children.every((s) => s.parentSpanId === 's1')).toBe(true);

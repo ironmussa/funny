@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Job, Watcher } from '@funny/shared';
 import { fireEvent, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { WatcherPanelButton } from '@/components/sidebar/WatcherPanelButton';
 import { seedBackgroundActivity } from '@/data/background/testing';
@@ -11,7 +12,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-const actions = vi.hoisted(() => ({ cancelJob: vi.fn(), cancelWatcher: vi.fn() }));
+const actions = (() => ({ cancelJob: vi.fn(), cancelWatcher: vi.fn() }))();
 vi.mock('@/data/background/actions', () => actions);
 
 vi.mock('react-i18next', () => ({

@@ -1,18 +1,20 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { MediaLoadError } from '@/components/MediaLoadError';
 
 function mockFetchOnce(res: Partial<Response> & { json?: () => Promise<unknown> }) {
   const fetchMock = vi.fn().mockResolvedValue(res);
-  vi.stubGlobal('fetch', fetchMock);
+  stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 describe('MediaLoadError', () => {
@@ -48,7 +50,7 @@ describe('MediaLoadError', () => {
 
   test('reports an unreachable runner when the probe itself throws', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
-    vi.stubGlobal('fetch', fetchMock);
+    stubGlobal('fetch', fetchMock);
     render(createElement(MediaLoadError, { probeUrl: '/api/files/raw?path=%2Fx.png' }));
     await waitFor(() =>
       expect(screen.getByText('Could not reach the runner to load this file.')).toBeTruthy(),

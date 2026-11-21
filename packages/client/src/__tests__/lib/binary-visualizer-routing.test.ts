@@ -1,5 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 import { okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { systemApi } from '@/lib/api/system';
 import {
@@ -45,7 +47,7 @@ describe('openFileInInternalEditor binary routing', () => {
     const { openFileInInternalEditor } = await import('@/lib/editor-utils');
     openFileInInternalEditor('/abs/data.parquet');
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const s = useInternalEditorStore.getState();
       expect(s.isOpen).toBe(true);
       expect(s.filePath).toBe('/abs/data.parquet');
@@ -63,7 +65,7 @@ describe('openFileInInternalEditor binary routing', () => {
     const { openFileInInternalEditor } = await import('@/lib/editor-utils');
     openFileInInternalEditor('/abs/notes.ts');
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(readFile).toHaveBeenCalledWith('/abs/notes.ts');
       // Text path loaded the fetched content (binary path would leave it '').
       expect(useInternalEditorStore.getState().initialContent).toBe('hello world');

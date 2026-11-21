@@ -1,10 +1,11 @@
-import { fireEvent, screen, within } from '@testing-library/react';
-import { beforeAll, describe, expect, test } from 'vitest';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { ToolCallCard } from '@/components/ToolCallCard';
-import { ToolCallGroup } from '@/components/ToolCallGroup';
+import { fireEvent, screen, within } from '@testing-library/react';
 
 import { renderWithProviders } from '../helpers/render';
+
+const { ToolCallCard } = await import('@/components/ToolCallCard');
+const { ToolCallGroup } = await import('@/components/ToolCallGroup');
 
 describe('Subagent tool calls', () => {
   beforeAll(async () => {

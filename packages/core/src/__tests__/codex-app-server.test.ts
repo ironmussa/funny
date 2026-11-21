@@ -1,8 +1,7 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { chmod, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { CodexAppServer, codexReviewTarget } from '../agents/codex-app-server.js';
 
@@ -82,22 +81,20 @@ describe('Codex App Server', () => {
 
   test('aborts a pending operation and rejects subsequent requests', async () => {
     await withServer(async (server, abort) => {
-      const completion = expect(server.runTurn('wait', { threadId: 'session' })).rejects.toThrow(
-        'cancelled',
-      );
+      // bun's expect(promise).rejects waits for the promise on the spot, so
+      // settle it first and assert afterwards.
+      const turn = server.runTurn('wait', { threadId: 'session' });
       abort.abort();
-      await completion;
+      await expect(turn).rejects.toThrow('cancelled');
       await expect(server.request('wait', {})).rejects.toThrow('cancelled');
     });
   });
 
   test('rejects pending operations when explicitly closed', async () => {
     await withServer(async (server) => {
-      const completion = expect(server.runTurn('wait', { threadId: 'session' })).rejects.toThrow(
-        'connection closed',
-      );
+      const turn = server.runTurn('wait', { threadId: 'session' });
       server.close();
-      await completion;
+      await expect(turn).rejects.toThrow('connection closed');
     });
   });
 

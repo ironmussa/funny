@@ -6,31 +6,26 @@
  * fake timers instead of a real daemon.
  */
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 
-const dataDir = await vi.hoisted(async () => {
+const dataDir = await (async () => {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   return mkdtempSync(join(tmpdir(), 'pty-daemon-launcher-'));
-});
+})();
 
-// `import.meta.dir` (used for DAEMON_ENTRY) is Bun-only and undefined under vitest.
-vi.mock('path', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('path')>();
-  const resolve = (...parts: (string | undefined)[]) =>
-    actual.resolve(...parts.map((part) => part ?? '.'));
-  return { ...actual, default: { ...actual, resolve }, resolve };
-});
 vi.mock('../../lib/data-dir.js', () => ({ DATA_DIR: dataDir }));
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { isDaemonRunning, stopDaemon } from '../../services/pty-daemon-launcher.js';
+// Imported after the mocks: the launcher reads DATA_DIR at import time.
+const { isDaemonRunning, stopDaemon } = await import('../../services/pty-daemon-launcher.js');
 
 type SocketHandlers = {
   open?: (socket: FakeSocket) => void;
@@ -82,7 +77,7 @@ describe('isDaemonRunning', () => {
     const pending = isDaemonRunning();
     handlers.data?.(socket, Buffer.from('{"type":"pong"}\n'));
     await expect(pending).resolves.toBe(true);
-    expect(socket.end).toHaveBeenCalledOnce();
+    expect(socket.end).toHaveBeenCalledTimes(1);
   });
 
   test('resolves false when the socket closes without a pong', async () => {
@@ -93,12 +88,12 @@ describe('isDaemonRunning', () => {
 
   test('resolves false (not throw) when the daemon never answers within 2s', async () => {
     const pending = isDaemonRunning();
-    await vi.advanceTimersByTimeAsync(1999);
+    await advanceTimersByTimeAsync(1999);
     let settled = false;
     void pending.then(() => (settled = true));
     await Promise.resolve();
     expect(settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
+    await advanceTimersByTimeAsync(1);
     await expect(pending).resolves.toBe(false);
   });
 });
@@ -109,7 +104,7 @@ describe('stopDaemon', () => {
     expect(socket.write).toHaveBeenCalledWith(JSON.stringify({ cmd: 'shutdown' }) + '\n');
     // Daemon exits but never closes the socket — the 3s timeout must not escalate to SIGTERM.
     alive = false;
-    await vi.advanceTimersByTimeAsync(3000 + 500);
+    await advanceTimersByTimeAsync(3000 + 500);
     await expect(pending).resolves.toBeUndefined();
     expect(process.kill).not.toHaveBeenCalledWith(FAKE_PID, 'SIGTERM');
   });

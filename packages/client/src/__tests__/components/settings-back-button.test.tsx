@@ -1,7 +1,8 @@
+import { describe, test, expect, beforeEach, vi } from 'bun:test';
+
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useEffect } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 import { PreferencesPanelBody } from '@/components/PreferencesPanel';
 import { SettingsPanelBody } from '@/components/SettingsPanel';

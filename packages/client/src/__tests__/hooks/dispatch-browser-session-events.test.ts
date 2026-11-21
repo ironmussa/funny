@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, setSystemTime, test, vi } from 'bun:test';
 
-const clientCalls = vi.hoisted(() => ({ close: vi.fn(), open: vi.fn() }));
+const clientCalls = (() => ({ close: vi.fn(), open: vi.fn() }))();
 vi.mock('@/lib/browser-session-client', () => ({ browserSessionClient: clientCalls }));
 
 import {
@@ -122,10 +122,10 @@ describe('browser-session:closed', () => {
   test('an own close that was never answered does not swallow a later real one', async () => {
     attachingTo(SESSION);
     useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
-    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.useFakeTimers(); // bun fakes Date along with the timers
     try {
       await useBrowserPanelStore.getState().endBrowserSession(); // the runner never answers
-      vi.setSystemTime(Date.now() + 60_000);
+      setSystemTime(Date.now() + 60_000);
 
       attachingTo(SESSION);
       useBrowserPanelStore.setState({ sessionStatus: 'ready' });

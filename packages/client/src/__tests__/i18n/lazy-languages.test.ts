@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 import i18n, { changeLanguage, SUPPORTED_LANGUAGES } from '@/i18n/config';
 

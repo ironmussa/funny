@@ -1,6 +1,7 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { ThreadStatus } from '@funny/shared';
 import type { FactoryRun } from '@funny/shared/contracts/factory';
-import { describe, expect, test } from 'vitest';
 
 import { threadActivity } from '@/lib/thread-activity';
 

@@ -1,11 +1,12 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
 import { ok } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { gitApi, refreshAllLoadedThreads } = vi.hoisted(() => ({
+const { gitApi, refreshAllLoadedThreads } = (() => ({
   gitApi: { startWorkflow: vi.fn(), projectStartWorkflow: vi.fn() },
   refreshAllLoadedThreads: vi.fn(),
-}));
+}))();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

@@ -1,7 +1,8 @@
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { GitHubPR, PRDetail } from '@funny/shared';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PRDetailDialog } from '@/components/PRDetailDialog';
 import { createDataLayer } from '@/data/data-layer';
@@ -11,16 +12,16 @@ import { mockT } from '../helpers/mock-i18n';
 import { MARKDOWN_PRELOAD_TIMEOUT_MS, preloadMarkdownPipeline } from '../helpers/preload-markdown';
 import { renderWithProviders } from '../helpers/render';
 
-const apiMock = vi.hoisted(() => ({
+const apiMock = (() => ({
   githubPRFiles: vi.fn(),
   githubPRCommits: vi.fn(),
   githubPRFileContent: vi.fn(),
   githubPRThreads: vi.fn(),
   githubPRConversation: vi.fn(),
-}));
-const githubApiMock = vi.hoisted(() => ({
+}))();
+const githubApiMock = (() => ({
   githubPRDetail: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({
   api: apiMock,

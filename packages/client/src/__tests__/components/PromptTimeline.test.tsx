@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import type { ThreadStatus } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { PromptTimeline } from '@/components/thread/PromptTimeline';
 

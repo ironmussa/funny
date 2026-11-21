@@ -1,6 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { KanbanColumn } from '@/components/kanban/KanbanColumn';
 import { buildThread } from '@/data/threads/testing';
@@ -46,7 +48,7 @@ function scrollToEnd() {
 describe('KanbanColumn pagination', () => {
   beforeEach(() => {
     intersectionCallbacks = [];
-    vi.stubGlobal(
+    stubGlobal(
       'IntersectionObserver',
       class {
         constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
@@ -57,7 +59,7 @@ describe('KanbanColumn pagination', () => {
       },
     );
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => unstubAllGlobals());
 
   test('resets pagination for a new search and expands to a highlighted thread', () => {
     const view = render(<KanbanColumn {...baseProps} />);

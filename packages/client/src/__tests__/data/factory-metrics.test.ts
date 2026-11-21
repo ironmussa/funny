@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { EMPTY_FACTORY_RUN_METRICS, type FactoryRun } from '@funny/shared/contracts/factory';
-import { describe, expect, test } from 'vitest';
 
 import { summarizeFactoryRuns } from '@/data/factory/metrics';
 

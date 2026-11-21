@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import {
   detectLanguageFromContent,
@@ -20,7 +20,7 @@ test('maps the long Markdown extension to Markdown highlighting', () => {
 describe('detectLanguageFromContent', () => {
   test('detects TypeScript from code content', async () => {
     const code = `import type { ThreadStatus } from '@funny/shared';
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi } from 'bun:test';
 
 describe('StatusBadge', () => {
   const statuses: ThreadStatus[] = ['idle', 'pending', 'running'];

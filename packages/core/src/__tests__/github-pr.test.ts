@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 
 vi.mock('../git/process.js', () => ({
   execute: vi.fn(),
@@ -8,7 +10,7 @@ vi.mock('../git/process.js', () => ({
 import { getPRForBranch, lookupPRForBranch } from '../git/github.js';
 import { execute } from '../git/process.js';
 
-const mockExecute = vi.mocked(execute);
+const mockExecute = mocked(execute);
 
 describe('getPRForBranch', () => {
   beforeEach(() => {

@@ -1,16 +1,17 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AcceptInvitePage } from '@/components/AcceptInvitePage';
 import { useAuthStore } from '@/stores/auth-store';
 
 import { renderWithProviders } from '../helpers/render';
 
-const apiMock = vi.hoisted(() => ({
+const apiMock = (() => ({
   acceptInviteLink: vi.fn(),
   registerViaInvite: vi.fn(),
   verifyInviteLink: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({ api: apiMock }));
 

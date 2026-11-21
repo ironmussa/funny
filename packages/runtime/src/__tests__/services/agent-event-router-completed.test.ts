@@ -12,7 +12,9 @@
  * runs for the same thread emit normally.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 import { AgentEventRouter } from '../../services/agent-event-router.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
@@ -212,7 +214,7 @@ describe('AgentEventRouter — changed-files summary on runs that end without a 
     const { router, orchestrator, messageHandler } = makeEndingRouter();
     try {
       orchestrator.emit('agent:stopped', 't-1');
-      await vi.waitFor(() =>
+      await waitFor(() =>
         expect(messageHandler.persistChangedFilesSummary).toHaveBeenCalledWith('t-1'),
       );
     } finally {

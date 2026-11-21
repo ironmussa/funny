@@ -1,6 +1,7 @@
+import { beforeEach, expect, test, vi } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { beforeEach, expect, test, vi } from 'vitest';
 
 import { ThreadListView } from '@/components/mobile/ThreadListView';
 import { seedGitStatus } from '@/data/git-status/testing';
@@ -41,12 +42,13 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
-const { threads } = vi.hoisted(() => ({ threads: new Array<Thread>() }));
+const { threads } = (() => ({ threads: new Array<Thread>() }))();
 vi.mock('@/lib/thread-selectors', () => ({ useThreadsForProject: () => threads }));
 
-const ensureStatus = vi.hoisted(() => vi.fn());
-vi.mock('@/data/git-status/actions', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+const ensureStatus = (() => vi.fn())();
+const actualDataGitStatusActions = { ...(await import('@/data/git-status/actions')) };
+vi.mock('@/data/git-status/actions', () => ({
+  ...actualDataGitStatusActions,
   ensureStatusForThreads: ensureStatus,
 }));
 beforeEach(() => {

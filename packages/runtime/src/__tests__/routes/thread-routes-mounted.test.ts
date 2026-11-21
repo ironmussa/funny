@@ -1,11 +1,12 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { Hono } from 'hono';
 import { errAsync, okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ThreadServiceError } from '../../services/thread-service/helpers.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getThread: vi.fn(),
   updateToolCallOutput: vi.fn(),
   isProjectInOrg: vi.fn(),
@@ -24,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   respondPermissionRequest: vi.fn(),
   cancelQueuedMessage: vi.fn(),
   updateQueuedMessage: vi.fn(),
-}));
+}))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

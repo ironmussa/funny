@@ -1,5 +1,6 @@
+import { describe, expect, it } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
 
 import { FileName } from '@/components/ui/file-name';
 import { TooltipProvider } from '@/components/ui/tooltip';

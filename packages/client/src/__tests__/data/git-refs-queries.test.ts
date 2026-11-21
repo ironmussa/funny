@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { errAsync, okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDataLayer } from '@/data/data-layer';
 import { fetchProjectBranches, setProjectCurrentBranch } from '@/data/projects/branches';
@@ -11,8 +12,8 @@ import {
 } from '@/data/pull-requests/queries';
 import { replaceDataLayer, getDataLayer } from '@/data/runtime';
 
-const mockListBranches = vi.hoisted(() => vi.fn());
-const mockPRDetail = vi.hoisted(() => vi.fn());
+const mockListBranches = (() => vi.fn())();
+const mockPRDetail = (() => vi.fn())();
 
 vi.mock('@/lib/api/projects', () => ({ projectsApi: { listBranches: mockListBranches } }));
 vi.mock('@/lib/api/github', () => ({
@@ -76,9 +77,9 @@ describe('PR detail query', () => {
     mockPRDetail.mockReturnValueOnce(okAsync(detail));
     await fetchPRDetail('p1', 7, { force: true });
     expect(isGithubRateLimited()).toBe(false);
-    expect(getDataLayer().queryClient.getQueryData(prDetailQuery('p1', 7).queryKey)).toEqual(
-      detail,
-    );
+    expect<unknown>(
+      getDataLayer().queryClient.getQueryData(prDetailQuery('p1', 7).queryKey),
+    ).toEqual(detail);
   });
 
   test('invalidatePR makes the next fetch run within the freshness window', async () => {

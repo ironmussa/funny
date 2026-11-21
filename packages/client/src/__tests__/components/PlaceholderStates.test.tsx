@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Inbox } from 'lucide-react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -46,6 +47,6 @@ describe('placeholder consistency', () => {
     expect(screen.getByTestId('empty')).not.toHaveClass('h-full');
     expect(screen.getByTestId('loading').querySelector('p')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add file' }));
-    expect(onClick).toHaveBeenCalledOnce();
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });

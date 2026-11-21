@@ -6,7 +6,7 @@
  *
  * We mock all side-effecting imports at the top so vitest can load the module.
  */
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi } from 'bun:test';
 
 // Mock bun:sqlite and all heavy imports so the module can load in vitest
 vi.mock('bun:sqlite', () => ({

@@ -16,7 +16,7 @@
  * `pipeline-adapter` tests under `services/`.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { RuntimeActionProvider } from '../../services/pipeline-adapter.js';
 import {

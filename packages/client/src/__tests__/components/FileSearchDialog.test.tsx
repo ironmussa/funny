@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { FileSearchDialog } from '@/components/FileSearchDialog';
 import { buildProject, withProjects } from '@/data/projects/testing';
@@ -11,10 +12,10 @@ import { useThreadStore } from '@/stores/thread-store';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   rankedSearch: vi.fn(),
   trackFileSelection: vi.fn(),
-}));
+}))();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT }),

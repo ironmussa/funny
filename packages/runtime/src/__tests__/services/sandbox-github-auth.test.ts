@@ -1,10 +1,10 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { GITHUB_APP_TOKEN_REUSE_MARGIN_MS } from '@funny/shared/github-app-token';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import {
   createSandboxGithubAuth,

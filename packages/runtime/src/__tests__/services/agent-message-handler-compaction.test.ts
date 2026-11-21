@@ -1,5 +1,6 @@
+import { describe, test, expect, vi } from 'bun:test';
+
 import type { CLIMessage } from '@funny/core/agents';
-import { describe, test, expect, vi } from 'vitest';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';

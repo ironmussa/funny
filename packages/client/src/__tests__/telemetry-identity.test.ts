@@ -1,6 +1,7 @@
+import { expect, test, vi } from 'bun:test';
+
 import { createClient } from '@abbacchio/browser-transport';
 import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
-import { expect, test, vi } from 'vitest';
 
 test('sends emitter identity with logs, metrics and traces', async () => {
   const identity = getTelemetryIdentity('funny-client');

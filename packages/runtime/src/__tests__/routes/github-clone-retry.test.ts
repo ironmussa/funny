@@ -1,12 +1,13 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import type { WSEvent } from '@funny/shared';
 import { internal } from '@funny/shared/errors';
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 import { Hono } from 'hono';
 import { err, ok, okAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Regression: POST /clone retries `createProject` (3 attempts, 1s then 2s
@@ -17,7 +18,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
  * when the clone starts; the outcome is the last `clone:progress` event.
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   createProject: vi.fn(),
   projectNameExists: vi.fn(async () => false),
   rm: vi.fn(async () => undefined),
@@ -25,10 +26,11 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
   emitToUser: vi.fn<(userId: string, event: WSEvent) => void>(),
   cloneRepository: vi.fn(),
-}));
+}))();
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@funny/core/git')>()),
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => ({
+  ...actualFunnyCoreGit,
   cloneRepository: mocks.cloneRepository,
 }));
 
@@ -58,8 +60,9 @@ vi.mock('../../lib/logger.js', () => ({
   log: { warn: mocks.warn, error: mocks.error, info: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('fs/promises', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('fs/promises')>()),
+const actualFsPromises = { ...(await import('fs/promises')) };
+vi.mock('fs/promises', () => ({
+  ...actualFsPromises,
   rm: mocks.rm,
 }));
 
@@ -130,23 +133,23 @@ describe('POST /clone createProject retry', () => {
 
     const pending = postClone(parentDir);
 
-    await vi.advanceTimersByTimeAsync(0);
+    await advanceTimersByTimeAsync(0);
     expect(mocks.createProject).toHaveBeenCalledTimes(1);
     expect(mocks.createProject).toHaveBeenCalledWith('widget', clonePath, USER);
 
-    await vi.advanceTimersByTimeAsync(999);
+    await advanceTimersByTimeAsync(999);
     expect(mocks.createProject).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1);
+    await advanceTimersByTimeAsync(1);
     expect(mocks.createProject).toHaveBeenCalledTimes(2);
 
-    await vi.advanceTimersByTimeAsync(1_999);
+    await advanceTimersByTimeAsync(1_999);
     expect(mocks.createProject).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(1);
+    await advanceTimersByTimeAsync(1);
     expect(mocks.createProject).toHaveBeenCalledTimes(3);
 
     const res = await pending;
     expect(res.status).toBe(202);
-    await vi.advanceTimersByTimeAsync(0);
+    await advanceTimersByTimeAsync(0);
     expect(lastProgress()).toMatchObject({ status: 'done', projectId: 'p-1' });
     expect(mocks.rm).not.toHaveBeenCalled();
     expect(attemptWarnings()).toHaveLength(2);
@@ -157,7 +160,7 @@ describe('POST /clone createProject retry', () => {
     mocks.createProject.mockRejectedValue(new Error('data channel down'));
 
     const pending = postClone(parentDir);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await advanceTimersByTimeAsync(10_000);
     const res = await pending;
 
     expect(res.status).toBe(202);
@@ -184,7 +187,7 @@ describe('POST /clone createProject retry', () => {
     mocks.createProject.mockResolvedValue(err(internal('Project already registered')));
 
     const pending = postClone(parentDir);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await advanceTimersByTimeAsync(10_000);
     const res = await pending;
 
     expect(res.status).toBe(202);

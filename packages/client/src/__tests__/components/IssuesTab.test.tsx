@@ -1,8 +1,8 @@
+import { beforeEach, describe, expect, setDefaultTimeout, test, vi, type Mock } from 'bun:test';
+
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
-import { IssuesTab } from '@/components/IssuesTab';
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun, FactorySettings } from '@/lib/api/factory';
 import { useProjectStore } from '@/stores/project-store';
@@ -13,14 +13,14 @@ import { renderWithProviders } from '../helpers/render';
 
 // These tests render the whole tab and its dialogs; under the full parallel suite
 // (pre-push) a different one ran a little past the 5 s default on each run.
-vi.setConfig({ testTimeout: 15_000 });
+setDefaultTimeout(15_000);
 
-const apiMock = vi.hoisted(() => ({
+const apiMock = (() => ({
   projectGetRemoteUrl: vi.fn(),
   githubIssuesEnriched: vi.fn(),
   githubIssueComments: vi.fn(),
-}));
-const logError = vi.hoisted(() => vi.fn());
+}))();
+const logError = (() => vi.fn())();
 vi.mock('@/lib/client-logger', () => ({
   createClientLogger: () => ({ error: logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
@@ -32,18 +32,18 @@ interface FactoryMocks {
   runs: FactoryRun[];
   blockers: Array<{ issue: number; blockers: Array<{ issue: number; inFactory: boolean }> }>;
   canSteer: boolean;
-  send: Mock;
-  control: Mock;
+  send: Mock<(...args: any[]) => unknown>;
+  control: Mock<(...args: any[]) => unknown>;
 }
 
-const factory = vi.hoisted((): FactoryMocks => ({
+const factory = ((): FactoryMocks => ({
   settings: null,
   runs: [],
   blockers: [],
   canSteer: true,
   send: vi.fn(),
   control: vi.fn(),
-}));
+}))();
 vi.mock('@/data/factory/hooks', () => ({
   useFactorySettings: () => factory.settings,
   useFactoryRuns: () => factory.runs,
@@ -57,8 +57,9 @@ vi.mock('@/data/factory/actions', () => ({
   sendIssuesToFactory: (...args: unknown[]) => factory.send(...args),
   controlFactoryRun: (...args: unknown[]) => factory.control(...args),
 }));
-vi.mock('@/data/projects/hooks', async (original) => ({
-  ...(await original<typeof import('@/data/projects/hooks')>()),
+const actualProjectHooks = { ...(await import('@/data/projects/hooks')) };
+vi.mock('@/data/projects/hooks', () => ({
+  ...actualProjectHooks,
   useCanSteerProject: () => factory.canSteer,
 }));
 /** `mockT`, plus `{{var}}` interpolation for a fallback given with its values. */
@@ -74,6 +75,9 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
+
+// Imported after the mocks, which bun does not hoist (IssuesTab creates its logger at import time).
+const { IssuesTab } = await import('@/components/IssuesTab');
 
 describe('IssuesTab remote checks', () => {
   beforeEach(() => {
@@ -289,6 +293,9 @@ describe('IssuesTab and the issue factory', () => {
     fireEvent.click(screen.getByTestId('issues-factory-send'));
 
     expect(factory.send).toHaveBeenCalledWith('project-1', [2, 1], 'issue-to-merge');
+    // Settle the send inside act(): outside it, React's not-wrapped-in-act
+    // path under bun stalls for tens of seconds re-reading react's jsx runtime.
+    await act(async () => {});
     await waitFor(() => expect(screen.queryByTestId('issues-factory-bar')).toBeNull());
   });
 

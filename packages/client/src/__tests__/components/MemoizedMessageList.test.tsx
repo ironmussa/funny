@@ -1,11 +1,9 @@
+import { beforeEach, describe, test, expect, vi } from 'bun:test';
+
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { createRef, useMemo, useRef, type RefObject } from 'react';
-import { beforeEach, describe, test, expect, vi } from 'vitest';
 
-import {
-  MemoizedMessageList,
-  type MemoizedMessageListHandle,
-} from '@/components/thread/MemoizedMessageList';
+import type { MemoizedMessageListHandle } from '@/components/thread/MemoizedMessageList';
 import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -27,11 +25,14 @@ vi.mock('@/hooks/use-pretext', () => ({
   layoutSync: () => ({ height: 0 }),
   prepareBatch: () => {},
   makeProseFont: () => '14px sans-serif',
+  makeMonoFont: () => '14px monospace',
+  preloadPretext: () => {},
   ensurePretextLoaded: () => new Promise(() => {}),
 }));
 
-vi.mock('@/stores/settings-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/stores/settings-store')>();
+const actualStoresSettingsStore = { ...(await import('@/stores/settings-store')) };
+vi.mock('@/stores/settings-store', () => {
+  const actual = actualStoresSettingsStore;
   return {
     ...actual,
     useSettingsStore: Object.assign(
@@ -83,7 +84,7 @@ interface VirtualizerMockState {
   scrollToOffsetCalls: { offset: number; opts?: { align?: string } }[];
 }
 
-const virtualizerMockState = vi.hoisted((): VirtualizerMockState => ({
+const virtualizerMockState = ((): VirtualizerMockState => ({
   start: undefined,
   visibleCount: 12,
   scrollOffset: 0,
@@ -93,7 +94,7 @@ const virtualizerMockState = vi.hoisted((): VirtualizerMockState => ({
   resizeItemCalls: [],
   scrollToIndexCalls: [],
   scrollToOffsetCalls: [],
-}));
+}))();
 
 vi.mock('@tanstack/react-virtual', () => ({
   // Mirrors the real adapter: ONE stable instance per component whose
@@ -147,6 +148,9 @@ vi.mock('@tanstack/react-virtual', () => ({
     return instance;
   },
 }));
+
+// Imported after the mocks, which bun does not hoist.
+const { MemoizedMessageList } = await import('@/components/thread/MemoizedMessageList');
 
 function makeMessages(count: number) {
   return Array.from({ length: count }, (_, i) => ({

@@ -1,13 +1,14 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import { ok } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import type { IThreadEventService } from '../../services/server-interfaces.js';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getDiffSummary: vi.fn(),
   getIgnoredFileStats: vi.fn(),
   saveThreadEvent: vi.fn<IThreadEventService['saveThreadEvent']>(async () => undefined),
-}));
+}))();
 
 /** The (threadId, type, data) of the n-th persisted thread event. */
 function savedEvent(n = 0): [string, string, any] {

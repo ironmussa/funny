@@ -1,6 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, render } from '@testing-library/react';
 import { useEffect } from 'react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { FrozenMessage } from '@/components/thread/FrozenMessage';
 
@@ -9,7 +11,7 @@ import { buildIntersectionEntry } from '../helpers/builders-components';
 // Track live Sätteri mounts so we can prove the fiber tree is dropped
 // when frozen (the memory goal), rather than relying on DOM text (the captured
 // static HTML legitimately still contains the rendered markup).
-const live = vi.hoisted(() => ({ mounts: 0 }));
+const live = (() => ({ mounts: 0 }))();
 vi.mock('@/components/thread/MessageContent', () => ({
   MessageContent: ({ content }: { content: string }) => {
     useEffect(() => {
@@ -52,16 +54,16 @@ function setIntersecting(isIntersecting: boolean) {
 describe('FrozenMessage', () => {
   beforeEach(() => {
     observers.length = 0;
-    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+    stubGlobal('IntersectionObserver', MockIntersectionObserver);
     // Run rAF synchronously so the post-mount capture pass is deterministic.
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
       return 0;
     });
-    vi.stubGlobal('cancelAnimationFrame', () => {});
+    stubGlobal('cancelAnimationFrame', () => {});
   });
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     vi.restoreAllMocks();
   });
 

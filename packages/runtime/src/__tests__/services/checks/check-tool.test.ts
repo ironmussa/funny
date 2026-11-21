@@ -1,18 +1,18 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { checkInputKey } from '@funny/shared/checks';
 import { parseTestProgress } from '@funny/shared/test-progress';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { getThread, getProject, emitToUser, spawnJob, assets } = vi.hoisted(() => ({
+const { getThread, getProject, emitToUser, spawnJob, assets } = (() => ({
   getThread: vi.fn(),
   getProject: vi.fn(),
   emitToUser: vi.fn(),
   spawnJob: vi.fn(),
   assets: { dir: '' },
-}));
+}))();
 
 vi.mock('../../../services/service-registry.js', () => ({
   getServices: () => ({ threads: { getThread }, projects: { getProject } }),
@@ -22,8 +22,9 @@ vi.mock('../../../services/agent-job-manager.js', () => ({ spawnJob }));
 vi.mock('../../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../../services/thread-context.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../services/thread-context.js')>()),
+const actualThreadContext = { ...(await import('../../../services/thread-context.js')) };
+vi.mock('../../../services/thread-context.js', () => ({
+  ...actualThreadContext,
   tmpAssetsPathFor: () => assets.dir,
 }));
 

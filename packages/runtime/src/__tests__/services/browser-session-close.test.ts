@@ -1,6 +1,8 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({ warn: vi.fn() }));
+import { waitFor } from '@funny/test-kit';
+
+const mocks = (() => ({ warn: vi.fn() }))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: mocks.warn, error: vi.fn(), debug: vi.fn() },
@@ -14,7 +16,7 @@ describe('BrowserSessionManager fire-and-forget close', () => {
     const close = vi.spyOn(manager, 'close').mockRejectedValueOnce(new Error('kill EPERM'));
 
     manager['closeAndLog']('session-1', 'heartbeat');
-    await vi.waitFor(() => expect(mocks.warn).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.warn).toHaveBeenCalled());
 
     expect(close).toHaveBeenCalledWith('session-1', 'heartbeat');
     expect(mocks.warn).toHaveBeenCalledWith(

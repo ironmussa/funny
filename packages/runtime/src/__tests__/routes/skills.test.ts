@@ -1,6 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import { Hono } from 'hono';
 import { okAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 
@@ -15,7 +16,7 @@ const {
   mockResolveAgentResources,
   mockResolveEffectiveProfile,
   MOCK_RECOMMENDED,
-} = vi.hoisted(() => ({
+} = (() => ({
   mockListSkills: vi.fn(),
   mockListProjectSkills: vi.fn(),
   mockListProjectCommands: vi.fn(),
@@ -32,7 +33,7 @@ const {
       identifier: 'vercel-labs/skills@find-skills',
     },
   ],
-}));
+}))();
 
 vi.mock('../../services/skills-service.js', () => ({
   listSkills: mockListSkills,

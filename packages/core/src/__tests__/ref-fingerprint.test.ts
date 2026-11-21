@@ -2,11 +2,10 @@
 // whose git state moved. Requires @funny/native-git; skipped when it is not
 // built (CI builds it for the parity tests).
 
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { getNativeGit } from '../git/native.js';
 import { executeSync } from '../git/process.js';

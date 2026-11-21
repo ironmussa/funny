@@ -1,9 +1,7 @@
 // Live test progress for the client's `test-progress` visualizer.
 //
 // `run-tests.ts` feeds each suite's output, line by line, to the parser in
-// `@funny/shared/checks` (vitest suites also get the runtime's `vitest-progress-reporter.mjs`,
-// whose event lines give per-test progress, the files running and the slow
-// ones), and a `ProgressFile` rewrites the JSON file `FUNNY_TEST_PROGRESS`
+// `@funny/shared/checks`, and a `ProgressFile` rewrites the JSON file `FUNNY_TEST_PROGRESS`
 // names (atomically, at most every `intervalMs`). The shape is `TestProgress` in
 // `@funny/shared/test-progress`.
 

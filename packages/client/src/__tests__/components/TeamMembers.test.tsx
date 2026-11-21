@@ -1,5 +1,6 @@
+import { afterEach, expect, test, setSystemTime, vi } from 'bun:test';
+
 import { act, cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, expect, test, vi } from 'vitest';
 
 import { TeamMembers } from '@/components/settings/TeamMembers';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -36,7 +37,7 @@ afterEach(() => {
 
 test('refreshes invitation expiry on the shared clock and preserves usage limits', async () => {
   vi.useFakeTimers();
-  vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+  setSystemTime(new Date('2026-01-01T00:00:00Z'));
   await act(async () => {
     render(
       <TooltipProvider>

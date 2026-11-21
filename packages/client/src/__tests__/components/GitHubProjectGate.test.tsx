@@ -1,12 +1,13 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, render, screen } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 
 import { expectInstance } from '../helpers/builders-components';
 
-const state = vi.hoisted(() => ({ projectId: 'one', remote: vi.fn() }));
+const state = (() => ({ projectId: 'one', remote: vi.fn() }))();
 vi.mock('@/lib/api', () => ({ api: { projectGetRemoteUrl: state.remote } }));
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: (selector: (value: { selectedProjectId: string }) => unknown) =>

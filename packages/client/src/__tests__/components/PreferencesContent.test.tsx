@@ -1,19 +1,20 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { installTestDataLayer } from '../helpers/data-layer-harness';
 import { mockT } from '../helpers/mock-i18n';
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getProfile: vi.fn(),
   getSmtpSettings: vi.fn(),
   updateProfile: vi.fn(),
   updateSmtpSettings: vi.fn(),
   testSmtpSettings: vi.fn(),
   isAdmin: true,
-}));
+}))();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

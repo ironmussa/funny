@@ -1,5 +1,6 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { ContextBreakdown } from '@funny/shared';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
   applyContextUsageEvent,

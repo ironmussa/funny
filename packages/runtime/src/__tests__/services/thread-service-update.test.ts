@@ -1,6 +1,8 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { waitFor } from '@funny/test-kit';
+
+const mocks = (() => ({
   copyThreadUploads: vi.fn(),
   hydrateReferencedFiles: vi.fn(async (prompt: string, _base: string) => prompt),
   tm: {
@@ -34,7 +36,7 @@ const mocks = vi.hoisted(() => ({
   stopContainer: vi.fn(() => ({ match: (_ok: () => void) => _ok() })),
   invalidateSearch: vi.fn(() => ({ match: (_ok: () => void) => _ok() })),
   killPtysUnderPath: vi.fn(() => 0),
-}));
+}))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -60,8 +62,9 @@ vi.mock('../../services/agent-runner-control.js', () => ({
   cleanupThreadState: mocks.cleanupThreadState,
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  isSafeGitRefArg: (await importOriginal<typeof import('@funny/core/git')>()).isSafeGitRefArg,
+const { isSafeGitRefArg } = await import('@funny/core/git');
+vi.mock('@funny/core/git', () => ({
+  isSafeGitRefArg,
   createWorktree: mocks.createWorktree,
   configuredWorktreeRoot: () => null,
   findWorktreeForBranch: mocks.findWorktreeForBranch,
@@ -430,7 +433,7 @@ describe('updateThread — auto-start idle thread', () => {
 
     await updateThread({ threadId: 't-1', userId: 'u-1', stage: 'in_progress' });
 
-    await vi.waitFor(() => expect(mocks.startAgent).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.startAgent).toHaveBeenCalled());
     expect(mocks.copyThreadUploads).toHaveBeenCalledWith('/repo', '/repo/.worktrees/t-1', 't-1');
     expect(mocks.hydrateReferencedFiles).toHaveBeenCalledWith('Build', '/repo');
   });
@@ -470,7 +473,7 @@ describe('updateThread — auto-start idle thread', () => {
       expect.objectContaining({ status: 'setting_up' }),
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mocks.createWorktree).toHaveBeenCalled();
       expect(mocks.startAgent).toHaveBeenCalledWith(
         't-1',
@@ -584,7 +587,7 @@ describe('convertToWorktree', () => {
       expect.objectContaining({ status: 'setting_up' }),
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mocks.createWorktree).toHaveBeenCalledWith(
         '/repo',
         expect.stringContaining('my-app/my-thread'),
@@ -613,7 +616,7 @@ describe('convertToWorktree', () => {
 
     await convertToWorktree('t-1', 'u-1');
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mocks.tm.updateThread).toHaveBeenCalledWith(
         't-1',
         expect.objectContaining({ status: 'failed' }),
@@ -634,7 +637,7 @@ describe('convertToWorktree', () => {
 
     await convertToWorktree('t-1', 'u-1');
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mocks.tm.updateThread).toHaveBeenCalledWith(
         't-1',
         expect.objectContaining({ status: 'failed' }),
@@ -706,7 +709,7 @@ describe('updateThread — idle branch checkout and failures', () => {
     mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
 
     await updateThread({ threadId: 't-1', userId: 'u-1', stage: 'in_progress' });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mocks.tm.updateThread).toHaveBeenCalledWith(
         't-1',
         expect.objectContaining({ status: 'failed' }),
@@ -727,7 +730,7 @@ describe('updateThread — idle branch checkout and failures', () => {
 
     await updateThread({ threadId: 't-1', userId: 'u-1', stage: 'in_progress' });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mocks.tm.updateThread).toHaveBeenCalledWith(
         't-1',
         expect.objectContaining({ status: 'failed' }),

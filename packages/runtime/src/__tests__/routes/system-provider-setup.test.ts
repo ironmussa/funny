@@ -1,12 +1,13 @@
-import { Hono } from 'hono';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { Hono } from 'hono';
+
+const mocks = (() => ({
   resolveProfile: vi.fn(),
   setupStatus: vi.fn(),
   startInstall: vi.fn(),
   providerKey: vi.fn(),
-}));
+}))();
 
 vi.mock('@funny/core/git', () => ({ getNativeGit: vi.fn() }));
 vi.mock('../../lib/data-dir.js', () => ({ DATA_DIR: '/tmp/provider-route-test' }));

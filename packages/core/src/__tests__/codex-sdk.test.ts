@@ -1,10 +1,10 @@
+import { describe, expect, test } from 'bun:test';
 import { execFileSync } from 'child_process';
 import { chmod, mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, relative } from 'path';
 
 import { parseCodexCommand } from '@funny/shared/codex-commands';
-import { describe, expect, test } from 'vitest';
 
 import {
   CodexSDKProcess,

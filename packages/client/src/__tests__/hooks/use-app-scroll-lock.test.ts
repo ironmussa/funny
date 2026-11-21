@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { renderHook } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
 
 import { APP_SCROLL_LOCK_CLASS, useAppScrollLock } from '@/hooks/use-app-scroll-lock';
 

@@ -2,11 +2,10 @@
 // flag for parity with the other git integration suites.
 process.env.FUNNY_DISABLE_NATIVE_GIT = '1';
 
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getGraphLog } from '../git/index.js';
 import type { GraphRef } from '../git/log.js';

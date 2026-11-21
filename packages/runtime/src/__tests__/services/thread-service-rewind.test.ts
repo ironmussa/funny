@@ -1,6 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   tm: {
     getThread: vi.fn(),
     getThreadWithMessages: vi.fn(),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   },
   forkThread: vi.fn(),
   restoreGitCheckpoint: vi.fn(),
-}));
+}))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

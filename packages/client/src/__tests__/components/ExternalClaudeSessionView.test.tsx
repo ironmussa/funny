@@ -1,6 +1,8 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import { screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -45,7 +47,7 @@ const [{ ExternalClaudeSessionView }, { api }] = await Promise.all([
 describe('ExternalClaudeSessionView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.getExternalClaudeTranscript).mockReturnValue(
+    mocked(api.getExternalClaudeTranscript).mockReturnValue(
       okAsync({
         transcript: {
           sessionId: 'session-1',

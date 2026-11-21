@@ -2,13 +2,13 @@
 // worktree, not every thread in the project. Needs @funny/native-git (gitoxide)
 // to compute fingerprints; skipped when it is not built.
 
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'child_process';
 import { mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
 import { getNativeGit } from '@funny/core/git';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { startWatching, stopWatching } from '../../services/git-watcher-service.js';
 import { resetServices, setServices } from '../../services/service-registry.js';

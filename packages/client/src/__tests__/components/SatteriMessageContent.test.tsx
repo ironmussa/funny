@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const markdown = vi.hoisted(() => ({
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+const markdown = (() => ({
   renderMarkdownToSafeHtml: vi.fn(),
   renderReadyMarkdownToSafeHtml: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/satteri-markdown', () => markdown);
 

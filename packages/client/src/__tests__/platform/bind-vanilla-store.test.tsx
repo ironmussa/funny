@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 
 import { bindVanillaStore } from '@/platform/bind-vanilla-store';

@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { clearProjectSandbox, saveProjectSandbox } from '@/data/runner/actions';
 import { useProjectSandbox } from '@/data/runner/hooks';
@@ -9,12 +10,12 @@ import { clientComposition } from '@/platform/client-composition';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({
+const api = (() => ({
   listInfraConnections: vi.fn(),
   getProjectSandbox: vi.fn(),
   saveProjectSandbox: vi.fn(),
   clearProjectSandbox: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/system', () => ({ systemApi: { getProviders: vi.fn() } }));
 vi.mock('@/lib/api/infra', () => ({ infraApi: api }));
 

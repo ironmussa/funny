@@ -1,6 +1,7 @@
+import { afterEach, expect, test, vi } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
 import { toast } from 'sonner';
-import { afterEach, expect, test, vi } from 'vitest';
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 
@@ -40,7 +41,7 @@ test('waits for clipboard success, resets feedback, and clears the timer on unmo
     await pending;
   });
   expect(result.current[0]).toBe(true);
-  expect(toast.success).toHaveBeenCalledOnce();
+  expect(toast.success).toHaveBeenCalledTimes(1);
   act(() => {
     vi.advanceTimersByTime(2000);
   });
@@ -57,5 +58,5 @@ test('reports clipboard errors without success feedback', async () => {
   });
   expect(result.current[0]).toBe(false);
   expect(toast.success).not.toHaveBeenCalled();
-  expect(toast.error).toHaveBeenCalledOnce();
+  expect(toast.error).toHaveBeenCalledTimes(1);
 });

@@ -3,7 +3,7 @@
  * PR for its last commit (31 calls, ~16 s on this repo). It is now one GraphQL
  * request; these tests pin its mapping to the REST shape the client reads.
  */
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import {
   mapPullRequests,

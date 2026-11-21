@@ -5,10 +5,11 @@
  * non-synthesizing orphan updates, preamble buffering and history replay.
  */
 
+import { describe, expect, test } from 'bun:test';
+
 import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
 import type { ProviderManifest, QuirkFlags } from '@funny/shared/provider-manifest';
 import { geminiManifest } from '@funny/shared/provider-manifests';
-import { describe, expect, test } from 'vitest';
 
 import { GenericACPProcess } from '../agents/generic-acp.js';
 import type { CLIMessage } from '../agents/types.js';

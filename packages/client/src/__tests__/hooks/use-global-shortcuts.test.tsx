@@ -1,8 +1,11 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import { renderHook } from '@testing-library/react';
 import type { Terminal } from '@xterm/xterm';
 import type { ReactNode } from 'react';
+// Window events must go through jsdom (see the helper).
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // getTerminalScope drives which project's terminal the Ctrl+` shortcut targets.
 vi.mock('@/hooks/use-terminal-scope', () => ({
@@ -51,7 +54,7 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     terminalRegistry.clear();
-    vi.mocked(getTerminalScope).mockReturnValue({
+    mocked(getTerminalScope).mockReturnValue({
       scopeId: 'p1',
       scratchThreadId: null,
 
@@ -85,7 +88,7 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
   });
 
   test('creates the first terminal in the selected thread worktree', () => {
-    vi.mocked(getTerminalScope).mockReturnValue({
+    mocked(getTerminalScope).mockReturnValue({
       scopeId: 'p1',
       scratchThreadId: null,
 

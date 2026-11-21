@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import {
   collectCommitAuthors,
@@ -70,7 +70,7 @@ describe('commitMatchesFilters', () => {
     ['pull', ['remote', 'inferred']],
     ['push', ['local']],
   ] as const)('filters %s using the graph sync markers', (filter, expected) => {
-    expect(
+    expect<unknown>(
       commits.flatMap((commit) =>
         commitMatchesFilters(commit, '', filter, unpushed, unpulled, inferred) ? [commit.hash] : [],
       ),

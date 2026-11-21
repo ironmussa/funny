@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import { Hono } from 'hono';
-import { describe, test, expect } from 'vitest';
 
 import { canDoGitOps } from '../../services/thread-context.js';
 

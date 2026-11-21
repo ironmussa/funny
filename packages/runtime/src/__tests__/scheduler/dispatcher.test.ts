@@ -13,6 +13,8 @@
  *   - active map: handles are tracked and cleaned up on settle
  */
 
+import { describe, expect, test, vi } from 'bun:test';
+
 import { node, type PipelineDefinition, type ProgressReporter } from '@funny/pipelines';
 import {
   SchedulerPipelineDispatcher,
@@ -24,7 +26,6 @@ import {
 } from '@funny/thread-scheduler';
 import type { ActionProvider } from '@funny/workflows/compiler';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
-import { describe, expect, test, vi } from 'vitest';
 
 // ── Helpers ──────────────────────────────────────────────────
 

@@ -1,6 +1,14 @@
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
+import * as realOs from 'os';
 import { homedir, tmpdir } from 'os';
 import { resolve, join } from 'path';
+
+// Bun's os.homedir() does not follow later changes to process.env.HOME, so the
+// tests that need another home set it here instead.
+const realHomedir = realOs.homedir;
+let fakeHome: string | undefined;
+mock.module('os', () => ({ ...realOs, homedir: () => fakeHome ?? realHomedir() }));
 
 import {
   validatePath,
@@ -241,18 +249,16 @@ describe('validateProjectRootContainment / validateProjectRootPath', () => {
   });
 
   test('allows root-home repositories only when root is the filesystem owner home', () => {
-    const previousHome = process.env.HOME;
     try {
-      process.env.HOME = '/root';
+      fakeHome = '/root';
       expect(validateProjectRootPath('/root/my-repo').isOk()).toBe(true);
       expect(validateProjectRootPath('/root/.ssh/repo').isErr()).toBe(true);
       expect(validateProjectRootPath('/root').isErr()).toBe(true);
-      process.env.HOME = '/home/another-user';
+      fakeHome = '/home/another-user';
       process.env.FUNNY_PROJECT_ROOT = '/root';
       expect(validateProjectRootPath('/root/my-repo').isErr()).toBe(true);
     } finally {
-      if (previousHome === undefined) delete process.env.HOME;
-      else process.env.HOME = previousHome;
+      fakeHome = undefined;
     }
   });
 

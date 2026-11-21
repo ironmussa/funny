@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 /**
  * sandbox-git-credential-broker: a sandbox runner gets no GitHub token, so
  * `gitRemote` must then add no credential of its own and leave git to the
@@ -6,8 +7,6 @@
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { gitRemote } from '../git/index.js';
 import { executeSync } from '../git/process.js';

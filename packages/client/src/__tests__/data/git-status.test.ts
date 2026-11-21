@@ -1,7 +1,9 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+
 import type { GitStatusInfo } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
+import { mocked, waitFor } from '@funny/test-kit';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
@@ -35,7 +37,7 @@ import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { gitApi } from '@/lib/api/git';
 import { useThreadStore } from '@/stores/thread-store';
 
-const mockApi = vi.mocked(gitApi);
+const mockApi = mocked(gitApi);
 
 function makeStatus(
   overrides: Partial<GitStatusInfo> & { threadId: string; branchKey: string },
@@ -620,7 +622,7 @@ describe('git status data', () => {
         { id: 't2', projectId: 'p1', mode: 'local', branch: 'feat' },
       ]);
 
-      await vi.waitFor(() => {
+      await waitFor(() => {
         expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(1);
       });
       expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal));
@@ -637,7 +639,7 @@ describe('git status data', () => {
         { id: 'b1', projectId: 'p2', mode: 'worktree', branch: 'feat-c', worktreePath: '/wt/c' },
       ]);
 
-      await vi.waitFor(() => {
+      await waitFor(() => {
         expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(2);
       });
       expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal));
@@ -825,7 +827,7 @@ describe('git status data', () => {
         .mockReturnValueOnce(okAsync({ statuses: [] }));
 
       void fetchForProject('p1');
-      await vi.waitFor(() => expect(firstSignal).toBeDefined());
+      await waitFor(() => expect(firstSignal).toBeDefined());
       await fetchForProject('p1', true);
 
       expect(firstSignal?.aborted).toBe(true);

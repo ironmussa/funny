@@ -1,3 +1,4 @@
+import { afterAll, beforeEach, describe, expect, test, vi } from 'bun:test';
 /**
  * Security regression tests for the git read routes reachable by steer
  * sharees:
@@ -11,11 +12,10 @@ import { join } from 'path';
 import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getThread: vi.fn(),
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   getCommitBody: vi.fn(),
   getCommitFiles: vi.fn(),
   getCommitFileDiff: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
@@ -42,8 +42,9 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@funny/core/git')>();
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => {
+  const actual = actualFunnyCoreGit;
   return {
     ...actual,
     getSingleFileDiff: mocks.getSingleFileDiff,

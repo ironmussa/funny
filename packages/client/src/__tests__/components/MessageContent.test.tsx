@@ -1,5 +1,6 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
 import { screen, cleanup, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { MessageContent } from '@/components/thread/MessageContent';
 import { buildProject, withProjects } from '@/data/projects/testing';

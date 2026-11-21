@@ -1,6 +1,11 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { AgentModel, Message, PermissionMode } from '@funny/shared';
+import { mocked } from '@funny/test-kit';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+
+import { deferred } from '../helpers/data-layer-harness';
+import { seedThreads } from '../helpers/seed-thread-state';
 
 const {
   mockSendMessage,
@@ -22,7 +27,7 @@ const {
   mockUpdateThreadPermissionMode,
   mockGetThreadMessages,
   mockCleanupThreadActor,
-} = vi.hoisted(() => ({
+} = (() => ({
   mockSendMessage: vi.fn(),
   mockStopThread: vi.fn(),
   mockApproveTool: vi.fn(),
@@ -42,7 +47,7 @@ const {
   mockUpdateThreadPermissionMode: vi.fn(),
   mockGetThreadMessages: vi.fn(),
   mockCleanupThreadActor: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api/threads', () => ({
   threadsApi: {
@@ -125,24 +130,24 @@ vi.mock('@/stores/thread-store-internals', () => ({
   setUrlThreadId: vi.fn(),
 }));
 
-import { readThreadIndex } from '@/data/threads/read';
-import { getThreadsData } from '@/data/threads/store';
-import { buildThread, buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
-import { prefetchThreadData } from '@/stores/thread-machine-bridge';
-import { useThreadStore } from '@/stores/thread-store';
-import {
+// Imported after the mocks (bun's mock.module is not hoisted), so the stores
+// see the mocked modules when they load.
+const { readThreadIndex } = await import('@/data/threads/read');
+const { getThreadsData } = await import('@/data/threads/store');
+const { buildThread, buildThreadWithMessages, withThreadIndex } =
+  await import('@/data/threads/testing');
+const { prefetchThreadData } = await import('@/stores/thread-machine-bridge');
+const { useThreadStore } = await import('@/stores/thread-store');
+const {
   clearWSBuffer,
   getAndClearWSBuffer,
   getSelectGeneration,
   getSelectingThreadId,
   nextSelectGeneration,
   setSelectingThreadId,
-} from '@/stores/thread-store-internals';
-import { readActiveThreadView } from '@/stores/thread-view';
-import { handleWSCompactBoundary } from '@/stores/thread-ws-handlers';
-
-import { deferred } from '../helpers/data-layer-harness';
-import { seedThreads } from '../helpers/seed-thread-state';
+} = await import('@/stores/thread-store-internals');
+const { readActiveThreadView } = await import('@/stores/thread-view');
+const { handleWSCompactBoundary } = await import('@/stores/thread-ws-handlers');
 
 const baseThread = buildThreadWithMessages({ title: 'thread' });
 
@@ -753,16 +758,16 @@ describe('thread store actions', () => {
       let generation = 0;
       let selecting: string | null = null;
       const buffers = new Map<string, Array<{ type: string; data: any }>>();
-      vi.mocked(nextSelectGeneration).mockImplementation(() => ++generation);
-      vi.mocked(getSelectGeneration).mockImplementation(() => generation);
-      vi.mocked(getSelectingThreadId).mockImplementation(() => selecting);
-      vi.mocked(setSelectingThreadId).mockImplementation((id: string | null) => {
+      mocked(nextSelectGeneration).mockImplementation(() => ++generation);
+      mocked(getSelectGeneration).mockImplementation(() => generation);
+      mocked(getSelectingThreadId).mockImplementation(() => selecting);
+      mocked(setSelectingThreadId).mockImplementation((id: string | null) => {
         selecting = id;
       });
-      vi.mocked(clearWSBuffer).mockImplementation((id: string) => {
+      mocked(clearWSBuffer).mockImplementation((id: string) => {
         buffers.delete(id);
       });
-      vi.mocked(getAndClearWSBuffer).mockImplementation((id: string) => {
+      mocked(getAndClearWSBuffer).mockImplementation((id: string) => {
         const events = buffers.get(id);
         buffers.delete(id);
         return events;
@@ -809,12 +814,12 @@ describe('thread store actions', () => {
         );
         expect(useThreadStore.getState().activeThread?.id).toBe('t1');
       } finally {
-        vi.mocked(nextSelectGeneration).mockReset().mockReturnValue(1);
-        vi.mocked(getSelectGeneration).mockReset().mockReturnValue(1);
-        vi.mocked(getSelectingThreadId).mockReset();
-        vi.mocked(setSelectingThreadId).mockReset();
-        vi.mocked(clearWSBuffer).mockReset();
-        vi.mocked(getAndClearWSBuffer).mockReset().mockReturnValue([]);
+        mocked(nextSelectGeneration).mockReset().mockReturnValue(1);
+        mocked(getSelectGeneration).mockReset().mockReturnValue(1);
+        mocked(getSelectingThreadId).mockReset();
+        mocked(setSelectingThreadId).mockReset();
+        mocked(clearWSBuffer).mockReset();
+        mocked(getAndClearWSBuffer).mockReset().mockReturnValue([]);
       }
     });
   });

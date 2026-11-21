@@ -6,8 +6,9 @@
  * merging (a timeout gets no fix agent).
  */
 
+import { describe, expect, test } from 'bun:test';
+
 import { nullReporter, runPipeline } from '@funny/pipelines';
-import { describe, expect, test } from 'vitest';
 
 import { loadWorkflowCatalog } from '../catalog.js';
 import type { ActionProvider, ActionResult } from '../compiler/action-provider.js';

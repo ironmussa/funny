@@ -1,7 +1,7 @@
 // Coverage-based test selection inside a `bun test` package.
 //
-// `scripts/run-tests.ts` selects whole packages (and, for vitest, `vitest
-// related`). This script goes one level down for `bun test` packages: it
+// `scripts/run-tests.ts` selects whole packages. This script goes one level
+// down for `bun test` packages: it
 // records which source files each test file actually executes, then selects
 // the test files whose recorded sources a change touches. Imports that a
 // static graph cannot follow (dynamic `import()`, registries, DI) show up in

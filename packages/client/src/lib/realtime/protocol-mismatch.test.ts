@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'bun:test';
 
-const warning = vi.hoisted(() => vi.fn());
+const warning = (() => vi.fn())();
 vi.mock('sonner', () => ({ toast: { warning } }));
 
 import { notifyIncompatibleProtocol, resetProtocolMismatchNotice } from './protocol-mismatch';
@@ -16,7 +16,7 @@ describe('notifyIncompatibleProtocol', () => {
     notifyIncompatibleProtocol('Generated browser schema identity is incompatible', reload);
     notifyIncompatibleProtocol('again', reload);
 
-    expect(warning).toHaveBeenCalledOnce();
+    expect(warning).toHaveBeenCalledTimes(1);
     const options = warning.mock.calls[0][1] as { action: { label: string; onClick: () => void } };
     expect(options.action.label).toBe('Reload');
     options.action.onClick();

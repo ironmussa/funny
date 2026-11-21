@@ -6,11 +6,10 @@
  * and that malformed user YAMLs surface as warnings (not exceptions).
  */
 
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { loadPipelines } from '../../pipelines/yaml-loader.js';
 import { resolveBuiltinAgentByName } from '../../services/agent-registry.js';

@@ -1,10 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { loadWorkflowCatalog } from '../catalog.js';
 

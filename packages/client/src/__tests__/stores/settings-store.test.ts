@@ -1,5 +1,6 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { ToolPermission } from '@funny/shared';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // Mock the profile API so syncToServer calls don't reach the network
 // (the store saves through data/profile/actions → profileApi).

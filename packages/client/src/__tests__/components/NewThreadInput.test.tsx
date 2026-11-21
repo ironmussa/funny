@@ -1,9 +1,9 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import type { ReactNode } from 'react';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
-import { NewThreadInput } from '@/components/thread/NewThreadInput';
 import { buildProject, withProjects } from '@/data/projects/testing';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -14,10 +14,10 @@ import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 const mockCreateThread = vi.fn().mockResolvedValue(true);
 const mockNavigate = vi.fn();
-const mockListMcpServers = vi.hoisted(() => vi.fn());
-const mockCreateIdleThread = vi.hoisted(() => vi.fn());
-const mockRunWorkflow = vi.hoisted(() => vi.fn());
-const mockListThreads = vi.hoisted(() => vi.fn());
+const mockListMcpServers = (() => vi.fn())();
+const mockCreateIdleThread = (() => vi.fn())();
+const mockRunWorkflow = (() => vi.fn())();
+const mockListThreads = (() => vi.fn())();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -27,8 +27,9 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-router-dom')>();
+const actualReactRouterDom = { ...(await import('react-router-dom')) };
+vi.mock('react-router-dom', () => {
+  const actual = actualReactRouterDom;
   return {
     ...actual,
     useNavigate: () => mockNavigate,
@@ -143,6 +144,9 @@ vi.mock('@/components/PromptInput', () => ({
     </div>
   ),
 }));
+
+// Imported after the mocks, which bun does not hoist.
+const { NewThreadInput } = await import('@/components/thread/NewThreadInput');
 
 describe('NewThreadInput', () => {
   beforeEach(() => {

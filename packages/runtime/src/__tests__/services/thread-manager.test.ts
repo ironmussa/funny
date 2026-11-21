@@ -1,5 +1,6 @@
+import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { eq, and, like, desc, asc, inArray, or, ne, count as drizzleCount, sql } from 'drizzle-orm';
-import { describe, test, expect, beforeEach } from 'vitest';
 
 import {
   createTestDb,

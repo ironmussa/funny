@@ -5,19 +5,20 @@
  * Skipped when no Playwright Chromium is installed.
  */
 
+import { afterAll, beforeAll, describe, expect, test, vi } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server } from 'http';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { mocked, waitFor } from '@funny/test-kit';
 import type { Result } from 'neverthrow';
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
-const dataDir = vi.hoisted(() => {
+const dataDir = (() => {
   const dir = `${process.env.TMPDIR ?? '/tmp'}/funny-browser-tools-${Date.now()}`;
   process.env.FUNNY_DATA_DIR = dir;
   return dir;
-});
+})();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -165,7 +166,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
 
     const answered = allText(unwrap(await browserDialog(ctx, { accept: true })));
     expect(answered).toContain('Accepted the confirm dialog');
-    await vi.waitFor(async () =>
+    await waitFor(async () =>
       expect(allText(unwrap(await browserEvaluate(ctx, { expression: 'document.title' })))).toBe(
         '"yes"',
       ),
@@ -181,7 +182,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     const snap = allText(unwrap(await browserSnapshot(ctx, {})));
     const link = refOf(snap, /link "Open popup" \[ref=(e\d+)\]/);
     unwrap(await browserAct(ctx, { action: 'click', ref: link }));
-    await vi.waitFor(
+    await waitFor(
       () =>
         expect(browserSessionManager.findByThread(ctx.userId, ctx.threadId)?.url).toContain(
           '/popup',
@@ -254,7 +255,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
       kind: 'dialog',
       accept: false,
     });
-    await vi.waitFor(async () =>
+    await waitFor(async () =>
       expect(allText(unwrap(await browserEvaluate(ctx, { expression: 'document.title' })))).toBe(
         '"no"',
       ),
@@ -270,7 +271,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
       sessionId,
       kind: 'takeControl',
     });
-    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    const emitToUser = mocked(wsBroker.emitToUser);
     emitToUser.mockClear();
 
     await browserSessionManager.open(ctx.userId, sessionId, '');
@@ -302,7 +303,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
   test('screencast frames have the viewport size, also after a resize', async () => {
     unwrap(await browserNavigate(ctx, { url: `${base}/keys` }));
     const sessionId = `thread:${ctx.threadId}`;
-    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    const emitToUser = mocked(wsBroker.emitToUser);
     const lastFrameSize = async () => {
       emitToUser.mockClear();
       await new Promise((r) => setTimeout(r, 800));
@@ -430,7 +431,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     unwrap(await browserOpen(ctx, { url: `${base}/login` }));
     const snap = allText(unwrap(await browserSnapshot(ctx, {})));
     const delay = refOf(snap, /button "Delay"[^\n]*\[ref=(e\d+)\]/);
-    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    const emitToUser = mocked(wsBroker.emitToUser);
     const pointers = () =>
       emitToUser.mock.calls
         .map(([, event]) => event)
@@ -453,7 +454,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     unwrap(await browserOpen(ctx, { url: `${base}/login` }));
     const snap = allText(unwrap(await browserSnapshot(ctx, {})));
     const submit = refOf(snap, /button "Sign in" \[ref=(e\d+)\]/);
-    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    const emitToUser = mocked(wsBroker.emitToUser);
     emitToUser.mockClear();
 
     unwrap(await browserAct(ctx, { action: 'click', ref: submit }));
@@ -485,7 +486,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
         kind: 'audio',
         muted,
       });
-    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    const emitToUser = mocked(wsBroker.emitToUser);
     emitToUser.mockClear();
 
     await input(false);
@@ -515,23 +516,22 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
         ref: refOf(snap, /link "Open popup" \[ref=(e\d+)\]/),
       }),
     );
-    await expect.poll(() => session.backgroundTabs.length).toBe(1);
+    await waitFor(() => expect(session.backgroundTabs.length).toBe(1), 5000);
     const background = session.backgroundTabs[0].page;
 
     await background.evaluate((url) => void window.open(url), `${base}/audio`);
-    await expect.poll(() => session.backgroundTabs.length).toBe(2);
+    await waitFor(() => expect(session.backgroundTabs.length).toBe(2), 5000);
     const stray = session.backgroundTabs[1].page;
     await stray.waitForLoadState();
-    await expect
-      .poll(() =>
-        stray.evaluate(() => {
-          const el = document.querySelector('audio');
-          if (!el) throw new Error('no <audio> element');
-          void el.play().catch(() => {});
-          return el.muted;
-        }),
-      )
-      .toBe(true);
+    await waitFor(async () => {
+      const muted = await stray.evaluate(() => {
+        const el = document.querySelector('audio');
+        if (!el) throw new Error('no <audio> element');
+        void el.play().catch(() => {});
+        return el.muted;
+      });
+      expect(muted).toBe(true);
+    }, 5000);
 
     await browserSessionManager.close(session.sessionId, 'user');
     expect(stray.isClosed()).toBe(true);

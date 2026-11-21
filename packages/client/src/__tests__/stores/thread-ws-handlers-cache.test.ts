@@ -10,7 +10,7 @@
  * on `invalidateThreadData` must fire.
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
 import { getContextUsageStore } from '@/data/context-usage/store';
 import { seedContextUsage } from '@/data/context-usage/testing';
@@ -21,10 +21,10 @@ import {
 } from '@/data/threads/testing';
 import type { AgentInitInfo } from '@/stores/thread-types';
 
-const { mockInvalidate, mockBuffer } = vi.hoisted(() => ({
+const { mockInvalidate, mockBuffer } = (() => ({
   mockInvalidate: vi.fn(),
   mockBuffer: vi.fn(),
-}));
+}))();
 
 vi.mock('@/stores/thread-machine-bridge', () => ({
   invalidateThreadData: mockInvalidate,
@@ -197,7 +197,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     handleWSStatus(get, set, THREAD_ID, { status: 'running' });
 
     expect(state.activeThread.status).toBe('running');
-    expect(state.threadsById[THREAD_ID].status).toBe('running');
+    expect<unknown>(state.threadsById[THREAD_ID].status).toBe('running');
     expect(state.threadDataById[THREAD_ID].status).toBe('running');
   });
 

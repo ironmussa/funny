@@ -1,14 +1,14 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { Hono } from 'hono';
 import { okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
   resolveProjectPath: vi.fn(),
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   getActive: vi.fn(),
   abort: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
@@ -201,6 +201,6 @@ nodes:
     const res = await makeApp().request('/workflows/runs/run-1/cancel', { method: 'POST' });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, found: true });
-    expect(mocks.abort).toHaveBeenCalledOnce();
+    expect(mocks.abort).toHaveBeenCalledTimes(1);
   });
 });

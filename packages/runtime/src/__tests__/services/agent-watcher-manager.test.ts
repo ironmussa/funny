@@ -1,9 +1,11 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'bun:test';
+
+import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
 
 // ── Mock the manager's dependencies ──────────────────────────────
 // Shared mock state lives in vi.hoisted so the (hoisted) vi.mock factories
 // can reference it. `rows` is an in-memory fake of IWatcherRepository.
-const { rows, fakeWatchers, emitToUser } = vi.hoisted(() => {
+const { rows, fakeWatchers, emitToUser } = (() => {
   const rows = new Map<string, any>();
   const LIVE = new Set(['pending', 'fired']);
   const fakeWatchers = {
@@ -54,7 +56,7 @@ const { rows, fakeWatchers, emitToUser } = vi.hoisted(() => {
     },
   };
   return { rows, fakeWatchers, emitToUser: vi.fn() };
-});
+})();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ watchers: fakeWatchers }),
@@ -214,10 +216,10 @@ describe('watcher scanner lifecycle', () => {
     const listDue = vi.spyOn(fakeWatchers, 'listDueWatchers');
 
     startAgentWatchers();
-    await vi.runAllTicks();
+    await flushMicrotasks();
 
     expect(listPending).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(60_000);
+    await advanceTimersByTimeAsync(60_000);
     expect(listPending).toHaveBeenCalledTimes(1);
     expect(listDue).not.toHaveBeenCalled();
   });
@@ -227,7 +229,7 @@ describe('watcher scanner lifecycle', () => {
     const listDue = vi.spyOn(fakeWatchers, 'listDueWatchers');
 
     startAgentWatchers();
-    await vi.runAllTicks();
+    await flushMicrotasks();
     await createOrReschedule({
       threadId: 't1',
       userId: 'u',
@@ -236,9 +238,9 @@ describe('watcher scanner lifecycle', () => {
       delayMs: 60_000,
     });
 
-    await vi.advanceTimersByTimeAsync(59_999);
+    await advanceTimersByTimeAsync(59_999);
     expect(listDue).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
+    await advanceTimersByTimeAsync(1);
     expect(listDue).toHaveBeenCalledTimes(1);
   });
 });
@@ -247,7 +249,7 @@ describe('watcher firing', () => {
   test('a watcher cancelled after the scan read it does not wake the agent', async () => {
     vi.useFakeTimers();
     const { sendMessage } = await import('../../services/thread-service/messaging.js');
-    vi.mocked(sendMessage).mockClear();
+    mocked(sendMessage).mockClear();
     startAgentWatchers();
     const watcher = await createOrReschedule({
       threadId: 't1',
@@ -269,7 +271,7 @@ describe('watcher firing', () => {
       return due;
     };
     try {
-      await vi.advanceTimersByTimeAsync(61_000);
+      await advanceTimersByTimeAsync(61_000);
     } finally {
       fakeWatchers.listDueWatchers = listDue;
       vi.useRealTimers();
@@ -287,7 +289,7 @@ describe('watcher firing', () => {
   test('a watcher snoozed after the scan read it is not fired early', async () => {
     vi.useFakeTimers();
     const { sendMessage } = await import('../../services/thread-service/messaging.js');
-    vi.mocked(sendMessage).mockClear();
+    mocked(sendMessage).mockClear();
     startAgentWatchers();
     const watcher = await createOrReschedule({
       threadId: 't1',
@@ -308,7 +310,7 @@ describe('watcher firing', () => {
       return due;
     };
     try {
-      await vi.advanceTimersByTimeAsync(61_000);
+      await advanceTimersByTimeAsync(61_000);
     } finally {
       fakeWatchers.listDueWatchers = listDue;
       vi.useRealTimers();
@@ -319,3 +321,8 @@ describe('watcher firing', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 });
+
+/** Stand-in for vitest's `vi.runAllTicks()`: let pending promise callbacks run. */
+async function flushMicrotasks(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+}

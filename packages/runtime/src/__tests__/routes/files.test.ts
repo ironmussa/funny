@@ -6,6 +6,7 @@
  * use cannot escape the project scope.
  */
 
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { execFileSync } from 'child_process';
 import { mkdirSync, writeFileSync, symlinkSync, mkdtempSync, rmSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
@@ -15,7 +16,6 @@ import { getNativeGit } from '@funny/core/git';
 import { signMediaClaim } from '@funny/shared/auth/media-url-signature';
 import { deriveRunnerForwardingKey, deriveRunnerMediaKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 
 import { clearRunnerKeys, configureRunnerKeys } from '../../lib/runner-keys.js';
 import filesRoutes, { rawFileHeaders } from '../../routes/files.js';

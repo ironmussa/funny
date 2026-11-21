@@ -11,11 +11,12 @@
  *      dispatcher will wire these to `touchLastEvent` for stall detection.
  */
 
+import { describe, expect, test, vi } from 'bun:test';
+
 import { runPipeline, type ProgressReporter, type StepProgressData } from '@funny/pipelines';
 import { parseWorkflowYaml } from '@funny/workflows';
 import type { ActionProvider } from '@funny/workflows/compiler';
 import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
-import { describe, expect, test, vi } from 'vitest';
 
 const SCHEDULER_THREAD_YAML = `
 name: scheduler-thread-smoke

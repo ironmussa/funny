@@ -570,6 +570,7 @@
     "commitCount_one": "{{count}} commit",
     "commitCount_other": "{{count}} commits",
     "currentBranch": "{{ref}} (current branch)",
+    "threadBranchMarker": "This thread works on {{branch}}",
     "pullRequest": "PR #{{number}} ({{state}})",
     "pullRequestMerged": "PR #{{number}} merged — its code is already in the base branch",
     "nodeAuthor": "Author: {{author}}",

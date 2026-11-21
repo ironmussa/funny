@@ -562,6 +562,7 @@
     "commitCount_one": "{{count}} commit",
     "commitCount_other": "{{count}} commits",
     "currentBranch": "{{ref}} (ramificação atual)",
+    "threadBranchMarker": "Esta conversa trabalha em {{branch}}",
     "pullRequest": "PR #{{number}} ({{state}})",
     "pullRequestMerged": "PR #{{number}} mesclado — seu código já está no branch base",
     "nodeAuthor": "Autor: {{author}}",

@@ -49,8 +49,12 @@ import {
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import { clearRunnerKeys, configureRunnerKeys } from '../../lib/runner-keys.js';
-import { authMiddleware } from '../../middleware/auth.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+
+// auth.ts reads TEAM_SERVER_URL / WS_TUNNEL_ONLY once, at load. A static import
+// runs before the env block above, so the cookie path only worked when the
+// shell already had TEAM_SERVER_URL (a funny runner does; CI does not).
+const { authMiddleware } = await import('../../middleware/auth.js');
 
 const ROOT = 'root-secret-0123456789abcdef0123456789abcdef';
 const OWNER = 'owner-user';

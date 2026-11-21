@@ -136,7 +136,7 @@ const { useThreadStore } = await import('@/stores/thread-store');
 // ── Setup ───────────────────────────────────────────────────────
 
 beforeEach(() => {
-  useThreadStore.setState({ threadDataById: {} });
+  useThreadStore.setState({ threadDataById: {}, threadLoadFailedId: null });
   useAppStore.setState(
     withProjects({
       projects: [
@@ -187,6 +187,26 @@ describe('ThreadView', () => {
     );
 
     await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
+  });
+
+  test('falls back to the regular empty screen when the thread fails to load', async () => {
+    const onReady = vi.fn();
+    localStorage.setItem('funny_last_route', '/projects/p1/threads/gone');
+    useAppStore.setState(withProjects({ projects: [], selectedProjectId: null }));
+    renderWithProviders(<ThreadView onReady={onReady} />, {
+      route: '/projects/p1/threads/gone',
+      threadId: 'gone',
+    });
+    expect(screen.getByTestId('thread-loading-placeholder')).toBeInTheDocument();
+
+    act(() => useThreadStore.setState({ threadLoadFailedId: 'gone' }));
+
+    // The existing "add a project" screen, not a spinner that never ends.
+    expect(screen.getByTestId('thread-empty-add-project')).toBeInTheDocument();
+    expect(screen.queryByTestId('thread-loading-placeholder')).not.toBeInTheDocument();
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
+    // The root path must not restore the dead route.
+    expect(localStorage.getItem('funny_last_route')).toBeNull();
   });
 
   test('keeps the submitted prompt in the conversation layout while a new thread loads', () => {

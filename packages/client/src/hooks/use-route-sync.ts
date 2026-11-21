@@ -44,6 +44,16 @@ function persistCurrentRoute(pathname: string) {
   } catch {}
 }
 
+/**
+ * Forget the saved route when it is `pathname`, so a route that no longer loads
+ * (a deleted thread) is not restored on the next visit to the root path.
+ */
+export function forgetLastRoute(pathname: string) {
+  try {
+    if (localStorage.getItem(LAST_ROUTE_KEY) === pathname) localStorage.removeItem(LAST_ROUTE_KEY);
+  } catch {}
+}
+
 export function useRouteSync() {
   const location = useLocation();
   const navigate = useNavigate();

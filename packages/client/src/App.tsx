@@ -328,6 +328,7 @@ export function App() {
     isFullScreenView,
     liveColumnsOpen,
     gridSelectedThreadId,
+    !!effectiveId || hasSelectedProject,
   );
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);

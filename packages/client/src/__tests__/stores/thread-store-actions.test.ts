@@ -4,6 +4,8 @@ import type { AgentModel, Message, PermissionMode } from '@funny/shared';
 import { mocked } from '@funny/test-kit';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 
+import { THREAD_MESSAGE_PAGE_SIZE } from '@/lib/thread-message-page';
+
 import { deferred } from '../helpers/data-layer-harness';
 import { seedThreads } from '../helpers/seed-thread-state';
 
@@ -1460,7 +1462,7 @@ describe('thread store actions', () => {
       expect(mockGetThreadMessages).toHaveBeenCalledWith(
         't1',
         '2026-01-01T00:00:00.000Z',
-        50,
+        THREAD_MESSAGE_PAGE_SIZE,
         'after',
       );
       const payload = useThreadStore.getState().threadDataById.t1;

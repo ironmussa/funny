@@ -3,6 +3,7 @@ import { assign, fromPromise, setup } from 'xstate';
 
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { THREAD_MESSAGE_PAGE_SIZE } from '@/lib/thread-message-page';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 import { isExternalClaudeShell } from '@/lib/thread-variant';
 
@@ -35,7 +36,7 @@ export const threadDataMachine = setup({
     fetcher: fromPromise<ThreadDataSnapshot, { threadId: string }>(async ({ input, signal }) => {
       const scrollOptions = loadThreadScrollFetchOptions(input.threadId);
       const [threadResult, eventsResult] = await Promise.all([
-        api.getThread(input.threadId, 50, signal, scrollOptions),
+        api.getThread(input.threadId, THREAD_MESSAGE_PAGE_SIZE, signal, scrollOptions),
         api.getThreadEvents(input.threadId, signal),
       ]);
       if (threadResult.isErr()) throw threadResult.error;
@@ -51,7 +52,12 @@ export const threadDataMachine = setup({
           projectId: thread.projectId || null,
         });
         if (imported.isOk()) {
-          const refetched = await api.getThread(input.threadId, 50, signal, scrollOptions);
+          const refetched = await api.getThread(
+            input.threadId,
+            THREAD_MESSAGE_PAGE_SIZE,
+            signal,
+            scrollOptions,
+          );
           if (refetched.isOk()) thread = refetched.value;
         } else {
           log.warn('Failed to hydrate external Claude Code session', {

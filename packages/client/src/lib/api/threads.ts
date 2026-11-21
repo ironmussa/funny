@@ -6,6 +6,8 @@ import type {
   ThreadStage,
 } from '@funny/shared';
 
+import { THREAD_MESSAGE_PAGE_SIZE } from '@/lib/thread-message-page';
+
 import { request } from './_core';
 import { trpc, trpcCall } from './_trpc';
 
@@ -76,7 +78,7 @@ export const threadsApi = {
   getThreadMessages: (
     threadId: string,
     cursor: string,
-    limit = 50,
+    limit = THREAD_MESSAGE_PAGE_SIZE,
     direction: 'before' | 'after' = 'before',
   ) => trpcCall(() => procedures.messages.query({ id: threadId, cursor, limit, direction })),
   searchThreadMessages: (threadId: string, query: string, limit = 100, caseSensitive = false) =>

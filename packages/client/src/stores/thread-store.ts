@@ -79,6 +79,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { loadContextUsage } from '@/lib/context-usage-storage';
 import { markMemoryPhase } from '@/lib/memory-phase';
 import { metric, startSpan } from '@/lib/telemetry';
+import { THREAD_MESSAGE_PAGE_SIZE } from '@/lib/thread-message-page';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 import { toastError } from '@/lib/toast-error';
 
@@ -856,7 +857,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       })),
     );
 
-    const result = await api.getThreadMessages(threadId, oldestMessage.timestamp, 50);
+    const result = await api.getThreadMessages(
+      threadId,
+      oldestMessage.timestamp,
+      THREAD_MESSAGE_PAGE_SIZE,
+    );
 
     // Bail if user switched away. The map entry might be evicted by now.
     const current = get().threadDataById[threadId];
@@ -911,7 +916,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       })),
     );
 
-    const result = await api.getThreadMessages(threadId, newestMessage.timestamp, 50, 'after');
+    const result = await api.getThreadMessages(
+      threadId,
+      newestMessage.timestamp,
+      THREAD_MESSAGE_PAGE_SIZE,
+      'after',
+    );
 
     const current = get().threadDataById[threadId];
     if (!current) return;
@@ -1045,7 +1055,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const threadId = active.id;
     const requestSeq = beginThreadRequest();
     const [result, eventsResult] = await Promise.all([
-      api.getThread(threadId, 50, undefined, getThreadScrollFetchOptions(threadId)),
+      api.getThread(
+        threadId,
+        THREAD_MESSAGE_PAGE_SIZE,
+        undefined,
+        getThreadScrollFetchOptions(threadId),
+      ),
       api.getThreadEvents(threadId),
     ]);
     if (result.isErr()) return; // silently ignore
@@ -1218,7 +1233,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const result = await api.getThread(
       threadId,
-      50,
+      THREAD_MESSAGE_PAGE_SIZE,
       undefined,
       getThreadScrollFetchOptions(threadId),
     );

@@ -1,5 +1,6 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
 import type { WSAgentAccountData } from '@funny/shared';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import {
   accountKey,

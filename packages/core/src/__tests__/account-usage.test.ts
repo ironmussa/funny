@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { SDKControlGetUsageResponse } from '@anthropic-ai/claude-agent-sdk';
-import { describe, expect, test } from 'vitest';
 
 import { toAgentAccountInfo, toAgentPlanUsage } from '../agents/account-usage.js';
 

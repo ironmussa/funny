@@ -45,11 +45,13 @@ function toolCallGroupAreEqual(prev: ToolCallGroupProps, next: ToolCallGroupProp
   return true;
 }
 
-/** The group's header icon, by the tool's kind. */
-function groupIcon(name: string): typeof Wrench {
-  if (isTodoToolName(name)) return ListTodo;
-  if (name === 'Task' || name === 'Agent') return Bot;
-  return Wrench;
+/** The group's header icon, by the tool's kind. A component, not a lookup in
+ * render: React Compiler refuses a component picked during render. */
+function GroupIcon({ name }: { name: string }) {
+  const className = 'icon-xs text-muted-foreground shrink-0';
+  if (isTodoToolName(name)) return <ListTodo className={className} />;
+  if (name === 'Task' || name === 'Agent') return <Bot className={className} />;
+  return <Wrench className={className} />;
 }
 
 export const ToolCallGroup = memo(function ToolCallGroup({
@@ -64,7 +66,6 @@ export const ToolCallGroup = memo(function ToolCallGroup({
     name === 'Bash' && calls.some((call) => call.author === 'shell'),
   );
   const isTodo = isTodoToolName(name);
-  const GroupIcon = groupIcon(name);
   const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
   const displayTime = useMemo(
     () => (timestamp ? timeAgo(timestamp, t, now) : null),
@@ -86,7 +87,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
           <ChevronRight
             className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
-          <GroupIcon className="icon-xs text-muted-foreground shrink-0" />
+          <GroupIcon name={name} />
           <span className="text-foreground shrink-0 font-mono font-medium">{label}</span>
           <span className="bg-muted-foreground/20 text-muted-foreground inline-flex items-center justify-center rounded-full px-1.5 text-xs leading-4 font-medium">
             ×{calls.length}

@@ -30,7 +30,7 @@ pre-commit:
 
           - name: lint
             glob: '**/*.{ts,tsx,js,jsx}'
-            run: bunx oxlint {staged_files}
+            run: bun scripts/bun-lint.ts {staged_files}
 
           # React Doctor on the staged client files. `--scope lines` reports only
           # issues on the changed lines, so findings already in a file never

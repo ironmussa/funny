@@ -28,8 +28,10 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
         with:
-          # Pinned for deterministic CI — bump deliberately, not via "latest".
-          bun-version: 1.4.4
+          # canary, not the pinned 1.4.4 of the other jobs: `bun lint` (the
+          # built-in linter `lint` runs) is only in the canary builds so far.
+          # Pin this back to an exact version once a release has it.
+          bun-version: canary
 
       - name: Cache bun dependencies
         uses: actions/cache@v6
@@ -57,7 +59,7 @@ jobs:
         with:
           workspaces: packages/remote-connector
 
-      - name: Lint (oxlint)
+      - name: Lint (bun lint)
         run: bun run lint
 
       # The evflow viewer is not a workspace: it has its own lockfile and Tailwind.

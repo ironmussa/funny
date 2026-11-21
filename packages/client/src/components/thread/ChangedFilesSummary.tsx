@@ -13,7 +13,7 @@ import { countDiffStats, parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
 
 /** Rows shown at first, and added by each "Show more" click. */
-export const CHANGED_FILES_PAGE_SIZE = 20;
+const CHANGED_FILES_PAGE_SIZE = 20;
 
 /**
  * Compact summary of the files modified during one session (user turn → agent

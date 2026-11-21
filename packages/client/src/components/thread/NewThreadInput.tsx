@@ -343,7 +343,8 @@ export function NewThreadInput({
       // it stays on this screen (toast only), so it must not pin the loader.
       const willNavigateAway = shouldNavigateAfterCreate(
         !!onCreated,
-        newThreadIdleOnly || opts.sendToBacklog === true,
+        newThreadIdleOnly,
+        opts.sendToBacklog === true,
         newThreadIsScratch,
         !!activeDesignId,
       );
@@ -504,10 +505,11 @@ function composePromptKey(
 function shouldNavigateAfterCreate(
   hasCallback: boolean,
   idleOnly: boolean,
+  sendToBacklog: boolean,
   scratch: boolean,
   hasDesign: boolean,
 ) {
-  return !hasCallback && !idleOnly && (scratch || !hasDesign);
+  return !hasCallback && !idleOnly && !sendToBacklog && (scratch || !hasDesign);
 }
 
 /** Where a created scratch or normal thread opens; `undefined` stays in place. */

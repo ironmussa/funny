@@ -20,6 +20,7 @@ import { analyticsRouter, pushRouter } from './routers/insights.js';
 import { personalTokensRouter } from './routers/personal-tokens.js';
 import { pipelinesRouter } from './routers/pipelines.js';
 import { profileRouter } from './routers/profile.js';
+import { projectSecretsRouter } from './routers/project-secrets.js';
 import { projectsRouter } from './routers/projects.js';
 import { projectRunnersRouter, runnersRouter } from './routers/runners.js';
 import { settingsRouter } from './routers/settings.js';
@@ -44,6 +45,7 @@ export const appRouter = router({
   githubApp: githubAppRouter,
   personalTokens: personalTokensRouter,
   factory: factoryRouter,
+  projectSecrets: projectSecretsRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -74,6 +76,7 @@ export type {
   ProfilePort,
   ProjectCommand,
   ProjectRunnersPort,
+  ProjectSecretsPort,
   ProjectsPort,
   PortResult,
   PushPort,

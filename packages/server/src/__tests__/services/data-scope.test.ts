@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -21,6 +21,9 @@ import {
   setProjectGithubToken,
 } from '../../services/runner-scope.js';
 import { seedMessage, seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
+
+// The keyring is resolved on first use, so this is in place before any secret is saved.
+process.env.FUNNY_ENCRYPTION_KEYS = JSON.stringify({ active: 'k1', keys: { k1: 'cd'.repeat(32) } });
 
 const FORBIDDEN = { type: 'data:ack', success: false, error: 'Forbidden' };
 
@@ -52,6 +55,7 @@ describe('dedicated runner data scope', () => {
     for (const table of [
       'project_runner_grants',
       'project_runner_settings',
+      'project_secrets',
       'messages',
       'threads',
       'runner_project_assignments',
@@ -181,6 +185,50 @@ describe('dedicated runner data scope', () => {
       projectId: 'py',
     });
     expect(fallback.token).toBeNull();
+  });
+
+  test('project secrets: only a runner in the project scope that belongs to the thread owner', async () => {
+    const { projectSecretsService } = await import('../../services/project-secrets.js');
+    const { log } = await import('../../lib/logger.js');
+    (
+      await projectSecretsService().set('alice', {
+        projectId: 'px',
+        scope: 'project',
+        name: 'API_KEY',
+        value: 'px-secret-value',
+        allowInSandbox: false,
+      })
+    )._unsafeUnwrap();
+    const ask = { type: 'data:get_project_secrets', threadId: 'tx' };
+
+    // The project's dedicated runner gets them.
+    expect(await send('rx', ask)).toEqual({
+      type: 'data:get_project_secrets_response',
+      secrets: [{ name: 'API_KEY', value: 'px-secret-value' }],
+    });
+
+    // A runner of the same user outside the project's scope is refused and audited.
+    const info = spyOn(log, 'info');
+    expect(await send('laptop', ask)).toEqual(FORBIDDEN);
+    const denials = info.mock.calls
+      .map((call) => JSON.stringify(call))
+      .filter((call) => call.includes('[AUDIT] runner.scope_denied'));
+    expect(denials).toHaveLength(1);
+    expect(denials[0]).toContain('"runnerId":"laptop"');
+    expect(denials[0]).toContain('"type":"data:get_project_secrets"');
+    info.mockRestore();
+
+    // Another user's runner is refused by the ownership check.
+    seedRunner(db, { id: 'bob-laptop', userId: 'bob', token: 'tok-b', hostname: 'b' });
+    const fromBob = await handleDataMessageWithAck('bob-laptop', 'bob', ask);
+    expect(fromBob).toEqual(FORBIDDEN);
+    expect(JSON.stringify(fromBob)).not.toContain('px-secret-value');
+
+    // A scratch thread has no project secrets.
+    expect(await send('laptop', { type: 'data:get_project_secrets', threadId: 'ts' })).toEqual({
+      type: 'data:get_project_secrets_response',
+      secrets: [],
+    });
   });
 
   test('user-level settings stay available to dedicated runners', async () => {

@@ -665,6 +665,26 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
           message: issued.error.message,
         };
   },
+  'data:get_project_secrets': async ({ runnerId, ownerId, data }) => {
+    // Data scope checked the runner may serve the thread's project (or is the
+    // thread's sandbox); the service adds that it is the thread owner's.
+    const { projectSecretsService } = await import('./project-secrets.js');
+    const resolved = await projectSecretsService().resolveThreadSecrets({
+      threadId: String(data.threadId),
+      runnerId,
+      runnerOwnerId: ownerId,
+    });
+    return resolved.isOk()
+      ? { type: 'data:get_project_secrets_response', secrets: resolved.value }
+      : {
+          type: 'data:get_project_secrets_response',
+          error: resolved.error.kind,
+          message: resolved.error.message,
+          ...(resolved.error.kind === 'undecryptable' && {
+            secretName: resolved.error.secretName,
+          }),
+        };
+  },
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');
     const key = await getProviderKey(ownerId, 'minimax');

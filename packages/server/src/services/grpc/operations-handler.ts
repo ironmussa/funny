@@ -113,6 +113,7 @@ const OPERATION_KINDS = [
   'getProviderKey',
   'getGithubToken',
   'getGithubAppToken',
+  'getProjectSecrets',
   'getMinimaxApiKey',
   'updateProfile',
   'resolveAgentExecutionProfile',
@@ -361,6 +362,7 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     projectId: value.projectId ?? undefined,
   }),
   getGithubAppToken: threadScoped('data:get_github_app_token'),
+  getProjectSecrets: threadScoped('data:get_project_secrets'),
   getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),
   updateProfile: (value, principalUserId) => ({
     type: 'data:update_profile',

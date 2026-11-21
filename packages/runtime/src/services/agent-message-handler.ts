@@ -24,6 +24,7 @@ import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { computeBranchKey } from '../utils/git-status-helpers.js';
+import { redactDeep } from './agent-startup/project-secrets.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { recordBashCheck } from './checks/bash-check-metric.js';
 import { flushPendingMessageUpdates } from './remote-thread-data-client.js';
@@ -202,7 +203,12 @@ export class AgentMessageHandler {
     }
   }
 
-  async handle(threadId: string, msg: CLIMessage): Promise<void> {
+  async handle(threadId: string, rawMsg: CLIMessage): Promise<void> {
+    // Project secrets the agent was started with are replaced here, once, so
+    // everything below (the stored transcript, the live stream, the debug
+    // logs) sees the same redacted message (project-secrets).
+    const redact = this.state.secretRedactors.get(threadId);
+    const msg = redact ? redactDeep(rawMsg, redact) : rawMsg;
     // Every message is activity: without this the stale sweep (1h) evicted a
     // long-running agent's dedup maps mid-run, duplicating messages/tool calls.
     this.state.touch(threadId);

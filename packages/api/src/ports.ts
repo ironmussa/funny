@@ -77,6 +77,10 @@ import type {
 } from '@funny/shared/contracts/pipelines';
 import type { ProfileResponse } from '@funny/shared/contracts/profile';
 import type {
+  ProjectSecretSummary,
+  SetProjectSecretInput,
+} from '@funny/shared/contracts/project-secrets';
+import type {
   ListProjectsQuery,
   ProjectCommandBody,
   ProjectMemberEntry,
@@ -467,6 +471,20 @@ export interface AuthzPort {
   adminRefused(userId: string, path: string, role: string | null): void;
 }
 
+/**
+ * A project's secrets (openspec project-secrets). No method returns a value.
+ * The procedure checked `view` to list and `steer` to write; the port demands
+ * `manage` for a shared secret (403) and keeps personal ones to the caller.
+ */
+export interface ProjectSecretsPort {
+  /** The project's shared secrets plus the caller's own, by name. */
+  list(userId: string, projectId: string): PortResult<ProjectSecretSummary[]>;
+  /** Creates the secret or changes the one with this name and scope; audited. */
+  set(userId: string, input: SetProjectSecretInput): PortResult<ProjectSecretSummary>;
+  /** 404 when the secret is not visible to the caller; audited. */
+  remove(userId: string, projectId: string, id: string): PortResult<Ok>;
+}
+
 export interface ApiPorts {
   automations: AutomationsPort;
   pipelines: PipelinesPort;
@@ -485,6 +503,7 @@ export interface ApiPorts {
   personalTokens: PersonalTokensPort;
   projectRunners: ProjectRunnersPort;
   factory: FactoryPort;
+  projectSecrets: ProjectSecretsPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

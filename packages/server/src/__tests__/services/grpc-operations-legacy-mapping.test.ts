@@ -227,6 +227,7 @@ describe('operations handler legacy request mapping', () => {
         provider: 'anthropic',
       },
       getGithubToken: { type: 'data:get_github_token', userId: 'user-1', projectId: 'p1' },
+      getProjectSecrets: { type: 'data:get_project_secrets', threadId: 't1' },
       getMinimaxApiKey: { type: 'data:get_minimax_api_key', userId: 'user-1' },
       updateProfile: { type: 'data:update_profile', userId: 'user-1', payload: decoded },
       resolveAgentExecutionProfile: {

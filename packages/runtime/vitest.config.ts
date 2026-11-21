@@ -13,6 +13,7 @@ export default defineConfig({
       '@funny/shared/dom/extract': path.join(shared, 'dom/extract.ts'),
       '@funny/shared/errors': path.join(shared, 'errors.ts'),
       '@funny/shared/github-app-token': path.join(shared, 'github-app-token.ts'),
+      '@funny/shared/project-secrets': path.join(shared, 'project-secrets.ts'),
       '@funny/shared/models': path.join(shared, 'models.ts'),
       '@funny/shared/provider-manifest': path.join(shared, 'provider-manifest.ts'),
       '@funny/shared/provider-manifests': path.join(shared, 'provider-manifests.ts'),

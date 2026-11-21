@@ -79,6 +79,17 @@ export function canDoGitOps(thread: { isScratch?: boolean }): boolean {
 }
 
 /**
+ * Returns true when the thread's agent starts with its project's secrets
+ * (project-secrets). A scratch thread has no project, so nothing is asked.
+ */
+export function receivesProjectSecrets(thread: {
+  isScratch?: boolean;
+  projectId?: string | null;
+}): boolean {
+  return !thread.isScratch && !!thread.projectId;
+}
+
+/**
  * Returns true for a thread that runs in its own sandbox (thread-sandboxes).
  * Its checkout lives on the sandbox runner, so its git status is never the
  * project checkout's: it gets its own status key, and a project runner's bulk

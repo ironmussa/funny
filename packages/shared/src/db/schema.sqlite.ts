@@ -1122,3 +1122,29 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
   p256dh: text('p256dh').notNull(),
   auth: text('auth').notNull(),
 });
+
+/**
+ * Project secrets (openspec `project-secrets`): named values handed to the
+ * project's agents as environment variables. `scope = 'project'` rows are
+ * shared by the members and carry `user_id = ''` (not NULL: a unique index
+ * treats NULLs as distinct, which would allow duplicate shared names);
+ * `scope = 'user'` rows belong to one member. `ciphertext` is keyring-encrypted.
+ */
+export const projectSecrets = sqliteTable(
+  'project_secrets',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull(),
+    userId: text('user_id').notNull().default(''),
+    name: text('name').notNull(),
+    ciphertext: text('ciphertext').notNull(),
+    allowInSandbox: integer('allow_in_sandbox').notNull().default(0),
+    updatedBy: text('updated_by').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('project_secrets_scope_name').on(t.projectId, t.scope, t.userId, t.name)],
+);

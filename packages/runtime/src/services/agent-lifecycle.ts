@@ -20,6 +20,7 @@ import type {
   Thread,
   ThreadStatus,
 } from '@funny/shared';
+import { createSecretRedactor, type SecretValue } from '@funny/shared/project-secrets';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
 
@@ -39,6 +40,7 @@ import {
   buildPermissionRuleLookup,
 } from './agent-startup/permission-hooks.js';
 import { ensureLazyCwd, syncWorktreeProjectAssets } from './agent-startup/prepare-workspace.js';
+import { composeAgentEnv, loadProjectSecrets } from './agent-startup/project-secrets.js';
 import { recoverThreadContext } from './agent-startup/recover-context.js';
 import { buildSystemPrefix, projectInstructionsBlock } from './agent-startup/system-prefix.js';
 import type { AgentStateTracker } from './agent-state.js';
@@ -46,7 +48,13 @@ import { captureGitCheckpoint } from './git-checkpoints.js';
 import { prepareAgentGithub } from './sandbox-github-auth.js';
 import type { IThreadManager, RuntimeThreadRecord } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
-import { canDoGitOps, hasLazyCwd, resolveThreadCwd, tmpAssetsPathFor } from './thread-context.js';
+import {
+  canDoGitOps,
+  hasLazyCwd,
+  receivesProjectSecrets,
+  resolveThreadCwd,
+  tmpAssetsPathFor,
+} from './thread-context.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
@@ -364,8 +372,13 @@ export class AgentLifecycleManager {
     // Resolve per-user API keys and git identity for agent subprocesses.
     // git and gh in a sandbox use the thread's GitHub App token, renewed in place.
     await prepareAgentGithub(threadId);
+    const secrets = await this.loadThreadSecrets(threadId, thread);
     const baseEnv = await buildAgentEnv({ threadId, userId, provider, assetsDir });
-    const agentEnv = await this.applyAgentProfile(threadId, activeAgentProfile, baseEnv);
+    const agentEnv = await this.applyAgentProfile(
+      threadId,
+      activeAgentProfile,
+      composeAgentEnv(secrets, baseEnv),
+    );
 
     await this.launchAgent(
       {
@@ -649,6 +662,25 @@ export class AgentLifecycleManager {
     setThreadTrace(threadId, { traceId: runSpan.traceId, spanId: runSpan.spanId });
     metric('agents.running', this.runSpans.size, { type: 'gauge' });
     metric('threads.started', 1, { type: 'sum', attributes: { model, provider } });
+  }
+
+  /**
+   * The project secrets this run starts with (project-secrets), and the
+   * redactor for what the run stores and shows. A failure to read them throws:
+   * the start fails with the reason, never with a secret silently missing.
+   */
+  private async loadThreadSecrets(
+    threadId: string,
+    thread: RuntimeThreadRecord | undefined,
+  ): Promise<SecretValue[]> {
+    this.state.secretRedactors.delete(threadId);
+    if (!thread || !receivesProjectSecrets(thread)) return [];
+    const loaded = await loadProjectSecrets(threadId);
+    if (loaded.isErr()) throw new Error(loaded.error);
+    if (loaded.value.length > 0) {
+      this.state.secretRedactors.set(threadId, createSecretRedactor(loaded.value));
+    }
+    return loaded.value;
   }
 
   /** Merge the active agent profile env and record (or clear) it on the thread. */

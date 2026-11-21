@@ -578,6 +578,12 @@ pub struct GetGithubAppToken {
     #[prost(string, tag="1")]
     pub thread_id: ::prost::alloc::string::String,
 }
+/// project-secrets: the project secrets the agent of a thread starts with.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetProjectSecrets {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetMinimaxApiKey {
 }
@@ -709,7 +715,7 @@ pub struct OperationsRequest {
     pub session: ::core::option::Option<SessionContext>,
     #[prost(message, optional, tag="2")]
     pub metadata: ::core::option::Option<RequestMetadata>,
-    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85")]
+    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86")]
     pub operation: ::core::option::Option<operations_request::Operation>,
 }
 /// Nested message and enum types in `OperationsRequest`.
@@ -842,6 +848,8 @@ pub mod operations_request {
         ListPermissionRules(super::ListPermissionRules),
         #[prost(message, tag="85")]
         GetGithubAppToken(super::GetGithubAppToken),
+        #[prost(message, tag="86")]
+        GetProjectSecrets(super::GetProjectSecrets),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]

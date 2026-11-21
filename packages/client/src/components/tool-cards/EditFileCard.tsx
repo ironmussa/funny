@@ -402,7 +402,7 @@ export function EditFileCard({
   return (
     <div
       data-expanded={expanded}
-      className="border-border w-full min-w-0 overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm data-[expanded=true]:border"
+      className="tool-card-frame w-full min-w-0 overflow-hidden rounded-lg text-sm"
     >
       <div className="flex w-full items-center overflow-hidden">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">

@@ -198,6 +198,20 @@
   }
 }
 
+/* A collapsible tool card's outline. Always 1px so opening a card does not
+   shift its content; a theme hides the collapsed outline by color
+   (--tool-card-border-color, Minimal) and an open card always shows it. The
+   name avoids `border-`, so the forced border color above does not apply. */
+@utility tool-card-frame {
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--tool-card-border-color, hsl(var(--border)));
+
+  &[data-expanded='true'] {
+    border-color: hsl(var(--border));
+  }
+}
+
 /* Sidebar navigation controls share one focus treatment. Keeping the ring
    inset prevents it from being clipped by scroll/containment boundaries. */
 .sidebar-focus-scope :is(button, [role='button'], a):focus-visible {
@@ -412,9 +426,6 @@ mark.md-search-match[data-active='true'] {
 
 @layer base {
   :root {
-    /* Tool card outline; a theme sets 0px to drop it (Minimal). */
-    --tool-card-border-width: 1px;
-
     --scrollbar-size: 6px;
     --font-sans: 'Geist Sans', 'Geist Sans Fallback', sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -946,9 +957,7 @@ mark.md-search-match[data-active='true'] {
     --status-neutral: 0 0% 50%;
     --status-violet: 263 85% 74%;
 
-    /* Width, not color: the base layer forces every `border-*` element to
-       the theme's border color with !important. */
-    --tool-card-border-width: 0px;
+    --tool-card-border-color: transparent;
     --thread-title: hsl(var(--foreground));
     --thread-icon-running: hsl(var(--status-info));
     --thread-icon-completed: hsl(var(--status-success));

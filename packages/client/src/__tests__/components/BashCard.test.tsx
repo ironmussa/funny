@@ -49,12 +49,12 @@ describe('BashCard', () => {
 });
 
 // A theme can hide a collapsed card's outline (Minimal sets
-// --tool-card-border-width: 0px); an open card always gets its border back.
+// --tool-card-border-color: transparent); an open card always shows it.
 test('BashCard marks its container expanded so it keeps a border when open', () => {
   const { container } = render(<BashCard parsed={{ command: 'bun test' }} output="ok" />);
   const card = container.firstElementChild!;
   expect(card).toHaveAttribute('data-expanded', 'false');
-  expect(card.className).toContain('data-[expanded=true]:border');
+  expect(card.className).toContain('tool-card-frame');
 
   fireEvent.click(screen.getByRole('button', { name: /tools\.runCommand/i }));
   expect(card).toHaveAttribute('data-expanded', 'true');

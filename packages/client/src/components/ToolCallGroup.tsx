@@ -74,7 +74,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
   return (
     <div
       data-expanded={expanded}
-      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm data-[expanded=true]:border"
+      className="tool-card-frame max-w-full overflow-hidden rounded-lg text-sm"
     >
       <button
         type="button"

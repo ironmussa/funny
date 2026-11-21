@@ -89,8 +89,8 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
     <div
       data-expanded={expanded}
       className={cn(
-        'max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] data-[expanded=true]:border text-sm',
-        isError ? 'border-destructive/50' : 'border-border',
+        'max-w-full overflow-hidden rounded-lg text-sm',
+        isError ? 'border-destructive/50 border' : 'tool-card-frame',
       )}
       data-testid={`mcp-tool-card-${mcp.server}-${mcp.tool}`}
     >

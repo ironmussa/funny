@@ -27,8 +27,8 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { renderWithProviders } from '../helpers/render';
 
-function open(runtime: ThreadRuntime) {
-  thread.current = { id: 't-1', userId: 'alice', title: 'Fix login', runtime };
+function open(runtime: ThreadRuntime, extra: Partial<Thread> = { projectId: 'p-1' }) {
+  thread.current = { id: 't-1', userId: 'alice', title: 'Fix login', runtime, ...extra };
   useAuthStore.setState({
     user: { id: 'alice', username: 'alice', displayName: 'alice', role: 'user' },
   });
@@ -48,6 +48,23 @@ describe('ShareThreadButton', () => {
     expect(screen.getByTestId('share-steer-repository-warning')).toHaveTextContent(
       'without your approval',
     );
+  });
+
+  test('warns, only at the editor level, that an editor reaches the project secrets', async () => {
+    open('local');
+    expect(screen.queryByTestId('share-steer-secrets-warning')).toBeNull();
+    fireEvent.click(await screen.findByTestId('share-level-comment'));
+    expect(screen.queryByTestId('share-steer-secrets-warning')).toBeNull();
+    fireEvent.click(screen.getByTestId('share-level-steer'));
+    expect(screen.getByTestId('share-steer-secrets-warning')).toHaveTextContent(
+      "project's secrets",
+    );
+  });
+
+  test('no secrets warning for a scratch thread', async () => {
+    open('local', { isScratch: true, projectId: '' });
+    fireEvent.click(await screen.findByTestId('share-level-steer'));
+    expect(screen.queryByTestId('share-steer-secrets-warning')).toBeNull();
   });
 
   test('no warning for a thread that does not run in a sandbox', async () => {

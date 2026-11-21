@@ -217,6 +217,16 @@ A sandbox never receives the owner's PAT: anything in a sandbox can be read by t
 - No App, not installed, or no owner access: no token, and the thread shows a `sandbox:error` card (phase `github`) saying what to do.
 - A steer sharee can act on the repository through a sandbox agent without the owner's approval (the share dialog says so). Protect important branches with GitHub rulesets.
 
+### Project secrets
+
+A project keeps named secret values on the server and hands them to its agents as environment variables (openspec `project-secrets`). A secret is **shared** (`scope = 'project'`, changed with `manage`) or **personal** (`scope = 'user'`, changed with `steer`, only its owner sees it); a personal one takes the place of the shared one of the same name. Values are encrypted with the keyring in `project_secrets.ciphertext` and never returned to a browser: the `projectSecrets` tRPC group (`trpc/ports/project-secrets.ts`) lists names and settings only. Managed in **Settings > project > Secrets** (`ProjectSecretsSetting.tsx`, `data/project-secrets/`).
+
+- **One reader of values:** `resolveThreadSecrets` in `server/services/project-secrets.ts`, behind `data:get_project_secrets` (rule `refs` in `DATA_SCOPE_RULES`). It answers the THREAD OWNER's runner in the project scope, or the thread's own sandbox runner, and uses the thread owner's personal secrets, so a steer sharee's follow-up, an automation and a factory run get what the owner's own message would. A sandbox runner gets only the secrets with `allow_in_sandbox`, decided after the personal override. A value that cannot be decrypted fails the whole call, and the agent does not start.
+- **Names:** `validateSecretName` in `@funny/shared/project-secrets` refuses names that change how a process starts (`PATH`, `NODE_OPTIONS`, `LD_*`, …) and the ones funny, git or the agent provider use (`GH_TOKEN`, `ANTHROPIC_*`, `FUNNY_*`, the provider keys). It runs on write and again on delivery. Add a name there, never at a call site.
+- **Runtime:** asked at every agent start (`agent-startup/project-secrets.ts`), kept in memory for that run, never written to disk. `composeAgentEnv` puts secrets UNDER `buildAgentEnv` and the agent profile: a secret overrides the runner's inherited environment, never a variable funny sets. Scratch threads ask for nothing (`receivesProjectSecrets` in `thread-context.ts`). Terminals and startup commands do not receive secrets.
+- **Redaction is best effort:** `AgentMessageHandler.handle` replaces the delivered values (8 characters or more) with `[secret:NAME]` before anything is stored, emitted or logged. The model still sees what the agent prints, and an encoded or split value is not caught. Do not rely on it for an access decision.
+- A shared secret is readable by every member with `steer`, and by a steer sharee through the agent; the settings screen and the share dialog say so.
+
 ### Auth Architecture
 
 - `packages/runtime/src/lib/auth.ts` — Better Auth instance (initialized by the server on startup)

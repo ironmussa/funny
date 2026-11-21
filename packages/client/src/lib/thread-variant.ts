@@ -48,6 +48,16 @@ export function steerReachesRepository(
   return runsInSandbox(thread);
 }
 
+/**
+ * A project thread's agent starts with the project's secrets, the owner's
+ * personal ones included (project-secrets), so a `steer` sharee can reach them
+ * through the agent. Scratch threads have no project, hence no secrets. The
+ * share dialog warns about it.
+ */
+export function steerReachesProjectSecrets(thread: ThreadGitContextLike): boolean {
+  return !!thread && !isScratch(thread) && !!thread.projectId;
+}
+
 export function sandboxSetupFailed(
   thread: { runtime?: string; status?: string; sessionId?: string | null } | null | undefined,
 ): boolean {

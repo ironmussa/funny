@@ -111,6 +111,39 @@ GitHub rulesets. Code: `packages/server/src/services/github-app/`,
 `packages/server/src/routes/github-app-settings.ts`,
 `packages/runtime/src/services/sandbox-github-auth.ts`.
 
+## Project secrets
+
+A project can keep named secret values (API keys, a database URL) on the server
+and have its agents start with them as environment variables. They are managed in
+**Settings > project > Secrets**.
+
+- **Shared** secrets belong to the project; only a project admin changes them.
+  **Mine** are personal: only your own threads get them, and one with the name of
+  a shared secret takes its place.
+- A value is stored encrypted with the server keyring and is never shown again;
+  to change it, replace it. The keyring must be backed up: without it the values
+  cannot be read, and agents of the project refuse to start until the secret is
+  saved again or deleted.
+- **Who can read a shared secret:** every member who can start threads on the
+  project, through their agent, and anyone a thread is shared with as an editor.
+  Use a personal secret for a value only one person should hold.
+- **Sandboxes** get a secret only when its switch is on, because whatever a sandbox
+  receives is readable by its agent.
+- Names that change how processes start (`PATH`, `NODE_OPTIONS`, `LD_*`) or that
+  funny, git or the agent provider use (`GH_TOKEN`, `ANTHROPIC_*`, `FUNNY_*`) are
+  refused.
+- Values an agent prints are replaced with `[secret:NAME]` in what funny stores
+  and shows. This is best effort: the model still sees them.
+- Secrets reach agents only. The terminal panel and project startup commands do
+  not receive them.
+- **Upgrading:** deploy the server first, then the runners. A runner from before
+  this feature starts agents without secrets.
+
+Code: `packages/server/src/services/project-secrets.ts` (the only reader of
+values), `packages/shared/src/project-secrets.ts` (name rules, redactor),
+`packages/runtime/src/services/agent-startup/project-secrets.ts`. Design:
+`openspec/changes/project-secrets/`.
+
 ## Trust boundaries — runners are not sandboxed
 
 A runner pointed at a remote `TEAM_SERVER_URL` effectively grants that server shell execution in the runner's `$HOME` — git operations, pre-commit hooks, agent CLI spawning, PTY shells, and access to saved GitHub tokens / provider keys. Only connect runners to central servers you trust, and prefer running each runner under a dedicated OS user, VM, or container. Runner-side required configuration:

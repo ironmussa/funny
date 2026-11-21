@@ -19,6 +19,7 @@ import { ProjectFactorySetting } from '@/components/general-settings-project/Pro
 import { ProjectPathSetting } from '@/components/general-settings-project/ProjectPathSetting';
 import { ProjectRedirectChecksSetting } from '@/components/general-settings-project/ProjectRedirectChecksSetting';
 import { ProjectSandboxSetting } from '@/components/general-settings-project/ProjectSandboxSetting';
+import { ProjectSecretsSetting } from '@/components/general-settings-project/ProjectSecretsSetting';
 import { ProjectThreadModeSetting } from '@/components/general-settings-project/ProjectThreadModeSetting';
 import {
   SegmentedControl,
@@ -309,6 +310,9 @@ export function GeneralSettings() {
 
           {/* The issue factory: its own section, not mixed with the project's options. */}
           <ProjectFactorySetting projectId={selectedProject.id} />
+
+          {/* What the project's agents get as environment variables. */}
+          <ProjectSecretsSetting projectId={selectedProject.id} />
         </>
       )}
 

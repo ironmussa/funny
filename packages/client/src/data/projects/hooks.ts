@@ -58,3 +58,12 @@ export function useProjectCurrentBranch(projectId: string | null | undefined): s
 export function useCanSteerProject(projectId: string): boolean {
   return roleAllows(useDataQuery(projectRoleQuery(projectId)).data, 'steer');
 }
+
+/**
+ * Whether the caller administers the project (`manage`): enables the controls
+ * of what the project's members share, such as its shared secrets. While the
+ * role loads, the controls show (the server still decides).
+ */
+export function useCanManageProject(projectId: string): boolean {
+  return roleAllows(useDataQuery(projectRoleQuery(projectId)).data, 'manage');
+}

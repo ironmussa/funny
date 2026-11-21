@@ -40,8 +40,8 @@ This runs `scripts/fitness/check-typecheck.ts`, which invokes `bun check` for ea
 ```bash
 bun run lint            # bun lint . + all fitness:*-validation checks below
 bun run lint:fix        # bun lint --fix .
-bun run format           # oxfmt --write .      (NOT prettier — no config here, wrong defaults)
-bun run format:check     # oxfmt --check .
+bun run format           # bun fmt .            (NOT prettier — no config here, wrong defaults)
+bun run format:check     # bun fmt --check .
 ```
 
 `bun run lint` also runs four baseline-diff "boundary validation" fitness checks (unvalidated HTTP/JSON/query/socket boundaries), each with matching `:refresh` and `:self-test` variants: `fitness:boundary-validation`, `fitness:query-validation`, `fitness:socket-validation`, `fitness:json-validation` (`scripts/fitness/check-*-boundary-validation.ts`).

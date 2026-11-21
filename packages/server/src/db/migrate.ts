@@ -2120,6 +2120,31 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Project secrets (openspec project-secrets). `user_id` is '' for shared
+    // rows so the unique index also covers them.
+    name: '104_project_secrets',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_secrets (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          scope TEXT NOT NULL,
+          user_id TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL,
+          ciphertext TEXT NOT NULL,
+          allow_in_sandbox INTEGER NOT NULL DEFAULT 0,
+          updated_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS project_secrets_scope_name
+        ON project_secrets (project_id, scope, user_id, name)
+      `);
+    },
+  },
 ];
 
 /**

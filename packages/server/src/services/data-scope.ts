@@ -95,6 +95,8 @@ export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:get_github_token': 'user',
   // Only a sandbox runner, for its own thread (see `assertRunnerDataScope`).
   'data:get_github_app_token': 'refs',
+  // The handler adds the owner check `refs` does not make (project-secrets).
+  'data:get_project_secrets': 'refs',
   'data:get_minimax_api_key': 'user',
   'data:update_profile': 'user',
   'data:get_builtin_providers': 'user',

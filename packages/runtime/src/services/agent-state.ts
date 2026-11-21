@@ -33,6 +33,13 @@ export class AgentStateTracker {
    */
   readonly completedEmitted = new Set<string>();
 
+  /**
+   * Replaces the project secret values the thread's agent was started with by
+   * `[secret:NAME]` in what is stored and shown (project-secrets). Set at each
+   * agent start; kept past the run's end, since output may still arrive.
+   */
+  readonly secretRedactors = new Map<string, (text: string) => string>();
+
   /** Current assistant message DB ID per thread */
   readonly currentAssistantMsgId = new Map<string, string>();
 
@@ -179,6 +186,7 @@ export class AgentStateTracker {
     this.cliToDbMsgId.delete(threadId);
     this.supportedSlashCommands.delete(threadId);
     this.threadUserIds.delete(threadId);
+    this.secretRedactors.delete(threadId);
   }
 
   /** State that belongs to a single run; shared by clearRunState and cleanupThread. */

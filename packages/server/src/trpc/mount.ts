@@ -23,6 +23,7 @@ import { personalTokensPort } from './ports/personal-tokens.js';
 import { pipelinesPort } from './ports/pipelines.js';
 import { profilePort } from './ports/profile.js';
 import { createProjectRunnersPort } from './ports/project-runners.js';
+import { projectSecretsPort } from './ports/project-secrets.js';
 import { createProjectsPort } from './ports/projects.js';
 import { runnersPort } from './ports/runners.js';
 import { settingsPort } from './ports/settings.js';
@@ -55,6 +56,7 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
       presence: c.env?.runnerPresence,
     }),
     factory: factoryPort,
+    projectSecrets: projectSecretsPort,
     threadAccess: threadAccessPort,
     authz: authzPort,
   };

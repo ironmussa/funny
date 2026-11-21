@@ -68,6 +68,13 @@ type AuditAction =
   | 'github.sandbox_token_issued'
   /** A sandbox thread's GitHub App token request was refused. */
   | 'github.sandbox_token_refused'
+  /** A project secret was created or changed (project-secrets). Never carries the value. */
+  | 'secret.set'
+  | 'secret.delete'
+  /** A thread's project secrets were handed to the runner that starts its agent. */
+  | 'secret.delivered'
+  /** A runner asked for a thread's project secrets and was refused. */
+  | 'secret.delivery_refused'
   /** ADMIN_PASSWORD env failed the password policy on first-run bootstrap. */
   | 'auth.weak_admin_password_rejected';
 

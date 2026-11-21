@@ -113,6 +113,7 @@ describe('GrpcOperationsAdapter mapping', () => {
       'data:get_provider_key': { kind: 'getProviderKey', value: { provider: 'anthropic' } },
       'data:get_github_token': { kind: 'getGithubToken', value: { projectId: 'p1' } },
       'data:get_github_app_token': { kind: 'getGithubAppToken', value: { threadId: 't1' } },
+      'data:get_project_secrets': { kind: 'getProjectSecrets', value: { threadId: 't1' } },
       'data:get_minimax_api_key': { kind: 'getMinimaxApiKey', value: {} },
       'data:update_profile': { kind: 'updateProfile', value: { updates: P } },
       'data:resolve_agent_execution_profile': {

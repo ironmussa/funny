@@ -71,6 +71,8 @@ const MIGRATED_GROUPS: Array<{
   // poll, heartbeat, tasks) stays REST, but the web client calls none of it.
   { path: '/runners' },
   { path: '/factory' },
+  // Never had a REST path; listed so one is not added from the client.
+  { path: '/project-secrets' },
   // `projects` (and the project runner settings under it) has no entry: its
   // server-answered routes moved, but creation and the runner's routes
   // (`/projects/:id/branches`, `/hooks`, `/config`, …) share the same paths and

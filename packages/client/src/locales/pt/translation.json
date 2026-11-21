@@ -1720,5 +1720,51 @@
       "conflictRate": "Runs com conflito",
       "agentFixes": "Correções do agente por run"
     }
+  },
+  "projectSecrets": {
+    "title": "Segredos",
+    "description": "Valores que os agentes deste projeto recebem como variáveis de ambiente. O valor é guardado cifrado e não volta a ser mostrado aqui.",
+    "noticeReaders": "Qualquer pessoa que possa iniciar threads neste projeto pode ler um segredo compartilhado através do seu agente, e também alguém com quem você compartilhe um thread como editor.",
+    "noticeRedaction": "Os valores que um agente imprime são substituídos por [secret:NAME] no que é guardado e mostrado, como melhor esforço: o modelo ainda os vê, e um valor codificado ou dividido não é detectado.",
+    "shared": "Compartilhados",
+    "sharedDesc": "Para todos os membros. Só um administrador do projeto pode alterá-los.",
+    "mine": "Meus",
+    "mineDesc": "Só para os seus threads. Um com o nome de um segredo compartilhado ocupa o lugar dele.",
+    "add": "Adicionar segredo",
+    "empty": "Ainda não há segredos.",
+    "overridesShared": "Substitui o compartilhado",
+    "overriddenByYours": "Substituído pelo seu",
+    "updatedOn": "Atualizado em {{date}}",
+    "sandbox": "Sandboxes",
+    "sandboxLabel": "Entregar {{name}} aos agentes em sandbox",
+    "replace": "Substituir",
+    "replaceTitle": "Substituir {{name}}",
+    "addSharedTitle": "Adicionar um segredo compartilhado",
+    "addPersonalTitle": "Adicionar um segredo pessoal",
+    "sharedDialogDesc": "Todos os membros que podem iniciar threads neste projeto o recebem nos seus agentes.",
+    "personalDialogDesc": "Só os agentes dos seus próprios threads neste projeto o recebem.",
+    "name": "Nome",
+    "value": "Valor",
+    "multiline": "Várias linhas",
+    "multilineUnmasked": "Um valor de várias linhas é mostrado enquanto você digita.",
+    "storedPlaceholder": "Guardado, digite um valor novo para substituir",
+    "showValue": "Mostrar valor",
+    "hideValue": "Ocultar valor",
+    "sandboxTitle": "Disponível em sandboxes",
+    "sandboxDesc": "Um agente em sandbox pode ler tudo o que recebe, e também qualquer pessoa com quem você compartilhe o thread como editor.",
+    "save": "Guardar segredo",
+    "deleteTitle": "Eliminar {{name}}?",
+    "deleteDescription": "Os agentes iniciados a partir de agora não receberão {{name}}.",
+    "deleteOverrideDescription": "Os seus agentes voltarão a receber o valor compartilhado de {{name}}.",
+    "nameProblem": {
+      "empty": "Um segredo precisa de um nome.",
+      "too-long": "O nome de um segredo tem no máximo 128 caracteres.",
+      "invalid-shape": "O nome de um segredo é um nome de variável de ambiente: letras, dígitos e sublinhados, sem começar por um dígito.",
+      "reserved": "Este nome está reservado: muda como os processos arrancam, ou é usado pelo funny, pelo git ou pelo fornecedor do agente."
+    },
+    "valueProblem": {
+      "empty": "Um segredo precisa de um valor.",
+      "too-large": "O valor de um segredo tem no máximo 32 KiB."
+    }
   }
 }

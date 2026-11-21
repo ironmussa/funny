@@ -338,6 +338,23 @@ export function createTestDb() {
     sql`CREATE UNIQUE INDEX IF NOT EXISTS factory_settings_project_user ON factory_settings (project_id, user_id)`,
   );
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_secrets (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      scope TEXT NOT NULL,
+      user_id TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      ciphertext TEXT NOT NULL,
+      allow_in_sandbox INTEGER NOT NULL DEFAULT 0,
+      updated_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  testDb.run(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS project_secrets_scope_name ON project_secrets (project_id, scope, user_id, name)`,
+  );
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS factory_runs (
       id TEXT PRIMARY KEY,
       factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,

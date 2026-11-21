@@ -150,6 +150,8 @@ message GetProviderKey { string provider = 1; }
 message GetGithubToken { string project_id = 1; }
 // sandbox-github-app-tokens: a repository-scoped GitHub App token for the runner's sandbox thread.
 message GetGithubAppToken { string thread_id = 1; }
+// project-secrets: the project secrets the agent of a thread starts with.
+message GetProjectSecrets { string thread_id = 1; }
 message GetMinimaxApiKey {}
 message UpdateProfile { google.protobuf.Struct updates = 1; }
 message ResolveAgentExecutionProfile { string project_id = 1; }
@@ -256,6 +258,7 @@ message OperationsRequest {
     FindPermissionRule find_permission_rule = 83;
     ListPermissionRules list_permission_rules = 84;
     GetGithubAppToken get_github_app_token = 85;
+    GetProjectSecrets get_project_secrets = 86;
   }
 }
 

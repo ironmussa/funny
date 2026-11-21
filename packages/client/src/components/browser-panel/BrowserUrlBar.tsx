@@ -8,11 +8,6 @@ import { browserSessionClient } from '@/lib/browser-session-client';
 import { isTauriAnnotatorAvailable, openAnnotator } from '@/lib/tauri-annotator';
 import { metric } from '@/lib/telemetry';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
-import {
-  PROSE_FONT_SIZE_PX,
-  PROSE_LINE_HEIGHT_PX,
-  useSettingsStore,
-} from '@/stores/settings-store';
 
 import { BrowserControlBar } from './BrowserControlBar';
 import { BrowserSessionMenu } from './BrowserSessionMenu';
@@ -51,7 +46,6 @@ export function BrowserUrlBar() {
   const setUrl = useBrowserPanelStore((s) => s.setUrl);
   const openBrowserSession = useBrowserPanelStore((s) => s.openBrowserSession);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
-  const fontSize = useSettingsStore((s) => s.fontSize);
 
   // Errors are shown centered in the viewport (BrowserViewport), not here.
   const setError = useBrowserPanelStore((s) => s.setLoadError);
@@ -92,11 +86,6 @@ export function BrowserUrlBar() {
     void browserSessionClient.nav(sessionId!, 'reload').catch(() => {});
   };
 
-  const fontStyle = {
-    fontSize: PROSE_FONT_SIZE_PX[fontSize],
-    lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
-  };
-
   const annotatorAvailable = isTauriAnnotatorAvailable();
   const handleOpenAnnotator = async () => {
     const result = normalizeUrl(url || loadedUrl || '');
@@ -113,6 +102,9 @@ export function BrowserUrlBar() {
     }
   };
 
+  // Text comes from the shared control scale (`size="sm"` → text-sm), which is
+  // rem-based and so follows the Appearance font size like every other input.
+  // Do not use the PROSE (chat) scale here: it is larger than the controls.
   return (
     <div className="flex flex-col gap-1 px-3 py-2">
       <form onSubmit={handleSubmit} className="flex items-center gap-1">
@@ -176,16 +168,9 @@ export function BrowserUrlBar() {
           placeholder="http://localhost:5173"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="h-8 flex-1"
-          style={fontStyle}
+          className="flex-1"
         />
-        <Button
-          type="submit"
-          data-testid="browser-panel-url-go"
-          size="sm"
-          className="h-8 px-3"
-          style={fontStyle}
-        >
+        <Button type="submit" data-testid="browser-panel-url-go" size="sm">
           Go
         </Button>
         {annotatorAvailable && (
@@ -208,7 +193,7 @@ export function BrowserUrlBar() {
         )}
         <BrowserSessionMenu />
       </form>
-      <BrowserControlBar style={fontStyle} />
+      <BrowserControlBar />
     </div>
   );
 }

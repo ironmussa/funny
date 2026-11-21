@@ -1,4 +1,5 @@
 import type {
+  FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryRun,
@@ -113,6 +114,20 @@ export function factoryFlowsQuery(projectId: string) {
     queryKey: ['factory', 'flows', projectId] as const,
     queryFn: (): Promise<FactoryFlowOption[]> => unwrapResult(factoryApi.listFlows(projectId)),
     staleTime: 5 * 60_000,
+  };
+}
+
+/**
+ * One flow's YAML (the settings page's viewer). Read only while a flow is
+ * chosen; like the flow list, it changes only with the default branch.
+ */
+export function factoryFlowDefinitionQuery(projectId: string, flowName: string | null) {
+  return {
+    queryKey: ['factory', 'flow-definition', projectId, flowName] as const,
+    queryFn: (): Promise<FactoryFlowDefinition> =>
+      unwrapResult(factoryApi.getFlowDefinition(projectId, flowName ?? '')),
+    staleTime: 5 * 60_000,
+    enabled: !!flowName,
   };
 }
 

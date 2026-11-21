@@ -7,7 +7,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { ok } from 'neverthrow';
 
-import { loadFactoryFlow } from '../../../services/factory/factory-flow.js';
+import {
+  loadFactoryFlow,
+  readFactoryFlowDefinition,
+} from '../../../services/factory/factory-flow.js';
 
 function fromRepository(yaml: string) {
   return {
@@ -120,5 +123,36 @@ describe('factory flow warnings', () => {
       const flow = await loadFactoryFlow(name, { readDefaultBranchFile: async () => ok(null) });
       expect(flow._unsafeUnwrap().warnings).toEqual([]);
     }
+  });
+});
+
+describe('reading a factory flow definition', () => {
+  test('the repository copy wins and is returned without compiling', async () => {
+    // Invalid as a flow (no nodes), but still readable: the viewer shows it.
+    const yaml = 'name: custom\ndescription: broken\n';
+    const read = await readFactoryFlowDefinition('custom', fromRepository(yaml));
+    expect(read._unsafeUnwrap()).toEqual({
+      name: 'custom',
+      source: 'repository',
+      path: '.funny/workflows/custom.yaml',
+      yaml,
+    });
+  });
+
+  test('a built-in is returned without its server path', async () => {
+    const read = await readFactoryFlowDefinition('issue-to-merge', {
+      readDefaultBranchFile: async () => ok(null),
+    });
+    const definition = read._unsafeUnwrap();
+    expect(definition.source).toBe('built-in');
+    expect(definition.path).toBeNull();
+    expect(definition.yaml).toContain('nodes');
+  });
+
+  test('an unknown flow is refused', async () => {
+    const read = await readFactoryFlowDefinition('nope', {
+      readDefaultBranchFile: async () => ok(null),
+    });
+    expect(read._unsafeUnwrapErr().kind).toBe('invalid');
   });
 });

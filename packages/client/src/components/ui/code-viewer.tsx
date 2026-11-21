@@ -37,7 +37,7 @@ export function CodeViewer({
     <div className={cn('overflow-x-auto overflow-y-auto', className)} style={{ maxHeight }}>
       {html ? (
         <div
-          className="hljs code-viewer font-mono text-xs leading-relaxed"
+          className="hljs code-viewer px-3 font-mono text-xs leading-relaxed whitespace-pre"
           style={{ counterReset: `line ${startLine - 1}` }}
           dangerouslySetInnerHTML={{ __html: html }}
         />

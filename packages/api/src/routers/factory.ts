@@ -1,5 +1,6 @@
 import {
   factoryBlockersInput,
+  factoryFlowInput,
   factoryProjectInput,
   factoryRunInput,
   saveFactorySettingsInput,
@@ -61,6 +62,11 @@ export const factoryRouter = router({
     .input(factoryProjectInput)
     .query(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.flows(ctx.userId, input.projectId)),
+    ),
+  flowDefinition: projectProcedure('view')
+    .input(factoryFlowInput)
+    .query(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.flowDefinition(ctx.userId, input.projectId, input.flowName)),
     ),
   blockers: projectProcedure('view')
     .input(factoryBlockersInput)

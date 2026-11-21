@@ -22,15 +22,21 @@
 
 import type { GithubCallError } from '@funny/core/github-app';
 import type {
+  FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueClearResult,
   FactorySubmitResult,
 } from '@funny/shared/contracts/factory';
-import { err, ok, ResultAsync, type Result } from 'neverthrow';
+import { err, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
-import { BUILT_IN_FACTORY_FLOWS, listFactoryFlows, loadFactoryFlow } from './factory-flow.js';
+import {
+  BUILT_IN_FACTORY_FLOWS,
+  listFactoryFlows,
+  loadFactoryFlow,
+  readFactoryFlowDefinition,
+} from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssueDetail, FactoryRepoReader } from './factory-github.js';
 import { createFactoryRunControl } from './factory-run-control.js';
 import { createFactoryRunsRepository } from './factory-runs.js';
@@ -241,6 +247,29 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     return listed.isOk() ? listed.value : builtIns;
   }
 
+  /**
+   * One flow's YAML. Without a factory, or when its repository cannot be read
+   * now, only the built-ins are found, as in `flows` (which lists the
+   * built-ins in that case).
+   */
+  async function flowDefinition(
+    factoryId: string | null,
+    flowName: string,
+  ): Promise<Result<FactoryFlowDefinition, FactoryQueueError>> {
+    const builtInOnly = {
+      readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null),
+    };
+    const where = factoryId ? await readerOf(factoryId) : null;
+    if (!where) return (await readFactoryFlowDefinition(flowName, builtInOnly)).mapErr(flowRefusal);
+    const read = await readFactoryFlowDefinition(flowName, {
+      readDefaultBranchFile: (path) => where.port.readDefaultBranchFile(where.reader, path),
+    });
+    if (read.isErr() && read.error.kind === 'unavailable') {
+      return (await readFactoryFlowDefinition(flowName, builtInOnly)).mapErr(flowRefusal);
+    }
+    return read.mapErr(flowRefusal);
+  }
+
   async function blockers(
     factoryId: string,
     issueNumbers: number[],
@@ -274,6 +303,9 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
       new ResultAsync(submit(factoryId, input)),
 
     flows: (factoryId: string) => ResultAsync.fromSafePromise(flows(factoryId)),
+
+    flowDefinition: (factoryId: string | null, flowName: string) =>
+      new ResultAsync(flowDefinition(factoryId, flowName)),
 
     blockers: (factoryId: string, issueNumbers: number[]) =>
       new ResultAsync(blockers(factoryId, issueNumbers)),

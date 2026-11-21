@@ -590,6 +590,8 @@
     "automations": "Automações",
     "pipelines": "Pipelines",
     "archivedThreads": "Threads Arquivadas",
+    "factory": "Factory",
+    "security": "Segurança",
     "selectSetting": "Selecione uma opção do menu lateral",
     "comingSoon": "Configurações de {{label}} em breve.",
     "defaultEditor": "Editor externo padrão",

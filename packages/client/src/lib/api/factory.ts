@@ -10,6 +10,7 @@ import type {
 import { trpc, trpcCall } from './_trpc';
 
 export type {
+  FactoryFlowDefinition,
   FactoryMode,
   FactoryQueueClearResult,
   FactoryRun,
@@ -33,6 +34,8 @@ export const factoryApi = {
   submitIssues: (input: SubmitFactoryIssuesInput) =>
     trpcCall(() => procedures.submitIssues.mutate(input)),
   listFlows: (projectId: string) => trpcCall(() => procedures.flows.query({ projectId })),
+  getFlowDefinition: (projectId: string, flowName: string) =>
+    trpcCall(() => procedures.flowDefinition.query({ projectId, flowName })),
   blockers: (projectId: string, issueNumbers: number[]) =>
     trpcCall(() => procedures.blockers.query({ projectId, issueNumbers })),
   clearQueue: (projectId: string) => trpcCall(() => procedures.clearQueue.mutate({ projectId })),

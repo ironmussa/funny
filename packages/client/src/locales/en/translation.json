@@ -600,6 +600,8 @@
     "automations": "Automations",
     "pipelines": "Pipelines",
     "archivedThreads": "Archived Threads",
+    "factory": "Factory",
+    "security": "Security",
     "selectSetting": "Select a setting from the sidebar",
     "comingSoon": "{{label}} settings coming soon.",
     "defaultEditor": "Default external editor",

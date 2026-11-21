@@ -532,6 +532,7 @@ describe('updateThread — auto-start idle thread', () => {
 describe('convertToWorktree', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isAgentRunning.mockReturnValue(false);
     mocks.projects.getProject.mockResolvedValue({ id: 'p-1', name: 'My App', path: '/repo' });
     mocks.projects.resolveProjectPath.mockResolvedValue(ok('/repo'));
     mocks.getCurrentBranch.mockResolvedValue(ok('main'));
@@ -596,7 +597,7 @@ describe('convertToWorktree', () => {
         expect.objectContaining({
           mode: 'worktree',
           worktreePath: '/repo/.worktrees/t-1',
-          status: 'pending',
+          status: 'completed',
           sessionId: null,
           contextRecoveryReason: 'worktree-convert',
         }),
@@ -621,12 +622,33 @@ describe('convertToWorktree', () => {
     });
   });
 
-  test('stops running agent before conversion', async () => {
+  test('stops running agent before conversion and leaves the thread stopped', async () => {
     mocks.isAgentRunning.mockReturnValue(true);
 
     await convertToWorktree('t-1', 'u-1');
 
     expect(mocks.stopAgent).toHaveBeenCalledWith('t-1');
+    await vi.waitFor(() => {
+      expect(mocks.tm.updateThread).toHaveBeenCalledWith(
+        't-1',
+        expect.objectContaining({ mode: 'worktree', status: 'stopped' }),
+      );
+    });
+  });
+
+  test('a finished thread is never left pending, which the UI shows as running', async () => {
+    await convertToWorktree('t-1', 'u-1');
+
+    await vi.waitFor(() => {
+      expect(mocks.tm.updateThread).toHaveBeenCalledWith(
+        't-1',
+        expect.objectContaining({ mode: 'worktree' }),
+      );
+    });
+    expect(mocks.tm.updateThread).not.toHaveBeenCalledWith(
+      't-1',
+      expect.objectContaining({ status: 'pending' }),
+    );
   });
 
   test('marks thread failed when background convert throws unexpectedly', async () => {

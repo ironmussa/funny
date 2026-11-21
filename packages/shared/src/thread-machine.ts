@@ -132,6 +132,10 @@ export const threadMachine = setup({
             guard: ({ event }) => event.status === 'running',
             actions: 'setResumeFresh',
           },
+          // Converting a finished thread to a worktree returns it to where it was.
+          { target: 'completed', guard: ({ event }) => event.status === 'completed' },
+          { target: 'stopped', guard: ({ event }) => event.status === 'stopped' },
+          { target: 'interrupted', guard: ({ event }) => event.status === 'interrupted' },
         ],
       },
     },

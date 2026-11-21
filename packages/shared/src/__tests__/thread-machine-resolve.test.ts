@@ -49,6 +49,16 @@ describe('resolveThreadTransition', () => {
     );
   });
 
+  test('a thread converted to a worktree returns to the status it had', () => {
+    // Runtime thread-service/update convertToWorktree: setting_up → prior status.
+    for (const status of ['completed', 'stopped', 'interrupted', 'idle', 'failed'] as const) {
+      expect(resolveThreadTransition('setting_up', { type: 'SET_STATUS', status })).toMatchObject({
+        status,
+        accepted: true,
+      });
+    }
+  });
+
   test('a row without a known status is treated as pending', () => {
     // SAFETY: deliberately not a ThreadStatus; a row without a status is the input under test.
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- intentional: test behavior with an impossible runtime value

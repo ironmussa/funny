@@ -1,6 +1,6 @@
 import type { Project } from '@funny/shared';
 import { DEFAULT_PROVIDER } from '@funny/shared/models';
-import { CircleDot, GitFork, NotebookPen } from 'lucide-react';
+import { CircleDot, NotebookPen } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -410,10 +410,16 @@ export function NewThreadInput({
     );
   }
 
-  // Context bar content (project / repo / branch) — rendered by the prompt input
-  // at the top, next to the worktree switch. Shared with the kanban "Add thread"
-  // dialog (SlideUpPrompt) via NewThreadContextBar.
-  const contextBar = <NewThreadContextBar projectId={effectiveProjectId || undefined} />;
+  // Context bar content (project / repo / branch, plus the new worktree's
+  // branch name in worktree mode) — rendered by the prompt input at the top,
+  // next to the worktree switch. Shared with the kanban "Add thread" dialog
+  // (SlideUpPrompt) via NewThreadContextBar.
+  const contextBar = (
+    <NewThreadContextBar
+      projectId={effectiveProjectId || undefined}
+      worktreeBranch={isWorktreeMode ? previewBranch : null}
+    />
+  );
 
   return (
     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
@@ -436,15 +442,6 @@ export function NewThreadInput({
             >
               {t('common.dismiss')}
             </Button>
-          </div>
-        )}
-        {isWorktreeMode && previewBranch && (
-          <div
-            className="text-muted-foreground/60 mb-1.5 flex items-center gap-1.5 text-[10px]"
-            data-testid="worktree-preview"
-          >
-            <GitFork className="size-3 shrink-0" />
-            <span className="truncate font-mono">{previewBranch}</span>
           </div>
         )}
         <PromptInput

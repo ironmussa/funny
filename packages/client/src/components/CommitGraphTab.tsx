@@ -24,7 +24,12 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
-import { GraphGutter, initialsOf, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
+import {
+  GRAPH_NODE_RADIUS,
+  GraphGutter,
+  initialsOf,
+  LANE_WIDTH,
+} from '@/components/commit-graph/GraphGutter';
 import { GraphRefChips, isThreadBranchRef } from '@/components/commit-graph/GraphRefChips';
 import {
   DEFAULT_GRAPH_BRANCH_SCOPE,
@@ -1667,7 +1672,7 @@ function GraphCommitRow({
           (() => {
             // px geometry from the row's padding-box origin (absolute inset-0).
             // Horizontal: pl-3 (12) + gutter + gap-2 (8) + info pl-1 (4).
-            const avatarR = Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(rowHeight * 0.15)));
+            const avatarR = GRAPH_NODE_RADIUS;
             const nodeX = 12 + graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2 - graphScrollLeft;
             const chipLeftX = 12 + graphViewportWidth + 8 + 4;
             const leaderLine = graphRefLeaderLineXRange({
@@ -1701,12 +1706,10 @@ function GraphCommitRow({
             // Anchor the identity tooltip to the avatar node itself, not the whole
             // gutter — otherwise the tooltip centers over the (possibly wide)
             // multi-lane gutter and reads as detached from the avatar. The node
-            // sits at `commitLane`'s center; its diameter mirrors GraphGutter's
-            // avatar sizing so the trigger overlays it precisely.
+            // sits at `commitLane`'s center with GraphGutter's fixed node radius,
+            // so the trigger overlays it precisely.
             const nodeCenterX = graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2;
-            const avatarDiameter =
-              2 * Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(rowHeight * 0.15)));
-            const nodeHitboxSize = hasDistinctCommitter ? avatarDiameter + 8 : avatarDiameter;
+            const nodeHitboxSize = 2 * GRAPH_NODE_RADIUS;
             return (
               <div
                 style={{ width: graphViewportWidth }}
@@ -1723,8 +1726,7 @@ function GraphCommitRow({
                     height={rowHeight}
                     avatarUrl={cachedAvatarUrl}
                     authorName={entry.author}
-                    committerAvatarUrl={cachedCommitterAvatarUrl}
-                    committerName={hasDistinctCommitter ? entry.committer : undefined}
+                    distinctCommitter={hasDistinctCommitter}
                     connectUp={connectToWip}
                     nodeYFrac={nodeYFrac}
                   />

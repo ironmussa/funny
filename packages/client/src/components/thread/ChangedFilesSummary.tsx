@@ -12,6 +12,9 @@ import { api } from '@/lib/api';
 import { countDiffStats, parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
 
+/** Rows shown at first, and added by each "Show more" click. */
+export const CHANGED_FILES_PAGE_SIZE = 20;
+
 /**
  * Compact summary of the files modified during one session (user turn → agent
  * run). Rendered at the end of each session in the message stream so the user
@@ -38,6 +41,8 @@ export function ChangedFilesSummary({
 }) {
   const { t } = useTranslation();
   const [reverting, setReverting] = useState(false);
+  // A session can touch hundreds of files (codemods); render them a page at a time.
+  const [visibleCount, setVisibleCount] = useState(CHANGED_FILES_PAGE_SIZE);
 
   // ── Diff popup state — same single-file dialog the Edit/Write tool cards use ──
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
@@ -142,6 +147,8 @@ export function ChangedFilesSummary({
   };
 
   const expandedDiffContent = expandedFile ? diffCache.get(expandedFile) : undefined;
+  const visibleFiles = effectiveFiles.slice(0, visibleCount);
+  const hiddenCount = effectiveFiles.length - visibleFiles.length;
 
   return (
     <div
@@ -177,7 +184,7 @@ export function ChangedFilesSummary({
 
       {/* Per-file rows — click a name to open the thread's diff popup */}
       <div className="flex flex-col gap-0.5">
-        {effectiveFiles.map((f) => (
+        {visibleFiles.map((f) => (
           <div
             key={f.path}
             data-testid={`changed-files-row-${f.path}`}
@@ -207,6 +214,23 @@ export function ChangedFilesSummary({
           </div>
         ))}
       </div>
+
+      {hiddenCount > 0 && (
+        <div className="flex">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setVisibleCount((n) => n + CHANGED_FILES_PAGE_SIZE)}
+            data-testid="changed-files-show-more"
+          >
+            {t('thread.changedFilesShowMore', {
+              count: Math.min(hiddenCount, CHANGED_FILES_PAGE_SIZE),
+              remaining: hiddenCount,
+              defaultValue: 'Show {{count}} more ({{remaining}} remaining)',
+            })}
+          </Button>
+        </div>
+      )}
 
       {/* Diff popup — the exact single-file dialog the Edit/Write tool cards open
           (no file explorer sidebar): pass neither `files` nor `onFileSelect`. */}

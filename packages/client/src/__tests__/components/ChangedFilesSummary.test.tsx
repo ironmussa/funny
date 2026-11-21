@@ -15,7 +15,9 @@ mock.module('react-i18next', () => ({
       if (typeof fallbackOrOpts === 'string') return fallbackOrOpts;
       const opts = fallbackOrOpts ?? {};
       const tmpl = opts.defaultValue ?? key;
-      return tmpl.replace('{{count}}', String(opts.count ?? ''));
+      return tmpl
+        .replace('{{count}}', String(opts.count ?? ''))
+        .replace('{{remaining}}', String(opts.remaining ?? ''));
     },
     i18n: { language: 'en' },
   }),
@@ -52,6 +54,27 @@ describe('ChangedFilesSummary', () => {
   beforeEach(() => {
     revertFiles.mockClear();
     getFileDiff.mockClear();
+  });
+
+  test('shows the first 20 files and reveals 20 more per "Show more" click', () => {
+    const files = Array.from({ length: 45 }, (_, i) => file(`src/f${i}.ts`, 1, 0));
+    renderWithProviders(<ChangedFilesSummary threadId="t1" files={files} />);
+
+    expect(screen.getByText('45 files changed')).toBeInTheDocument();
+    expect(screen.getByTestId('changed-files-row-src/f19.ts')).toBeInTheDocument();
+    expect(screen.queryByTestId('changed-files-row-src/f20.ts')).toBeNull();
+
+    const more = screen.getByTestId('changed-files-show-more');
+    expect(more).toHaveTextContent('Show 20 more (25 remaining)');
+    fireEvent.click(more);
+    expect(screen.getByTestId('changed-files-row-src/f39.ts')).toBeInTheDocument();
+    expect(screen.getByTestId('changed-files-show-more')).toHaveTextContent(
+      'Show 5 more (5 remaining)',
+    );
+
+    fireEvent.click(screen.getByTestId('changed-files-show-more'));
+    expect(screen.getByTestId('changed-files-row-src/f44.ts')).toBeInTheDocument();
+    expect(screen.queryByTestId('changed-files-show-more')).toBeNull();
   });
 
   test('renders nothing when there are no changed files', () => {

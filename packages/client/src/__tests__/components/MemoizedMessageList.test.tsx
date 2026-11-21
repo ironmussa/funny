@@ -787,6 +787,60 @@ describe('MemoizedMessageList virtualization', () => {
     );
   });
 
+  describe('a scroll position the virtualizer moved', () => {
+    // The virtualizer corrects the scroll position at once and notifies with
+    // `sync = false`; the rows only move on the next commit. A commit left to
+    // React's scheduler lands after the paint, so the content was shown
+    // displaced for a frame.
+    const mountAtFirstRows = async () => {
+      virtualizerMockState.start = 0;
+      virtualizerMockState.visibleCount = 2;
+      const messages = makeMessages(40);
+      const view = render(<Harness messages={messages} />);
+      const viewport = view.getByTestId('viewport');
+      await waitFor(() => expect(viewport.querySelector('[data-index="0"]')).toBeTruthy());
+      // A second commit subscribes the list to the viewport the parent set.
+      view.rerender(<Harness messages={messages} />);
+      return viewport;
+    };
+    const runMicrotasks = () => Promise.resolve().then(() => Promise.resolve());
+
+    test('commits the moved rows before the next task', async () => {
+      const viewport = await mountAtFirstRows();
+
+      virtualizerMockState.start = 10;
+      viewport.scrollTop = 500;
+      virtualizerMockState.lastOptions.onChange(virtualizerMockState.instance, false);
+      await runMicrotasks();
+
+      expect(viewport.querySelector('[data-index="10"]')).toBeTruthy();
+      expect(viewport.querySelector('[data-index="0"]')).toBeNull();
+    });
+
+    test('leaves a scroll notification to the scheduler', async () => {
+      const viewport = await mountAtFirstRows();
+
+      virtualizerMockState.start = 10;
+      viewport.scrollTop = 500;
+      virtualizerMockState.lastOptions.onChange(virtualizerMockState.instance, true);
+      await runMicrotasks();
+
+      expect(viewport.querySelector('[data-index="10"]')).toBeNull();
+    });
+
+    test('leaves a resize that did not move the scroll position to the scheduler', async () => {
+      const viewport = await mountAtFirstRows();
+      viewport.scrollTop = 500;
+      fireEvent.scroll(viewport);
+
+      virtualizerMockState.start = 10;
+      virtualizerMockState.lastOptions.onChange(virtualizerMockState.instance, false);
+      await runMicrotasks();
+
+      expect(viewport.querySelector('[data-index="10"]')).toBeNull();
+    });
+  });
+
   test('uses resize observer border-box height for virtual row measurements', async () => {
     const { getByTestId } = render(<Harness messages={makeMessages(2)} />);
     const viewport = getByTestId('viewport');

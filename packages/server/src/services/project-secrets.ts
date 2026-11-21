@@ -143,26 +143,36 @@ export function createProjectSecretsService(overrides: Partial<ProjectSecretsDep
     return null;
   }
 
+  /** The row a save writes: a new one, or `existing` with its changes. */
+  function rowToSave(
+    userId: string,
+    input: SetProjectSecret,
+    existing: Row | undefined,
+    ciphertext: string,
+  ): Row {
+    const now = deps.now().toISOString();
+    const changes = { ciphertext, allowInSandbox: input.allowInSandbox ? 1 : 0, updatedBy: userId };
+    if (existing) return { ...existing, ...changes, updatedAt: now };
+    return {
+      id: deps.newId(),
+      projectId: input.projectId,
+      scope: input.scope,
+      userId: ownerOf(input.scope, userId),
+      name: input.name,
+      ...changes,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
   /** Insert, or on conflict change the sandbox setting and (when given) the value. */
   function upsert(userId: string, input: SetProjectSecret, existing: Row | undefined) {
-    const now = deps.now().toISOString();
     const ciphertext =
       input.value !== undefined ? deps.crypto.encrypt(input.value) : existing?.ciphertext;
     if (ciphertext === undefined) {
       return errAsync<Row, ProjectSecretError>(invalid('A new secret needs a value.'));
     }
-    const row: Row = {
-      id: existing?.id ?? deps.newId(),
-      projectId: input.projectId,
-      scope: input.scope,
-      userId: ownerOf(input.scope, userId),
-      name: input.name,
-      ciphertext,
-      allowInSandbox: input.allowInSandbox ? 1 : 0,
-      updatedBy: userId,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
+    const row = rowToSave(userId, input, existing, ciphertext);
     return ResultAsync.fromPromise(
       db
         .insert(projectSecrets)

@@ -207,8 +207,7 @@ export class AgentMessageHandler {
     // Project secrets the agent was started with are replaced here, once, so
     // everything below (the stored transcript, the live stream, the debug
     // logs) sees the same redacted message (project-secrets).
-    const redact = this.state.secretRedactors.get(threadId);
-    const msg = redact ? redactDeep(rawMsg, redact) : rawMsg;
+    const msg = redactDeep(rawMsg, this.state.secretRedactors.get(threadId));
     // Every message is activity: without this the stale sweep (1h) evicted a
     // long-running agent's dedup maps mid-run, duplicating messages/tool calls.
     this.state.touch(threadId);

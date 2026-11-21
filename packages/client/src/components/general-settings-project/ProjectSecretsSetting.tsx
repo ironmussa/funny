@@ -309,6 +309,83 @@ function SecretValueField({
   );
 }
 
+/** A valid name, and a valid value unless a stored one is kept by leaving the field empty. */
+function isSavable(name: string, value: string, stored: boolean): boolean {
+  if (validateSecretName(name) !== null) return false;
+  return value === '' ? stored : validateSecretValue(value) === null;
+}
+
+/** Says what is being edited and who gets it. */
+function SecretDialogHeading({ scope, replacingName }: { scope: Scope; replacingName?: string }) {
+  const { t } = useTranslation();
+  const addTitle =
+    scope === 'project'
+      ? t('projectSecrets.addSharedTitle', 'Add a shared secret')
+      : t('projectSecrets.addPersonalTitle', 'Add a personal secret');
+  return (
+    <DialogHeader>
+      <DialogTitle>
+        {replacingName
+          ? t('projectSecrets.replaceTitle', 'Replace {{name}}', { name: replacingName })
+          : addTitle}
+      </DialogTitle>
+      <DialogDescription>
+        {scope === 'project'
+          ? t(
+              'projectSecrets.sharedDialogDesc',
+              'Every member who can start threads on this project gets it in their agents.',
+            )
+          : t(
+              'projectSecrets.personalDialogDesc',
+              'Only the agents of your own threads on this project get it.',
+            )}
+      </DialogDescription>
+    </DialogHeader>
+  );
+}
+
+/** The secret's name, with its problem shown inline. `fixed`: a stored secret keeps its name. */
+function SecretNameField({
+  id,
+  name,
+  fixed,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  name: string;
+  fixed: boolean;
+  disabled: boolean;
+  onChange: (name: string) => void;
+}) {
+  const { t } = useTranslation();
+  const problem = name === '' ? null : validateSecretName(name);
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-foreground text-xs font-medium">
+        {t('projectSecrets.name', 'Name')}
+      </label>
+      <Input
+        id={id}
+        value={name}
+        // The name is the secret's key: renaming is deleting and adding.
+        readOnly={fixed}
+        disabled={disabled}
+        placeholder="DATABASE_URL"
+        aria-invalid={problem ? true : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid="settings-secret-name"
+        {...NO_PASSWORD_MANAGER}
+      />
+      {problem && (
+        <p className="text-destructive text-xs" data-testid="settings-secret-name-error">
+          {t(`projectSecrets.nameProblem.${problem}`, secretNameMessage(problem))}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SecretDialog({
   projectId,
   editing,
@@ -328,11 +405,7 @@ function SecretDialog({
   const [allowInSandbox, setAllowInSandbox] = useState(replacing?.allowInSandbox ?? false);
   const [saving, setSaving] = useState(false);
 
-  const nameProblem = name === '' ? null : validateSecretName(name);
-  const valueProblem = value === '' ? null : validateSecretValue(value);
-  // A stored secret keeps its value when the field is left empty.
-  const valueMissing = value === '' && !replacing;
-  const canSave = name !== '' && !nameProblem && !valueProblem && !valueMissing && !saving;
+  const canSave = !saving && isSavable(name, value, !!replacing);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -363,50 +436,16 @@ function SecretDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent data-testid="settings-secret-dialog">
-        <DialogHeader>
-          <DialogTitle>
-            {replacing
-              ? t('projectSecrets.replaceTitle', 'Replace {{name}}', { name: replacing.name })
-              : scope === 'project'
-                ? t('projectSecrets.addSharedTitle', 'Add a shared secret')
-                : t('projectSecrets.addPersonalTitle', 'Add a personal secret')}
-          </DialogTitle>
-          <DialogDescription>
-            {scope === 'project'
-              ? t(
-                  'projectSecrets.sharedDialogDesc',
-                  'Every member who can start threads on this project gets it in their agents.',
-                )
-              : t(
-                  'projectSecrets.personalDialogDesc',
-                  'Only the agents of your own threads on this project get it.',
-                )}
-          </DialogDescription>
-        </DialogHeader>
+        <SecretDialogHeading scope={scope} replacingName={replacing?.name} />
 
         <form id={formId} className="flex flex-col gap-3" onSubmit={submit} autoComplete="off">
-          <div className="flex flex-col gap-1">
-            <label htmlFor={`${formId}-name`} className="text-foreground text-xs font-medium">
-              {t('projectSecrets.name', 'Name')}
-            </label>
-            <Input
-              id={`${formId}-name`}
-              value={name}
-              // The name is the secret's key: renaming is deleting and adding.
-              readOnly={!!replacing}
-              disabled={saving}
-              placeholder="DATABASE_URL"
-              aria-invalid={nameProblem ? true : undefined}
-              onChange={(e) => setName(e.target.value)}
-              data-testid="settings-secret-name"
-              {...NO_PASSWORD_MANAGER}
-            />
-            {nameProblem && (
-              <p className="text-destructive text-xs" data-testid="settings-secret-name-error">
-                {t(`projectSecrets.nameProblem.${nameProblem}`, secretNameMessage(nameProblem))}
-              </p>
-            )}
-          </div>
+          <SecretNameField
+            id={`${formId}-name`}
+            name={name}
+            fixed={!!replacing}
+            disabled={saving}
+            onChange={setName}
+          />
 
           <SecretValueField
             id={`${formId}-value`}

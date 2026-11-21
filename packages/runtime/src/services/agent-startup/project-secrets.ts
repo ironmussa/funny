@@ -69,11 +69,6 @@ export async function loadProjectSecrets(
   return ok(secrets);
 }
 
-/** Secrets as environment variables. */
-export function projectSecretEnv(secrets: readonly SecretValue[]): Record<string, string> {
-  return Object.fromEntries(secrets.map(({ name, value }) => [name, value]));
-}
-
 /**
  * The agent's environment, later sources winning: project secrets, then the
  * variables funny computes (`buildAgentEnv`), then the agent execution
@@ -86,11 +81,13 @@ export function composeAgentEnv(
   baseEnv: Record<string, string> | undefined,
 ): Record<string, string> | undefined {
   if (secrets.length === 0) return baseEnv;
-  return { ...projectSecretEnv(secrets), ...baseEnv };
+  const secretEnv = Object.fromEntries(secrets.map(({ name, value }) => [name, value]));
+  return { ...secretEnv, ...baseEnv };
 }
 
-/** Applies `redact` to every string inside `value`, keeping its shape. */
-export function redactDeep<T>(value: T, redact: (text: string) => string): T {
+/** Applies `redact` (when there is one) to every string inside `value`, keeping its shape. */
+export function redactDeep<T>(value: T, redact: ((text: string) => string) | undefined): T {
+  if (!redact) return value;
   if (typeof value === 'string') return redact(value) as T;
   if (Array.isArray(value)) return value.map((item) => redactDeep(item, redact)) as T;
   if (value !== null && typeof value === 'object') {

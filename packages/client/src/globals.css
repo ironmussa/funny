@@ -58,12 +58,6 @@
   /* Opt-in theme hooks. A theme sets the raw variable (a full color, e.g.
      `hsl(var(--status-info))`); every other theme falls back to the look it
      always had. Used by the Minimal theme. */
-  --color-tool-card-border: var(--tool-card-border, hsl(var(--border)));
-  --color-tool-icon-read: var(--tool-icon-read, hsl(var(--muted-foreground)));
-  --color-tool-icon-edit: var(--tool-icon-edit, hsl(var(--muted-foreground)));
-  --color-tool-icon-run: var(--tool-icon-run, hsl(var(--muted-foreground)));
-  --color-tool-icon-agent: var(--tool-icon-agent, hsl(var(--muted-foreground)));
-  --color-tool-icon-other: var(--tool-icon-other, hsl(var(--muted-foreground)));
   --color-thread-icon-running: var(--thread-icon-running, var(--color-gray-400));
   --color-thread-icon-completed: var(--thread-icon-completed, var(--color-gray-400));
 
@@ -415,6 +409,9 @@ mark.md-search-match[data-active='true'] {
 
 @layer base {
   :root {
+    /* Tool card outline; a theme sets 0px to drop it (Minimal). */
+    --tool-card-border-width: 1px;
+
     --scrollbar-size: 6px;
     --font-sans: 'Geist Sans', 'Geist Sans Fallback', sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -946,12 +943,9 @@ mark.md-search-match[data-active='true'] {
     --status-neutral: 0 0% 50%;
     --status-violet: 263 85% 74%;
 
-    --tool-card-border: transparent;
-    --tool-icon-read: hsl(var(--status-info));
-    --tool-icon-edit: hsl(var(--status-warning));
-    --tool-icon-run: hsl(var(--status-success));
-    --tool-icon-agent: hsl(var(--status-violet));
-    --tool-icon-other: hsl(190 80% 60%);
+    /* Width, not color: the base layer forces every `border-*` element to
+       the theme's border color with !important. */
+    --tool-card-border-width: 0px;
     --thread-icon-running: hsl(var(--status-info));
     --thread-icon-completed: hsl(var(--status-success));
 

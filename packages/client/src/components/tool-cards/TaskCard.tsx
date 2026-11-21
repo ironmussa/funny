@@ -135,7 +135,7 @@ export const TaskCard = memo(function TaskCard({
   return (
     <div
       data-testid="task-card"
-      className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm"
+      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm"
     >
       <button
         type="button"
@@ -147,7 +147,7 @@ export const TaskCard = memo(function TaskCard({
         <ChevronRight
           className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
-        <Bot className="icon-xs text-tool-icon-agent shrink-0" />
+        <Bot className="icon-xs text-muted-foreground shrink-0" />
         {!hideLabel && (
           <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.subagent')}

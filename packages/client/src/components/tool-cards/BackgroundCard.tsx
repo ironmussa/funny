@@ -55,7 +55,7 @@ export function BackgroundCard({
   const exitCode = typeof parsed.exitCode === 'number' ? parsed.exitCode : null;
 
   return (
-    <div className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
       <button
         type="button"
         aria-expanded={expanded}
@@ -66,7 +66,7 @@ export function BackgroundCard({
         <ChevronRight
           className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
-        {!hideLabel && <Timer className="icon-xs text-tool-icon-run shrink-0" />}
+        {!hideLabel && <Timer className="icon-xs text-muted-foreground shrink-0" />}
         {!hideLabel && (
           <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.background')}

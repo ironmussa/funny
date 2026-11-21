@@ -145,7 +145,7 @@ function CheckHeader({
           className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
       )}
-      <ListChecks className="icon-xs text-tool-icon-run shrink-0" />
+      <ListChecks className="icon-xs text-muted-foreground shrink-0" />
       <span className="text-foreground min-w-0 truncate font-mono font-medium">{label}</span>
       {displayTime && (
         <span className="text-muted-foreground/50 ml-auto shrink-0 text-xs tabular-nums">
@@ -210,7 +210,7 @@ export function CheckRunCard({
 
   return (
     <div
-      className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm"
+      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm"
       data-testid="check-run-card"
     >
       <CheckHeader

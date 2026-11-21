@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -11,7 +11,9 @@ import type { ServerEnv, UserRole } from '../../lib/types.js';
 import { fakeFetch } from '../helpers/builders-routes.js';
 
 // The stored App's key is encrypted with the keyring: keep it out of ~/.funny.
-process.env.FUNNY_DATA_DIR = mkdtempSync(join(tmpdir(), 'funny-github-app-routes-'));
+const dataDir = mkdtempSync(join(tmpdir(), 'funny-github-app-routes-'));
+process.env.FUNNY_DATA_DIR = dataDir;
+afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
 
 const { createGithubAppSettingsRoutes } = await import('../../routes/github-app-settings.js');
 const { createGithubAppPort } = await import('../../trpc/ports/github-app.js');

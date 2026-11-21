@@ -1,11 +1,12 @@
-import { describe, test, expect } from 'bun:test';
-import { mkdtempSync } from 'fs';
+import { afterAll, describe, test, expect } from 'bun:test';
+import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 // Point DATA_DIR to a temp directory to isolate side-effects
 const testDir = mkdtempSync(join(tmpdir(), 'funny-crypto-test-'));
 process.env.FUNNY_DATA_DIR = testDir;
+afterAll(() => rmSync(testDir, { recursive: true, force: true }));
 
 // Import AFTER setting env so data-dir.ts picks up the temp directory
 const { encrypt, decrypt, rotateKey, isEncryptedWithActiveKey } =

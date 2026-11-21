@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,7 +9,9 @@ import { okAsync } from 'neverthrow';
 import { fakeFetch } from '../../helpers/builders-services.js';
 
 // The stored App's key is encrypted with the keyring: keep it out of ~/.funny.
-process.env.FUNNY_DATA_DIR = mkdtempSync(join(tmpdir(), 'funny-github-app-test-'));
+const dataDir = mkdtempSync(join(tmpdir(), 'funny-github-app-test-'));
+process.env.FUNNY_DATA_DIR = dataDir;
+afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
 
 const { loadGithubAppConfig, saveGithubApp, deleteGithubApp } =
   await import('../../../services/github-app/app-config.js');

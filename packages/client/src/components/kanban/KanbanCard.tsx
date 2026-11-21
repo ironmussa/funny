@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
+import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
 import {
@@ -139,6 +140,7 @@ export const KanbanCard = memo(function KanbanCard({
             stopBadgePropagation
             badgeTestId={`kanban-card-attachments-${thread.id}`}
           />
+          <ThreadWatcherIndicator threadId={thread.id} className="mt-1" />
         </div>
 
         <ThreadPowerline

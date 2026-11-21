@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useExternalClaudeSessionsSync } from '@/hooks/use-external-claude-sessions';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import { showsInSidebar } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 
@@ -81,7 +82,7 @@ export function SidebarProjectsSection({
     const result: Record<string, Thread[]> = {};
     for (const project of activeProjects) {
       const src = threadsByProject[project.id];
-      result[project.id] = (Array.isArray(src) ? src : []).filter((thread) => !thread.archived);
+      result[project.id] = (Array.isArray(src) ? src : []).filter(showsInSidebar);
     }
     return result;
   }, [threadsByProject, activeProjects]);

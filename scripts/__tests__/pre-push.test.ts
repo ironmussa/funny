@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { changedFiles } from '../pre-push';
+import { changedFiles, testCheckout } from '../pre-push';
 import { testSuiteEnv } from '../test-env';
 
 const ZERO = '0'.repeat(40);
@@ -61,4 +61,51 @@ test('deletions and blank lines add nothing', () => {
 test('an unresolvable range returns null so the caller runs everything', () => {
   const local = commit('packages/a/a.ts');
   expect(changedFiles(refLine(local, ZERO), repo, 'no-such-ref')).toBeNull();
+});
+
+// The suites must test what is pushed, not the checkout's files: a shared
+// checkout may hold another agent's unfinished edits (a source changed before
+// its test), which failed pushes that did not touch them.
+const noInstall = () => true;
+
+test('a clean checkout at the pushed commit is tested in place', () => {
+  const head = commit('packages/a/a.ts');
+  const checkout = testCheckout([head], repo, noInstall);
+  expect(checkout.root).toBe(repo);
+  expect(checkout.warning).toBeUndefined();
+});
+
+test('uncommitted edits send the suites to a worktree of the pushed commit', () => {
+  const head = commit('packages/a/a.ts');
+  writeFileSync(join(repo, 'packages/a/a.ts'), 'half-done edit\n');
+  const checkout = testCheckout([head], repo, noInstall);
+  try {
+    expect(checkout.root).not.toBe(repo);
+    expect(readFileSync(join(checkout.root, 'packages/a/a.ts'), 'utf8')).toBe('packages/a/a.ts\n');
+  } finally {
+    checkout.dispose();
+  }
+  expect(existsSync(checkout.root)).toBe(false);
+  expect(git('worktree', 'list')).not.toContain(checkout.root);
+});
+
+test('a pushed commit other than HEAD is tested at that commit', () => {
+  const pushed = commit('packages/a/a.ts');
+  commit('packages/b/b.ts');
+  const checkout = testCheckout([pushed], repo, noInstall);
+  try {
+    expect(existsSync(join(checkout.root, 'packages/a/a.ts'))).toBe(true);
+    expect(existsSync(join(checkout.root, 'packages/b/b.ts'))).toBe(false);
+  } finally {
+    checkout.dispose();
+  }
+});
+
+test('a failed install falls back to the checkout and says so', () => {
+  const head = commit('packages/a/a.ts');
+  writeFileSync(join(repo, 'packages/a/a.ts'), 'edit\n');
+  const checkout = testCheckout([head], repo, () => false);
+  expect(checkout.root).toBe(repo);
+  expect(checkout.warning).toContain('could not prepare');
+  expect(git('worktree', 'list').split('\n')).toHaveLength(1);
 });

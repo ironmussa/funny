@@ -15,7 +15,7 @@ import { useBrowserPanelStore } from '@/stores/browser-panel-store';
  * session), plus the pending JavaScript dialog, which freezes the page until
  * someone answers it.
  */
-export function BrowserControlBar({ style }: { style?: React.CSSProperties }) {
+export function BrowserControlBar() {
   const sessionThreadId = useBrowserPanelStore((s) => s.sessionThreadId);
   const controller = useBrowserPanelStore((s) => s.controller);
   const dialog = useBrowserPanelStore((s) => s.dialog);
@@ -24,7 +24,7 @@ export function BrowserControlBar({ style }: { style?: React.CSSProperties }) {
   if (!sessionThreadId && !dialog && !hasSession) return null;
 
   return (
-    <div className="flex flex-col gap-1" style={style}>
+    <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
         {sessionThreadId && (
           <div

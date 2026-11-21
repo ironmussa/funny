@@ -1,4 +1,4 @@
-import { AlarmClock } from 'lucide-react';
+import { AlarmClock, SquareTerminal, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,16 +11,24 @@ import {
 } from '@/lib/watcher-utils';
 
 /**
- * Small clock shown next to a thread's status icon when the thread has
- * background activity funny is tracking: a RUNNING job (funny_spawn) or a
- * PENDING watcher (funny_watch snooze). Rendered inside ThreadStatusPin, so it
- * appears in every surface that shows a thread — sidebar, kanban cards, and the
- * virtual thread list — from one place.
+ * Background activity funny is tracking for a thread, shown to the RIGHT of the
+ * thread's title (sidebar, kanban cards, virtual thread list):
  *
- * Returns null when there is no active background work, so layouts are
- * unaffected in the common case.
+ * - a terminal icon while a background job is RUNNING (funny_spawn);
+ * - an alarm clock while a watcher is PENDING (funny_watch snooze), with the
+ *   countdown to its next wake in the tooltip.
+ *
+ * Each kind has its own icon so the user can tell "a process is running" from
+ * "the agent will wake up later". Renders nothing when there is no active
+ * background work, so layouts are unaffected in the common case.
  */
-export function ThreadWatcherIndicator({ threadId }: { threadId: string }) {
+export function ThreadWatcherIndicator({
+  threadId,
+  className,
+}: {
+  threadId: string;
+  className?: string;
+}) {
   const threadWatchers = useThreadWatchersById(threadId);
   const threadJobs = useThreadJobsById(threadId);
   const watchers = useMemo(
@@ -31,43 +39,76 @@ export function ThreadWatcherIndicator({ threadId }: { threadId: string }) {
     () => selectRunningJobsForThread(threadJobs, threadId),
     [threadJobs, threadId],
   );
+
+  if (watchers.length === 0 && jobs.length === 0) return null;
+
+  return (
+    <span className={cn('flex shrink-0 items-center gap-1', className)}>
+      {jobs.length > 0 && (
+        <IndicatorIcon
+          icon={SquareTerminal}
+          className="text-status-info"
+          testId={`thread-job-indicator-${threadId}`}
+          tooltip={`${jobs.length} background job${jobs.length === 1 ? '' : 's'} running`}
+        />
+      )}
+      {watchers.length > 0 && (
+        <WatcherIcon
+          threadId={threadId}
+          count={watchers.length}
+          nextWakeAt={Math.min(...watchers.map((w) => w.nextWakeAt))}
+        />
+      )}
+    </span>
+  );
+}
+
+/** The alarm clock, whose tooltip counts down to the next wake. */
+function WatcherIcon({
+  threadId,
+  count,
+  nextWakeAt,
+}: {
+  threadId: string;
+  count: number;
+  nextWakeAt: number;
+}) {
   const [now, setNow] = useState(() => Date.now());
 
-  const hasActive = watchers.length > 0 || jobs.length > 0;
-  const hasWatcher = watchers.length > 0;
-
-  // Tick the countdown only while there's a pending watcher to count down to.
+  // Tick the countdown only while this icon is mounted (a watcher is pending).
   useEffect(() => {
-    if (!hasWatcher) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [hasWatcher]);
+  }, []);
 
-  const tooltip = useMemo(() => {
-    if (!hasActive) return '';
-    const parts: string[] = [];
-    if (jobs.length > 0) {
-      parts.push(`${jobs.length} background job${jobs.length === 1 ? '' : 's'} running`);
-    }
-    if (watchers.length > 0) {
-      const next = [...watchers].sort((a, b) => a.nextWakeAt - b.nextWakeAt)[0];
-      const noun = watchers.length === 1 ? 'watcher' : 'watchers';
-      parts.push(`${watchers.length} ${noun} · next wake ${formatCountdown(next.nextWakeAt, now)}`);
-    }
-    return parts.join(' · ');
-  }, [watchers, jobs, hasActive, now]);
+  const noun = count === 1 ? 'watcher' : 'watchers';
+  return (
+    <IndicatorIcon
+      icon={AlarmClock}
+      className="text-status-warning"
+      testId={`thread-watcher-indicator-${threadId}`}
+      tooltip={`${count} ${noun} · next wake ${formatCountdown(nextWakeAt, now)}`}
+    />
+  );
+}
 
-  if (!hasActive) return null;
-
+function IndicatorIcon({
+  icon: Icon,
+  className,
+  testId,
+  tooltip,
+}: {
+  icon: LucideIcon;
+  className: string;
+  testId: string;
+  tooltip: string;
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          className="flex shrink-0 items-center"
-          data-testid={`thread-watcher-indicator-${threadId}`}
-        >
+        <span className="flex shrink-0 items-center" data-testid={testId}>
           {/* icon-sm to match the thread status icon in ThreadStatusPin */}
-          <AlarmClock className={cn('icon-sm', 'text-status-warning')} />
+          <Icon className={cn('icon-sm', className)} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">

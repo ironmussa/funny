@@ -75,7 +75,10 @@ mock.module('@/lib/api', async () => {
 
 mock.module('@/components/PromptInput', () => ({
   PromptInput: (props: {
-    onSubmit?: (prompt: string, opts: { model: string; mode: string; threadMode: string }) => void;
+    onSubmit?: (
+      prompt: string,
+      opts: { model: string; mode: string; threadMode: string; sendToBacklog?: boolean },
+    ) => void;
     onWorktreeModeChange?: (value: boolean) => void;
     onContentChange?: (hasContent: boolean, text: string) => void;
     onProviderChange?: (provider: string) => void;
@@ -99,6 +102,20 @@ mock.module('@/components/PromptInput', () => ({
         }
       >
         Submit
+      </button>
+      <button
+        type="button"
+        data-testid="mock-backlog-submit"
+        onClick={() =>
+          props.onSubmit?.('Build feature X', {
+            model: 'gpt-5',
+            mode: 'auto',
+            threadMode: 'local',
+            sendToBacklog: true,
+          })
+        }
+      >
+        Backlog
       </button>
       <button
         type="button"
@@ -319,6 +336,21 @@ describe('NewThreadInput', () => {
     // The loader shows while the request is in flight; what must not happen is
     // that it stays. Checking right after the call raced the resolution and
     // failed intermittently in CI; a pinned loader still times this out.
+    await waitFor(() =>
+      expect(screen.queryByTestId('new-thread-creating')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('mock-prompt-input')).toBeInTheDocument();
+  });
+
+  test('does NOT pin the loader when the "send to backlog" toggle is on', async () => {
+    // Regression: the pin only looked at idle-only mode, so a backlog submit from
+    // the normal compose form left "Preparing…" up as if the thread had started.
+    mockCreateThread.mockResolvedValueOnce(true);
+    renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+
+    fireEvent.click(screen.getByTestId('mock-backlog-submit'));
+
+    await waitFor(() => expect(mockCreateThread).toHaveBeenCalled());
     await waitFor(() =>
       expect(screen.queryByTestId('new-thread-creating')).not.toBeInTheDocument(),
     );

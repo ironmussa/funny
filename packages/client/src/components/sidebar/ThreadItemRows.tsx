@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PRBadge } from '@/components/PRBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
+import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { getSummary, getToolLabel } from '@/components/tool-cards/format-utils';
 import { HighlightText } from '@/components/ui/highlight-text';
@@ -106,6 +107,8 @@ export function ThreadItemTitleRow({
         className="text-thread-title text-sm leading-tight"
         badgeTestId={`thread-item-attachments-${thread.id}`}
       />
+      {/* Background jobs (funny_spawn) / watchers (funny_watch), right of the title */}
+      <ThreadWatcherIndicator threadId={thread.id} />
       {titleBadge}
       {/* The thread's PR sits beside the title, not in the powerline row */}
       {gitStatus?.prNumber ? (

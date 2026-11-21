@@ -1,6 +1,16 @@
 import type { ThreadEvent } from '@funny/shared';
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import type { RefObject } from 'react';
+import { flushSync } from 'react-dom';
 
 import {
   ensurePretextLoaded,
@@ -138,7 +148,18 @@ export function useContainerWidth(itemContainerRef: RefObject<HTMLElement | null
   return containerWidth;
 }
 
-export function usePretextWarmup(groupedItems: RenderItem[], fontConfig: FontConfig) {
+/**
+ * Prepares the list's texts for pretext in idle time. `onPrepared` runs after
+ * a batch that prepared at least one text, which is when a text estimate can
+ * change.
+ */
+export function usePretextWarmup(
+  groupedItems: RenderItem[],
+  fontConfig: FontConfig,
+  onPrepared?: () => void,
+) {
+  const notifyPrepared = useEffectEvent(() => onPrepared?.());
+
   // The effect cleanup cancels the idle callback or fallback timeout and gates the pending promise.
   // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
@@ -164,8 +185,12 @@ export function usePretextWarmup(groupedItems: RenderItem[], fontConfig: FontCon
         }
 
         if (toPrepare.length > 0) {
-          prepareBatch(toPrepare, proseFont, {
+          // Not gated on `cancelled`: a newer run finds these texts already
+          // prepared and would never report them.
+          void prepareBatch(toPrepare, proseFont, {
             signal: cancelled ? AbortSignal.abort() : undefined,
+          }).then((prepared) => {
+            if (prepared > 0) notifyPrepared();
           });
         }
       });
@@ -188,4 +213,54 @@ export function usePretextWarmup(groupedItems: RenderItem[], fontConfig: FontCon
       }
     };
   }, [groupedItems, fontConfig]);
+}
+
+/** Sync renders allowed per frame before falling back to React's own schedule. */
+const MAX_SYNC_RENDERS_PER_FRAME = 8;
+
+/**
+ * Returns the virtualizer's `onChange`. When the virtualizer measures a row
+ * above the viewport it moves the scroll position at once, inside its
+ * ResizeObserver callback, but the rows only move on the next React commit.
+ * React schedules that commit as a task, so the browser painted one frame with
+ * the scroll moved and the rows not: the content was shown displaced by the
+ * row's estimate error, then put back. Rendering in a microtask puts the commit
+ * before that paint.
+ *
+ * `scrollTopAtLastScrollEventRef` tells a moved scroll position from a row that
+ * only resized: a position no scroll event has reported yet was set by code.
+ */
+export function useSyncRenderOnScrollCorrection(
+  scrollRef: RefObject<HTMLElement | null>,
+  scrollTopAtLastScrollEventRef: RefObject<number | null>,
+) {
+  const [, renderNow] = useReducer((count: number) => count + 1, 0);
+  const scheduledRef = useRef(false);
+  const rendersThisFrameRef = useRef(0);
+
+  return useCallback(
+    (_instance: unknown, isScrollNotification: boolean) => {
+      // Scroll notifications keep React's schedule, so mounting rows never
+      // blocks the scroll handler.
+      if (isScrollNotification || scheduledRef.current) return;
+      const viewport = scrollRef.current;
+      if (!viewport || viewport.scrollTop === scrollTopAtLastScrollEventRef.current) return;
+
+      scheduledRef.current = true;
+      queueMicrotask(() => {
+        scheduledRef.current = false;
+        // A row whose size depends on the render would otherwise loop here
+        // without ever yielding to the browser.
+        if (rendersThisFrameRef.current >= MAX_SYNC_RENDERS_PER_FRAME) return;
+        if (rendersThisFrameRef.current === 0) {
+          requestAnimationFrame(() => {
+            rendersThisFrameRef.current = 0;
+          });
+        }
+        rendersThisFrameRef.current += 1;
+        flushSync(renderNow);
+      });
+    },
+    [scrollRef, scrollTopAtLastScrollEventRef],
+  );
 }

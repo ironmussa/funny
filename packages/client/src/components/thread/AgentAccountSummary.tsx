@@ -54,7 +54,7 @@ export function AgentAccountSummary({ account, profileName }: Props) {
         </span>
         {plan && (
           <span className="ml-auto shrink-0">
-            <Badge variant="secondary" data-testid="agent-account-plan">
+            <Badge variant="secondary" size="xs" data-testid="agent-account-plan">
               {plan}
             </Badge>
           </span>

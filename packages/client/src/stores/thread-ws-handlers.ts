@@ -23,10 +23,12 @@ import type {
   PendingPermissionRequest,
   PermissionApprovalCapability,
   PermissionRecoveryReason,
+  WSAgentAccountData,
   WSContextUsageData,
 } from '@funny/shared';
 import { toast } from 'sonner';
 
+import { applyAgentAccountEvent } from '@/data/agent-account/store';
 import { applyContextUsageEvent, resetContextUsage } from '@/data/context-usage/store';
 import { applyQueueSummary } from '@/data/queue/store';
 import {
@@ -36,6 +38,7 @@ import {
   readThreadRow,
 } from '@/data/threads/read';
 import i18n from '@/i18n/config';
+import { saveAgentAccounts } from '@/lib/agent-account-storage';
 import { createClientLogger } from '@/lib/client-logger';
 import { saveContextUsage } from '@/lib/context-usage-storage';
 import { buildPath } from '@/lib/url';
@@ -1053,6 +1056,13 @@ export function handleWSCompactBoundary(
 export function handleWSContextUsage(threadId: string, data: WSContextUsageData): void {
   // Persist across page reloads — the runtime only keeps usage in memory.
   saveContextUsage(threadId, applyContextUsageEvent(threadId, data));
+}
+
+// ── Agent account ──────────────────────────────────────────────
+
+export function handleWSAgentAccount(threadId: string, data: WSAgentAccountData): void {
+  // Persist across page reloads — the runtime only reports it while running.
+  saveAgentAccounts(applyAgentAccountEvent(threadId, data));
 }
 
 // ── Error ────────────────────────────────────────────────────────

@@ -42,6 +42,7 @@ import { addReferencedEntries, stripReferencedContents } from '@funny/shared/att
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
+import { restoreAgentAccounts } from '@/data/agent-account/store';
 import { restoreContextUsage } from '@/data/context-usage/store';
 import { seedQueueSummary } from '@/data/queue/store';
 import {
@@ -72,6 +73,7 @@ import {
   readThreadRow,
   subscribeProjectLists,
 } from '@/data/threads/read';
+import { loadAgentAccounts } from '@/lib/agent-account-storage';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { loadContextUsage } from '@/lib/context-usage-storage';
@@ -534,6 +536,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // Restore context usage from localStorage when this session has none yet
       // (e.g. fresh tab), so the ring re-appears before the next WS event fires.
       restoreContextUsage(threadId, () => loadContextUsage(threadId));
+      restoreAgentAccounts(loadAgentAccounts);
 
       seedQueueSummary(threadId, queuedCount ?? 0, queuedNextMessage);
 

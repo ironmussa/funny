@@ -5,7 +5,7 @@
  * these types without pulling in a concrete process implementation.
  */
 
-import type { ContextBreakdown } from '@funny/shared';
+import type { AgentAccountInfo, AgentPlanUsage, ContextBreakdown } from '@funny/shared';
 
 // ── CLI Message Types ──────────────────────────────────────────────
 
@@ -104,6 +104,16 @@ export interface CLIRateLimitMessage {
   sessionId: string;
 }
 
+/**
+ * The account the provider CLI is logged in with (Claude SDK `accountInfo()`)
+ * and its plan usage (`/usage`; absent when plan limits do not apply).
+ */
+export interface CLIAccountMessage {
+  type: 'account';
+  info: AgentAccountInfo;
+  usage?: AgentPlanUsage;
+}
+
 /** End-of-turn per-category context window breakdown (Claude SDK `getContextUsage`). */
 export interface CLIContextBreakdownMessage {
   type: 'context_breakdown';
@@ -137,6 +147,7 @@ export type CLIMessage =
   | CLIResultMessage
   | CLICompactBoundaryMessage
   | CLIRateLimitMessage
+  | CLIAccountMessage
   | CLIContextBreakdownMessage
   | CLIPermissionRequestMessage;
 

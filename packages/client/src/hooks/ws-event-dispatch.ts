@@ -57,6 +57,7 @@ import {
   getUrlThreadId,
 } from '@/stores/thread-store-internals';
 import { readActiveThreadView } from '@/stores/thread-view';
+import { handleWSAgentAccount } from '@/stores/thread-ws-handlers';
 
 import { dispatchBrowserSessionEvent } from './dispatch-browser-session-events';
 import { dispatchTestEvent } from './dispatch-test-events';
@@ -706,6 +707,7 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'agent:context_usage': inTransition((store, threadId, data) =>
     store.handleWSContextUsage(threadId, data),
   ),
+  'agent:account': (threadId, data) => handleWSAgentAccount(threadId, data),
   'command:output': (_threadId, data) => {
     useTerminalStore.getState().appendCommandOutput(data.commandId, data.data);
   },
@@ -1043,6 +1045,7 @@ const ALL_EVENT_TYPES = [
   'agent:error',
   'agent:compact_boundary',
   'agent:context_usage',
+  'agent:account',
   'command:output',
   'command:status',
   'command:metrics',

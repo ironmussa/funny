@@ -116,6 +116,15 @@ export class AgentStateTracker {
    */
   readonly supportedSlashCommands = new Map<string, Set<string>>();
 
+  /**
+   * Execution profile of the thread's current run, cached for the account and
+   * rate-limit events (run-scoped: the next run may use another profile).
+   */
+  readonly runAgentProfiles = new Map<
+    string,
+    { profileId: string | null; profileName: string | null }
+  >();
+
   /** Cached userId per thread — avoids DB reads on every WS emission */
   readonly threadUserIds = new Map<string, string>();
 
@@ -191,6 +200,7 @@ export class AgentStateTracker {
 
   /** State that belongs to a single run; shared by clearRunState and cleanupThread. */
   private clearRunScopedState(threadId: string): void {
+    this.runAgentProfiles.delete(threadId);
     this.currentAssistantMsgId.delete(threadId);
     this.resultReceived.delete(threadId);
     this.completedEmitted.delete(threadId);

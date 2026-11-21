@@ -340,6 +340,15 @@ export class AgentMessageHandler {
       return;
     }
 
+    if (msg.type === 'account') {
+      await this.emitWS(threadId, 'agent:account', {
+        ...(await this.runAgentProfile(threadId)),
+        account: msg.info,
+        usage: msg.usage,
+      });
+      return;
+    }
+
     // Result — agent finished
     if (msg.type === 'result') {
       await this.handleResult(threadId, msg);
@@ -378,6 +387,35 @@ export class AgentMessageHandler {
       isUsingOverage: msg.info.isUsingOverage ?? false,
     });
     await this.emitWS(threadId, 'agent:rate_limit', { info: msg.info });
+  }
+
+  /**
+   * The execution profile the thread's current run uses, so the client can
+   * key the account's usage by profile rather than by thread. Read from the thread
+   * row (written before the agent starts) once per run.
+   */
+  private async runAgentProfile(
+    threadId: string,
+  ): Promise<{ profileId: string | null; profileName: string | null }> {
+    const cached = this.state.runAgentProfiles.get(threadId);
+    if (cached) return cached;
+    let ref = { profileId: null as string | null, profileName: null as string | null };
+    try {
+      const thread = await this.threadManager.getThread(threadId);
+      ref = {
+        profileId: thread?.agentProfileId ?? null,
+        profileName: thread?.agentProfileName ?? null,
+      };
+    } catch (err) {
+      log.warn('Failed to read the thread agent profile', {
+        namespace: 'agent',
+        threadId,
+        error: err,
+      });
+      return ref;
+    }
+    this.state.runAgentProfiles.set(threadId, ref);
+    return ref;
   }
 
   // ── Assistant message handling ─────────────────────────────────

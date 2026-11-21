@@ -23,13 +23,16 @@ describe('sessionChangesFromEvents', () => {
       summaryEvent('e2', 'u2', [{ ...FILE, path: 'src/b.ts' }]),
     ]);
     expect([...map.keys()]).toEqual(['u1', 'u2']);
-    expect<unknown>(map.get('u1')).toEqual([FILE]);
-    expect(map.get('u2')![0].path).toBe('src/b.ts');
+    expect<unknown>(map.get('u1')).toEqual({
+      files: [FILE],
+      createdAt: '2026-06-15T00:00:00.000Z',
+    });
+    expect(map.get('u2')!.files[0].path).toBe('src/b.ts');
   });
 
   test('the frozen +/- stats come straight from the event, not recomputed', () => {
     const map = sessionChangesFromEvents([summaryEvent('e1', 'u1', [FILE])]);
-    expect(map.get('u1')![0]).toMatchObject({ additions: 22, deletions: 6 });
+    expect(map.get('u1')!.files[0]).toMatchObject({ additions: 22, deletions: 6 });
   });
 
   test('ignores non-summary thread events (e.g. git ops)', () => {

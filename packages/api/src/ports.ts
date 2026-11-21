@@ -9,6 +9,7 @@
  */
 
 import type {
+  Activity,
   AgentExecutionProfileResponse,
   AgentTemplate,
   Automation,
@@ -36,6 +37,7 @@ import type {
   Watcher,
 } from '@funny/shared';
 import type { Capability, Role } from '@funny/shared/auth/roles';
+import type { RemovedActivities } from '@funny/shared/contracts/activities';
 import type {
   AgentTemplateBody,
   UpdateAgentTemplateBody,
@@ -246,6 +248,15 @@ export interface WatchersPort {
   list(userId: string): PortResult<Watcher[]>;
   /** Stops a live watcher of the caller (404 otherwise); terminal ones stay as they are. */
   cancel(userId: string, id: string): PortResult<Watcher>;
+}
+
+export interface ActivitiesPort {
+  /** The caller's activities, newest first. */
+  list(userId: string): PortResult<Activity[]>;
+  /** 404 when it is not the caller's; 409 for a running one whose runner is connected. */
+  dismiss(userId: string, id: string): PortResult<RemovedActivities>;
+  /** Deletes the caller's finished activities; running ones stay. */
+  clearFinished(userId: string): PortResult<RemovedActivities>;
 }
 
 export interface JobsPort {
@@ -494,6 +505,7 @@ export interface ApiPorts {
   agentTemplates: AgentTemplatesPort;
   watchers: WatchersPort;
   jobs: JobsPort;
+  activities: ActivitiesPort;
   designs: DesignsPort;
   analytics: AnalyticsPort;
   push: PushPort;

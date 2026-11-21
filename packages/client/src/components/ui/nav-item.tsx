@@ -33,12 +33,14 @@ interface NavItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   count?: number;
   size?: 'sm' | 'md';
   isActive?: boolean;
+  /** Extra content after the count (e.g. a second, failure badge). */
+  trailing?: React.ReactNode;
 }
 
 // forwardRef + prop spread so NavItem can be a Radix `asChild` trigger
 // (Popover/Dropdown) — those clone the child with a ref and a11y/state props.
 export const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(function NavItem(
-  { icon: Icon, label, count, size = 'md', isActive = false, className, ...rest },
+  { icon: Icon, label, count, size = 'md', isActive = false, trailing, className, ...rest },
   ref,
 ) {
   return (
@@ -50,6 +52,7 @@ export const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(function NavI
           {count}
         </Badge>
       )}
+      {trailing}
     </button>
   );
 });

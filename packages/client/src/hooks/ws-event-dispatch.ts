@@ -9,6 +9,11 @@ import { isTerminalSessionUnavailable } from '@funny/shared/socket-events';
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
+import {
+  applyActivitiesRemoved,
+  applyActivityProgress,
+  applyActivityUpdated,
+} from '@/data/activities/apply-event';
 import { applyApprovalRequested, applyApprovalResolved } from '@/data/approvals/store';
 import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/automations/events';
 import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
@@ -39,6 +44,7 @@ import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { clientComposition } from '@/platform/client-composition';
+import { notifyActivityFailed } from '@/stores/activity-notifications';
 import { useCheckRunsStore } from '@/stores/check-runs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { notifyPtySessionLost, useTerminalStore } from '@/stores/terminal-store';
@@ -807,6 +813,12 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'test:error': testEventHandler,
   'test:action': testEventHandler,
   'clone:progress': noop,
+  'activity:updated': (_threadId, data) => {
+    const outcome = applyActivityUpdated(data);
+    if (outcome?.becameFailed) notifyActivityFailed(outcome.activity);
+  },
+  'activity:removed': (_threadId, data) => applyActivitiesRemoved(data),
+  'activity:progress': (_threadId, data) => applyActivityProgress(data),
   'worktree:setup': (threadId, data) => {
     useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
   },
@@ -1085,6 +1097,9 @@ const ALL_EVENT_TYPES = [
   'test:error',
   'test:action',
   'clone:progress',
+  'activity:updated',
+  'activity:removed',
+  'activity:progress',
   'worktree:setup',
   'worktree:setup_complete',
   'native-git:build_output',

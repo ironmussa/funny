@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
     parentSpanId?: string;
   }>,
   histograms: [] as Array<{ name: string; attributes?: Record<string, unknown> }>,
+  sendRemoteData: vi.fn(async (_type: string, _payload: Record<string, any>) => ({ ok: true })),
 }));
+
+vi.mock('../../services/remote-data-channel.js', () => ({ sendRemoteData: mocks.sendRemoteData }));
 
 vi.mock('@funny/core/git', () => ({
   createWorktree: mocks.createWorktree,
@@ -157,5 +160,57 @@ describe('prepareWorktree', () => {
     expect(step.attributes.status).toBe('unfinished');
     const root = mocks.spans.find((s) => s.name === 'worktree.prepare')!;
     expect(root.attributes.outcome).toBe('error');
+  });
+
+  describe('activity', () => {
+    const reports = (type: string) =>
+      mocks.sendRemoteData.mock.calls.filter(([t]) => t === type).map(([, p]) => p);
+    const terminal = () =>
+      vi.waitFor(() => {
+        const last = reports('data:activity_update').find((p) => p.patch.status);
+        expect(last).toBeDefined();
+        return last!.patch;
+      });
+
+    test('records each setup step and succeeds when setup is clean', async () => {
+      mocks.createWorktree.mockImplementation(async (...args: unknown[]) => {
+        (args[3] as Progress)('worktree:create', 'Creating worktree', 'running');
+        return ok('/wt');
+      });
+      mocks.setupWorktree.mockImplementation(async (...args: unknown[]) => {
+        (args[2] as Progress)('cmd:bun install', 'bun install', 'running');
+        return ok({ ports: [], postCreateErrors: [] });
+      });
+
+      await prepareWorktree({ ...params, projectId: 'p-1' });
+
+      expect(await terminal()).toEqual({ status: 'succeeded' });
+      expect(reports('data:activity_start')[0]).toMatchObject({
+        kind: 'worktree.setup',
+        projectId: 'p-1',
+        threadId: 't-1',
+        input: { branch: 'app/feature-abc123', baseBranch: 'master' },
+      });
+      expect(
+        reports('data:activity_update')
+          .map((p) => p.patch.step)
+          .filter(Boolean),
+      ).toEqual(['Creating worktree', 'bun install']);
+    });
+
+    test('a failed startup command fails the activity but keeps the worktree', async () => {
+      mocks.createWorktree.mockResolvedValue(ok('/wt'));
+      mocks.setupWorktree.mockResolvedValue(
+        ok({ ports: [], postCreateErrors: ['"bun install": exit 1'] }),
+      );
+
+      const result = await prepareWorktree(params);
+
+      expect(result._unsafeUnwrap()).toBe('/wt');
+      expect(await terminal()).toEqual({
+        status: 'failed',
+        error: 'Setup failed: "bun install": exit 1',
+      });
+    });
   });
 });

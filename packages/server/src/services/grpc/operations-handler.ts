@@ -70,6 +70,9 @@ const PERSISTENT_MUTATIONS = new Set([
   'jobUpdate',
   'jobDeleteByThread',
   'createPermissionRule',
+  'activityStart',
+  'activityUpdate',
+  'activityReconcile',
 ]);
 
 const OPERATION_KINDS = [
@@ -137,6 +140,9 @@ const OPERATION_KINDS = [
   'createPermissionRule',
   'findPermissionRule',
   'listPermissionRules',
+  'activityStart',
+  'activityUpdate',
+  'activityReconcile',
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
@@ -411,6 +417,15 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
   createPermissionRule: principalRulePayload('data:create_permission_rule'),
   findPermissionRule: principalRulePayload('data:find_permission_rule'),
   listPermissionRules: principalRulePayload('data:list_permission_rules'),
+  activityStart: (value) => ({
+    type: 'data:activity_start',
+    payload: decodeStruct(value.activity),
+  }),
+  activityUpdate: idPatchPayload('data:activity_update', 'activityId'),
+  activityReconcile: (value) => ({
+    type: 'data:activity_reconcile',
+    payload: { liveIds: Array.isArray(value.liveActivityIds) ? value.liveActivityIds : [] },
+  }),
 };
 
 // Single-entity lookups whose empty result maps to NOT_FOUND. Listed exactly:

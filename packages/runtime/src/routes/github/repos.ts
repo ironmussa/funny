@@ -4,12 +4,14 @@ import { resolve, isAbsolute, join } from 'path';
 
 import { cloneRepository } from '@funny/core/git';
 import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
+import { stripUrlCredentials } from '@funny/shared/activities';
 import { retryAsync } from '@funny/shared/async';
 import { badRequest, conflict, processError } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
-import { err } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
+import { trackActivity, type ActivityHandle } from '../../services/activity-tracker.js';
 import { getServices } from '../../services/service-registry.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -241,9 +243,13 @@ interface CloneJob {
 /**
  * Runs the clone and registers the project, reporting every step as a
  * `clone:progress` event. The last event has `status: 'done'` with the
- * project id, or `status: 'failed'` with the error. Never rejects.
+ * project id, or `status: 'failed'` with the error. Resolves to the created
+ * project or the error, for its activity; never rejects.
  */
-async function runClone(job: CloneJob): Promise<void> {
+async function runClone(
+  job: CloneJob,
+  activity: ActivityHandle,
+): Promise<Result<{ projectId: string }, string>> {
   const { cloneId, cloneUrl, clonePath, repoName, userId } = job;
   // No thread: the event travels as an unscoped user event (runner-protocol
   // `isRunnerUserEventType`), matched by `cloneId` in the browser.
@@ -264,6 +270,7 @@ async function runClone(job: CloneJob): Promise<void> {
       ...extra,
     });
     emitProgress({ phase: 'Clone failed', percent: 0, status: 'failed', error });
+    return err(error);
   };
 
   try {
@@ -272,6 +279,7 @@ async function runClone(job: CloneJob): Promise<void> {
     const resolved = await resolveGithubToken(userId);
     const startedAt = Date.now();
     emitProgress({ phase: 'Starting clone...', percent: 0, status: 'running' });
+    activity.step('Cloning');
     const cloned = await cloneRepository(cloneUrl, clonePath, {
       githubToken: resolved?.token ?? null,
       onProgress: (rawLine) => {
@@ -279,6 +287,7 @@ async function runClone(job: CloneJob): Promise<void> {
         const line = redactGithubToken(rawLine);
         // Parse percentage from git output like "Receiving objects:  45% (123/456)"
         const pctMatch = line.match(/(\d+)%/);
+        if (pctMatch) activity.progress(Number.parseInt(pctMatch[1], 10));
         emitProgress({
           phase: line,
           percent: pctMatch ? Number.parseInt(pctMatch[1], 10) : undefined,
@@ -290,11 +299,10 @@ async function runClone(job: CloneJob): Promise<void> {
       const failure = cloned.error;
       const isProcess = failure.type === 'PROCESS_ERROR';
       const detail = redactGithubToken((isProcess && failure.stderr?.trim()) || failure.message);
-      fail(detail, {
+      return fail(detail, {
         exitCode: (isProcess && failure.exitCode) || 1,
         durationMs: Date.now() - startedAt,
       });
-      return;
     }
     log.info('Clone finished', {
       namespace: 'github-routes',
@@ -303,12 +311,12 @@ async function runClone(job: CloneJob): Promise<void> {
       durationMs: Date.now() - startedAt,
     });
     emitProgress({ phase: 'Creating project...', percent: 100, status: 'running' });
+    activity.step('Creating project');
 
     const registered = await registerClonedProject(repoName, clonePath, userId);
     if ('error' in registered) {
       await removeCloneDir(clonePath);
-      fail(registered.error, { stage: 'create-project' });
-      return;
+      return fail(registered.error, { stage: 'create-project' });
     }
     emitProgress({
       phase: 'Clone complete',
@@ -316,8 +324,10 @@ async function runClone(job: CloneJob): Promise<void> {
       status: 'done',
       projectId: registered.projectId,
     });
+    activity.result({ projectId: registered.projectId });
+    return ok({ projectId: registered.projectId });
   } catch (error: any) {
-    fail(error?.message ?? String(error));
+    return fail(error?.message ?? String(error));
   }
 }
 
@@ -349,9 +359,19 @@ repoRoutes.post('/clone', async (c) => {
 
   const cloneId = parsed.value.cloneId ?? crypto.randomUUID();
   clonesInFlight.add(clonePath);
-  void runClone({ cloneId, cloneUrl, clonePath, repoName, userId }).finally(() =>
-    clonesInFlight.delete(clonePath),
-  );
+  // Tracked as an activity under the client's clone id, so its outcome is kept
+  // even when nobody is watching (track-background-activities). The server
+  // strips the URL's credentials and every field the kind does not declare.
+  void trackActivity(
+    {
+      id: cloneId,
+      kind: 'project.clone',
+      userId,
+      title: `Clone ${repoName}`,
+      input: { cloneUrl: stripUrlCredentials(cloneUrl), destinationPath, name: repoName },
+    },
+    (activity) => runClone({ cloneId, cloneUrl, clonePath, repoName, userId }, activity),
+  ).finally(() => clonesInFlight.delete(clonePath));
 
   return c.json({ cloneId }, 202);
 });

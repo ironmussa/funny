@@ -989,6 +989,50 @@ export interface WSJobData {
   job: Job;
 }
 
+// ─── Background activities (user-started operations: clone, worktree setup, git workflow) ──
+
+export type ActivityStatus = 'running' | 'succeeded' | 'failed' | 'interrupted';
+
+/** A reference to what a finished activity produced. */
+export interface ActivityResultRef {
+  projectId?: string;
+  prUrl?: string;
+}
+
+export interface Activity {
+  id: string;
+  userId: string;
+  /** The runner that ran it; null for a server-run activity. */
+  runnerId: string | null;
+  /** A key of the kind registry (`@funny/shared/activities`). */
+  kind: string;
+  projectId: string | null;
+  threadId: string | null;
+  title: string;
+  status: ActivityStatus;
+  step: string | null;
+  error: string | null;
+  /** The kind's input, validated and stripped of undeclared fields. */
+  input: Record<string, unknown>;
+  resultRef: ActivityResultRef | null;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+export interface WSActivityUpdatedData {
+  activity: Activity;
+}
+
+export interface WSActivityRemovedData {
+  ids: string[];
+}
+
+/** Transient progress of a running activity; never persisted. */
+export interface WSActivityProgressData {
+  id: string;
+  percent: number;
+}
+
 export type WSEvent =
   | { type: 'agent:init'; threadId: string; data: WSInitData }
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
@@ -1035,6 +1079,9 @@ export type WSEvent =
   | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData }
   | { type: 'worktree:setup_complete'; threadId: string; data: WSWorktreeSetupCompleteData }
   | { type: 'clone:progress'; threadId: string; data: WSCloneProgressData }
+  | { type: 'activity:updated'; threadId: ''; data: WSActivityUpdatedData }
+  | { type: 'activity:removed'; threadId: ''; data: WSActivityRemovedData }
+  | { type: 'activity:progress'; threadId: ''; data: WSActivityProgressData }
   | { type: 'pipeline:run_started'; threadId: string; data: WSPipelineRunStartedData }
   | { type: 'pipeline:stage_update'; threadId: string; data: WSPipelineStageUpdateData }
   | { type: 'pipeline:run_completed'; threadId: string; data: WSPipelineRunCompletedData }

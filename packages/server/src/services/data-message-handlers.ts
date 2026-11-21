@@ -17,6 +17,11 @@ import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
+import {
+  reconcileRunnerActivities,
+  startActivityFromRunner,
+  updateActivityFromRunner,
+} from './activities/activity-service.js';
 import { onAutomationThreadTerminal } from './automation-runs.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
 import { forgetThreadOwnership } from './data-ownership.js';
@@ -816,6 +821,32 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   'data:job_delete_by_thread': async ({ data }) => {
     await repos.jobs().deleteByThread(data.payload.threadId);
     return { type: 'data:job_delete_by_thread_response', ok: true };
+  },
+
+  // ── Background activities (track-background-activities) ──────
+  'data:activity_start': async ({ runnerId, ownerId, data }) => {
+    const result = await startActivityFromRunner({
+      runnerId,
+      ownerId,
+      payload: data.payload ?? {},
+    });
+    return result.ok
+      ? { type: 'data:activity_start_response', ok: true, applied: result.applied }
+      : { type: 'data:ack', success: false, error: result.error };
+  },
+  'data:activity_update': async ({ runnerId, data }) => {
+    const result = await updateActivityFromRunner({
+      runnerId,
+      id: data.payload?.id,
+      patch: data.payload?.patch,
+    });
+    return result.ok
+      ? { type: 'data:activity_update_response', ok: true, applied: result.applied }
+      : { type: 'data:ack', success: false, error: result.error };
+  },
+  'data:activity_reconcile': async ({ runnerId, data }) => {
+    const changed = await reconcileRunnerActivities(runnerId, data.payload?.liveIds);
+    return { type: 'data:activity_reconcile_response', ok: true, interrupted: changed.length };
   },
 
   // ── Durable permission rules ────────────────────────────────

@@ -9,6 +9,8 @@ const evflow = path.resolve(__dirname, '../evflow/src');
 export default defineConfig({
   resolve: {
     alias: {
+      '@funny/shared/activities': path.join(shared, 'activities/kinds.ts'),
+      '@funny/shared/activity-machine': path.join(shared, 'activity-machine.ts'),
       '@funny/shared/codex-commands': path.join(shared, 'codex-commands.ts'),
       '@funny/shared/dom/extract': path.join(shared, 'dom/extract.ts'),
       '@funny/shared/errors': path.join(shared, 'errors.ts'),

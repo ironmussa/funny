@@ -280,6 +280,26 @@ export function createTestDb() {
     )
   `);
 
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS activities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      runner_id TEXT,
+      kind TEXT NOT NULL,
+      project_id TEXT,
+      thread_id TEXT,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      step TEXT,
+      error TEXT,
+      input TEXT NOT NULL DEFAULT '{}',
+      result_ref TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
   return { db: testDb, sqlite, schema, dbAll, dbGet, dbRun };
 }
 

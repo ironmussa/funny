@@ -178,6 +178,13 @@ message JobListRunning {}
 message JobListByUser {}
 message JobUpdate { string job_id = 1; google.protobuf.Struct patch = 2; }
 message JobDeleteByThread { string thread_id = 1; }
+// Background activities (track-background-activities). The server takes the
+// user and runner from the session, never from the payload.
+message ActivityStart { google.protobuf.Struct activity = 1; }
+message ActivityUpdate { string activity_id = 1; google.protobuf.Struct patch = 2; }
+// The ids the runner is still running; its other `running` activities become
+// `interrupted`. Sent on every (re)connect.
+message ActivityReconcile { repeated string live_activity_ids = 1; }
 message CreatePermissionRule {
   string project_path = 1;
   string tool_name = 2;
@@ -259,6 +266,9 @@ message OperationsRequest {
     ListPermissionRules list_permission_rules = 84;
     GetGithubAppToken get_github_app_token = 85;
     GetProjectSecrets get_project_secrets = 86;
+    ActivityStart activity_start = 87;
+    ActivityUpdate activity_update = 88;
+    ActivityReconcile activity_reconcile = 89;
   }
 }
 

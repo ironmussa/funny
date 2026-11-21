@@ -49,3 +49,10 @@ export {
   type JobPatch,
 } from './job-repository.js';
 export type { RepoDeps } from './deps.js';
+export {
+  createActivityRepository,
+  ACTIVITY_CAP_PER_USER,
+  type ActivityRepositoryDeps,
+  type ActivityRepository,
+  type ActivityPatch,
+} from './activity-repository.js';

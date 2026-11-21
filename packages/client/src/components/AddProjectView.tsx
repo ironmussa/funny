@@ -1,6 +1,6 @@
 import { SiGithub } from '@icons-pack/react-simple-icons';
 import { FolderOpen, Loader2, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -23,6 +23,7 @@ import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useCloneRetryStore } from '@/stores/clone-retry-store';
 
 import { CloneRepoView } from './CloneRepoView';
 import { FolderPicker } from './FolderPicker';
@@ -33,7 +34,12 @@ export function AddProjectView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const loadProjects = useAppStore((s) => s.loadProjects);
-  const [mode, setMode] = useState<AddMode>('local');
+  // A clone retried from the activity panel opens on the GitHub tab, filled.
+  const [cloneRetry] = useState(() => useCloneRetryStore.getState().pending);
+  useEffect(() => {
+    if (cloneRetry) useCloneRetryStore.getState().take();
+  }, [cloneRetry]);
+  const [mode, setMode] = useState<AddMode>(cloneRetry ? 'github' : 'local');
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectPath, setNewProjectPath] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
@@ -238,7 +244,7 @@ export function AddProjectView() {
             </div>
           </div>
         ) : (
-          <CloneRepoView onCloningChange={setIsCloning} />
+          <CloneRepoView onCloningChange={setIsCloning} initialValues={cloneRetry ?? undefined} />
         )}
       </div>
 

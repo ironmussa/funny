@@ -1,7 +1,8 @@
-import type { Job, JobStatus, Watcher, WatcherStatus } from '@funny/shared';
-import { AlarmClock, CircleStop } from 'lucide-react';
+import type { Activity, Job, JobStatus, Watcher, WatcherStatus } from '@funny/shared';
+import { Activity as ActivityIcon, CircleStop } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
@@ -14,11 +15,16 @@ import { NavItem } from '@/components/ui/nav-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { clearFinishedActivities, dismissActivity } from '@/data/activities/actions';
+import { useActivities, useActivityCounts, useActivityProgress } from '@/data/activities/hooks';
+import { loadActivities } from '@/data/activities/loaders';
 import { cancelJob, cancelWatcher } from '@/data/background/actions';
 import { useJobsById, useWatchersById } from '@/data/background/hooks';
 import { loadJobs, loadWatchers } from '@/data/background/loaders';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
+import { canRetryActivity, retryActivity } from '@/lib/activity-retry';
 import { openJobLogTerminal } from '@/lib/open-terminal-tab';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -27,7 +33,13 @@ import {
   formatClock,
   formatCountdown,
 } from '@/lib/watcher-utils';
+import { type ActivityPanelTab, useActivityPanelStore } from '@/stores/activity-panel-store';
+import { useCloneRetryStore } from '@/stores/clone-retry-store';
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { findThreadById } from '@/stores/store-bridge';
+import { useUIStore } from '@/stores/ui-store';
+
+import { ActivityList } from './ActivityList';
 
 /** Compact pill used for status chips in the background-activity panel. */
 const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-[9px] leading-none font-medium';
@@ -407,96 +419,237 @@ function WatchersDialog({
   );
 }
 
+/** One kind of background entry (jobs or watchers): a preview plus the full-history dialog. */
+function BackgroundEntriesTab({
+  kind,
+  entries,
+  scopeId,
+  now,
+  onOpened,
+  onViewAll,
+}: {
+  kind: 'job' | 'watcher';
+  entries: ActivityEntry[];
+  scopeId: string | null;
+  now: number;
+  onOpened: () => void;
+  onViewAll: () => void;
+}) {
+  const items = entries.filter((entry) => entry.kind === kind);
+  const activeCount = items.filter((entry) => entry.active).length;
+  return (
+    <>
+      <p className="text-muted-foreground px-2 pb-1 text-xs">
+        {activeCount} active · {items.length - activeCount} in history
+      </p>
+      {items.length === 0 ? (
+        <EmptyState fill={false} className="px-2 py-4" title="No background activity yet." />
+      ) : (
+        <>
+          <ScrollArea className={cn('max-h-96', items.length > 6 && 'h-96')}>
+            <ActivityEntryList
+              items={items.slice(0, 10)}
+              scopeId={scopeId}
+              now={now}
+              onOpened={onOpened}
+            />
+          </ScrollArea>
+          <Button
+            variant="ghost"
+            className="mt-1 w-full border-t"
+            data-testid={`${kind === 'job' ? 'jobs' : 'watcher'}-panel-view-all`}
+            onClick={onViewAll}
+          >
+            {items.length > 10 ? `View more (${items.length - 10})` : 'View all'}
+          </Button>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Opens where a failed activity can be retried; true when something opened. */
+function openRetryTarget(activity: Activity, navigate: (path: string) => void): boolean {
+  return retryActivity(activity, {
+    navigate,
+    findThread: (threadId) => findThreadById(threadId),
+    openCloneForm: (values) => {
+      useCloneRetryStore.getState().request(values);
+      useUIStore.getState().setAddProjectOpen(true);
+    },
+    openReviewPane: () => useUIStore.getState().setReviewPaneOpen(true),
+  });
+}
+
+function loadBackgroundLists(): void {
+  void loadWatchers();
+  void loadJobs();
+  void loadActivities();
+}
+
 /**
- * Global, cross-thread background-activity panel. Lists the user's running
- * jobs (funny_spawn) and deferred-wake watchers (funny_watch snooze) with live
- * status (fed by `job:*` / `watcher:*` WS events) and cancel controls.
+ * Loads the lists once on mount, so the per-thread clocks (ThreadWatcherIndicator)
+ * and the footer counters are right without opening the panel (realtime events
+ * keep them live afterwards; this button is always mounted, so this fills them
+ * app-wide), and again on open. Returns a clock that ticks every second while open.
  */
-export function WatcherPanelButton() {
-  const [open, setOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+function useBackgroundLists(open: boolean): number {
   const [now, setNow] = useState(() => Date.now());
+  useEffect(loadBackgroundLists, []);
+  useEffect(() => {
+    if (!open) return;
+    loadBackgroundLists();
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [open]);
+  return now;
+}
+
+function PanelTabs() {
+  const { t } = useTranslation();
+  const tabs: Array<[ActivityPanelTab, string]> = [
+    ['activity', t('activity.tabActivity')],
+    ['jobs', t('activity.tabJobs')],
+    ['watchers', t('activity.tabWatchers')],
+  ];
+  return (
+    <div className="border-border border-b px-2 py-2">
+      <TabsList className="w-full">
+        {tabs.map(([value, label]) => (
+          <TabsTrigger
+            key={value}
+            value={value}
+            className="flex-1"
+            data-testid={`activity-panel-tab-${value}`}
+          >
+            {label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </div>
+  );
+}
+
+function FailedBadge({ count, alone }: { count: number; alone: boolean }) {
+  if (count === 0) return null;
+  return (
+    <Badge
+      variant="destructive"
+      size="xs"
+      className={cn('shrink-0', alone && 'ml-auto')}
+      data-testid="sidebar-activity-failed-count"
+    >
+      {count}
+    </Badge>
+  );
+}
+
+/** The Activity tab: the user's activities, with retry, dismiss and clear. */
+function ActivityTab({ now, onClose }: { now: number; onClose: () => void }) {
+  const navigate = useNavigate();
+  const activities = useActivities();
+  const progress = useActivityProgress();
+  const runnerOffline = useRunnerStatusStore((s) => s.status === 'offline');
+  const retry = (activity: Activity) => {
+    if (openRetryTarget(activity, navigate)) onClose();
+  };
+  return (
+    <ScrollArea className={cn('max-h-96', activities.length > 6 && 'h-96')}>
+      <ActivityList
+        activities={activities}
+        progress={progress}
+        runnerOffline={runnerOffline}
+        now={now}
+        canRetry={canRetryActivity}
+        onRetry={retry}
+        onDismiss={(activity) => void dismissActivity(activity.id)}
+        onClearFinished={() => void clearFinishedActivities()}
+      />
+    </ScrollArea>
+  );
+}
+
+/**
+ * The sidebar footer's background panel (track-background-activities): the
+ * Activity tab lists the operations the user started (clone, worktree setup,
+ * git workflow) from the server's activity rows; the Jobs and Watchers tabs
+ * list the agents' `funny_spawn` processes and `funny_watch` snoozes as
+ * before. The button counts what is running and what failed.
+ */
+export function ActivityPanelButton() {
+  const { t } = useTranslation();
+  const open = useActivityPanelStore((s) => s.open);
+  const setOpen = useActivityPanelStore((s) => s.setOpen);
+  const tab = useActivityPanelStore((s) => s.tab);
+  const setTab = useActivityPanelStore((s) => s.setTab);
+  const [showAll, setShowAll] = useState<'job' | 'watcher' | null>(null);
+  const now = useBackgroundLists(open || showAll !== null);
   const { scopeId } = useTerminalScope();
   const watchersById = useWatchersById();
   const jobsById = useJobsById();
+  const counts = useActivityCounts();
 
   const entries = useMemo(
     () => buildActivityEntries(jobsById, watchersById),
     [jobsById, watchersById],
   );
-  const activeCount = entries.filter((entry) => entry.active).length;
-  const totalCount = entries.length;
-
-  // Load once on mount so the per-thread clocks (ThreadWatcherIndicator) are
-  // correct without the user opening the panel. WS job:*/watcher:* events keep
-  // the stores live afterwards. This button is always mounted in the sidebar
-  // footer, so this populates the stores app-wide.
-  useEffect(() => {
-    void loadWatchers();
-    void loadJobs();
-  }, []);
-
-  // Fetch on open; tick the countdown every second while open.
-  useEffect(() => {
-    if (!open && !showAll) return;
-    void loadWatchers();
-    void loadJobs();
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [open, showAll]);
+  const runningCount = counts.running + entries.filter((entry) => entry.active).length;
+  const dialogEntries = showAll ? entries.filter((entry) => entry.kind === showAll) : [];
+  const viewAll = (kind: 'job' | 'watcher') => {
+    setOpen(false);
+    setShowAll(kind);
+  };
 
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <NavItem
-            icon={AlarmClock}
-            label="Watchers"
-            count={activeCount}
-            isActive={open || showAll}
-            data-testid="sidebar-watchers"
+            icon={ActivityIcon}
+            label={t('activity.title')}
+            count={runningCount}
+            isActive={open || showAll !== null}
+            data-testid="sidebar-activity"
+            trailing={<FailedBadge count={counts.failed} alone={runningCount === 0} />}
           />
         </PopoverTrigger>
-        <PopoverContent side="top" align="start" className="w-80 p-1" data-testid="watcher-panel">
-          <div className="border-border border-b px-2 py-2">
-            <p className="text-sm font-medium">Watchers</p>
-            <p className="text-muted-foreground text-xs">
-              {activeCount} active · {totalCount - activeCount} in history
-            </p>
-          </div>
-          {totalCount === 0 ? (
-            <EmptyState fill={false} className="px-2 py-4" title="No background activity yet." />
-          ) : (
-            <>
-              <ScrollArea className={cn('max-h-96', totalCount > 6 && 'h-96')}>
-                <ActivityEntryList
-                  items={entries.slice(0, 10)}
-                  scopeId={scopeId}
-                  now={now}
-                  onOpened={() => setOpen(false)}
-                />
-              </ScrollArea>
-              <Button
-                variant="ghost"
-                className="mt-1 w-full border-t"
-                data-testid="watcher-panel-view-all"
-                onClick={() => {
-                  setOpen(false);
-                  setShowAll(true);
-                }}
-              >
-                {totalCount > 10 ? `View more (${totalCount - 10})` : 'View all'}
-              </Button>
-            </>
-          )}
+        <PopoverContent side="top" align="start" className="w-96 p-1" data-testid="activity-panel">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as ActivityPanelTab)}>
+            <PanelTabs />
+            <TabsContent value="activity" className="mt-1">
+              <ActivityTab now={now} onClose={() => setOpen(false)} />
+            </TabsContent>
+            <TabsContent value="jobs" className="mt-1" data-testid="watcher-panel">
+              <BackgroundEntriesTab
+                kind="job"
+                entries={entries}
+                scopeId={scopeId}
+                now={now}
+                onOpened={() => setOpen(false)}
+                onViewAll={() => viewAll('job')}
+              />
+            </TabsContent>
+            <TabsContent value="watchers" className="mt-1" data-testid="watchers-tab">
+              <BackgroundEntriesTab
+                kind="watcher"
+                entries={entries}
+                scopeId={scopeId}
+                now={now}
+                onOpened={() => setOpen(false)}
+                onViewAll={() => viewAll('watcher')}
+              />
+            </TabsContent>
+          </Tabs>
         </PopoverContent>
       </Popover>
       <WatchersDialog
-        open={showAll}
-        onOpenChange={setShowAll}
-        entries={entries}
-        activeCount={activeCount}
+        open={showAll !== null}
+        onOpenChange={(next) => {
+          if (!next) setShowAll(null);
+        }}
+        entries={dialogEntries}
+        activeCount={dialogEntries.filter((entry) => entry.active).length}
         scopeId={scopeId}
         now={now}
       />

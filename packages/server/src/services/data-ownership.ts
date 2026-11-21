@@ -322,7 +322,7 @@ async function checkQueuedMessage({ userId, data }: OwnershipContext): Promise<D
  */
 function checkUserOwnedRow(
   kind: string,
-  table: typeof schema.watchers | typeof schema.jobs,
+  table: typeof schema.watchers | typeof schema.jobs | typeof schema.activities,
 ): OwnershipStep {
   return async ({ userId, payload }) => {
     // By-id ops MUST name the row they act on.
@@ -372,6 +372,9 @@ const PRE_PROJECT_TYPE_CHECKS = new Map<string, OwnershipStep>([
 
 const checkWatcher = checkUserOwnedRow('watcher', schema.watchers);
 const checkJob = checkUserOwnedRow('job', schema.jobs);
+// The runner half of an activity's ownership (row.runner_id) is a compare-and-set
+// in the repository, so a runner of the same user cannot touch it either.
+const checkActivity = checkUserOwnedRow('activity', schema.activities);
 
 /** Type-specific steps that run after the project step. */
 const POST_PROJECT_TYPE_CHECKS = new Map<string, OwnershipStep>([
@@ -392,6 +395,7 @@ const POST_PROJECT_TYPE_CHECKS = new Map<string, OwnershipStep>([
   ['data:watcher_get', checkWatcher],
   ['data:job_update', checkJob],
   ['data:job_get', checkJob],
+  ['data:activity_update', checkActivity],
   ['data:resolve_pending_permission_request', checkPendingPermission],
   ['data:expire_pending_permission_request', checkPendingPermission],
 ]);

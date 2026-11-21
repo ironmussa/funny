@@ -10,7 +10,10 @@ import type { RepoDeps } from './deps.js';
  * legal from.
  */
 /** The tables whose status writes go through this guard. */
-type GuardedTable = RepoDeps['schema']['watchers'] | RepoDeps['schema']['jobs'];
+type GuardedTable =
+  | RepoDeps['schema']['watchers']
+  | RepoDeps['schema']['jobs']
+  | RepoDeps['schema']['activities'];
 
 export async function updateWithStatusGuard<S extends string>(
   deps: Pick<RepoDeps, 'db' | 'dbAll'>,

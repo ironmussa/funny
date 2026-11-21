@@ -1,9 +1,9 @@
 import { Keyboard, LogOut, Settings, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { ActivityPanelButton } from '@/components/sidebar/ActivityPanelButton';
 import { AutomationInboxButton } from '@/components/sidebar/AutomationInboxButton';
 import { KeyboardShortcutsDialog } from '@/components/sidebar/KeyboardShortcutsDialog';
-import { WatcherPanelButton } from '@/components/sidebar/WatcherPanelButton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,7 +40,7 @@ export function SidebarFooter() {
     <ShadSidebarFooter className="pb-4">
       <div className="px-1">
         <AutomationInboxButton />
-        <WatcherPanelButton />
+        <ActivityPanelButton />
       </div>
       <div className="flex items-center gap-2 px-1">
         {authUser ? (

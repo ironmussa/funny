@@ -2145,6 +2145,39 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // track-background-activities: user-started background operations (clone,
+    // worktree setup, git workflow) and their outcome. No foreign keys: a row
+    // outlives its thread and project.
+    name: '105_activities',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS activities (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          runner_id TEXT,
+          kind TEXT NOT NULL,
+          project_id TEXT,
+          thread_id TEXT,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'running',
+          step TEXT,
+          error TEXT,
+          input TEXT NOT NULL DEFAULT '{}',
+          result_ref TEXT,
+          started_at TEXT NOT NULL,
+          ended_at TEXT,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(
+        sql`CREATE INDEX IF NOT EXISTS idx_activities_user_started ON activities (user_id, started_at)`,
+      );
+      await ctx().exec(
+        sql`CREATE INDEX IF NOT EXISTS idx_activities_runner_status ON activities (runner_id, status)`,
+      );
+    },
+  },
 ];
 
 /**

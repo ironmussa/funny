@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, it, vi } from 'bun:test';
+
 import { DeliveryClass } from '@funny/shared/browser-v1/common';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { sendBrowserSessionRealtime, setBrowserSessionTransport } from './browser-session-realtime';
 

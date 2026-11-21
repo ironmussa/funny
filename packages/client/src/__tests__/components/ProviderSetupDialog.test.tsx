@@ -1,15 +1,16 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { err, ok } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderSetupDialog } from '@/components/ProviderSetupDialog';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   status: vi.fn(),
   install: vi.fn(),
   fetch: vi.fn(),
   terminal: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/system', () => ({
   systemApi: { providerSetupStatus: mocks.status, installProviderTool: mocks.install },
 }));
@@ -97,7 +98,7 @@ it('opens the runner login command in the project terminal', async () => {
     shell: 'bash',
     label: 'Connect Gemini',
   });
-  expect(onClose).toHaveBeenCalledOnce();
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 it('shows a verified session without asking for another login', async () => {

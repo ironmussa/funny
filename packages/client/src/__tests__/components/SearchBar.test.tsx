@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { render } from '@testing-library/react';
 import { createRef } from 'react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { SearchBar } from '@/components/ui/search-bar';
 

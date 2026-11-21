@@ -1,12 +1,14 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { WSEvent } from '@funny/shared';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { stubGlobal } from '@funny/test-kit';
 
 interface GrpcOptions {
   endpoint?: string;
   onDisconnected?: (error?: Error) => void;
 }
 
-const h = vi.hoisted(() => {
+const h = (() => {
   const unset = <T>(): T | undefined => undefined;
   return {
     start: vi.fn(),
@@ -18,7 +20,7 @@ const h = vi.hoisted(() => {
     grpcOptions: unset<GrpcOptions>(),
     brokerHandler: unset<(event: WSEvent) => void>(),
   };
-});
+})();
 
 const originalFetch = globalThis.fetch;
 
@@ -46,8 +48,9 @@ vi.mock('../../services/ws-broker.js', () => ({
 }));
 // Runner-installed provider extensions are loaded from DATA_DIR on connect;
 // keep the developer's ~/.funny/extensions out of the test.
-vi.mock('../../lib/data-dir.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/data-dir.js')>()),
+const actualDataDir = { ...(await import('../../lib/data-dir.js')) };
+vi.mock('../../lib/data-dir.js', () => ({
+  ...actualDataDir,
   DATA_DIR: '/nonexistent/funny-team-client-test',
 }));
 vi.mock('../../lib/logger.js', () => ({
@@ -75,7 +78,7 @@ describe('team-client gRPC routing', () => {
     h.grpcOptions = undefined;
     process.env.RUNNER_AUTH_SECRET = 'test-secret';
     process.env.RUNNER_GRPC_ENDPOINT = 'grpc.example.test:50051';
-    vi.stubGlobal(
+    stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         if (String(input).endsWith('/api/runners/register')) {
@@ -109,7 +112,7 @@ describe('team-client gRPC routing', () => {
   test('activates only gRPC and routes data and broker events through it', async () => {
     await initTeamMode('http://central.test');
 
-    expect(h.start).toHaveBeenCalledOnce();
+    expect(h.start).toHaveBeenCalledTimes(1);
 
     await remoteSaveThreadEvent('thread-1', 'agent:state', { active: true });
     expect(h.request).toHaveBeenCalledWith('data:save_thread_event', {
@@ -127,7 +130,7 @@ describe('team-client gRPC routing', () => {
     h.grpcOptions?.onDisconnected?.(new Error('temporary transport failure'));
 
     expect(h.shutdown).not.toHaveBeenCalled();
-    expect(h.start).toHaveBeenCalledOnce();
+    expect(h.start).toHaveBeenCalledTimes(1);
   });
 
   test('uses the WebSocket carrier on the server origin when no gRPC endpoint is set', async () => {
@@ -136,7 +139,7 @@ describe('team-client gRPC routing', () => {
     await initTeamMode('https://central.test');
 
     expect(h.grpcOptions?.endpoint).toBe('wss://central.test/api/runner-grpc/ws');
-    expect(h.start).toHaveBeenCalledOnce();
+    expect(h.start).toHaveBeenCalledTimes(1);
   });
 
   test('prefers the explicit private gRPC endpoint', async () => {

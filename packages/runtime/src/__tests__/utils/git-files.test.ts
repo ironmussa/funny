@@ -1,3 +1,4 @@
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 /**
  * Regression tests for the file-picker pipeline.
  *
@@ -16,7 +17,6 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { getNativeGit } from '@funny/core/git';
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import {
   HEAVY_IGNORED_DIRS,

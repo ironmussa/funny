@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 
 import { buildThread } from '@/data/threads/testing';
 import { getLoadedSidebarResyncTargets, shouldResyncThreadsOnConnect } from '@/hooks/use-ws';

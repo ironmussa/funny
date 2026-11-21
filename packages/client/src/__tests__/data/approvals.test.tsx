@@ -1,3 +1,5 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type {
   WSPipelineApprovalRequestedData,
   WSPipelineApprovalResolvedData,
@@ -5,7 +7,6 @@ import type {
 import type { DomainError } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { usePendingApprovals } from '@/data/approvals/hooks';
 import {
@@ -17,9 +18,9 @@ import {
 
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({ respondToApproval: vi.fn() }));
+const api = (() => ({ respondToApproval: vi.fn() }))();
 vi.mock('@/lib/api/pipelines', () => ({ pipelinesApi: api }));
-const effects = vi.hoisted(() => ({ emit: vi.fn() }));
+const effects = (() => ({ emit: vi.fn() }))();
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));

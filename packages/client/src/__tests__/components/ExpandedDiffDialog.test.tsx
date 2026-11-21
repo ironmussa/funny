@@ -1,19 +1,20 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ExpandedDiffDialog, ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 
 import { buildReviewThread } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
 
-const viewport = vi.hoisted(() => ({ mobile: false }));
+const viewport = (() => ({ mobile: false }))();
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
 
 interface DiffPropsRef {
   current: Record<string, any> | null;
 }
 
-const diffProps = vi.hoisted((): DiffPropsRef => ({ current: null }));
+const diffProps = ((): DiffPropsRef => ({ current: null }))();
 
 vi.mock('@/components/VirtualDiff', () => ({
   VirtualDiff: (props: { 'data-testid'?: string; viewMode?: string }) => {

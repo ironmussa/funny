@@ -1,9 +1,11 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { waitFor } from '@funny/test-kit';
+
+const mocks = (() => ({
   emitToUser: vi.fn(),
   getPipelineForProject: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
 vi.mock('../../services/pipeline-manager.js', () => ({
@@ -28,7 +30,7 @@ describe('executeWorkflow', () => {
     });
 
     // Without this the client's buttons waited for an end that never came.
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(mocks.emitToUser).toHaveBeenCalledWith('u1', {
         type: 'git:workflow_progress',
         threadId: 'thread-1',

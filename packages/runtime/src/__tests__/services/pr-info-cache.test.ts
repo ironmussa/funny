@@ -1,8 +1,10 @@
-import { processError } from '@funny/shared/errors';
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const core = vi.hoisted(() => ({ lookupPRForBranch: vi.fn() }));
+import { processError } from '@funny/shared/errors';
+import { waitFor } from '@funny/test-kit';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+
+const core = (() => ({ lookupPRForBranch: vi.fn() }))();
 vi.mock('@funny/core/git', () => core);
 
 import {
@@ -14,7 +16,7 @@ import {
   schedulePRLookup,
 } from '../../services/pr-info-cache.js';
 
-const PR = { prNumber: 7, prUrl: 'https://github.com/o/r/pull/7', prState: 'OPEN' };
+const PR = { prNumber: 7, prUrl: 'https://github.com/o/r/pull/7', prState: 'OPEN' as const };
 
 /** A lookup that resolves when `resolve` is called, like a slow `gh` call. */
 function deferredLookup() {
@@ -62,7 +64,7 @@ describe('pr-info-cache', () => {
     schedulePRLookup({ projectPath: '/repo', branch: 'feat', onUpdate });
     resolve(PR);
     await first;
-    await vi.waitFor(() => expect(onUpdate).toHaveBeenCalledWith(PR));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(PR));
     expect(core.lookupPRForBranch).toHaveBeenCalledTimes(1);
   });
 

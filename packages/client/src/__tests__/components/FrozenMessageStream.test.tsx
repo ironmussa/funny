@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, render } from '@testing-library/react';
 import { createRef } from 'react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { FrozenMessageStream } from '@/components/thread/FrozenMessageStream';
 import type { MessageStreamHandle } from '@/components/thread/message-stream-types';
 
 import { buildIntersectionEntry, expectInstance } from '../helpers/builders-components';
@@ -25,6 +26,9 @@ vi.mock('@/components/thread/FrozenMessageList', () => ({
 vi.mock('@/components/thread/MessageStreamStatusTail', () => ({
   MessageStreamStatusTail: () => null,
 }));
+
+// Imported after the mocks, which bun does not hoist.
+const { FrozenMessageStream } = await import('@/components/thread/FrozenMessageStream');
 
 // Controllable IntersectionObserver: record instances so tests can fire
 // intersection for a specific sentinel target.
@@ -69,11 +73,11 @@ function baseProps(
 describe('FrozenMessageStream infinite scroll', () => {
   beforeEach(() => {
     observers.length = 0;
-    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+    stubGlobal('IntersectionObserver', MockIntersectionObserver);
     window.localStorage.clear();
   });
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test('renders both sentinels when there is older and newer history', () => {

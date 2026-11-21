@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Automation, AutomationRun, InboxItem } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
   createAutomation,
@@ -20,7 +21,7 @@ import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 import { buildAutomation } from '../helpers/builders-lib';
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({
+const api = (() => ({
   listAutomations: vi.fn(),
   createAutomation: vi.fn(),
   updateAutomation: vi.fn(),
@@ -29,10 +30,10 @@ const api = vi.hoisted(() => ({
   listAutomationRuns: vi.fn(),
   getAutomationInbox: vi.fn(),
   triageRun: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/automations', () => ({ automationsApi: api }));
 
-const effects = vi.hoisted(() => ({ emit: vi.fn() }));
+const effects = (() => ({ emit: vi.fn() }))();
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));

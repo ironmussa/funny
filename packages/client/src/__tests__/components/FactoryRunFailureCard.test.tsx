@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
@@ -9,14 +10,14 @@ import type { FactoryRun } from '@/lib/api/factory';
 interface FailureCardMocks {
   run: FactoryRun | null;
   thread: Pick<Thread, 'id' | 'projectId' | 'source'> | undefined;
-  control: Mock;
+  control: Mock<(...args: any[]) => any>;
 }
 
-const mocks = vi.hoisted((): FailureCardMocks => ({
+const mocks = ((): FailureCardMocks => ({
   run: null,
   thread: { id: 't1', projectId: 'p1', source: 'factory' },
   control: vi.fn(),
-}));
+}))();
 
 vi.mock('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
 vi.mock('@/lib/thread-selectors', () => ({ useThreadById: () => mocks.thread }));

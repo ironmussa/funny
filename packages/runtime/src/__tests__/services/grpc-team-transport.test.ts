@@ -1,9 +1,10 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { EventEmitter } from 'node:events';
 
 import { fromJson } from '@bufbuild/protobuf';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { OperationsRequestSchema } from '@funny/shared/runner-v2/operations';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { waitFor } from '@funny/test-kit';
 
 import { GrpcEventReplayStore } from '../../services/grpc-event-replay-store.js';
 import { GrpcOperationOutbox } from '../../services/grpc-operation-outbox.js';
@@ -356,11 +357,11 @@ describe('GrpcTeamTransport', () => {
       data: { sequence: '2', data: Buffer.from('o').toString('base64') },
     });
     tunnel.emit('data', { tunnelId: 'tunnel-1', end: { finalSequence: '2' } });
-    expect(handleTunnel).toHaveBeenCalledOnce();
+    expect(handleTunnel).toHaveBeenCalledTimes(1);
     await handleTunnel.mock.results[0]!.value;
     // Let respondToTunnel resume after awaiting the mocked response and drain
     // its body before inspecting the emitted frames. Bun's test runner does
-    // not implement Vitest's vi.waitFor helper.
+    // not implement Vitest's waitFor helper.
     await flushMicrotasksUntil(() => Boolean(tunnel.writes.at(-1)?.end));
     expect(tunnel.writes.at(-1)).toMatchObject({ end: { finalSequence: '2' } });
     expect(tunnel.writes.filter((frame) => frame.data).map((frame) => frame.data.sequence)).toEqual(

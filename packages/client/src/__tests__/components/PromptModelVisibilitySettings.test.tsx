@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { getConfigurablePromptModelGroups } from '@/lib/prompt-model-visibility';
 import type { ModelSelectGroup } from '@/lib/providers';

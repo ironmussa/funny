@@ -1,6 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { GitStatusInfo } from '@funny/shared';
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { seedGitStatus } from '@/data/git-status/testing';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
@@ -50,15 +52,14 @@ function renderAutoRefresh(visible = true) {
 
 async function flushDebounce() {
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
+    await advanceTimersByTimeAsync(HISTORY_REFRESH_DEBOUNCE_MS);
   });
 }
 
 describe('useGitHistoryAutoRefresh', () => {
   beforeEach(() => {
-    vi.useFakeTimers({
-      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
-    });
+    // bun fakes timers and Date together; it takes no `toFake` list.
+    vi.useFakeTimers();
     seedGitStatus({ statusByBranch: {}, threadToBranchKey: {} });
   });
   afterEach(() => {

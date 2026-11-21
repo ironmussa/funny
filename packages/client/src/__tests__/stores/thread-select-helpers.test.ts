@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
-import { describe, expect, test } from 'vitest';
 
 import { buildThread } from '@/data/threads/testing';
 import { deriveWaitingState } from '@/stores/thread-select-helpers';

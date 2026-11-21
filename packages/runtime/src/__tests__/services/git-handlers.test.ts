@@ -1,6 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   startWatching: vi.fn(),
   stopWatching: vi.fn(),
   getPipelineForProject: vi.fn(),
@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   metric: vi.fn(),
   startSpan: vi.fn(() => ({ end: vi.fn() })),
   getThreadTrace: vi.fn(() => undefined),
-}));
+}))();
 
 vi.mock('../../services/git-watcher-service.js', () => ({
   startWatching: mocks.startWatching,

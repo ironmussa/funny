@@ -1,8 +1,7 @@
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, writeFileSync, rmSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import {
   augmentPromptWithFiles,

@@ -1,3 +1,4 @@
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 /**
  * Integration tests for pruneOrphanWorktrees.
  * Creates a real git repo and worktrees, then tests cleanup.
@@ -5,8 +6,6 @@
 import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import { executeSync } from '../git/process.js';
 import { createWorktree, pruneOrphanWorktrees, getWorktreeBasePath } from '../git/worktree.js';

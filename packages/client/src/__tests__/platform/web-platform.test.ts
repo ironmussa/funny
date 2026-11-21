@@ -1,10 +1,11 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import {
   createEndpointPolicy,
   type ClientDiagnostic,
   type ClientLocation,
   type LifecycleSnapshot,
 } from '@funny/client-core';
-import { describe, expect, test, vi } from 'vitest';
 
 import { createClientComposition } from '@/platform/client-composition';
 import { createBrowserEffectService } from '@/platform/web/browser-effects';
@@ -108,7 +109,7 @@ describe('web client platform', () => {
       { key: 'funny:settings', value: 'remote' },
     ]);
     unsubscribe();
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledTimes(1);
 
     const denied = createBrowserStorageService(
       {
@@ -148,7 +149,7 @@ describe('web client platform', () => {
     pop?.();
     expect(locations).toHaveLength(2);
     stopNavigation();
-    expect(stopPop).toHaveBeenCalledOnce();
+    expect(stopPop).toHaveBeenCalledTimes(1);
 
     let snapshot: LifecycleSnapshot = { focused: true, visible: true };
     let changed: (() => void) | undefined;
@@ -166,7 +167,7 @@ describe('web client platform', () => {
     changed?.();
     expect(snapshots).toEqual([{ focused: false, visible: false }]);
     stopLifecycle();
-    expect(stopHost).toHaveBeenCalledOnce();
+    expect(stopHost).toHaveBeenCalledTimes(1);
   });
 
   test('delivers effects and reports unsupported optional notifications', () => {
@@ -266,8 +267,8 @@ describe('web client platform', () => {
     const dispose = installBrowserCircuitConnectivity(win, store);
     listeners.get('offline')?.(new Event('offline'));
     listeners.get('online')?.(new Event('online'));
-    expect(recordFailure).toHaveBeenCalledOnce();
-    expect(retryNow).toHaveBeenCalledOnce();
+    expect(recordFailure).toHaveBeenCalledTimes(1);
+    expect(retryNow).toHaveBeenCalledTimes(1);
     dispose();
     expect(listeners.size).toBe(0);
   });

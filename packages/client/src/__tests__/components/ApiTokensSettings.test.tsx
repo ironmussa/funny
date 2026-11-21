@@ -1,14 +1,15 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { mockT } from '../helpers/mock-i18n';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   listPersonalTokens: vi.fn(),
   createPersonalToken: vi.fn(),
   revokePersonalToken: vi.fn(),
-}));
+}))();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),

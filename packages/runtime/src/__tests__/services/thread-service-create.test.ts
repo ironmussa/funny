@@ -1,6 +1,8 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { mocked, waitFor } from '@funny/test-kit';
+
+const mocks = (() => ({
   releaseStagedUploads: vi.fn(),
   tm: {
     createThread: vi.fn(async () => undefined),
@@ -42,7 +44,7 @@ const mocks = vi.hoisted(() => ({
     timedOut: false,
     outputTruncated: false,
   })),
-}));
+}))();
 
 vi.mock('../../services/ws-broker.js', () => ({
   wsBroker: { emit: vi.fn(), emitToUser: vi.fn() },
@@ -94,9 +96,9 @@ vi.mock('../../services/thread-service/staged-uploads.js', () => ({
 
 vi.mock('fs/promises', () => ({ mkdir: mocks.mkdir, stat: mocks.stat }));
 
-vi.mock('../../services/thread-service/shell-escape.js', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../services/thread-service/shell-escape.js')>();
+const actualShellEscape = { ...(await import('../../services/thread-service/shell-escape.js')) };
+vi.mock('../../services/thread-service/shell-escape.js', () => {
+  const actual = actualShellEscape;
   return {
     ...actual,
     executeShellEscape: mocks.executeShellEscape,
@@ -387,7 +389,7 @@ describe('createAndStartThread', () => {
     });
     expect(result.isOk()).toBe(true);
     const args = mocks.startAgent.mock.lastCall;
-    expect([args?.[3], args?.[8]]).toEqual(want);
+    expect([args?.[3], args?.[8]]).toEqual([...want]);
   });
 
   test.each([
@@ -407,7 +409,7 @@ describe('createAndStartThread', () => {
     });
 
     expect(result.isOk()).toBe(true);
-    const metas = vi.mocked(log.info).mock.calls.map((call) => JSON.stringify(call));
+    const metas = mocked(log.info).mock.calls.map((call) => JSON.stringify(call));
     expect(metas.length).toBeGreaterThan(0);
     for (const meta of metas) expect(meta).not.toContain('SECRET-VALUE');
   });
@@ -649,7 +651,7 @@ describe('createAndStartThread', () => {
       expect(mocks.adoptStagedUploads).toHaveBeenCalledWith(
         expect.objectContaining({ cwd: '/projects/my-app' }),
       );
-      await vi.waitFor(() => expect(mocks.startAgent).toHaveBeenCalled());
+      await waitFor(() => expect(mocks.startAgent).toHaveBeenCalled());
       expect(mocks.copyThreadUploads).toHaveBeenCalledWith(
         '/projects/my-app',
         '/projects/my-app/.worktrees/feature',

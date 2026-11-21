@@ -4,12 +4,12 @@
  * Skipped when no Playwright Chromium is installed on the machine.
  */
 
+import { afterAll, beforeAll, describe, expect, test, vi } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import type { Result } from 'neverthrow';
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

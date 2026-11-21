@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
 import { buildActivity } from '@/data/activities/testing';
 import { canRetryActivity, retryActivity, type RetryDeps } from '@/lib/activity-retry';

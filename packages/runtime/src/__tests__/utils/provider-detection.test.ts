@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+
+import { stubEnv, unstubAllEnvs } from '@funny/test-kit';
 
 // Mock claude-binary before importing provider-detection
 vi.mock('../../utils/claude-binary.js', () => ({
@@ -8,7 +10,7 @@ vi.mock('../../utils/claude-binary.js', () => ({
   },
 }));
 
-const mocks = vi.hoisted(() => ({ codex: vi.fn() }));
+const mocks = (() => ({ codex: vi.fn() }))();
 
 // SDK import and native CLI resolution are separate checks.
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({}));
@@ -25,10 +27,10 @@ beforeEach(() => {
   resetProviderCache();
   mocks.codex.mockReset();
   mocks.codex.mockImplementation(function () {});
-  vi.stubEnv('CODEX_BINARY_PATH', '');
-  vi.stubEnv('CODEX_BIN', '');
+  stubEnv('CODEX_BINARY_PATH', '');
+  stubEnv('CODEX_BIN', '');
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => unstubAllEnvs());
 
 describe('provider-detection', () => {
   test('requires the native CLI even when the SDK imports successfully', async () => {
@@ -53,13 +55,13 @@ describe('provider-detection', () => {
   });
 
   test('rejects a missing explicit CLI override', async () => {
-    vi.stubEnv('CODEX_BINARY_PATH', '/nonexistent/funny-test/codex');
+    stubEnv('CODEX_BINARY_PATH', '/nonexistent/funny-test/codex');
     expect((await getAvailableProviders()).get('codex')?.available).toBe(false);
     expect(mocks.codex).not.toHaveBeenCalled();
   });
 
   test('passes an executable override to the SDK', async () => {
-    vi.stubEnv('CODEX_BINARY_PATH', process.execPath);
+    stubEnv('CODEX_BINARY_PATH', process.execPath);
     expect((await getAvailableProviders()).get('codex')?.available).toBe(true);
     expect(mocks.codex).toHaveBeenCalledWith({ codexPathOverride: process.execPath });
   });

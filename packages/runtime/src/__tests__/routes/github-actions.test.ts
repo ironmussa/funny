@@ -1,17 +1,19 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { Hono } from 'hono';
 import { ok } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 /**
  * The Actions tab routes: the run list (and the filters it forwards), a run's
  * jobs, the end of a failed job's log, and re-running failed jobs.
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getProject: vi.fn(),
   getGithubToken: vi.fn(),
   getRemoteUrl: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
@@ -20,8 +22,9 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@funny/core/git')>()),
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => ({
+  ...actualFunnyCoreGit,
   getRemoteUrl: mocks.getRemoteUrl,
   // The `gh auth token` fallback must never see the host's real gh CLI.
   execute: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 1 })),
@@ -72,14 +75,14 @@ const RAW_RUN = {
 beforeEach(() => {
   vi.clearAllMocks();
   _resetGithubCache();
-  vi.stubGlobal('fetch', fetchMock);
+  stubGlobal('fetch', fetchMock);
   mocks.getProject.mockResolvedValue({ id: 'p-1', userId: 'u-1', path: '/repo' });
   mocks.getRemoteUrl.mockResolvedValue(ok('https://github.com/acme/repo.git'));
   mocks.getGithubToken.mockResolvedValue('tok');
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 describe('GET /actions/runs', () => {

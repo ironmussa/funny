@@ -4,9 +4,10 @@
  * answers a thread's token.
  */
 
+import { afterAll, afterEach, describe, expect, test, vi } from 'bun:test';
+
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { afterAll, afterEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

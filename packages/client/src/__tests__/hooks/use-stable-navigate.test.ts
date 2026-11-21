@@ -1,8 +1,9 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { renderHook } from '@testing-library/react';
 import type { NavigateFunction } from 'react-router-dom';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const mockUseNavigate = vi.hoisted(() => vi.fn());
+const mockUseNavigate = (() => vi.fn())();
 
 vi.mock('react-router-dom', () => ({
   useNavigate: mockUseNavigate,

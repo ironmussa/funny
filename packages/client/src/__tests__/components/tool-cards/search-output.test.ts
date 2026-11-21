@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { isSearchCommand, parseSearchOutput } from '@/components/tool-cards/search-output';
 

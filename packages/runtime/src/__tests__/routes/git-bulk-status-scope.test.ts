@@ -1,16 +1,18 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { Hono } from 'hono';
 import { ok, okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   listThreads: vi.fn(),
   getStatusSummary: vi.fn(),
   getCommittedBranchSummary: vi.fn(),
   getCurrentBranch: vi.fn(),
-}));
+}))();
 
-vi.mock('@funny/core/git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@funny/core/git')>();
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => {
+  const actual = actualFunnyCoreGit;
   return {
     ...actual,
     getStatusSummary: mocks.getStatusSummary,
@@ -32,8 +34,9 @@ vi.mock('../../utils/route-helpers.js', () => ({
   steerFromContext: vi.fn(),
   isSteerGrantFor: vi.fn(),
 }));
-vi.mock('../../routes/git/helpers.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../routes/git/helpers.js')>();
+const actualRoutesGitHelpers = { ...(await import('../../routes/git/helpers.js')) };
+vi.mock('../../routes/git/helpers.js', () => {
+  const actual = actualRoutesGitHelpers;
   return {
     ...actual,
     getCachedPR: vi.fn(() => null),

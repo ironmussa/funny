@@ -4,10 +4,9 @@
  * node that rely on the default join and so are skipped when it fails.
  */
 
+import { describe, expect, test } from 'bun:test';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-
-import { describe, expect, test } from 'vitest';
 
 import { builtInWorkflowsDir } from '../catalog.js';
 import { parseWorkflowYaml } from '../parse.js';

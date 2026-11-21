@@ -1,9 +1,10 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { AgentResource, McpServer } from '@funny/shared';
 import { okAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const { listSkillResourcesForProvider, listCustomCommandResourcesForProvider, listMcpServers } =
-  vi.hoisted(() => ({
+  (() => ({
     listSkillResourcesForProvider: vi.fn<
       (p: string, path?: string, options?: { claudeConfigDir?: string }) => AgentResource[]
     >(() => []),
@@ -11,7 +12,7 @@ const { listSkillResourcesForProvider, listCustomCommandResourcesForProvider, li
       (p: string, path?: string, options?: { claudeConfigDir?: string }) => AgentResource[]
     >(() => []),
     listMcpServers: vi.fn(),
-  }));
+  }))();
 
 vi.mock('../../services/skills-service.js', () => ({
   listSkillResourcesForProvider,
@@ -85,7 +86,7 @@ describe('resolveAgentResources — skills', () => {
 });
 
 describe('resolveAgentResources — session commands', () => {
-  test.each([
+  test.each<{ sessionCommands: string[] | undefined }>([
     { sessionCommands: undefined },
     { sessionCommands: [] },
     { sessionCommands: ['compact'] },

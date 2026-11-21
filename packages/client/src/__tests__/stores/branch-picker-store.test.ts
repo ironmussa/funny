@@ -1,9 +1,10 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 
-const mockListBranches = vi.hoisted(() => vi.fn());
+const mockListBranches = (() => vi.fn())();
 
 vi.mock('@/lib/api/projects', () => ({
   projectsApi: {

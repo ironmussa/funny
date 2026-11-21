@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { advanceTimersByTimeAsync, expectRejection } from '@funny/test-kit';
 
 import { GrpcOperationOutbox } from '../../services/grpc-operation-outbox.js';
 import { GrpcOperationsAdapter } from '../../services/grpc-operations-adapter.js';
@@ -26,8 +28,8 @@ describe('GrpcOperationsAdapter outbox ownership', () => {
   });
 
   test('a mutation that timed out after delivery is not replayed on reconnect', async () => {
-    const result = expect(update()).rejects.toThrow('Data request timed out');
-    await vi.advanceTimersByTimeAsync(15_000);
+    const result = expectRejection(update(), 'Data request timed out');
+    await advanceTimersByTimeAsync(15_000);
     await result;
 
     expect(outbox.pending()).toEqual([]);
@@ -37,8 +39,8 @@ describe('GrpcOperationsAdapter outbox ownership', () => {
 
   test('a mutation that timed out waiting for a connection is never sent', async () => {
     send.mockReturnValue(false);
-    const result = expect(update()).rejects.toThrow('timed out waiting for runner connection');
-    await vi.advanceTimersByTimeAsync(30_000);
+    const result = expectRejection(update(), 'timed out waiting for runner connection');
+    await advanceTimersByTimeAsync(30_000);
     await result;
 
     expect(outbox.pending()).toEqual([]);
@@ -57,9 +59,9 @@ describe('GrpcOperationsAdapter outbox ownership', () => {
   });
 
   test('a late reply to a timed-out mutation is ignored', async () => {
-    const result = expect(update()).rejects.toThrow('Data request timed out');
+    const result = expectRejection(update(), 'Data request timed out');
     const correlationId = send.mock.calls[0][1].metadata.correlationId;
-    await vi.advanceTimersByTimeAsync(15_000);
+    await advanceTimersByTimeAsync(15_000);
     await result;
 
     expect(() => adapter.receive({ correlationId, success: {} })).not.toThrow();

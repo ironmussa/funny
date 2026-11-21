@@ -1,27 +1,28 @@
+import { afterEach, beforeEach, expect, test, vi, type Mock } from 'bun:test';
+
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { err, ok } from 'neverthrow';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test, vi, type Mock } from 'vitest';
 
 import { AddProjectView } from '@/components/AddProjectView';
 
 interface AddProjectMocks {
-  createProject: Mock;
-  listProjects: Mock;
-  loadProjects: Mock;
-  toastError: Mock;
-  toast: Mock;
+  createProject: Mock<(...args: any[]) => any>;
+  listProjects: Mock<(...args: any[]) => any>;
+  loadProjects: Mock<(...args: any[]) => any>;
+  toastError: Mock<(...args: any[]) => any>;
+  toast: Mock<(...args: any[]) => any>;
   orgId: string | null;
 }
 
-const mocks = vi.hoisted((): AddProjectMocks => ({
+const mocks = ((): AddProjectMocks => ({
   createProject: vi.fn(),
   listProjects: vi.fn(),
   loadProjects: vi.fn(),
   toastError: vi.fn(),
   toast: vi.fn(),
   orgId: null,
-}));
+}))();
 vi.mock('@/lib/api', () => ({ api: mocks }));
 vi.mock('@/stores/app-store', () => ({
   useAppStore: (select: (s: typeof mocks) => unknown) => select(mocks),

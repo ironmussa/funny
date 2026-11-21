@@ -1,6 +1,8 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
+
+const mocks = (() => ({
   tm: {
     createThread: vi.fn(async () => undefined),
     getThread: vi.fn(async (): Promise<any> => null),
@@ -26,7 +28,7 @@ const mocks = vi.hoisted(() => ({
     value: 'main',
   })),
   getRemoteUrl: vi.fn(),
-}));
+}))();
 
 vi.mock('nanoid', () => ({ nanoid: () => 'ingest-thread-id' }));
 
@@ -49,9 +51,9 @@ vi.mock('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  getWorktreeBasePaths: (await importOriginal<typeof import('@funny/core/git')>())
-    .getWorktreeBasePaths,
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => ({
+  getWorktreeBasePaths: actualFunnyCoreGit.getWorktreeBasePaths,
   getCurrentBranch: mocks.getCurrentBranch,
   getRemoteUrl: mocks.getRemoteUrl,
 }));
@@ -1207,9 +1209,9 @@ describe('startExternalThreadSweep', () => {
   });
 
   afterEach(async () => {
-    const registered = vi
-      .mocked(shutdownManager.register)
-      .mock.calls.find(([name]) => name === 'ingest-sweep');
+    const registered = mocked(shutdownManager.register).mock.calls.find(
+      ([name]) => name === 'ingest-sweep',
+    );
     await registered?.[1]?.('hard');
     vi.useRealTimers();
   });
@@ -1226,7 +1228,7 @@ describe('startExternalThreadSweep', () => {
     );
 
     vi.advanceTimersByTime(11 * 60 * 1000);
-    await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+    await advanceTimersByTimeAsync(2 * 60 * 1000);
 
     expect(mocks.tm.updateThread).toHaveBeenCalledWith(
       'ingest-thread-id',
@@ -1237,9 +1239,9 @@ describe('startExternalThreadSweep', () => {
   test('clears sweep timer on shutdown cleanup', async () => {
     startExternalThreadSweep();
 
-    const registered = vi
-      .mocked(shutdownManager.register)
-      .mock.calls.find(([name]) => name === 'ingest-sweep');
+    const registered = mocked(shutdownManager.register).mock.calls.find(
+      ([name]) => name === 'ingest-sweep',
+    );
     await registered?.[1]?.('hard');
 
     startExternalThreadSweep();
@@ -1252,7 +1254,7 @@ describe('startExternalThreadSweep', () => {
 
     vi.advanceTimersByTime(11 * 60 * 1000);
     mocks.tm.updateThread.mockClear();
-    await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+    await advanceTimersByTimeAsync(2 * 60 * 1000);
 
     expect(mocks.tm.updateThread).not.toHaveBeenCalled();
   });

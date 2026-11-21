@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
@@ -9,14 +10,14 @@ import { factoryRunSteps } from '@/lib/factory-run-labels';
 interface IndicatorMocks {
   run: FactoryRun | null;
   canSteer: boolean;
-  control: Mock;
+  control: Mock<(...args: any[]) => any>;
 }
 
-const mocks = vi.hoisted((): IndicatorMocks => ({
+const mocks = ((): IndicatorMocks => ({
   run: null,
   canSteer: true,
   control: vi.fn(),
-}));
+}))();
 
 vi.mock('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
 vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));

@@ -4,13 +4,13 @@
  * switch / tab restore leaks the previous CDP WebSocket to Chromium.
  */
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   connect: vi.fn(),
   setViewport: vi.fn(async () => {}),
   disconnect: vi.fn(async () => {}),
-}));
+}))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

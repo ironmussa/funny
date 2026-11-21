@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { TaskProgress, TaskStep } from '@funny/shared/task-progress';
-import { describe, expect, test } from 'vitest';
 
 import { summarizeTaskProgress } from '@/lib/task-progress-summary';
 

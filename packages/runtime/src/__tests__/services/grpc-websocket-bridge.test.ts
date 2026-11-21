@@ -1,9 +1,10 @@
-import { RUNNER_GRPC_WS_PATH } from '@funny/shared/runner-protocol';
 /**
  * grpc-websocket-bridge.ts — loopback TCP → WebSocket carrier, plus endpoint
  * derivation. A Bun WebSocket echo server stands in for the funny server.
  */
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'bun:test';
+
+import { RUNNER_GRPC_WS_PATH } from '@funny/shared/runner-protocol';
 
 import {
   isWebSocketEndpoint,

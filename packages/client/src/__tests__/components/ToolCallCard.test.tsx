@@ -1,7 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
-import { ToolCallCard } from '@/components/ToolCallCard';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -25,7 +24,9 @@ vi.mock('@/stores/project-store', () => {
   return { useProjectStore };
 });
 
+const actualSettingsStore = { ...(await import('@/stores/settings-store')) };
 vi.mock('@/stores/settings-store', () => ({
+  ...actualSettingsStore,
   useSettingsStore: (selector: (state: { defaultEditor: string }) => unknown) =>
     selector({ defaultEditor: 'cursor' }),
 }));
@@ -33,6 +34,8 @@ vi.mock('@/stores/settings-store', () => ({
 vi.mock('@/components/tool-cards/dispatch', () => ({
   dispatchToolCard: () => null,
 }));
+
+const { ToolCallCard } = await import('@/components/ToolCallCard');
 
 describe('ToolCallCard', () => {
   test('suppresses ProviderError output when it duplicates the input error', () => {

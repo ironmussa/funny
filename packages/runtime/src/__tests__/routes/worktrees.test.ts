@@ -1,6 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import { Hono } from 'hono';
 import { ok, err, okAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const {
   mockListWorktrees,
@@ -9,14 +10,14 @@ const {
   mockGetStatusSummary,
   mockCheckWorktreePathInProject,
   mockInvalidateSearch,
-} = vi.hoisted(() => ({
+} = (() => ({
   mockListWorktrees: vi.fn(),
   mockCreateWorktree: vi.fn(),
   mockRemoveWorktree: vi.fn(),
   mockGetStatusSummary: vi.fn(),
   mockCheckWorktreePathInProject: vi.fn(),
   mockInvalidateSearch: vi.fn(),
-}));
+}))();
 
 vi.mock('@funny/core/git', () => ({
   listWorktrees: mockListWorktrees,
@@ -29,9 +30,9 @@ vi.mock('@funny/core/git', () => ({
   removeBranch: vi.fn().mockReturnValue(okAsync(undefined)),
 }));
 
-const { mockRequireProject } = vi.hoisted(() => ({
+const { mockRequireProject } = (() => ({
   mockRequireProject: vi.fn(),
-}));
+}))();
 
 vi.mock('../../utils/route-helpers.js', () => ({
   requireProject: mockRequireProject,

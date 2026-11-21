@@ -1,9 +1,8 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({ resolveProfile: vi.fn() }));
+const mocks = (() => ({ resolveProfile: vi.fn() }))();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ agentProfiles: { resolveEffectiveProfile: mocks.resolveProfile } }),

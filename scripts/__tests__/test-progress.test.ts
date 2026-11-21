@@ -170,35 +170,6 @@ describe('ProgressFile', () => {
 });
 
 describe('runTests with a progress file', () => {
-  test('adds the progress reporter to a vitest suite and reads its events', async () => {
-    // A fake `vitest` that records its arguments and prints reporter events.
-    mkdirSync(join(dir, 'node_modules', '.bin'), { recursive: true });
-    const args = join(dir, 'vitest-args');
-    const events = [
-      { e: 'run', files: 2 },
-      { e: 'file', file: 'src/a.test.ts' },
-      { e: 'test', file: 'src/a.test.ts', name: 'works', state: 'passed', ms: 1 },
-      { e: 'file-end', file: 'src/a.test.ts', ms: 2 },
-    ].map((event) => `echo '${TEST_EVENT_PREFIX}${JSON.stringify(event)}'`);
-    writeFileSync(
-      join(dir, 'node_modules', '.bin', 'vitest'),
-      ['#!/bin/sh', `echo "$@" > '${args}'`, ...events].join('\n'),
-      { mode: 0o755 },
-    );
-    mkdirSync(join(dir, 'packages', 'web'), { recursive: true });
-    writeFileSync(
-      join(dir, 'packages', 'web', 'package.json'),
-      JSON.stringify({ name: '@x/web', scripts: { test: 'vitest run --project unit' } }),
-    );
-    const path = join(dir, 'progress.json');
-
-    expect(await runTests(discoverPackages(dir), dir, 1, path)).toBe(0);
-    expect(readFileSync(args, 'utf8')).toMatch(
-      /^run --reporter=default --reporter=\S*vitest-progress-reporter\.mjs --project unit/,
-    );
-    expect(read(path).suites[0]).toMatchObject({ passed: 1, filesTotal: 2, filesDone: 1 });
-  });
-
   test('records each suite from its output', async () => {
     const pkg = (name: string, script: string) => {
       mkdirSync(join(dir, 'packages', name), { recursive: true });

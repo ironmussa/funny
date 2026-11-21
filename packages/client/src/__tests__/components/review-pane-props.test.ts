@@ -1,6 +1,7 @@
+import { describe, expect, it, vi } from 'bun:test';
+
 import type { FileDiffSummary } from '@funny/shared';
 import { FileCode, FilePlus, FileWarning, FileX } from 'lucide-react';
-import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildFileSearch,

@@ -1,5 +1,12 @@
+import { describe, test, expect, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import type { Terminal } from '@xterm/xterm';
-import { describe, test, expect, vi } from 'vitest';
+
+/** Shadow a prototype getter on one element (bun's spyOn does not support accessors). */
+function stubGetter(target: HTMLElement, key: string, value: unknown): void {
+  Object.defineProperty(target, key, { get: () => value, configurable: true });
+}
 
 // xterm-utils eagerly imports the real xterm bundle at module load on non-Tauri
 // (`if (!isTauri) getXtermModules()`). Flag Tauri before importing so the unit
@@ -71,7 +78,7 @@ describe('repaintVisibleTerminal', () => {
   test('un-pauses before refreshing a visible terminal', () => {
     const { terminal, calls } = makeFakeTerminal({ paused: true });
     const container = document.createElement('div');
-    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(document.body);
+    stubGetter(container, 'offsetParent', document.body);
 
     repaintVisibleTerminal(terminal, container);
 
@@ -82,7 +89,7 @@ describe('repaintVisibleTerminal', () => {
   test('refreshes without forcing intersection when the terminal is hidden', () => {
     const { terminal, calls } = makeFakeTerminal({ paused: true });
     const container = document.createElement('div');
-    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(null);
+    stubGetter(container, 'offsetParent', null);
 
     repaintVisibleTerminal(terminal, container);
 
@@ -95,10 +102,10 @@ describe('writeAndRepaintTerminal', () => {
   test('repaints only after xterm finishes processing the written chunk', () => {
     const { terminal, calls } = makeFakeTerminal({ paused: true });
     const container = document.createElement('div');
-    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(document.body);
+    stubGetter(container, 'offsetParent', document.body);
 
     let writeCallback: (() => void) | undefined;
-    vi.mocked(terminal.write).mockImplementation((_data, callback) => {
+    mocked(terminal.write).mockImplementation((_data, callback) => {
       writeCallback = callback;
     });
 
@@ -119,8 +126,8 @@ describe('refitAndRepaintVisibleTerminal', () => {
     const { terminal, calls } = makeFakeTerminal({ paused: true });
     const fitAddon = { fit: vi.fn() };
     const container = document.createElement('div');
-    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(document.body);
-    vi.spyOn(container, 'clientHeight', 'get').mockReturnValue(240);
+    stubGetter(container, 'offsetParent', document.body);
+    stubGetter(container, 'clientHeight', 240);
 
     refitAndRepaintVisibleTerminal(terminal, fitAddon, container);
 
@@ -133,8 +140,8 @@ describe('refitAndRepaintVisibleTerminal', () => {
     const { terminal, calls } = makeFakeTerminal({ paused: true });
     const fitAddon = { fit: vi.fn() };
     const container = document.createElement('div');
-    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(null);
-    vi.spyOn(container, 'clientHeight', 'get').mockReturnValue(0);
+    stubGetter(container, 'offsetParent', null);
+    stubGetter(container, 'clientHeight', 0);
 
     refitAndRepaintVisibleTerminal(terminal, fitAddon, container);
 

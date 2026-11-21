@@ -1,6 +1,7 @@
+import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { describe, test, expect, beforeEach } from 'vitest';
 
 import { createTestDb, seedProject } from '../helpers/test-db.js';
 

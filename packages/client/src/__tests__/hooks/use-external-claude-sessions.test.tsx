@@ -1,6 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
   resetExternalClaudeSessionsForTests,
@@ -34,13 +36,13 @@ describe('external Claude sessions sync', () => {
   });
 
   test('polls all projects with a single global request (no projectId)', async () => {
-    vi.mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
+    mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
 
     const { unmount } = renderHook(() => useExternalClaudeSessionsSync());
     // Initial sync is deferred to idle. Vitest 5 fakes requestIdleCallback, so
     // it runs at the 3 s idle timeout (the setTimeout(500) fallback is unused).
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3_000);
+      await advanceTimersByTimeAsync(3_000);
     });
     await flushMicrotasks();
 
@@ -50,7 +52,7 @@ describe('external Claude sessions sync', () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
+      await advanceTimersByTimeAsync(15_000);
     });
     await flushMicrotasks();
 
@@ -64,7 +66,7 @@ describe('external Claude sessions sync', () => {
   });
 
   test('multiple consumers share one request — no per-project fan-out', async () => {
-    vi.mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
+    mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
 
     // Even if several components mount the syncer, the inflight/hasLoaded
     // dedupe keeps it to a single network request.
@@ -72,7 +74,7 @@ describe('external Claude sessions sync', () => {
     const b = renderHook(() => useExternalClaudeSessionsSync());
     const c = renderHook(() => useExternalClaudeSessionsSync());
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3_000);
+      await advanceTimersByTimeAsync(3_000);
     });
     await flushMicrotasks();
 
@@ -84,14 +86,14 @@ describe('external Claude sessions sync', () => {
   });
 
   test('useExternalClaudeSessionsLoaded flips to true after the global sync', async () => {
-    vi.mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
+    mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
 
     const loaded = renderHook(() => useExternalClaudeSessionsLoaded());
     expect(loaded.result.current).toBe(false);
 
     const sync = renderHook(() => useExternalClaudeSessionsSync());
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3_000);
+      await advanceTimersByTimeAsync(3_000);
     });
     await flushMicrotasks();
 

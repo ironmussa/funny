@@ -1,8 +1,8 @@
-import { describe, test, expect, vi, beforeAll, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeAll, afterEach } from 'bun:test';
 
 import { clearGlobal, readGlobal } from '../helpers/builders.js';
 
-const lifecycleMock = vi.hoisted(() => ({
+const lifecycleMock = (() => ({
   stopAllAgents: vi.fn(async () => undefined),
   extractActiveAgents: vi.fn(() => new Map<string, unknown>()),
   extractActiveAgentSnapshot: vi.fn(() => ({
@@ -17,13 +17,13 @@ const lifecycleMock = vi.hoisted(() => ({
   cleanupThreadState: vi.fn(),
   getRunSpans: vi.fn(() => new Map()),
   endRunSpan: vi.fn(),
-}));
+}))();
 
 interface ShutdownCapture {
   handler: null | ((mode: 'hotReload' | 'hard') => Promise<void>);
 }
 
-const shutdownCapture = vi.hoisted((): ShutdownCapture => ({ handler: null }));
+const shutdownCapture = ((): ShutdownCapture => ({ handler: null }))();
 
 vi.mock('../../services/shutdown-manager.js', () => ({
   shutdownManager: {
@@ -81,7 +81,6 @@ vi.mock('@funny/core/agents', () => ({
 
 describe('AgentRunner shutdown handler', () => {
   beforeAll(async () => {
-    vi.resetModules();
     await import('../../services/agent-runner.js');
     if (!shutdownCapture.handler) {
       throw new Error('agent-runner shutdown handler was not registered');

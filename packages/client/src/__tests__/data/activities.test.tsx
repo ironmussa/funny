@@ -1,7 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { DomainError } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { clearFinishedActivities, dismissActivity } from '@/data/activities/actions';
 import {
@@ -17,14 +18,14 @@ import { resyncDataLayer } from '@/data/resync';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({
+const api = (() => ({
   listActivities: vi.fn(),
   dismissActivity: vi.fn(),
   clearFinishedActivities: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/activities', () => ({ activitiesApi: api }));
 
-const effects = vi.hoisted(() => ({ emit: vi.fn() }));
+const effects = (() => ({ emit: vi.fn() }))();
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));

@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { HtmlPreview } from '@/components/HtmlPreview';
 import { MonacoEditorDialog } from '@/components/MonacoEditorDialog';

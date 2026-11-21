@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { createSandboxManagerProcessAdapter } from '../adapters/local-runtime.js';
 import { createAgent, createSession, sandbox } from '../index.js';

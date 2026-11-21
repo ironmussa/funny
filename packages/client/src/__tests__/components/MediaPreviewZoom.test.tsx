@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
 import { fireEvent, render, screen, cleanup } from '@testing-library/react';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { MediaPreview } from '@/components/MediaPreview';
 

@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { ThreadStatus } from '@funny/shared';
-import { describe, test, expect } from 'vitest';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import {

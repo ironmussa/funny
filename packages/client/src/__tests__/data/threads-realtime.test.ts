@@ -1,6 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
+import { runAllTimersAsync } from '@funny/test-kit';
 import { okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDataLayer } from '@/data/data-layer';
 import { replaceDataLayer } from '@/data/runtime';
@@ -17,11 +19,11 @@ import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-
  * follows (spec: *Realtime convergence*).
  */
 
-const mockApi = vi.hoisted(() => ({
+const mockApi = (() => ({
   listThreads: vi.fn(),
   getThread: vi.fn(),
   getThreadEvents: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api', () => ({ api: mockApi }));
 
 function thread(id: string, overrides: Partial<Thread> = {}): Thread {
@@ -77,7 +79,7 @@ describe('realtime row updates', () => {
     expect(readThreadIndex().threadsById['new-one']).toBeUndefined();
 
     // The debounced project refresh brings the complete row.
-    await vi.runAllTimersAsync();
+    await runAllTimersAsync();
     expect(mockApi.listThreads).toHaveBeenCalledTimes(2);
     expect(getThreadsData().readThread('new-one')?.status).toBe('running');
   });

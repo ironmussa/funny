@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { deleteProjectSecret, setProjectSecret } from '@/data/project-secrets/actions';
 import { useProjectSecrets } from '@/data/project-secrets/hooks';
@@ -8,11 +9,11 @@ import type { ProjectSecretSummary } from '@/lib/api/project-secrets';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({
+const api = (() => ({
   listProjectSecrets: vi.fn(),
   setProjectSecret: vi.fn(),
   deleteProjectSecret: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/project-secrets', () => ({ projectSecretsApi: api }));
 
 const secret = (over: Partial<ProjectSecretSummary> = {}): ProjectSecretSummary => ({

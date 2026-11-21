@@ -4,23 +4,25 @@
  * closes or the user switches threads, and attaches when the agent opens one.
  */
 
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 interface BrowserPanelMocks {
-  open: Mock;
-  close: Mock;
-  navigate: Mock;
-  input: Mock;
+  open: Mock<(...args: any[]) => any>;
+  close: Mock<(...args: any[]) => any>;
+  navigate: Mock<(...args: any[]) => any>;
+  input: Mock<(...args: any[]) => any>;
   urlThreadId: string | null;
 }
 
-const mocks = vi.hoisted((): BrowserPanelMocks => ({
+const mocks = ((): BrowserPanelMocks => ({
   open: vi.fn(),
   close: vi.fn(),
   navigate: vi.fn(),
   input: vi.fn(),
   urlThreadId: null,
-}));
+}))();
 
 vi.mock('@/lib/browser-session-client', () => ({
   browserSessionClient: {
@@ -108,7 +110,7 @@ describe('browser panel thread sessions', () => {
     useBrowserPanelStore.setState({ open: true });
     await store().openBrowserSession('https://example.com');
     store().closePanel();
-    await vi.waitFor(() => expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'detach'));
+    await waitFor(() => expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'detach'));
   });
 
   test('closing the panel closes a panel-owned session', async () => {
@@ -116,9 +118,7 @@ describe('browser panel thread sessions', () => {
     await store().openBrowserSession('https://example.com');
     const id = store().sessionId;
     store().closePanel();
-    await vi.waitFor(() =>
-      expect(mocks.close).toHaveBeenCalledWith(id, 'user', expect.any(String)),
-    );
+    await waitFor(() => expect(mocks.close).toHaveBeenCalledWith(id, 'user', expect.any(String)));
   });
 
   test('switching to a thread with the panel open detaches the old session and probes the new one', async () => {
@@ -126,9 +126,9 @@ describe('browser panel thread sessions', () => {
     store().togglePanel();
     store().syncActiveThread('t1');
     store().togglePanel();
-    await vi.waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
+    await waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
     store().syncActiveThread('t2');
-    await vi.waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t2', ''));
+    await waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t2', ''));
     expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'detach');
     expect(store().open).toBe(true);
     expect(store().sessionId).toBe('thread:t2');
@@ -142,11 +142,11 @@ describe('browser panel thread sessions', () => {
     store().syncActiveThread('t2');
     expect(store().open).toBe(false);
     expect(store().sessionId).toBeNull();
-    await vi.waitFor(() => expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'detach'));
+    await waitFor(() => expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'detach'));
 
     store().syncActiveThread('t1');
     expect(store().open).toBe(true);
-    await vi.waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
+    await waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
 
     store().closePanel();
     store().syncActiveThread('t2');
@@ -182,7 +182,7 @@ describe('browser panel thread sessions', () => {
 
   test('agent-opened on the active thread opens the panel and attaches', async () => {
     store().handleAgentOpened('thread:t1', 't1', 't1');
-    await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledWith('thread:t1', ''));
+    await waitFor(() => expect(mocks.open).toHaveBeenCalledWith('thread:t1', ''));
     expect(store().open).toBe(true);
     expect(store().sessionId).toBe('thread:t1');
   });

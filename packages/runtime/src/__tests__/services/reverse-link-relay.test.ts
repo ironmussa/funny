@@ -1,3 +1,5 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
 /**
  * reverse-link-relay.ts — sandbox end of the reverse runner link. A plain
  * WebSocket client stands in for the server's dialer.
@@ -7,7 +9,6 @@ import {
   REVERSE_LINK_PATH,
   REVERSE_LINK_SECRET_HEADER,
 } from '@funny/shared/reverse-link';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { startReverseLinkRelay, type ReverseLinkRelay } from '../../services/reverse-link-relay.js';
 

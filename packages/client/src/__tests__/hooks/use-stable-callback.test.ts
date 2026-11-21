@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { renderHook } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { useStableCallback } from '@/hooks/use-stable-callback';
 
@@ -19,7 +20,7 @@ describe('useStableCallback', () => {
 
     expect(result.current).toBe(stableCallback);
     expect(stableCallback(1)).toBe(3);
-    expect(initialCallback).toHaveBeenCalledOnce();
-    expect(nextCallback).toHaveBeenCalledOnce();
+    expect(initialCallback).toHaveBeenCalledTimes(1);
+    expect(nextCallback).toHaveBeenCalledTimes(1);
   });
 });

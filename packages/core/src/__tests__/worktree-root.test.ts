@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 /**
  * FUNNY_WORKTREE_ROOT: worktrees under a configured root instead of next to
  * the project. Unit tests for the base resolution, then integration tests
@@ -9,7 +10,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { dirname, resolve } from 'path';
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { stubEnv, unstubAllEnvs } from '@funny/test-kit';
 
 import { executeSync } from '../git/process.js';
 import {
@@ -70,7 +71,7 @@ describe('worktrees under FUNNY_WORKTREE_ROOT', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
+    unstubAllEnvs();
     rmSync(TMP, { recursive: true, force: true });
   });
 
@@ -80,7 +81,7 @@ describe('worktrees under FUNNY_WORKTREE_ROOT', () => {
     const legacyPath = before._unsafeUnwrap();
     expect(dirname(legacyPath)).toBe(resolve(TMP, 'one', '.funny-worktrees', 'app'));
 
-    vi.stubEnv('FUNNY_WORKTREE_ROOT', root);
+    stubEnv('FUNNY_WORKTREE_ROOT', root);
     const after = await createWorktree(repoPath, 'made-after');
     expect(after.isOk()).toBe(true);
     const rootPath = after._unsafeUnwrap();
@@ -94,7 +95,7 @@ describe('worktrees under FUNNY_WORKTREE_ROOT', () => {
   });
 
   test('pruning one project never removes the worktrees of a same-named project', async () => {
-    vi.stubEnv('FUNNY_WORKTREE_ROOT', root);
+    stubEnv('FUNNY_WORKTREE_ROOT', root);
     const otherRepo = initRepo(resolve(TMP, 'two', 'app'));
     const other = await createWorktree(otherRepo, 'other-branch');
     expect(other.isOk()).toBe(true);

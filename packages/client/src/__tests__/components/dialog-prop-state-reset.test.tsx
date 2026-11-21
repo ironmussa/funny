@@ -1,10 +1,11 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { PullStrategyDialog } from '@/components/pull-strategy-dialog';
 import { WorktreeDeleteDialog } from '@/components/WorktreeDeleteDialog';
 
-const worktreeStatus = vi.hoisted(() => vi.fn());
+const worktreeStatus = (() => vi.fn())();
 
 vi.mock('@/lib/api', () => ({
   api: { worktreeStatus },

@@ -1,6 +1,7 @@
+import { describe, it, expect, beforeAll, afterAll, vi } from 'bun:test';
+
 import type { Client } from '@libsql/client';
 import { Hono } from 'hono';
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
 import { createDb, initSchema, insertFact, listFacts } from '../storage.js';
 import { makeFact } from './helpers.js';

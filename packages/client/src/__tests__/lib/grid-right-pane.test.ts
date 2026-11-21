@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { effectiveThreadId, isRightPaneVisible, rightPaneProjectId } from '@/lib/grid-right-pane';
 

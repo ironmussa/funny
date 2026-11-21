@@ -4,23 +4,24 @@
  * the user owns.
  */
 
+import { afterAll, describe, expect, test, vi } from 'bun:test';
 import { execFileSync } from 'child_process';
 import { rmSync } from 'fs';
 
-import { afterAll, describe, expect, test, vi } from 'vitest';
+import { waitFor } from '@funny/test-kit';
 
-const dataDir = vi.hoisted(() => {
+const dataDir = (() => {
   const dir = `${process.env.TMPDIR ?? '/tmp'}/funny-open-url-${Date.now()}`;
   process.env.FUNNY_DATA_DIR = dir;
   return dir;
-});
+})();
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   openForThread: vi.fn(async () => null),
   getThread: vi.fn(async (id: string) =>
     id === 'own-thread' ? { id, userId: 'u1' } : { id, userId: 'someone-else' },
   ),
-}));
+}))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -58,7 +59,7 @@ describe('$BROWSER bridge', () => {
       encoding: 'utf8',
     });
     expect(out).toContain('Opened in the Funny browser panel');
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(mocks.openForThread).toHaveBeenCalledWith(
         'u1',
         'own-thread',
@@ -73,7 +74,7 @@ describe('$BROWSER bridge', () => {
     execFileSync('sh', [env.BROWSER, 'https://example.test'], {
       env: { ...process.env, ...env, FUNNY_THREAD_ID: 'foreign-thread' },
     });
-    await vi.waitFor(() => expect(mocks.getThread).toHaveBeenCalledWith('foreign-thread'));
+    await waitFor(() => expect(mocks.getThread).toHaveBeenCalledWith('foreign-thread'));
     await new Promise((r) => setTimeout(r, 100));
     expect(mocks.openForThread).not.toHaveBeenCalled();
   });

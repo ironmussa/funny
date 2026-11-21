@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { Hono } from 'hono';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const listThreadsWithSessions = vi.fn((_userId: string): string[] => []);
 vi.mock('../../services/browser-session-manager.js', () => ({

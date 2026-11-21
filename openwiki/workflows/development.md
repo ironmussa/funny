@@ -61,7 +61,7 @@ All of these are baseline-diff style (compare against `.fitness/*-baseline.txt`)
 
 ## Testing
 
-- **Unit/integration:** `vitest` for `core`/`runtime`/`client`-style packages, plain `bun test` (`bun:test`) for `shared`-style packages. Run via each package's own `package.json` `test` script, or `bun scripts/run-tests.ts` from the root. The pre-push hook (`scripts/pre-push.ts`) runs only the suites a push can affect; inside a vitest suite it runs `vitest related`, and inside a `bun test` suite with a test-impact map (currently `server`) only the test files that executed a changed source. CI builds the map on every push to `master`; download it with `bun scripts/test-impact.ts fetch` (needs `gh`). Without a map the suite runs whole. See `scripts/test-impact.ts`.
+- **Unit/integration:** `bun test` (`bun:test`) in every package. Packages whose files need their own global and module registry (module mocks, jsdom) run `bun test --parallel` (`core`, `harness`, `runtime`, `client`; the server uses `--isolate`). The client preloads a jsdom window per file (`packages/client/src/__tests__/dom-environment.ts`, then `setup.ts`). What `bun:test` lacks from vitest (`stubGlobal`, `stubEnv`, `waitFor`, async fake-timer helpers, `mocked`) lives in `@funny/test-kit`. Storybook interaction tests stay on vitest's browser mode (`bun run --cwd packages/client test:storybook`). How mocks, timers and matchers differ from vitest: [`docs/guides/bun-test.md`](../../docs/guides/bun-test.md). Run via each package's own `package.json` `test` script, or `bun scripts/run-tests.ts` from the root. The pre-push hook (`scripts/pre-push.ts`) runs only the suites a push can affect, and inside a `bun test` suite with a test-impact map (currently `server`) only the test files that executed a changed source. CI builds the map on every push to `master`; download it with `bun scripts/test-impact.ts fetch` (needs `gh`). Without a map the suite runs whole. See `scripts/test-impact.ts`.
 - **End-to-end:** Playwright, driven by `bun run test:e2e` (`bunx playwright test`) / `bun run test:e2e:ui`. The full data-testid reference and per-feature test checklist lives in [`e2e/TEST-PLAN.md`](../../e2e/TEST-PLAN.md); spec files live in `e2e/*.spec.ts` (auth, sidebar, kanban, browser-panel, automation-inbox, i18n, dark-mode, accessibility, multi-tab, and more).
 - **Regression rule:** when fixing a bug, add a test that fails without the fix and passes with it (per `CLAUDE.md` "Bug Fixes & Regression Tests"). If a test genuinely isn't feasible, say so explicitly rather than skipping silently.
 - **UI testid convention:** every interactive element needs a `data-testid` in kebab-case, `{area}-{element}-{qualifier}` (e.g. `sidebar-add-project`, `thread-item-{id}`) — this is what the E2E suite above depends on.
@@ -115,12 +115,12 @@ it is intended for local operators, not mutually untrusted accounts on a shared 
 Run the opt-in smoke test from `packages/runtime`:
 
 ```bash
-FUNNY_TGREP_TEST_BINARY=/absolute/path/to/tgrep bunx vitest run \
-  src/__tests__/services/tgrep-content-search.test.ts \
-  src/__tests__/services/tgrep-rpc.test.ts \
-  src/__tests__/services/tgrep-project-search-provider.test.ts \
-  src/__tests__/services/project-search-registry.test.ts \
-  src/__tests__/routes/text-search.test.ts
+FUNNY_TGREP_TEST_BINARY=/absolute/path/to/tgrep bun test --parallel \
+  ./src/__tests__/services/tgrep-content-search.test.ts \
+  ./src/__tests__/services/tgrep-rpc.test.ts \
+  ./src/__tests__/services/tgrep-project-search-provider.test.ts \
+  ./src/__tests__/services/project-search-registry.test.ts \
+  ./src/__tests__/routes/text-search.test.ts
 ```
 
 Without `FUNNY_TGREP_TEST_BINARY`, the real-binary smoke test is skipped.

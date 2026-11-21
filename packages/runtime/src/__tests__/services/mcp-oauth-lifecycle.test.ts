@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 describe('mcp-oauth module lifecycle', () => {
   test('importing the module does not keep the process alive', async () => {
@@ -10,11 +10,14 @@ describe('mcp-oauth module lifecycle', () => {
         stderr: 'ignore',
       },
     );
+    // A loaded machine (a parallel suite run) can take several seconds just to
+    // start the child and import the module; a handle that keeps it alive never
+    // lets it exit at all, so a long wait does not weaken the check.
     const exited = await Promise.race([
       proc.exited.then(() => true),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5_000)),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 15_000)),
     ]);
     proc.kill();
     expect(exited).toBe(true);
-  }, 10_000);
+  }, 20_000);
 });

@@ -1,11 +1,6 @@
-import { act, screen, waitFor } from '@testing-library/react';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-import { ThreadView } from '@/components/ThreadView';
-import { withProjects } from '@/data/projects/testing';
-import { buildThreadWithMessages } from '@/data/threads/testing';
-import { useAppStore } from '@/stores/app-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { act, screen, waitFor } from '@testing-library/react';
 
 import { buildMessage } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
@@ -81,8 +76,9 @@ vi.mock('@/hooks/use-todo-panel', () => ({
   useTodoSnapshots: () => [],
 }));
 
-vi.mock('@/stores/settings-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/stores/settings-store')>();
+const actualStoresSettingsStore = { ...(await import('@/stores/settings-store')) };
+vi.mock('@/stores/settings-store', () => {
+  const actual = actualStoresSettingsStore;
   return {
     ...actual,
     useSettingsStore: Object.assign(() => ({ fontSize: 'default' }), {
@@ -130,6 +126,12 @@ vi.mock('react-markdown', () => ({
 vi.mock('remark-gfm', () => ({
   default: [],
 }));
+
+const { ThreadView } = await import('@/components/ThreadView');
+const { withProjects } = await import('@/data/projects/testing');
+const { buildThreadWithMessages } = await import('@/data/threads/testing');
+const { useAppStore } = await import('@/stores/app-store');
+const { useThreadStore } = await import('@/stores/thread-store');
 
 // ── Setup ───────────────────────────────────────────────────────
 

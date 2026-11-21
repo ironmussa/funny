@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { AgentPointer } from '@/components/browser-panel/AgentPointer';
 import { dispatchBrowserSessionEvent } from '@/hooks/dispatch-browser-session-events';

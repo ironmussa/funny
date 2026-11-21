@@ -1,7 +1,6 @@
+import { describe, expect, test } from 'bun:test';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-
-import { describe, expect, test } from 'vitest';
 
 import { claudeConfigJsonPath } from '../../utils/claude-profile-paths.js';
 

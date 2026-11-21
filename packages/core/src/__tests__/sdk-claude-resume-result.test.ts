@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'bun:test';
 
 import { EMPTY_RESUME_RESULT_HOLD_MS, SDKClaudeProcess } from '../agents/sdk-claude.js';
 import type { ClaudeProcessOptions, CLIMessage } from '../agents/types.js';

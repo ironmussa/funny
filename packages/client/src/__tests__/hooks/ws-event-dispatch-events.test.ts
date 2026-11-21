@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+// Window events must go through jsdom (see the helper).
+import { mocked, waitFor } from '@funny/test-kit';
 
 const {
   mockNotifyDirty,
@@ -19,7 +22,7 @@ const {
   mockToastError,
   mockShowAgentNotification,
   mockSetTabError,
-} = vi.hoisted(() => {
+} = (() => {
   const mockActiveCommits: Record<string, { workflowId?: string }> = {};
   return {
     mockNotifyDirty: vi.fn(),
@@ -41,7 +44,7 @@ const {
     mockShowAgentNotification: vi.fn(),
     mockSetTabError: vi.fn(),
   };
-});
+})();
 
 vi.mock('@/stores/commit-progress-store', () => ({
   useCommitProgressStore: {
@@ -84,12 +87,13 @@ vi.mock('@/stores/terminal-store', () => ({
   },
 }));
 
-const gitActionOverrides = vi.hoisted(() => {
+const gitActionOverrides = (() => {
   const overrides: Record<string, (...args: any[]) => unknown> = {};
   return overrides;
-});
-vi.mock('@/data/git-status/actions', async (importOriginal) => {
-  const real = await importOriginal<Record<string, (...args: any[]) => unknown>>();
+})();
+const actualDataGitStatusActions = { ...(await import('@/data/git-status/actions')) };
+vi.mock('@/data/git-status/actions', () => {
+  const real = actualDataGitStatusActions;
   const wrapped: Record<string, (...args: any[]) => unknown> = {};
   for (const [name, fn] of Object.entries(real)) {
     wrapped[name] = (...args) => (gitActionOverrides[name] ?? fn)(...args);
@@ -129,8 +133,9 @@ vi.mock('@/stores/settings-store', () => ({
   },
 }));
 
-vi.mock('@/stores/thread-store-internals', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/stores/thread-store-internals')>();
+const actualStoresThreadStoreInternals = { ...(await import('@/stores/thread-store-internals')) };
+vi.mock('@/stores/thread-store-internals', () => {
+  const actual = actualStoresThreadStoreInternals;
   return {
     ...actual,
     getNavigate: () => vi.fn(),
@@ -274,7 +279,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       data: { statuses: [status] },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockNotifyDirty).toHaveBeenCalledWith('t1');
     });
 
@@ -308,7 +313,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(readGitStatusMaps().statusByBranch['p1:feature']).toMatchObject({
         prNumber: 42,
       });
@@ -323,7 +328,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     Object.assign(gitActionOverrides, { fetchForThread, fetchProjectStatus, fetchForProject });
     useThreadStore.setState({ selectedThreadId: 't1' });
     useProjectStore.setState({ selectedProjectId: 'p1' });
-    vi.mocked(getProjectIdForThread).mockReturnValue('p1');
+    mocked(getProjectIdForThread).mockReturnValue('p1');
     const handler = captureHandlers()['git:refs-updated'];
 
     handler({ threadId: '', data: { projectId: 'p2' } });
@@ -349,10 +354,10 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     // One at a time: concurrent dynamic imports of a mocked module can resolve
     // the second to the real module under vitest.
     handler({ threadId: 't1', data: { projectId: 'p1', changed: ['diff'] } });
-    await vi.waitFor(() => expect(mockNotifyDirty).toHaveBeenCalledWith('t1'));
+    await waitFor(() => expect(mockNotifyDirty).toHaveBeenCalledWith('t1'));
     // Project-mode summaries carry no thread: the pane keys on the project id.
     handler({ threadId: '', data: { projectId: 'p2', changed: ['diff'] } });
-    await vi.waitFor(() => expect(mockNotifyDirty).toHaveBeenCalledWith('p2'));
+    await waitFor(() => expect(mockNotifyDirty).toHaveBeenCalledWith('p2'));
     expect(fetchForThread).not.toHaveBeenCalled();
     expect(fetchProjectStatus).not.toHaveBeenCalled();
     expect(fetchForProject).not.toHaveBeenCalled();
@@ -419,7 +424,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       data: { event: { id: 'ev-2', type: 'status' } },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const events = useThreadStore.getState().activeThread?.threadEvents ?? [];
       expect(events.map((e: { id: string }) => e.id)).toEqual(['ev-1', 'ev-2']);
     });
@@ -429,7 +434,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       data: { event: { id: 'ev-2', type: 'status' } },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const events = useThreadStore.getState().activeThread?.threadEvents ?? [];
       expect(events).toHaveLength(2);
     });
@@ -463,13 +468,13 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
 
   test('runner:status updates runner status store for online/offline', async () => {
     captureHandlers()['runner:status']({ threadId: '', data: { status: 'online' } });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockSetRunnerStatus).toHaveBeenCalledWith('online');
     });
 
     mockSetRunnerStatus.mockClear();
     captureHandlers()['runner:status']({ threadId: '', data: { status: 'offline' } });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockSetRunnerStatus).toHaveBeenCalledWith('offline');
     });
   });
@@ -553,7 +558,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockStartCommit).toHaveBeenCalledWith(
         't1',
         'Committing',
@@ -573,7 +578,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(
         'Pre-commit hook failed',
         expect.objectContaining({ description: 'lint failed badly' }),
@@ -618,11 +623,11 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockReplaceSteps).toHaveBeenCalled();
       expect(mockToastSuccess).toHaveBeenCalledWith('Pushed successfully');
     });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockNotifyDirty).toHaveBeenCalledWith('t1');
     });
 
@@ -638,13 +643,13 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       threadId: 't1',
       data: { status: 'completed', action: 'commit', workflowId: 'wf-1', steps: [] },
     });
-    await vi.waitFor(() => expect(mockReplaceSteps).toHaveBeenCalled());
+    await waitFor(() => expect(mockReplaceSteps).toHaveBeenCalled());
 
     handler({
       threadId: 't1',
       data: { status: 'started', title: 'Again', action: 'commit', workflowId: 'wf-2', steps: [] },
     });
-    await vi.waitFor(() => expect(mockStartCommit).toHaveBeenCalled());
+    await waitFor(() => expect(mockStartCommit).toHaveBeenCalled());
 
     vi.advanceTimersByTime(1500);
     expect(mockFinishCommit).not.toHaveBeenCalled();
@@ -662,7 +667,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockSetFailedWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Push failed', action: 'push' }),
       );
@@ -678,7 +683,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
         threadId: 't1',
         data: { status: 'completed', action: 'push', workflowId: 'wf-a', steps: [] },
       });
-      await vi.waitFor(() => expect(mockReplaceSteps).toHaveBeenCalled());
+      await waitFor(() => expect(mockReplaceSteps).toHaveBeenCalled());
       mockActiveCommits.t1 = { workflowId: 'wf-a' };
 
       // Run B fails during setup: `failed` without `started`.
@@ -692,7 +697,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
           steps: [],
         },
       });
-      await vi.waitFor(() =>
+      await waitFor(() =>
         expect(mockSetFailedWorkflow).toHaveBeenCalledWith(
           expect.objectContaining({ title: 'Commit failed' }),
         ),
@@ -749,7 +754,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       data: { status: 'completed', cost: 0.01, duration: 2 },
     });
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(mockShowAgentNotification).toHaveBeenCalledWith(
         expect.stringContaining('Fix bug'),
         'Agent finished',

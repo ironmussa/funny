@@ -8,14 +8,15 @@
  * were deleted along with the .pipeline.ts source files.
  */
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { runPipeline, nullReporter } from '@funny/pipelines';
+import { mocked } from '@funny/test-kit';
 import type { ActionProvider, ActionResult } from '@funny/workflows/compiler';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { loadPipelines } from '../../pipelines/yaml-loader.js';
 import { resolveBuiltinAgentByName } from '../../services/agent-registry.js';
@@ -111,9 +112,9 @@ describe('built-in: commit', () => {
       ctx(provider, { commit_message: 'wip' }),
     );
     expect(result.outcome).toBe('completed');
-    expect(provider.spawnAgent).toHaveBeenCalledOnce();
+    expect(provider.spawnAgent).toHaveBeenCalledTimes(1);
     // The fixer prompt sees LAST_ERROR.
-    const prompt = vi.mocked(provider.spawnAgent).mock.calls[0][0].prompt;
+    const prompt = mocked(provider.spawnAgent).mock.calls[0][0].prompt;
     expect(prompt).toContain('lint errors');
   });
 });
@@ -131,7 +132,7 @@ describe('built-in: code-review', () => {
       ctx(provider, { commit_sha: 'HEAD' }),
     );
     expect(result.outcome).toBe('completed');
-    expect(provider.spawnAgent).toHaveBeenCalledOnce(); // reviewer only
+    expect(provider.spawnAgent).toHaveBeenCalledTimes(1); // reviewer only
   });
 
   test('runs review → fix → commit-fix → review loop until pass', async () => {
@@ -154,7 +155,7 @@ describe('built-in: code-review', () => {
     );
     expect(result.outcome).toBe('completed');
     expect(sa).toHaveBeenCalledTimes(3); // 2 reviews + 1 fix
-    expect(commit).toHaveBeenCalledOnce();
+    expect(commit).toHaveBeenCalledTimes(1);
     // After the fix iteration, ctx.outputs.commit-fix.json.sha is exposed.
     expect(result.ctx.outputs['commit-fix']?.json?.sha).toBe('fix-sha');
   });
@@ -238,7 +239,7 @@ describe('built-in: code-quality', () => {
     expect(provider.createPr).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'wip', base: 'main' }),
     );
-    expect(provider.notify).toHaveBeenCalledOnce();
+    expect(provider.notify).toHaveBeenCalledTimes(1);
   });
 
   test('skips test step when test_command is unset', async () => {

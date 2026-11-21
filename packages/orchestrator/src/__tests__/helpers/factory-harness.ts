@@ -32,9 +32,9 @@ import { inProcessStepLauncher, type InProcessStepOptions } from './in-process-s
 import { sandboxExec } from './local-sandbox.js';
 import type { FakeAgentTurn } from './step-fakes.js';
 
-export const REPO = 'acme/app';
+const REPO = 'acme/app';
 export const LOGIN = 'octo-owner';
-export const AUTHOR = { name: 'Octo Owner', email: 'octo@example.com' };
+const AUTHOR = { name: 'Octo Owner', email: 'octo@example.com' };
 export const USER_TOKEN = ['ghp', 'usersownpersonaltoken0123456789abcd'].join('_');
 export const MIN = 60_000;
 

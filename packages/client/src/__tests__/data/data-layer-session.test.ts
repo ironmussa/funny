@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
 import type { SafeUser } from '@funny/shared';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { getDataLayer } from '@/data/runtime';
 import { bindDataLayerToSession } from '@/lib/data-layer-session';

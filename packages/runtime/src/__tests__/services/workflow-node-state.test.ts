@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const { emitToUser } = vi.hoisted(() => ({
+const { emitToUser } = (() => ({
   emitToUser: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/ws-broker.js', () => ({
   wsBroker: {

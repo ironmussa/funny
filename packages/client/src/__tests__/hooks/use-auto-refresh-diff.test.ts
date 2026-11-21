@@ -1,15 +1,16 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 interface ReviewPaneMockState {
   dirtySignal: number;
   dirtyThreadId: string | undefined;
 }
 
-const reviewPaneState = vi.hoisted((): ReviewPaneMockState => ({
+const reviewPaneState = ((): ReviewPaneMockState => ({
   dirtySignal: 0,
   dirtyThreadId: undefined,
-}));
+}))();
 
 vi.mock('@/stores/review-pane-store', () => ({
   useReviewPaneStore: (selector: (state: typeof reviewPaneState) => unknown) =>
@@ -43,6 +44,6 @@ describe('useAutoRefreshDiff', () => {
     act(() => vi.advanceTimersByTime(100));
 
     expect(initialRefresh).not.toHaveBeenCalled();
-    expect(nextRefresh).toHaveBeenCalledOnce();
+    expect(nextRefresh).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
-import { describe, expect, test, vi } from 'vitest';
+import { mocked } from '@funny/test-kit';
 
 import type { RunnerCredentials } from '../../services/runner-credentials.js';
 import {
@@ -155,7 +157,7 @@ describe('RunnerEnrollmentClient', () => {
       forwardingKey: 'enrolled-key',
       ownerUserId: 'owner-1',
     });
-    expect(deps.clearCredentials).toHaveBeenCalledOnce();
+    expect(deps.clearCredentials).toHaveBeenCalledTimes(1);
     expect(deps.sleep).not.toHaveBeenCalled();
     // Security M8: the delivered key is never written into process.env.
     expect(deps.env.RUNNER_AUTH_SECRET).toBe('shared-secret');
@@ -194,6 +196,6 @@ describe('RunnerEnrollmentClient', () => {
       token: 'token-1',
     });
     expect(registerCalls).toBe(4);
-    expect(vi.mocked(deps.sleep).mock.calls.map(([ms]) => ms)).toEqual([2000, 4000, 6000]);
+    expect(mocked(deps.sleep).mock.calls.map(([ms]) => ms)).toEqual([2000, 4000, 6000]);
   });
 });

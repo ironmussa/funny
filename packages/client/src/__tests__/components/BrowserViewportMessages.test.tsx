@@ -3,8 +3,9 @@
  * and the disconnected screen is the only place a session error shows then.
  */
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@/lib/browser-session-client', () => ({
   browserSessionClient: { heartbeat: vi.fn(), input: vi.fn() },

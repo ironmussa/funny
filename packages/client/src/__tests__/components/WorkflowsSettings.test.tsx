@@ -1,19 +1,21 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type {
   WorkflowDefinitionResponse,
   WorkflowListResponse,
 } from '@funny/shared/types/workflows';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import * as React from 'react';
 
-const apiMocks = vi.hoisted(() => ({
+const apiMocks = (() => ({
   listWorkflows: vi.fn(),
   getWorkflow: vi.fn(),
   validateWorkflow: vi.fn(),
   saveWorkflow: vi.fn(),
   runWorkflow: vi.fn(),
   cancelWorkflowRun: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({
   api: apiMocks,
@@ -28,7 +30,9 @@ vi.mock('@/stores/app-store', () => ({
     }),
 }));
 
+const actualWorkflowsBrowser = { ...(await import('@funny/workflows/browser')) };
 vi.mock('@funny/workflows/browser', () => ({
+  ...actualWorkflowsBrowser,
   serializeWorkflow: (workflow: { name: string }) => `name: ${workflow.name}\nnodes: []\n`,
   workflowToGraph: () => ({
     nodes: [
@@ -53,8 +57,7 @@ vi.mock('@funny/workflows/browser', () => ({
   }),
 }));
 
-vi.mock('@xyflow/react', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
+vi.mock('@xyflow/react', () => {
   return {
     ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     ReactFlow: ({
@@ -88,7 +91,7 @@ vi.mock('@xyflow/react', async () => {
   };
 });
 
-import { WorkflowsSettings } from '@/components/WorkflowsSettings';
+const { WorkflowsSettings } = await import('@/components/WorkflowsSettings');
 
 const listResponse: WorkflowListResponse = {
   workflows: [{ name: 'fusion', source: 'built-in', hasOverride: false }],

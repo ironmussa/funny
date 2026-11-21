@@ -1,8 +1,7 @@
+import { describe, expect, test, afterEach, vi } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { describe, expect, test, afterEach, vi } from 'vitest';
 
 import {
   importExternalClaudeSession,

@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
 import { prefetchInitialThread } from '@/platform/prefetch-initial-thread';
 
-const { prefetch, readStorage } = vi.hoisted(() => ({
+const { prefetch, readStorage } = (() => ({
   prefetch: vi.fn(),
   readStorage: vi.fn<() => string | null>(),
-}));
+}))();
 
 vi.mock('@/stores/thread-machine-bridge', () => ({ prefetchThreadData: prefetch }));
 vi.mock('@/platform/client-composition', () => ({
@@ -23,7 +23,8 @@ describe('initial thread prefetch', () => {
 
     expect(prefetchInitialThread('/')).toBe(true);
     expect(readStorage).toHaveBeenCalledWith('funny_last_route');
-    expect(prefetch).toHaveBeenCalledExactlyOnceWith('t1');
+    expect(prefetch).toHaveBeenCalledTimes(1);
+    expect(prefetch).toHaveBeenCalledWith('t1');
   });
 
   test.each(['/projects/p1/threads/t2', '/acme/projects/p1/threads/t2', '/scratch/t2'])(
@@ -31,7 +32,8 @@ describe('initial thread prefetch', () => {
     (pathname) => {
       readStorage.mockReturnValue('/projects/p1/threads/t1');
       expect(prefetchInitialThread(pathname)).toBe(true);
-      expect(prefetch).toHaveBeenCalledExactlyOnceWith('t2');
+      expect(prefetch).toHaveBeenCalledTimes(1);
+      expect(prefetch).toHaveBeenCalledWith('t2');
       expect(readStorage).not.toHaveBeenCalled();
     },
   );
@@ -60,6 +62,7 @@ describe('initial thread prefetch', () => {
   test('also warms restored scratch threads', () => {
     readStorage.mockReturnValue('/scratch/t1');
     expect(prefetchInitialThread('/')).toBe(true);
-    expect(prefetch).toHaveBeenCalledExactlyOnceWith('t1');
+    expect(prefetch).toHaveBeenCalledTimes(1);
+    expect(prefetch).toHaveBeenCalledWith('t1');
   });
 });

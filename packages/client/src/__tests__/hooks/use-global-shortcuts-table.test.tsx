@@ -1,13 +1,17 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { ThreadWithMessages } from '@funny/shared';
 import { renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }));
+// Window events must go through jsdom (see the helper).
 
-vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-router-dom')>();
+const { mockNavigate } = (() => ({ mockNavigate: vi.fn() }))();
+
+const actualReactRouterDom = { ...(await import('react-router-dom')) };
+vi.mock('react-router-dom', () => {
+  const actual = actualReactRouterDom;
   return { ...actual, useNavigate: () => mockNavigate };
 });
 

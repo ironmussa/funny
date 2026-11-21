@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const metric = vi.hoisted(() => vi.fn());
-const info = vi.hoisted(() => vi.fn());
+const metric = (() => vi.fn())();
+const info = (() => vi.fn())();
 vi.mock('../../../lib/telemetry.js', () => ({ metric }));
 vi.mock('../../../lib/logger.js', () => ({ log: { info } }));
 

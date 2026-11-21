@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 import { render } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { D4CAnimation } from '@/components/D4CAnimation';
 

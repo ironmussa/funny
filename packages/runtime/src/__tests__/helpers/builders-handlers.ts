@@ -7,9 +7,10 @@
  * literal.
  */
 
+import { vi } from 'bun:test';
+
 import { AgentOrchestrator, type CLIMessage } from '@funny/core/agents';
 import type { ThreadStatus } from '@funny/shared';
-import { vi } from 'vitest';
 
 import { AgentMessageHandler, type ProjectLookup } from '../../services/agent-message-handler.js';
 import type { AgentStateTracker } from '../../services/agent-state.js';

@@ -1,9 +1,10 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { ok, err } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   requireThread: vi.fn(),
   requireProject: vi.fn(),
   resolveGithubToken: vi.fn(),
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   updateThread: vi.fn(),
   isSandboxRunner: vi.fn(() => false),
   prepareSandboxGithub: vi.fn(),
-}));
+}))();
 
 vi.mock('../../utils/route-helpers.js', () => ({
   requireThread: mocks.requireThread,

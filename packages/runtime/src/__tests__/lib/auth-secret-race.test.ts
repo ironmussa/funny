@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 /**
  * Security ME-10 regression — `getOrCreateSecret` now writes with
  * `flag: 'wx'` and reads back on EEXIST, so two parallel runtime starts
@@ -14,8 +15,6 @@ import { randomBytes } from 'crypto';
 import { mkdirSync, readFileSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 // Inline the function under test — importing from `lib/auth.ts` would
 // drag in Better Auth, the database, and Bun-only modules that don't

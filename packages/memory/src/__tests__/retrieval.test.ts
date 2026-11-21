@@ -1,5 +1,6 @@
+import { describe, it, expect, beforeEach } from 'bun:test';
+
 import type { Client } from '@libsql/client';
-import { describe, it, expect, beforeEach } from 'vitest';
 
 import { RelationshipGraph } from '../graph.js';
 import { RetrievalEngine } from '../retrieval.js';

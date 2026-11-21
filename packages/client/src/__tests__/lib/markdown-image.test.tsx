@@ -1,6 +1,8 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { baseMarkdownComponents } from '@/lib/markdown-components';
 import { renderMarkdownToSafeHtml } from '@/lib/satteri-markdown';
@@ -16,7 +18,7 @@ afterEach(() => {
   cleanup();
   useMediaPreviewStore.getState().close();
   __resetVisualizerRegistry();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 describe('markdown img', () => {
@@ -52,7 +54,7 @@ describe('markdown img', () => {
   });
 
   test('a failed local image swaps the broken <img> for the media error widget', async () => {
-    vi.stubGlobal(
+    stubGlobal(
       'fetch',
       vi
         .fn()

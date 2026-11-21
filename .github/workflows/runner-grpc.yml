@@ -48,14 +48,13 @@ jobs:
       - name: Architecture fitness
         run: bun run fitness:runner-transport
       - name: Runtime adapter contracts
+        working-directory: packages/runtime
         run: >-
-          FUNNY_DATA_DIR=/tmp/funny-grpc-runtime bun --bun
-          packages/runtime/node_modules/vitest/vitest.mjs run
-          src/__tests__/services/grpc-team-transport.test.ts
-          src/__tests__/services/runner-tunnel-adapter.test.ts
-          src/__tests__/services/runner-terminal-adapter.test.ts
-          src/__tests__/services/runner-event-publisher.test.ts
-          --root packages/runtime --pool=threads --maxWorkers=1
+          FUNNY_DATA_DIR=/tmp/funny-grpc-runtime bun test --isolate --timeout 20000
+          ./src/__tests__/services/grpc-team-transport.test.ts
+          ./src/__tests__/services/runner-tunnel-adapter.test.ts
+          ./src/__tests__/services/runner-terminal-adapter.test.ts
+          ./src/__tests__/services/runner-event-publisher.test.ts
       - name: Production vertical and failure matrix
         run: >-
           FUNNY_DATA_DIR=/tmp/funny-grpc-server bun test

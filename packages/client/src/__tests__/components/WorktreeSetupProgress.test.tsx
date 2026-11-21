@@ -1,5 +1,6 @@
+import { describe, expect, it, vi } from 'bun:test';
+
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
 
 import { WorktreeSetupProgress } from '@/components/WorktreeSetupProgress';
 

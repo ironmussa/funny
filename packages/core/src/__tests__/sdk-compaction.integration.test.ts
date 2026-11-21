@@ -7,7 +7,7 @@
  * Makes real API calls (uses a Claude subscription / API key) and is slow
  * (~30–60s), so it is SKIPPED by default. Run explicitly with:
  *
- *   RUN_SDK_INTEGRATION=1 bunx vitest run src/__tests__/sdk-compaction.integration.test.ts
+ *   RUN_SDK_INTEGRATION=1 bun test src/__tests__/sdk-compaction.integration.test.ts
  *
  * This complements the fast unit tests (isPureSlashCommand / buildEffectivePrompt
  * / extractSlashCommandName), which cover the regex + prefix logic but cannot
@@ -15,11 +15,11 @@
  * "/compact doesn't compact" bug.
  */
 
+import { describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { describe, expect, test } from 'vitest';
 
 import { resolveSDKCli } from '../agents/resolve-sdk-cli.js';
 

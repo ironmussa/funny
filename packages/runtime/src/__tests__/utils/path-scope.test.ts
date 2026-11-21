@@ -1,3 +1,4 @@
+import { beforeAll, afterAll, beforeEach, describe, expect, test, vi } from 'bun:test';
 /**
  * Security HI-2 regression tests — `requirePickerPath` / `requireProjectPath`
  * must follow realpath so a symlink in $HOME (or a project tree) can't be
@@ -11,26 +12,24 @@ import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { resolve } from 'path';
 
-import { beforeAll, afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import { mocked } from '@funny/test-kit';
 
 // Mock $HOME so the picker scope check operates against a sandboxed dir
 // where we can plant symlinks at will. Compute the path inline inside the
 // hoisted callback — top-level imports (resolve/tmpdir) aren't visible at
 // hoist time. The callback imports `path` and the real `os` itself.
-const { FAKE_HOME } = await vi.hoisted(async () => {
+const { FAKE_HOME } = await (async () => {
   const pathMod = await import('path');
-  const osMod = await vi.importActual<typeof import('os')>('os');
+  const osMod = await import('os');
   return { FAKE_HOME: pathMod.resolve(osMod.tmpdir(), 'funny-path-scope-test-' + Date.now()) };
-});
+})();
 
-vi.mock('os', async () => {
-  const actual = await vi.importActual<typeof import('os')>('os');
-  return { ...actual, homedir: vi.fn(() => FAKE_HOME) };
-});
+const actualOs = { ...(await import('os')) };
+vi.mock('os', () => ({ ...actualOs, homedir: vi.fn(() => FAKE_HOME) }));
 
 // Stub the service registry so requireProjectPath() can pretend the test
 // owns a project at `${FAKE_HOME}/proj`.
-const { mockListProjects } = vi.hoisted(() => ({ mockListProjects: vi.fn() }));
+const { mockListProjects } = (() => ({ mockListProjects: vi.fn() }))();
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { listProjects: mockListProjects } }),
 }));
@@ -53,20 +52,20 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  vi.mocked(homedir).mockReturnValue(FAKE_HOME);
+  mocked(homedir).mockReturnValue(FAKE_HOME);
   mockListProjects.mockReset();
   mockListProjects.mockResolvedValue([{ path: resolve(FAKE_HOME, 'proj') }]);
 });
 
 describe('requirePickerPath — symlink escape (security HI-2)', () => {
   test('allows the root user home and clone destinations in containers', async () => {
-    vi.mocked(homedir).mockReturnValue('/root');
+    mocked(homedir).mockReturnValue('/root');
     expect(await requirePickerPath('/root')).toBeNull();
     expect(await requirePickerPath('/root/projects/new-repo')).toBeNull();
   });
 
   test('keeps root credentials and system paths blocked in containers', async () => {
-    vi.mocked(homedir).mockReturnValue('/root');
+    mocked(homedir).mockReturnValue('/root');
     for (const path of ['/root/.ssh', '/root/.aws/config', '/etc', '/var']) {
       expect((await requirePickerPath(path))?.status).toBe(403);
     }

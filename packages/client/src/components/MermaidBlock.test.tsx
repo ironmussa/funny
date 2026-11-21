@@ -1,5 +1,7 @@
+import { afterEach, describe, expect, it, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -15,15 +17,35 @@ function Diagram({ source = chart }: { source?: string }) {
   );
 }
 
+const elementSizeProps = ['clientWidth', 'clientHeight'] as const;
+const originalSizeDescriptors = elementSizeProps.map(
+  (prop) => [prop, Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop)] as const,
+);
+
+/** Bun's spyOn cannot spy on getters: define the size getters directly. */
+function stubElementSize(width: number, height: number) {
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+    get: () => width,
+    configurable: true,
+  });
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+    get: () => height,
+    configurable: true,
+  });
+}
+
 afterEach(() => {
+  for (const [prop, descriptor] of originalSizeDescriptors) {
+    if (descriptor) Object.defineProperty(HTMLElement.prototype, prop, descriptor);
+    else Reflect.deleteProperty(HTMLElement.prototype, prop);
+  }
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 describe('MermaidBlock', () => {
   it('fits the synchronous first render and preserves zoom/reset controls', () => {
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
-    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(420);
+    stubElementSize(800, 420);
     render(<Diagram />);
     const svg = screen.getByTestId('mermaid-diagram').querySelector('svg')!;
     expect(svg.textContent).toContain('Client');
@@ -55,14 +77,20 @@ describe('MermaidBlock', () => {
       return 'blob:mermaid';
     });
     const revokeObjectURL = vi.fn();
-    vi.stubGlobal(
+    stubGlobal(
       'URL',
       class extends URL {
         static createObjectURL = createObjectURL;
         static revokeObjectURL = revokeObjectURL;
       },
     );
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    // Bun's mocks do not record `mock.instances`: capture the clicked anchor.
+    const clickedAnchors: HTMLAnchorElement[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clickedAnchors.push(this);
+    });
     render(
       <TooltipProvider>
         <MermaidExpandedDialog chart={chart} open onClose={() => {}} />
@@ -70,7 +98,7 @@ describe('MermaidBlock', () => {
     );
     fireEvent.click(screen.getByTestId('mermaid-download-svg'));
     await waitFor(() => expect(click).toHaveBeenCalled());
-    const anchor = click.mock.instances[0] as HTMLAnchorElement;
+    const anchor = clickedAnchors[0];
     expect(anchor.download).toBe('mermaid-diagram.svg');
     expect(downloaded?.type).toBe('image/svg+xml;charset=utf-8');
     const text = await downloaded!.text();

@@ -3,7 +3,9 @@
  * are rejected for both IP literals and resolved hostnames.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'bun:test';
+
+import { mocked, stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
 vi.mock('dns/promises', () => ({
   lookup: vi.fn(),
@@ -15,9 +17,9 @@ import { lookup } from 'dns/promises';
 import { assertSafeOutboundUrl, safeFetch, safeFetchUserUrl } from '../../lib/ssrf-guard.js';
 
 // SAFETY: ssrf-guard calls lookup(hostname, { all: true }) which returns LookupAddress[],
-// but vi.mocked picks the single-result overload. Cast to allow array mock values.
+// but mocked picks the single-result overload. Cast to allow array mock values.
 // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-const mockLookup = vi.mocked(lookup) as unknown as {
+const mockLookup = mocked(lookup) as unknown as {
   mockReset(): void;
   mockResolvedValueOnce(value: LookupAddress[]): void;
 };
@@ -141,7 +143,7 @@ describe('safeFetchUserUrl (security HI-5)', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     mockLookup.mockReset();
   });
 
@@ -173,11 +175,11 @@ describe('safeFetch DNS rebinding pinning (security HI-6)', () => {
   beforeEach(() => {
     mockLookup.mockReset();
     fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response('ok'));
-    vi.stubGlobal('fetch', fetchMock);
+    stubGlobal('fetch', fetchMock);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     mockLookup.mockReset();
   });
 
@@ -186,7 +188,7 @@ describe('safeFetch DNS rebinding pinning (security HI-6)', () => {
 
     await safeFetch('http://example.com:8080/path?q=1', { headers: { Accept: 'text/plain' } });
 
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://93.184.216.34:8080/path?q=1');
     const headers = new Headers(init?.headers);
@@ -207,7 +209,7 @@ describe('safeFetch DNS rebinding pinning (security HI-6)', () => {
 
     await safeFetchUserUrl('http://launcher.example.test/start');
 
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://192.168.1.50/start');
     expect(new Headers(init?.headers).get('Host')).toBe('launcher.example.test');

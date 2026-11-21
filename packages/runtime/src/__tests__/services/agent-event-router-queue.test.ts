@@ -1,3 +1,5 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 /**
  * Regression: per-thread message handling must stay strictly sequential.
  *
@@ -6,7 +8,7 @@
  * next message then started concurrently, out of order.
  */
 import type { CLIMessage } from '@funny/core/agents';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 
 import { AgentEventRouter } from '../../services/agent-event-router.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
@@ -58,20 +60,20 @@ describe('AgentEventRouter message queue', () => {
     );
 
     orchestrator.emit('agent:message', 't1', assistantMessage('m1'));
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await advanceTimersByTimeAsync(5 * 60_000);
     gates.get('m1')!.resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await advanceTimersByTimeAsync(0);
 
     orchestrator.emit('agent:message', 't1', assistantMessage('m2'));
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await advanceTimersByTimeAsync(5 * 60_000);
     orchestrator.emit('agent:message', 't1', assistantMessage('m3'));
-    await vi.advanceTimersByTimeAsync(0);
+    await advanceTimersByTimeAsync(0);
 
     expect(events).toEqual(['start m1', 'end m1', 'start m2']);
     gates.get('m2')!.resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await advanceTimersByTimeAsync(0);
     gates.get('m3')!.resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await advanceTimersByTimeAsync(0);
     expect(events).toEqual(['start m1', 'end m1', 'start m2', 'end m2', 'start m3', 'end m3']);
     // The queue entry is released once the thread goes idle (no timer needed).
     expect(router['messageQueues'].size).toBe(0);

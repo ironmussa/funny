@@ -1,26 +1,30 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import type { ProjectSecretSummary } from '@/lib/api/project-secrets';
 
+// bun:test's Mock needs its function type.
+type AnyMock = Mock<(...args: any[]) => any>;
+
 interface SecretMocks {
   secrets: ProjectSecretSummary[] | undefined;
-  set: Mock;
-  remove: Mock;
-  toastError: Mock;
+  set: AnyMock;
+  remove: AnyMock;
+  toastError: AnyMock;
   canManage: boolean;
   canSteer: boolean;
 }
 
-const mocks = vi.hoisted((): SecretMocks => ({
+const mocks = ((): SecretMocks => ({
   secrets: [],
   set: vi.fn(),
   remove: vi.fn(),
   toastError: vi.fn(),
   canManage: true,
   canSteer: true,
-}));
+}))();
 
 vi.mock('@/data/projects/hooks', () => ({
   useCanManageProject: () => mocks.canManage,

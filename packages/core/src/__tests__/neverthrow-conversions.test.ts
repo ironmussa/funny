@@ -1,8 +1,9 @@
+import { vi, describe, test, expect, beforeEach } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { vi, describe, test, expect, beforeEach } from 'vitest';
+import { mocked } from '@funny/test-kit';
 
 vi.mock('../git/process.js', () => ({
   executeShell: vi.fn(),
@@ -34,11 +35,11 @@ import { readProjectConfig } from '../ports/config-reader.js';
 import { setupWorktree, syncClaudeProjectAssets } from '../ports/index.js';
 import { allocatePorts } from '../ports/port-allocator.js';
 
-const mockExecute = vi.mocked(execute);
-const mockExecuteShell = vi.mocked(executeShell);
-const mockReadProjectConfig = vi.mocked(readProjectConfig);
-const mockAllocatePorts = vi.mocked(allocatePorts);
-const mockGetWorktreeBasePaths = vi.mocked(getWorktreeBasePaths);
+const mockExecute = mocked(execute);
+const mockExecuteShell = mocked(executeShell);
+const mockReadProjectConfig = mocked(readProjectConfig);
+const mockAllocatePorts = mocked(allocatePorts);
+const mockGetWorktreeBasePaths = mocked(getWorktreeBasePaths);
 
 describe('runHookCommand', () => {
   beforeEach(() => {

@@ -5,7 +5,7 @@
  * sections, recursive object interpolation, and strict-mode errors.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import {
   interpolate,

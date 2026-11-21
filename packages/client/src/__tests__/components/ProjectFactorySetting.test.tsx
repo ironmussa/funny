@@ -1,22 +1,23 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun, FactorySettings } from '@/lib/api/factory';
 
 interface FactoryMocks {
   settings: FactorySettings | null;
-  save: Mock;
+  save: Mock<(...args: any[]) => any>;
   runs: FactoryRun[];
-  control: Mock;
-  empty: Mock;
-  toastError: Mock;
+  control: Mock<(...args: any[]) => any>;
+  empty: Mock<(...args: any[]) => any>;
+  toastError: Mock<(...args: any[]) => any>;
   canSteer: boolean;
 }
 
-const mocks = vi.hoisted((): FactoryMocks => ({
+const mocks = ((): FactoryMocks => ({
   settings: null,
   save: vi.fn(),
   runs: [],
@@ -24,7 +25,7 @@ const mocks = vi.hoisted((): FactoryMocks => ({
   empty: vi.fn(),
   toastError: vi.fn(),
   canSteer: true,
-}));
+}))();
 
 vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
 

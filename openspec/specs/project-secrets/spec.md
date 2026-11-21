@@ -1,6 +1,7 @@
 # project-secrets Specification
 
 ## Purpose
+
 Lets a project keep named secret values on the server, encrypted, and hands them to the project's agents as environment variables, so threads on sandboxes and on other members' machines have the credentials they need without anyone pasting them into a chat.
 
 ## Requirements

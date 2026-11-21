@@ -1,6 +1,7 @@
 # agent-sdk-compatibility Specification
 
 ## Purpose
+
 Defines the compatibility guarantees Funny provides when translating provider-neutral agent settings into the built-in Claude and Codex SDK adapters.
 
 ## Requirements

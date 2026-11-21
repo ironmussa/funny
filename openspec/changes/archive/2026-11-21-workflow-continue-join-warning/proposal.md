@@ -14,8 +14,8 @@ flows in other repositories are not, so the change has to announce itself where 
 - The workflow parser reports **warnings** next to a valid result. A warning never makes a
   flow fail to load, save or run.
 - New warning: a node that depends on a node with `on_error: continue` and declares no
-  `trigger_rule` gets *"`<dependent>` is skipped if `<node>` fails (on_error: continue). Add
-  `trigger_rule: all_done` if it must run anyway."* Declaring any `trigger_rule` on the
+  `trigger_rule` gets _"`<dependent>` is skipped if `<node>` fails (on_error: continue). Add
+  `trigger_rule: all_done` if it must run anyway."_ Declaring any `trigger_rule` on the
   dependent, `all_success` included, silences it.
 - Workflow diagnostics carry a severity, `error` or `warning`. Diagnostics without one are
   errors, so existing producers keep their meaning.

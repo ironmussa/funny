@@ -1,6 +1,7 @@
 # git-runtime-coordination Specification
 
 ## Purpose
+
 TBD - created by archiving change unified-git-runtime-service. Update Purpose after archive.
 
 ## Requirements

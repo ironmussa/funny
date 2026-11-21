@@ -1,6 +1,7 @@
 # workflow-engine Specification
 
 ## Purpose
+
 Defines how a workflow graph executes: when nodes start, how branches join, how bounded loops
 repeat a region, how limits shared across runs are applied, and how a run resumes.
 

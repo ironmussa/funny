@@ -1,6 +1,7 @@
 # arc-data-model Specification
 
 ## Purpose
+
 TBD - created by archiving change native-arcs. Update Purpose after archive.
 
 ## Requirements

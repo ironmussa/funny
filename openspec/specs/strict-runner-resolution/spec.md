@@ -1,6 +1,7 @@
 # strict-runner-resolution Specification
 
 ## Purpose
+
 TBD - created by archiving change strict-runner-resolver. Update Purpose after archive.
 
 ## Requirements

@@ -1,6 +1,7 @@
 # gpuix-system-window-chrome Specification
 
 ## Purpose
+
 Defines how the native GPUIX client obtains usable system window controls while preserving host-appropriate behavior across Linux, macOS, and Windows.
 
 ## Requirements

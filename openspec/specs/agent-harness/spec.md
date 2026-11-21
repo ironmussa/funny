@@ -1,6 +1,7 @@
 # agent-harness Specification
 
 ## Purpose
+
 TBD - created by archiving change public-agent-harness. Update Purpose after archive.
 
 ## Requirements

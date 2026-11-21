@@ -1,6 +1,7 @@
 # semantic-validation Specification
 
 ## Purpose
+
 TBD - created by archiving change evflow-smart-validator. Update Purpose after archive.
 
 ## Requirements

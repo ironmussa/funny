@@ -1,6 +1,7 @@
 # grid-thread-actions Specification
 
 ## Purpose
+
 TBD - created by archiving change grid-thread-actions. Update Purpose after archive.
 
 ## Requirements

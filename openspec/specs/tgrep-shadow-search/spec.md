@@ -1,6 +1,7 @@
 # tgrep-shadow-search Specification
 
 ## Purpose
+
 Provide bounded tgrep content search and independent file search without FFF.
 
 ## Requirements

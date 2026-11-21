@@ -1,6 +1,7 @@
 # runner-request-isolation Specification
 
 ## Purpose
+
 Guarantees that every request and terminal message the central server sends to a
 runner targets a runner owned by, and in scope for, the identity signed into that
 message, so one user's work never reaches another user's runner.

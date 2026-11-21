@@ -1,6 +1,7 @@
 # automation-execution Specification
 
 ## Purpose
+
 Defines when and where automation runs execute, how each run is recorded and completed, and the guarantees that keep runs inside the automation owner's own runner.
 
 ## Requirements

@@ -17,11 +17,13 @@ yet. This change archives after it.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One non-blocking warning, computed once in the parser and surfaced in the editor, the API and
   the load logs.
 - A severity field that later warnings can reuse.
 
 **Non-Goals:**
+
 - Changing the `on_error: continue` semantics or restoring the old behavior.
 - Turning the warning into an error, or a flag to opt out of it besides an explicit
   `trigger_rule`.

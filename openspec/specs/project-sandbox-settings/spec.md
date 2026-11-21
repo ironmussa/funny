@@ -1,6 +1,7 @@
 # project-sandbox-settings Specification
 
 ## Purpose
+
 Lets each user pick, per project, which of their own sandbox provider connections new threads use, at what size, and whether the sandbox is on by default, and lets them turn it on or off when creating a thread.
 
 ## Requirements

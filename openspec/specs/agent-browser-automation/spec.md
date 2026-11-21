@@ -1,6 +1,7 @@
 # agent-browser-automation Specification
 
 ## Purpose
+
 Lets an agent operate a real web browser on the user's runner — open pages, read them, click, type and run scripts — inside the same browser session the user watches in the Browser Panel, so web tasks (dashboards, OAuth logins, checking deployed pages) happen in Funny instead of in a separate or system browser.
 
 ## Requirements

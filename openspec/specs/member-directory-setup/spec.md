@@ -1,6 +1,7 @@
 # member-directory-setup Specification
 
 ## Purpose
+
 TBD - created by archiving change shared-project-directory-assignment. Update Purpose after archive.
 
 ## Requirements

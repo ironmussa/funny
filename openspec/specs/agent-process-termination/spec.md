@@ -1,6 +1,7 @@
 # agent-process-termination Specification
 
 ## Purpose
+
 TBD - created by archiving change agent-idle-reaper. Update Purpose after archive.
 
 ## Requirements

@@ -1,6 +1,7 @@
 # project-runtime-settings Specification
 
 ## Purpose
+
 Each user's thread runtime for a given project — local, worktree, or sandbox (with the
 sandbox provider connection and size) — kept per `(project, user)` and defaulting to
 local, so the composer and the issue factory know where that person's new threads run.

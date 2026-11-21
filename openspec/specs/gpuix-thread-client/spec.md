@@ -1,6 +1,7 @@
 # gpuix-thread-client Specification
 
 ## Purpose
+
 Defines an experimental native GPUIX client that provides a secure, usable, and state-consistent Funny project and agent-thread workflow without depending on the DOM renderer.
 
 ## Requirements

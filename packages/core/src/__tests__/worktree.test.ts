@@ -15,13 +15,19 @@ import {
 } from '../git/worktree.js';
 
 const TMP = resolve(tmpdir(), 'core-worktree-test-' + Date.now());
+let testCount = 0;
 
+// Each test gets its own directory, and the repo never starts a background gc.
+// Rebuilding one shared path right after deleting it let a git process left
+// over from the previous test hit the new repo ("fatal: could not parse HEAD").
 function initTestRepo(): string {
-  const repoPath = resolve(TMP, 'project');
+  const repoPath = resolve(TMP, `test-${++testCount}`, 'project');
   mkdirSync(repoPath, { recursive: true });
   executeSync('git', ['init'], { cwd: repoPath });
   executeSync('git', ['config', 'user.email', 'test@test.com'], { cwd: repoPath });
   executeSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath });
+  executeSync('git', ['config', 'gc.auto', '0'], { cwd: repoPath });
+  executeSync('git', ['config', 'maintenance.auto', 'false'], { cwd: repoPath });
   writeFileSync(resolve(repoPath, 'README.md'), '# Test');
   executeSync('git', ['add', '.'], { cwd: repoPath });
   executeSync('git', ['commit', '-m', 'initial commit'], { cwd: repoPath });

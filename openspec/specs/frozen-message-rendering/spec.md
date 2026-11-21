@@ -1,6 +1,7 @@
 # frozen-message-rendering Specification
 
 ## Purpose
+
 TBD - created by archiving change frozen-thread-viewer. Update Purpose after archive.
 
 ## Requirements

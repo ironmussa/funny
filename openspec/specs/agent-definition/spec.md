@@ -1,6 +1,7 @@
 # agent-definition Specification
 
 ## Purpose
+
 TBD - created by archiving change agent-definitions. Update Purpose after archive.
 
 ## Requirements

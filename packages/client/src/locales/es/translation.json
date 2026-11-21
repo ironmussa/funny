@@ -638,7 +638,8 @@
       "catppuccin": "Catppuccin",
       "sunrise": "Amanecer",
       "monochrome": "Monocromático",
-      "monochromeDark": "Monocromático Oscuro"
+      "monochromeDark": "Monocromático Oscuro",
+      "minimal": "Minimalista"
     },
     "threads": "Hilos",
     "defaultThreadMode": "Modo de hilo predeterminado",

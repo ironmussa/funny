@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { cloneElement } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -45,5 +45,34 @@ describe.each(['arrow', 'chips', 'plain'] as const)('PowerlineBar %s', (variant)
     );
     fireEvent.click(screen.getByRole('button', { name: 'main' }));
     expect(open).toHaveBeenCalledOnce();
+  });
+});
+
+describe('PowerlineBar theme variant', () => {
+  const segments = [
+    { key: 'project', label: 'funny', color: '#7CB9E8' },
+    { key: 'branch', label: 'master', color: '#5a8fb8' },
+  ];
+
+  test('follows a theme switch without remounting', async () => {
+    const html = document.documentElement;
+    render(<PowerlineBar segments={segments} />);
+    // The default (arrow) shape has no slash separator.
+    expect(screen.queryByText('/')).not.toBeInTheDocument();
+
+    await act(async () => {
+      html.style.setProperty('--powerline-variant', 'plain');
+      html.classList.add('theme-minimal');
+      // MutationObserver callbacks run as microtasks.
+      await Promise.resolve();
+    });
+    expect(screen.getByText('/')).toBeInTheDocument();
+
+    await act(async () => {
+      html.style.removeProperty('--powerline-variant');
+      html.classList.remove('theme-minimal');
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('/')).not.toBeInTheDocument();
   });
 });

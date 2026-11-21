@@ -65,6 +65,11 @@ const THEME_OPTIONS: ThemeOption[] = [
     label: 'settings.themes.monochromeDark',
     colors: { bg: '#121212', sidebar: '#0d0d0d', accent: '#ededed', fg: '#ededed' },
   },
+  {
+    value: 'minimal',
+    label: 'settings.themes.minimal',
+    colors: { bg: '#0a0a0a', sidebar: '#050505', accent: '#5fa8f5', fg: '#ededed' },
+  },
 ];
 
 function ThemeCard({

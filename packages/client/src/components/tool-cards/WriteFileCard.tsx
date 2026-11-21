@@ -64,7 +64,7 @@ export function WriteFileCard({
   }, [content, hljsLang]);
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs">
         <button
           type="button"
@@ -75,7 +75,7 @@ export function WriteFileCard({
           <ChevronRight
             className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
-          {!hideLabel && <FileText className="icon-xs text-muted-foreground shrink-0" />}
+          {!hideLabel && <FileText className="icon-xs text-tool-icon-edit shrink-0" />}
           {!hideLabel && (
             <span className="text-foreground shrink-0 font-mono font-medium">
               {t('tools.writeFile')}

@@ -428,9 +428,9 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   const responseLabels = createPlanResponseLabels(t, planComments.length);
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <FileCode2 className="icon-xs text-muted-foreground shrink-0" />
+        <FileCode2 className="icon-xs text-tool-icon-edit shrink-0" />
         <span className="text-foreground font-medium">{t('tools.plan')}</span>
         {!submitted && (
           <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>

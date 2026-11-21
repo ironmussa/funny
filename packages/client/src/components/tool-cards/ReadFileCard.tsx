@@ -163,7 +163,7 @@ export function ReadFileCard({
   };
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div
         className={cn(
           'flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs',
@@ -184,7 +184,7 @@ export function ReadFileCard({
           ) : (
             <span className="icon-xs shrink-0" />
           )}
-          {!hideLabel && <FileSearch className="icon-xs text-muted-foreground shrink-0" />}
+          {!hideLabel && <FileSearch className="icon-xs text-tool-icon-read shrink-0" />}
           {!hideLabel && (
             <span className="text-foreground shrink-0 font-mono font-medium">
               {t('tools.readFile')}

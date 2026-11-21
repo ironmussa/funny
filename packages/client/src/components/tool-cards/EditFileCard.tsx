@@ -400,7 +400,7 @@ export function EditFileCard({
   }, [fontSize, hasDiff, unifiedDiff]);
 
   return (
-    <div className="border-border w-full min-w-0 overflow-hidden rounded-lg border text-sm">
+    <div className="border-tool-card-border w-full min-w-0 overflow-hidden rounded-lg border text-sm">
       <div className="flex w-full items-center overflow-hidden">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <button
@@ -412,7 +412,7 @@ export function EditFileCard({
             <ChevronRight
               className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
             />
-            {!hideLabel && <FilePen className="icon-xs text-muted-foreground shrink-0" />}
+            {!hideLabel && <FilePen className="icon-xs text-tool-icon-edit shrink-0" />}
             {!hideLabel && (
               <span className="text-foreground shrink-0 font-mono font-medium">
                 {t('tools.editFile')}

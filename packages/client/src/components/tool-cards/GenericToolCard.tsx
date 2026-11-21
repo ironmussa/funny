@@ -75,7 +75,7 @@ export function GenericToolCard({
   }, [output, expanded]);
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+    <div className="border-tool-card-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div className="hover:bg-accent/30 relative w-full rounded-md text-left">
         <button
           type="button"
@@ -90,9 +90,9 @@ export function GenericToolCard({
           />
           {!hideLabel &&
             (isTodo ? (
-              <ListTodo className="icon-xs text-muted-foreground shrink-0" />
+              <ListTodo className="icon-xs text-tool-icon-read shrink-0" />
             ) : (
-              <Wrench className="icon-xs text-muted-foreground shrink-0" />
+              <Wrench className="icon-xs text-tool-icon-other shrink-0" />
             ))}
           {!hideLabel && (
             <span className="text-foreground shrink-0 font-mono font-medium">{label}</span>

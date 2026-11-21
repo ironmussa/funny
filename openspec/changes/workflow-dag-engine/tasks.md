@@ -38,5 +38,5 @@
 
 ## 6. Integration
 
-- [ ] 6.1 Run `bun run lint`, `bun run typecheck` and the pipelines, workflows, server, runtime, orchestrator and client suites; all pass
-- [ ] 6.2 End to end on the server: two factory runs of one repository with a flow whose `merge` node has `concurrency: { group: merge-{{inputs.repo}}, limit: 1 }` merge one after the other, and a server restart mid-run resumes without starting a second agent thread
+- [x] 6.1 Run `bun run lint`, `bun run typecheck` and the pipelines, workflows, server, runtime, orchestrator and client suites; all pass
+- [x] 6.2 End to end on the server: two factory runs of one repository with a flow whose `merge` node has `concurrency: { group: merge-{{inputs.repo}}, limit: 1 }` merge one after the other, and a server restart mid-run resumes without starting a second agent thread (`factory-watcher.test.ts`, real database leases and journal with fake GitHub and runner; this wired the lease gate into factory runs, which ran on the per-process gate until then, and records a run waiting for its slot at that step)

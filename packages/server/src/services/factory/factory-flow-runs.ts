@@ -31,7 +31,7 @@
  * - the run was stopped, or the watcher shut down → nothing more is written.
  */
 
-import { nullReporter, runPipeline } from '@funny/pipelines';
+import { nullReporter, runPipeline, type ConcurrencyGate } from '@funny/pipelines';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
@@ -50,6 +50,7 @@ import {
   databaseJournal,
   type JournalCodec,
 } from '../workflow-engine/journal-repository.js';
+import { createLeaseGate } from '../workflow-engine/lease-gate.js';
 import {
   createFactoryActionProvider,
   type FactoryRunScope,
@@ -92,6 +93,13 @@ export interface FactoryFlowRunsDeps {
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
+  /**
+   * Grants the flows' concurrency-group slots. Default: database leases shared
+   * by every server instance (`createLeaseGate`), stopped by `stopAll`, so
+   * `merge-{{inputs.repo}}` with limit 1 merges one pull request at a time
+   * per repository however many servers run.
+   */
+  gate?: ConcurrencyGate;
 }
 
 export interface WaitingNotice {
@@ -195,10 +203,18 @@ const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineConte
   decode: (stored) => ({ ...live, outputs: stored as Record<string, NodeOutput> }),
 });
 
+/** The given gate, or this server's lease gate with how to stop renewing its leases. */
+function flowGate(given?: ConcurrencyGate): { gate: ConcurrencyGate; stop: () => void } {
+  if (given) return { gate: given, stop: () => {} };
+  const leases = createLeaseGate();
+  return { gate: leases, stop: () => leases.stop() };
+}
+
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
   const waitThread = deps.waitThread ?? createThreadWaits();
   const journalRows = createWorkflowJournalRepository();
+  const { gate, stop: stopGate } = flowGate(deps.gate);
 
   const loadFlow =
     deps.loadFlow ??
@@ -412,9 +428,12 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const result = await runPipeline(flow.value.pipeline, context, {
       signal: controller.signal,
       runId: job.run.id,
+      gate,
       journal: databaseJournal(journalRows, journalCodec(context)),
       onStateChange: (change) => {
-        if (change.kind !== 'entering') return;
+        // A node waiting for its group's slot (a merge behind another run's)
+        // is the run's current step too, though it has not entered yet.
+        if (change.kind !== 'entering' && change.kind !== 'waiting_slot') return;
         trace.step = change.nodeName;
         void record({ currentStep: change.nodeName });
       },
@@ -465,6 +484,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     stopAll(): void {
       for (const controller of active.values()) controller.abort();
       active.clear();
+      // Leases this server held expire unrenewed; another server takes over.
+      stopGate();
     },
   };
 }

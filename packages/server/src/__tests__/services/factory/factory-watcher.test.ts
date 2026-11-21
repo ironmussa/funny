@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import type { CiState } from '@funny/core/github-app';
 import type { IssueBlocker } from '@funny/core/github-app';
-import { err, errAsync, ok, okAsync } from 'neverthrow';
+import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
@@ -81,6 +81,8 @@ interface GithubScript {
   /** CI answers in order; the last one repeats. */
   ci?: CiState | CiState[];
   merge?: FactoryMergeOutcome;
+  /** While set, a merge call waits for it before answering. */
+  mergeHold?: () => Promise<void>;
   /** Each issue's blockers (GitHub's "blocked by"); an issue absent here has none. */
   blockers?: Record<number, IssueBlocker[] | 'unreadable'>;
   /** Issues GitHub reports as closed. */
@@ -144,9 +146,10 @@ function fakeGithub(
       ciState: () => okAsync(answers[Math.min(looks++, answers.length - 1)]!),
       merge: () => {
         port.merges++;
-        return okAsync(
-          script.merge ?? ({ kind: 'merged', method: 'squash', branchDeleted: true } as const),
-        );
+        const outcome =
+          script.merge ?? ({ kind: 'merged', method: 'squash', branchDeleted: true } as const);
+        const hold = script.mergeHold;
+        return hold ? ResultAsync.fromSafePromise(hold().then(() => outcome)) : okAsync(outcome);
       },
     },
   };
@@ -710,6 +713,138 @@ describe('factory flow', () => {
       finishedThreads('completed'),
     );
     await eventually(factoryId, (r) => r.state === 'waiting_human');
+  });
+
+  describe('a merge group shared by the runs of one repository (end to end, task 6.2)', () => {
+    const GROUPED_FLOW = [
+      'name: issue-to-merge',
+      'inputs:',
+      '  repo: { type: string, required: true }',
+      '  issue_number: { type: string, required: true }',
+      '  branch: { type: string, required: true }',
+      'nodes:',
+      '  - id: implement',
+      '    spawn_agent:',
+      '      prompt: Implement {{issue_number}} on {{branch}}',
+      '  - id: pull-request',
+      '    depends_on: [implement]',
+      '    create_pr: { title: t }',
+      '  - id: ci',
+      '    depends_on: [pull-request]',
+      '    wait_ci: {}',
+      '  - id: merge',
+      '    depends_on: [ci]',
+      '    concurrency: { group: "merge-{{inputs.repo}}", limit: 1 }',
+      '    merge: { method: squash }',
+    ].join('\n');
+    const twoIssues = [
+      { number: 1, title: 'a', url: 'u/1' },
+      { number: 2, title: 'b', url: 'u/2' },
+    ];
+
+    const rows = (table: string) =>
+      testDb.sqlite.query(`SELECT group_key, holder FROM ${table}`).all() as Array<{
+        group_key: string;
+        holder: string;
+      }>;
+
+    async function allRuns(factoryId: string) {
+      return (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    }
+
+    async function until(check: () => Promise<boolean> | boolean, what: string) {
+      for (let i = 0; i < 400; i++) {
+        if (await check()) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error(`never: ${what}`);
+    }
+
+    /** A merge hold the test releases. */
+    function mergeHold() {
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      return { hold: () => released, release };
+    }
+
+    async function startGrouped(hold: ReturnType<typeof mergeHold>) {
+      const factoryId = await enableFactory({ maxConcurrent: 2 });
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      const github = fakeGithub('o/r', twoIssues, {
+        files: { '.funny/workflows/issue-to-merge.yaml': GROUPED_FLOW },
+        mergeHold: hold.hold,
+      });
+      const start = () =>
+        startFactoryWatcher({
+          ports,
+          github,
+          createPoll: poll.createPoll,
+          launch: launcher.launch,
+          resolveRuntime,
+          waitThread: finishedThreads('completed'),
+          followUp: async () => ok(undefined),
+        });
+      await start();
+      await poll.ticks[0]!();
+      return { factoryId, poll, launcher, github, start };
+    }
+
+    test('two runs merge one after the other, the second waiting on the database lease', async () => {
+      const hold = mergeHold();
+      const { factoryId, github, launcher } = await startGrouped(hold);
+
+      // One run merges (its merge held); the other reached merge and waits for the slot.
+      await until(() => rows('workflow_concurrency_waiters').length === 1, 'a waiter');
+      expect(github.merges).toBe(1);
+      const [lease] = rows('workflow_concurrency_leases');
+      expect(lease?.group_key).toBe('merge-o/r');
+      const [waiter] = rows('workflow_concurrency_waiters');
+      expect(waiter?.group_key).toBe('merge-o/r');
+      // Holders are `<runId>/<node>/<visit>`: the lease and the waiter are the two runs.
+      const runs = await allRuns(factoryId);
+      const runOf = (holder?: string) => holder?.split('/')[0];
+      expect(new Set([runOf(lease?.holder), runOf(waiter?.holder)])).toEqual(
+        new Set(runs.map((r) => r.id)),
+      );
+      await until(
+        async () => (await allRuns(factoryId)).every((r) => r.currentStep === 'merge'),
+        'both runs at merge (the waiting one reported by waiting_slot)',
+      );
+      expect((await allRuns(factoryId)).every((r) => r.state !== 'merged')).toBe(true);
+      expect(github.merges).toBe(1);
+
+      hold.release();
+      await until(
+        async () => (await allRuns(factoryId)).every((r) => r.state === 'merged'),
+        'both runs merged',
+      );
+      expect(github.merges).toBe(2);
+      expect(launcher.calls).toHaveLength(2);
+      expect(rows('workflow_concurrency_leases')).toHaveLength(0);
+      expect(rows('workflow_concurrency_waiters')).toHaveLength(0);
+    });
+
+    test('a restart while one run merges and the other waits resumes both without a second agent thread', async () => {
+      const hold = mergeHold();
+      const { factoryId, github, launcher, poll, start } = await startGrouped(hold);
+      await until(() => rows('workflow_concurrency_waiters').length === 1, 'a waiter');
+
+      // The server stops mid-run: the held merge finishes on its own, the waiter leaves.
+      stopFactoryWatcher();
+      hold.release();
+      await start();
+      await poll.ticks.at(-1)!();
+
+      await until(
+        async () => (await allRuns(factoryId)).every((r) => r.state === 'merged'),
+        'both runs merged after the restart',
+      );
+      // One agent thread per issue: the resumed runs adopted theirs from the journal.
+      expect(launcher.calls).toHaveLength(2);
+      expect(github.merges).toBeGreaterThanOrEqual(2);
+      expect(rows('workflow_concurrency_leases')).toHaveLength(0);
+    });
   });
 
   test("the repository's default-branch copy of the flow replaces the built-in", async () => {

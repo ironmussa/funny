@@ -10,13 +10,19 @@ import type {
   CLIUserMessage,
 } from '@funny/core/agents';
 import type { ResolvedAgentExecutionProfileResponse, WSEvent } from '@funny/shared';
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { AgentRunner } from '../../services/agent-runner.js';
 import type { IThreadManager, IWSBroker } from '../../services/server-interfaces.js';
 import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { setServices, resetServices } from '../../services/service-registry.js';
 import { buildProject, createServiceProviderFake } from '../helpers/builders.js';
+
+// Agent start asks the server for the project's secrets (project-secrets);
+// these tests have no gRPC transport, so the project has none.
+vi.mock('../../services/remote-project-identity-client.js', () => ({
+  remoteGetProjectSecrets: async () => ({ secrets: [] }),
+}));
 
 // ── Mock helpers ────────────────────────────────────────────────
 

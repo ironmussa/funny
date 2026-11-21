@@ -1,6 +1,7 @@
 # sandbox-github-access Specification
 
 ## Purpose
+
 Gives a sandbox thread full `git` and `gh` access to its own GitHub repository through short-lived, repository-scoped GitHub App tokens, so that the owner's personal access token never enters a sandbox and a leaked sandbox credential is worth one repository for at most an hour.
 
 ## Requirements

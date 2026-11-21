@@ -1,6 +1,7 @@
 # codex-permission-approvals Specification
 
 ## Purpose
+
 TBD - created by archiving change codex-permission-approvals. Update Purpose after archive.
 
 ## Requirements

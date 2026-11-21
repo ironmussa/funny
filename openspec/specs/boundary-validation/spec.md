@@ -1,6 +1,7 @@
 # boundary-validation Specification
 
 ## Purpose
+
 TBD - created by archiving change enforce-boundary-validation. Update Purpose after archive.
 
 ## Requirements

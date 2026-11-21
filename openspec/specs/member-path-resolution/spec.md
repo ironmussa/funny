@@ -1,6 +1,7 @@
 # member-path-resolution Specification
 
 ## Purpose
+
 TBD - created by archiving change shared-project-directory-assignment. Update Purpose after archive.
 
 ## Requirements

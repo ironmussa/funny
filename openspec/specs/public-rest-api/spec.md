@@ -1,6 +1,7 @@
 # public-rest-api Specification
 
 ## Purpose
+
 Defines the versioned REST API through which clients outside the web app (the Chrome extension and scripts) list projects and create threads, authenticated with personal API tokens, documented by an OpenAPI document generated from the same procedures the server implements.
 
 ## Requirements

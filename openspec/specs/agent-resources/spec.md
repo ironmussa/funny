@@ -1,6 +1,7 @@
 # agent-resources Specification
 
 ## Purpose
+
 TBD - created by archiving change agent-resources. Update Purpose after archive.
 
 ## Requirements

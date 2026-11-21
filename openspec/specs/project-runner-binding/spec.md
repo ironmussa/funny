@@ -1,6 +1,7 @@
 # project-runner-binding Specification
 
 ## Purpose
+
 Defines how runners are bound to projects so that each project executes only on the runner(s) explicitly configured for it, while a user-level general runner keeps serving projectless and non-overridden work.
 
 ## Requirements

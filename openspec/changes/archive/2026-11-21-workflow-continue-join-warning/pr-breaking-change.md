@@ -14,7 +14,7 @@ nodes:
     on_error: continue
   - id: notify
     depends_on: [tests]
-    notify: { message: "Review finished" }   # skipped now when tests fails
+    notify: { message: 'Review finished' } # skipped now when tests fails
 ```
 
 **Migration.** For every node that depends on a node with `on_error: continue`:
@@ -23,8 +23,8 @@ nodes:
 - if it must not run when the dependency fails, add `trigger_rule: all_success` explicitly.
 
 **How you find out.** The parser warns on every such dependent that declares no
-`trigger_rule`: *"`notify` is skipped if `tests` fails (on_error: continue). Add
-`trigger_rule: all_done` if it must run anyway."* The warning shows in the workflow editor
+`trigger_rule`: _"`notify` is skipped if `tests` fails (on_error: continue). Add
+`trigger_rule: all_done` if it must run anyway."_ The warning shows in the workflow editor
 (saving and running stay enabled), comes back from the workflow API as a diagnostic with
 `severity: 'warning'`, and is logged when the runtime or the factory loads the flow. Declaring
 any `trigger_rule` on the dependent silences it.

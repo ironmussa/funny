@@ -1,6 +1,7 @@
 # thread-share-steer Specification
 
 ## Purpose
+
 TBD - created by archiving change thread-sharing-steer. Update Purpose after archive.
 
 ## Requirements

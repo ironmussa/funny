@@ -1,6 +1,7 @@
 # client-memory-diagnostics Specification
 
 ## Purpose
+
 TBD - created by archiving change track-client-memory-growth. Update Purpose after archive.
 
 ## Requirements

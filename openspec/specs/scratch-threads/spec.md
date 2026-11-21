@@ -1,6 +1,7 @@
 # scratch-threads Specification
 
 ## Purpose
+
 TBD - created by archiving change scratch-threads. Update Purpose after archive.
 
 ## Requirements

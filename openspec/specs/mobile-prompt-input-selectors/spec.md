@@ -1,6 +1,7 @@
 # mobile-prompt-input-selectors Specification
 
 ## Purpose
+
 Make prompt input options usable on narrow touch screens through accessible bottom selection panels while preserving existing desktop interactions and selection rules.
 
 ## Requirements

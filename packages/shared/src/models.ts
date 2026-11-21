@@ -15,6 +15,7 @@ import type { AgentProvider, FollowUpMode, PermissionMode, ThreadMode } from './
 // there is no runtime import cycle.
 import {
   ACP_MANIFESTS,
+  antigravityModels,
   cursorModels,
   geminiModels,
   opencodeModels,
@@ -256,6 +257,7 @@ export const MODEL_REGISTRY = {
   pi: piModels,
   cursor: cursorModels,
   opencode: opencodeModels,
+  antigravity: antigravityModels,
   deepagent: deepagentModels,
 } as const;
 
@@ -267,6 +269,7 @@ export type GeminiModel = keyof typeof geminiModels;
 export type PiModel = keyof typeof piModels;
 export type CursorModel = keyof typeof cursorModels;
 export type OpenCodeModel = keyof typeof opencodeModels;
+export type AntigravityModel = keyof typeof antigravityModels;
 export type DeepAgentModel = keyof typeof deepagentModels;
 export type AgentModel =
   | ClaudeModel
@@ -275,6 +278,7 @@ export type AgentModel =
   | PiModel
   | CursorModel
   | OpenCodeModel
+  | AntigravityModel
   | DeepAgentModel;
 
 // Helper: narrow a provider string to keys of its sub-registry.
@@ -511,11 +515,17 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
   }
   const def = getModelDefinition(provider, model);
   if (!def) {
-    // Pi, Cursor and opencode expose their catalogs dynamically (see
-    // *-discover.ts). The selected value may already be the wire-format model
-    // ID that the Pi SDK, cursor-agent's `unstable_setSessionModel`, or
-    // opencode's `session/set_model` expects — pass it through instead of throwing.
-    if (provider === 'pi' || provider === 'cursor' || provider === 'opencode') {
+    // Pi, Cursor, opencode and Antigravity expose their catalogs dynamically
+    // (see *-discover.ts). The selected value may already be the wire-format
+    // model ID that the Pi SDK, cursor-agent's `unstable_setSessionModel`, or
+    // opencode's / agy's `session/set_model` expects — pass it through instead
+    // of throwing.
+    if (
+      provider === 'pi' ||
+      provider === 'cursor' ||
+      provider === 'opencode' ||
+      provider === 'antigravity'
+    ) {
       return model as string;
     }
     const providerLabel = PROVIDER_LABELS[provider] ?? provider;
@@ -605,6 +615,7 @@ export function getDefaultAllowedTools(provider: AgentProvider): string[] {
   if (provider === 'pi') return [...PI_DEFAULT_TOOLS];
   if (provider === 'cursor') return [...CURSOR_DEFAULT_TOOLS];
   if (provider === 'opencode') return [...OPENCODE_DEFAULT_TOOLS];
+  if (provider === 'antigravity') return [];
   if (provider === 'deepagent') return [...DEEPAGENT_DEFAULT_TOOLS];
   if (provider === 'llm-api') return [...LLM_API_DEFAULT_TOOLS];
   return [];

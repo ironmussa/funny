@@ -90,6 +90,17 @@ export const opencodeModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
+// Antigravity (`agy`) serves Gemini, Claude and GPT-OSS models from the user's
+// Google account; the catalog comes from `session/new` at runtime.
+export const antigravityModels = {
+  default: {
+    id: 'default',
+    label: 'Antigravity (configured default)',
+    contextWindow: 1_048_576,
+    i18nKey: 'antigravityDefault',
+  },
+} as const satisfies Record<string, ModelDefinition>;
+
 // ─── Manifests ───────────────────────────────────────────────────────────────
 
 export const geminiManifest: ProviderManifest = {
@@ -225,6 +236,59 @@ export const opencodeManifest: ProviderManifest = {
   },
 };
 
+/**
+ * Google Antigravity CLI (`agy`), the successor of gemini-cli for Google
+ * accounts. Unlike gemini-cli, `agy acp` is a subcommand, takes no `--model`
+ * or `--yolo` launch flags, and is driven entirely over ACP:
+ *   - models: `session/new` lists ids such as `gemini-4-neon-high` (model plus
+ *     thinking level). `session/set_model` accepts them; the `model` config
+ *     option only offers the base names, so it cannot be used for these ids.
+ *   - modes: `default` | `accept-edits` | `auto` | `plan` via `session/set_mode`.
+ *     funny's autoEdit (full bypass) keeps `default` and approves every
+ *     permission request itself (`permissionModel: 'gated'`).
+ *   - auth: a Google login done once on the runner (`agy acp --login`).
+ *   - no native fork (`sessionCapabilities` has resume/load/list/close only).
+ */
+export const antigravityManifest: ProviderManifest = {
+  id: 'antigravity',
+  label: 'Antigravity',
+  kind: 'acp',
+  spawn: {
+    command: 'agy',
+    args: ['acp'],
+    binEnvVars: ['AGY_BINARY_PATH', 'ACP_ANTIGRAVITY_BIN'],
+  },
+  models: { kind: 'dynamic', sentinel: antigravityModels.default, defaultModel: 'default' },
+  setModel: { method: 'session/set_model' },
+  modelVia: 'acp-method',
+  modeVia: 'acp-setSessionMode',
+  modeMap: {
+    plan: 'plan',
+    ask: 'default',
+    confirmEdit: 'default',
+    auto: null,
+    autoEdit: 'default',
+  },
+  forkCapabilityPaths: [],
+  builtinTools: [
+    'read_file',
+    'write_file',
+    'edit_file',
+    'run_command',
+    'search_web',
+    'manage_task',
+    'invoke_subagent',
+    'ask_question',
+  ],
+  attachmentLimits: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 18 * MB, hardMaxBytes: 20 * MB },
+  auth: { mode: 'runner-preauth' },
+  quirks: {
+    planRender: 'todoCard',
+    synthToolUseFromOrphanUpdate: true,
+    permissionModel: 'gated',
+  },
+};
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 /** All bundled ACP provider manifests, keyed by provider id. */
@@ -232,6 +296,7 @@ export const ACP_MANIFESTS = {
   gemini: geminiManifest,
   cursor: cursorManifest,
   opencode: opencodeManifest,
+  antigravity: antigravityManifest,
 } as const satisfies Record<string, ProviderManifest>;
 
 /** Compile-time known ACP provider ids (the bundled set). */

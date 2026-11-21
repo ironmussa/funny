@@ -147,7 +147,7 @@ function firstDefined(input: Record<string, unknown>, keys: readonly string[]): 
   return undefined;
 }
 
-/** Provider aliases for the file path, in priority order (last four are Cursor-specific). */
+/** Provider aliases for the file path, in priority order (Cursor-specific, then Antigravity's `Path`). */
 const FILE_PATH_ALIASES = [
   'path',
   'filePath',
@@ -157,6 +157,8 @@ const FILE_PATH_ALIASES = [
   'abs_path',
   'absolute_path',
   'relative_workspace_path',
+  // Antigravity (`agy`) uses PascalCase argument names.
+  'Path',
 ] as const;
 
 type DiffBlock = { path?: string; oldText?: string; newText?: string };
@@ -213,7 +215,8 @@ const fillFileTool: ToolInputFiller = (input, data, toolName) => {
 
 const fillBash: ToolInputFiller = (input, data) => {
   if (!input.command) {
-    input.command = firstDefined(input, ['cmd', 'shell_command', 'script']) ?? data.title;
+    input.command =
+      firstDefined(input, ['cmd', 'shell_command', 'script', 'CommandLine']) ?? data.title;
   }
   return undefined;
 };

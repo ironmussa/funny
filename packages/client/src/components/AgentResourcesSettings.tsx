@@ -27,6 +27,7 @@ const PROVIDERS: Array<{ id: string; label: string }> = [
   { id: 'gemini', label: 'Gemini' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'opencode', label: 'opencode' },
+  { id: 'antigravity', label: 'Antigravity' },
   { id: 'pi', label: 'Pi' },
   { id: 'deepagent', label: 'DeepAgent' },
 ];

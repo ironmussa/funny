@@ -73,6 +73,24 @@ describe('provider setup', () => {
     expect((await providerSetupStatus('custom')).installable).toBe(false);
   });
 
+  it('offers a login but no install for Antigravity, which has no npm package', async () => {
+    stubEnv('AGY_BINARY_PATH', '');
+    stubEnv('ACP_ANTIGRAVITY_BIN', '');
+    const { providerSetupStatus, startProviderInstall } = await loadProviderSetup();
+    expect(await providerSetupStatus('antigravity')).toMatchObject({
+      state: 'missing',
+      installable: false,
+    });
+    expect(startProviderInstall('antigravity')).toBe(false);
+    expect(mocks.spawn).not.toHaveBeenCalled();
+
+    mocks.which.mockReturnValue('/home/u/.local/bin/agy');
+    const installed = await providerSetupStatus('antigravity');
+    expect(installed.state).toBe('installed');
+    expect(installed.login).toBe('agy acp --login');
+    expect(installed.loginCommand).toContain("'/home/u/.local/bin/agy' 'acp' '--login'");
+  });
+
   it('uses the bundled Codex CLI and preserves explicit overrides', async () => {
     mocks.bundled.mockReturnValue('/sdk/bin/codex.js');
     const { activateProviderTools } = await loadProviderSetup();

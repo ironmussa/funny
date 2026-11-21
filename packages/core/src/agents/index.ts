@@ -7,6 +7,7 @@ export { CodexSDKProcess } from './codex-sdk.js';
 export { GeminiACPProcess } from './gemini-acp.js';
 export { CursorACPProcess } from './cursor-acp.js';
 export { OpenCodeACPProcess } from './opencode-acp.js';
+export { AntigravityACPProcess } from './antigravity-acp.js';
 export { PiSDKProcess, discoverPiModels } from './pi-sdk.js';
 export { createPiSessionManager, findPiSessionById } from './pi-sdk-session.js';
 export { DeepAgentProcess } from './deepagent-process.js';

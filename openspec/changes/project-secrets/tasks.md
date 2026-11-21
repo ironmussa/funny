@@ -39,4 +39,4 @@
 
 - [x] 7.1 Document the feature in `CLAUDE.md` (a "Project secrets" section: scopes, reserved names, the delivery rule, the sandbox switch, redaction limits) and in `openwiki/`; verify the links resolve and `bun run lint` passes
 - [x] 7.2 Cover the chain from `projectSecrets.set` to the agent env in its two halves, split at the data channel (the runtime cannot import the server): the server answers a saved secret to the thread owner's runner (`data-scope.test.ts`), and the runtime puts that answer in the env it hands the orchestrator and fails the start without it (`agent-lifecycle.test.ts`). A steer sharee's follow-up needs no case of its own: the request carries the thread, never the sender
-- [ ] 7.3 Run `bun run lint`, `bun run typecheck`, the affected test suites and `bunx fallow audit`; verify all pass
+- [x] 7.3 Run `bun run lint`, `bun run typecheck`, the affected test suites and `bunx fallow audit`; verify all pass

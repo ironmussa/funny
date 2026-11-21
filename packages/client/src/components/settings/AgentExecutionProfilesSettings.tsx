@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { refreshProjectAgentProfiles } from '@/data/agent-profiles/queries';
 import { useProjectById } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
@@ -160,6 +161,7 @@ export function AgentExecutionProfilesSettings() {
         current.map((item) => (item.id === result.value.id ? result.value : item)),
       );
       setDrafts((current) => ({ ...current, [result.value.id]: profileToDraft(result.value) }));
+      refreshProjectAgentProfiles();
       toast.success(t('agentProfiles.saved', 'Profile saved'));
     },
     [drafts, t],
@@ -184,6 +186,7 @@ export function AgentExecutionProfilesSettings() {
         delete next[profile.id];
         return next;
       });
+      refreshProjectAgentProfiles();
       toast.success(t('agentProfiles.deleted', 'Profile deleted'));
     },
     [t],
@@ -297,6 +300,7 @@ export function ProjectAgentExecutionProfileSettings() {
         }
 
         setBindingProfileId(result.value.profile?.id ?? null);
+        refreshProjectAgentProfiles();
         toast.success(t('agentProfiles.bindingSaved', 'Project profile saved'));
       } finally {
         setBindingSaving(false);

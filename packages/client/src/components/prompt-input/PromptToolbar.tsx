@@ -9,7 +9,9 @@ import {
   type ModelSelectGroup,
 } from '@/components/PromptSelectors';
 import { Button } from '@/components/ui/button';
+import { parseUnifiedModel } from '@/lib/providers';
 
+import { AgentProfileIndicator } from './AgentProfileIndicator';
 import { BacklogToggle, DictationButton, SendOrStopButton } from './PromptToolbarButtons';
 
 export interface PromptToolbarProps {
@@ -27,6 +29,8 @@ export interface PromptToolbarProps {
   mode: string;
   onModeChange: (v: string) => void;
   modes: { value: string; label: string }[];
+  /** Show the project's execution profile (new threads only). */
+  showAgentProfile: boolean;
   // Backlog
   showBacklog: boolean;
   sendToBacklog: boolean;
@@ -65,6 +69,12 @@ export function PromptToolbar(props: PromptToolbarProps) {
             value={props.selectedTemplateId}
             onChange={props.onTemplateChange}
             templates={props.templates}
+          />
+        )}
+        {props.showAgentProfile && (
+          <AgentProfileIndicator
+            projectId={props.projectId}
+            provider={parseUnifiedModel(props.unifiedModel).provider}
           />
         )}
         <ModeSelect value={props.mode} onChange={props.onModeChange} modes={props.modes} />

@@ -1171,6 +1171,7 @@
     "threadArchived": "Thread arquivada com sucesso",
     "threadDeleted": "Thread \"{{title}}\" excluída",
     "threadCreated": "Thread \"{{title}}\" criada",
+    "sentToBacklog": "\"{{title}}\" enviada para o backlog",
     "projectRenamed": "Projeto renomeado para \"{{name}}\"",
     "threadRenamed": "Thread renomeada para \"{{title}}\"",
     "projectDeleted": "Projeto \"{{name}}\" excluído",

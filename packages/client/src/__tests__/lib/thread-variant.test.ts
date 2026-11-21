@@ -20,6 +20,7 @@ import {
   getSidebarBucket,
   getThreadRoute,
   isScratch,
+  showsInSidebar,
 } from '@/lib/thread-variant';
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
@@ -231,5 +232,22 @@ describe('sandbox threads (thread-sandboxes)', () => {
   test('a busy sandbox thread can be deleted (its machine goes with it); a local one cannot', () => {
     expect(canDeleteWhileBusy({ runtime: 'sandbox' })).toBe(true);
     expect(canDeleteWhileBusy({ runtime: 'local' })).toBe(false);
+  });
+});
+
+describe('showsInSidebar', () => {
+  test('a thread sent to the backlog and never started is not listed', () => {
+    expect(showsInSidebar(makeThread({ status: 'idle', stage: 'backlog', source: 'web' }))).toBe(
+      false,
+    );
+  });
+
+  test('a started, planning or forked thread is listed; an archived one is not', () => {
+    expect(showsInSidebar(makeThread({ status: 'running', stage: 'in_progress' }))).toBe(true);
+    expect(showsInSidebar(makeThread({ status: 'idle', stage: 'planning' }))).toBe(true);
+    expect(
+      showsInSidebar(makeThread({ status: 'idle', stage: 'backlog', parentThreadId: 't0' })),
+    ).toBe(true);
+    expect(showsInSidebar(makeThread({ status: 'completed', archived: true }))).toBe(false);
   });
 });

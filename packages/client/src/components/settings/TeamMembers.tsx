@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { SettingsSection } from '@/components/settings/SettingRow';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -244,7 +245,7 @@ export function TeamMembers() {
   return (
     <>
       {/* Invite form */}
-      <h3 className="settings-section-header">Invite Member</h3>
+      <SettingsSection settingId="team-members.invite">Invite Member</SettingsSection>
       <div className="settings-card">
         <div className="px-4 py-3.5">
           {smtpConfigured === false && (
@@ -305,7 +306,7 @@ export function TeamMembers() {
       </div>
 
       {/* Invite link */}
-      <h3 className="settings-section-header">Invite Link</h3>
+      <SettingsSection settingId="team-members.invite-link">Invite Link</SettingsSection>
       <div className="settings-card">
         <div className="px-4 py-3.5">
           <p className="text-muted-foreground mb-3 text-sm">
@@ -401,7 +402,7 @@ export function TeamMembers() {
       </div>
 
       {/* Members list */}
-      <h3 className="settings-section-header">Members ({members.length})</h3>
+      <SettingsSection settingId="team-members.members">Members ({members.length})</SettingsSection>
       <div className="settings-card">
         {members.map((member) => {
           const isCurrentUser = member.userId === currentUser?.id;
@@ -473,7 +474,9 @@ export function TeamMembers() {
       {/* Pending invitations */}
       {invitations.length > 0 && (
         <>
-          <h3 className="settings-section-header">Pending Invitations ({invitations.length})</h3>
+          <SettingsSection settingId="team-members.pending">
+            Pending Invitations ({invitations.length})
+          </SettingsSection>
           <div className="settings-card">
             {invitations.map((inv) => (
               <div key={inv.id} className="settings-row" data-testid={`team-invitation-${inv.id}`}>

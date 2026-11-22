@@ -13,8 +13,10 @@ import { OrganizationManagement } from '@/components/settings/OrganizationManage
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
 import { SandboxesSettings } from '@/components/settings/SandboxesSettings';
+import { SettingAnchor } from '@/components/settings/SettingRow';
 import { SystemSettings } from '@/components/settings/SystemSettings';
 import { TeamMembers } from '@/components/settings/TeamMembers';
+import { useSettingFocusScroll } from '@/components/settings/use-settings-filter';
 import { UserManagement } from '@/components/settings/UserManagement';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -101,6 +103,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
   // Hook order matters: their mount effects load the profile, then SMTP, then shells.
   const keys = useProviderKeys();
   const smtp = useSmtpSettings();
+  useSettingFocusScroll();
 
   useEffect(() => {
     fetchAvailableShells();
@@ -181,7 +184,10 @@ function AiProviderKeysSection({ keys }: { keys: ProviderKeysState }) {
       <p className="text-muted-foreground px-1 pb-3 text-sm">
         Configure API keys for AI providers. Keys are encrypted at rest.
       </p>
-      <div className="settings-card divide-border space-y-0 divide-y">
+      <SettingAnchor
+        settingId="ai-keys.provider-keys"
+        className="settings-card divide-border space-y-0 divide-y"
+      >
         {AI_PROVIDER_KEYS.map((keyConfig) => (
           <div key={keyConfig.id} className="px-4 py-3.5">
             <p className="settings-row-title">{keyConfig.label}</p>
@@ -200,7 +206,7 @@ function AiProviderKeysSection({ keys }: { keys: ProviderKeysState }) {
             <ProviderKeyRowFor keys={keys} id={keyConfig.id} label={keyConfig.label} />
           </div>
         ))}
-      </div>
+      </SettingAnchor>
     </>
   );
 }
@@ -212,7 +218,7 @@ function SpeechKeySection({ keys }: { keys: ProviderKeysState }) {
         Configure an AssemblyAI API key to enable voice dictation in the prompt input.
       </p>
       <div className="settings-card">
-        <div className="px-4 py-3.5">
+        <SettingAnchor settingId="speech.assemblyai" className="px-4 py-3.5">
           <p className="settings-row-title">AssemblyAI API Key</p>
           <p className="settings-row-desc mb-2">
             Get your key at{' '}
@@ -227,7 +233,7 @@ function SpeechKeySection({ keys }: { keys: ProviderKeysState }) {
             . The key is encrypted at rest.
           </p>
           <ProviderKeyRowFor keys={keys} id="assemblyai" label="AssemblyAI API Key" />
-        </div>
+        </SettingAnchor>
       </div>
     </>
   );
@@ -314,7 +320,7 @@ function ProviderKeyPanel({
   return (
     <>
       <div className="settings-card">
-        <div className="px-4 py-3.5">
+        <SettingAnchor settingId="github.token" className="px-4 py-3.5">
           <p className="settings-row-title">{title}</p>
           <p className="settings-row-desc mb-2">{description}</p>
           <div className="flex items-center gap-2">
@@ -349,7 +355,7 @@ function ProviderKeyPanel({
               </Button>
             )}
           </div>
-        </div>
+        </SettingAnchor>
       </div>
     </>
   );

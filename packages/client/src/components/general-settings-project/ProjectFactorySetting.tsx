@@ -70,6 +70,7 @@ function FactoryModeRows({
   return (
     <>
       <SettingRow
+        settingId="factory.mode"
         title={t('settings.projectFactoryMode', 'Mode')}
         description={
           mode === 'automatic'
@@ -100,6 +101,7 @@ function FactoryModeRows({
 
       {mode === 'automatic' && (
         <SettingRow
+          settingId="factory.label"
           title={t('settings.projectFactoryLabel', 'Issue label')}
           description={t(
             'settings.projectFactoryLabelDesc',
@@ -155,6 +157,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
   return (
     <>
       <SettingRow
+        settingId="factory.status"
         title={t('settings.projectFactoryStatus', 'Status')}
         description={t(
           'settings.projectFactoryStatusDesc',
@@ -191,6 +194,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
       {enabled && (
         <>
           <SettingRow
+            settingId="factory.flow"
             title={t('settings.projectFactoryFlow', 'Flow')}
             description={t(
               'settings.projectFactoryFlowDesc',
@@ -207,6 +211,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
           </SettingRow>
 
           <SettingRow
+            settingId="factory.concurrency"
             title={t('settings.projectFactoryConcurrency', 'Max in flight')}
             description={t('settings.projectFactoryConcurrencyDesc', 'How many issues run at once')}
           >

@@ -8,21 +8,22 @@ It ships as a Bun workspaces monorepo with **19 packages** under `packages/*`, a
 
 ## Where to go next
 
-| Page                                                                                   | What it covers                                                                                                                            |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [architecture/overview.md](./architecture/overview.md)                                 | Full package map (all 19 packages), what's live app vs. standalone service vs. experimental, deployment topology                          |
-| [architecture/agent-execution.md](./architecture/agent-execution.md)                   | End-to-end trace of a live chat thread: client → server → runner → agent process → WebSocket back                                         |
-| [architecture/client-platform-boundary.md](./architecture/client-platform-boundary.md) | Renderer-independent client services, composition flow, store inventory, and intentionally web-only areas                                 |
-| [architecture/pipelines-and-automation.md](./architecture/pipelines-and-automation.md) | Post-commit review/fix pipeline, the `@funny/pipelines` engine, scheduler, and automations                                                |
-| [architecture/issue-factory.md](./architecture/issue-factory.md)                       | Server-run issue factory: labelled issues → flow (implement, PR, CI fix loop, merge) as the enabler; resume, controls, boundaries         |
-| [architecture/background-activities.md](./architecture/background-activities.md)       | Tracked background operations (clone, worktree setup, git workflow): runner tracker, server rows, panel; how to add a kind                |
-| [domain/threads-and-worktrees.md](./domain/threads-and-worktrees.md)                   | Thread modes (local/worktree), scratch threads, team sharing levels and the steer-delegation exception                                    |
-| [integrations/extensions-and-services.md](./integrations/extensions-and-services.md)   | Multi-provider agents, visualizer plugins, MCP, native-git, and the standalone services (`agent`, `reviewbot`, `memory`, `design-client`) |
-| [integrations/agent-browser.md](./integrations/agent-browser.md)                       | Agent browser tools over the shared browser session: tab-per-session host, refs, persistent profile, permissions, kill switch             |
-| [operations/deployment-and-auth.md](./operations/deployment-and-auth.md)               | Local vs. team deployment, auth/admin bootstrap (and a stale-doc fix), per-user git identity, trust boundaries, desktop packaging         |
-| [operations/runner-grpc-runbook.md](./operations/runner-grpc-runbook.md)               | Runner gRPC ownership boundaries, configuration, test layers, rollout checks, and incident diagnosis                                      |
-| [operations/client-memory-diagnostics.md](./operations/client-memory-diagnostics.md)   | Development-only browser memory profiler, controlled experiments, JSONL export, and heap-vs-native-memory interpretation                  |
-| [workflows/development.md](./workflows/development.md)                                 | Dev commands, TypeScript/lint/format tooling, fitness/architecture guardrails, testing, CI                                                |
+| Page                                                                                       | What it covers                                                                                                                            |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [architecture/overview.md](./architecture/overview.md)                                     | Full package map (all 19 packages), what's live app vs. standalone service vs. experimental, deployment topology                          |
+| [architecture/agent-execution.md](./architecture/agent-execution.md)                       | End-to-end trace of a live chat thread: client → server → runner → agent process → WebSocket back                                         |
+| [architecture/client-platform-boundary.md](./architecture/client-platform-boundary.md)     | Renderer-independent client services, composition flow, store inventory, and intentionally web-only areas                                 |
+| [architecture/pipelines-and-automation.md](./architecture/pipelines-and-automation.md)     | Post-commit review/fix pipeline, the `@funny/pipelines` engine, scheduler, and automations                                                |
+| [architecture/issue-factory.md](./architecture/issue-factory.md)                           | Server-run issue factory: labelled issues → flow (implement, PR, CI fix loop, merge) as the enabler; resume, controls, boundaries         |
+| [architecture/issue-factory-improvements.md](./architecture/issue-factory-improvements.md) | Issue factory: possible improvements not yet implemented (orphaned-worktree sweep, UI refresh, metrics, sandbox runs, graph labels)       |
+| [architecture/background-activities.md](./architecture/background-activities.md)           | Tracked background operations (clone, worktree setup, git workflow): runner tracker, server rows, panel; how to add a kind                |
+| [domain/threads-and-worktrees.md](./domain/threads-and-worktrees.md)                       | Thread modes (local/worktree), scratch threads, team sharing levels and the steer-delegation exception                                    |
+| [integrations/extensions-and-services.md](./integrations/extensions-and-services.md)       | Multi-provider agents, visualizer plugins, MCP, native-git, and the standalone services (`agent`, `reviewbot`, `memory`, `design-client`) |
+| [integrations/agent-browser.md](./integrations/agent-browser.md)                           | Agent browser tools over the shared browser session: tab-per-session host, refs, persistent profile, permissions, kill switch             |
+| [operations/deployment-and-auth.md](./operations/deployment-and-auth.md)                   | Local vs. team deployment, auth/admin bootstrap (and a stale-doc fix), per-user git identity, trust boundaries, desktop packaging         |
+| [operations/runner-grpc-runbook.md](./operations/runner-grpc-runbook.md)                   | Runner gRPC ownership boundaries, configuration, test layers, rollout checks, and incident diagnosis                                      |
+| [operations/client-memory-diagnostics.md](./operations/client-memory-diagnostics.md)       | Development-only browser memory profiler, controlled experiments, JSONL export, and heap-vs-native-memory interpretation                  |
+| [workflows/development.md](./workflows/development.md)                                     | Dev commands, TypeScript/lint/format tooling, fitness/architecture guardrails, testing, CI                                                |
 
 For Railway setup and installing tools inside remote terminals, see [Railway deployment and runner tools](operations/railway.md).
 

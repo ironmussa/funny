@@ -53,6 +53,31 @@ trackActivity / beginActivity
   `shared/src/activities/kinds.ts`.
 - **Client:** the `data/activities/` collection and the Activity tab of the sidebar footer panel.
 
+More kinds record what users do that cannot be taken back and what never happens (openspec
+`track-user-and-scheduled-actions`): GitHub writes from the review pane (`github.write`: PR merge,
+file revert in a PR, repository publish), destructive git commands (`git.destructive`: discard,
+`reset --hard`, stash drop, rewind, and their restore), and automations that do not run
+(`automation.unscheduled` for a stored schedule that does not parse — new ones are refused on save —
+and `automation.skipped`, recorded once per run that is still running).
+
+### Undo snapshots
+
+Before a destructive git command the runner saves what it is about to remove
+(`packages/runtime/src/services/git-undo.ts`, over the tree snapshot of `git-checkpoints.ts`):
+
+- `refs/funny/undo/<activityId>` → a commit of the full working tree (untracked, non-ignored files
+  included) whose parent is `HEAD`, or the stash commit about to be dropped;
+  `refs/funny/undo/<activityId>-index` → the index tree.
+- `runDestructive` saves first, refuses the command when the snapshot fails, and records one
+  `git.destructive` activity with `resultRef.snapshot`. The routes call the wrappers in
+  `services/git-destructive.ts`, never the git function directly.
+- The Activity tab offers **Restore** on such a row (`canRestoreActivity`, 30 days). The runner
+  route `POST /api/git/{project/:projectId | :threadId}/undo/:activityId` saves the current state
+  as a new snapshot first, then puts the old one back; `404 snapshot-gone` once pruned, `409`
+  while the thread's agent runs.
+- Snapshots older than 30 days are pruned whenever a new one is saved. `refs/funny/*` is not pushed
+  with a branch; `git push --mirror` would push it (funny never runs it).
+
 ### Server-run activities
 
 `packages/server/src/services/activities/server-activities.ts` (`trackServerActivity`,

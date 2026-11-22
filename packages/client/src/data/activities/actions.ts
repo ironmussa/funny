@@ -1,7 +1,9 @@
+import type { Activity } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { errAsync, type ResultAsync } from 'neverthrow';
 
 import { activitiesApi } from '@/lib/api/activities';
+import { gitApi } from '@/lib/api/git';
 
 import type { DataLayer } from '../data-layer';
 import { optimisticWrite } from '../optimistic-write';
@@ -47,4 +49,17 @@ export function clearFinishedActivities(
     confirm: (removed) => data.remove(removed.ids),
     failureMessageKey: FAILURE_KEY,
   });
+}
+
+/**
+ * Put back what a destructive git command removed (track-user-and-scheduled-
+ * actions, design D6), on the thread's worktree or the project checkout it ran
+ * on. The runner saves the current state first and records the restore as its
+ * own activity, which arrives over the realtime channel. Fails with
+ * NOT_FOUND `snapshot-gone` when the snapshot was pruned.
+ */
+export function restoreActivitySnapshot(activity: Activity): ResultAsync<unknown, DomainError> {
+  if (activity.threadId) return gitApi.restoreSnapshot(activity.threadId, activity.id);
+  if (activity.projectId) return gitApi.projectRestoreSnapshot(activity.projectId, activity.id);
+  return errAsync({ type: 'BAD_REQUEST', message: 'The activity has no workspace to restore' });
 }

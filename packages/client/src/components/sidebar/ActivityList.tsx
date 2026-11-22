@@ -7,6 +7,7 @@ import {
   Loader2,
   RotateCcw,
   TriangleAlert,
+  Undo2,
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +35,9 @@ export interface ActivityListProps {
   now: number;
   canRetry: (activity: Activity) => boolean;
   onRetry: (activity: Activity) => void;
+  /** Whether the row offers Restore (an undo snapshot it can still put back). */
+  canRestore?: (activity: Activity) => boolean;
+  onRestore?: (activity: Activity) => void;
   onDismiss: (activity: Activity) => void;
   onClearFinished: () => void;
 }
@@ -135,6 +139,55 @@ function RowAction({
   );
 }
 
+/** Retry, restore and dismiss for one row. */
+function RowActions({
+  activityId,
+  canRetry,
+  onRetry,
+  canRestore,
+  onRestore,
+  dismissable,
+  onDismiss,
+}: {
+  activityId: string;
+  canRetry: boolean;
+  onRetry: () => void;
+  canRestore: boolean;
+  onRestore: () => void;
+  dismissable: boolean;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      {canRetry ? (
+        <RowAction
+          label={t('activity.retry')}
+          testId={`activity-item-retry-${activityId}`}
+          icon={RotateCcw}
+          onClick={onRetry}
+        />
+      ) : null}
+      {canRestore ? (
+        <RowAction
+          label={t('activity.restore')}
+          testId={`activity-item-restore-${activityId}`}
+          icon={Undo2}
+          onClick={onRestore}
+        />
+      ) : null}
+      {dismissable ? (
+        <RowAction
+          label={t('activity.dismiss')}
+          testId={`activity-item-dismiss-${activityId}`}
+          icon={X}
+          onClick={onDismiss}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function ActivityRow({
   activity,
   percent,
@@ -142,6 +195,8 @@ function ActivityRow({
   now,
   canRetry,
   onRetry,
+  canRestore,
+  onRestore,
   onDismiss,
 }: {
   activity: Activity;
@@ -150,6 +205,8 @@ function ActivityRow({
   now: number;
   canRetry: boolean;
   onRetry: () => void;
+  canRestore: boolean;
+  onRestore: () => void;
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
@@ -209,24 +266,15 @@ function ActivityRow({
         ) : null}
         <EffectsList activity={activity} />
       </div>
-      <div className="flex shrink-0 items-center gap-0.5">
-        {canRetry ? (
-          <RowAction
-            label={t('activity.retry')}
-            testId={`activity-item-retry-${activity.id}`}
-            icon={RotateCcw}
-            onClick={onRetry}
-          />
-        ) : null}
-        {dismissable ? (
-          <RowAction
-            label={t('activity.dismiss')}
-            testId={`activity-item-dismiss-${activity.id}`}
-            icon={X}
-            onClick={onDismiss}
-          />
-        ) : null}
-      </div>
+      <RowActions
+        activityId={activity.id}
+        canRetry={canRetry}
+        onRetry={onRetry}
+        canRestore={canRestore}
+        onRestore={onRestore}
+        dismissable={dismissable}
+        onDismiss={onDismiss}
+      />
     </div>
   );
 }
@@ -238,6 +286,8 @@ export function ActivityList({
   now,
   canRetry,
   onRetry,
+  canRestore = () => false,
+  onRestore = () => {},
   onDismiss,
   onClearFinished,
 }: ActivityListProps) {
@@ -266,6 +316,8 @@ export function ActivityList({
           now={now}
           canRetry={canRetry(activity)}
           onRetry={() => onRetry(activity)}
+          canRestore={canRestore(activity)}
+          onRestore={() => onRestore(activity)}
           onDismiss={() => onDismiss(activity)}
         />
       ))}

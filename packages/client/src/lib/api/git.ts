@@ -289,6 +289,18 @@ export const gitApi = {
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash/drop/${stashIndex}`, {
       method: 'POST',
     }),
+  /** Put an activity's undo snapshot back in the thread's worktree (track-user-and-scheduled-actions). */
+  restoreSnapshot: (threadId: string, activityId: string) =>
+    request<{ ok: boolean; snapshot: string }>(
+      `/git/${threadId}/undo/${encodeURIComponent(activityId)}`,
+      { method: 'POST' },
+    ),
+  /** Put an activity's undo snapshot back in the project checkout. */
+  projectRestoreSnapshot: (projectId: string, activityId: string) =>
+    request<{ ok: boolean; snapshot: string }>(
+      `/git/project/${projectId}/undo/${encodeURIComponent(activityId)}`,
+      { method: 'POST' },
+    ),
   resetSoft: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-soft`, {
       method: 'POST',

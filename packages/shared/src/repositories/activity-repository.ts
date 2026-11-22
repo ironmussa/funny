@@ -57,6 +57,7 @@ const inputSchema = z.record(z.string(), z.unknown());
 const resultRefSchema = z.object({
   projectId: z.string().optional(),
   prUrl: z.string().optional(),
+  snapshot: z.string().optional(),
 });
 
 function parseInput(raw: string | null): Record<string, unknown> {

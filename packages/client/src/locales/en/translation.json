@@ -1872,8 +1872,21 @@
       "pr-merged": "Pull request merged",
       "remote-branch-deleted": "Remote branch deleted",
       "agent-stopped": "Agent stopped",
-      "factory-disabled": "Factory turned off"
-    }
+      "factory-disabled": "Factory turned off",
+      "repo-published": "Repository published",
+      "file-reverted": "File reverted",
+      "changes-discarded": "Changes discarded",
+      "commits-reset": "Reset",
+      "stash-dropped": "Stash dropped",
+      "code-rewound": "Code rewound",
+      "snapshot-saved": "Snapshot saved"
+    },
+    "restore": "Restore",
+    "restored": "Restored. The previous state was saved as a new snapshot.",
+    "snapshotGone": "This snapshot no longer exists on the runner.",
+    "restoreFailed": "Could not restore",
+    "restoreTitle": "Restore this snapshot?",
+    "restoreDescription": "Puts back what “{{title}}” removed. The current state is saved first, so this can be undone too."
   },
   "factoryView": {
     "title": "Factory queue",

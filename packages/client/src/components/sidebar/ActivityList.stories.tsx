@@ -59,6 +59,22 @@ const automaticCleanup = buildActivity({
   endedAt: '2026-11-20T09:50:00.000Z',
 });
 
+const discard = buildActivity({
+  id: 'discard',
+  kind: 'git.destructive',
+  title: 'Discard changes to 3 files',
+  status: 'succeeded',
+  input: { action: 'discard', paths: ['src/a.ts', 'src/b.ts', 'README.md'] },
+  effects: [
+    { effect: 'changes-discarded', target: 'src/a.ts' },
+    { effect: 'changes-discarded', target: 'src/b.ts' },
+    { effect: 'changes-discarded', target: 'README.md' },
+    { effect: 'snapshot-saved', target: 'refs/funny/undo/discard' },
+  ],
+  resultRef: { snapshot: 'refs/funny/undo/discard' },
+  endedAt: '2026-11-20T09:55:00.000Z',
+});
+
 const meta = {
   title: 'Sidebar/ActivityList',
   component: ActivityList,
@@ -112,4 +128,8 @@ export const Empty: Story = {
 
 export const AutomaticCleanup: Story = {
   args: { activities: [automaticCleanup, succeeded] },
+};
+
+export const RestorableDiscard: Story = {
+  args: { activities: [discard, succeeded], canRestore: (a) => a.id === 'discard' },
 };

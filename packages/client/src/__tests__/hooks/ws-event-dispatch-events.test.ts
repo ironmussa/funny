@@ -227,6 +227,25 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(refreshAll).toHaveBeenCalled();
   });
 
+  test('thread:updated with a cleared worktree reloads the open thread', () => {
+    const refreshAll = vi.fn();
+    const refreshActive = vi.fn();
+    useThreadStore.setState({
+      selectedThreadId: 't1',
+      refreshAllLoadedThreads: refreshAll,
+      refreshActiveThread: refreshActive,
+    });
+
+    // A merged factory run's cleanup removes the worktree: both fields become null.
+    captureHandlers()['thread:updated']({
+      threadId: 't1',
+      data: { worktreePath: null, branch: null },
+    });
+
+    expect(refreshAll).toHaveBeenCalled();
+    expect(refreshActive).toHaveBeenCalled();
+  });
+
   test('thread:updated resync reloads durable state for the active thread only', () => {
     const refreshActive = vi.fn();
     useThreadStore.setState({

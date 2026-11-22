@@ -34,7 +34,9 @@ Copy the built-in flow to the repository's **default branch** as
 `packages/workflows/defaults/issue-to-merge.yaml`) and give its `regression_proof` step rules. The
 factory reads flows from the default branch only, never from a run's branch, so a pull request
 cannot change the rules that judge it. The copy replaces the built-in of that name, so keep it in
-step with the built-in when that changes.
+step with the built-in when that changes. An older copy whose prompt still says "Work on a new branch named
+`{{branch}}`" works (the agent starts on that branch already), but each run logs a flow warning
+until its wording matches the built-in's.
 
 funny's own copy is [`.funny/workflows/issue-to-merge.yaml`](../../.funny/workflows/issue-to-merge.yaml).
 Its step:

@@ -30,6 +30,11 @@ import { sandboxWaker } from '../thread-sandboxes/sandbox-lifecycle.js';
 
 const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 
+/** Where the cleanup announces a changed thread row to its owner's browsers. */
+export interface BrowserEventsPort {
+  toUser(userId: string, event: Record<string, unknown>): void;
+}
+
 type PostError = { message: string; sandboxAsleep: boolean };
 
 interface ThreadRequest {
@@ -250,11 +255,15 @@ export async function sendFactoryFollowUp(
  * torn down with its own lifecycle, and a thread still running (a member
  * following up) keeps its checkout. Best effort: a runner that is offline
  * leaves them in place, and the merge is not affected.
+ *
+ * Each cleared thread is announced to its owner as `thread:updated`, so an
+ * open thread view stops pointing at the removed worktree without a reload.
  */
 export async function cleanupFactoryWorktrees(
   ports: RunnerPorts,
   userId: string,
   threadIds: string[],
+  browserEvents?: BrowserEventsPort,
 ): Promise<void> {
   if (threadIds.length === 0) return;
   const rows = await db
@@ -300,6 +309,11 @@ export async function cleanupFactoryWorktrees(
       .update(threads)
       .set({ worktreePath: null, branch: null })
       .where(eq(threads.id, thread.id));
+    browserEvents?.toUser(userId, {
+      type: 'thread:updated',
+      threadId: thread.id,
+      data: { worktreePath: null, branch: null },
+    });
     log.info('Removed a merged factory run worktree', {
       namespace: 'factory',
       threadId: thread.id,

@@ -84,6 +84,7 @@ import {
   type WatchedFactory,
 } from './factory-settings.js';
 import {
+  type BrowserEventsPort,
   cleanupFactoryWorktrees,
   cancelRegressionProofOnRunner,
   pollRegressionProofOnRunner,
@@ -132,6 +133,8 @@ export interface FactoryWatcherDeps {
     content: string,
     expectedBranch?: string,
   ) => Promise<Result<void, string>>;
+  /** Where the merged-run cleanup tells the enabler's browsers about the cleared threads. */
+  browserEvents?: BrowserEventsPort;
   /** Merged-run cleanup override for tests; defaults to `cleanupFactoryWorktrees`. */
   cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
   /** Notification override for tests; defaults to Web Push. */
@@ -1007,7 +1010,7 @@ function cleanupMergedFor(
 ): Promise<void> {
   return d.cleanupMerged
     ? d.cleanupMerged(userId, threadIds)
-    : cleanupFactoryWorktrees(d.ports, userId, threadIds);
+    : cleanupFactoryWorktrees(d.ports, userId, threadIds, d.browserEvents);
 }
 
 /**

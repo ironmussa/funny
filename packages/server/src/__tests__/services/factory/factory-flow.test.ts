@@ -118,6 +118,34 @@ describe('factory flow warnings', () => {
     ]);
   });
 
+  test('a repository copy that still asks for a new branch is warned about', async () => {
+    const flow = await load(`  - id: implement
+    spawn_agent: { prompt: "Work on a new branch named {{branch}}" }
+  - id: pull-request
+    depends_on: [implement]
+    create_pr: { title: t }
+  - id: ci
+    depends_on: [pull-request]
+    wait_ci: {}
+    on_error: retry
+    retry:
+      max_attempts: 2
+      before_retry: { prompt: "Push the fix to a New Branch" }
+`);
+    const stale = flow._unsafeUnwrap().warnings.filter((w) => w.message.includes('new branch'));
+    expect(stale.map((w) => w.path)).toEqual([
+      'nodes.0.spawn_agent.prompt',
+      'nodes.2.retry.before_retry.prompt',
+    ]);
+  });
+
+  test('the current branch wording is not warned about', async () => {
+    const flow = await load(`  - id: implement
+    spawn_agent: { prompt: "Work on the branch {{branch}}. You may already be on it." }
+`);
+    expect(flow._unsafeUnwrap().warnings).toEqual([]);
+  });
+
   test('the built-in factory flows have only the proof-not-configured warning', async () => {
     for (const name of ['issue-to-merge', 'issue-to-pr']) {
       const flow = await loadFactoryFlow(name, { readDefaultBranchFile: async () => ok(null) });

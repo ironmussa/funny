@@ -42,3 +42,31 @@ describe('GraphGutter node', () => {
     expect(distinct.container.querySelector('circle[stroke-dasharray]')).not.toBeNull();
   });
 });
+
+describe('GraphGutter HEAD rail', () => {
+  // A row above HEAD: the reserved lane 0 passes through, the node is on lane 1.
+  const aboveHead: GraphRow = {
+    commitLane: 1,
+    nodeColor: 1,
+    segments: [
+      { fromLane: 0, fromY: 0, toLane: 0, toY: 1, color: 0, wip: true },
+      { fromLane: 1, fromY: 0.5, toLane: 1, toY: 1, color: 1 },
+    ],
+  };
+
+  test('is hidden while the tree is clean', () => {
+    const { container } = render(<GraphGutter row={aboveHead} laneCount={2} height={22} />);
+    expect(container.querySelectorAll('line')).toHaveLength(1);
+    expect(container.querySelector('line[stroke-dasharray]')).toBeNull();
+  });
+
+  test('is drawn dashed toward the WIP node when the tree is dirty, with no extra stub', () => {
+    const { container } = render(
+      <GraphGutter row={aboveHead} laneCount={2} height={22} connectUp />,
+    );
+    const dashed = [...container.querySelectorAll('line[stroke-dasharray]')];
+    expect(dashed).toHaveLength(1);
+    expect(dashed[0].getAttribute('x1')).toBe(dashed[0].getAttribute('x2'));
+    expect(dashed[0].getAttribute('x1')).toBe('8');
+  });
+});

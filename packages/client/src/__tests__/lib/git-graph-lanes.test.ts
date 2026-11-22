@@ -168,3 +168,50 @@ describe('computeGraphRows', () => {
     expect(layout.rows[4].commitLane).toBe(0);
   });
 });
+
+describe('computeGraphRows with headHash', () => {
+  test('HEAD keeps lane 0 under the WIP node; newer branches curve into it', () => {
+    // R (origin/master) and F (PR branch) both sit on HEAD H, newer than it.
+    const commits = [c('R', 'H'), c('F', 'H'), c('H', 'P'), c('P')];
+
+    const plain = computeGraphRows(commits);
+    expect(plain.rows.map((r) => r.commitLane)).toEqual([0, 1, 0, 0]);
+
+    const layout = computeGraphRows(commits, { headHash: 'H' });
+    expect(layout.rows.map((r) => r.commitLane)).toEqual([1, 2, 0, 0]);
+    // Rows above HEAD carry the dashed rail straight down lane 0 ...
+    for (const row of layout.rows.slice(0, 2)) {
+      expect(row.segments).toContainEqual({
+        fromLane: 0,
+        fromY: 0,
+        toLane: 0,
+        toY: 1,
+        color: 0,
+        wip: true,
+      });
+    }
+    // ... into HEAD's node, where the other branches converge from the side.
+    const headSegments = layout.rows[2].segments;
+    expect(headSegments).toContainEqual({
+      fromLane: 0,
+      fromY: 0,
+      toLane: 0,
+      toY: 0.5,
+      color: 0,
+      wip: true,
+    });
+    expect(
+      headSegments
+        .filter((s) => s.toY === 0.5 && !s.wip)
+        .map((s) => s.fromLane)
+        .sort(),
+    ).toEqual([1, 2]);
+    // Nothing below HEAD is part of the WIP rail.
+    expect(layout.rows[3].segments.some((s) => s.wip)).toBe(false);
+  });
+
+  test('a HEAD outside the window changes nothing', () => {
+    const commits = [c('A', 'B'), c('B')];
+    expect(computeGraphRows(commits, { headHash: 'Z' })).toEqual(computeGraphRows(commits));
+  });
+});

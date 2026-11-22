@@ -146,7 +146,10 @@ describe('factory pull requests: the proof gate (task 4.4)', () => {
         auth: headers.get('authorization') ?? undefined,
       });
       if (!(key in routes)) return new Response('not found', { status: 404 });
-      const route = routes[key];
+      const routed = routes[key];
+      // A function route answers from the calls made so far (a state that changes mid-way).
+      const route: unknown =
+        typeof routed === 'function' ? routed(calls.map((call) => call.key)) : routed;
       if (isStatus(route)) {
         return new Response(JSON.stringify(route.body ?? { message: 'refused' }), {
           status: route.status,
@@ -222,7 +225,32 @@ describe('factory pull requests: the proof gate (task 4.4)', () => {
       await prs.merge(pr, { sha: 'abc', method: 'squash', autoMergeWhenHeld: true })
     )._unsafeUnwrap();
     expect(merged.kind).toBe('auto-merge-enabled');
-    expect(calls.some((c) => c.key === 'POST /graphql')).toBe(true);
+    // Enabled for the proved commit only: GitHub refuses it if the head is another.
+    const mutation = calls.find((c) => c.key === 'POST /graphql')?.body as {
+      query: string;
+      variables: Record<string, string>;
+    };
+    expect(mutation.query).toContain('expectedHeadOid: $head');
+    expect(mutation.variables.head).toBe('abc');
+  });
+
+  test('a push between the held check and enabling auto-merge enables nothing', async () => {
+    const { prs, calls } = gated({
+      ...green,
+      ...heldBy(999),
+      ...autoMerge,
+      'PUT /repos/o/r/pulls/7/merge': { status: 405 },
+      // The head is the proved commit until auto-merge is about to be enabled
+      // (the repository settings were just read), then someone pushed.
+      'GET /repos/o/r/pulls/7': (seen: string[]) =>
+        seen.includes('GET /repos/o/r') ? { ...openPull, head: { sha: 'pushed' } } : openPull,
+    });
+    const merged = (
+      await prs.merge(pr, { sha: 'abc', method: 'squash', autoMergeWhenHeld: true })
+    )._unsafeUnwrap();
+    expect(merged.kind).toBe('not-mergeable');
+    expect(calls.some((c) => c.key === 'GET /repos/o/r')).toBe(true);
+    expect(calls.some((c) => c.key === 'POST /graphql')).toBe(false);
   });
 
   test('not held (required from another App, or not published): no auto-merge, says how', async () => {

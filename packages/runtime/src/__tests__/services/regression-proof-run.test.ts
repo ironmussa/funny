@@ -5,17 +5,18 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { executeSync } from '@funny/core/git';
+import { createTempWorktree, executeSync } from '@funny/core/git';
 
 import {
   fillCommand,
   inconclusiveBaseFailure,
   matchesGlob,
   runProof,
+  startProofJob,
   type ProofRequest,
 } from '../../services/regression-proof.js';
 
@@ -168,6 +169,28 @@ describe('regression proof run', () => {
   test('no changed test file is skipped', async () => {
     const result = await prove(repoWithFix({ 'notes.md': 'x\n' }));
     expect(result.verdict).toBe('skipped');
+  });
+});
+
+describe('regression proof jobs', () => {
+  test("a project's first proof removes the worktrees a killed runner left behind", async () => {
+    const repo = repoWithFix({ 'lib.test.sh': ASSERTS_FIX });
+    const leftover = (
+      await createTempWorktree(repo.path, repo.headSha, 'leftover')
+    )._unsafeUnwrap();
+    expect(existsSync(leftover)).toBe(true);
+
+    const job = startProofJob('thread-sweep', repo.path, {
+      headSha: repo.headSha,
+      defaultBranch: 'main',
+      rules: [{ globs: ['**/*.test.sh'], command: 'sh {{files}}' }],
+      supportGlobs: [],
+      timeoutMs: 30_000,
+    });
+    while (job.state === 'running') await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(job.result?.verdict).toBe('pass');
+    expect(existsSync(leftover)).toBe(false);
   });
 });
 

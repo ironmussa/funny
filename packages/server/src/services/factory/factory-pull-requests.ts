@@ -252,7 +252,7 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
                 })
               : proofCheckHeld(pr, state.baseRef).andThen((held) =>
                   held
-                    ? autoMergeOrMerge(pullRequestsFor(pr, 'write'), pr, method)
+                    ? autoMergeOrMerge(pullRequestsFor(pr, 'write'), pr, method, sha)
                     : okAsync<FactoryMergeOutcome, FactoryPullRequestError>({
                         kind: 'not-mergeable',
                         reason: `${refused}. The factory enables auto-merge only where GitHub holds the proof: require the "${REGRESSION_PROOF_CHECK}" check from this GitHub App on ${state.baseRef || 'the base branch'} (a ruleset or branch protection).`,
@@ -345,9 +345,11 @@ function autoMergeOrMerge(
   github: ReturnType<typeof createPullRequestCi>,
   pr: FactoryPullRequestRef,
   method: MergeMethod | undefined,
+  /** Only this head: a push since it was proved enables nothing. */
+  expectedHeadSha?: string,
 ): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> {
   return github
-    .enableAutoMerge(pr.repo, pr.number, method)
+    .enableAutoMerge(pr.repo, pr.number, method, expectedHeadSha)
     .mapErr(callError)
     .map((result): FactoryMergeOutcome => {
       if (result.kind === 'enabled') return { kind: 'auto-merge-enabled', method: result.method };

@@ -36,6 +36,12 @@ export interface GithubAppStatus {
    * regression proof check). Absent when they could not be read.
    */
   missingPermissions?: string[];
+  /**
+   * Accounts whose installation has not accepted every permission funny asks
+   * for: GitHub grants a permission added to the App only once the
+   * installation's owner accepts it. Absent when they could not be read.
+   */
+  pendingInstallations?: string[];
   error?: string;
 }
 

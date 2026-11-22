@@ -223,6 +223,23 @@ const VERDICT_COUNTERS = {
   timeout: 'ciTimeouts',
 } satisfies Record<z.infer<typeof CI_VERDICT>, keyof FactoryRunMetrics | null>;
 
+/** A proof the merge gate holds: its record, and what publishing it needs. */
+interface HeldProof {
+  record: RegressionProofRecord;
+  /** Whether this issue needs a regression test (decides the check's conclusion). */
+  testRequired: boolean;
+  /** Its verdict allows a merge. */
+  ok: boolean;
+  /** Its check is on GitHub. */
+  checkPublished: boolean;
+}
+
+const PROOF_NOT_CONFIGURED: ActionResult = {
+  ok: false,
+  error:
+    'Regression proof not configured: the flow has no regression_proof rules, so the factory does not merge.',
+};
+
 /**
  * The counters after one `wait_ci` result. A stop or a GitHub access error is
  * not a CI round (no verdict about the code), so it counts nothing.
@@ -454,10 +471,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   }
 
   /**
-   * The last proof this execution ran: which commit, whether its verdict
-   * allows a merge, and whether its check is on GitHub (auto-merge needs it).
+   * The last proof this execution ran: its record (which commit), whether its
+   * verdict allows a merge, and whether its check is on GitHub (auto-merge
+   * needs it).
    */
-  let lastProof: { headSha: string; ok: boolean; checkPublished: boolean } | null = null;
+  let lastProof: HeldProof | null = null;
 
   /** Run the proof on the runner, record and publish it, and map its verdict to the step's result. */
   async function runRegressionProof(opts: RegressionProofOpts): Promise<ActionResult> {
@@ -496,15 +514,25 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return false;
   }
 
-  /** Record the runner's verdict on the run, publish it, and map it to the step's result. */
+  /** Publish the runner's verdict, record it on the run, and map it to the step's result. */
   async function proofVerdict(
     result: ProofResultBody,
     testRequired: boolean,
   ): Promise<ActionResult> {
-    const proofRecord = proofRecordOf(result);
+    const proved = proofRecordOf(result);
+    const checkPublished = await publishCheck(proved, testRequired);
+    const proofRecord = { ...proved, checkPublished };
     await deps.record({ regressionProof: proofRecord });
-    const checkPublished = await publishCheck(proofRecord, testRequired);
-    const meta: Record<string, unknown> = { ...proofRecord, checkPublished };
+    const meta: Record<string, unknown> = { ...proofRecord };
+    // What the merge gate holds: only a proof that names its commit.
+    if (proofRecord.headSha) {
+      lastProof = {
+        record: proofRecord,
+        testRequired,
+        ok: proofAllowsMerge(result, testRequired),
+        checkPublished,
+      };
+    }
 
     if (proofAllowsMerge(result, testRequired)) {
       const event =
@@ -524,20 +552,6 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return result.failureKind === 'test'
       ? { ...proofFailed(finding), metadata: meta }
       : { ...proofUnavailable(finding), metadata: meta };
-  }
-
-  /** Run the proof and remember what it proved, for the merge gate. */
-  async function proveHead(opts: RegressionProofOpts): Promise<ActionResult> {
-    const result = await runRegressionProof(opts);
-    const headSha = result.metadata?.headSha;
-    if (typeof headSha === 'string' && headSha) {
-      lastProof = {
-        headSha,
-        ok: result.ok,
-        checkPublished: result.metadata?.checkPublished === true,
-      };
-    }
-    return result;
   }
 
   /** The enabler reads the repository: the App token capped by their access. */
@@ -572,6 +586,40 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   }
 
   /**
+   * The passing proof of `sha`: the last one when it is of that commit and
+   * passed, else a proof run now. Otherwise the result the merge step ends with.
+   */
+  async function proofOfHead(
+    config: RegressionProofOpts,
+    sha: string,
+  ): Promise<{ held: HeldProof } | { refused: ActionResult }> {
+    if (lastProof?.record.headSha !== sha || !lastProof.ok) {
+      const proved = await runRegressionProof(config);
+      if (!proved.ok) return { refused: proved };
+    }
+    if (lastProof?.record.headSha !== sha) {
+      return {
+        refused: {
+          ok: false,
+          error: `Regression proof unavailable: the pull request head ${sha} is not the proved commit ${lastProof?.record.headSha ?? '(none)'}.`,
+        },
+      };
+    }
+    return { held: lastProof };
+  }
+
+  /** Whether the proof's check is on GitHub, publishing it now when an earlier try failed. */
+  async function checkOnGithub(proof: HeldProof): Promise<boolean> {
+    if (proof.checkPublished) return true;
+    const published = await publishCheck(proof.record, proof.testRequired);
+    if (!published) return false;
+    proof.checkPublished = true;
+    proof.record = { ...proof.record, checkPublished: true };
+    await deps.record({ regressionProof: proof.record });
+    return true;
+  }
+
+  /**
    * The merge gate: merge only a pull request head with a passing proof of
    * that exact commit, pinned to it. Runs the flow's proof when none is held.
    */
@@ -579,34 +627,20 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     if (opts.requireRegressionProof === false) return ci.merge(opts);
     // A proof without rules proves nothing: no merge, whatever it answered.
     const config = opts.regressionProof;
-    if (!config || config.rules.length === 0) {
-      return {
-        ok: false,
-        error:
-          'Regression proof not configured: the flow has no regression_proof rules, so the factory does not merge.',
-      };
-    }
+    if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
     const pr = pullRequest();
     if (!pr) return ci.merge(opts);
     const head = await deps.github.pullRequests.pullHead(pr);
     if (head.isErr()) {
       return { ok: false, error: head.error.message, metadata: { kind: head.error.kind } };
     }
-    if (lastProof?.headSha !== head.value.sha || !lastProof.ok) {
-      const proved = await proveHead(config);
-      if (!proved.ok) return proved;
-    }
-    if (lastProof?.headSha !== head.value.sha) {
-      return {
-        ok: false,
-        error: `Regression proof unavailable: the pull request head ${head.value.sha} is not the proved commit ${lastProof?.headSha ?? '(none)'}.`,
-      };
-    }
+    const proof = await proofOfHead(config, head.value.sha);
+    if ('refused' in proof) return proof.refused;
     // Auto-merge only on the proved commit whose check GitHub can hold.
     return ci.merge({
       ...opts,
       sha: head.value.sha,
-      autoMergeWhenHeld: lastProof?.checkPublished === true,
+      autoMergeWhenHeld: await checkOnGithub(proof.held),
     });
   }
 
@@ -662,7 +696,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
     merge: (opts) => provedMerge(opts),
 
-    regressionProof: (opts) => proveHead(opts),
+    regressionProof: (opts) => runRegressionProof(opts),
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

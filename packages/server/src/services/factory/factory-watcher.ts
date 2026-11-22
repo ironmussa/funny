@@ -26,6 +26,7 @@ import type { IssueBlocker } from '@funny/core/github-app';
 import type { ConcurrencyGate } from '@funny/pipelines';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
+import type { RegressionProofOpts } from '@funny/workflows/compiler';
 import { and, eq } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
@@ -64,6 +65,7 @@ import {
   proofRecordOf,
   proveOnRunner,
   regressionTestRequired,
+  type FactoryProofDeps,
 } from './factory-proof-runner.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import {
@@ -72,6 +74,7 @@ import {
   IN_FLIGHT_STATES,
   type FactoryRunState,
   type FactoryRunView,
+  type RegressionProofRecord,
 } from './factory-runs.js';
 import {
   disableFactory,
@@ -730,6 +733,144 @@ async function reconcileParked(factory: WatchedFactory, repo: string): Promise<v
   for (const run of parked.value) await reconcileRun(factory, repo, run);
 }
 
+/** A parked run whose pull request head needs its proof on GitHub. */
+interface ParkedProofTarget {
+  run: FactoryRunView;
+  threadId: string;
+  pr: { repo: string; number: number; userId: string; projectId: string };
+  /** The pull request's head now. */
+  sha: string;
+  config: RegressionProofOpts;
+  testRequired: boolean;
+}
+
+/** The flow's proof rules of a run, read from the default branch; null without rules. */
+async function proofConfigOf(
+  factory: WatchedFactory,
+  repo: string,
+  run: FactoryRunView,
+): Promise<RegressionProofOpts | null> {
+  if (!deps) return null;
+  const github = deps.github;
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const flow = await loadFactoryFlow(run.flowName ?? factory.flowName, {
+    readDefaultBranchFile: (path) => github.readDefaultBranchFile(reader, path),
+  });
+  const config = flow.isOk() ? flow.value.regressionProof : undefined;
+  return config && config.rules.length > 0 ? config : null;
+}
+
+/**
+ * What to prove or publish for a run waiting on GitHub's auto-merge: its pull
+ * request head when that is not the proved commit, or the proved commit when
+ * its check never reached GitHub. Null when there is nothing to do, or
+ * something could not be read (the next tick looks again).
+ */
+async function parkedProofTarget(
+  factory: WatchedFactory,
+  repo: string,
+  run: FactoryRunView,
+  number: number,
+): Promise<ParkedProofTarget | null> {
+  const threadId = run.threadIds[0];
+  const proved = run.regressionProof;
+  if (!deps || !threadId || !proved) return null;
+  const github = deps.github;
+  const pr = { repo, number, userId: factory.userId, projectId: factory.projectId };
+  const head = await github.pullRequests.pullHead(pr);
+  if (head.isErr() || !head.value.autoMerge) return null;
+  const sha = head.value.sha;
+  if (sha === proved.headSha && proved.checkPublished !== false) return null;
+  const config = await proofConfigOf(factory, repo, run);
+  if (!config) return null;
+  // Whether the issue needs a test decides the check's conclusion: without
+  // its labels nothing is published (an unread label must not exempt it).
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const issue = await github.getIssue(reader, run.issueNumber);
+  if (issue.isErr()) {
+    log.warn("Issue factory could not read a parked run's issue, its new head is not proved yet", {
+      namespace: 'factory',
+      runId: run.id,
+      headSha: sha,
+      error: issue.error.message,
+    });
+    return null;
+  }
+  const testRequired = regressionTestRequired(config, issue.value.labels ?? []);
+  return { run, threadId, pr, sha, config, testRequired };
+}
+
+/** Prove the target's head on the runner; null when there is no verdict of that commit. */
+async function proveParkedHead(
+  target: ParkedProofTarget,
+  proofDeps: FactoryProofDeps,
+  signal: AbortSignal,
+): Promise<RegressionProofRecord | null> {
+  const { run, sha } = target;
+  const proof = await proveOnRunner(proofDeps, target.threadId, target.config, signal, sha);
+  // A verdict of another commit (or of none) says nothing about this head.
+  const why =
+    proof.kind === 'unavailable'
+      ? proof.why
+      : proof.result.headSha === sha
+        ? null
+        : `the runner proved ${proof.result.headSha || 'no commit'}`;
+  if (proof.kind === 'unavailable' || why) {
+    log.warn("Issue factory could not prove a parked run's new head", {
+      namespace: 'factory',
+      runId: run.id,
+      headSha: sha,
+      error: why,
+    });
+    return null;
+  }
+  return proofRecordOf(proof.result);
+}
+
+/**
+ * Record the proof of the target's head and publish its check. The record is
+ * stored first, marked unpublished, and only while the run is still parked;
+ * a publish that fails is tried again on a later tick without proving again.
+ */
+async function settleParkedProof(
+  target: ParkedProofTarget,
+  proofDeps: FactoryProofDeps,
+  repository: ReturnType<typeof createFactoryRunsRepository>,
+  signal: AbortSignal,
+): Promise<void> {
+  if (!deps) return;
+  const { run, sha, testRequired } = target;
+  const held = run.regressionProof?.headSha === sha ? run.regressionProof : null;
+  const proved = held ?? (await proveParkedHead(target, proofDeps, signal));
+  if (!proved) return;
+  const reason = held
+    ? run.failureReason
+    : proofAllowsMerge(proved, testRequired)
+      ? null
+      : `Regression proof failed on the new head ${sha}: ${proved.finding ?? 'no regression test'}`;
+  const stored = await repository.recordParkedProof(
+    run.id,
+    { ...proved, checkPublished: false },
+    reason,
+  );
+  // Retried or taken over meanwhile (or not stored): its check is not this watcher's to publish.
+  if (stored.isErr() || !stored.value) return;
+  const published = await deps.github.pullRequests.publishProofCheck(
+    target.pr,
+    proofCheckOf(proved, testRequired),
+  );
+  if (published.isErr()) {
+    log.warn('Issue factory could not publish the regression proof check', {
+      namespace: 'factory',
+      runId: run.id,
+      headSha: sha,
+      error: published.error.message,
+    });
+    return;
+  }
+  await repository.recordParkedProof(run.id, { ...proved, checkPublished: true }, reason);
+}
+
 /**
  * A run waiting on GitHub's auto-merge whose pull request head is no longer
  * the proved commit: prove the new head and publish its check, in the
@@ -742,68 +883,24 @@ async function reproveMovedHead(
   run: FactoryRunView,
   number: number,
 ): Promise<void> {
-  const threadId = run.threadIds[0];
-  const proved = run.regressionProof;
-  if (!deps || !runs || !proofs || !threadId || !proved || reproving.has(run.id)) return;
-  const github = deps.github;
-  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
-  const pr = { repo, number, userId: factory.userId, projectId: factory.projectId };
-  const head = await github.pullRequests.pullHead(pr);
-  if (head.isErr() || !head.value.autoMerge || head.value.sha === proved.headSha) return;
-  const flowName = run.flowName ?? factory.flowName;
-  const flow = await loadFactoryFlow(flowName, {
-    readDefaultBranchFile: (path) => github.readDefaultBranchFile(reader, path),
-  });
-  const config = flow.isOk() ? flow.value.regressionProof : undefined;
-  if (!config || config.rules.length === 0) return;
-
+  if (!runs || !proofs || reproving.has(run.id)) return;
+  const repository = runs;
+  const proofsFor = proofs;
+  const target = await parkedProofTarget(factory, repo, run, number);
+  if (!target || reproving.has(run.id)) return;
   const controller = new AbortController();
   reproving.set(run.id, controller);
-  const sha = head.value.sha;
-  const proofDeps = proofs(factory.userId, threadId);
-  const repository = runs;
-  void (async () => {
-    try {
-      const proof = await proveOnRunner(proofDeps, threadId, config, controller.signal, sha);
-      if (proof.kind === 'unavailable') {
-        log.warn("Issue factory could not prove a parked run's new head", {
-          namespace: 'factory',
-          runId: run.id,
-          headSha: sha,
-          error: proof.why,
-        });
-        return;
-      }
-      const issue = await github.getIssue(reader, run.issueNumber);
-      const testRequired = regressionTestRequired(
-        config,
-        issue.isOk() ? (issue.value.labels ?? []) : [],
-      );
-      const record = proofRecordOf(proof.result);
-      const allows = proofAllowsMerge(proof.result, testRequired);
-      await repository.recordParkedProof(
-        run.id,
-        record,
-        allows
-          ? null
-          : `Regression proof failed on the new head ${sha}: ${proof.result.finding ?? 'no regression test'}`,
-      );
-      const published = await github.pullRequests.publishProofCheck(
-        pr,
-        proofCheckOf(record, testRequired),
-      );
-      if (published.isErr()) {
-        log.warn('Issue factory could not publish the regression proof check', {
-          namespace: 'factory',
-          runId: run.id,
-          headSha: sha,
-          error: published.error.message,
-        });
-      }
-    } finally {
-      reproving.delete(run.id);
-    }
-  })();
+  const proofDeps = proofsFor(factory.userId, target.threadId);
+  void settleParkedProof(target, proofDeps, repository, controller.signal)
+    .catch((error: unknown) => {
+      log.error("Issue factory failed while proving a parked run's new head", {
+        namespace: 'factory',
+        runId: run.id,
+        headSha: target.sha,
+        error: String(error),
+      });
+    })
+    .finally(() => reproving.delete(run.id));
 }
 
 /** The run's pull request number: the recorded one, else the one on its branch (then recorded). */

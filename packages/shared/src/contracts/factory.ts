@@ -133,6 +133,11 @@ export const factoryRegressionProofSchema = z.object({
   /** A pass: the base's failing output (the evidence); a fail: the failing run's. */
   outputTail: z.string().optional(),
   ranAt: z.string(),
+  /**
+   * Whether the proof is on GitHub as its commit's check. False: publishing
+   * failed and is tried again; absent on proofs stored before it was tracked.
+   */
+  checkPublished: z.boolean().optional(),
 });
 
 export type FactoryRegressionProof = z.infer<typeof factoryRegressionProofSchema>;

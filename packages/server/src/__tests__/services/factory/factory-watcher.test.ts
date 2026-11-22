@@ -108,6 +108,10 @@ interface GithubScript {
   branchAhead?: boolean;
   /** The pull request's head now (default `sha-head`, auto-merge off). */
   head?: { sha: string; autoMerge: boolean };
+  /** GitHub does not answer for issues. */
+  issuesUnreadable?: boolean;
+  /** How many times publishing the proof check fails before it works. */
+  publishFailures?: number;
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
@@ -127,6 +131,7 @@ function fakeGithub(
 ): FakeGithub {
   const answers: CiState[] = [script.ci ?? { kind: 'green' }].flat();
   let looks = 0;
+  let publishFailures = script.publishFailures ?? 0;
   const port: FakeGithub = {
     fileReads: [],
     merges: 0,
@@ -136,14 +141,16 @@ function fakeGithub(
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
     getIssue: (_reader: unknown, number: number) =>
-      okAsync({
-        number,
-        title: `Issue ${number}`,
-        url: `u/${number}`,
-        state: script.closed?.includes(number) ? ('closed' as const) : ('open' as const),
-        pullRequest: false,
-        createdAt: '2026-01-01T00:00:00Z',
-      }),
+      script.issuesUnreadable
+        ? errAsync({ message: 'GitHub answered 500', status: 500 })
+        : okAsync({
+            number,
+            title: `Issue ${number}`,
+            url: `u/${number}`,
+            state: script.closed?.includes(number) ? ('closed' as const) : ('open' as const),
+            pullRequest: false,
+            createdAt: '2026-01-01T00:00:00Z',
+          }),
     issueBlockers: (_reader: unknown, number: number) => {
       const blockers = script.blockers?.[number] ?? [];
       return blockers === 'unreadable'
@@ -173,6 +180,9 @@ function fakeGithub(
       pullHead: () =>
         okAsync({ sha: 'sha-head', autoMerge: false, ...script.head, baseRef: 'main' }),
       publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {
+        if (publishFailures-- > 0) {
+          return errAsync({ kind: 'not-installed' as const, message: 'GitHub answered 502' });
+        }
         port.checks.push(check);
         return okAsync(undefined);
       },
@@ -1382,7 +1392,11 @@ describe('factory operator controls', () => {
       });
 
       await poll.ticks[0]!();
-      const reproved = await eventuallyRun(run.id, (r) => r.regressionProof?.headSha === 'sha-new');
+      const reproved = await eventuallyRun(
+        run.id,
+        (r) =>
+          r.regressionProof?.headSha === 'sha-new' && r.regressionProof.checkPublished === true,
+      );
 
       expect(asked).toEqual(['sha-new']);
       expect(reproved).toMatchObject({ state: 'waiting_human', failureReason: null });
@@ -1399,7 +1413,7 @@ describe('factory operator controls', () => {
       });
 
       await poll.ticks[0]!();
-      const failed = await eventuallyRun(run.id, (r) => r.regressionProof?.headSha === 'sha-new');
+      const failed = await eventuallyRun(run.id, (r) => r.regressionProof?.checkPublished === true);
 
       expect(failed.failureReason).toContain('Regression proof failed on the new head sha-new');
       expect(failed.failureReason).toContain('The tests pass on the base commit');
@@ -1425,6 +1439,91 @@ describe('factory operator controls', () => {
         expect(github.checks).toEqual([]);
       });
     }
+  });
+
+  describe('a re-proof that cannot be trusted or published (review of task 4.4)', () => {
+    async function seedAutoMergeRun(factoryId: string) {
+      const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
+      await createFactoryRunsRepository().update(run.id, {
+        prUrl: 'https://github.com/o/r/pull/9',
+        currentStep: null,
+        regressionProof: { headSha: 'sha-old', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+      });
+      return run;
+    }
+
+    /** A runner whose verdict names `answered`, whatever it was asked for. */
+    const proving = (asked: string[], answered?: string) => () => ({
+      startProof: async (_threadId: string, body: Record<string, unknown>) => {
+        asked.push(String(body.headSha));
+        return ok({ proofId: 'p1', state: 'running' });
+      },
+      pollProof: async () =>
+        ok({ state: 'done', result: { verdict: 'skipped', headSha: answered ?? asked.at(-1) } }),
+    });
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+    test('an issue that cannot be read publishes nothing: its labels must not exempt the test', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true }, issuesUnreadable: true },
+        proof: proving(asked),
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+
+      expect(asked).toEqual([]);
+      expect(github.checks).toEqual([]);
+      expect((await runById(run.id)).regressionProof?.headSha).toBe('sha-old');
+    });
+
+    test('a verdict of another commit than the one asked for is not recorded or published', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true } },
+        proof: proving(asked, 'sha-other'),
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+
+      expect(asked).toEqual(['sha-new']);
+      expect(github.checks).toEqual([]);
+      expect((await runById(run.id)).regressionProof?.headSha).toBe('sha-old');
+    });
+
+    test('a check that could not be published is published on a later tick, without proving again', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true }, publishFailures: 1 },
+        proof: proving(asked),
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+      expect(github.checks).toEqual([]);
+      expect((await runById(run.id)).regressionProof).toMatchObject({
+        headSha: 'sha-new',
+        checkPublished: false,
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+      expect(asked).toEqual(['sha-new']);
+      expect(github.checks).toMatchObject([{ headSha: 'sha-new' }]);
+      expect((await runById(run.id)).regressionProof?.checkPublished).toBe(true);
+    });
   });
 
   test('a parked run whose pull request a person merged is closed as merged', async () => {

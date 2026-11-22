@@ -142,6 +142,20 @@ describe('isCheckHeldByApp', () => {
     expect(calls.map((c) => c.path)).toEqual(['/repos/o/r/rules/branches/main?per_page=100']);
   });
 
+  test('a branch name with a slash keeps it in the path', async () => {
+    const { ops, calls } = opsFor({
+      'GET /repos/o/r/rules/branches/release/1.x?per_page=100': rules([
+        { context: name, integration_id: 999 },
+      ]),
+    });
+    expect((await ops.isCheckHeldByApp('o/r', 'release/1.x', name, 999))._unsafeUnwrap()).toBe(
+      true,
+    );
+    expect(calls.map((c) => c.path)).toEqual([
+      '/repos/o/r/rules/branches/release/1.x?per_page=100',
+    ]);
+  });
+
   test('not held: required from any source, or from another App', async () => {
     for (const check of [{ context: name }, { context: name, integration_id: 15368 }]) {
       const { ops } = opsFor({

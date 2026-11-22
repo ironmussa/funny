@@ -214,6 +214,12 @@ interface Checkout {
   path: string;
 }
 
+/** Why a checkout could not be prepared. */
+interface CheckoutRefusal {
+  finding: string;
+  output: string;
+}
+
 class ProofRun {
   private readonly deadline: number;
   readonly tempWorktrees: string[] = [];
@@ -237,7 +243,7 @@ class ProofRun {
     sha: string,
     label: string,
     files: string[],
-  ): Promise<{ ok: true; checkout: Checkout } | { ok: false; finding: string; output: string }> {
+  ): Promise<{ ok: true; checkout: Checkout } | ({ ok: false } & CheckoutRefusal)> {
     const created = await createTempWorktree(this.projectPath, sha, label);
     if (created.isErr()) {
       return {
@@ -247,33 +253,43 @@ class ProofRun {
       };
     }
     this.tempWorktrees.push(created.value);
-    if (files.length > 0) {
-      const copied = await copyFilesFromCommit(
-        this.projectPath,
-        created.value,
-        this.request.headSha,
-        files,
-      );
-      if (copied.isErr()) {
-        return { ok: false, finding: `Copy failed: ${copied.error.message}`, output: '' };
-      }
-    }
-    // The head's setup prepares both phases alike: the flow's `setup_command`,
-    // else the head checkout's `.funny.json` `postCreate` (as a thread worktree).
+    const refused =
+      (await this.copyHeadFiles(created.value, files)) ?? (await this.setup(created.value, label));
+    if (refused) return { ok: false, ...refused };
+    return { ok: true, checkout: { path: created.value } };
+  }
+
+  /** Copy `files` from the head commit into the worktree; a finding when it fails. */
+  private async copyHeadFiles(worktree: string, files: string[]): Promise<CheckoutRefusal | null> {
+    if (files.length === 0) return null;
+    const copied = await copyFilesFromCommit(
+      this.projectPath,
+      worktree,
+      this.request.headSha,
+      files,
+    );
+    return copied.isErr() ? { finding: `Copy failed: ${copied.error.message}`, output: '' } : null;
+  }
+
+  /**
+   * The head's setup prepares both phases alike: the flow's `setup_command`,
+   * else the head checkout's `.funny.json` `postCreate` (as a thread worktree).
+   */
+  private async setup(worktree: string, label: string): Promise<CheckoutRefusal | null> {
     this.setupCommands ??= this.request.setupCommand
       ? [this.request.setupCommand]
-      : (readProjectConfig(created.value)?.postCreate ?? []);
+      : (readProjectConfig(worktree)?.postCreate ?? []);
     for (const command of this.setupCommands) {
-      const setup = await runCommand(command, created.value, this.signal, this.remaining());
+      const setup = await runCommand(command, worktree, this.signal, this.remaining());
       if (setup.kind !== 'exited' || setup.exitCode !== 0) {
+        const how = setup.kind === 'exited' ? `exited ${setup.exitCode}` : setup.kind;
         return {
-          ok: false,
-          finding: `Setup failed on the ${label}: \`${command}\` ${setup.kind === 'exited' ? `exited ${setup.exitCode}` : setup.kind}`,
+          finding: `Setup failed on the ${label}: \`${command}\` ${how}`,
           output: setup.output,
         };
       }
     }
-    return { ok: true, checkout: { path: created.value } };
+    return null;
   }
 
   run(command: string, checkout: Checkout, cwd?: string): Promise<RunOutcome> {
@@ -305,15 +321,13 @@ export async function runProof(
   }
 }
 
-async function proveCommit(run: ProofRun): Promise<Omit<ProofResult, 'headSha'>> {
-  const { projectPath, request } = run;
-  const { headSha, defaultBranch, rules } = request;
-  const supportGlobs =
-    request.supportGlobs.length > 0 ? request.supportGlobs : DEFAULT_SUPPORT_GLOBS;
-  const failed = (
-    finding: string,
-    rest: Partial<Omit<ProofResult, 'headSha' | 'verdict'>> = {},
-  ): Omit<ProofResult, 'headSha'> => ({
+type Outcome = Omit<ProofResult, 'headSha'>;
+
+function failed(
+  finding: string,
+  rest: Partial<Omit<ProofResult, 'headSha' | 'verdict'>> = {},
+): Outcome {
+  return {
     verdict: 'fail',
     failureKind: 'environment',
     finding,
@@ -322,96 +336,140 @@ async function proveCommit(run: ProofRun): Promise<Omit<ProofResult, 'headSha'>>
     baseSha: '',
     outputTail: '',
     ...rest,
-  });
+  };
+}
 
-  await gitNetwork(['fetch', 'origin', defaultBranch], {
+/** A rule with the changed test files it covers and its filled command. */
+interface ActiveRule {
+  rule: ProofRequest['rules'][number];
+  files: string[];
+  command: string;
+}
+
+/** What a proof runs: the rules with changed tests, between a base and the head. */
+interface ProofPlan {
+  activeRules: ActiveRule[];
+  changed: string[];
+  context: { files: string[]; commands: string[]; baseSha: string };
+}
+
+/** Bring the default branch and the head commit into the checkout. */
+async function fetchCommits(projectPath: string, request: ProofRequest): Promise<void> {
+  await gitNetwork(['fetch', 'origin', request.defaultBranch], {
     cwd: projectPath,
     reject: false,
     timeout: 60_000,
   });
   // A head named by the server (the pull request's, pushed from elsewhere) may
   // not be here yet: fetch that commit (GitHub serves reachable SHAs).
-  const present = await gitRead(['cat-file', '-e', `${headSha}^{commit}`], {
+  const present = await gitRead(['cat-file', '-e', `${request.headSha}^{commit}`], {
     cwd: projectPath,
     reject: false,
   });
-  if (present.exitCode !== 0) {
-    await gitNetwork(['fetch', 'origin', headSha], {
-      cwd: projectPath,
-      reject: false,
-      timeout: 60_000,
-    });
-  }
+  if (present.exitCode === 0) return;
+  await gitNetwork(['fetch', 'origin', request.headSha], {
+    cwd: projectPath,
+    reject: false,
+    timeout: 60_000,
+  });
+}
 
-  const baseResult = await mergeBase(projectPath, `origin/${defaultBranch}`, headSha);
+/** The plan of a proof, or the outcome when there is nothing to run. */
+async function planProof(
+  projectPath: string,
+  request: ProofRequest,
+): Promise<{ plan: ProofPlan } | { outcome: Outcome }> {
+  const baseResult = await mergeBase(
+    projectPath,
+    `origin/${request.defaultBranch}`,
+    request.headSha,
+  );
   if (baseResult.isErr()) {
-    return failed(`Could not compute merge-base: ${baseResult.error.message}`);
+    return { outcome: failed(`Could not compute merge-base: ${baseResult.error.message}`) };
   }
   const baseSha = baseResult.value;
 
-  const changedResult = await changedFilesBetween(projectPath, baseSha, headSha);
+  const changedResult = await changedFilesBetween(projectPath, baseSha, request.headSha);
   if (changedResult.isErr()) {
-    return failed(`Could not list changed files: ${changedResult.error.message}`, { baseSha });
+    return {
+      outcome: failed(`Could not list changed files: ${changedResult.error.message}`, { baseSha }),
+    };
   }
 
-  const activeRules = [...assignFilesToRules(changedResult.value, rules)].flatMap(
+  const activeRules = [...assignFilesToRules(changedResult.value, request.rules)].flatMap(
     ([rule, files]) =>
       files.length > 0
         ? [{ rule, files, command: fillCommand(rule.command, files, rule.cwd) }]
         : [],
   );
-  const testFiles = activeRules.flatMap(({ files }) => files);
-  if (testFiles.length === 0) {
+  const files = activeRules.flatMap((active) => active.files);
+  if (files.length === 0) {
     return {
-      verdict: 'skipped',
-      finding: 'No test files changed',
-      files: [],
-      commands: [],
-      baseSha,
-      outputTail: '',
+      outcome: {
+        verdict: 'skipped',
+        finding: 'No test files changed',
+        files: [],
+        commands: [],
+        baseSha,
+        outputTail: '',
+      },
     };
   }
   const commands = activeRules.map(({ command }) => command);
-  const context = { files: testFiles, commands, baseSha };
+  return {
+    plan: { activeRules, changed: changedResult.value, context: { files, commands, baseSha } },
+  };
+}
 
-  // --- Head: must pass, every run ---
-  const head = await run.checkout(headSha, 'head', []);
-  if (!head.ok) return failed(head.finding, { ...context, outputTail: head.output });
-  let headOutput = '';
+/** Why one run of the head's tests refuses the proof, or null when it passed. */
+function headRefusal(outcome: RunOutcome, attempt: number, plan: ProofPlan): Outcome | null {
+  const { context } = plan;
+  if (outcome.kind === 'aborted') return failed('Aborted', context);
+  if (outcome.kind === 'timed-out') {
+    return failed('The proof ran out of time on the head commit', {
+      ...context,
+      outputTail: outcome.output,
+    });
+  }
+  if (outcome.exitCode === 0) return null;
+  return failed(
+    attempt === 1
+      ? 'Tests fail on the head commit'
+      : `Tests passed on the head commit, then failed on run ${attempt}: they are flaky`,
+    { ...context, outputTail: outcome.output, failureKind: 'test' },
+  );
+}
+
+/** Head: the tests must pass, every run. The refusal, or null. */
+async function proveHead(run: ProofRun, plan: ProofPlan): Promise<Outcome | null> {
+  const head = await run.checkout(run.request.headSha, 'head', []);
+  if (!head.ok) return failed(head.finding, { ...plan.context, outputTail: head.output });
   for (let attempt = 1; attempt <= HEAD_RUNS; attempt++) {
-    for (const { rule, command } of activeRules) {
+    for (const { rule, command } of plan.activeRules) {
       const outcome = await run.run(command, head.checkout, rule.cwd);
-      headOutput = outcome.output;
-      if (outcome.kind === 'aborted') return failed('Aborted', context);
-      if (outcome.kind === 'timed-out') {
-        return failed('The proof ran out of time on the head commit', {
-          ...context,
-          outputTail: headOutput,
-        });
-      }
-      if (outcome.exitCode !== 0) {
-        return failed(
-          attempt === 1
-            ? 'Tests fail on the head commit'
-            : `Tests passed on the head commit, then failed on run ${attempt}: they are flaky`,
-          { ...context, outputTail: headOutput, failureKind: 'test' },
-        );
-      }
+      const refusal = headRefusal(outcome, attempt, plan);
+      if (refusal) return refusal;
     }
   }
+  return null;
+}
 
-  // --- Base: the head's tests (and their support files) must fail by an assertion ---
-  const supportFiles = changedResult.value.filter(
-    (f) => !testFiles.includes(f) && matchesAnyGlob(f, supportGlobs),
+/** Base: the head's tests (and their support files) must fail by an assertion. */
+async function proveBase(run: ProofRun, plan: ProofPlan): Promise<Outcome> {
+  const { context } = plan;
+  const supportGlobs =
+    run.request.supportGlobs.length > 0 ? run.request.supportGlobs : DEFAULT_SUPPORT_GLOBS;
+  const supportFiles = plan.changed.filter(
+    (f) => !context.files.includes(f) && matchesAnyGlob(f, supportGlobs),
   );
-  const base = await run.checkout(baseSha, 'base', [...testFiles, ...supportFiles]);
+  const base = await run.checkout(context.baseSha, 'base', [...context.files, ...supportFiles]);
   if (!base.ok) {
     return failed(`Inconclusive: ${base.finding}`, { ...context, outputTail: base.output });
   }
   let caught = false;
   let inconclusive: string | null = null;
   let baseOutput = '';
-  for (const { rule, command } of activeRules) {
+  for (const { rule, command } of plan.activeRules) {
     const outcome = await run.run(command, base.checkout, rule.cwd);
     baseOutput += outcome.output;
     if (outcome.kind === 'aborted') return failed('Aborted', context);
@@ -420,21 +478,21 @@ async function proveCommit(run: ProofRun): Promise<Omit<ProofResult, 'headSha'>>
     else if (outcome.kind === 'exited' && outcome.exitCode !== 0) caught = true;
   }
   const baseTail = baseOutput.slice(-OUTPUT_TAIL);
-  if (caught) {
-    // The evidence of a pass is the base failing: keep that output, not the head's.
-    return { verdict: 'pass', ...context, outputTail: baseTail };
-  }
-  if (inconclusive) {
-    return failed(
-      `Inconclusive: the tests failed on the base commit, but not by an assertion (${inconclusive})`,
-      { ...context, outputTail: baseTail, failureKind: 'test' },
-    );
-  }
-  return failed('The tests pass on the base commit: they do not catch the bug', {
-    ...context,
-    outputTail: baseTail,
-    failureKind: 'test',
-  });
+  // The evidence of a pass is the base failing: keep that output, not the head's.
+  if (caught) return { verdict: 'pass', ...context, outputTail: baseTail };
+  return failed(
+    inconclusive
+      ? `Inconclusive: the tests failed on the base commit, but not by an assertion (${inconclusive})`
+      : 'The tests pass on the base commit: they do not catch the bug',
+    { ...context, outputTail: baseTail, failureKind: 'test' },
+  );
+}
+
+async function proveCommit(run: ProofRun): Promise<Outcome> {
+  await fetchCommits(run.projectPath, run.request);
+  const planned = await planProof(run.projectPath, run.request);
+  if ('outcome' in planned) return planned.outcome;
+  return (await proveHead(run, planned.plan)) ?? (await proveBase(run, planned.plan));
 }
 
 // ── Job registry ──────────────────────────────────────────────
@@ -466,7 +524,8 @@ export function startProofJob(
   };
   jobs.set(threadId, job);
 
-  runProof(projectPath, request, controller.signal)
+  sweepOnce(projectPath)
+    .then(() => runProof(projectPath, request, controller.signal))
     .then((result) => {
       job.result = result;
       job.state = 'done';
@@ -506,10 +565,32 @@ export function cancelProofJob(threadId: string, proofId: string): boolean {
   return true;
 }
 
-export async function sweepProofWorktrees(projectPath: string): Promise<number> {
-  const result = await sweepTempWorktrees(projectPath);
-  return result.match(
-    (n) => n,
-    () => 0,
-  );
+/** Projects whose leftover proof worktrees this process already removed. */
+const swept = new Map<string, Promise<void>>();
+
+/**
+ * Remove the proof worktrees a previous runner process left behind (it was
+ * killed mid-proof), once per project, before this process's first proof
+ * there. Later proofs skip it, so a running proof's worktree is never removed.
+ */
+function sweepOnce(projectPath: string): Promise<void> {
+  let pending = swept.get(projectPath);
+  if (!pending) {
+    pending = sweepTempWorktrees(projectPath).match(
+      (removed) => {
+        if (removed > 0) {
+          log.info('Removed leftover proof worktrees', { namespace: ns, projectPath, removed });
+        }
+      },
+      (error) => {
+        log.warn('Could not sweep leftover proof worktrees', {
+          namespace: ns,
+          projectPath,
+          error: error.message,
+        });
+      },
+    );
+    swept.set(projectPath, pending);
+  }
+  return pending;
 }

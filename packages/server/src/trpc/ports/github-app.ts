@@ -73,35 +73,61 @@ function originOf(header: string | undefined): string | null {
 
 const LEVEL_RANK = { read: 1, write: 2 } as const;
 
+/** The permissions of `APP_PERMISSIONS` that `has` does not cover, as `name: level`. */
+function lacking(has: Record<string, string>): string[] {
+  return Object.entries(APP_PERMISSIONS)
+    .filter(([name, level]) => {
+      const held = has[name];
+      return !(held === 'read' || held === 'write') || LEVEL_RANK[held] < LEVEL_RANK[level];
+    })
+    .map(([name, level]) => `${name}: ${level}`);
+}
+
+/** What the App's permissions look like on GitHub. */
+interface AppPermissionGaps {
+  /** Permissions funny asks for that the App itself does not have. */
+  missingPermissions: string[];
+  /** Accounts whose installation has not accepted every permission funny asks for. */
+  pendingInstallations: string[];
+}
+
 /**
- * The permissions of `APP_PERMISSIONS` the App lacks (`GET /app`, as the App),
- * e.g. an App created before the issue factory needed `checks: write`. Null
- * when GitHub could not be asked: the screen then says nothing.
+ * What the App and its installations lack of `APP_PERMISSIONS` (`GET /app` and
+ * `GET /app/installations`, as the App), e.g. an App created before the issue
+ * factory needed `checks: write`, or an installation that has not accepted it
+ * yet: GitHub grants a new permission to an installation only once its owner
+ * accepts it. Null when GitHub could not be asked: the screen then says nothing.
  */
-async function missingAppPermissions(
+async function appPermissionGaps(
   doFetch: typeof fetch,
   api: string,
   app: { appId: string; privateKey: string },
-): Promise<string[] | null> {
+): Promise<AppPermissionGaps | null> {
   const jwt = signAppJwt(app.appId, app.privateKey);
   if (jwt.isErr()) return null;
-  try {
-    const res = await doFetch(`${api}/app`, {
+  const get = async (path: string): Promise<unknown> => {
+    const res = await doFetch(`${api}${path}`, {
       headers: {
         accept: 'application/vnd.github+json',
         authorization: `Bearer ${jwt.value}`,
         'user-agent': 'funny',
       },
     });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { permissions?: Record<string, string> };
-    const has = body.permissions ?? {};
-    return Object.entries(APP_PERMISSIONS)
-      .filter(([name, level]) => {
-        const held = has[name];
-        return !(held === 'read' || held === 'write') || LEVEL_RANK[held] < LEVEL_RANK[level];
-      })
-      .map(([name, level]) => `${name}: ${level}`);
+    if (!res.ok) throw new Error(`GitHub answered ${res.status} for ${path}`);
+    return res.json();
+  };
+  try {
+    const body = (await get('/app')) as { permissions?: Record<string, string> };
+    const missingPermissions = lacking(body.permissions ?? {});
+    // The installations are a second question: without an answer, say what is known.
+    const installations = (await get('/app/installations?per_page=100').catch(() => [])) as Array<{
+      account?: { login?: string } | null;
+      permissions?: Record<string, string>;
+    }>;
+    const pendingInstallations = (Array.isArray(installations) ? installations : [])
+      .filter((installation) => lacking(installation.permissions ?? {}).length > 0)
+      .map((installation) => installation.account?.login ?? 'unknown account');
+    return { missingPermissions, pendingInstallations };
   } catch (error) {
     log.warn('Could not read the GitHub App permissions', {
       namespace: 'github-app',
@@ -172,7 +198,7 @@ export function createGithubAppPort(
       }
       const app = config.value;
       if (!app) return ok({ configured: false, source: 'none' as const });
-      const missingPermissions = await missingAppPermissions(doFetch, api, app);
+      const gaps = await appPermissionGaps(doFetch, api, app);
       const status: GithubAppStatus = {
         configured: true,
         source: app.source,
@@ -183,7 +209,10 @@ export function createGithubAppPort(
         settingsUrl: app.slug ? `https://github.com/settings/apps/${app.slug}` : null,
       };
       // Absent when GitHub could not be asked: the screen then says nothing.
-      if (missingPermissions) status.missingPermissions = missingPermissions;
+      if (gaps) {
+        status.missingPermissions = gaps.missingPermissions;
+        status.pendingInstallations = gaps.pendingInstallations;
+      }
       return ok(status);
     },
 

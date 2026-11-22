@@ -213,6 +213,26 @@ describe('GitHub App settings', () => {
     expect((await statusWith({ ...sandboxSet, checks: 'write' })).missingPermissions).toEqual([]);
     // GitHub could not be asked: the screen says nothing.
     expect((await statusWith(null)).missingPermissions).toBeUndefined();
+
+    // The App has the permission, but one installation has not accepted it yet.
+    const full = { ...sandboxSet, checks: 'write' };
+    const { admin, anonymous } = setup({
+      github: (path) => {
+        if (path === '/app') return new Response(JSON.stringify({ permissions: full }));
+        if (path !== '/app/installations?per_page=100') return undefined;
+        return new Response(
+          JSON.stringify([
+            { account: { login: 'acme' }, permissions: sandboxSet },
+            { account: { login: 'alice' }, permissions: full },
+          ]),
+        );
+      },
+    });
+    await callback(anonymous, (await start(admin)).body.state);
+    expect((await status(admin)).body).toMatchObject({
+      missingPermissions: [],
+      pendingInstallations: ['acme'],
+    });
     // Asked as the App (its JWT), never with a user's token.
     expect(auths.every((auth) => auth?.startsWith('Bearer ey'))).toBe(true);
   });

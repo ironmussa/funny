@@ -153,6 +153,25 @@ describe('GithubAppSettings', () => {
     );
   });
 
+  test('an installation that has not accepted the permissions is named', async () => {
+    mocks.getGithubAppStatus.mockReturnValue(
+      okAsync({
+        configured: true,
+        source: 'database',
+        appId: '42',
+        slug: 'funny-acme',
+        missingPermissions: [],
+        pendingInstallations: ['acme', 'alice'],
+      }),
+    );
+    render(<GithubAppSettings />);
+
+    const notice = await screen.findByTestId('github-app-pending-installations');
+    expect(notice).toHaveTextContent('acme, alice');
+    expect(notice).toHaveTextContent('regression proof check');
+    expect(screen.queryByTestId('github-app-missing-permissions')).toBeNull();
+  });
+
   test('an App with every permission shows no notice', async () => {
     mocks.getGithubAppStatus.mockReturnValue(
       okAsync({
@@ -161,11 +180,13 @@ describe('GithubAppSettings', () => {
         appId: '42',
         slug: 'funny-acme',
         missingPermissions: [],
+        pendingInstallations: [],
       }),
     );
     render(<GithubAppSettings />);
     await screen.findByTestId('github-app-connected');
     expect(screen.queryByTestId('github-app-missing-permissions')).toBeNull();
+    expect(screen.queryByTestId('github-app-pending-installations')).toBeNull();
   });
 
   test('configured through server variables: no Connect and no Disconnect', async () => {

@@ -588,7 +588,9 @@ describe('factory action provider proof counters (task 4.7)', () => {
 describe('factory action provider: the proof check (task 4.4)', () => {
   const rules = [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }];
 
-  function publishing(result: Record<string, unknown>, publishFails = false) {
+  /** `publishFails`: always, or only the first `n` tries. */
+  function publishing(result: Record<string, unknown>, publishFails: boolean | number = false) {
+    let failures = publishFails === true ? Infinity : Number(publishFails);
     const checks: FactoryProofCheck[] = [];
     const merges: Array<FactoryMergeOptions | undefined> = [];
     const { provider } = providerWith({
@@ -607,7 +609,7 @@ describe('factory action provider: the proof check (task 4.4)', () => {
           pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
           publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {
             checks.push(check);
-            return publishFails
+            return failures-- > 0
               ? errAsync({ kind: 'not-installed' as const, message: 'checks: write not accepted' })
               : okAsync(undefined);
           },
@@ -649,6 +651,15 @@ describe('factory action provider: the proof check (task 4.4)', () => {
     expect((await provider.regressionProof!({ rules })).ok).toBe(true);
     expect((await provider.merge({ regressionProof: { rules } })).ok).toBe(true);
     expect(merges[0]).toMatchObject({ sha: 'sha-head', autoMergeWhenHeld: false });
+  });
+
+  test('a check that failed to publish is published again at the merge, which may then auto-merge', async () => {
+    const { provider, merges, checks } = publishing({ verdict: 'pass' }, 1);
+    await provider.regressionProof!({ rules });
+    await provider.merge({ regressionProof: { rules } });
+    // Two tries of the same proof (the fake records every try), no second proof run.
+    expect(checks).toMatchObject([{ headSha: 'sha-head' }, { headSha: 'sha-head' }]);
+    expect(merges[0]).toMatchObject({ sha: 'sha-head', autoMergeWhenHeld: true });
   });
 
   test('a published check lets the merge auto-merge where GitHub holds it', async () => {

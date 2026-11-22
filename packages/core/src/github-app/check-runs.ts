@@ -149,7 +149,8 @@ export function createRepoCheckOps(github: RepoGithub): RepoCheckOps {
     },
 
     isCheckHeldByApp(repo, branch, checkName, appId) {
-      const ref = encodeURIComponent(branch);
+      // Per segment: a branch such as `release/1.x` keeps its slashes in the path.
+      const ref = branch.split('/').map(encodeURIComponent).join('/');
       // A missing branch or rule set (404) holds nothing.
       const none = <T>(e: GithubCallError) =>
         e.status === 404 ? okAsync<T | null, GithubCallError>(null) : errAsync(e);

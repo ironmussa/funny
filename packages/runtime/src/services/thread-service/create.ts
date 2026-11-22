@@ -15,6 +15,8 @@ import {
   git,
   isContainedPath,
   isRegisteredWorktreePath,
+  removeBranch,
+  removeWorktree,
 } from '@funny/core/git';
 import type {
   WSEvent,
@@ -600,12 +602,47 @@ async function setupWorktreeAndStartAgent(
     }
     const wtPath = wtResult.value;
 
+    // The worktree path is only saved by markWorktreeReady, so a thread deleted
+    // while its worktree was being prepared left the worktree and branch behind.
+    if (!(await tm.getThread(threadId))) {
+      await removeOrphanWorktree(ctx, wtPath, branchName, reuse);
+      return;
+    }
+
     await markWorktreeReady(params.userId, threadId, branchName, wtPath);
     await startAgentInNewWorktree(ctx, wtPath);
   } catch (err) {
     log.error('Background worktree setup failed', { threadId, error: String(err) });
     await markThreadFailed(params.userId, threadId);
   }
+}
+
+/**
+ * Remove the worktree (and the branch, unless it existed before this thread)
+ * of a thread that was deleted while its worktree was being prepared.
+ * A reused branch is kept: it holds an earlier attempt's work.
+ */
+async function removeOrphanWorktree(
+  ctx: ProjectThreadContext,
+  wtPath: string,
+  branchName: string,
+  reusedBranch: boolean,
+): Promise<void> {
+  const { threadId, projectPath } = ctx;
+  log.info('Thread deleted during worktree setup; removing its worktree', {
+    namespace: 'cleanup',
+    threadId,
+    worktreePath: wtPath,
+  });
+  await removeWorktree(projectPath, wtPath).match(
+    () => undefined,
+    (e) => log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) }),
+  );
+  if (reusedBranch) return;
+  await removeBranch(projectPath, branchName).match(
+    () => undefined,
+    (e) => log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) }),
+  );
 }
 
 /** Record the worktree on the thread, transition it to pending and notify the user. */

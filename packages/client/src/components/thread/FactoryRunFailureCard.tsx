@@ -5,12 +5,16 @@
  * card makes it visible without looking for it. It goes away once the run is
  * retried (the failure is cleared) or moves on.
  */
-import { CircleX } from 'lucide-react';
+import { CircleX, MessageSquareText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { useFactoryRunForThread } from '@/data/factory/hooks';
-import { factoryRunFailedStep, isFactoryRunFailed } from '@/lib/factory-run-labels';
+import {
+  factoryRunFailedStep,
+  isFactoryRunFailed,
+  isFactoryRunNoChange,
+} from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { isFactoryThread } from '@/lib/thread-variant';
 
@@ -32,6 +36,43 @@ function RunFailure({ projectId, threadId }: { projectId: string; threadId: stri
   const run = useFactoryRunForThread(projectId, threadId);
   if (!run || !isFactoryRunFailed(run)) return null;
   const step = factoryRunFailedStep(run);
+  const controls = (
+    <div className="flex items-center justify-end gap-1">
+      <FactoryRunControls
+        projectId={projectId}
+        run={run}
+        testId={(button) => `factory-run-failure-${button}`}
+      />
+    </div>
+  );
+
+  // Not an error: the agent found nothing to change and said why on the issue.
+  if (isFactoryRunNoChange(run)) {
+    return (
+      <div
+        className="bg-card space-y-2 rounded-lg border px-3 py-2 text-xs"
+        data-testid="factory-run-no-change-card"
+      >
+        <div className="flex items-center gap-2">
+          <MessageSquareText className="text-muted-foreground icon-sm shrink-0" />
+          <span className="font-medium">
+            {t('factory.noChange.title', 'The agent made no change')}
+          </span>
+          <span className="text-muted-foreground ml-auto">
+            {t('factory.banner.title', 'Factory · #{{issue}}', { issue: run.issueNumber })}
+          </span>
+        </div>
+        <p className="text-foreground">
+          {t(
+            'factory.noChange.body',
+            'It opened no pull request and committed nothing. Its explanation is posted on issue #{{issue}}: close the issue, or retry the run.',
+            { issue: run.issueNumber },
+          )}
+        </p>
+        {controls}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -52,13 +93,7 @@ function RunFailure({ projectId, threadId }: { projectId: string; threadId: stri
       {run.failureReason && (
         <p className="text-foreground break-words whitespace-pre-wrap">{run.failureReason}</p>
       )}
-      <div className="flex items-center justify-end gap-1">
-        <FactoryRunControls
-          projectId={projectId}
-          run={run}
-          testId={(button) => `factory-run-failure-${button}`}
-        />
-      </div>
+      {controls}
     </div>
   );
 }

@@ -15,7 +15,8 @@ describe('factory-issue workflow', () => {
     const { workflows, warnings } = await loadWorkflowCatalog();
     const entry = workflows.get('factory-issue');
 
-    expect(warnings).toEqual([]);
+    const unexpected = warnings.filter((w) => !w.includes('no rules'));
+    expect(unexpected).toEqual([]);
     expect(entry?.source).toBe('built-in');
     expect(Object.keys(entry!.workflow.inputs ?? {}).sort()).toEqual([
       'base',

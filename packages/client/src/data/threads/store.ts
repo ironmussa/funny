@@ -8,7 +8,13 @@ import {
   type SyncParams as SyncedCollectionParams,
 } from '../synced-collection';
 import { createThreadListMeta, type ThreadListMetaStore } from './list-meta';
-import { fenceFields, mergeIncomingThread, takeFencedFields, type FieldFences } from './merge';
+import {
+  endsRun,
+  fenceFields,
+  mergeIncomingThread,
+  takeFencedFields,
+  type FieldFences,
+} from './merge';
 
 /**
  * The canonical thread rows for one session.
@@ -94,6 +100,22 @@ export interface ThreadsData {
 function createThreadsData(layer: DataLayer): ThreadsData {
   const synced = new Map<string, Thread>();
   const fences: FieldFences = new Map();
+  /**
+   * Sequence at which a realtime event ended each thread's run. A response
+   * whose request started before it cannot know the run ended; the first one
+   * that started after it clears the entry. Sequence, not time: the client
+   * clock is never compared with the server's.
+   */
+  const runEndedAt = new Map<string, number>();
+
+  /** Whether a request started at `startedSeq` predates the run end of `threadId`. */
+  function takeStartedBeforeRunEnded(threadId: string, startedSeq: number): boolean {
+    const endedSeq = runEndedAt.get(threadId);
+    if (endedSeq === undefined) return false;
+    if (startedSeq < endedSeq) return true;
+    runEndedAt.delete(threadId);
+    return false;
+  }
   let sync: SyncParams | null = null;
   const fromRowCache = new WeakMap<object, Thread>();
 
@@ -214,7 +236,8 @@ function createThreadsData(layer: DataLayer): ThreadsData {
         for (const row of rows) {
           const prev = synced.get(row.id);
           const fenced = takeFencedFields(fences, row.id, startedSeq);
-          pushRow(out, prev, mergeIncomingThread(prev, row, fenced));
+          const beforeRunEnded = takeStartedBeforeRunEnded(row.id, startedSeq);
+          pushRow(out, prev, mergeIncomingThread(prev, row, fenced, beforeRunEnded));
         }
       });
     },
@@ -233,6 +256,7 @@ function createThreadsData(layer: DataLayer): ThreadsData {
       if (!prev) return null;
       const next = updater(prev);
       if (next === prev) return null;
+      if (endsRun(prev, next)) runEndedAt.set(threadId, layer.nextSeq());
       batch((out) => pushRow(out, prev, next));
       return next;
     },
@@ -255,6 +279,7 @@ function createThreadsData(layer: DataLayer): ThreadsData {
         for (const id of threadIds) {
           if (!synced.delete(id)) continue;
           fences.delete(id);
+          runEndedAt.delete(id);
           out.push({ type: 'delete', key: id });
         }
       });

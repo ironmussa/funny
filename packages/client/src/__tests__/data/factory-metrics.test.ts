@@ -29,6 +29,7 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     flowSteps: [],
     failureReason: null,
     metrics: { ...EMPTY_FACTORY_RUN_METRICS },
+    regressionProof: null,
     ...over,
   };
 }

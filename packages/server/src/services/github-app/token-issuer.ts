@@ -54,6 +54,16 @@ export const SANDBOX_PERMISSIONS: Record<AccessLevel, GithubPermissions> = {
   },
 };
 
+/**
+ * The only token that may write checks: the server's, to publish the factory's
+ * `funny/regression-proof` check (factory-quality-gates). Never given to a
+ * sandbox or an agent: anything there could then forge the proof's check.
+ */
+export const CHECK_PUBLISH_PERMISSIONS: GithubPermissions = { checks: 'write', metadata: 'read' };
+
+/** What the App asks for when it is created: the sandbox set plus writing checks. */
+export const APP_PERMISSIONS: GithubPermissions = { ...SANDBOX_PERMISSIONS.write, checks: 'write' };
+
 export type IssueErrorKind = GithubAppErrorKind | 'no-access';
 export interface IssueError {
   kind: IssueErrorKind;
@@ -124,6 +134,15 @@ export function createGithubAppTokenIssuer(deps: TokenIssuerDeps) {
     );
   }
 
+  /** The connected App, or `not-configured`. */
+  const connectedApp = () =>
+    deps
+      .app()
+      .mapErr((message) => fail('not-configured', message))
+      .andThen((app) =>
+        app ? okAsync(app) : errAsync(fail('not-configured', 'No GitHub App is connected')),
+      );
+
   return {
     /**
      * A token for `repo` (`owner/name`) capped by the owner's access, reused
@@ -136,22 +155,51 @@ export function createGithubAppTokenIssuer(deps: TokenIssuerDeps) {
           fail('no-access', 'The thread owner has no GitHub token to check access with'),
         );
       }
+      return connectedApp().andThen((app) =>
+        ownerLevel(normalized, ownerToken).andThen((level) => {
+          if (!level) {
+            return errAsync(fail('no-access', `The thread owner has no access to ${normalized}`));
+          }
+          return installationTokens
+            .issue({ app, repo: normalized, permissions: SANDBOX_PERMISSIONS[level] })
+            .map((token): RepoToken => ({ ...token, level }));
+        }),
+      );
+    },
+
+    /**
+     * A token that can only write checks on `repo` (`CHECK_PUBLISH_PERMISSIONS`),
+     * for the server's own use: only for an owner with write access. Fails while
+     * the installation has not accepted `checks: write`.
+     */
+    issueCheckPublisher(
+      repo: string,
+      ownerToken: string | null,
+    ): ResultAsync<RepoToken, IssueError> {
+      const normalized = repo.toLowerCase();
+      if (!ownerToken) {
+        return errAsync(fail('no-access', 'The owner has no GitHub token to check access with'));
+      }
+      return connectedApp().andThen((app) =>
+        ownerLevel(normalized, ownerToken).andThen((level) => {
+          if (level !== 'write') {
+            return errAsync(
+              fail('no-access', `Publishing a check on ${normalized} needs write access`),
+            );
+          }
+          return installationTokens
+            .issue({ app, repo: normalized, permissions: CHECK_PUBLISH_PERMISSIONS })
+            .map((token): RepoToken => ({ ...token, level }));
+        }),
+      );
+    },
+
+    /** The connected App's id, for pinning a required check to it; null when none. */
+    appId(): ResultAsync<string | null, IssueError> {
       return deps
         .app()
         .mapErr((message) => fail('not-configured', message))
-        .andThen((app) =>
-          app ? okAsync(app) : errAsync(fail('not-configured', 'No GitHub App is connected')),
-        )
-        .andThen((app) =>
-          ownerLevel(normalized, ownerToken).andThen((level) => {
-            if (!level) {
-              return errAsync(fail('no-access', `The thread owner has no access to ${normalized}`));
-            }
-            return installationTokens
-              .issue({ app, repo: normalized, permissions: SANDBOX_PERMISSIONS[level] })
-              .map((token): RepoToken => ({ ...token, level }));
-          }),
-        );
+        .map((app) => app?.appId ?? null);
     },
   };
 }

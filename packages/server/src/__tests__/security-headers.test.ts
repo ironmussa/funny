@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
+import { FRAME_SRC, frameAncestorsFor, RAW_FILE_PATH } from '@funny/shared/frame-policy';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 
@@ -169,4 +170,50 @@ describe('Markdown WebAssembly security policy', () => {
       expect(res.headers.get('Cross-Origin-Embedder-Policy')).toBe('require-corp');
     });
   }
+});
+
+// Issue #222: the PDF preview iframes the same-origin `/api/files/raw`, so both
+// entrypoints must allow same-origin frames and let only that response be framed.
+describe('raw-file preview frame policy (#222)', () => {
+  for (const path of ['../app.ts', '../../../runtime/src/app/setup-middleware.ts']) {
+    it(`uses the shared frame policy in ${path}`, () => {
+      const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+      expect(source).toContain('frameSrc: FRAME_SRC');
+      expect(source).toMatch(
+        /frameAncestors: \[\(c(: Context)?\) => frameAncestorsFor\(c\.req\.path\)\]/,
+      );
+      expect(source).not.toMatch(/frameSrc: \["'none'"\]/);
+    });
+  }
+
+  async function probe(path: string): Promise<Response> {
+    const app = new Hono();
+    app.use(
+      '*',
+      secureHeaders({
+        contentSecurityPolicy: {
+          frameAncestors: [(c) => frameAncestorsFor(c.req.path)],
+          frameSrc: FRAME_SRC,
+        },
+      }),
+    );
+    app.get('*', (c) => c.text('ok'));
+    return app.request(path);
+  }
+
+  it('lets the app frame the raw-file response', async () => {
+    const res = await probe(`${RAW_FILE_PATH}?path=%2Ftmp%2Fa.pdf`);
+    expect(res.headers.get('Content-Security-Policy')).toBe(
+      "frame-ancestors 'self'; frame-src 'self'",
+    );
+  });
+
+  it('keeps every other response unframeable', async () => {
+    for (const path of ['/', '/api/files/raw-signed', '/api/files/rawx', '/api/files/raw/x']) {
+      const res = await probe(path);
+      expect(res.headers.get('Content-Security-Policy')).toBe(
+        "frame-ancestors 'none'; frame-src 'self'",
+      );
+    }
+  });
 });

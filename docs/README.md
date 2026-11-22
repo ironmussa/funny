@@ -14,11 +14,12 @@ This directory holds **durable** documentation: guides, architecture, design not
 
 How to use or operate funny.
 
-| Doc                                               | Purpose                                                 |
-| ------------------------------------------------- | ------------------------------------------------------- |
-| [ingest-api.md](./guides/ingest-api.md)           | External agent webhook API                              |
-| [issue-factory.md](./guides/issue-factory.md)     | Issue factory: Factory App, settings, secrets, security |
-| [process-cleanup.md](./guides/process-cleanup.md) | Ghost sockets, port cleanup, Windows handle inheritance |
+| Doc                                                                 | Purpose                                                                      |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [ingest-api.md](./guides/ingest-api.md)                             | External agent webhook API                                                   |
+| [issue-factory.md](./guides/issue-factory.md)                       | Issue factory: Factory App, settings, secrets, security                      |
+| [factory-regression-proof.md](./guides/factory-regression-proof.md) | Server factory: the regression proof gate, its rules, the merge, "no change" |
+| [process-cleanup.md](./guides/process-cleanup.md)                   | Ghost sockets, port cleanup, Windows handle inheritance                      |
 
 ## Architecture
 

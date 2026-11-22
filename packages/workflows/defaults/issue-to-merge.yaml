@@ -1,21 +1,27 @@
-# Built-in flow of the server-run issue factory (change factory-flow-execution):
-# implement an issue, open a pull request, wait for its CI and merge it.
+# Built-in flow of the server-run issue factory (change factory-flow-execution,
+# factory-quality-gates): implement an issue, open a pull request, prove the
+# regression test, wait for green CI and merge it.
 #
 # The server runs this flow as the factory's enabler. Agent steps are threads
 # on the enabler's runner; the agent commits, pushes and opens the pull request
 # itself (the server has no checkout), and the `pull-request` step finds that
-# pull request on GitHub by its branch. `wait_ci` and `merge` run on the server
-# with the deployment's GitHub App token, capped by the enabler's own access;
-# a merge happens only on green checks.
+# pull request on GitHub by its branch. `regression-proof`, `wait_ci` and
+# `merge` run on the server with the deployment's GitHub App token, capped by
+# the enabler's own access; a merge happens only on green checks and a passing
+# proof.
+#
+# Regression proof: runs the pull request's changed test files against the base
+# commit (they must fail) and the head commit (they must pass). Configure rules
+# per repository in `.funny/workflows/issue-to-merge.yaml` on the DEFAULT
+# branch. Without rules, the factory will not admit issues.
 #
 # CI fix loop: when the checks fail (or the pull request conflicts with its
 # base), the implementing agent gets the failing checks and their log excerpts
 # as a follow-up on its own thread (so it keeps the context of its change),
 # pushes a fix to the same branch, and `wait_ci` looks again — up to 3 looks
 # in all. Add `required_checks: [name, ...]` to `wait_ci` to wait on (and
-# merge on) only those checks. A
-# timeout or a GitHub access error is not retried. When the loop runs out, the
-# run fails and nothing is merged.
+# merge on) only those checks. A timeout or a GitHub access error is not
+# retried. When the loop runs out, the run fails and nothing is merged.
 #
 # The factory supplies every input. `issue_url` points at the issue: the agent
 # reads its text there (issue text is untrusted input, so it is not inlined).
@@ -26,7 +32,7 @@
 # ignored.
 
 name: issue-to-merge
-description: Implement a GitHub issue, open a pull request, wait for green CI and merge it
+description: Implement a GitHub issue, open a pull request, prove the regression test, wait for green CI and merge it
 
 inputs:
   repo: { type: string, required: true }
@@ -50,8 +56,16 @@ nodes:
           `git branch --show-current`); otherwise create it from the default branch.
         - Read the code around the change before editing, follow the conventions
           you find, and keep the change to what the issue asks.
-        - Add or update tests when the change affects behavior, and run the
-          project's checks before you finish.
+        - **Find the root cause** before making changes. Do not fix symptoms.
+        - **Cover every case the issue names** or state in the pull request why
+          one is left out. Consider concurrency and edge cases.
+        - **If the issue asks you to verify or measure first**, do it and report
+          the result. If the issue's claim does not hold, push nothing, explain
+          why in your final message, and stop.
+        - Add or update a **regression test** that fails without the fix and
+          passes with it. Run the **full test suite** of each package you change.
+          State in the pull request body how the test was shown to fail without
+          the fix.
         - Commit, push the branch `{{branch}}` to `origin`, and open a pull
           request from it against the default branch whose body contains
           `Closes #{{issue_number}}`.
@@ -62,8 +76,53 @@ nodes:
     create_pr:
       title: '{{issue_title}}'
 
-  - id: ci
+  # Regression proof: runs the changed test files against the base (must fail)
+  # and the head (must pass). Configure rules per repository by copying this
+  # file and adding rules, e.g.:
+  #
+  #   regression_proof:
+  #     rules:
+  #       - globs: ['packages/client/**/*.test.ts', 'packages/client/**/*.test.tsx']
+  #         cwd: packages/client
+  #         command: 'bun test --isolate --timeout 20000 {{files}}'
+  #       - globs: ['**/*.test.ts']
+  #         command: 'bun test {{files}}'
+  #     support_globs: ['**/__fixtures__/**', '**/testing/**']
+  #     setup_command: 'bun install --frozen-lockfile'
+  #
+  # Both commits run in fresh temporary checkouts prepared alike by
+  # `setup_command`, else by the head's `.funny.json` `postCreate` (what a
+  # thread worktree runs, e.g. `bun install`). The head must pass
+  # twice; the base must fail by an assertion: a timeout, a setup failure or a
+  # test file that cannot load there proves nothing. Every issue needs a
+  # regression test except those labelled `docs` or `chore`.
+  - id: regression-proof
     depends_on: [pull-request]
+    regression_proof:
+      require_test: always
+      exempt_labels: [docs, chore]
+      timeout_ms: 600000
+    retry:
+      max_attempts: 3
+      should_retry: "$contains(error, 'Regression proof failed')"
+      before_retry:
+        prompt: |
+          You are working unattended: nobody will answer questions.
+
+          The regression proof of the pull request from `{{branch}}`
+          (GitHub issue #{{issue_number}} of {{repo}}) failed:
+
+          ```
+          {{LAST_ERROR}}
+          ```
+
+          The test must fail without your fix and pass with it.
+          Check out `{{branch}}` and pull it, fix the test, commit and
+          push to `{{branch}}`. Do not open another pull request.
+          End with a short summary of the fix.
+
+  - id: ci
+    depends_on: [regression-proof]
     wait_ci: {}
     retry:
       max_attempts: 3

@@ -1,13 +1,6 @@
 import { spawnSync } from 'child_process';
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  readlinkSync,
-  statSync,
-  writeFileSync,
-} from 'fs';
+import { mkdirSync, readFileSync, readlinkSync, writeFileSync } from 'fs';
+import { readdir, stat } from 'fs/promises';
 import { homedir } from 'os';
 import { basename, dirname, join } from 'path';
 
@@ -24,6 +17,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { DATA_DIR } from '../lib/data-dir.js';
+import { readFileLines } from './file-lines.js';
 import { getServices } from './service-registry.js';
 
 const CLAUDE_PROJECTS_DIR = '.claude/projects';
@@ -31,6 +25,8 @@ const DISMISSED_SESSIONS_FILE = join(DATA_DIR, 'external-claude-dismissed.json')
 const MAX_JSONL_FILES_PER_CWD = 8;
 const MAX_PROJECT_SESSION_FILES = 200;
 const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
+/** Session files whose metadata is remembered between syncs (oldest dropped first). */
+const MAX_CACHED_SESSION_FILES = 2 * MAX_PROJECT_SESSION_FILES;
 const IDE_OPENED_FILE_RE = /<ide_opened_file>[\s\S]*?<\/ide_opened_file>/g;
 const PREVIEWABLE_ASSETS_BLOCK_RE = /\[PREVIEWABLE ASSETS\][\s\S]*?\[\/PREVIEWABLE ASSETS\]/g;
 const LOCAL_COMMAND_CAVEAT_BLOCK_RE =
@@ -139,10 +135,10 @@ export function isClaudeCodeProcess(proc: Pick<ProcessInfo, 'command' | 'args'>)
   return /(^|[/\s])claude(\s|$)/i.test(text) || /@anthropic-ai[/\\]claude-code/i.test(text);
 }
 
-export function listExternalClaudeSessions(
+export async function listExternalClaudeSessions(
   options: ExternalClaudeSessionOptions = {},
-): ExternalClaudeSession[] {
-  const runningSessions = listRunningExternalClaudeSessions(options);
+): Promise<ExternalClaudeSession[]> {
+  const runningSessions = await listRunningExternalClaudeSessions(options);
   if (options.projects?.length) {
     return listProjectClaudeSessions(options, runningSessions);
   }
@@ -163,7 +159,7 @@ export async function syncExternalClaudeSessionThreads(
     : allProjects;
   if (projects.length === 0) return { threadIds: [] };
 
-  const sessions = listExternalClaudeSessions({ ...options, projects });
+  const sessions = await listExternalClaudeSessions({ ...options, projects });
   const threadIds: string[] = [];
   for (const session of sessions) {
     if (session.sessionId && getDismissedSessionIds().has(session.sessionId)) continue;
@@ -227,7 +223,7 @@ export async function importExternalClaudeSession(
     });
   }
 
-  const transcript = readExternalClaudeTranscript(sessionId, options);
+  const transcript = await readExternalClaudeTranscript(sessionId, options);
   if (!transcript) {
     return {
       ok: false,
@@ -376,7 +372,7 @@ async function hydrateExternalClaudeThread(params: {
     return { ok: true, imported: false, thread };
   }
 
-  const transcript = readExternalClaudeTranscript(sessionId, {
+  const transcript = await readExternalClaudeTranscript(sessionId, {
     homeDir: params.homeDir,
   });
   if (!transcript) {
@@ -449,9 +445,9 @@ function saveDismissedSessionIds(sessionIds: Set<string>): void {
   writeFileSync(DISMISSED_SESSIONS_FILE, JSON.stringify(Array.from(sessionIds).sort(), null, 2));
 }
 
-function listRunningExternalClaudeSessions(
+async function listRunningExternalClaudeSessions(
   options: ExternalClaudeSessionOptions = {},
-): ExternalClaudeSession[] {
+): Promise<ExternalClaudeSession[]> {
   const now = options.now ?? new Date();
   const currentPid = options.currentPid ?? process.pid;
   const homeDir = options.homeDir ?? homedir();
@@ -461,57 +457,66 @@ function listRunningExternalClaudeSessions(
   const processByPid = new Map(processes.map((proc) => [proc.pid, proc]));
   const seen = new Set<string>();
 
-  return processes
+  const externalProcesses = processes
     .filter(isClaudeCodeProcess)
-    .filter((proc) => !isFunnyManagedProcess(proc, processByPid, currentPid))
-    .map((proc): ExternalClaudeSession | null => {
-      const cwd = getCwd(proc.pid);
-      const metadata = cwd ? readClaudeSessionMetadata(homeDir, cwd) : null;
-      const effectiveCwd = metadata?.cwd ?? cwd;
+    .filter((proc) => !isFunnyManagedProcess(proc, processByPid, currentPid));
 
-      if (effectiveCwd && effectiveCwd.includes('/.funny-worktrees/')) return null;
+  const sessions: ExternalClaudeSession[] = [];
+  for (const proc of externalProcesses) {
+    const cwd = getCwd(proc.pid);
+    const metadata = cwd ? await readClaudeSessionMetadata(homeDir, cwd) : null;
+    const session = runningSession(proc, cwd, metadata, now);
+    if (!session || seen.has(session.id)) continue;
+    seen.add(session.id);
+    sessions.push(session);
+  }
 
-      const sessionId = metadata?.sessionId ?? null;
-      const id = sessionId ? `claude:${sessionId}` : `claude-pid:${proc.pid}`;
-      if (seen.has(id)) return null;
-      seen.add(id);
-
-      const projectName = effectiveCwd ? basename(effectiveCwd) : null;
-      const startedAt =
-        proc.elapsedSeconds === null
-          ? null
-          : new Date(now.getTime() - proc.elapsedSeconds * 1000).toISOString();
-
-      return {
-        id,
-        source: 'claude-code' as const,
-        pid: proc.pid,
-        ppid: proc.ppid,
-        isRunning: true,
-        sessionId,
-        cwd: effectiveCwd,
-        projectName,
-        gitBranch: metadata?.gitBranch ?? null,
-        title: sessionTitle(metadata, projectName ?? 'Claude Code'),
-        lastPrompt: metadata?.lastPrompt ?? null,
-        command: proc.args,
-        startedAt,
-        elapsedSeconds: proc.elapsedSeconds,
-        updatedAt: metadata?.updatedAt ?? null,
-      };
-    })
-    .filter((session): session is ExternalClaudeSession => session !== null)
-    .sort(
-      (a, b) =>
-        (a.elapsedSeconds ?? Number.MAX_SAFE_INTEGER) -
-        (b.elapsedSeconds ?? Number.MAX_SAFE_INTEGER),
-    );
+  return sessions.sort(
+    (a, b) =>
+      (a.elapsedSeconds ?? Number.MAX_SAFE_INTEGER) - (b.elapsedSeconds ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
-function listProjectClaudeSessions(
+/** A running Claude Code process as a session; null inside a Funny worktree. */
+function runningSession(
+  proc: ProcessInfo,
+  cwd: string | null,
+  metadata: SessionMetadata | null,
+  now: Date,
+): ExternalClaudeSession | null {
+  const effectiveCwd = metadata?.cwd ?? cwd;
+  if (effectiveCwd && effectiveCwd.includes('/.funny-worktrees/')) return null;
+
+  const sessionId = metadata?.sessionId ?? null;
+  const projectName = effectiveCwd ? basename(effectiveCwd) : null;
+  const startedAt =
+    proc.elapsedSeconds === null
+      ? null
+      : new Date(now.getTime() - proc.elapsedSeconds * 1000).toISOString();
+
+  return {
+    id: sessionId ? `claude:${sessionId}` : `claude-pid:${proc.pid}`,
+    source: 'claude-code' as const,
+    pid: proc.pid,
+    ppid: proc.ppid,
+    isRunning: true,
+    sessionId,
+    cwd: effectiveCwd,
+    projectName,
+    gitBranch: metadata?.gitBranch ?? null,
+    title: sessionTitle(metadata, projectName ?? 'Claude Code'),
+    lastPrompt: metadata?.lastPrompt ?? null,
+    command: proc.args,
+    startedAt,
+    elapsedSeconds: proc.elapsedSeconds,
+    updatedAt: metadata?.updatedAt ?? null,
+  };
+}
+
+async function listProjectClaudeSessions(
   options: ExternalClaudeSessionOptions,
   runningSessions: ExternalClaudeSession[],
-): ExternalClaudeSession[] {
+): Promise<ExternalClaudeSession[]> {
   const homeDir = options.homeDir ?? homedir();
   const projects = options.projects ?? [];
   const runningBySessionId = new Map(
@@ -521,8 +526,8 @@ function listProjectClaudeSessions(
   );
   const sessionsById = new Map<string, ExternalClaudeSession>();
 
-  for (const file of listClaudeSessionFiles(homeDir)) {
-    const metadata = parseClaudeJsonl(file.path, file.sessionId);
+  for (const file of await listClaudeSessionFiles(homeDir)) {
+    const metadata = await readSessionMetadata(file.path, file.sessionId);
     if (!metadata?.sessionId) continue;
     const project = matchProjectForCwd(metadata.cwd, projects);
     if (!project) continue;
@@ -558,41 +563,29 @@ function listProjectClaudeSessions(
   });
 }
 
-export function readExternalClaudeTranscript(
+export async function readExternalClaudeTranscript(
   sessionId: string,
   options: { homeDir?: string } = {},
-): ExternalClaudeTranscript | null {
+): Promise<ExternalClaudeTranscript | null> {
   if (!isSafeSessionId(sessionId)) return null;
 
   const homeDir = options.homeDir ?? homedir();
-  const file = findClaudeSessionFile(homeDir, sessionId);
+  const file = await findClaudeSessionFile(homeDir, sessionId);
   if (!file) return null;
 
-  let raw = '';
+  const transcript: TranscriptState = {
+    metadata: emptySessionMetadata(sessionId),
+    messages: [],
+    toolCallsByClaudeId: new Map(),
+  };
   try {
-    const stats = statSync(file);
-    if (stats.size > MAX_TRANSCRIPT_BYTES) return null;
-    raw = readFileSync(file, 'utf8');
+    if ((await stat(file)).size > MAX_TRANSCRIPT_BYTES) return null;
+    for await (const line of readFileLines(file)) foldTranscriptLine(transcript, line.text);
   } catch {
     return null;
   }
 
-  const messages: ExternalClaudeTranscriptMessage[] = [];
-  const toolCallsByClaudeId = new Map<string, ExternalClaudeTranscriptToolCall>();
-  const metadata = emptySessionMetadata(sessionId);
-
-  for (const [, entry] of parseJsonlEntries(raw)) {
-    applyEntryMetadata(metadata, entry);
-
-    const message = entryToTranscriptMessage(entry, messages.length, toolCallsByClaudeId);
-    if (message) {
-      metadata.hasDisplayableContent = true;
-      messages.push(message);
-      if (message.role === 'user' && !metadata.lastPrompt) {
-        metadata.lastPrompt = firstLine(message.content);
-      }
-    }
-  }
+  const { metadata, messages } = transcript;
 
   const projectName = metadata.cwd ? basename(metadata.cwd) : null;
   return {
@@ -605,6 +598,28 @@ export function readExternalClaudeTranscript(
     updatedAt: metadata.updatedAt,
     messages,
   };
+}
+
+interface TranscriptState {
+  metadata: SessionMetadata;
+  messages: ExternalClaudeTranscriptMessage[];
+  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>;
+}
+
+/** Fold one JSONL line into a transcript being read. */
+function foldTranscriptLine(state: TranscriptState, line: string): void {
+  const entry = parseJsonlEntry(line);
+  if (!entry) return;
+  const { metadata, messages } = state;
+  applyEntryMetadata(metadata, entry);
+
+  const message = entryToTranscriptMessage(entry, messages.length, state.toolCallsByClaudeId);
+  if (!message) return;
+  metadata.hasDisplayableContent = true;
+  messages.push(message);
+  if (message.role === 'user' && !metadata.lastPrompt) {
+    metadata.lastPrompt = firstLine(message.content);
+  }
 }
 
 function parseElapsed(value: string): number | null {
@@ -674,59 +689,80 @@ function getProcessCwd(pid: number): string | null {
   return null;
 }
 
-function readClaudeSessionMetadata(homeDir: string, cwd: string): SessionMetadata | null {
+async function readClaudeSessionMetadata(
+  homeDir: string,
+  cwd: string,
+): Promise<SessionMetadata | null> {
   const projectDir = join(homeDir, CLAUDE_PROJECTS_DIR, encodeClaudeProjectPath(cwd));
-  if (!existsSync(projectDir)) return null;
-
-  const files = readdirSync(projectDir)
-    .filter((name) => name.endsWith('.jsonl'))
-    .map((name) => {
-      const path = join(projectDir, name);
-      return { path, name, mtimeMs: statSync(path).mtimeMs };
-    })
+  const files = (await listSessionFilesIn(projectDir))
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(0, MAX_JSONL_FILES_PER_CWD);
 
   for (const file of files) {
-    const metadata = parseClaudeJsonl(file.path, file.name.replace(/\.jsonl$/, ''));
+    const metadata = await readSessionMetadata(file.path, file.sessionId);
     if (metadata) return metadata;
   }
 
   return null;
 }
 
-function listClaudeSessionFiles(homeDir: string): Array<{ path: string; sessionId: string }> {
-  const projectsDir = join(homeDir, CLAUDE_PROJECTS_DIR);
-  if (!existsSync(projectsDir)) return [];
-
-  const files: Array<{ path: string; sessionId: string; mtimeMs: number }> = [];
-  for (const projectName of readdirSync(projectsDir)) {
-    const projectDir = join(projectsDir, projectName);
-    try {
-      if (!statSync(projectDir).isDirectory()) continue;
-    } catch {
-      continue;
-    }
-
-    for (const name of readdirSync(projectDir)) {
-      if (!name.endsWith('.jsonl')) continue;
-      const path = join(projectDir, name);
-      try {
-        files.push({
-          path,
-          sessionId: name.replace(/\.jsonl$/, ''),
-          mtimeMs: statSync(path).mtimeMs,
-        });
-      } catch {
-        continue;
-      }
-    }
+async function listClaudeSessionFiles(
+  homeDir: string,
+): Promise<Array<{ path: string; sessionId: string }>> {
+  const files: SessionFile[] = [];
+  for (const projectDir of await listClaudeProjectDirs(homeDir)) {
+    files.push(...(await listSessionFilesIn(projectDir)));
   }
 
   return files
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(0, MAX_PROJECT_SESSION_FILES)
     .map(({ path, sessionId }) => ({ path, sessionId }));
+}
+
+interface SessionFile {
+  path: string;
+  sessionId: string;
+  mtimeMs: number;
+}
+
+/** Directories under `~/.claude/projects`; none when it does not exist. */
+async function listClaudeProjectDirs(homeDir: string): Promise<string[]> {
+  const projectsDir = join(homeDir, CLAUDE_PROJECTS_DIR);
+  try {
+    const entries = await readdir(projectsDir, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map((entry) => join(projectsDir, entry.name));
+  } catch {
+    return [];
+  }
+}
+
+/** The `.jsonl` session files of one Claude project directory, with their mtimes. */
+async function listSessionFilesIn(projectDir: string): Promise<SessionFile[]> {
+  let names: string[];
+  try {
+    names = await readdir(projectDir);
+  } catch {
+    return [];
+  }
+
+  const files: SessionFile[] = [];
+  for (const name of names) {
+    if (!name.endsWith('.jsonl')) continue;
+    const path = join(projectDir, name);
+    try {
+      files.push({
+        path,
+        sessionId: name.replace(/\.jsonl$/, ''),
+        mtimeMs: (await stat(path)).mtimeMs,
+      });
+    } catch {
+      continue;
+    }
+  }
+  return files;
 }
 
 /** Title shown for a session: Claude Code's generated title, else the last prompt. */
@@ -752,13 +788,11 @@ function emptySessionMetadata(sessionId: string): SessionMetadata {
   };
 }
 
-/** Valid entries of a session JSONL file, with their line index; blank and invalid lines are skipped. */
-function* parseJsonlEntries(raw: string): Generator<[number, ClaudeJsonlEntry]> {
-  for (const [index, line] of raw.split('\n').entries()) {
-    if (!line.trim()) continue;
-    const parsed = parseStoredJson(claudeJsonlEntrySchema, line, 'Claude Code session JSONL');
-    if (parsed.ok) yield [index, parsed.value];
-  }
+/** One line of a session JSONL file as an entry; null for blank and invalid lines. */
+function parseJsonlEntry(line: string): ClaudeJsonlEntry | null {
+  if (!line.trim()) return null;
+  const parsed = parseStoredJson(claudeJsonlEntrySchema, line, 'Claude Code session JSONL');
+  return parsed.ok ? parsed.value : null;
 }
 
 /** Fold one JSONL entry's session-level fields (ids, timestamps, prompt, title) into `metadata`. */
@@ -788,33 +822,93 @@ function applyEntryTitles(metadata: SessionMetadata, entry: ClaudeJsonlEntry): v
   if (aiTitle) metadata.aiTitle = aiTitle;
 }
 
-function parseClaudeJsonl(path: string, fallbackSessionId: string): SessionMetadata | null {
-  let raw = '';
+interface CachedSessionMetadata {
+  size: number;
+  mtimeMs: number;
+  /** Byte offset past the last complete line folded into `committed`. */
+  offset: number;
+  /** Metadata of the complete lines, the state a later read resumes from. */
+  committed: SessionMetadata;
+  /** `committed` plus an unterminated last line, if the file had one: what callers get. */
+  current: SessionMetadata;
+}
+
+/**
+ * Session metadata by file path. Claude Code only appends to a session file, so a
+ * file that grew is read from where the last read stopped instead of from the start.
+ */
+const sessionMetadataCache = new Map<string, CachedSessionMetadata>();
+
+/** Session-level metadata of a JSONL file, read asynchronously and incrementally. */
+async function readSessionMetadata(
+  path: string,
+  fallbackSessionId: string,
+): Promise<SessionMetadata | null> {
+  const cached = sessionMetadataCache.get(path);
+  sessionMetadataCache.delete(path);
+
+  let entry: CachedSessionMetadata;
   try {
-    raw = readFileSync(path, 'utf8');
+    const stats = await stat(path);
+    const unchanged = cached?.size === stats.size && cached.mtimeMs === stats.mtimeMs;
+    entry = unchanged
+      ? cached
+      : await readSessionMetadataFrom(path, stats, cached, fallbackSessionId);
   } catch {
     return null;
   }
 
-  const metadata = emptySessionMetadata(fallbackSessionId);
-  const toolCallsByClaudeId = new Map<string, ExternalClaudeTranscriptToolCall>();
+  // Re-inserted last, so the map's first key is the least recently read file.
+  sessionMetadataCache.set(path, entry);
+  if (sessionMetadataCache.size > MAX_CACHED_SESSION_FILES) {
+    const oldest = sessionMetadataCache.keys().next().value;
+    if (oldest !== undefined) sessionMetadataCache.delete(oldest);
+  }
+  return { ...entry.current };
+}
 
-  for (const [index, entry] of parseJsonlEntries(raw)) {
-    applyEntryMetadata(metadata, entry);
-    const message = entry.message;
-    if (!metadata.lastPrompt && entry.type === 'user' && message?.content !== undefined) {
-      metadata.lastPrompt = firstLine(contentToText(message.content));
-    }
-    if (!metadata.hasDisplayableContent) {
-      metadata.hasDisplayableContent = !!entryToTranscriptMessage(
-        entry,
-        index,
-        toolCallsByClaudeId,
-      );
+/** Read a changed session file, resuming after `cached` when the file only grew. */
+async function readSessionMetadataFrom(
+  path: string,
+  stats: { size: number; mtimeMs: number },
+  cached: CachedSessionMetadata | undefined,
+  fallbackSessionId: string,
+): Promise<CachedSessionMetadata> {
+  // A file that shrank was rewritten: read it again from the start.
+  const resume = cached && stats.size >= cached.offset ? cached : null;
+  const committed = resume ? { ...resume.committed } : emptySessionMetadata(fallbackSessionId);
+  let offset = resume?.offset ?? 0;
+  let current = committed;
+
+  for await (const line of readFileLines(path, offset)) {
+    if (line.end === null) {
+      // Claude Code may still be writing this line: count it now, read it again next time.
+      current = { ...committed };
+      foldSessionMetadataLine(current, line.text);
+    } else {
+      foldSessionMetadataLine(committed, line.text);
+      offset = line.end;
     }
   }
 
-  return metadata;
+  return { size: stats.size, mtimeMs: stats.mtimeMs, offset, committed, current };
+}
+
+/** Fold one JSONL line into the session-level metadata. */
+function foldSessionMetadataLine(metadata: SessionMetadata, line: string): void {
+  const entry = parseJsonlEntry(line);
+  if (!entry) return;
+
+  applyEntryMetadata(metadata, entry);
+  const message = entry.message;
+  if (!metadata.lastPrompt && entry.type === 'user' && message?.content !== undefined) {
+    metadata.lastPrompt = firstLine(contentToText(message.content));
+  }
+  if (!metadata.hasDisplayableContent) {
+    // A tool result only fills a card of an earlier tool_use, and a tool_use already makes
+    // the session displayable, so no tool calls need to be remembered across lines.
+    metadata.hasDisplayableContent = !!entryToTranscriptMessage(entry, 0, new Map());
+  }
 }
 
 function matchProjectForCwd<T extends ClaudeProject>(
@@ -846,20 +940,14 @@ function encodeClaudeProjectPath(cwd: string): string {
   return cwd.replace(/[\\/]/g, '-');
 }
 
-function findClaudeSessionFile(homeDir: string, sessionId: string): string | null {
-  const projectsDir = join(homeDir, CLAUDE_PROJECTS_DIR);
-  if (!existsSync(projectsDir)) return null;
-
-  for (const projectName of readdirSync(projectsDir)) {
-    const projectDir = join(projectsDir, projectName);
+async function findClaudeSessionFile(homeDir: string, sessionId: string): Promise<string | null> {
+  for (const projectDir of await listClaudeProjectDirs(homeDir)) {
+    const candidate = join(projectDir, `${sessionId}.jsonl`);
     try {
-      if (!statSync(projectDir).isDirectory()) continue;
+      if ((await stat(candidate)).isFile()) return candidate;
     } catch {
       continue;
     }
-
-    const candidate = join(projectDir, `${sessionId}.jsonl`);
-    if (existsSync(candidate)) return candidate;
   }
 
   return null;

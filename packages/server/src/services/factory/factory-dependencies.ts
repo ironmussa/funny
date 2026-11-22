@@ -34,7 +34,10 @@ export interface BlockerInput {
   queueGraph: ReadonlyMap<number, readonly number[]>;
 }
 
-type BlockerStatus = Exclude<FactoryWaitReason['kind'], 'circular' | 'blockers-unreadable'>;
+type BlockerStatus = Exclude<
+  FactoryWaitReason['kind'],
+  'circular' | 'blockers-unreadable' | 'proof-not-configured'
+>;
 
 /** The reasons shown first when several blockers hold the issue: the most actionable. */
 const PRIORITY: BlockerStatus[] = [

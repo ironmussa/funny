@@ -85,9 +85,10 @@ export function evaluateRunnerAccess(
 //
 // Routing-policy caches are only valid at the policy version they were read
 // at. Every scope change bumps `runner_policy_version` in the DB; every read
-// first syncs that version (one primary-key lookup) and ignores entries from
-// an older one. So a revocation made on any server instance applies to every
-// instance on its next read — not after the TTL. The TTL stays as a backstop.
+// first syncs that version (one primary-key lookup, shared by the reads within
+// `versionSyncWindowMs`) and ignores entries from an older one. So a
+// revocation made on any server instance applies to every instance within
+// that window — not after the TTL. The TTL stays as a backstop.
 
 const CACHE_TTL_MS = 30_000;
 
@@ -139,12 +140,49 @@ function clearLocal(change: { runnerId?: string; projectId?: string }) {
 }
 
 /**
+ * How long one read of the policy version is trusted before the next read
+ * queries the DB again. Agent events check scope several times each, and at
+ * streaming rates a query per check (issue #217) dominated the event path, so
+ * reads inside this window share one query. Changes made on THIS instance
+ * still apply at once (the writers clear the local caches and advance the
+ * known version); a change made on ANOTHER instance applies here within this
+ * window instead of on the very next read. 0 disables the memo.
+ */
+const DEFAULT_VERSION_SYNC_WINDOW_MS = 1_000;
+let versionSyncWindowMs = DEFAULT_VERSION_SYNC_WINDOW_MS;
+
+/** Last successful version read: the version and when it was read. */
+let lastVersionSync: { version: number; at: number } | null = null;
+/** The version read in flight, shared by every caller that arrives meanwhile. */
+let versionSyncInFlight: Promise<number> | null = null;
+
+/**
  * Read the DB policy version and drop every cache entry from an older one.
  * Returns the version to tag entries read after this call with. If the
  * version cannot be read, returns a fresh sentinel so nothing is served from
  * (or kept in) the cache — fail closed to the DB, never to a stale answer.
+ *
+ * Reads within `versionSyncWindowMs` of the last successful one reuse it, and
+ * concurrent reads share one query.
  */
-export async function syncRunnerPolicyVersion(): Promise<number> {
+export function syncRunnerPolicyVersion(): Promise<number> {
+  if (
+    lastVersionSync &&
+    lastVersionSync.version === knownVersion &&
+    Date.now() - lastVersionSync.at < versionSyncWindowMs
+  ) {
+    return Promise.resolve(lastVersionSync.version);
+  }
+  if (versionSyncInFlight) return versionSyncInFlight;
+  const inFlight = readRunnerPolicyVersion().finally(() => {
+    if (versionSyncInFlight === inFlight) versionSyncInFlight = null;
+  });
+  versionSyncInFlight = inFlight;
+  return inFlight;
+}
+
+async function readRunnerPolicyVersion(): Promise<number> {
+  const startedAt = Date.now();
   let version: number;
   try {
     const [row] = await db
@@ -162,12 +200,16 @@ export async function syncRunnerPolicyVersion(): Promise<number> {
     });
     clearLocal({});
     knownVersion = -1;
+    lastVersionSync = null;
     return -2;
   }
   if (version > knownVersion) {
     if (knownVersion !== -1) clearLocal({});
     knownVersion = version;
   }
+  // Memoise only a read that is the version the caches trust (a local bump
+  // may have moved past it while the query ran).
+  lastVersionSync = version === knownVersion ? { version, at: startedAt } : null;
   return version;
 }
 
@@ -191,7 +233,10 @@ async function invalidateRunnerScope(change: { runnerId?: string; projectId?: st
       .returning({ version: runnerPolicyVersion.version });
     if (!row) throw new Error('runner_policy_version row is missing');
     knownVersion = Math.max(knownVersion, Number(row.version));
+    lastVersionSync = { version: knownVersion, at: Date.now() };
   } catch (error) {
+    // The next read must go to the DB, not reuse a version from before this change.
+    lastVersionSync = null;
     // Other instances keep their caches until the TTL: make that loud.
     log.error('Runner policy version bump failed — other instances may serve stale routing', {
       namespace: 'runner-scope',
@@ -214,6 +259,15 @@ export function __resetRunnerScopeCache() {
   policyCache.clear();
   sandboxByThreadCache.clear();
   knownVersion = -1;
+  lastVersionSync = null;
+  versionSyncInFlight = null;
+  versionSyncWindowMs = DEFAULT_VERSION_SYNC_WINDOW_MS;
+}
+
+/** Test helper: how long a version read is reused (0 = query on every read). */
+export function __setRunnerPolicyVersionSyncWindowMs(ms: number) {
+  versionSyncWindowMs = ms;
+  lastVersionSync = null;
 }
 
 // ── Reads ──────────────────────────────────────────────────

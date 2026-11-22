@@ -142,6 +142,18 @@ export interface SetStageOpts {
 // pull request, so the options carry only the knobs. The factory's
 // server-side provider does the GitHub work under a repo-scoped token.
 
+export interface RegressionProofOpts {
+  rules: Array<{ globs: string[]; command: string; cwd?: string }>;
+  supportGlobs?: string[];
+  requireTest?: 'always' | 'labels' | 'never';
+  labels?: string[];
+  /** Labels whose issues need no test, whatever `requireTest` says. */
+  exemptLabels?: string[];
+  /** Run in each temporary checkout before the tests. */
+  setupCommand?: string;
+  timeoutMs?: number;
+}
+
 export interface WaitCiOpts {
   /** Overall budget before the step returns a timeout verdict. */
   timeoutMs?: number;
@@ -160,6 +172,13 @@ export interface MergeOpts {
   auto?: boolean;
   /** The execution this merge belongs to; `execution.batch` is set when it leads a batch. */
   execution?: ActionExecution;
+  /**
+   * Whether the merge needs a regression proof of the head it merges (the
+   * step's `require_regression_proof`, default true).
+   */
+  requireRegressionProof?: boolean;
+  /** The flow's `regression_proof` step configuration, when it has one. */
+  regressionProof?: RegressionProofOpts;
 }
 
 // ── Approval (human-in-the-loop) ────────────────────────────
@@ -244,6 +263,12 @@ export interface ActionProvider {
    * PR's required checks are green; otherwise resolves `ok: false`.
    */
   merge(opts: MergeOpts): Promise<ActionResult>;
+
+  /**
+   * Run a regression proof: test the changed files against the base (must
+   * fail) and the head (must pass). The provider starts and polls the job.
+   */
+  regressionProof?(opts: RegressionProofOpts): Promise<ActionResult>;
 
   /**
    * Request a human approval and block until decided (or timeout).

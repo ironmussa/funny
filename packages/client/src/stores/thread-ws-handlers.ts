@@ -72,9 +72,14 @@ type Get = () => ThreadState;
 type Set = (partial: Partial<ThreadState> | ((state: ThreadState) => Partial<ThreadState>)) => void;
 const TERMINAL_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);
 
+/**
+ * `completedAt` for a run that just ended, for the list order and the
+ * "ended ago" label. `updatedAt` is left to the server: the stale-row guard
+ * compares it with server rows, and the client clock may be skewed.
+ */
 function terminalTimestamps(status: ThreadStatus, now = new Date().toISOString()) {
   if (!TERMINAL_STATUSES.has(status)) return {};
-  return { completedAt: now, updatedAt: now };
+  return { completedAt: now };
 }
 
 function findTailUserMessageWithContent(

@@ -78,9 +78,13 @@ function journaledProvider(over: Partial<Parameters<typeof createFactoryActionPr
       followedUpSince: async () => false,
     },
     github: {
+      branchAhead: () => okAsync(true),
+      commentOnIssue: () => okAsync(undefined),
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),
+        pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+        publishProofCheck: () => okAsync(undefined),
         ciState: () => okAsync({ kind: 'green' as const }),
         merge: () =>
           okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),

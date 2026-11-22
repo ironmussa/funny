@@ -13,6 +13,7 @@ export type {
   FactoryMode,
   FactoryQueueClearResult,
   FactoryQueueRun,
+  FactoryRegressionProof,
   FactoryRun,
   FactorySettings,
   FactorySubmitResult,

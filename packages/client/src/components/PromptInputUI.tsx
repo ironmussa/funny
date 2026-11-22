@@ -31,7 +31,10 @@ import { PromptToolbar } from './prompt-input/PromptToolbar';
 import { QueueIndicator } from './prompt-input/QueueIndicator';
 import { TemplateVariableInputs } from './prompt-input/TemplateVariableInputs';
 import { useMessageHistory } from './prompt-input/use-message-history';
-import { usePromptAttachments } from './prompt-input/use-prompt-attachments';
+import {
+  usePromptAttachments,
+  type PromptAttachmentsHandle,
+} from './prompt-input/use-prompt-attachments';
 import { usePromptDrop } from './prompt-input/use-prompt-drop';
 import {
   useLightbox,
@@ -152,6 +155,8 @@ export interface PromptInputUIProps {
   messageHistory?: readonly string[];
   initialPrompt?: string;
   initialImages?: ImageAttachment[];
+  /** Filled with a handle so the parent's draft persistence can save/restore attachments. */
+  attachmentsRef?: React.RefObject<PromptAttachmentsHandle | null>;
 
   // ── Draft persistence callbacks ──
   onEditorChange?: () => void;
@@ -294,6 +299,7 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
     threadId: props.threadId,
     projectId: props.projectId,
     t,
+    handleRef: props.attachmentsRef,
   });
   const { images, attachedTextFiles } = attachments;
 

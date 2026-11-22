@@ -45,7 +45,7 @@ Prerequisites: `workflow-dag-engine` groups 1–3 (executor, loops, concurrency 
 ## 7. Merge one at a time
 
 - [ ] 7.1 The factory host applies the group `merge:{{inputs.repo}}:{{inputs.base_branch}}` to every `merge` node and pins its limit to 1 (`resolveLimit`), and passes `factory_id` and `base_branch` as inputs; verify with a factory-flow test where a repository flow omits the group and two runs still merge one at a time
-- [ ] 7.2 Change `merge`: require a pass for the head SHA (unless `require_review: false`) and an allowed risk class, else `waiting_human` with the reason; and that the branch still contains the last reviewed commit, all checked on entry after holding the slot; verify with tests for each refusal and the spec's MODIFIED scenarios
+- [ ] 7.2 Change `merge`: require a pass for the head SHA (unless `require_review: false`) and an allowed risk class, else `waiting_human` with the reason; and that the branch still contains the last reviewed commit, all checked on entry after holding the slot; verify with tests for each refusal and the spec's MODIFIED scenarios, including a PR whose only review is an external reviewer's green check or approval (parks with "no review")
 - [ ] 7.3 Without a GitHub merge queue: update-branch (merge), wait for green checks, merge only if the base did not move, else update again; no new review when only base changes came in; add update-branch to `@funny/core/github-app`; verify with merge-node tests for stale-green, moved base and the review carry-over
 - [ ] 7.4 With a required GitHub merge queue: detect it from the branch rules, enqueue, follow, and end the node with the failure as feedback so the merge loop goes back to `address`; verify with tests using a fake GitHub
 - [ ] 7.5 Factory `priority` hook: merge waiters in admission order, a blocked-by run after its blocker; verify with an ordering test over the lease gate
@@ -64,3 +64,8 @@ Prerequisites: `workflow-dag-engine` groups 1–3 (executor, loops, concurrency 
 - [ ] 9.1 Update `openwiki/architecture/issue-factory.md` (roles, invariants, loops, merge group, stage limits, sentinel) and add the role names to `GLOSSARY.md`; verify the doc's file references exist
 - [ ] 9.2 Run `bun run lint`, `bun run typecheck` and the pipelines, workflows, server, shared and client test suites; all pass
 - [ ] 9.3 End to end on a test repository with `maxConcurrent: 2`: two issues touching the same file run one after the other, a review failure is fixed and re-reviewed, the second PR is updated and re-checked before merging, and a deliberately breaking merge opens an incident and a revert PR
+- [ ] 9.4 Before archiving, merge this change's MODIFIED `merge` requirement with the text
+      `factory-quality-gates` left in `openspec/specs/issue-factory/spec.md` (archived
+      2026-11-22: the regression proof gate, the published `funny/regression-proof` check and
+      the auto-merge pinned to the proved commit), so archiving this change does not drop
+      them. Verify with `openspec validate factory-agent-roles --strict`.

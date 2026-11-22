@@ -6,6 +6,7 @@ const mocks = (() => ({
   releaseStagedUploads: vi.fn(),
   tm: {
     createThread: vi.fn(async () => undefined),
+    getThread: vi.fn(async (id: string): Promise<{ id: string } | undefined> => ({ id })),
     insertMessage: vi.fn(async () => 'msg-1'),
     insertToolCall: vi.fn(async () => 'tc-shell'),
     updateToolCallOutput: vi.fn(async () => undefined),
@@ -24,6 +25,8 @@ const mocks = (() => ({
   startAgent: vi.fn(async (..._args: unknown[]) => undefined),
   getCurrentBranch: vi.fn(),
   createWorktree: vi.fn(),
+  removeWorktree: vi.fn(),
+  removeBranch: vi.fn(),
   setupWorktree: vi.fn(),
   git: vi.fn(),
   findWorktreeForBranch: vi.fn(),
@@ -108,6 +111,8 @@ mock.module('../../services/thread-service/shell-escape.js', () => {
 mock.module('@funny/core/git', () => ({
   getCurrentBranch: mocks.getCurrentBranch,
   createWorktree: mocks.createWorktree,
+  removeWorktree: mocks.removeWorktree,
+  removeBranch: mocks.removeBranch,
   configuredWorktreeRoot: () => null,
   git: mocks.git,
   findWorktreeForBranch: mocks.findWorktreeForBranch,
@@ -761,6 +766,56 @@ describe('createAndStartThread', () => {
 
     expect(mocks.tm.updateThread).toHaveBeenCalledWith('fixed-thread-id', { status: 'failed' });
     expect(mocks.startAgent).not.toHaveBeenCalled();
+  });
+
+  describe('thread deleted while its worktree is prepared', () => {
+    beforeEach(() => {
+      mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
+      mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
+      mocks.removeWorktree.mockReturnValue(okAsync(undefined));
+      mocks.removeBranch.mockReturnValue(okAsync(undefined));
+      mocks.tm.getThread.mockResolvedValueOnce(undefined);
+    });
+
+    test('removes the worktree and branch and does not start the agent', async () => {
+      const result = await createAndStartThread({
+        projectId: 'p-1',
+        userId: 'u-1',
+        mode: 'worktree',
+        prompt: 'Build',
+        title: 'Feature',
+      });
+      expect(result.isOk()).toBe(true);
+
+      await waitFor(() => expect(mocks.removeBranch).toHaveBeenCalled());
+      expect(mocks.removeWorktree).toHaveBeenCalledWith(
+        '/projects/my-app',
+        '/projects/my-app/.worktrees/feature',
+      );
+      expect(mocks.removeBranch).toHaveBeenCalledWith('/projects/my-app', 'my-app/feature-fixed-');
+      expect(mocks.tm.updateThread).not.toHaveBeenCalled();
+      expect(mocks.startAgent).not.toHaveBeenCalled();
+    });
+
+    test('keeps a reused branch, removing only the worktree', async () => {
+      // The requested branch exists and no worktree has it checked out: reused.
+      mocks.git.mockResolvedValue(ok('abc123'));
+      mocks.findWorktreeForBranch.mockResolvedValue(ok(null));
+
+      const result = await createAndStartThread({
+        projectId: 'p-1',
+        userId: 'u-1',
+        mode: 'worktree',
+        branch: 'factory/issue-1',
+        prompt: 'Build',
+        title: 'Feature',
+      });
+      expect(result.isOk()).toBe(true);
+
+      await waitFor(() => expect(mocks.removeWorktree).toHaveBeenCalled());
+      expect(mocks.removeBranch).not.toHaveBeenCalled();
+      expect(mocks.startAgent).not.toHaveBeenCalled();
+    });
   });
 
   test('continues worktree setup when postCreate commands report errors', async () => {

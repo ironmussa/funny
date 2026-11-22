@@ -47,6 +47,10 @@ export interface MergeOptions {
   method?: MergeMethod;
   deleteBranch?: boolean;
   auto?: boolean;
+  /** Merge exactly this commit (the proved one). */
+  sha?: string;
+  /** With `sha`: auto-merge when GitHub holds the proof's check (`FactoryMergeOptions`). */
+  autoMergeWhenHeld?: boolean;
 }
 
 /** The tail of each failing check's log kept in the error (where the failure usually is). */
@@ -197,6 +201,8 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
       method: options.method,
       deleteBranch: options.deleteBranch,
       requiredChecks: required,
+      sha: options.sha,
+      autoMergeWhenHeld: options.autoMergeWhenHeld,
     });
     if (merged.isErr()) {
       return { ok: false, error: merged.error.message, metadata: { kind: merged.error.kind } };

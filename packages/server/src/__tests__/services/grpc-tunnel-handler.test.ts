@@ -22,6 +22,17 @@ function stub<T>(partial: unknown): T {
 
 class FakeCall extends EventEmitter {
   readonly writes: Array<Record<string, any>> = [];
+  paused = false;
+
+  pause(): this {
+    this.paused = true;
+    return this;
+  }
+
+  resume(): this {
+    this.paused = false;
+    return this;
+  }
 
   write(frame: Record<string, unknown>): boolean {
     this.writes.push(frame);
@@ -162,6 +173,90 @@ describe('runner gRPC tunnel stream', () => {
       Buffer.from(payload),
     );
     await expect(exchange.completed).resolves.toBeUndefined();
+    sessions.closeAll();
+  });
+
+  test('pauses the runner stream for a slow consumer instead of aborting a large response', async () => {
+    const { call, dispatcher, epoch, sessions } = setup({
+      maxFrameBytes: 4,
+      maxBufferedBytesPerClass: 8,
+    });
+    const exchange = dispatcher.dispatch('runner-1', {
+      method: 'GET',
+      path: '/large',
+      deadlineAt: Date.now() + 10_000,
+    });
+    const frame = (payload: Record<string, unknown>) =>
+      call.emit('data', {
+        session: { sessionEpoch: String(epoch) },
+        tunnelId: exchange.tunnelId,
+        ...payload,
+      });
+    frame({ responseStart: { statusCode: 200 } });
+    await exchange.response;
+
+    // The body is several times the buffer limit. The runner keeps sending
+    // only while the stream is not paused, as HTTP/2 flow control enforces.
+    const payload = Uint8Array.from({ length: 40 }, (_value, index) => index);
+    const reader = exchange.body[Symbol.asyncIterator]();
+    const received: number[] = [];
+    let sequence = 0;
+    let pausedAtLeastOnce = false;
+    while (sequence * 4 < payload.byteLength) {
+      if (call.paused) {
+        pausedAtLeastOnce = true;
+        const next = await reader.next();
+        received.push(...(next.value ?? []));
+        continue;
+      }
+      sequence += 1;
+      frame({
+        data: {
+          sequence: String(sequence),
+          data: payload.subarray((sequence - 1) * 4, sequence * 4),
+        },
+      });
+    }
+    frame({ end: { finalSequence: String(sequence) } });
+    for (;;) {
+      const next = await reader.next();
+      if (next.done) break;
+      received.push(...next.value);
+    }
+
+    expect(pausedAtLeastOnce).toBe(true);
+    expect(call.paused).toBe(false);
+    expect(received).toEqual([...payload]);
+    await expect(exchange.completed).resolves.toBeUndefined();
+    expect(call.writes.some((written) => written.cancel)).toBe(false);
+    sessions.closeAll();
+  });
+
+  test('resumes the runner stream when a paused tunnel is cancelled', async () => {
+    const { call, dispatcher, epoch, sessions } = setup({
+      maxFrameBytes: 4,
+      maxBufferedBytesPerClass: 4,
+    });
+    const exchange = dispatcher.dispatch('runner-1', {
+      method: 'GET',
+      path: '/large',
+      deadlineAt: Date.now() + 10_000,
+    });
+    call.emit('data', {
+      session: { sessionEpoch: String(epoch) },
+      tunnelId: exchange.tunnelId,
+      responseStart: { statusCode: 200 },
+    });
+    call.emit('data', {
+      session: { sessionEpoch: String(epoch) },
+      tunnelId: exchange.tunnelId,
+      data: { sequence: '1', data: Uint8Array.from([1, 2]) },
+    });
+    expect(call.paused).toBe(true);
+
+    exchange.cancel('browser closed the response');
+    await expect(exchange.completed).rejects.toBeInstanceOf(TunnelDispatchError);
+    expect(call.paused).toBe(false);
     sessions.closeAll();
   });
 

@@ -609,6 +609,33 @@ export const respondPermissionRequestSchema = z.object({
   decision: z.enum(['allow_once', 'allow_always', 'deny']),
 });
 
+// ── Regression proof schemas ────────────────────────────────────
+
+export const startRegressionProofSchema = z.object({
+  /** The commit to prove; the runner resolves the thread checkout's HEAD when absent. */
+  headSha: gitRefSchema.optional(),
+  /** The base branch; the runner resolves the repository's default branch when absent. */
+  defaultBranch: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine((s) => !s.startsWith('-'), 'branch must not start with "-"')
+    .optional(),
+  rules: z.array(
+    z.object({
+      globs: z.array(z.string()).min(1),
+      command: z.string(),
+      cwd: z.string().optional(),
+    }),
+  ),
+  supportGlobs: z.array(z.string()).default([]),
+  /** Run in each temporary worktree before the tests (e.g. a dependency install). */
+  setupCommand: z.string().min(1).max(1000).optional(),
+  timeoutMs: z.number().int().positive().default(600_000),
+  /** Fetch `headSha` when the checkout does not have it (only for a sandbox thread). */
+  fetchHead: z.boolean().default(false),
+});
+
 // ── Helper ───────────────────────────────────────────────────────
 
 /** Validate request body; returns Result<T, DomainError> */

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import type { PromptAttachmentsHandle } from '@/components/prompt-input/use-prompt-attachments';
 import { useThreadId } from '@/stores/thread-context';
 
 import type { SubmitFn, ThreadOverride } from './prompt-input-types';
@@ -53,6 +54,7 @@ export function usePromptInputState(args: UsePromptInputStateArgs) {
   const { isNewThread, threadOverride } = args;
   const { effectiveThreadId, threadIdRef } = useEffectiveThreadId();
   const editorRef = useRef<PromptEditorHandle>(null);
+  const attachmentsRef = useRef<PromptAttachmentsHandle>(null);
   const [sendToBacklog, setSendToBacklog] = useState(false);
 
   const project = usePromptProjectContext(args);
@@ -90,6 +92,7 @@ export function usePromptInputState(args: UsePromptInputStateArgs) {
 
   const handlers = usePromptEditorSession({
     editorRef,
+    attachmentsRef,
     effectiveThreadId,
     threadIdRef,
     stopRecordingRef: dictation.stopRecordingRef,
@@ -103,6 +106,7 @@ export function usePromptInputState(args: UsePromptInputStateArgs) {
   return {
     // Editor refs
     editorRef,
+    attachmentsRef,
     editorContainerRef: dictation.editorContainerRef,
 
     // Submission

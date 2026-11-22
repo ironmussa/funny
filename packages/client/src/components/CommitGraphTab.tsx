@@ -67,7 +67,6 @@ import { createClientLogger } from '@/lib/client-logger';
 import {
   graphGutterViewportWidth,
   graphRefLeaderLineXRange,
-  threadBranchShaftPath,
   renderedGraphLaneCount,
 } from '@/lib/commit-graph-layout';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
@@ -91,6 +90,7 @@ import {
   graphNodeParentRefLabels,
   type GraphNodeParentLabel,
   inferUnpulledHashesFromGraphEntries,
+  pinThreadBranchFirst,
   summarizeGraphBranches,
   type GraphBranchSummary,
 } from '@/lib/graph-refs';
@@ -1602,8 +1602,10 @@ function GraphCommitRow({
   // `Cloud`, a tag shows `Tag`.
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
   const foldedRefs = useMemo(
-    () => foldGraphRefs(entry.refs, entry.headBranch),
-    [entry.refs, entry.headBranch],
+    // The open thread's branch goes first so its arrow runs straight along the
+    // leader line; the order changes with the selected thread.
+    () => pinThreadBranchFirst(foldGraphRefs(entry.refs, entry.headBranch), threadBranch),
+    [entry.refs, entry.headBranch, threadBranch],
   );
   const pullRequestLinks = useMemo(() => {
     const seen = new Set<string>();
@@ -1653,17 +1655,10 @@ function GraphCommitRow({
   // matches the rendered DOM exactly — otherwise line-height/padding rounding
   // leaves the leader line a couple px off the chip's true center.
   const hasRefs = foldedRefs.length > 0;
-  const threadBranchChipIndex = useMemo(
-    () => foldedRefs.findIndex((ref) => isThreadBranchRef(ref, threadBranch)),
-    [foldedRefs, threadBranch],
-  );
+  const threadBranchOnLeader = !!foldedRefs[0] && isThreadBranchRef(foldedRefs[0], threadBranch);
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const chipCenterY = nodeYForRow(entry, rowHeight);
-  // Chips stack with a 4px gap (see the chip column below), so the thread
-  // branch chip's center sits that many chip lines under the first one.
-  const threadChipY =
-    threadBranchChipIndex > 0 ? chipCenterY + threadBranchChipIndex * (chipLineH + 4) : null;
   const nodeYFrac = hasRefs ? chipCenterY / rowHeight : 0.5;
 
   return (
@@ -1725,29 +1720,9 @@ function GraphCommitRow({
                   x2={leaderLine.x2}
                   y2={chipCenterY}
                   stroke={lanePastel}
-                  strokeWidth={threadBranchChipIndex === 0 ? 3 : 1.6}
+                  strokeWidth={threadBranchOnLeader ? 3 : 1.6}
                   strokeLinecap="round"
                 />
-                {threadChipY !== null &&
-                  (() => {
-                    const shaft = threadBranchShaftPath({
-                      x1: leaderLine.x1,
-                      chipLeftX: leaderLine.x2,
-                      leaderY: chipCenterY,
-                      threadChipY,
-                    });
-                    return shaft ? (
-                      <path
-                        d={shaft}
-                        fill="none"
-                        stroke={lanePastel}
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        data-testid="graph-thread-branch-shaft"
-                      />
-                    ) : null;
-                  })()}
               </svg>
             );
           })()}

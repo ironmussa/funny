@@ -155,6 +155,22 @@ export function foldGraphRefs(
   return out;
 }
 
+/**
+ * Move the open thread's branch chip to the front of a commit's chips, so the
+ * row's leader line (and the thread arrow on it) reaches it straight instead of
+ * bending down to a lower chip. Other chips keep their order; returns `refs`
+ * itself when nothing moves.
+ */
+export function pinThreadBranchFirst(
+  refs: FoldedRef[],
+  threadBranch: string | null | undefined,
+): FoldedRef[] {
+  if (!threadBranch) return refs;
+  const index = refs.findIndex((ref) => ref.kind === 'local' && ref.name === threadBranch);
+  if (index <= 0) return refs;
+  return [refs[index], ...refs.slice(0, index), ...refs.slice(index + 1)];
+}
+
 export function graphNodeRefLabel(foldedRefs: readonly FoldedRef[]): string | null {
   const labels = graphNodeRefLabels(foldedRefs);
   return labels.length > 0 ? labels.join(', ') : null;

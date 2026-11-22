@@ -234,6 +234,28 @@ async function applyPersistedBuiltinProviders(): Promise<void> {
   }
 }
 
+/** The `startAgent` control command; a failed start fails the command. */
+async function startAgentForControl(
+  input: Record<string, any>,
+  signal: AbortSignal,
+): Promise<void> {
+  const { startAgent, stopAgent } = await import('./agent-runner-control.js');
+  const threadId = String(input.threadId ?? '');
+  signal.addEventListener('abort', () => void stopAgent(threadId), { once: true });
+  const started = await startAgent(
+    threadId,
+    String(input.prompt ?? ''),
+    String(input.cwd ?? ''),
+    input.model || undefined,
+    input.permissionMode || undefined,
+    input.images,
+    input.disallowedTools,
+    input.allowedTools,
+    input.provider || undefined,
+  );
+  if (started.isErr()) throw new Error(started.error.message);
+}
+
 async function handleGrpcControl(
   command: RunnerGrpcWireMessage,
   signal: AbortSignal,
@@ -241,22 +263,7 @@ async function handleGrpcControl(
   if (signal.aborted) throw new Error('runner command cancelled');
 
   if (command.startAgent) {
-    const input = command.startAgent as Record<string, any>;
-    const { startAgent, stopAgent } = await import('./agent-runner-control.js');
-    const threadId = String(input.threadId ?? '');
-    signal.addEventListener('abort', () => void stopAgent(threadId), { once: true });
-    const started = await startAgent(
-      threadId,
-      String(input.prompt ?? ''),
-      String(input.cwd ?? ''),
-      input.model || undefined,
-      input.permissionMode || undefined,
-      input.images,
-      input.disallowedTools,
-      input.allowedTools,
-      input.provider || undefined,
-    );
-    if (started.isErr()) throw new Error(started.error.message);
+    await startAgentForControl(command.startAgent as Record<string, any>, signal);
     return {};
   }
 

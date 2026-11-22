@@ -7,8 +7,8 @@ import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useProjectThreadMode } from '@/data/runner/hooks';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
-import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 interface Props {
   projectId: string;
@@ -18,7 +18,7 @@ interface Props {
 
 export function NewThreadView({ projectId, onBack, onCreated }: Props) {
   const { t } = useTranslation();
-  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   // Local/worktree comes from the caller's runtime row (project-runtime-settings).
   const defaultThreadMode = useProjectThreadMode(projectId);
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);

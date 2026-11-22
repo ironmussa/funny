@@ -26,8 +26,9 @@ import {
 import { metric } from '@/lib/telemetry';
 import { cn } from '@/lib/utils';
 import { getVisualizerForFence } from '@/lib/visualizer-registry';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { editorLabels, useSettingsStore } from '@/stores/settings-store';
+import { useThreadStore } from '@/stores/thread-store';
 import { readActiveThreadView } from '@/stores/thread-view';
 
 type RenderedSegment =
@@ -59,10 +60,9 @@ function getInitialRenderState(segments: SatteriMarkdownSegment[]): RenderState 
 }
 
 function getActiveFileBasePath(): string | null {
-  const appState = useAppStore.getState();
-  const { selectedProjectId } = appState;
+  const { selectedProjectId } = useProjectStore.getState();
   const projects = readProjects();
-  const activeThread = readActiveThreadView(appState);
+  const activeThread = readActiveThreadView(useThreadStore.getState());
   // A scratch thread's projectId is '' (no project): fall back like a missing one.
   const projectId = activeThread?.projectId || selectedProjectId;
   const projectPath = projectId ? projects.find((project) => project.id === projectId)?.path : null;

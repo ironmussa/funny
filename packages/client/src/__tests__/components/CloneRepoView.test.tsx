@@ -7,6 +7,7 @@ import { err, ok } from 'neverthrow';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { CloneRepoView } from '@/components/CloneRepoView';
+import { useProjectStore } from '@/stores/project-store';
 
 /**
  * Regression: the clone used to finish inside the HTTP request, so a large
@@ -30,19 +31,13 @@ const mocks = (() => ({
 }))();
 
 mock.module('@/lib/api', () => ({ api: mocks.api }));
-interface AppStoreSlice {
-  loadProjects: typeof mocks.loadProjects;
-  setAddProjectOpen: typeof mocks.setAddProjectOpen;
-}
 interface UIStoreSlice {
   generalSettingsOpen: boolean;
+  setAddProjectOpen: typeof mocks.setAddProjectOpen;
 }
-mock.module('@/stores/app-store', () => ({
-  useAppStore: (select: (s: AppStoreSlice) => unknown) =>
-    select({ loadProjects: mocks.loadProjects, setAddProjectOpen: mocks.setAddProjectOpen }),
-}));
 mock.module('@/stores/ui-store', () => ({
-  useUIStore: (select: (s: UIStoreSlice) => unknown) => select({ generalSettingsOpen: false }),
+  useUIStore: (select: (s: UIStoreSlice) => unknown) =>
+    select({ generalSettingsOpen: false, setAddProjectOpen: mocks.setAddProjectOpen }),
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
 mock.module('sonner', () => ({
@@ -54,6 +49,8 @@ mock.module('react-i18next', () => ({
 }));
 mock.module('@/lib/url', () => ({ buildPath: (path: string) => path }));
 mock.module('@/components/FolderPicker', () => ({ FolderPicker: () => null }));
+
+const realLoadProjects = useProjectStore.getState().loadProjects;
 
 const REPO = {
   id: 7,
@@ -110,10 +107,12 @@ beforeEach(() => {
   mocks.api.githubUser.mockResolvedValue(ok({ login: 'me', avatar_url: '', name: null }));
   mocks.api.githubRepos.mockResolvedValue(ok({ repos: [REPO], hasMore: false }));
   mocks.loadProjects.mockResolvedValue(undefined);
+  useProjectStore.setState({ loadProjects: mocks.loadProjects });
 });
 
 afterEach(() => {
   cleanup();
+  useProjectStore.setState({ loadProjects: realLoadProjects });
   unstubAllGlobals();
 });
 

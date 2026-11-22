@@ -21,15 +21,6 @@ mock.module('@/lib/api', () => ({
   api: apiMocks,
 }));
 
-mock.module('@/stores/app-store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      selectedProjectId: 'project-1',
-      selectedThreadId: 'thread-1',
-      activeThread: { id: 'thread-1', title: 'Thread one' },
-    }),
-}));
-
 const actualWorkflowsBrowser = { ...(await import('@funny/workflows/browser')) };
 mock.module('@funny/workflows/browser', () => ({
   ...actualWorkflowsBrowser,
@@ -92,6 +83,8 @@ mock.module('@xyflow/react', () => {
 });
 
 const { WorkflowsSettings } = await import('@/components/WorkflowsSettings');
+const { useProjectStore } = await import('@/stores/project-store');
+const { useThreadStore } = await import('@/stores/thread-store');
 
 const listResponse: WorkflowListResponse = {
   workflows: [{ name: 'fusion', source: 'built-in', hasOverride: false }],
@@ -142,6 +135,8 @@ function definition(
 
 describe('WorkflowsSettings', () => {
   beforeEach(() => {
+    useProjectStore.setState({ selectedProjectId: 'project-1' });
+    useThreadStore.setState({ selectedThreadId: 'thread-1' });
     apiMocks.listWorkflows.mockReset();
     apiMocks.getWorkflow.mockReset();
     apiMocks.validateWorkflow.mockReset();

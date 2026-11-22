@@ -45,7 +45,6 @@ import { stageConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn, resolveThreadBranch } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -330,7 +329,7 @@ export function KanbanView({
   const deleteThread = useThreadStore((s) => s.deleteThread);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useProjects();
-  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{

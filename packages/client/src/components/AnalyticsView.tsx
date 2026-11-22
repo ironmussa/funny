@@ -21,7 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { MetricCard } from './analytics/MetricCard';
 import { TimeRangeSelector, type TimeRange } from './analytics/TimeRangeSelector';
@@ -42,7 +42,7 @@ type TimelineData = AnalyticsTimeline;
 export function AnalyticsView() {
   const { t } = useTranslation();
   const projects = useProjects();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
   const [projectId, setProjectId] = useState<string>(() => selectedProjectId || '__all__');
   const [timeRange, setTimeRange] = useState<TimeRange>('month');

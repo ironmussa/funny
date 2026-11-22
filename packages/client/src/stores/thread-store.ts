@@ -75,7 +75,7 @@ import {
 } from '@/data/threads/read';
 import { loadAgentAccounts } from '@/lib/agent-account-storage';
 import { api } from '@/lib/api';
-import { createClientLogger } from '@/lib/client-logger';
+import { createClientLogger, isClientLogLevelEnabled } from '@/lib/client-logger';
 import { loadContextUsage } from '@/lib/context-usage-storage';
 import { markMemoryPhase } from '@/lib/memory-phase';
 import { metric, startSpan } from '@/lib/telemetry';
@@ -276,7 +276,8 @@ function getActiveThread(state: ThreadState): ThreadWithMessages | null {
 }
 
 const refreshLog = createClientLogger('thread-refresh');
-const selectLog = createClientLogger('thread-select');
+const SELECT_LOG_NS = 'thread-select';
+const selectLog = createClientLogger(SELECT_LOG_NS);
 
 type LocalMessage = import('@funny/shared').Message & { toolCalls?: any[] };
 const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
@@ -392,7 +393,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Diagnostic: who is driving selection? Surfaces the caller chain behind the
     // route-sync ↔ back-fill re-select ping-pong. Off in prod by default; enable
     // with `__funnyLog.setNamespaceLevel('thread-select', 'debug')`.
-    if (threadId) {
+    // The stack is built only when the level is on: `selectThread` runs on
+    // every route sync, and capturing a stack costs far more than the call.
+    if (threadId && isClientLogLevelEnabled(SELECT_LOG_NS, 'debug')) {
       const caller = new Error().stack?.split('\n').slice(2, 7).join(' <- ').replace(/\s+/g, ' ');
       selectLog.debug('selectThread called', {
         threadId,

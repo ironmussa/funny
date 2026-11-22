@@ -21,6 +21,7 @@ const githubApiMock = (() => ({
 
 const logError = (() => vi.fn())();
 mock.module('@/lib/client-logger', () => ({
+  isClientLogLevelEnabled: () => false,
   createClientLogger: () => ({ error: logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
 mock.module('@/lib/api', () => ({

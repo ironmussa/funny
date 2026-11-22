@@ -1837,10 +1837,6 @@
     "title": "Factory queue",
     "summary": "{{projects}} projects · {{runs}} runs",
     "searchPlaceholder": "Filter by issue, project or step",
-    "waiting": "Waiting for you",
-    "active": "In progress",
-    "queue": "In queue",
-    "failed": "Failed recently",
     "empty": "Nothing in the factory",
     "emptyDescription": "Issues sent to a project factory show here while they wait and run.",
     "issueTitle": "Issue #{{number}}"

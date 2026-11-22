@@ -5,7 +5,7 @@ import type { FactoryRun } from '@/lib/api/factory';
 import { groupFactoryRuns } from '@/lib/factory-run-labels';
 
 describe('groupFactoryRuns (the factory view)', () => {
-  test('groups runs by what the member sees and drops the ones that ended', () => {
+  test('groups runs by what the member sees, the ended ones last', () => {
     const run = (id: string, state: FactoryRun['state'], queueOrder: number | null = null) =>
       buildFactoryRun({ id, state, queueOrder });
     const groups = groupFactoryRuns([
@@ -24,5 +24,6 @@ describe('groupFactoryRuns (the factory view)', () => {
     // The queue follows its own order, not the list's.
     expect(ids('queue')).toEqual(['first', 'second']);
     expect(ids('failed')).toEqual(['broken']);
+    expect(ids('ended')).toEqual(['done', 'cancelled']);
   });
 });

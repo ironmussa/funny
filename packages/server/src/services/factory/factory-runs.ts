@@ -517,14 +517,15 @@ export function createFactoryRunsRepository(
 
     /**
      * What the factory view lists: every run of `userId`'s factories that has
-     * not ended (queued, in flight, or waiting for the member), or failed within
-     * `FAILED_RUN_WINDOW_MS`, with the project its factory belongs to.
+     * not ended (queued, in flight, or waiting for the member), or ended (merged,
+     * failed, stopped) within `FAILED_RUN_WINDOW_MS`, with the project its
+     * factory belongs to.
      */
     queueForOwner(
       userId: string,
       now: number = Date.now(),
     ): ResultAsync<Array<FactoryRunView & { projectId: string }>, FactoryRunsError> {
-      const failedSince = new Date(now - FAILED_RUN_WINDOW_MS).toISOString();
+      const endedSince = new Date(now - FAILED_RUN_WINDOW_MS).toISOString();
       return ResultAsync.fromPromise(
         db
           .select({ run: factoryRuns, projectId: factorySettings.projectId })
@@ -535,7 +536,7 @@ export function createFactoryRunsRepository(
               eq(factorySettings.userId, userId),
               or(
                 notInArray(factoryRuns.state, [...TERMINAL_STATES]),
-                and(eq(factoryRuns.state, 'failed'), gte(factoryRuns.completedAt, failedSince)),
+                gte(factoryRuns.completedAt, endedSince),
               ),
             ),
           )

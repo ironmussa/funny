@@ -1830,10 +1830,6 @@
     "title": "Cola del factory",
     "summary": "{{projects}} proyectos · {{runs}} ejecuciones",
     "searchPlaceholder": "Filtrar por issue, proyecto o paso",
-    "waiting": "Esperándote",
-    "active": "En curso",
-    "queue": "En cola",
-    "failed": "Fallidas recientemente",
     "empty": "No hay nada en el factory",
     "emptyDescription": "Los issues enviados al factory de un proyecto aparecen aquí mientras esperan y se ejecutan.",
     "issueTitle": "Issue #{{number}}"

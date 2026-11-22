@@ -415,7 +415,7 @@ function IssueRow({
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground text-2xs">#{issue.number}</span>
+          <span className="text-muted-foreground text-xs">#{issue.number}</span>
           {factoryRun && (
             <IssueFactoryStatus
               projectId={projectId}
@@ -424,10 +424,10 @@ function IssueRow({
             />
           )}
           <IssueBadges issue={issue} />
-          <span className="text-muted-foreground text-2xs">{timeAgo(issue.created_at, now)}</span>
-          {issue.user && <span className="text-muted-foreground text-2xs">{issue.user.login}</span>}
+          <span className="text-muted-foreground text-xs">{timeAgo(issue.created_at, now)}</span>
+          {issue.user && <span className="text-muted-foreground text-xs">{issue.user.login}</span>}
           {issue.comments > 0 && (
-            <span className="text-muted-foreground text-2xs flex items-center gap-0.5">
+            <span className="text-muted-foreground flex items-center gap-0.5 text-xs">
               <MessageSquare className="icon-xs" />
               {issue.comments}
             </span>
@@ -435,7 +435,7 @@ function IssueRow({
         </div>
         {issue.body ? (
           <p
-            className="text-muted-foreground text-2xs mt-1 line-clamp-3 whitespace-pre-wrap"
+            className="text-muted-foreground mt-1 line-clamp-3 text-xs whitespace-pre-wrap"
             data-testid={`issue-body-${issue.number}`}
           >
             {issue.body}

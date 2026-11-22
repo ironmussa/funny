@@ -32,7 +32,7 @@ export function IssueBadges({ issue }: { issue: EnrichedGitHubIssue }) {
           prNumber={issue.linkedPR.number}
           prState={toPRBadgeState(issue.linkedPR.state)}
           prUrl={issue.linkedPR.url}
-          size="xxs"
+          size="compact"
         />
       )}
     </>

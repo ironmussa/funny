@@ -102,7 +102,7 @@ function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
               navigate(href);
             }}
             title={t('worktreeSettings.openThread', { title: thread.title })}
-            className="text-2xs text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-1.5 hover:underline"
+            className="text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-1.5 text-xs hover:underline"
             data-testid={`worktree-thread-link-${thread.id}`}
           >
             <MessageSquare className="icon-xs shrink-0" />
@@ -161,14 +161,14 @@ function WorktreeCard({
               </LabelBadge>
             )}
           </div>
-          <div className="text-muted-foreground text-2xs flex min-w-0 items-center gap-1.5">
+          <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
             <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
             <span title={worktree.path} className="truncate font-mono">
               {worktree.path}
             </span>
           </div>
           {worktree.commit && (
-            <span className="text-muted-foreground text-2xs flex items-center gap-1.5">
+            <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <GitCommitHorizontal className="icon-xs shrink-0" />
               <CommitHash hash={worktree.commit} />
             </span>

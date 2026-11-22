@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
-import { Badge } from '@/components/ui/badge';
+import { LabelBadge } from '@/components/ui/label-badge';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { cn } from '@/lib/utils';
 
@@ -131,11 +131,11 @@ export function PRCompactIdentity({
           prNumber={pr.number}
           prState={resolvedState}
           prUrl={pr.html_url}
-          size="xxs"
+          size="compact"
           className="mt-0.5"
           data-testid={numberTestId}
         />
-        <div className="text-compact min-w-0 flex-1 leading-5 break-words">
+        <div className="min-w-0 flex-1 text-xs leading-5 break-words">
           {onTitleClick ? (
             <button
               type="button"
@@ -165,7 +165,7 @@ export function PRCompactIdentity({
 
       {hasMeta ? (
         <div
-          className="text-muted-foreground text-2xs flex flex-wrap items-center gap-1.5"
+          className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs"
           data-testid={metaTestId}
         >
           {pr.updated_at ? (
@@ -187,9 +187,7 @@ export function PRCompactIdentity({
           {showDraftBadge && pr.draft ? (
             <>
               {pr.updated_at || lastCommitAuthor ? <span>&middot;</span> : null}
-              <Badge variant="outline" className="text-3xs h-3.5 px-1 py-0 leading-none">
-                {t('review.pullRequests.draft', 'Draft')}
-              </Badge>
+              <LabelBadge tone="neutral">{t('review.pullRequests.draft', 'Draft')}</LabelBadge>
             </>
           ) : null}
         </div>

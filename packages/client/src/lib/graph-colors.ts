@@ -4,32 +4,32 @@ import { stringHash } from '@/lib/string-hash';
 /**
  * Categorical lane palette for the commit graph — the single source of truth
  * for every lane color: `[hue, saturation, lightness]` of the rendered color.
- * Two tiers, so neighbours differ in lightness as well as hue (pastel alone
- * flattens sixteen hues into look-alikes):
- * - the first eight are soft pastels (the original palette; lane-index callers
- *   still get these in the original order);
- * - the next eight are deeper, saturated tones on hues interleaved between them.
+ * All pastels, in two tiers so neighbours differ in lightness as well as hue
+ * (one lightness alone flattens sixteen hues into look-alikes):
+ * - the first eight are light pastels (lane-index callers get these first);
+ * - the next eight are mid pastels, a step darker, on hues interleaved between
+ *   them.
  * Chips pick their text color with `contrastText()`, so both tiers stay legible.
  */
 const GRAPH_LANE_HSL: ReadonlyArray<readonly [number, number, number]> = [
-  // Pastel tier.
-  [217, 0.7, 0.74],
-  [142, 0.62, 0.74],
-  [263, 0.68, 0.74],
-  [38, 0.7, 0.74],
-  [0, 0.7, 0.74],
-  [190, 0.7, 0.74],
-  [330, 0.7, 0.74],
-  [165, 0.64, 0.74],
-  // Deep tier.
-  [22, 0.9, 0.55],
-  [238, 0.75, 0.62],
-  [88, 0.7, 0.42],
-  [300, 0.65, 0.55],
-  [50, 0.95, 0.5],
-  [275, 0.7, 0.6],
-  [120, 0.6, 0.38],
-  [350, 0.8, 0.55],
+  // Light tier.
+  [217, 0.7, 0.76],
+  [142, 0.5, 0.72],
+  [263, 0.65, 0.78],
+  [38, 0.75, 0.72],
+  [0, 0.7, 0.78],
+  [190, 0.6, 0.7],
+  [330, 0.65, 0.78],
+  [165, 0.5, 0.7],
+  // Mid tier.
+  [22, 0.6, 0.64],
+  [238, 0.45, 0.66],
+  [88, 0.4, 0.58],
+  [300, 0.38, 0.64],
+  [50, 0.55, 0.6],
+  [275, 0.4, 0.66],
+  [120, 0.32, 0.56],
+  [350, 0.45, 0.64],
 ];
 
 const GRAPH_LANE_HEX = GRAPH_LANE_HSL.map(([h, s, l]) => hslToHex(h, s, l));

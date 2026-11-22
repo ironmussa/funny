@@ -87,8 +87,8 @@ const RESULT_STYLE = {
   },
   stopped: {
     Icon: XCircle,
-    card: 'border-status-info/20 bg-status-info/5',
-    text: 'text-status-info/80',
+    card: 'border-status-interrupted/20 bg-status-interrupted/5',
+    text: 'text-status-interrupted/80',
   },
   failed: {
     Icon: AlertTriangle,
@@ -221,10 +221,10 @@ export function AgentStoppedCard({
   const { t } = useTranslation();
 
   return (
-    <div className="border-status-info/20 bg-status-info/5 flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
-      <XCircle className="icon-base text-status-info/80 shrink-0" />
+    <div className="border-status-interrupted/20 bg-status-interrupted/5 flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
+      <XCircle className="icon-base text-status-interrupted/80 shrink-0" />
       <div>
-        <span className="text-status-info/80 font-medium">{t('thread.taskStopped')}</span>
+        <span className="text-status-interrupted/80 font-medium">{t('thread.taskStopped')}</span>
         <p className="text-muted-foreground mt-0.5">{t('thread.manuallyStopped')}</p>
       </div>
       <div className="text-muted-foreground ml-auto flex items-center gap-3">

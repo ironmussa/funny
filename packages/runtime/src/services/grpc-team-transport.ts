@@ -63,7 +63,10 @@ export class GrpcTeamTransport {
       options.handleControl,
     );
     this.tunnel = new RunnerTunnelAdapter(
-      { send: (_name, message) => this.client.send('tunnel', message) },
+      {
+        send: (_name, message) => this.client.send('tunnel', message),
+        whenWritable: () => this.client.whenWritable('tunnel'),
+      },
       options.handleTunnel,
     );
     this.terminal = new RunnerTerminalAdapter(

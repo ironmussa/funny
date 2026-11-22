@@ -27,6 +27,9 @@ export interface RunnerGrpcDuplexStream {
   on(event: 'data', listener: (message: RunnerGrpcWireMessage) => void): this;
   on(event: 'error', listener: (error: Error) => void): this;
   on(event: 'close' | 'end', listener: () => void): this;
+  /** Present on real gRPC calls; used to wait for `drain` after a write returned false. */
+  once?(event: 'drain' | 'close' | 'end' | 'error', listener: () => void): this;
+  removeListener?(event: 'drain' | 'close' | 'end' | 'error', listener: () => void): this;
 }
 
 export interface RunnerGrpcTransport {
@@ -189,6 +192,26 @@ export class RunnerGrpcClient {
     const stream = this.streams.get(name);
     if (!stream || !this.epoch) return false;
     return stream.write({ session: { sessionEpoch: this.epoch }, ...message });
+  }
+
+  /**
+   * Resolve once the stream accepts writes again (`drain`) or goes away. A
+   * caller whose `send` returned false awaits this before sending more, so a
+   * slow server reader holds the producer back instead of growing the queue.
+   */
+  whenWritable(name: RunnerGrpcStreamName): Promise<void> {
+    const stream = this.streams.get(name);
+    const once = stream?.once?.bind(stream);
+    const removeListener = stream?.removeListener?.bind(stream);
+    if (!once || !removeListener) return Promise.resolve();
+    const events = ['drain', 'close', 'end', 'error'] as const;
+    return new Promise((resolve) => {
+      const done = () => {
+        for (const event of events) removeListener(event, done);
+        resolve();
+      };
+      for (const event of events) once(event, done);
+    });
   }
 
   sendControl(message: RunnerGrpcWireMessage): boolean {

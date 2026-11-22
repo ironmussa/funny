@@ -59,6 +59,8 @@ interface AttachedStream {
   call: RunnerGrpcCall;
   epoch: bigint;
   tunnels: Map<string, TunnelState>;
+  /** Tunnels whose buffered response is at its high-water mark; the call is paused while any is. */
+  saturated: Set<string>;
 }
 
 interface TunnelState {
@@ -167,7 +169,7 @@ export class RunnerGrpcTunnelDispatcher {
   attach(runnerId: string, epoch: bigint, call: RunnerGrpcCall): () => void {
     const previous = this.streams.get(runnerId);
     if (previous) this.failStream(previous, 'tunnel stream was replaced');
-    const stream: AttachedStream = { call, epoch, tunnels: new Map() };
+    const stream: AttachedStream = { call, epoch, tunnels: new Map(), saturated: new Set() };
     this.streams.set(runnerId, stream);
     return () => {
       if (this.streams.get(runnerId) !== stream) return;
@@ -345,6 +347,7 @@ export class RunnerGrpcTunnelDispatcher {
       else {
         state.chunks.push(data);
         state.bufferedBytes += data.byteLength;
+        if (state.bufferedBytes > this.highWaterBytes()) this.saturate(state);
       }
       return;
     }
@@ -404,6 +407,7 @@ export class RunnerGrpcTunnelDispatcher {
       const chunk = state.chunks.shift();
       if (chunk) {
         state.bufferedBytes -= chunk.byteLength;
+        if (state.bufferedBytes <= this.highWaterBytes()) this.unsaturate(state);
         yield chunk;
         continue;
       }
@@ -417,6 +421,34 @@ export class RunnerGrpcTunnelDispatcher {
       if (next.done) return;
       yield next.value;
     }
+  }
+
+  /**
+   * Buffered bytes above which the next response frame might not fit. Past it
+   * the tunnel stops reading from the runner instead of failing (see
+   * `saturate`), so a slow browser slows the runner down rather than aborting.
+   */
+  private highWaterBytes(): number {
+    return Math.max(0, this.config.maxBufferedBytesPerClass - this.config.maxFrameBytes);
+  }
+
+  /**
+   * Stop reading the tunnel call. HTTP/2 flow control then holds the runner's
+   * writes back until the slow reader catches up. The call carries every
+   * tunnel of the runner, so the others wait too; that is preferred to aborting
+   * a large response, and each tunnel's deadline still bounds the wait.
+   */
+  private saturate(state: TunnelState): void {
+    const { stream } = state;
+    if (stream.saturated.has(state.id)) return;
+    stream.saturated.add(state.id);
+    if (stream.saturated.size === 1) stream.call.pause();
+  }
+
+  private unsaturate(state: TunnelState): void {
+    const { stream } = state;
+    if (!stream.saturated.delete(state.id)) return;
+    if (stream.saturated.size === 0) stream.call.resume();
   }
 
   private protocolFailure(state: TunnelState, message: string): void {
@@ -459,6 +491,7 @@ export class RunnerGrpcTunnelDispatcher {
     clearTimeout(state.timer);
     state.removeAbortListener?.();
     state.stream.tunnels.delete(state.id);
+    this.unsaturate(state);
   }
 
   private failStream(stream: AttachedStream, message: string): void {

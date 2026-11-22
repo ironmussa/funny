@@ -15,6 +15,21 @@ type TunnelRequestState = {
 
 export interface RunnerTunnelSender {
   send(name: 'tunnel', message: RunnerGrpcWireMessage): boolean;
+  /** Resolves when the tunnel stream drains after `send` returned false. */
+  whenWritable?(): Promise<void>;
+}
+
+/** Wait for the stream to drain, or for the request to be cancelled first. */
+function writableOrAborted(writable: Promise<void>, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const onAbort = () => resolve();
+    signal.addEventListener('abort', onAbort, { once: true });
+    void writable.then(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    });
+  });
 }
 
 /** Frames gRPC tunnel requests into local Fetch requests and response frames. */
@@ -121,10 +136,16 @@ export class RunnerTunnelAdapter {
               offset,
               Math.min(offset + this.maxFrameBytes, value.byteLength),
             );
-            this.sender.send('tunnel', {
+            const writable = this.sender.send('tunnel', {
               tunnelId,
               data: { sequence: String(++sequence), data: Buffer.from(chunk).toString('base64') },
             });
+            // Respect gRPC backpressure: the server pauses a tunnel whose browser
+            // reads slowly, so stop reading the local response until it drains.
+            if (!writable && this.sender.whenWritable) {
+              await writableOrAborted(this.sender.whenWritable(), state.controller.signal);
+              if (state.controller.signal.aborted) throw new Error('tunnel request cancelled');
+            }
           }
         }
       }

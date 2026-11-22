@@ -43,6 +43,66 @@ describe('RunnerTunnelAdapter', () => {
     expect(dataFrames).toHaveLength(2);
   });
 
+  test('waits for the stream to drain before sending more response frames', async () => {
+    let drain = () => {};
+    const send = vi.fn((_name: 'tunnel', message: Record<string, any>) => !message.data);
+    const whenWritable = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          drain = resolve;
+        }),
+    );
+    const adapter = new RunnerTunnelAdapter(
+      { send, whenWritable },
+      async () => new Response('abcdef'),
+    );
+    adapter.setMaxFrameBytes(2);
+    adapter.receive({ tunnelId: 't1', requestStart: { method: 'GET', path: '/', headers: [] } });
+    adapter.receive({ tunnelId: 't1', end: {} });
+
+    await waitFor(() => expect(whenWritable).toHaveBeenCalledTimes(1));
+    const dataFrames = () => send.mock.calls.filter(([, message]) => message.data);
+    expect(dataFrames()).toHaveLength(1);
+
+    drain();
+    await waitFor(() => expect(whenWritable).toHaveBeenCalledTimes(2));
+    expect(dataFrames()).toHaveLength(2);
+    drain();
+    await waitFor(() => expect(whenWritable).toHaveBeenCalledTimes(3));
+    drain();
+    await waitFor(() =>
+      expect(send).toHaveBeenLastCalledWith('tunnel', {
+        tunnelId: 't1',
+        end: { finalSequence: '3' },
+      }),
+    );
+  });
+
+  test('stops waiting for a drain when the tunnel is cancelled', async () => {
+    const send = vi.fn((_name: 'tunnel', message: Record<string, any>) => !message.data);
+    const whenWritable = vi.fn(() => new Promise<void>(() => undefined));
+    const adapter = new RunnerTunnelAdapter(
+      { send, whenWritable },
+      async () => new Response('abcdef'),
+    );
+    adapter.setMaxFrameBytes(2);
+    adapter.receive({ tunnelId: 't1', requestStart: { method: 'GET', path: '/', headers: [] } });
+    adapter.receive({ tunnelId: 't1', end: {} });
+    await waitFor(() => expect(whenWritable).toHaveBeenCalledTimes(1));
+
+    adapter.receive({ tunnelId: 't1', cancel: { reason: 'browser closed' } });
+
+    await waitFor(() =>
+      expect(send).toHaveBeenLastCalledWith(
+        'tunnel',
+        expect.objectContaining({
+          failure: expect.objectContaining({ code: FailureCode.CANCELLED }),
+        }),
+      ),
+    );
+    expect(send.mock.calls.filter(([, message]) => message.data)).toHaveLength(1);
+  });
+
   test('rejects invalid input sequencing before dispatch', () => {
     const send = vi.fn((_name: 'tunnel', _message: Record<string, any>) => true);
     const handle = vi.fn(async () => new Response());

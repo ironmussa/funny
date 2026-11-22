@@ -32,10 +32,24 @@ export interface FactoryProofDeps {
   ): Promise<Result<{ state: string; result?: unknown }, string>>;
   /** Stop a proof the factory no longer waits for (best effort). */
   cancelProof?(threadId: string, proofId: string): Promise<void>;
+  /** How often a running proof is polled (tests shorten it). */
+  pollMs?: number;
+  /** How long the runner may stay unreachable before the wait ends (tests shorten it). */
+  offlineGraceMs?: number;
 }
 
 /** How often a running proof is polled. */
 const PROOF_POLL_MS = 5_000;
+
+/**
+ * How long the runner may stay unreachable while a proof runs. A runner that
+ * restarts (a deploy, a dev reload) is offline for a few seconds and then
+ * answers `proof-not-found`, which starts the job again.
+ */
+const PROOF_OFFLINE_GRACE_MS = 180_000;
+
+/** The prefix of a request error that never reached the runner. */
+export const RUNNER_UNAVAILABLE_PREFIX = 'runner unavailable: ';
 
 /** The runner's proof result (`ProofResult` of the runtime). */
 const PROOF_RESULT = z.object({
@@ -84,7 +98,15 @@ export async function proveOnRunner(
 
   const started = await proof.startProof(threadId, body);
   if (started.isErr()) return unavailable(`could not start: ${started.error}`);
-  const job: PolledJob = { threadId, body, proofId: started.value.proofId, restarted: false };
+  const job: PolledJob = {
+    threadId,
+    body,
+    proofId: started.value.proofId,
+    restarted: false,
+    offlineSince: null,
+  };
+  const pollMs = proof.pollMs ?? PROOF_POLL_MS;
+  const graceMs = proof.offlineGraceMs ?? PROOF_OFFLINE_GRACE_MS;
   // The runner's budget plus slack for its git fetch and cleanup.
   const deadline = Date.now() + timeoutMs + 60_000;
   let wait = 0;
@@ -92,9 +114,9 @@ export async function proveOnRunner(
   while (Date.now() < deadline) {
     await interruptibleSleep(wait, signal).catch(() => undefined);
     if (signal.aborted) break;
-    const look = await pollProofJob(proof, job);
+    const look = await pollProofJob(proof, job, graceMs);
     if (look.kind === 'done') return look.run;
-    wait = look.kind === 'restarted' ? 0 : PROOF_POLL_MS;
+    wait = look.kind === 'restarted' ? 0 : pollMs;
   }
 
   await proof.cancelProof?.(threadId, job.proofId);
@@ -110,13 +132,29 @@ interface PolledJob {
   proofId: string;
   /** It was started again once already. */
   restarted: boolean;
+  /** When the runner stopped answering, while it stays unreachable. */
+  offlineSince: number | null;
 }
 
 type JobLook = { kind: 'done'; run: ProofRun } | { kind: 'running' } | { kind: 'restarted' };
 
-/** One look at the job: its verdict, still running, or started again. */
-async function pollProofJob(proof: FactoryProofDeps, job: PolledJob): Promise<JobLook> {
+/**
+ * One look at the job: its verdict, still running, or started again. An
+ * unreachable runner counts as running for `graceMs`: it is usually
+ * restarting, and once back it answers `proof-not-found`.
+ */
+async function pollProofJob(
+  proof: FactoryProofDeps,
+  job: PolledJob,
+  graceMs: number,
+): Promise<JobLook> {
   const polled = await proof.pollProof(job.threadId, job.proofId);
+  if (polled.isErr() && polled.error.startsWith(RUNNER_UNAVAILABLE_PREFIX)) {
+    job.offlineSince ??= Date.now();
+    if (Date.now() - job.offlineSince < graceMs) return { kind: 'running' };
+    return { kind: 'done', run: unavailable(`poll failed: ${polled.error}`) };
+  }
+  job.offlineSince = null;
   if (polled.isErr()) return restartLostJob(proof, job, polled.error);
   if (polled.value.state !== 'done') return { kind: 'running' };
   const parsed = PROOF_RESULT.safeParse(polled.value.result);

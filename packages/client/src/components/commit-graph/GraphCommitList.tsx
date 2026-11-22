@@ -2,32 +2,16 @@ import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 
 import type { GraphEntry } from '@/components/commit-graph/graph-entry';
-import { GraphCommitRow, type GraphCommitRowProps } from '@/components/commit-graph/GraphCommitRow';
+import {
+  GraphCommitRow,
+  type GraphCommitRowSharedProps,
+} from '@/components/commit-graph/GraphCommitRow';
 import {
   RebaseCopyLinksOverlay,
   renderedRangeOf,
 } from '@/components/commit-graph/RebaseCopyLinksOverlay';
 import type { GraphView } from '@/components/commit-graph/use-graph-view';
 import { LoadingState } from '@/components/ui/loading-state';
-
-/** The row props every commit row shares; the list fills in the per-row ones. */
-export type GraphCommitRowSharedProps = Omit<
-  GraphCommitRowProps,
-  | 'entry'
-  | 'graphRow'
-  | 'selected'
-  | 'avatarUrl'
-  | 'committerAvatarUrl'
-  | 'rebaseEvents'
-  | 'forkedFromRefLabel'
-  | 'parentLabel'
-  | 'unpushed'
-  | 'unpulled'
-  | 'connectToWip'
-  | 'transform'
-  | 'rowHeight'
-  | 'onSelect'
->;
 
 /** The virtualized commit rows, the rebase-copy links over them and the load-more sentinel. */
 export function GraphCommitList({
@@ -107,25 +91,26 @@ export function GraphCommitList({
         return (
           <GraphCommitRow
             key={entry.hash}
-            {...rowProps}
-            entry={entry}
-            graphRow={layout.rows[virtualRow.index]}
-            selected={selectedHash === entry.hash}
-            avatarUrl={githubAvatarBySha.get(entry.hash) ?? avatarByEmail.get(entry.authorEmail)}
-            committerAvatarUrl={avatarByEmail.get(entry.committerEmail)}
-            rebaseEvents={view.rebaseEventsByHash.get(entry.hash) ?? []}
-            forkedFromRefLabel={
-              view.forkedFromRefLabelByHash.get(entry.hash) ??
-              view.rebaseParentRefLabelByHash.get(entry.hash) ??
-              null
-            }
-            parentLabel={view.parentLabelByHash.get(entry.hash) ?? null}
-            unpushed={unpushed.has(entry.hash)}
-            unpulled={unpulled.has(entry.hash) || view.inferredUnpulled.has(entry.hash)}
-            connectToWip={virtualRow.index <= lastWipRowIndex}
-            transform={virtualRow.start}
-            rowHeight={rowHeightFor(entry)}
-            onSelect={() => onSelectHash(selectedHash === entry.hash ? null : entry.hash)}
+            shared={rowProps}
+            row={{
+              entry,
+              graphRow: layout.rows[virtualRow.index],
+              selected: selectedHash === entry.hash,
+              avatarUrl: githubAvatarBySha.get(entry.hash) ?? avatarByEmail.get(entry.authorEmail),
+              committerAvatarUrl: avatarByEmail.get(entry.committerEmail),
+              rebaseEvents: view.rebaseEventsByHash.get(entry.hash) ?? [],
+              forkedFromRefLabel:
+                view.forkedFromRefLabelByHash.get(entry.hash) ??
+                view.rebaseParentRefLabelByHash.get(entry.hash) ??
+                null,
+              parentLabel: view.parentLabelByHash.get(entry.hash) ?? null,
+              unpushed: unpushed.has(entry.hash),
+              unpulled: unpulled.has(entry.hash) || view.inferredUnpulled.has(entry.hash),
+              connectToWip: virtualRow.index <= lastWipRowIndex,
+              transform: virtualRow.start,
+              rowHeight: rowHeightFor(entry),
+              onSelect: () => onSelectHash(selectedHash === entry.hash ? null : entry.hash),
+            }}
           />
         );
       })}

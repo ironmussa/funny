@@ -1,4 +1,4 @@
-import { useMemo, useState, type WheelEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent, type WheelEvent } from 'react';
 
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import {
@@ -73,6 +73,46 @@ export interface GraphCommitRowProps {
   transform: number;
   rowHeight: number;
   onSelect: () => void;
+}
+
+/** The props that differ per row; the list builds them for each visible commit. */
+type GraphCommitRowOwnKeys =
+  | 'entry'
+  | 'graphRow'
+  | 'selected'
+  | 'avatarUrl'
+  | 'committerAvatarUrl'
+  | 'rebaseEvents'
+  | 'forkedFromRefLabel'
+  | 'parentLabel'
+  | 'unpushed'
+  | 'unpulled'
+  | 'connectToWip'
+  | 'transform'
+  | 'rowHeight'
+  | 'onSelect';
+
+export type GraphCommitRowOwnProps = Pick<GraphCommitRowProps, GraphCommitRowOwnKeys>;
+
+/** The row props every commit row shares. */
+export type GraphCommitRowSharedProps = Omit<GraphCommitRowProps, GraphCommitRowOwnKeys>;
+
+/**
+ * The node avatar and, when the committer differs from the author, the
+ * committer's, both served from the short-TTL blob cache so scrolling the
+ * virtualized list doesn't re-hit GitHub for the same image (avoids 429s).
+ */
+function useRowAvatars(
+  entry: GraphEntry,
+  avatarUrl: string | undefined,
+  committerAvatarUrl: string | undefined,
+) {
+  const cachedAvatarUrl = useCachedAvatar(avatarUrl);
+  const hasDistinctCommitter = hasDistinctCommitterIdentity(entry);
+  const cachedCommitterAvatarUrl = useCachedAvatar(
+    hasDistinctCommitter ? committerAvatarUrl : undefined,
+  );
+  return { cachedAvatarUrl, hasDistinctCommitter, cachedCommitterAvatarUrl };
 }
 
 /**
@@ -179,48 +219,53 @@ function RefLeaderLine({
 
 /** One commit row: graph gutter + subject/refs + author avatar, hash, link. */
 export function GraphCommitRow({
-  entry,
-  graphRow,
-  laneCount,
-  gutterWidth,
-  graphViewportWidth,
-  graphScrollLeft,
-  onGraphGutterWheel,
-  selected,
-  avatarUrl,
-  committerAvatarUrl,
-  githubBrowseBaseUrl,
-  effectiveThreadId,
-  projectModeId,
-  onAfterAction,
-  onCreateThreadFromBranch,
-  branchSummaryByName,
-  branchActionInProgress,
-  onPushBranch,
-  onPullCurrentBranch,
-  rebaseEvents,
-  onSelectRebaseEvent,
-  forkedFromRefLabel,
-  parentLabel,
-  branchColorByLabel,
-  unpushed,
-  unpulled,
-  connectToWip,
-  searchQuery,
-  threadBranch,
-  transform,
-  rowHeight,
-  onSelect,
-}: GraphCommitRowProps) {
+  row,
+  shared,
+}: {
+  row: GraphCommitRowOwnProps;
+  shared: GraphCommitRowSharedProps;
+}) {
+  const {
+    entry,
+    graphRow,
+    laneCount,
+    gutterWidth,
+    graphViewportWidth,
+    graphScrollLeft,
+    onGraphGutterWheel,
+    selected,
+    avatarUrl,
+    committerAvatarUrl,
+    githubBrowseBaseUrl,
+    effectiveThreadId,
+    projectModeId,
+    onAfterAction,
+    onCreateThreadFromBranch,
+    branchSummaryByName,
+    branchActionInProgress,
+    onPushBranch,
+    onPullCurrentBranch,
+    rebaseEvents,
+    onSelectRebaseEvent,
+    forkedFromRefLabel,
+    parentLabel,
+    branchColorByLabel,
+    unpushed,
+    unpulled,
+    connectToWip,
+    searchQuery,
+    threadBranch,
+    transform,
+    rowHeight,
+    onSelect,
+  }: GraphCommitRowProps = { ...shared, ...row };
   // Keep the kebab pinned (and the time hidden) while its dropdown is open.
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Serve the node avatar from the short-TTL blob cache so scrolling the
-  // virtualized list doesn't re-hit GitHub for the same image (avoids 429s).
-  const cachedAvatarUrl = useCachedAvatar(avatarUrl);
-  const hasDistinctCommitter = hasDistinctCommitterIdentity(entry);
-  const cachedCommitterAvatarUrl = useCachedAvatar(
-    hasDistinctCommitter ? committerAvatarUrl : undefined,
+  const { cachedAvatarUrl, hasDistinctCommitter, cachedCommitterAvatarUrl } = useRowAvatars(
+    entry,
+    avatarUrl,
+    committerAvatarUrl,
   );
 
   // Render branch/tag refs with the same powerline component used across the
@@ -280,12 +325,7 @@ export function GraphCommitRow({
         role="button"
         tabIndex={0}
         onClick={onSelect}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
+        onKeyDown={(e) => activateOnEnterOrSpace(e, onSelect)}
         className={cn(
           'group relative flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden pl-3 pr-2 text-left transition-colors',
           selected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-accent/50',
@@ -308,101 +348,44 @@ export function GraphCommitRow({
           />
         )}
         {/* Layout: graph | commit info, with branch/tag chips above the title. */}
-        {graphRow &&
-          (() => {
-            // Anchor the identity tooltip to the avatar node itself, not the whole
-            // gutter — otherwise the tooltip centers over the (possibly wide)
-            // multi-lane gutter and reads as detached from the avatar. The node
-            // sits at `commitLane`'s center with GraphGutter's fixed node radius,
-            // so the trigger overlays it precisely.
-            const nodeCenterX = graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2;
-            const nodeHitboxSize = 2 * GRAPH_NODE_RADIUS;
-            return (
-              <div
-                style={{ width: graphViewportWidth }}
-                className="shrink-0 self-stretch overflow-hidden"
-                onWheel={onGraphGutterWheel}
-              >
-                <div
-                  style={{ width: gutterWidth, transform: `translateX(-${graphScrollLeft}px)` }}
-                  className="relative h-full"
-                >
-                  <GraphGutter
-                    row={graphRow}
-                    laneCount={laneCount}
-                    height={rowHeight}
-                    avatarUrl={cachedAvatarUrl}
-                    authorName={entry.author}
-                    distinctCommitter={hasDistinctCommitter}
-                    connectUp={connectToWip}
-                    nodeYFrac={nodeYFrac}
-                  />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div
-                        aria-hidden
-                        className="absolute -translate-x-1/2 -translate-y-1/2"
-                        style={{
-                          left: nodeCenterX,
-                          top: nodeYFrac * rowHeight,
-                          width: nodeHitboxSize,
-                          height: nodeHitboxSize,
-                        }}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      <GraphNodeTooltipContent
-                        entry={entry}
-                        avatarUrl={cachedAvatarUrl}
-                        committerAvatarUrl={cachedCommitterAvatarUrl}
-                        hasDistinctCommitter={hasDistinctCommitter}
-                        forkedFromRefLabel={forkedFromRefLabel}
-                        parentLabel={parentLabel}
-                        branchColorByLabel={branchColorByLabel}
-                        unpushed={unpushed}
-                      />
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
-            );
-          })()}
+        {graphRow && (
+          <GraphCommitNode
+            entry={entry}
+            graphRow={graphRow}
+            laneCount={laneCount}
+            gutterWidth={gutterWidth}
+            graphViewportWidth={graphViewportWidth}
+            graphScrollLeft={graphScrollLeft}
+            onGraphGutterWheel={onGraphGutterWheel}
+            rowHeight={rowHeight}
+            nodeYFrac={nodeYFrac}
+            avatarUrl={cachedAvatarUrl}
+            committerAvatarUrl={cachedCommitterAvatarUrl}
+            hasDistinctCommitter={hasDistinctCommitter}
+            connectToWip={connectToWip}
+            forkedFromRefLabel={forkedFromRefLabel}
+            parentLabel={parentLabel}
+            branchColorByLabel={branchColorByLabel}
+            unpushed={unpushed}
+          />
+        )}
         {/* Commit info: title line, optional branch/tag chips above it. */}
         <div className="flex min-w-0 flex-1 flex-col justify-center pl-1">
           {/* Branch/tag chips on their own line above the commit title. */}
           {foldedRefs.length > 0 && (
-            <div
-              className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
-              style={{ height: foldedRefs.length * chipLineH + (foldedRefs.length - 1) * 4 }}
-            >
-              {/* Branches on a commit are siblings, not a hierarchy — render
-                  them as separate pills (`chips`) rather than connected powerline
-                  chevrons, which read as one continuous path when two branch tips
-                  share a commit. A folded local+remote pair is already ONE chip,
-                  so distinct chips here always mean distinct branches/tags. */}
-              <GraphRefChips
-                refs={foldedRefs}
-                branchSummaryByName={branchSummaryByName}
-                githubBrowseBaseUrl={githubBrowseBaseUrl}
-                actionInProgress={branchActionInProgress}
-                color={lanePastel}
-                searchQuery={searchQuery}
-                threadBranch={threadBranch}
-                onPushBranch={onPushBranch}
-                onPullCurrentBranch={onPullCurrentBranch}
-              />
-              {pullRequestLinks.map((pr) => (
-                <PRBadge
-                  key={pr.url}
-                  prNumber={pr.number}
-                  prState={pr.state}
-                  prUrl={pr.url}
-                  size="compact"
-                  className="ml-1"
-                  data-testid={`graph-pr-badge-${pr.number}`}
-                />
-              ))}
-            </div>
+            <GraphCommitRefsLine
+              foldedRefs={foldedRefs}
+              pullRequestLinks={pullRequestLinks}
+              lineHeight={chipLineH}
+              branchSummaryByName={branchSummaryByName}
+              githubBrowseBaseUrl={githubBrowseBaseUrl}
+              branchActionInProgress={branchActionInProgress}
+              color={lanePastel}
+              searchQuery={searchQuery}
+              threadBranch={threadBranch}
+              onPushBranch={onPushBranch}
+              onPullCurrentBranch={onPullCurrentBranch}
+            />
           )}
           {/* Rem-based title/meta sizes, identical across every tab. */}
           <div
@@ -461,4 +444,181 @@ export function GraphCommitRow({
       </div>
     </div>
   );
+}
+
+interface GraphCommitNodeProps extends Pick<
+  GraphCommitRowProps,
+  | 'entry'
+  | 'laneCount'
+  | 'gutterWidth'
+  | 'graphViewportWidth'
+  | 'graphScrollLeft'
+  | 'onGraphGutterWheel'
+  | 'rowHeight'
+  | 'avatarUrl'
+  | 'committerAvatarUrl'
+  | 'connectToWip'
+  | 'forkedFromRefLabel'
+  | 'parentLabel'
+  | 'branchColorByLabel'
+  | 'unpushed'
+> {
+  graphRow: GraphRow;
+  nodeYFrac: number;
+  hasDistinctCommitter: boolean;
+}
+
+/** The row's graph gutter, with the identity tooltip anchored on its avatar node. */
+function GraphCommitNode({
+  entry,
+  graphRow,
+  laneCount,
+  gutterWidth,
+  graphViewportWidth,
+  graphScrollLeft,
+  onGraphGutterWheel,
+  rowHeight,
+  nodeYFrac,
+  avatarUrl,
+  committerAvatarUrl,
+  hasDistinctCommitter,
+  connectToWip,
+  forkedFromRefLabel,
+  parentLabel,
+  branchColorByLabel,
+  unpushed,
+}: GraphCommitNodeProps) {
+  // Anchor the identity tooltip to the avatar node itself, not the whole
+  // gutter — otherwise the tooltip centers over the (possibly wide)
+  // multi-lane gutter and reads as detached from the avatar. The node
+  // sits at `commitLane`'s center with GraphGutter's fixed node radius,
+  // so the trigger overlays it precisely.
+  const nodeCenterX = graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2;
+  const nodeHitboxSize = 2 * GRAPH_NODE_RADIUS;
+  return (
+    <div
+      style={{ width: graphViewportWidth }}
+      className="shrink-0 self-stretch overflow-hidden"
+      onWheel={onGraphGutterWheel}
+    >
+      <div
+        style={{ width: gutterWidth, transform: `translateX(-${graphScrollLeft}px)` }}
+        className="relative h-full"
+      >
+        <GraphGutter
+          row={graphRow}
+          laneCount={laneCount}
+          height={rowHeight}
+          avatarUrl={avatarUrl}
+          authorName={entry.author}
+          distinctCommitter={hasDistinctCommitter}
+          connectUp={connectToWip}
+          nodeYFrac={nodeYFrac}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              aria-hidden
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{
+                left: nodeCenterX,
+                top: nodeYFrac * rowHeight,
+                width: nodeHitboxSize,
+                height: nodeHitboxSize,
+              }}
+            />
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <GraphNodeTooltipContent
+              entry={entry}
+              avatarUrl={avatarUrl}
+              committerAvatarUrl={committerAvatarUrl}
+              hasDistinctCommitter={hasDistinctCommitter}
+              forkedFromRefLabel={forkedFromRefLabel}
+              parentLabel={parentLabel}
+              branchColorByLabel={branchColorByLabel}
+              unpushed={unpushed}
+            />
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+type CommitRowRefs = ReturnType<typeof useCommitRowRefs>;
+
+interface GraphCommitRefsLineProps extends Pick<
+  GraphCommitRowProps,
+  | 'branchSummaryByName'
+  | 'githubBrowseBaseUrl'
+  | 'branchActionInProgress'
+  | 'searchQuery'
+  | 'threadBranch'
+  | 'onPushBranch'
+  | 'onPullCurrentBranch'
+> {
+  foldedRefs: CommitRowRefs['foldedRefs'];
+  pullRequestLinks: CommitRowRefs['pullRequestLinks'];
+  /** Height of one chip line. */
+  lineHeight: number;
+  color: string;
+}
+
+/** The branch/tag chips and PR badges on their own line above the commit title. */
+function GraphCommitRefsLine({
+  foldedRefs,
+  pullRequestLinks,
+  lineHeight,
+  branchSummaryByName,
+  githubBrowseBaseUrl,
+  branchActionInProgress,
+  color,
+  searchQuery,
+  threadBranch,
+  onPushBranch,
+  onPullCurrentBranch,
+}: GraphCommitRefsLineProps) {
+  return (
+    <div
+      className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
+      style={{ height: foldedRefs.length * lineHeight + (foldedRefs.length - 1) * 4 }}
+    >
+      {/* Branches on a commit are siblings, not a hierarchy — render
+          them as separate pills (`chips`) rather than connected powerline
+          chevrons, which read as one continuous path when two branch tips
+          share a commit. A folded local+remote pair is already ONE chip,
+          so distinct chips here always mean distinct branches/tags. */}
+      <GraphRefChips
+        refs={foldedRefs}
+        branchSummaryByName={branchSummaryByName}
+        githubBrowseBaseUrl={githubBrowseBaseUrl}
+        actionInProgress={branchActionInProgress}
+        color={color}
+        searchQuery={searchQuery}
+        threadBranch={threadBranch}
+        onPushBranch={onPushBranch}
+        onPullCurrentBranch={onPullCurrentBranch}
+      />
+      {pullRequestLinks.map((pr) => (
+        <PRBadge
+          key={pr.url}
+          prNumber={pr.number}
+          prState={pr.state}
+          prUrl={pr.url}
+          size="compact"
+          className="ml-1"
+          data-testid={`graph-pr-badge-${pr.number}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Treat Enter / Space on a `role="button"` element as a click. */
+function activateOnEnterOrSpace(e: KeyboardEvent<HTMLElement>, onActivate: () => void) {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    onActivate();
+  }
 }

@@ -32,23 +32,26 @@ async function pushNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   return ctx;
 }
 
+/** Refuse a PR before calling GitHub when the branch has no commits ahead of its base. */
+async function assertCommitsAheadOfBase(threadId: string, cwd: string): Promise<void> {
+  const thread = await tm.getThread(threadId);
+  const base = thread?.baseBranch;
+  if (!base) return;
+  const countResult = await gitRead(['rev-list', '--count', `${base}..HEAD`], {
+    cwd,
+    reject: false,
+  });
+  const ahead = parseInt(countResult.stdout.trim(), 10) || 0;
+  if (ahead === 0) {
+    throw new Error(`No commits ahead of ${base}. Push new commits before creating a PR.`);
+  }
+}
+
 async function prNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   await trackStep(ctx, 'pr', 'PR creation failed', async () => {
     if (!ctx.threadId) throw new Error('PR creation requires a thread');
 
-    // Pre-check: verify the branch has commits ahead of base before calling GitHub
-    const thread = await tm.getThread(ctx.threadId);
-    const base = thread?.baseBranch;
-    if (base) {
-      const countResult = await gitRead(['rev-list', '--count', `${base}..HEAD`], {
-        cwd: ctx.cwd,
-        reject: false,
-      });
-      const ahead = parseInt(countResult.stdout.trim(), 10) || 0;
-      if (ahead === 0) {
-        throw new Error(`No commits ahead of ${base}. Push new commits before creating a PR.`);
-      }
-    }
+    await assertCommitsAheadOfBase(ctx.threadId, ctx.cwd);
 
     const prUrl = unwrapGit(
       await gitServiceCreatePR({

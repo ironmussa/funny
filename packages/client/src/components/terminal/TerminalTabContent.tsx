@@ -31,6 +31,14 @@ export function TerminalTabContent({
       />
     );
   }
+  return (
+    processTabContent(tab, active) ??
+    (isTauri ? <TauriTerminalTabContent id={tab.id} cwd={tab.cwd} active={active} /> : null)
+  );
+}
+
+/** A background job's log or a project command's output; `null` for any other tab. */
+function processTabContent(tab: TerminalTab, active: boolean) {
   if (tab.type === 'job-log' && tab.jobId) {
     return <JobLogTabContent tabId={tab.id} jobId={tab.jobId} active={active} />;
   }
@@ -43,9 +51,6 @@ export function TerminalTabContent({
         alive={tab.alive}
       />
     );
-  }
-  if (isTauri) {
-    return <TauriTerminalTabContent id={tab.id} cwd={tab.cwd} active={active} />;
   }
   return null;
 }

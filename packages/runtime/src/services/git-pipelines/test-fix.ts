@@ -62,6 +62,30 @@ async function testRunnerNode(ctx: GitPipelineContext): Promise<GitPipelineConte
   return { ...ctx, testPassed: false, testOutput: result.output || 'Tests failed' };
 }
 
+/**
+ * Stage the test fixer's changes on the parent thread and commit them as a
+ * pipeline commit. Returns whether there was anything to commit.
+ */
+async function commitTestFix(ctx: GitPipelineContext, threadId: string): Promise<boolean> {
+  const parentThread = await tm.getThread(threadId);
+  const targetCwd = parentThread?.worktreePath || parentThread?.initCwd || ctx.cwd;
+
+  await gitRead(['add', '-A'], { cwd: targetCwd, reject: false });
+
+  // Check if there are staged changes to commit
+  const statusResult = await gitRead(['status', '--porcelain'], {
+    cwd: targetCwd,
+    reject: false,
+  });
+  const hasChanges = statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
+
+  if (hasChanges) {
+    const commitMessage = `fix: address test failures (iteration ${ctx.testIteration})`;
+    await commitPipelineFix({ ...ctx, threadId }, targetCwd, commitMessage);
+  }
+  return hasChanges;
+}
+
 async function testFixerNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   if (!ctx.threadId || !ctx.projectId) {
     throw new Error('Test fixer requires threadId and projectId');
@@ -102,35 +126,16 @@ async function testFixerNode(ctx: GitPipelineContext): Promise<GitPipelineContex
 
   await waitForAgentCompletionPoll(fixerThread.id);
 
-  // Stage changes and commit as a pipeline commit
-  const parentThread = await tm.getThread(ctx.threadId);
-  const targetCwd = parentThread?.worktreePath || parentThread?.initCwd || ctx.cwd;
-
-  await gitRead(['add', '-A'], { cwd: targetCwd, reject: false });
-
-  // Check if there are staged changes to commit
-  const statusResult = await gitRead(['status', '--porcelain'], {
-    cwd: targetCwd,
-    reject: false,
-  });
-  const hasChanges = statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
-
-  if (hasChanges) {
-    const commitMessage = `fix: address test failures (iteration ${ctx.testIteration})`;
-
-    await commitPipelineFix({ ...ctx, threadId: ctx.threadId }, targetCwd, commitMessage);
-  }
+  const hasChanges = await commitTestFix(ctx, ctx.threadId);
 
   ctx.setStep('test-fixer', { status: 'completed' });
 
-  if (ctx.threadId) {
-    await emitWorkflowEvent(ctx.userId, ctx.threadId, 'workflow:test_fix', {
-      workflowId: ctx.workflowId,
-      iteration: ctx.testIteration,
-      fixerThreadId: fixerThread.id,
-      hasChanges,
-    });
-  }
+  await emitWorkflowEvent(ctx.userId, ctx.threadId, 'workflow:test_fix', {
+    workflowId: ctx.workflowId,
+    iteration: ctx.testIteration,
+    fixerThreadId: fixerThread.id,
+    hasChanges,
+  });
 
   return {
     ...ctx,

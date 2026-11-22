@@ -32,6 +32,56 @@ export interface WebXtermSessionOptions {
   unregisterPtyCallback: TerminalStoreState['unregisterPtyCallback'];
 }
 
+type XtermModules = Awaited<ReturnType<typeof getXtermModules>>;
+
+/**
+ * Build the tab's xterm.js terminal with its addons in `container`, register
+ * it for search and lookup, and route Ctrl/Cmd+F to the search overlay.
+ */
+function createWebXterm(
+  { Terminal, FitAddon, WebLinksAddon, SearchAddon, WebglAddon }: XtermModules,
+  id: string,
+  codeFontSizePx: number,
+  container: HTMLDivElement,
+) {
+  const terminal = new Terminal({
+    cursorBlink: true,
+    fontSize: codeFontSizePx,
+    fontFamily: '"JetBrains Mono", Menlo, Monaco, Consolas, "Courier New", monospace',
+    theme: getTerminalTheme(),
+    scrollback: 5000,
+    allowProposedApi: true,
+  });
+
+  const fitAddon = new FitAddon();
+  const webLinksAddon = new WebLinksAddon();
+  const searchAddon = new SearchAddon();
+  terminal.loadAddon(fitAddon);
+  terminal.loadAddon(webLinksAddon);
+  terminal.loadAddon(searchAddon);
+  terminal.open(container);
+  attachWebglRenderer(terminal, WebglAddon);
+  searchAddonRegistry.set(id, searchAddon);
+  terminalRegistry.set(id, terminal);
+  terminal.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown') return true;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      e.stopPropagation();
+      window.dispatchEvent(new CustomEvent('terminal:search-open', { detail: { id } }));
+      return false;
+    }
+    return true;
+  });
+  return { terminal, fitAddon };
+}
+
+/** Whether the tab was created within the last second (so it should take focus). */
+function isNewlyCreatedTab(id: string): boolean {
+  const cAt = useTerminalStore.getState().tabs.find((t) => t.id === id)?.createdAt;
+  return cAt ? Date.now() - cAt < 1000 : false;
+}
+
 /**
  * Mount a web PTY tab's xterm.js terminal in `containerRef` and wire it to the
  * realtime PTY stream. Returns the teardown for the component's mount effect.
@@ -85,39 +135,15 @@ export function mountWebXterm(options: WebXtermSessionOptions): () => void {
     });
   };
 
+  /** The container while the mount is live; `null` once cancelled or detached. */
+  const liveContainer = () => (cancelled ? null : containerRef.current);
+
   (async () => {
-    const { Terminal, FitAddon, WebLinksAddon, SearchAddon, WebglAddon } = await getXtermModules();
-    if (cancelled || !containerRef.current) return;
+    const modules = await getXtermModules();
+    const container = liveContainer();
+    if (!container) return;
 
-    const terminal = new Terminal({
-      cursorBlink: true,
-      fontSize: codeFontSizePx,
-      fontFamily: '"JetBrains Mono", Menlo, Monaco, Consolas, "Courier New", monospace',
-      theme: getTerminalTheme(),
-      scrollback: 5000,
-      allowProposedApi: true,
-    });
-
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    const searchAddon = new SearchAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.loadAddon(webLinksAddon);
-    terminal.loadAddon(searchAddon);
-    terminal.open(containerRef.current);
-    attachWebglRenderer(terminal, WebglAddon);
-    searchAddonRegistry.set(id, searchAddon);
-    terminalRegistry.set(id, terminal);
-    terminal.attachCustomKeyEventHandler((e) => {
-      if (e.type !== 'keydown') return true;
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
-        e.preventDefault();
-        e.stopPropagation();
-        window.dispatchEvent(new CustomEvent('terminal:search-open', { detail: { id } }));
-        return false;
-      }
-      return true;
-    });
+    const { terminal, fitAddon } = createWebXterm(modules, id, codeFontSizePx, container);
     termRef.current = { terminal, fitAddon };
 
     // Phase boundary for a memory profiling run: xterm buffers and the WebGL
@@ -147,7 +173,7 @@ export function mountWebXterm(options: WebXtermSessionOptions): () => void {
       });
     });
 
-    if (cancelled || !containerRef.current) {
+    if (!liveContainer()) {
       searchAddonRegistry.delete(id);
       terminalRegistry.delete(id);
       termRef.current = null;
@@ -160,10 +186,7 @@ export function mountWebXterm(options: WebXtermSessionOptions): () => void {
     // (e.g. NewThreadDialog) has time to unmount and the panel expand
     // animation can finish.  Without this, the caret won't appear inside
     // the terminal when it is first created.
-    const isNewlyCreated = (() => {
-      const cAt = useTerminalStore.getState().tabs.find((t) => t.id === id)?.createdAt;
-      return cAt ? Date.now() - cAt < 1000 : false;
-    })();
+    const isNewlyCreated = isNewlyCreatedTab(id);
     focusTimeout = setTimeout(() => {
       if (cancelled) return;
       if (isNewlyCreated && !document.querySelector('[role="dialog"][data-state="open"]')) {
@@ -229,7 +252,8 @@ export function mountWebXterm(options: WebXtermSessionOptions): () => void {
     const resizeObserver = new ResizeObserver(() => resizeScheduler.schedule());
     resizeObserver.observe(containerRef.current!);
 
-    if (!cancelled) send({ type: 'TERM_READY' });
+    // No await since the liveContainer() check above, so the mount is still live.
+    send({ type: 'TERM_READY' });
 
     cleanup = () => {
       resizeScheduler.dispose();

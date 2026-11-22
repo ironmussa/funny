@@ -23,7 +23,7 @@ import { createNewWorktreeThread } from './create-worktree.js';
 import { ThreadServiceError, releaseStagedUploadsOnSuccess } from './helpers.js';
 import { extractShellEscapeCommand } from './shell-escape.js';
 
-export { createIdleThread, type CreateIdleThreadParams } from './create-idle.js';
+export { createIdleThread } from './create-idle.js';
 export type { CreateAndStartThreadParams } from './create-context.js';
 
 export function createAndStartThread(

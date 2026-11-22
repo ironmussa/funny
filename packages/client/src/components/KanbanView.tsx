@@ -402,8 +402,10 @@ export function KanbanView({
     const { threadId, projectId: threadProjectId, title } = deleteConfirm;
     const wasSelected = selectedThreadId === threadId;
     try {
-      await deleteThread(threadId, threadProjectId);
+      const deleted = await deleteThread(threadId, threadProjectId);
       setDeleteConfirm(null);
+      // A refused delete already brought the card back with an error toast.
+      if (!deleted) return;
       toast.success(t('toast.threadDeleted', { title }));
       if (wasSelected) navigate(buildPath(`/projects/${threadProjectId}`));
     } finally {

@@ -78,7 +78,7 @@ function seedStores(projects: Project[] = [makeProject()]) {
     updateThreadStage: noop,
     archiveThread: noop,
     unarchiveThread: noop,
-    deleteThread: noop,
+    deleteThread: () => Promise.resolve(true),
     pinThread: noop,
     selectedThreadId: null,
   });

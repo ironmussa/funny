@@ -692,11 +692,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   deleteThread: async (threadId) => {
     const result = await deleteThreadRow(threadId, { stopFirst: isAgentActive(get(), threadId) });
     if (result.isOk()) forgetThread(threadId);
+    return result.isOk();
   },
 
   deleteScratchThread: async (threadId) => {
     const result = await deleteThreadRow(threadId, { stopFirst: isAgentActive(get(), threadId) });
     if (result.isOk()) forgetThread(threadId);
+    return result.isOk();
   },
 
   handleShareRevoked: (threadId) => {

@@ -80,9 +80,9 @@ export function useSidebarActions() {
       navigate(buildPath(scratch || !projectId ? '/' : `/projects/${projectId}`));
     }
 
+    // A refused delete already brought the row back with an error toast.
     if (scratch) {
-      await deleteScratchThread(threadId);
-      toast.success(t('toast.threadDeleted', { title }));
+      if (await deleteScratchThread(threadId)) toast.success(t('toast.threadDeleted', { title }));
       return;
     }
 
@@ -90,8 +90,7 @@ export function useSidebarActions() {
     // the worktree and branch itself. A prior `DELETE /worktrees` kept the
     // row visible for the whole (slow, on NTFS tens of seconds) removal, so
     // a second click raced it and the first delete came back as a 404.
-    await deleteThread(threadId, projectId);
-    toast.success(t('toast.threadDeleted', { title }));
+    if (await deleteThread(threadId, projectId)) toast.success(t('toast.threadDeleted', { title }));
   }, [deleteThreadConfirm, deleteThread, deleteScratchThread, t, navigate]);
 
   const handleRenameProjectConfirm = useCallback(async () => {

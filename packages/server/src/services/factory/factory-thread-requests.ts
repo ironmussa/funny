@@ -276,6 +276,8 @@ export async function cleanupFactoryWorktrees(
 ): Promise<KeptWorktree[]> {
   const kept: KeptWorktree[] = [];
   if (threadIds.length === 0) return kept;
+  // A run that merged, or one that ended without a pull request ("no change").
+  const reason = options.keepUnsaved ? 'ended-without-pr' : 'merged';
   const rows = await db
     .select({
       id: threads.id,
@@ -308,9 +310,10 @@ export async function cleanupFactoryWorktrees(
       },
     });
     if (removed.isErr()) {
-      log.warn('Failed to remove a merged factory run worktree', {
+      log.warn('Failed to remove a factory run worktree', {
         namespace: 'factory',
         threadId: thread.id,
+        reason,
         error: removed.error.message,
       });
       continue;
@@ -336,13 +339,58 @@ export async function cleanupFactoryWorktrees(
       threadId: thread.id,
       data: { worktreePath: null, branch: null },
     });
-    log.info('Removed a merged factory run worktree', {
+    log.info('Removed a factory run worktree', {
       namespace: 'factory',
       threadId: thread.id,
+      reason,
       branch: thread.branch,
     });
   }
   return kept;
+}
+
+/**
+ * Archive the threads a retry replaced: the run no longer records them, and a
+ * new agent thread with the same title takes their place. Left in the list,
+ * the old failed thread looks like the run's (and deleting it looks like it
+ * did nothing). A thread a member is still running is left alone.
+ */
+export async function archiveReplacedFactoryThreads(
+  threadIds: string[],
+  browserEvents?: BrowserEventsPort,
+): Promise<void> {
+  if (threadIds.length === 0) return;
+  const rows = await db
+    .select({ id: threads.id, userId: threads.userId })
+    .from(threads)
+    .where(
+      and(
+        inArray(threads.id, [...new Set(threadIds)]),
+        eq(threads.archived, 0),
+        notInArray(threads.status, ACTIVE_STATUSES),
+      ),
+    );
+  if (rows.length === 0) return;
+  await db
+    .update(threads)
+    .set({ archived: 1 })
+    .where(
+      inArray(
+        threads.id,
+        rows.map((row) => row.id),
+      ),
+    );
+  for (const row of rows) {
+    browserEvents?.toUser(row.userId, {
+      type: 'thread:updated',
+      threadId: row.id,
+      data: { archived: 1 },
+    });
+  }
+  log.info('Archived factory threads a retry replaced', {
+    namespace: 'factory',
+    threadIds: rows.map((row) => row.id),
+  });
 }
 
 /** A worktree the cleanup left in place because removing it would lose work. */

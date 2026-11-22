@@ -12,6 +12,8 @@
  *   branch and pull request. A completed implement step is kept (its thread
  *   replays); every later step runs again, so a CI fix loop gets its fixes
  *   back. A "no change" run keeps nothing: a new agent implements the issue.
+ *   The threads a retry does not keep are archived, so the list does not
+ *   show the old failed thread next to the new one with the same title.
  * - **Take over** a run: a member follows up on the run's last agent thread;
  *   when that thread completes again, a failed or parked run goes back in
  *   flight with all its steps replayed, so the flow continues from that step
@@ -30,9 +32,14 @@ import { log } from '../../lib/logger.js';
 import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
-import { stopFactoryThreads } from './factory-thread-requests.js';
+import { archiveReplacedFactoryThreads, stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
-import { factoryRunnerPorts, pokeFactory, stopFactoryFlow } from './factory-watcher.js';
+import {
+  factoryBrowserEvents,
+  factoryRunnerPorts,
+  pokeFactory,
+  stopFactoryFlow,
+} from './factory-watcher.js';
 
 export type FactoryRunControlError = {
   kind: 'not-found' | 'conflict' | 'storage';
@@ -129,16 +136,23 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
       return runOf(factoryId, runId)
         .andThen((run) =>
           ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
-            runs.reopen(run.id, kept).mapErr(reopenRefused),
+            runs
+              .reopen(run.id, kept)
+              .mapErr(reopenRefused)
+              .andThen((reopened) =>
+                reopened
+                  ? ResultAsync.fromSafePromise(
+                      archiveReplacedFactoryThreads(
+                        run.threadIds.filter((id) => !kept.includes(id)),
+                        factoryBrowserEvents(),
+                      ),
+                    )
+                  : errAsync<undefined, FactoryRunControlError>({
+                      kind: 'conflict',
+                      message: 'Only a failed run, or one waiting for you, can be retried.',
+                    }),
+              ),
           ),
-        )
-        .andThen((reopened) =>
-          reopened
-            ? okAsync(undefined)
-            : errAsync<undefined, FactoryRunControlError>({
-                kind: 'conflict',
-                message: 'Only a failed run, or one waiting for you, can be retried.',
-              }),
         )
         .andThen(() => {
           wake(factoryId);

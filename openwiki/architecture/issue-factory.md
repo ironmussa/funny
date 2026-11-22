@@ -150,6 +150,8 @@ at the PR for teams that merge by hand).
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
   branch and PR; a completed implement step is kept, later steps run again. A `no change` run
   keeps nothing (replaying its thread would only reach `no change` again): a new agent starts.
+  The threads the retry does not keep are archived (unless one is still running), so the list does
+  not show the old failed thread next to the new one under the same title.
 - **Take over**: when the thread's **owner** follows up on a parked run's last thread after it
   parked (noted by `POST /api/threads/:id/message`), the run resumes from that step when the thread
   completes. A steer sharee's follow-up never does: it would otherwise move the flow toward a merge

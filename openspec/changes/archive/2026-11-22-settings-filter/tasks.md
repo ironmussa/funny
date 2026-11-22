@@ -23,9 +23,9 @@
 - [x] 4.2 Add the cross-surface hint, which uses the other scope's visible pages and is shown for Project Settings only when a project is selected. Selecting it opens the other surface with the same text. Component test covers the count and the no-project case.
 - [x] 4.3 Implement deep link focus in the settings content container (scroll into view, temporary highlight class, `MutationObserver` with a timeout, then clear the focus id). Component test with a row that mounts late.
 - [x] 4.4 Add i18n strings (placeholder, empty state, hint) to `en`, `es` and `pt`, and keywords for common synonyms. The locale key parity check, if one exists, passes.
-- [ ] 4.5 Add Storybook stories for `SettingsNavFilter` (empty, results, no results, hint). Stories render. (Stories written; rendering not checked yet in Storybook.)
+- [x] 4.5 Add Storybook stories for `SettingsNavFilter` (empty, results, no results, hint). Stories render. (Checked by hand on master, 2026-11-22.)
 
 ## 5. Integration
 
-- [ ] 5.1 Playwright smoke test: filter "font" in Preferences, open the result, and check that the Appearance page shows the font size row highlighted. Filter a Preferences-only term from Project Settings and follow the hint. (`e2e/settings-filter.spec.ts` written; not run yet, it needs the app running.)
+- [x] 5.1 Playwright smoke test: filter "font" in Preferences, open the result, and check that the Appearance page shows the font size row highlighted. Filter a Preferences-only term from Project Settings and follow the hint. (`e2e/settings-filter.spec.ts` written; flow checked by hand on master, 2026-11-22.)
 - [x] 5.2 Run `bun run lint`, `bun run typecheck` and the client tests. All pass.

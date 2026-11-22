@@ -89,6 +89,29 @@ describe('factory thread requests', () => {
     });
   });
 
+  test("a follow-up names the run's branch, and a refusal says why", async () => {
+    runner('r-alice', 'alice');
+    seedThread(testDb.db, { id: 't1', projectId: 'p1', userId: 'alice', status: 'completed' });
+    requests.response = {
+      status: 409,
+      headers: {},
+      body: JSON.stringify({
+        error: 'The thread\'s worktree is on branch "fix/x", not "factory/issue-7-r1"',
+      }),
+      bodyEncoding: 'utf8',
+    };
+
+    const sent = await sendFactoryFollowUp(ports(), 'alice', 't1', 'fix', 'factory/issue-7-r1');
+
+    expect(JSON.parse(String(requests.requests[0]!.request.body))).toEqual({
+      content: 'fix',
+      expectedBranch: 'factory/issue-7-r1',
+    });
+    // The run parks with the runner's reason, not a bare status.
+    expect(sent.isErr() && sent.error).toContain('409');
+    expect(sent.isErr() && sent.error).toContain('"fix/x"');
+  });
+
   test("another user's thread, or a refused follow-up, is an error", async () => {
     runner('r-alice', 'alice');
     seedThread(testDb.db, { id: 't-bob', projectId: 'p1', userId: 'bob', status: 'completed' });

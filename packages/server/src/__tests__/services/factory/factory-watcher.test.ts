@@ -600,7 +600,7 @@ describe('factory flow', () => {
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', issue7, script);
     const notices: Array<{ title: string; body: string }> = [];
-    const followUps: Array<{ threadId: string; content: string }> = [];
+    const followUps: Array<{ threadId: string; content: string; expectedBranch?: string }> = [];
     const cleanups: Array<{ userId: string; threadIds: string[] }> = [];
     await startFactoryWatcher({
       ports,
@@ -613,8 +613,8 @@ describe('factory flow', () => {
         cleanups.push({ userId, threadIds });
       },
       notify: async (_userId, notice) => notices.push(notice),
-      followUp: async (_userId, threadId, content) => {
-        followUps.push({ threadId, content });
+      followUp: async (_userId, threadId, content, expectedBranch) => {
+        followUps.push({ threadId, content, expectedBranch });
         return ok(undefined);
       },
     });
@@ -656,6 +656,8 @@ describe('factory flow', () => {
     const fix = followUps[0]!.content;
     expect(fix).toContain('expected 1, got 2');
     expect(fix).toContain(`push to \`factory/issue-7-${run.id.slice(0, 8)}\``);
+    // The fix only runs while the worktree is still on the run's branch.
+    expect(followUps[0]!.expectedBranch).toBe(`factory/issue-7-${run.id.slice(0, 8)}`);
     expect(github.merges).toBe(1);
   });
 

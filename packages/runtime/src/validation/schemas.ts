@@ -320,6 +320,12 @@ export const sendMessageSchema = z
     ...agentRunInputFields,
     baseBranch: optionalBaseBranchSchema,
     forceQueue: z.boolean().optional(),
+    /**
+     * The branch the thread's worktree must be on for this message to run (the
+     * issue factory sends its run's branch). A worktree checked out on another
+     * branch refuses it with 409, so the agent never pushes the wrong branch.
+     */
+    expectedBranch: branchNameSchema.optional(),
     /** A never-answered earlier prompt the agent sees before `content` (sandbox retry). */
     precedingPrompt: z.string().min(1).max(500_000).optional(),
     /** The images of that earlier prompt: the agent sees them, they are not saved again. */

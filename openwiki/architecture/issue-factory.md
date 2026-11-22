@@ -58,8 +58,13 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    **continues that thread** with a follow-up message, so the agent keeps its context. The agent
    commits, pushes the run's branch (`factory/issue-<n>-<runId8>`) and opens the PR; the server has no
    checkout. A worktree thread is created on that branch (the launch passes `branch`), so the
-   thread, its worktree and the PR share one branch; if the branch already exists (a retried
-   run), the runner falls back to a name from the title.
+   thread, its worktree and the PR share one branch. If the branch exists already (a retried
+   run), the worktree checks it out and the agent goes on from the earlier attempt
+   (`worktreeBranchName`, `createWorktree`'s `reuseExistingBranch`); only when another worktree
+   still holds it does the runner fall back to a name from the title. Each follow-up step sends
+   `expectedBranch` (the run's branch): the runner refuses it with 409 while the thread's
+   worktree is on another branch (`checkExpectedBranch`), so a worktree someone switched never
+   gets the next fix, and the run parks with that reason.
 3. **CI**: `wait_ci` polls the PR; red or conflict hands the failure (check names and log tails)
    to the fix step via `retry.before_retry`, up to the flow's attempts. A timeout is not retried.
 4. **End**: merged → `merged`; completed without a merge → `waiting_human`; failed with the PR

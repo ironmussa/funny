@@ -109,7 +109,12 @@ export interface FactoryWatcherDeps {
   /** Thread wait override for tests; defaults to the DB status plus the terminal signal. */
   waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
   /** Follow-up override for tests; defaults to a message on the thread's runner, as the enabler. */
-  followUp?: (userId: string, threadId: string, content: string) => Promise<Result<void, string>>;
+  followUp?: (
+    userId: string,
+    threadId: string,
+    content: string,
+    expectedBranch?: string,
+  ) => Promise<Result<void, string>>;
   /** Merged-run cleanup override for tests; defaults to `cleanupFactoryWorktrees`. */
   cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
   /** Notification override for tests; defaults to Web Push. */
@@ -179,7 +184,8 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     cleanupMerged: (userId, threadIds) => cleanupMergedFor(d, userId, threadIds),
     followUp:
       d.followUp ??
-      ((userId, threadId, content) => sendFactoryFollowUp(d.ports, userId, threadId, content)),
+      ((userId, threadId, content, expectedBranch) =>
+        sendFactoryFollowUp(d.ports, userId, threadId, content, expectedBranch)),
   });
   for (const factory of await listWatchedFactories([...IN_FLIGHT_STATES])) schedule(factory);
   log.info('Issue factory watcher started', { namespace: 'factory', jobs: jobs.size });

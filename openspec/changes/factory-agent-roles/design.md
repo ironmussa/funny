@@ -60,11 +60,15 @@ The correction loops are engine loops (`workflow-dag-engine`, D3), visible in th
 built-in `issue-to-merge` is:
 
 ```
-triage → implement → pull-request → address → ci → review → merge
-                                       ▲             │        │
-                                       └── loop ─────┘        │   review: until pass, max 3
-                                       └── loop ──────────────┘   merge: until merged, max 3
+triage → implement → pull-request → address → regression-proof → ci → review → merge
+                                       ▲                                │        │
+                                       └── loop ────────────────────────┘        │   review: until pass, max 3
+                                       └── loop ─────────────────────────────────┘   merge: until merged, max 3
 ```
+
+`regression-proof` is the gate `factory-quality-gates` added; it keeps its own retry. `triage`
+arrives in phase 2 (D14); until then the flow starts at `implement`. `review` follows `ci` in the
+graph, but its agent starts earlier (D7).
 
 `address` is the implementer's follow-up for whatever the last gate reported (review findings,
 an integration conflict, checks red on the updated base); its `when` skips it on the first
@@ -91,12 +95,12 @@ Codex, ACP), and the server would still validate.
 
 ### D3. Inputs per role (what each agent does NOT see is the point)
 
-| Role        | Gets                                                                                                                                                                                                         | Never gets               |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
-| Triage      | issue URL, read-only checkout of the default branch, paths of runs in flight                                                                                                                                 | other threads            |
-| Implementer | issue URL, the contract, its own history, then CI failures / findings / conflict diffs as follow-ups                                                                                                         | the reviewer's thread    |
-| Reviewer    | the contract, the commit to review (fetches `origin/<branch>` at that SHA and diffs against the merge base), the PR body, the test-weakening report, the factory's recent and in-flight PRs with their paths | the implementer's thread |
-| Sentinel    | the factory merges since the last green default-branch commit (SHA, PR, contract), the failing checks and log tails                                                                                          | any run thread           |
+| Role        | Gets                                                                                                                                                                                                                                               | Never gets               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Triage      | issue URL, read-only checkout of the default branch, paths of runs in flight                                                                                                                                                                       | other threads            |
+| Implementer | issue URL, the contract, its own history, then CI failures / findings / conflict diffs as follow-ups                                                                                                                                               | the reviewer's thread    |
+| Reviewer    | the contract (the issue URL when the run has none), the commit to review (fetches `origin/<branch>` at that SHA and diffs against the merge base), the PR body, the test-weakening report, the factory's recent and in-flight PRs with their paths | the implementer's thread |
+| Sentinel    | the factory merges since the last green default-branch commit (SHA, PR, contract), the failing checks and log tails                                                                                                                                | any run thread           |
 
 Issue text is never inlined in a prompt (unchanged rule); the contract is model output and is
 inlined, which is acceptable: it was produced by a read-only agent and the reviewer judges
@@ -132,8 +136,8 @@ the merge lane backs up is enough.
 
 ### D6. Test-weakening check and risk class (deterministic, server)
 
-On each head commit with green checks, the server reads the pull request's file list and patch
-and flags: removed test files or test cases, added `.skip` / `.only` / `xit` / `@pytest.mark.skip`
+On each head commit (when its checks start, so the report is ready for an early review, D7), the
+server reads the pull request's file list and patch and flags: removed test files or test cases, added `.skip` / `.only` / `xit` / `@pytest.mark.skip`
 (per-language patterns), lowered coverage thresholds in known config files, and edits under
 `.github/workflows/`. The report goes to the reviewer and to the risk class.
 
@@ -145,7 +149,26 @@ contract lists a risk hint. `factory_settings.auto_merge` is `low_risk` (default
 
 ### D7. The review gate
 
-`review` runs after `wait_ci` is green. Verdict `fail` with a `critical` or `high` finding →
+`review` follows `wait_ci` in the graph, so the loops and the join stay simple, but the server
+does not wait for green checks to start the reviewer: when `wait_ci` begins watching head commit
+S, the action provider starts the review of S (a new read-only thread, as the node would) if no
+verdict or review thread exists for S and the factory's `review` stage has a free slot, whose
+lease it takes for the node to reuse. The `review` node then takes the stored verdict for the
+current head commit, waits for the review in flight, or starts one. When the head commit changes
+while a review runs (a CI fix was pushed), or the run ends, the server stops that thread and
+discards its result. This removes one CI wait from every round at the price of reviews spent on
+commits that CI rejects; a flow turns it off with `review: { early: false }`. Nothing else
+changes: the verdict is keyed by commit, and `merge` re-verifies both results on entry (D8).
+
+The reviewer judges against the contract; a run without one (phase 1, or a triage that gave no
+valid result) is judged against the issue, which the reviewer reads from its URL like the
+implementer does (issue text is still never inlined).
+
+The factory settings show a notice when the `review` step resolves to the same provider and
+model as the implementer: the same model tends to miss what it missed while writing. It is a
+notice, not a refusal.
+
+Verdict `fail` with a `critical` or `high` finding →
 the findings go to the implementer as a follow-up (same path as a CI fix), then `wait_ci` and
 `review` run again on the new head commit, through the review loop (D1, `max_iterations` 3,
 i.e. two correction rounds). `fail` with only
@@ -183,6 +206,16 @@ sends the run back to `address` (D1). The factory's `priority` hook orders waite
 with a run whose issue is blocked by another run's issue after it. The group is shared by every
 factory on that repository: ordering crosses users, but each merge uses its own run's
 enabler-capped token, so no identity crosses.
+
+A run waiting for the merge slot is in flight and counts toward `maxConcurrent`. This is meant:
+a slow lane then slows admissions instead of piling up open pull requests that conflict with
+each other. A factory that wants more work in progress raises `maxConcurrent`.
+
+Who handles a failed merge: the server decides and performs the merge, and never asks an agent
+whether to merge. A failure that is code (a conflict, checks red on the updated base) is the
+implementer's follow-up (D9). A failure that is not (the App lost a permission, a branch rule
+refuses the merge, the branch was rewritten, GitHub answers an error after the provider's
+retries) parks the run in `waiting_human` with the reason; no agent is started for it.
 
 _Alternative:_ a dedicated lane table with a head slot. Rejected once the engine has
 concurrency groups: it would be a second mechanism for the same rule.
@@ -249,14 +282,37 @@ The manifest's default permissions become their own set (today they are
 comments only; the factory settings show "accept the new App permission to publish
 `funny/review`".
 
+### D14. Two phases
+
+Phase 1 is the reviewer and the merge lane: structured review results, the `reviewing` /
+`merging` states, the test-weakening check and risk class, the review gate (D7), the merge group
+and conflict handling (D8, D9) and stage limits (D13). It answers both problems in the proposal
+and is deployable alone: there is no contract, so the reviewer judges against the issue, risk
+hints are empty and no run reserves paths.
+
+Phase 2 is triage and the contract (D4), path reservation (D5) and the sentinel (D10). They come
+second because each one improves on something phase 1 already makes safe: reservation only
+saves conflict work that the lane would catch, and the sentinel only fires when a change is
+green on the current base and still breaks it.
+
+The spec delta describes the end state; the change is archived after phase 2.
+
+_Alternative:_ two changes. Rejected: the requirements share the role and result rules, and
+`factory-integration` already refers to this change's groups.
+
 ## Risks / Trade-offs
 
 - [The reviewer is also an LLM; a prompt injection in the issue or the diff can make it say
   `pass`] → It is defense in depth: CI on the current base, the deterministic risk class (which
   the LLM cannot lower) and branch rules still apply; high risk always waits for a person.
-- [Review rounds and update-branch cycles make runs slower and costlier] → the loop limits, the
-  merge group holds one candidate only while it waits on CI, and `issue-to-pr` remains for teams that merge by
-  hand. Record the reviewer's veto rate per factory so teams can see whether it pays.
+- [Review rounds and update-branch cycles make runs slower and costlier] → the review overlaps
+  CI (D7), the loop limits, the merge group holds one candidate only while it waits on CI, and
+  `issue-to-pr` remains for teams that merge by hand. Record per factory the review verdicts and
+  the reasons runs park in `waiting_human`, so a team can see whether the reviewer pays and
+  whether the risk rules (400 lines, sensitive paths) park too much to stay unattended.
+- [An early review is wasted when CI rejects the commit] → it is stopped as soon as the head
+  commit changes, it never takes a slot from a run already at the `review` node (it starts only
+  on a free slot), and `early: false` turns it off.
 - [A serialized lane is slow when CI is slow] → It is the batch of one of `factory-integration`'s
   merge queue, which tests and merges several pull requests per CI run and bisects a red batch.
 - [`likely_paths` can be wrong] → Reservation is a soft hold; the merge lane still tests every
@@ -272,10 +328,11 @@ comments only; the factory settings show "accept the new App permission to publi
 
 1. Migration: new run states, contract / verdict / risk columns on `factory_runs`, the incident
    table, `factory_settings.stage_limits`, `factory_settings.auto_merge` and `sensitive_paths`.
-2. Ship structured results, triage and the review step with `merge` still in its old behaviour
+2. Phase 1: ship structured results and the review step with `merge` still in its old behaviour
    behind `require_review: false` in the built-ins; then flip the built-ins to the gate.
-3. Ship the merge group (after `workflow-dag-engine`) and conflict handling; then the sentinel.
+3. Phase 1: ship the merge group and conflict handling.
 4. Update the App manifest permission; installations accept it at their pace.
+5. Phase 2: triage and the contract, path reservation, then the sentinel.
    Rollback: the built-ins can set `require_review: false` and the merge group can be removed from the
    built-ins; new columns are nullable.
 
@@ -284,3 +341,7 @@ comments only; the factory settings show "accept the new App permission to publi
 - The exact per-language patterns of the test-weakening check beyond TypeScript / JavaScript
   and Python (more can be added without changing the spec).
 - Default sensitive-path list contents beyond the ones above.
+- Whether a conflict should go to a new thread instead of the implementer's when that thread is
+  long (it would get the contract, the pull request's diff and the diff that merged first).
+  Decide from phase 1 data; it would relax "one writer thread per branch" to "one writer at a
+  time".

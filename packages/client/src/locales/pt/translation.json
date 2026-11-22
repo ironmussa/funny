@@ -1081,7 +1081,8 @@
     "baseBranch": "Branch base",
     "creating": "Criando...",
     "loadingWorktrees": "Carregando worktrees...",
-    "noWorktrees": "Nenhum worktree encontrado. Crie um para começar."
+    "noWorktrees": "Nenhum worktree encontrado. Crie um para começar.",
+    "openThread": "Abrir thread: {{title}}"
   },
   "common": {
     "cancel": "Cancelar",

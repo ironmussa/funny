@@ -1081,7 +1081,7 @@
   },
   "worktreeSettings": {
     "main": "Principal",
-    "active": "Activo",
+    "active": "Actual",
     "mainDescription": "Carpeta original del repositorio. No se puede eliminar como un worktree secundario.",
     "activeDescription": "Directorio de trabajo mostrado actualmente en el panel de revisión.",
     "noProject": "No hay proyecto seleccionado. Agrega un proyecto primero para gestionar worktrees.",
@@ -1095,7 +1095,8 @@
     "baseBranch": "Rama base",
     "creating": "Creando...",
     "loadingWorktrees": "Cargando worktrees...",
-    "noWorktrees": "No se encontraron worktrees. Crea uno para comenzar."
+    "noWorktrees": "No se encontraron worktrees. Crea uno para comenzar.",
+    "openThread": "Abrir hilo: {{title}}"
   },
   "common": {
     "cancel": "Cancelar",

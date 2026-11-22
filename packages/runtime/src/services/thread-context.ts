@@ -67,6 +67,16 @@ export function resolveThreadCwd(
 }
 
 /**
+ * True for a scratch thread (projectless, gitless). Use it for a decision that
+ * is about the thread being scratch itself (ownership checks on a scratch-only
+ * route, a spawned child inheriting its parent's kind); prefer a
+ * capability predicate below when one names the axis.
+ */
+export function isScratchThread(thread: { isScratch?: boolean | null }): boolean {
+  return !!thread.isScratch;
+}
+
+/**
  * Returns true when git/repo operations (diff, stage, commit, push, PR) are
  * available for the given thread. False for scratch threads — they have no
  * repo by design.
@@ -74,7 +84,7 @@ export function resolveThreadCwd(
  * Callers MUST use this helper rather than reading `thread.isScratch`
  * directly, so the rule stays in one place.
  */
-export function canDoGitOps(thread: { isScratch?: boolean }): boolean {
+export function canDoGitOps(thread: { isScratch?: boolean | null }): boolean {
   return !thread.isScratch;
 }
 

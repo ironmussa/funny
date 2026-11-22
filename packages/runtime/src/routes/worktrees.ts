@@ -18,7 +18,7 @@ import { err } from 'neverthrow';
 
 import { cleanupWorkspace, pruneOrphans } from '../services/workspace-cleanup.js';
 import type { HonoEnv } from '../types/hono-env.js';
-import { resultToResponse } from '../utils/result-response.js';
+import { recordedFailureResponse, resultToResponse } from '../utils/result-response.js';
 import { requireProject } from '../utils/route-helpers.js';
 import { createWorktreeSchema, deleteWorktreeSchema, validate } from '../validation/schemas.js';
 
@@ -146,7 +146,7 @@ worktreeRoutes.delete('/', async (c) => {
     deleteBranch,
     reason,
   });
-  if (cleanup.isErr()) return resultToResponse(c, cleanup);
+  if (cleanup.isErr()) return recordedFailureResponse(c, cleanup.error);
 
   return c.json({ ok: true });
 });

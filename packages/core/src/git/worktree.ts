@@ -618,7 +618,12 @@ export function removeBranch(
     return errAsync(badRequest('Branch name must not start with "-"'));
   }
   return ResultAsync.fromPromise(
-    gitWrite(['branch', '-D', '--', branchName], { cwd: projectPath, reject: false }),
+    // C locale: the "not found" check below reads git's English message.
+    gitWrite(['branch', '-D', '--', branchName], {
+      cwd: projectPath,
+      reject: false,
+      env: { LC_ALL: 'C' },
+    }),
     (error) => internal(String(error)),
   ).andThen((result) =>
     result.exitCode === 0 || isMissingBranch(result.stderr)

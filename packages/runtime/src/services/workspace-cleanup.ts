@@ -14,6 +14,7 @@
  * `scripts/fitness/check-workspace-removal.ts` fails on any other runner code
  * that imports `removeWorktree`, `removeBranch` or `pruneOrphanWorktrees`.
  */
+import { existsSync } from 'fs';
 import { rm } from 'fs/promises';
 import { basename, normalize, resolve } from 'path';
 
@@ -65,6 +66,7 @@ export interface WorkspaceCleanupDeps {
   killPtysUnderPath: (dir: string) => string[];
   invalidateSearchIndex: (cwd: string) => Promise<void>;
   removeDirectory: (dir: string) => Promise<void>;
+  pathExists: (path: string) => boolean;
   trackActivity: typeof defaultTrackActivity;
   recordActivity: typeof defaultRecordActivity;
 }
@@ -95,6 +97,7 @@ const defaultDeps: WorkspaceCleanupDeps = {
       },
     ),
   removeDirectory: (dir) => rm(dir, { recursive: true, force: true }),
+  pathExists: existsSync,
   trackActivity: defaultTrackActivity,
   recordActivity: defaultRecordActivity,
 };
@@ -106,11 +109,16 @@ function samePath(a: string, b: string): boolean {
 export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> = {}) {
   const deps: WorkspaceCleanupDeps = { ...defaultDeps, ...overrides };
 
-  /** Refuses anything but a registered worktree of the project (never the main checkout). */
+  /**
+   * Refuses anything but a worktree of the project (never the main checkout).
+   * A worktree inside the project's worktree base that git no longer lists and
+   * whose folder is gone (pruned, removed from the settings screen) is already
+   * removed: `gone`, and the branch step still runs.
+   */
   async function validateTarget(
     projectPath: string,
     worktreePath: string,
-  ): Promise<DomainError | null> {
+  ): Promise<DomainError | 'gone' | null> {
     if (samePath(projectPath, worktreePath)) {
       return badRequest('Refusing to remove the project checkout');
     }
@@ -118,10 +126,9 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
     if (outside) return outside;
     const registered = await deps.isRegisteredWorktreePath(projectPath, worktreePath);
     if (registered.isErr()) return registered.error;
-    if (!registered.value) {
-      return badRequest(`${worktreePath} is not a worktree of this project`);
-    }
-    return null;
+    if (registered.value) return null;
+    if (!deps.pathExists(worktreePath)) return 'gone';
+    return badRequest(`${worktreePath} is not a worktree of this project`);
   }
 
   /** Stops what runs inside `dir`; each stopped thing becomes an effect. */
@@ -144,8 +151,8 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
   /**
    * Removes a thread's worktree, and its branch when `deleteBranch`, as one
    * `workspace.cleanup` activity. Processes inside are stopped first. A failed
-   * step ends the activity `failed` with the effects so far; the branch step
-   * still runs when the worktree was removed.
+   * step ends the activity `failed` with the effects that did happen; the
+   * branch step runs whatever happened to the worktree.
    */
   function cleanupWorkspace(
     request: WorkspaceCleanupRequest,
@@ -172,26 +179,34 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
           activity.effect(effect.effect, effect.target);
         };
 
-        const refused = await validateTarget(request.projectPath, request.worktreePath);
-        if (refused) return err(refused);
+        const target = await validateTarget(request.projectPath, request.worktreePath);
+        if (target !== null && target !== 'gone') return err(target);
 
-        activity.step('Stopping processes');
-        const stopped: ActivityEffect[] = [];
-        await stopProcessesUnder(request.worktreePath, stopped);
-        for (const effect of stopped) note(effect);
+        // The worktree step; an already-removed worktree has nothing to stop.
+        let worktreeError: DomainError | null = null;
+        if (target !== 'gone') {
+          activity.step('Stopping processes');
+          const stopped: ActivityEffect[] = [];
+          await stopProcessesUnder(request.worktreePath, stopped);
+          for (const effect of stopped) note(effect);
 
-        activity.step('Removing worktree');
-        const removed = await deps.removeWorktree(request.projectPath, request.worktreePath);
-        if (removed.isErr()) return err(removed.error);
-        note({ effect: 'worktree-removed', target: request.worktreePath });
+          activity.step('Removing worktree');
+          const removed = await deps.removeWorktree(request.projectPath, request.worktreePath);
+          if (removed.isErr()) worktreeError = removed.error;
+          else note({ effect: 'worktree-removed', target: request.worktreePath });
+        }
 
+        // The branch step runs even when the worktree could not be removed (git
+        // refuses a branch still checked out there, which is then reported).
+        let branchError: DomainError | null = null;
         if (request.deleteBranch && branch) {
           activity.step('Deleting branch');
           const deleted = await deps.removeBranch(request.projectPath, branch);
-          if (deleted.isErr()) return err(deleted.error);
-          note({ effect: 'branch-deleted', target: branch });
+          if (deleted.isErr()) branchError = deleted.error;
+          else note({ effect: 'branch-deleted', target: branch });
         }
-        return ok({ effects });
+        const failure = worktreeError ?? branchError;
+        return failure ? err(failure) : ok({ effects });
       },
     );
     return ResultAsync.fromPromise(run, (error) => internal(messageOf(error))).andThen(
@@ -210,7 +225,9 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
   }): ResultAsync<number, DomainError> {
     return deps.pruneOrphanWorktrees(request.projectPath).map(async (removed) => {
       if (removed.length > 0) {
-        await deps.recordActivity(
+        // Not awaited: the report retries while disconnected, and listing the
+        // worktrees must not wait for it.
+        void deps.recordActivity(
           {
             kind: 'workspace.prune',
             userId: request.userId,

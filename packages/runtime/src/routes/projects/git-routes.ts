@@ -191,6 +191,12 @@ projectGitRoutes.get('/:id/checkout-preflight', async (c) => {
   });
 });
 
+/** The commit of the newest stash entry, or null when there is none. */
+async function stashHead(projectPath: string): Promise<string | null> {
+  const head = await git(['rev-parse', '-q', '--verify', 'refs/stash'], projectPath);
+  return head.isOk() ? head.value.trim() || null : null;
+}
+
 /**
  * Checks `branch` out in the project checkout. When the route stashed the
  * user's changes first, the switch is recorded as a `checkout.switch`
@@ -285,14 +291,19 @@ projectGitRoutes.post('/:id/checkout', async (c) => {
     });
   }
 
+  // Whether this request created a stash: `git stash push` on a clean tree
+  // succeeds without one, and popping then would apply an older, unrelated one.
+  let stashed = false;
   if (strategy === 'stash') {
     // Include untracked files (-u) — otherwise new files stay in the working
     // tree and follow the checkout onto the target branch, so "leave my
     // changes" would silently carry them anyway.
+    const before = await stashHead(project.path);
     const stashResult = await stash(project.path, true);
     if (stashResult.isErr()) {
       return c.json({ error: `Failed to stash: ${stashResult.error.message}` }, 500);
     }
+    stashed = (await stashHead(project.path)) !== before;
   }
 
   const checkoutError = await checkoutRecordingStash(project.path, {
@@ -302,7 +313,7 @@ projectGitRoutes.post('/:id/checkout', async (c) => {
     fromBranch: currentBranch,
     branch,
     create,
-    stashed: strategy === 'stash',
+    stashed,
   });
   if (checkoutError) return c.json({ error: `Checkout failed: ${checkoutError}` }, 500);
 

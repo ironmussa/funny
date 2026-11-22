@@ -12,15 +12,26 @@ import { repos } from '../../db/repos.js';
 import { broadcastActivitiesRemoved } from '../../services/activities/activity-service.js';
 import type { RunnerPresencePort } from '../../services/runner-ports.js';
 
-export function createActivitiesPort(presence?: Pick<RunnerPresencePort, 'isAvailable'>) {
+/** How long a `running` server-run activity is protected from dismissal. */
+export const SERVER_ROW_STALE_MS = 30 * 60_000;
+
+export function createActivitiesPort(
+  presence?: Pick<RunnerPresencePort, 'isAvailable'>,
+  now: () => number = Date.now,
+) {
   /**
    * Whether the row is still being run. A server row (no runner) is run by this
    * server, which interrupts its own leftovers at start (track-funny-actions,
-   * design D7). Without a presence port a runner is assumed connected: refusing
-   * is the safe side.
+   * design D7); one still `running` after `SERVER_ROW_STALE_MS` is taken as
+   * stuck (a hung provider call) and can be dismissed. Without a presence port
+   * a runner is assumed connected: refusing is the safe side.
    */
-  const stillRunning = async (runnerId: string | null) =>
-    runnerId === null ? true : presence ? presence.isAvailable(runnerId) : true;
+  const stillRunning = async (row: { runnerId: string | null; startedAt: string }) => {
+    if (row.runnerId === null) {
+      return now() - Date.parse(row.startedAt) < SERVER_ROW_STALE_MS;
+    }
+    return presence ? presence.isAvailable(row.runnerId) : true;
+  };
 
   const port: ActivitiesPort = {
     async list(userId) {
@@ -30,7 +41,7 @@ export function createActivitiesPort(presence?: Pick<RunnerPresencePort, 'isAvai
     async dismiss(userId, id) {
       const row = await repos.activities().getById(id);
       if (!row || row.userId !== userId) return err(failure(404, 'Not found'));
-      if (row.status === 'running' && (await stillRunning(row.runnerId))) {
+      if (row.status === 'running' && (await stillRunning(row))) {
         return err(failure(409, 'The activity is still running'));
       }
       const removed = await repos.activities().remove(id, userId);

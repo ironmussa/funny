@@ -75,8 +75,9 @@ export async function requestThreadWorkspaceCleanup(
   });
   if (sent.isOk()) return ok(undefined);
 
-  // The runner answered: it recorded the failed cleanup itself.
-  if (!sent.error.answered) {
+  // Unless the runner says it recorded the failed cleanup, the server does:
+  // an unreachable runner, or one that refused before the cleanup ran.
+  if (!sent.error.activityRecorded) {
     await recordServerActivity(
       {
         kind: 'workspace.cleanup',
@@ -118,7 +119,7 @@ export async function requestScratchCleanup(
     body: null,
   });
   if (sent.isOk()) return ok(undefined);
-  if (!sent.error.answered) {
+  if (!sent.error.activityRecorded) {
     await recordServerActivity(
       {
         kind: 'workspace.cleanup',
@@ -140,6 +141,14 @@ export async function requestScratchCleanup(
     error: sent.error.message,
   });
   return err(sent.error.message);
+}
+
+async function stillArchived(threadId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ archived: threads.archived })
+    .from(threads)
+    .where(eq(threads.id, threadId));
+  return !!row?.archived;
 }
 
 /** After a successful removal the thread no longer names a worktree or a branch. */
@@ -204,6 +213,8 @@ export async function cleanUpArchivedThread(
   workspace: ThreadWorkspace,
   browserEvents?: BrowserEventSink,
 ): Promise<void> {
+  // Unarchived before the background cleanup started: keep the workspace.
+  if (!(await stillArchived(workspace.id))) return;
   const removed = await requestThreadWorkspaceCleanup(ports, {
     userId: ownerId,
     thread: workspace,

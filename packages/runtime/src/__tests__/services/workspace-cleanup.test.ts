@@ -56,6 +56,7 @@ function setup(overrides: Partial<WorkspaceCleanupDeps> = {}) {
     removeDirectory: async () => {
       calls.push('rm');
     },
+    pathExists: () => true,
     trackActivity: tracker.trackActivity,
     recordActivity: tracker.recordActivity,
     ...overrides,
@@ -124,6 +125,33 @@ describe('cleanupWorkspace', () => {
     expect(terminal().status).toBe('failed');
   });
 
+  test('a worktree git no longer lists and whose folder is gone still has its branch deleted', async () => {
+    const { cleanup, calls, tracker, terminal } = setup({
+      isRegisteredWorktreePath: () => okAsync(false),
+      pathExists: () => false,
+    });
+    const result = await cleanup.cleanupWorkspace(REQUEST);
+    await tracker.flush();
+    expect(result.isOk()).toBe(true);
+    expect(calls).toEqual(['remove-branch']);
+    expect(terminal()).toEqual({
+      status: 'succeeded',
+      effects: [{ effect: 'branch-deleted', target: 'feature' }],
+    });
+  });
+
+  test('a worktree that cannot be removed still has its branch step, and the cleanup fails', async () => {
+    const { cleanup, calls, tracker, terminal } = setup({
+      removeWorktree: () => errAsync(internal('file locked')),
+    });
+    const result = await cleanup.cleanupWorkspace(REQUEST);
+    await tracker.flush();
+    expect(result._unsafeUnwrapErr().message).toBe('file locked');
+    expect(calls).toContain('remove-branch');
+    expect(terminal().status).toBe('failed');
+    expect(terminal().effects).toContainEqual({ effect: 'branch-deleted', target: 'feature' });
+  });
+
   test('refuses the main checkout', async () => {
     const { cleanup, calls } = setup();
     const result = await cleanup.cleanupWorkspace({ ...REQUEST, worktreePath: `${PROJECT}/` });
@@ -162,13 +190,16 @@ describe('cleanupWorkspace', () => {
 
 describe('pruneOrphans', () => {
   test('records the removed folders', async () => {
-    const { cleanup, reports } = setup({ pruneOrphanWorktrees: () => okAsync(['/w/a', '/w/b']) });
+    const { cleanup, reports, tracker } = setup({
+      pruneOrphanWorktrees: () => okAsync(['/w/a', '/w/b']),
+    });
     const result = await cleanup.pruneOrphans({
       userId: 'u1',
       projectId: 'p1',
       projectPath: PROJECT,
     });
     expect(result._unsafeUnwrap()).toBe(2);
+    await tracker.flush();
     expect(reports).toHaveLength(1);
     expect(reports[0].payload).toMatchObject({
       kind: 'workspace.prune',

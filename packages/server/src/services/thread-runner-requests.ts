@@ -25,6 +25,8 @@ export interface ThreadRunnerError {
   sandboxAsleep: boolean;
   /** The runner received the request and answered with an error. */
   answered: boolean;
+  /** The runner's answer says it recorded the failed operation as an activity. */
+  activityRecorded: boolean;
 }
 
 export interface ThreadRunnerRequest {
@@ -36,13 +38,21 @@ export interface ThreadRunnerRequest {
 }
 
 /** A runner's JSON error body (`resultToResponse`). */
-const runnerErrorBody = z.object({ error: z.string() });
+const runnerErrorBody = z.object({
+  error: z.string(),
+  activityRecorded: z.boolean().optional(),
+});
 
-/** The `error` of a runner's JSON error body, so a refusal says why (a branch mismatch). */
-function runnerErrorText(body: string | null | undefined): string | null {
-  if (!body) return null;
+/** A runner's JSON error body: why it refused (a branch mismatch), and whether it recorded it. */
+function runnerError(body: string | null | undefined): {
+  text: string | null;
+  activityRecorded: boolean;
+} {
+  if (!body) return { text: null, activityRecorded: false };
   const parsed = parseStoredJson(runnerErrorBody, body, 'runner error');
-  return parsed.ok ? parsed.value.error.slice(0, 500) : null;
+  return parsed.ok
+    ? { text: parsed.value.error.slice(0, 500), activityRecorded: !!parsed.value.activityRecorded }
+    : { text: null, activityRecorded: false };
 }
 
 /** Send a request to the runner a thread runs on, as `userId`. */
@@ -71,20 +81,23 @@ export async function sendToThreadRunner(
         message: `the thread's runner is unavailable (${reason})`,
         sandboxAsleep: reason === 'thread-sandbox-unavailable',
         answered: false,
+        activityRecorded: false,
       });
     }
     if (sent.value.status < 400) return ok(undefined);
-    const reason = runnerErrorText(sent.value.body);
+    const reason = runnerError(sent.value.body);
     return err({
-      message: `the runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`,
+      message: `the runner answered ${sent.value.status}${reason.text ? `: ${reason.text}` : ''}`,
       sandboxAsleep: false,
       answered: true,
+      activityRecorded: reason.activityRecorded,
     });
   } catch (error) {
     return err({
       message: error instanceof Error ? error.message : String(error),
       sandboxAsleep: false,
       answered: false,
+      activityRecorded: false,
     });
   }
 }

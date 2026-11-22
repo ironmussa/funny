@@ -34,7 +34,7 @@ import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
-import { createServerActivities, type ServerActivities } from '../activities/server-activities.js';
+import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import {
   startThreadOnRunner,
   type RunnerPorts,
@@ -594,7 +594,7 @@ async function enablerCanStillSteer(factory: WatchedFactory): Promise<boolean> {
   unscheduleFactory(factory.id);
   await stopOpenRuns(factory);
   // The enabler sees why their factory stopped (track-funny-actions).
-  await (deps?.activities ?? recordFactoryActivities()).recordServerActivity(
+  await (deps?.activities ?? serverActivities).recordServerActivity(
     {
       kind: 'factory.disabled',
       userId: factory.userId,
@@ -627,12 +627,6 @@ async function stopOpenRuns(factory: WatchedFactory): Promise<void> {
     factory.userId,
     open.flatMap((run) => run.threadIds),
   );
-}
-
-let factoryActivities: ServerActivities | null = null;
-function recordFactoryActivities(): ServerActivities {
-  factoryActivities ??= createServerActivities();
-  return factoryActivities;
 }
 
 async function defaultCheckAccess(userId: string, projectId: string): Promise<boolean> {

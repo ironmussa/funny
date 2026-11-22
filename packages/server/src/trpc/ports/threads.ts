@@ -134,12 +134,12 @@ async function currentThread(id: string) {
 export interface ThreadsPortOptions {
   /** The request's runner ports; without them an archive removes nothing. */
   runnerPorts?: RunnerPorts;
-  /** Runs work that follows an answer (tests await it). */
-  background?: (task: Promise<void>) => void;
+  /** Runs work that follows an answer (tests decide when, and await it). */
+  background?: (task: () => Promise<void>) => void;
 }
 
-function runInBackground(task: Promise<void>): void {
-  task.catch((error) =>
+function runInBackground(task: () => Promise<void>): void {
+  task().catch((error) =>
     log.warn('Background thread work failed', { namespace: 'threads', error: String(error) }),
   );
 }
@@ -325,8 +325,9 @@ export function createThreadsPort(
       const workspace =
         data.archived === true && !thread.archived ? workspaceToRemoveOnArchive(thread) : null;
       if (workspace && options.runnerPorts) {
-        background(
-          cleanUpArchivedThread(options.runnerPorts, thread.userId, workspace, browserEvents),
+        const runnerPorts = options.runnerPorts;
+        background(() =>
+          cleanUpArchivedThread(runnerPorts, thread.userId, workspace, browserEvents),
         );
       }
 

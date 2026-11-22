@@ -17,7 +17,7 @@ import { threads } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import {
-  createServerActivities,
+  serverActivities,
   type ServerActivities,
 } from '../../services/activities/server-activities.js';
 import * as projectRepo from '../../services/project-repository.js';
@@ -56,7 +56,7 @@ export async function stopProjectSessionsOnRunners(
   projectId: string,
   runnerIds: string[],
   reason: 'runner-binding-changed' | 'runner-revoked' = 'runner-binding-changed',
-  activities: Pick<ServerActivities, 'recordServerActivity'> = defaultActivities(),
+  activities: Pick<ServerActivities, 'recordServerActivity'> = serverActivities,
 ): Promise<void> {
   if (!ports.requests || runnerIds.length === 0) return;
   const project = await projectRepo.getProject(projectId);
@@ -130,12 +130,6 @@ export async function stopProjectSessionsOnRunners(
       },
     );
   }
-}
-
-let sharedActivities: ServerActivities | null = null;
-function defaultActivities(): ServerActivities {
-  sharedActivities ??= createServerActivities();
-  return sharedActivities;
 }
 
 const projectNotFound = () => err(failure(404, 'Project not found'));

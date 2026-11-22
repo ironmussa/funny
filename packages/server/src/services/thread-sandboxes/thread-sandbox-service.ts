@@ -41,7 +41,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
-import { createServerActivities, type ServerActivities } from '../activities/server-activities.js';
+import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import { mintLlmProxyToken } from '../llm-proxy/llm-proxy-tokens.js';
 import type { ProvisionTokenError } from '../runner-provision-tokens.js';
 import { fromResult, runToResult } from './effect-bridge.js';
@@ -103,12 +103,6 @@ export interface ProvisionInput {
   checkout?: { path: string; repoUrl: string; branch?: string };
   /** Aborting it (the thread was deleted) interrupts the preparation. */
   signal?: AbortSignal;
-}
-
-let sharedActivities: ServerActivities | null = null;
-function defaultServerActivities(): ServerActivities {
-  sharedActivities ??= createServerActivities();
-  return sharedActivities;
 }
 
 /** Absolute path made only of characters that need no shell quoting beyond '…'. */
@@ -392,7 +386,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       );
     });
 
-  const activities = deps.activities ?? defaultServerActivities();
+  const activities = deps.activities ?? serverActivities;
 
   return {
     /**

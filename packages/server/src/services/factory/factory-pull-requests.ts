@@ -22,7 +22,7 @@ import {
 } from '@funny/core/github-app';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
-import { createServerActivities, type ServerActivities } from '../activities/server-activities.js';
+import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import type { AccessLevel, IssueError, RepoToken } from '../github-app/token-issuer.js';
 
 /** The pull request of a run, and whose access caps the token. */
@@ -134,7 +134,7 @@ const callError = (error: GithubCallError): FactoryPullRequestError =>
     : { kind: 'github-error', message: error.message };
 
 export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): FactoryPullRequests {
-  const activities = deps.activities ?? createServerActivities();
+  const activities = deps.activities ?? serverActivities;
 
   /**
    * A merge the factory made for its enabler (track-funny-actions): the merged

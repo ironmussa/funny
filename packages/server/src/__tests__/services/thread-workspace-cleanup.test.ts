@@ -132,7 +132,7 @@ describe('requestThreadWorkspaceCleanup', () => {
     requests.response = {
       status: 400,
       headers: {},
-      body: JSON.stringify({ error: 'not a worktree of this project' }),
+      body: JSON.stringify({ error: 'not a worktree of this project', activityRecorded: true }),
       bodyEncoding: 'utf8',
     };
 
@@ -145,6 +145,27 @@ describe('requestThreadWorkspaceCleanup', () => {
 
     expect(result.isErr() && result.error).toContain('not a worktree');
     expect(await repos.activities().listByUser('alice')).toHaveLength(0);
+  });
+});
+
+describe('a runner that refused before the cleanup ran', () => {
+  test('the server records the failed cleanup itself', async () => {
+    runner('r-alice', 'alice');
+    requests.response = {
+      status: 404,
+      headers: {},
+      body: JSON.stringify({ error: 'Project not found' }),
+      bodyEncoding: 'utf8',
+    };
+    const result = await requestThreadWorkspaceCleanup(ports(), {
+      userId: 'alice',
+      thread: THREAD,
+      deleteBranch: true,
+      reason: 'thread-archived',
+    });
+    expect(result.isErr()).toBe(true);
+    const [activity] = await repos.activities().listByUser('alice');
+    expect(activity).toMatchObject({ kind: 'workspace.cleanup', status: 'failed', runnerId: null });
   });
 });
 
@@ -175,7 +196,7 @@ describe('archiving a thread through the threads port (regression: archive left 
   }
 
   async function archive(id: string) {
-    const tasks: Promise<void>[] = [];
+    const tasks: Array<() => Promise<void>> = [];
     const events: Array<Record<string, unknown>> = [];
     const port = createThreadsPort(
       { toUser: (_u: string, e: Record<string, unknown>) => events.push(e) } as never,
@@ -184,7 +205,7 @@ describe('archiving a thread through the threads port (regression: archive left 
     const [row] = await testDb.db.select().from(threads).where(eq(threads.id, id));
     const thread = { ...row!, archived: !!row!.archived } as never;
     const answer = await port.update('alice', thread, { archived: true });
-    await Promise.all(tasks);
+    await Promise.all(tasks.map((task) => task()));
     const [after] = await testDb.db.select().from(threads).where(eq(threads.id, id));
     return { answer, after: after!, events };
   }
@@ -224,6 +245,24 @@ describe('archiving a thread through the threads port (regression: archive left 
     const { after } = await archive('r1');
     expect(requests.requests).toEqual([]);
     expect(after.worktreePath).toBe('/srv/wt/r1');
+  });
+
+  test('a thread unarchived before the cleanup started keeps its worktree', async () => {
+    runner('r-alice', 'alice');
+    worktreeThread('u1');
+    const tasks: Array<() => Promise<void>> = [];
+    const port = createThreadsPort(undefined, {
+      runnerPorts: ports(),
+      background: (task) => tasks.push(task),
+    });
+    const [row] = await testDb.db.select().from(threads).where(eq(threads.id, 'u1'));
+    await port.update('alice', { ...row!, archived: false } as never, { archived: true });
+    // Unarchived again before the background cleanup runs.
+    await testDb.db.update(threads).set({ archived: 0 }).where(eq(threads.id, 'u1'));
+    await Promise.all(tasks.map((task) => task()));
+    expect(requests.requests).toEqual([]);
+    const [after] = await testDb.db.select().from(threads).where(eq(threads.id, 'u1'));
+    expect(after!.worktreePath).toBe('/srv/wt/u1');
   });
 
   test('a failed removal keeps the worktree on the row', async () => {

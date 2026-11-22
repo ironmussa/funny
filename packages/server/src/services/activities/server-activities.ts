@@ -12,8 +12,8 @@
  *
  * - `trackServerActivity(spec, run)` wraps an operation that returns a `Result`.
  * - `beginServerActivity(spec)` is the imperative form.
- * Callers that need these hold their own instance (`createServerActivities`);
- * the module exports the shared `recordServerActivity`.
+ * `serverActivities` is the shared instance (stateless: it reads the
+ * repository on each write); tests build their own with `createServerActivities`.
  * - `recordServerActivity(spec, outcome)` writes an instant action in one row.
  *
  * A kind declared `on-failure` writes nothing until it fails, then one finished
@@ -263,7 +263,7 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
 
 export type ServerActivities = ReturnType<typeof createServerActivities>;
 
-const serverActivities = createServerActivities();
+export const serverActivities = createServerActivities();
 
 export const recordServerActivity = serverActivities.recordServerActivity;
 

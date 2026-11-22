@@ -15,7 +15,7 @@
 import type { ActivityOrigin } from '@funny/shared';
 import { ResultAsync } from 'neverthrow';
 
-import { createServerActivities, type ServerActivities } from '../activities/server-activities.js';
+import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import type { ThreadSandboxControl } from './thread-sandbox-control.js';
 import type { ThreadSandboxStore } from './thread-sandbox-store.js';
 
@@ -34,13 +34,11 @@ type Control = Pick<
   'stop' | 'resume' | 'destroy' | 'release' | 'recover' | 'abandon'
 >;
 
-let shared: ServerActivities | null = null;
-
 export function recordingSandboxControl<C extends Partial<Control>>(
   control: C,
   context: SandboxActivityContext,
 ): C {
-  const activities = context.activities ?? (shared ??= createServerActivities());
+  const activities = context.activities ?? serverActivities;
 
   const ownerOf = async (threadId: string): Promise<string | null> => {
     const row = await context.store.get(threadId);

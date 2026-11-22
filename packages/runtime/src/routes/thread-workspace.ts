@@ -19,7 +19,7 @@ import { scratchPathFor } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import { removeScratchWorkspace } from '../services/workspace-cleanup.js';
 import type { HonoEnv } from '../types/hono-env.js';
-import { resultToResponse } from '../utils/result-response.js';
+import { recordedFailureResponse, resultToResponse } from '../utils/result-response.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -44,6 +44,6 @@ threadWorkspaceRoutes.delete('/:id/scratch', async (c) => {
     threadId: id,
     scratchPath: scratchPathFor(userId, id),
   });
-  if (removed.isErr()) return resultToResponse(c, removed);
+  if (removed.isErr()) return recordedFailureResponse(c, removed.error);
   return c.json({ ok: true });
 });

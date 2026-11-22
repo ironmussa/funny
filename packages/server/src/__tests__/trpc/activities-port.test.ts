@@ -88,6 +88,15 @@ describe('activities port', () => {
     expect(await repos.activities().getById('srv')).toBeDefined();
   });
 
+  test('a server row stuck running for over 30 minutes can be dismissed', async () => {
+    await seed('stuck', 'alice', 'running', null);
+    const later = createActivitiesPort(
+      { isAvailable: async () => true },
+      () => Date.now() + 31 * 60_000,
+    );
+    expect((await later.dismiss('alice', 'stuck'))._unsafeUnwrap()).toEqual({ ids: ['stuck'] });
+  });
+
   test('dismissing a finished row broadcasts activity:removed to the owner', async () => {
     await seed('done', 'alice', 'failed');
     await port.dismiss('alice', 'done');

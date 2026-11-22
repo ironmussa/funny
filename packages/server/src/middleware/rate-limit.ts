@@ -6,7 +6,8 @@
  *     caller IP when one is available. Sharing the IP bucket with all other
  *     anonymous callers would let one abuser lock every logged-in user out.
  *   - Anonymous requests key on IP only. `X-Forwarded-For` is trusted
- *     strictly when `TRUST_PROXY=true` is set in the environment — otherwise
+ *     strictly when `TRUST_PROXY` is set in the environment (`true` or the
+ *     number of trusted proxies; see `lib/client-ip.ts`) — otherwise
  *     we rely on the socket remote address so a client cannot spoof its
  *     rate-limit bucket by attaching its own header.
  *   - If neither a userId nor a resolvable IP is present (e.g. a unix-socket
@@ -21,10 +22,8 @@ import {
 } from '@funny/shared/lib/sliding-window-hits';
 import type { Context, Next } from 'hono';
 
-import { clientIp } from '../lib/client-ip.js';
+import { clientIp, TRUSTED_PROXY_HOPS } from '../lib/client-ip.js';
 import { log } from '../lib/logger.js';
-
-const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 
 /** A sliding-window counter per key; `hit` records one request and says if it is over the limit. */
 export function createSlidingWindowLimiter(opts: { windowMs: number; max: number }): {
@@ -90,7 +89,7 @@ export function rateLimit(opts: {
       log.debug('Rate limit skipped — no identifiable IP for anonymous request', {
         namespace: 'rate-limit',
         path: c.req.path,
-        trustProxy: TRUST_PROXY,
+        trustedProxyHops: TRUSTED_PROXY_HOPS,
       });
     }
 

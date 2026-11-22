@@ -1,7 +1,7 @@
 // Test the CLI fallback path — native module has known issues with status/diff counts
 process.env.FUNNY_DISABLE_NATIVE_GIT = '1';
 
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
@@ -40,7 +40,10 @@ import {
 } from '../git/index.js';
 import { executeSync } from '../git/process.js';
 
-const TMP = resolve(tmpdir(), 'core-git-test-' + Date.now());
+// A fresh directory per test: a git process a previous test left running
+// (e.g. a background status refresh) must not write into the next test's
+// repo, which used to fail its setup with `fatal: could not parse HEAD`.
+let TMP = '';
 
 function initTestRepo(): string {
   const repoPath = resolve(TMP, 'repo');
@@ -59,7 +62,7 @@ describe('git operations', () => {
 
   beforeEach(() => {
     invalidateStatusCache();
-    mkdirSync(TMP, { recursive: true });
+    TMP = mkdtempSync(resolve(tmpdir(), 'core-git-test-'));
     repoPath = initTestRepo();
   });
 

@@ -110,6 +110,12 @@ the owner's PAT). This deployment's App is `funny-sandboxes-ironmussa`
   line with `\n` escapes works too). Never put it in git, the runner or the
   template.
 
+The App's permissions are listed in
+[deployment and auth](../../openwiki/operations/deployment-and-auth.md#github-access-in-sandbox-threads--the-github-app).
+It needs **Checks: Read and write** for the factory's regression-proof check; an App
+created before that check existed must have it added in its settings on GitHub and
+accepted on the `ironmussa` installation.
+
 Server variables win over an App connected in Preferences > GitHub App. To
 rotate the key, generate a new one in the App's settings on GitHub, update the
 variable, redeploy the server, then delete the old key on GitHub.

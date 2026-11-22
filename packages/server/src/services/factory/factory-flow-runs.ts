@@ -67,6 +67,7 @@ import {
   type UpdateRunInput,
 } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
+import type { KeptWorktree } from './factory-thread-requests.js';
 import {
   createThreadWaits,
   lastThreadMessage,
@@ -103,6 +104,11 @@ export interface FactoryFlowRunsDeps {
   stopThreads?: (userId: string, threadIds: string[]) => Promise<void>;
   /** Remove the worktree and local branch of a merged run's threads (best effort). */
   cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
+  /**
+   * The same for a run that ended without a pull request, keeping (and
+   * returning) the worktrees with uncommitted files or unpushed commits.
+   */
+  cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Regression proof start/poll through the enabler's runner. */
   proof?: (userId: string, threadId: string) => FactoryProofDeps;
@@ -469,10 +475,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       github: deps.github,
       issueLabels: job.issue.labels ?? [],
       lastThreadMessage,
-      removeWorktrees: async () => {
+      removeUnchangedWorktrees: async () => {
         const run = await deps.runs.get(job.run.id);
         const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;
-        await deps.cleanupMerged?.(scope.userId, ids);
+        return (await deps.cleanupUnchanged?.(scope.userId, ids)) ?? [];
       },
       proof: deps.proof
         ? {

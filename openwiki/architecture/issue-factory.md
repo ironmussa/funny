@@ -93,7 +93,14 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    the reason is shown as the factory's `blockedReason`.
    **No change**: when `create_pr` finds no PR and the branch has no commits ahead of the
    default branch, the run comments the agent's last message on the issue, removes its
-   worktrees and parks `waiting_human` with reason `no change` (the flow stops there).
+   worktrees and parks `waiting_human` with reason `no change` (the flow stops there). A
+   worktree with uncommitted files or commits only its branch has is kept and named in the
+   comment: the runner checks and removes in one request (`POST /api/worktrees/remove-unchanged`),
+   and a runner that cannot answer leaves the worktree in place.
+   **A finished turn is not a finished agent**: a `completed` thread with a background job
+   still running or a watcher pending (or one that ended in the last 2 minutes, whose wake is
+   starting) still counts as running (`awaitsWake` in `factory-thread-waits.ts`), so the flow
+   does not move on while the agent waits for its own tests.
 7. **Finished outside the factory**: each tick looks at the parked runs (`waiting_human`, `failed`)
    that have a PR. If a person merged it, the run becomes `merged`; if it was closed without a
    merge, `stopped` with that reason. The write is a compare-and-set from the parked states

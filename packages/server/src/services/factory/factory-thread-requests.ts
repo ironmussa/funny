@@ -47,21 +47,23 @@ interface ThreadRequest {
 }
 
 /** POST `path` (a thread route) to the thread's runner, as `userId`. */
-function postToThread(
+async function postToThread(
   ports: RunnerPorts,
   userId: string,
   path: string,
   body: unknown,
 ): Promise<Result<void, PostError>> {
-  return sendToThreadRunner(ports, userId, { method: 'POST', path, body });
+  return (await sendToThreadRunner(ports, userId, { method: 'POST', path, body })).map(
+    () => undefined,
+  );
 }
 
-/** Send a request to the runner a thread runs on, as `userId`. */
+/** Send a request to the runner a thread runs on, as `userId`. Answers the response body. */
 async function sendToThreadRunner(
   ports: RunnerPorts,
   userId: string,
   { method, path, query = {}, body }: ThreadRequest,
-): Promise<Result<void, PostError>> {
+): Promise<Result<string | null, PostError>> {
   const sink = authorizedRunnerRequests(ports.requests);
   try {
     const sent = await withRunnerFor(
@@ -83,7 +85,7 @@ async function sendToThreadRunner(
         sandboxAsleep: reason === 'thread-sandbox-unavailable',
       });
     }
-    if (sent.value.status < 400) return ok(undefined);
+    if (sent.value.status < 400) return ok(sent.value.body ?? null);
     const reason = runnerErrorText(sent.value.body);
     return err({
       message: `the runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`,
@@ -259,14 +261,21 @@ export async function sendFactoryFollowUp(
  *
  * Each cleared thread is announced to its owner as `thread:updated`, so an
  * open thread view stops pointing at the removed worktree without a reload.
+ *
+ * With `keepUnsaved` (a run that ended without a pull request) the runner
+ * removes a worktree only when nothing would be lost with it, and the ones it
+ * kept are returned. A runner that cannot answer (offline, or from before that
+ * route) leaves the worktree in place: never delete on a guess.
  */
 export async function cleanupFactoryWorktrees(
   ports: RunnerPorts,
   userId: string,
   threadIds: string[],
   browserEvents?: BrowserEventsPort,
-): Promise<void> {
-  if (threadIds.length === 0) return;
+  options: { keepUnsaved?: boolean } = {},
+): Promise<KeptWorktree[]> {
+  const kept: KeptWorktree[] = [];
+  if (threadIds.length === 0) return kept;
   const rows = await db
     .select({
       id: threads.id,
@@ -288,8 +297,8 @@ export async function cleanupFactoryWorktrees(
   for (const thread of rows) {
     if (!thread.projectId || !thread.worktreePath) continue;
     const removed = await sendToThreadRunner(ports, userId, {
-      method: 'DELETE',
-      path: '/api/worktrees',
+      method: options.keepUnsaved ? 'POST' : 'DELETE',
+      path: options.keepUnsaved ? '/api/worktrees/remove-unchanged' : '/api/worktrees',
       query: { threadId: thread.id, projectId: thread.projectId },
       body: {
         projectId: thread.projectId,
@@ -306,6 +315,18 @@ export async function cleanupFactoryWorktrees(
       });
       continue;
     }
+    if (options.keepUnsaved) {
+      const unsaved = unsavedWorkOf(removed.value);
+      if (unsaved) {
+        kept.push({ threadId: thread.id, worktreePath: thread.worktreePath, ...unsaved });
+        log.info('Kept a factory run worktree with unsaved work', {
+          namespace: 'factory',
+          threadId: thread.id,
+          ...unsaved,
+        });
+        continue;
+      }
+    }
     await db
       .update(threads)
       .set({ worktreePath: null, branch: null })
@@ -321,6 +342,37 @@ export async function cleanupFactoryWorktrees(
       branch: thread.branch,
     });
   }
+  return kept;
+}
+
+/** A worktree the cleanup left in place because removing it would lose work. */
+export interface KeptWorktree {
+  threadId: string;
+  worktreePath: string;
+  dirtyFileCount: number;
+  unpushedCommitCount: number;
+}
+
+const removeUnchangedResponse = z.object({
+  removed: z.boolean(),
+  dirtyFileCount: z.number().optional(),
+  unpushedCommitCount: z.number().optional(),
+});
+
+/**
+ * The unsaved work a `remove-unchanged` answer reports, or null when the runner
+ * removed the worktree. An answer that does not say `removed: true` is read as
+ * kept: the thread must go on pointing at a worktree that may still exist.
+ */
+function unsavedWorkOf(
+  body: string | null,
+): { dirtyFileCount: number; unpushedCommitCount: number } | null {
+  const parsed = parseStoredJson(removeUnchangedResponse, body ?? '{}', 'remove-unchanged');
+  if (parsed.ok && parsed.value.removed) return null;
+  return {
+    dirtyFileCount: parsed.ok ? (parsed.value.dirtyFileCount ?? 0) : 0,
+    unpushedCommitCount: parsed.ok ? (parsed.value.unpushedCommitCount ?? 0) : 0,
+  };
 }
 
 /** Stop a regression proof job on the thread's runner (best effort: a failure is logged). */

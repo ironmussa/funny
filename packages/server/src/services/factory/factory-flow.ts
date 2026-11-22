@@ -22,6 +22,7 @@ import type { PipelineDefinition } from '@funny/pipelines';
 import type { FactoryFlowDefinition } from '@funny/shared/contracts/factory';
 import {
   formatParseError,
+  isProofReady,
   loadWorkflowCatalog,
   parseWorkflowYaml,
   type ParsedWorkflow,
@@ -52,6 +53,8 @@ export interface FactoryFlow {
   pipeline: PipelineDefinition<YamlPipelineContext>;
   /** Parse warnings of the flow: logged by the caller, they block nothing. */
   warnings: WorkflowIssue[];
+  /** Whether its merge may happen: a proof with rules, or the explicit opt-out (`isProofReady`). */
+  proofReady: boolean;
 }
 
 type FlowNode = ParsedWorkflow['nodes'][number];
@@ -108,6 +111,7 @@ function compile(
       source,
       pipeline: compileYamlPipeline(parsed.workflow),
       warnings: parsed.warnings,
+      proofReady: isProofReady(parsed.workflow),
     });
   } catch (error) {
     return err({

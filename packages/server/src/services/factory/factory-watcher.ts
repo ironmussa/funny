@@ -55,7 +55,7 @@ import {
   type FactoryRunJob,
   type WaitingNotice,
 } from './factory-flow-runs.js';
-import type { FactoryFlow, FactoryFlowError } from './factory-flow.js';
+import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './factory-github.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import {
@@ -401,6 +401,8 @@ interface AdmissionContext {
   queued: ReadonlySet<number>;
   /** Blockers read this pass, by issue (null: unreadable). */
   blockers: Map<number, Promise<IssueBlocker[] | null>>;
+  /** Whether each flow read this pass is proof-ready, by name. */
+  proofReady: Map<string, Promise<boolean>>;
 }
 
 function admissionContext(
@@ -416,6 +418,7 @@ function admissionContext(
     reader: { repo, ownerId: factory.userId, projectId: factory.projectId },
     latestRuns,
     queued: new Set(all.flatMap((run) => (run.state === 'requested' ? [run.issueNumber] : []))),
+    proofReady: new Map(),
     blockers: new Map(),
   };
 }
@@ -487,9 +490,33 @@ async function admitWork(factory: WatchedFactory, repo: string, mode: LaunchMode
   const ctx = admissionContext(factory, repo, all.value);
 
   const left = await admitQueue(factory, repo, mode, queue.value, slots, ctx);
-  if (factory.mode === 'automatic' && left > 0) {
-    await admitFromGithub(factory, repo, mode, left, ctx);
+  if (factory.mode !== 'automatic' || left <= 0) return;
+  // A flow that could never merge admits nothing; runs in flight go on.
+  if (!(await flowProofReady(ctx, factory.flowName))) {
+    await reportBlocked(factory.id, proofNotConfigured(factory.flowName));
+    return;
   }
+  await admitFromGithub(factory, repo, mode, left, ctx);
+}
+
+/** The factory blocker of a flow that is not proof-ready. */
+const proofNotConfigured = (flowName: string) =>
+  `Regression proof not configured: the flow "${flowName}" has no regression_proof rules, so it would never merge. Add rules to .funny/workflows/${flowName}.yaml on the default branch, or set require_regression_proof: false on its merge step.`;
+
+/**
+ * Whether the flow `name` may merge (`FactoryFlow.proofReady`), read once per
+ * pass. A flow that cannot be loaded now is not held back here: its run
+ * reports why it failed to load.
+ */
+function flowProofReady(ctx: AdmissionContext, name: string): Promise<boolean> {
+  let ready = ctx.proofReady.get(name);
+  if (!ready) {
+    ready = loadFactoryFlow(name, {
+      readDefaultBranchFile: (path) => deps!.github.readDefaultBranchFile(ctx.reader, path),
+    }).then((flow) => !flow.isOk() || flow.value.proofReady);
+    ctx.proofReady.set(name, ready);
+  }
+  return ready;
 }
 
 /** Admit sent issues in queue order while slots remain; the slots left. */
@@ -518,6 +545,12 @@ async function admitQueued(
   ctx: AdmissionContext,
 ): Promise<boolean> {
   if (!runs || !deps) return false;
+  // Its flow could never merge: it stays queued, holding no slot.
+  const flowName = run.flowName ?? factory.flowName;
+  if (!(await flowProofReady(ctx, flowName))) {
+    await reportBlocked(factory.id, proofNotConfigured(flowName));
+    return false;
+  }
   // The issue first: one closed since it was sent leaves the queue even while
   // something still blocks it.
   const issue = await openQueuedIssue(factory, run, ctx);

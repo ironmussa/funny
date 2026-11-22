@@ -754,15 +754,51 @@ describe('factory flow', () => {
     expect(run.failureReason).toContain('No open pull request');
   });
 
-  test('the built-in flow, with no proof rules, never merges: the run waits for a person', async () => {
-    const { factoryId, github } = await runFlow(
-      { builtInFlow: true },
-      finishedThreads('completed'),
-    );
-    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
-    expect(run.currentStep).toBe('merge');
-    expect(run.failureReason).toContain('no regression proof configured');
-    expect(github.merges).toBe(0);
+  describe('admission needs a proof-ready flow (task 4.6)', () => {
+    const blocked = async () =>
+      (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap()!.blockedReason;
+    const runsOf = async (factoryId: string) =>
+      (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+
+    test('the built-in flow, with no proof rules, admits nothing and says why', async () => {
+      const { factoryId, launcher } = await runFlow({ builtInFlow: true }, pendingThreads);
+      expect(await runsOf(factoryId)).toEqual([]);
+      expect(launcher.calls).toHaveLength(0);
+      expect(await blocked()).toContain('Regression proof not configured');
+    });
+
+    test('once rules are added the issue is admitted and the blocker clears', async () => {
+      const script: GithubScript = { builtInFlow: true };
+      const { factoryId, poll } = await runFlow(script, pendingThreads);
+      expect(await runsOf(factoryId)).toEqual([]);
+      script.builtInFlow = false;
+      await poll.ticks[0]!();
+      expect(await runsOf(factoryId)).toHaveLength(1);
+      expect(await blocked()).toBeNull();
+    });
+
+    test('a merge that opts out of the proof is admitted without rules', async () => {
+      const optOut = proofReadyFlowFiles()
+        ['.funny/workflows/issue-to-merge.yaml']!.replace(/      rules:\n.*\n.*\n/, '')
+        .replace('    merge:', '    merge:\n      require_regression_proof: false');
+      expect(optOut).not.toContain('    regression_proof:\n      rules:');
+      const { factoryId } = await runFlow(
+        { files: { '.funny/workflows/issue-to-merge.yaml': optOut } },
+        pendingThreads,
+      );
+      expect(await runsOf(factoryId)).toHaveLength(1);
+    });
+
+    test('a run in flight goes on when its flow stops being proof-ready', async () => {
+      const script: GithubScript = {};
+      const { factoryId, poll } = await runFlow(script, pendingThreads);
+      const [admitted] = await runsOf(factoryId);
+      script.builtInFlow = true;
+      await poll.ticks[0]!();
+      const [still] = await runsOf(factoryId);
+      expect(still!.id).toBe(admitted!.id);
+      expect(still!.state).toBe(admitted!.state);
+    });
   });
 
   test('a merged run has its steps and no failure reason', async () => {
@@ -928,7 +964,8 @@ describe('factory flow', () => {
     );
     await eventually(factoryId, (r) => r.state === 'waiting_human');
     expect(launcher.calls[0]!.body.prompt).toBe('CUSTOM 7');
-    expect(github.fileReads).toEqual(['.funny/workflows/issue-to-merge.yaml']);
+    // Read for the admission check and for the run: only ever the default branch's copy.
+    expect([...new Set(github.fileReads)]).toEqual(['.funny/workflows/issue-to-merge.yaml']);
   });
 
   test('a flow with a parse warning is logged and still runs', async () => {

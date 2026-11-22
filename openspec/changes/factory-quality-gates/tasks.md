@@ -87,7 +87,7 @@
       run's worktree and park in `waiting_human` with reason `no change`; with commits ahead,
       today's error. Verify with provider tests for both cases and that a parked `no change` run
       is not admitted again.
-- [ ] 4.6 Check `isProofReady` at admission in the watcher: a flow that is not proof-ready admits
+- [x] 4.6 Check `isProofReady` at admission in the watcher: a flow that is not proof-ready admits
       nothing, leaves the issue queued with no slot, and records the factory blocker "regression
       proof not configured"; in-flight runs continue. Expose the blocker in the `factory` tRPC
       settings and queue responses. Verify with watcher tests: not configured (no run, blocker

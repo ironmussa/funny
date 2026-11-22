@@ -92,7 +92,7 @@ function fakeGithub(script: Script = {}): FakeGithub {
     readDefaultBranchFile: (_reader: unknown, path: string) =>
       script.repoUnreadable
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
-        : okAsync(script.repoFiles?.[path] ?? null),
+        : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
     branchAhead: () => okAsync(true),
     commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
@@ -591,8 +591,7 @@ describe('blocked issues', () => {
     const { factoryId, queue, launcher, tick } = await setUp({
       maxConcurrent: 2,
       waitThread: finishedThreads('completed'),
-      // A proof-ready flow, so the blocker's run can merge.
-      script: { blockers: { 2: [blocker(1)] }, repoFiles: proofReadyFlowFiles() },
+      script: { blockers: { 2: [blocker(1)] } },
     });
     await queue.submit(factoryId, { issueNumbers: [1, 2], flowName: 'issue-to-merge' });
 

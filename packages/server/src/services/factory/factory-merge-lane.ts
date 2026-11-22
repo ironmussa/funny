@@ -48,10 +48,29 @@ export type UpToDate =
   /** It could not be brought up to date and no code change is known to help. */
   | { kind: 'failed'; error: string };
 
+/** How a pull request left GitHub's merge queue. */
+export type QueueEnd =
+  /** GitHub merged it. */
+  | { kind: 'merged' }
+  /** GitHub took it out without merging: its checks failed with the base, or it conflicts. */
+  | { kind: 'removed' }
+  | { kind: 'failed'; error: string };
+
+/** How often the queue is looked at, and how long a pull request may stay in it. */
+const QUEUE_INTERVAL_MS = 30 * 1000;
+const QUEUE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
 export interface MergeLaneDeps {
   prs: Pick<
     FactoryPullRequests,
-    'pullHead' | 'baseDistance' | 'updateBranch' | 'commitParents' | 'baseChanges' | 'changedFiles'
+    | 'pullHead'
+    | 'baseDistance'
+    | 'updateBranch'
+    | 'commitParents'
+    | 'baseChanges'
+    | 'changedFiles'
+    | 'enqueue'
+    | 'queueState'
   >;
   pullRequest(): FactoryPullRequestRef | null;
   /** The run's branch (named in the feedback). */
@@ -217,7 +236,56 @@ export function createMergeLane(deps: MergeLaneDeps) {
     return { updated };
   }
 
+  /** Look at the queue until GitHub merges the pull request or takes it out. */
+  async function followQueue(pr: FactoryPullRequestRef): Promise<QueueEnd> {
+    const started = now();
+    while (now() - started < QUEUE_TIMEOUT_MS) {
+      if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
+      const state = await deps.prs.queueState(pr);
+      if (state.isErr()) return { kind: 'failed', error: state.error.message };
+      if (state.value === 'merged') return { kind: 'merged' };
+      if (state.value === 'not-queued') return { kind: 'removed' };
+      if (state.value === 'closed') {
+        return { kind: 'failed', error: 'The pull request was closed while in the merge queue.' };
+      }
+      const slept = await sleep(QUEUE_INTERVAL_MS, deps.signal).then(
+        () => true,
+        () => false,
+      );
+      if (!slept) return { kind: 'failed', error: 'The run was stopped.' };
+    }
+    return {
+      kind: 'failed',
+      error: `GitHub's merge queue did not merge the pull request within ${QUEUE_TIMEOUT_MS / 60_000} minutes.`,
+    };
+  }
+
   return {
+    /**
+     * Where the base branch requires GitHub's merge queue: add the pull request
+     * (only while its head is `sha`) and follow it. GitHub tests it on the
+     * current base and merges it, so the branch is not updated first.
+     */
+    async throughQueue(sha: string): Promise<QueueEnd> {
+      const pr = deps.pullRequest();
+      if (!pr) return { kind: 'failed', error: 'The run has no pull request yet.' };
+      const added = await deps.prs.enqueue(pr, sha);
+      if (added.isErr()) return { kind: 'failed', error: added.error.message };
+      if (added.value.kind === 'head-moved') {
+        return {
+          kind: 'failed',
+          error: `The pull request head moved from ${sha} before it could enter the merge queue.`,
+        };
+      }
+      if (added.value.kind === 'refused') {
+        return {
+          kind: 'failed',
+          error: `GitHub refused to add the pull request to the merge queue: ${added.value.reason}`,
+        };
+      }
+      return followQueue(pr);
+    },
+
     /**
      * Bring the pull request up to date with its base and make sure its checks
      * are green there. Resolves with the head that is current, or why not.

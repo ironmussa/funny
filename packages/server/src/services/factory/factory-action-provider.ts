@@ -936,6 +936,58 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return null;
   }
 
+  /** `merge` sent the change back to the implementing agent: ok, so the flow's loop can act. */
+  async function sentBack(why: 'conflict' | 'checks', feedback: string): Promise<ActionResult> {
+    await count(
+      { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
+      { event: `merge_sent_back_${why}` },
+    );
+    return { ok: true, output: 'sent_back', metadata: { outcome: 'sent_back', why, feedback } };
+  }
+
+  /**
+   * The head to merge once the branch has its base and its checks are green
+   * there (green on an old base proves nothing about the base as it is now),
+   * or the result `merge` ends with instead.
+   */
+  async function upToDate(opts: MergeOpts, sha: string): Promise<string | ActionResult> {
+    const current = await lane.bringUpToDate();
+    if (current.kind === 'failed') return { ok: false, error: current.error };
+    if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
+    for (const step of current.carried) await reviewer.carry(step.from, step.to);
+    if (current.sha === sha) return sha;
+    return (await mergeHeld(opts, current.sha)) ?? current.sha;
+  }
+
+  /**
+   * Merge `sha` through GitHub's merge queue. Taken out of the queue, the
+   * branch is brought up to date here, so what failed with the base shows on
+   * the pull request's own checks and goes to the implementing agent.
+   */
+  async function throughQueue(opts: MergeOpts, sha: string): Promise<ActionResult> {
+    if (opts.requireRegressionProof !== false) {
+      const config = opts.regressionProof;
+      if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
+      const proof = await proofOfHead(config, sha);
+      if ('refused' in proof) return proof.refused;
+    }
+    const end = await lane.throughQueue(sha);
+    if (end.kind === 'merged') {
+      await deps.record({ state: 'merged', currentStep: null });
+      return { ok: true, output: 'merged', metadata: { outcome: 'merged', via: 'merge-queue' } };
+    }
+    if (end.kind === 'failed') return { ok: false, error: end.error };
+    const current = await lane.bringUpToDate();
+    if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
+    return {
+      ok: false,
+      error:
+        current.kind === 'failed'
+          ? `GitHub's merge queue removed the pull request, and it could not be brought up to date: ${current.error}`
+          : "GitHub's merge queue removed the pull request, though its checks pass on the current base.",
+    };
+  }
+
   /**
    * The merge gate: merge only a pull request head that passed the flow's
    * review and has a passing proof of that exact commit, pinned to it. Runs
@@ -952,26 +1004,15 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const held = await mergeHeld(opts, head.value.sha);
     if (held) return held;
 
-    // Green on an old base proves nothing about the base as it is now.
-    const current = await lane.bringUpToDate();
-    if (current.kind === 'failed') return { ok: false, error: current.error };
-    if (current.kind === 'sent-back') {
-      await count(
-        { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
-        { event: `merge_sent_back_${current.why}` },
-      );
-      return {
-        ok: true,
-        output: 'sent_back',
-        metadata: { outcome: 'sent_back', why: current.why, feedback: current.feedback },
-      };
+    // Where the base branch requires GitHub's merge queue, GitHub tests the
+    // change on the current base and merges it: the factory enqueues and follows.
+    const queue = await deps.github.pullRequests.mergeQueueRequired(pr, head.value.baseRef);
+    if (queue.isErr()) {
+      return { ok: false, error: queue.error.message, metadata: { kind: queue.error.kind } };
     }
-    for (const step of current.carried) await reviewer.carry(step.from, step.to);
-    const sha = current.sha;
-    if (sha !== head.value.sha) {
-      const heldNow = await mergeHeld(opts, sha);
-      if (heldNow) return heldNow;
-    }
+    const sha = queue.value ? head.value.sha : await upToDate(opts, head.value.sha);
+    if (typeof sha !== 'string') return sha;
+    if (queue.value) return throughQueue(opts, sha);
     if (opts.requireRegressionProof === false) {
       // A reviewed commit is merged as that commit; without the review gate, as before.
       return opts.requireReview === false ? ci.merge(opts) : ci.merge({ ...opts, sha });

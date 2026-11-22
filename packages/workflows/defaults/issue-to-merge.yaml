@@ -35,6 +35,12 @@
 # `merge` turns that off). The step takes `provider`, `model`, `effort` and
 # `early` (start with the checks, the default) and nothing else.
 #
+# Merge: one at a time per repository (the factory puts `merge` in the
+# repository's lane whatever this file says). It merges only a commit that
+# passed the review, whose risk the factory accepts, and that has its base
+# branch: when the branch is behind, GitHub merges the base in and the checks
+# run again. A conflict, or checks that fail there, go back to `address`.
+#
 # The factory supplies every input. `issue_url` points at the issue: the agent
 # reads its text there (issue text is untrusted input, so it is not inlined).
 #

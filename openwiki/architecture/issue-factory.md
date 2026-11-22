@@ -83,7 +83,30 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    [docs/guides/factory-regression-proof.md](../../docs/guides/factory-regression-proof.md).
 4. **CI**: `wait_ci` polls the PR; red or conflict hands the failure (check names and log tails)
    to the fix step via `retry.before_retry`, up to the flow's attempts. A timeout is not retried.
-5. **Merge**: unless `merge.require_regression_proof: false`, the merge reads the PR head and
+   4a. **Review** (the `review` step, after `wait_ci` in `issue-to-merge`; change
+   `factory-agent-roles`): a second agent, the **reviewer**, judges the PR's head commit on its
+   own new read-only thread and answers `pass` / `fail` with findings (see Role results). It
+   never gets the implementing thread, and the server builds its prompt. It starts when the
+   commit's checks start (`wait_ci` is told about the step; `early: false` turns that off) and
+   the step takes the stored verdict, waits for the review in flight or starts one; a review of
+   a replaced commit is stopped and dropped. A `fail` with a `critical` or `high` finding loops
+   back to `address` (the implementing agent's follow-up with the findings), then proof, CI and
+   review run again on the new commit: three reviews, then the loop is exhausted and the run
+   waits for a person. Each verdict is posted on the PR as a review with the event `COMMENT`
+   and, when the installation accepted `statuses: write`, as the `funny/review` status.
+   Invariants: only the implementing agent writes to the branch; no agent merges, approves or
+   publishes; a verdict holds for one commit.
+5. **Merge**: one at a time per repository and base branch (the lane, `factory-merge-lane.ts`).
+   On entry, whatever path led to it, `merge` checks: the head commit has a verdict of the
+   flow's own `review` step that allows a merge (unless `require_review: false`; an external
+   bot's check or approval is not a review), the branch still contains the commit reviewed
+   before it, and the risk class is one the factory merges by itself (`auto_merge`: `low_risk`
+   by default). Otherwise the run waits for a person with the reason (`no review`,
+   `review failed`, `high risk`, `branch history rewritten`). Then it brings the branch up to
+   date with its base (update-branch, checks again) or, where the base requires GitHub's merge
+   queue, enqueues and follows; a conflict or checks failing on the current base end the step
+   with `outcome: sent_back` and the merge loop goes back to `address`. Unless
+   `merge.require_regression_proof: false`, the merge reads the PR head and
    merges only a head with a passing proof of that commit (the step's, or a new proof it runs),
    pinned to that SHA; every proof is also published as the `funny/regression-proof` check. When
    the direct merge is refused for a requirement, auto-merge only where that check is required

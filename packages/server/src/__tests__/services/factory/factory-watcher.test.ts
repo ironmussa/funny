@@ -210,6 +210,9 @@ function fakeGithub(
       updateBranch: () => okAsync({ kind: 'updating' as const }),
       commitParents: () => okAsync([]),
       baseChanges: () => okAsync({ commits: [], files: [] }),
+      mergeQueueRequired: () => okAsync(false),
+      enqueue: () => okAsync({ kind: 'queued' as const }),
+      queueState: () => okAsync('merged' as const),
       pullHead: () =>
         okAsync({ sha: 'sha-head', autoMerge: false, ...script.head, baseRef: 'main' }),
       publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {

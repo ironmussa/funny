@@ -21,16 +21,21 @@ import {
   createPullRequestCi,
   createRepoCheckOps,
   createRepoGithub,
+  enqueuePullRequest,
   listPullRequestFiles,
+  mergeQueueState,
   REGRESSION_PROOF_CHECK,
+  requiresMergeQueue,
   REVIEW_STATUS_CONTEXT,
   setCommitStatus,
   updateBranch,
   type BaseChanges,
   type BaseDistance,
   type CiState,
+  type EnqueueResult,
   type GithubCallError,
   type MergeMethod,
+  type MergeQueueState,
   type PullRequestFiles,
   type UpdateBranchResult,
 } from '@funny/core/github-app';
@@ -173,6 +178,20 @@ export interface FactoryPullRequests {
     headSha: string,
     baseRef: string,
   ): ResultAsync<BaseChanges, FactoryPullRequestError>;
+  /** Whether the base branch `baseRef` requires GitHub's merge queue. */
+  mergeQueueRequired(
+    pr: FactoryPullRequestRef,
+    baseRef: string,
+  ): ResultAsync<boolean, FactoryPullRequestError>;
+  /** Add the pull request to GitHub's merge queue, only while its head is `headSha`. */
+  enqueue(
+    pr: FactoryPullRequestRef,
+    headSha: string,
+  ): ResultAsync<EnqueueResult, FactoryPullRequestError>;
+  /** Where the pull request stands in the merge queue. */
+  queueState(
+    pr: FactoryPullRequestRef,
+  ): ResultAsync<MergeQueueState['kind'], FactoryPullRequestError>;
   /**
    * Put a review verdict on the pull request: a review comment that never
    * approves, then the `funny/review` status on the reviewed commit with a
@@ -390,6 +409,23 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
       return baseChangesSince(repoGithubFor(pr, 'read'), pr.repo, headSha, baseRef).mapErr(
         callError,
       );
+    },
+
+    mergeQueueRequired(pr, baseRef) {
+      return requiresMergeQueue(repoGithubFor(pr, 'read'), pr.repo, baseRef).mapErr(callError);
+    },
+
+    enqueue(pr, headSha) {
+      const github = repoGithubFor(pr, 'write');
+      return mergeQueueState(github, pr.repo, pr.number)
+        .andThen((state) => enqueuePullRequest(github, pr.repo, state.id, headSha))
+        .mapErr(callError);
+    },
+
+    queueState(pr) {
+      return mergeQueueState(repoGithubFor(pr, 'read'), pr.repo, pr.number)
+        .map((state) => state.kind)
+        .mapErr(callError);
     },
 
     publishProofCheck(pr, check) {

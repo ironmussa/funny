@@ -65,6 +65,9 @@ function providerWith(pullRequests: Partial<PullRequestsPort>, over: Partial<Pro
         updateBranch: () => okAsync({ kind: 'updating' as const }),
         commitParents: () => okAsync([]),
         baseChanges: () => okAsync({ commits: [], files: [] }),
+        mergeQueueRequired: () => okAsync(false),
+        enqueue: () => okAsync({ kind: 'queued' as const }),
+        queueState: () => okAsync('merged' as const),
         pullHead: () => okAsync({ sha: 'sha-1', baseRef: 'main', autoMerge: false }),
         publishProofCheck: () => okAsync(undefined),
         ciState: () => okAsync({ kind: 'green' as const }),
@@ -800,11 +803,17 @@ describe('merge brings the branch up to date with its base first', () => {
     reviews?: ProviderDeps['reviews'];
     /** Commits of the first that the second lacks (a rewritten history), by `first...second`. */
     lacks?: Record<string, number>;
+    /** The base branch requires GitHub's merge queue: how adding to it and following it go. */
+    queue?: {
+      enqueue?: { kind: 'queued' } | { kind: 'head-moved' } | { kind: 'refused'; reason: string };
+      state: 'merged' | 'not-queued' | 'closed';
+    };
   }
 
   function lane(script: LaneScript) {
     let head = SHA_A;
     const updates: string[] = [];
+    const enqueued: string[] = [];
     const merges: Array<{ sha?: string } | undefined> = [];
     const recorded: UpdateRunInput[] = [];
     const followUps: string[] = [];
@@ -827,6 +836,12 @@ describe('merge brings the branch up to date with its base first', () => {
           return okAsync({ kind: 'updating' as const });
         },
         commitParents: (_pr, sha) => okAsync(script.parents?.[sha] ?? []),
+        mergeQueueRequired: () => okAsync(script.queue !== undefined),
+        enqueue: (_pr, sha) => {
+          enqueued.push(sha);
+          return okAsync(script.queue?.enqueue ?? { kind: 'queued' as const });
+        },
+        queueState: () => okAsync(script.queue?.state ?? 'merged'),
         baseChanges: () =>
           okAsync({
             commits: [{ sha: BASE_1, title: 'fix: rounding (#12)' }],
@@ -867,7 +882,7 @@ describe('merge brings the branch up to date with its base first', () => {
       const writes = recorded.flatMap((input) => (input.reviews ? [input.reviews] : []));
       return writes.at(-1) ?? [];
     };
-    return { merge, merges, updates, reviews, recorded, followUps };
+    return { merge, merges, updates, reviews, recorded, followUps, enqueued };
   }
 
   test('a head that has its base is merged without touching the branch', async () => {
@@ -969,6 +984,74 @@ describe('merge brings the branch up to date with its base first', () => {
     expect(result.error).toContain('is not a merge of');
     expect(merges).toEqual([]);
     expect(reviews()).toEqual([]);
+  });
+
+  describe("where the base branch requires GitHub's merge queue", () => {
+    test('the pull request is enqueued at its reviewed commit, and GitHub merges it', async () => {
+      const { merge, merges, updates, enqueued, recorded } = lane({
+        behind: { [SHA_A]: 3 },
+        queue: { state: 'merged' },
+      });
+      expect(await merge()).toMatchObject({
+        ok: true,
+        output: 'merged',
+        metadata: { outcome: 'merged', via: 'merge-queue' },
+      });
+      expect(enqueued).toEqual([SHA_A]);
+      // The queue tests it on the base: the factory neither updates the branch nor merges.
+      expect(updates).toEqual([]);
+      expect(merges).toEqual([]);
+      expect(recorded).toContainEqual({ state: 'merged', currentStep: null });
+    });
+
+    test('taken out of the queue: what fails with the base goes to the implementer', async () => {
+      const { merge, merges } = lane({
+        behind: { [SHA_A]: 1 },
+        updates: { [SHA_A]: SHA_M },
+        parents: { [SHA_M]: [SHA_A, BASE_1] },
+        checks: {
+          [SHA_M]: {
+            kind: 'failing',
+            checks: [{ name: 'test', conclusion: 'failure', excerpt: 'expected 3, got 2' }],
+          },
+        },
+        queue: { state: 'not-queued' },
+      });
+      const result = await merge();
+      expect(result).toMatchObject({ ok: true, metadata: { outcome: 'sent_back', why: 'checks' } });
+      expect(String(result.metadata?.feedback)).toContain('expected 3, got 2');
+      expect(merges).toEqual([]);
+    });
+
+    test('taken out of the queue for no reason the factory can show: the run is left for a person', async () => {
+      const { merge, followUps } = lane({ queue: { state: 'not-queued' } });
+      const result = await merge();
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain("GitHub's merge queue removed the pull request");
+      expect(followUps).toEqual([]);
+    });
+
+    test('a refusal to enqueue fails the step with its reason', async () => {
+      const { merge, merges } = lane({
+        queue: {
+          enqueue: { kind: 'refused', reason: 'Required status check "ci" is expected' },
+          state: 'not-queued',
+        },
+      });
+      const result = await merge();
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('Required status check "ci" is expected');
+      expect(merges).toEqual([]);
+    });
+
+    test('an unreviewed commit is not enqueued', async () => {
+      const { merge, enqueued } = lane({ reviews: [], queue: { state: 'merged' } });
+      expect(await merge()).toMatchObject({
+        ok: false,
+        metadata: { reason: MERGE_HOLD_REASONS.noReview },
+      });
+      expect(enqueued).toEqual([]);
+    });
   });
 
   test('a branch rewritten so it no longer contains the reviewed commit waits for a person', async () => {

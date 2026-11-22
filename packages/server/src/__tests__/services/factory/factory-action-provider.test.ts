@@ -12,6 +12,7 @@ import {
   countCiResult,
   createFactoryActionProvider,
   NO_CHANGE_LINE,
+  regressionTestRequired,
 } from '../../../services/factory/factory-action-provider.js';
 import type {
   FactoryMergeOptions,
@@ -346,7 +347,7 @@ describe('factory action provider merge gate', () => {
   test('a flow without a configured proof does not merge', async () => {
     const { provider, merges } = gated({});
     const noStep = await provider.merge({});
-    expect(noStep.error).toContain('no regression proof configured');
+    expect(noStep.error).toContain('Regression proof not configured');
     const noRules = await provider.merge({ regressionProof: { rules: [] } });
     expect(noRules.ok).toBe(false);
     expect(merges).toHaveLength(0);
@@ -434,5 +435,83 @@ describe('factory action provider "no change" outcome', () => {
     const result = await provider.createPr({ cwd: '', title: 'Fix it' });
     expect(result.error).toContain('No open pull request');
     expect(comments).toHaveLength(0);
+  });
+});
+
+describe('factory action provider regression proof outcomes', () => {
+  const rules = [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }];
+
+  function proving(result: Record<string, unknown>, over: { aborted?: boolean } = {}) {
+    const bodies: Array<Record<string, unknown>> = [];
+    const cancelled: string[] = [];
+    const controller = new AbortController();
+    if (over.aborted) controller.abort();
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      signal: controller.signal,
+      proof: {
+        startProof: async (_threadId, body) => {
+          bodies.push(body);
+          return ok({ proofId: 'p1', state: 'running' });
+        },
+        pollProof: async () => ok({ state: 'done', result }),
+        cancelProof: async (_threadId, proofId) => {
+          cancelled.push(proofId);
+        },
+      },
+    });
+    return { provider, bodies, cancelled };
+  }
+
+  test('a test the agent can fix is "failed" (retried); an environment failure is "unavailable"', async () => {
+    const test = await proving({
+      verdict: 'fail',
+      failureKind: 'test',
+      finding: 'pass on the base',
+    }).provider.regressionProof!({ rules });
+    expect(test.error).toStartWith('Regression proof failed: pass on the base');
+    const env = await proving({
+      verdict: 'fail',
+      failureKind: 'environment',
+      finding: 'Setup failed',
+    }).provider.regressionProof!({ rules });
+    expect(env.error).toStartWith('Regression proof unavailable: Setup failed');
+  });
+
+  test("a missing required test is the agent's to fix", async () => {
+    const result = await proving({ verdict: 'skipped' }).provider.regressionProof!({ rules });
+    expect(result.error).toStartWith('Regression proof failed: no regression test');
+  });
+
+  test('the setup command reaches the runner', async () => {
+    const { provider, bodies } = proving({ verdict: 'pass', headSha: 'sha' });
+    await provider.regressionProof!({ rules, setupCommand: 'bun install --frozen-lockfile' });
+    expect(bodies[0]).toMatchObject({ setupCommand: 'bun install --frozen-lockfile' });
+  });
+
+  test('a stopped run stops the proof on the runner', async () => {
+    const { provider, cancelled } = proving({ verdict: 'pass' }, { aborted: true });
+    const result = await provider.regressionProof!({ rules });
+    expect(result.error).toContain('stopped');
+    expect(cancelled).toEqual(['p1']);
+  });
+
+  test('an unreadable runner result is not a verdict', async () => {
+    const result = await proving({ verdict: 'maybe' }).provider.regressionProof!({ rules });
+    expect(result.error).toStartWith('Regression proof unavailable');
+  });
+
+  test('every issue needs a test by default, except those with an exempt label', () => {
+    expect(regressionTestRequired({}, [])).toBe(true);
+    expect(regressionTestRequired({ exemptLabels: ['docs', 'chore'] }, ['docs'])).toBe(false);
+    expect(regressionTestRequired({ requireTest: 'never' }, [])).toBe(false);
+    expect(regressionTestRequired({ requireTest: 'labels', labels: ['bug'] }, ['bug'])).toBe(true);
+    expect(regressionTestRequired({ requireTest: 'labels', labels: ['bug'] }, [])).toBe(false);
+    expect(
+      regressionTestRequired({ requireTest: 'labels', labels: ['bug'], exemptLabels: ['docs'] }, [
+        'bug',
+        'docs',
+      ]),
+    ).toBe(false);
   });
 });

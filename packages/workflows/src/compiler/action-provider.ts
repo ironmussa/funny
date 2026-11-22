@@ -147,6 +147,10 @@ export interface RegressionProofOpts {
   supportGlobs?: string[];
   requireTest?: 'always' | 'labels' | 'never';
   labels?: string[];
+  /** Labels whose issues need no test, whatever `requireTest` says. */
+  exemptLabels?: string[];
+  /** Run in each temporary checkout before the tests. */
+  setupCommand?: string;
   timeoutMs?: number;
 }
 

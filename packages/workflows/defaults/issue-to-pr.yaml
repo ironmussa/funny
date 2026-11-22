@@ -64,12 +64,12 @@ nodes:
   - id: regression-proof
     depends_on: [pull-request]
     regression_proof:
-      require_test: labels
-      labels: [bug]
+      require_test: always
+      exempt_labels: [docs, chore]
       timeout_ms: 600000
     retry:
       max_attempts: 3
-      should_retry: "$contains(error, 'Regression proof')"
+      should_retry: "$contains(error, 'Regression proof failed')"
       before_retry:
         prompt: |
           You are working unattended: nobody will answer questions.

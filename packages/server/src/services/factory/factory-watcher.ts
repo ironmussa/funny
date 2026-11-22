@@ -74,6 +74,7 @@ import {
 } from './factory-settings.js';
 import {
   cleanupFactoryWorktrees,
+  cancelRegressionProofOnRunner,
   pollRegressionProofOnRunner,
   sendFactoryFollowUp,
   startRegressionProofOnRunner,
@@ -189,6 +190,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
       ((userId, _threadId) => ({
         startProof: (tid, body) => startRegressionProofOnRunner(d.ports, userId, tid, body),
         pollProof: (tid, proofId) => pollRegressionProofOnRunner(d.ports, userId, tid, proofId),
+        cancelProof: (tid, proofId) => cancelRegressionProofOnRunner(d.ports, userId, tid, proofId),
       })),
     reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
     stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),

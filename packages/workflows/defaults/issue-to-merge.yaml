@@ -88,15 +88,23 @@ nodes:
   #       - globs: ['**/*.test.ts']
   #         command: 'bun test {{files}}'
   #     support_globs: ['**/__fixtures__/**', '**/testing/**']
+  #     setup_command: 'bun install --frozen-lockfile'
+  #
+  # Both commits run in fresh temporary checkouts prepared alike by
+  # `setup_command`, else by the head's `.funny.json` `postCreate` (what a
+  # thread worktree runs, e.g. `bun install`). The head must pass
+  # twice; the base must fail by an assertion: a timeout, a setup failure or a
+  # test file that cannot load there proves nothing. Every issue needs a
+  # regression test except those labelled `docs` or `chore`.
   - id: regression-proof
     depends_on: [pull-request]
     regression_proof:
-      require_test: labels
-      labels: [bug]
+      require_test: always
+      exempt_labels: [docs, chore]
       timeout_ms: 600000
     retry:
       max_attempts: 3
-      should_retry: "$contains(error, 'Regression proof')"
+      should_retry: "$contains(error, 'Regression proof failed')"
       before_retry:
         prompt: |
           You are working unattended: nobody will answer questions.

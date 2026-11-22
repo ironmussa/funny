@@ -101,8 +101,9 @@
 
 - [x] 5.1 Add the `regression-proof` step (no rules; rule examples for common test runners in
       comments, its retry and inline fix prompt) between `pull-request` and `ci` in
-      `issue-to-merge.yaml` and `issue-to-pr.yaml`, with `require_test: labels` and
-      `labels: [bug]`. Verify with the built-in flow tests and a watcher test that runs the
+      `issue-to-merge.yaml` and `issue-to-pr.yaml`, with `require_test: always` and
+      `exempt_labels: [docs, chore]`, retried with the agent only on a proof it can fix
+      (`Regression proof failed`). Verify with the built-in flow tests and a watcher test that runs the
       built-in flow end to end with a fake proof, including a CI fix round followed by the
       re-proof in `merge`.
 - [x] 5.2 Rewrite the implement prompt of both built-ins as the spec requires (root cause, every

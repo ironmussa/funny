@@ -307,3 +307,38 @@ export async function cleanupFactoryWorktrees(
     });
   }
 }
+
+/** Stop a regression proof job on the thread's runner (best effort: a failure is logged). */
+export async function cancelRegressionProofOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  threadId: string,
+  proofId: string,
+): Promise<void> {
+  const sink = authorizedRunnerRequests(ports.requests);
+  const path = `/api/threads/${threadId}/regression-proof/${proofId}`;
+  try {
+    const sent = await withRunnerFor(
+      runnerActor({ userId }),
+      { kind: 'request', path, query: {} },
+      ports.presence,
+      (actor, runner, proof) =>
+        sink.send(actor, runner, proof, { method: 'DELETE', path, headers: {}, body: null }),
+    );
+    if (sent.isErr() || (sent.value.status >= 400 && sent.value.status !== 404)) {
+      log.warn('Issue factory could not stop a regression proof', {
+        namespace: 'factory',
+        threadId,
+        proofId,
+        error: sent.isErr() ? sent.error.reason : `runner answered ${sent.value.status}`,
+      });
+    }
+  } catch (error) {
+    log.warn('Issue factory could not stop a regression proof', {
+      namespace: 'factory',
+      threadId,
+      proofId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}

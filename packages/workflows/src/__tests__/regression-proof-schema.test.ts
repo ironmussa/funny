@@ -42,6 +42,26 @@ function parseErr(yaml: string) {
 }
 
 describe('regression_proof schema', () => {
+  test('exempt labels and a setup command parse; an empty setup command does not', () => {
+    const result = parse(
+      flow(`    regression_proof:
+      rules:
+        - globs: ['**/*.test.ts']
+          command: 'bun test {{files}}'
+      require_test: always
+      exempt_labels: [docs, chore]
+      setup_command: 'bun install --frozen-lockfile'`),
+    );
+    const proof = result.workflow.nodes.find((n) => n.regression_proof)?.regression_proof;
+    expect(proof?.exempt_labels).toEqual(['docs', 'chore']);
+    expect(proof?.setup_command).toBe('bun install --frozen-lockfile');
+    parseErr(
+      flow(`    regression_proof:
+      rules: []
+      setup_command: ''`),
+    );
+  });
+
   test('a valid regression_proof step with rules parses', () => {
     const result = parse(
       flow(`    regression_proof:

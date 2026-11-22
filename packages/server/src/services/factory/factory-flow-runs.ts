@@ -471,6 +471,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
               deps.proof!(scope.userId, threadId).startProof(threadId, body),
             pollProof: (threadId, proofId) =>
               deps.proof!(scope.userId, threadId).pollProof(threadId, proofId),
+            cancelProof: async (threadId, proofId) =>
+              deps.proof!(scope.userId, threadId).cancelProof?.(threadId, proofId),
           }
         : undefined,
       record,

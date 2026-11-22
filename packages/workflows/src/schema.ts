@@ -194,6 +194,10 @@ const regressionProofAction = z
     require_test: z.enum(['always', 'labels', 'never']).optional(),
     /** Issue labels that require a test when require_test is 'labels'. */
     labels: z.array(z.string()).optional(),
+    /** Issue labels that need no test even when require_test is 'always' (e.g. docs, chore). */
+    exempt_labels: z.array(z.string()).optional(),
+    /** Run in each temporary checkout before the tests (e.g. `bun install --frozen-lockfile`). */
+    setup_command: z.string().min(1).optional(),
     /** Time limit for the proof in milliseconds. */
     timeout_ms: z.number().int().positive().optional(),
   })

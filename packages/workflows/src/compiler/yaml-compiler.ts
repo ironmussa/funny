@@ -351,6 +351,8 @@ function regressionProofOpts(
     supportGlobs: opts.support_globs,
     requireTest: opts.require_test,
     labels: opts.labels,
+    exemptLabels: opts.exempt_labels,
+    setupCommand: opts.setup_command,
     timeoutMs: opts.timeout_ms,
   };
 }

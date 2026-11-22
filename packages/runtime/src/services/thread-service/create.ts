@@ -494,11 +494,27 @@ async function createShellEscapeProjectThread(ctx: ProjectThreadContext, shellCo
  * Create the thread row in `setting_up`, persist the first message and kick
  * off worktree creation + agent start in the background.
  */
+/**
+ * The branch a new worktree starts from. Without an explicit base the worktree
+ * is created from the project checkout's HEAD, so record that branch: the git
+ * status counts commits as `<base>..HEAD` while the branch has no upstream, and
+ * a missing base made a pushless worktree thread show no commits (sidebar,
+ * review pane) however many it had.
+ */
+async function worktreeBaseBranch(ctx: ProjectThreadContext): Promise<string | undefined> {
+  if (ctx.resolvedBaseBranch) return ctx.resolvedBaseBranch;
+  const current = await getCurrentBranch(ctx.projectPath);
+  if (current.isErr()) return undefined;
+  const branch = current.value.trim();
+  return branch && branch !== 'HEAD' ? branch : undefined;
+}
+
 async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
   // Adopted into the project checkout (file references are resolved against
   // it); copied into the worktree once it exists, before the agent starts.
   const ctx = {
     ...baseCtx,
+    resolvedBaseBranch: await worktreeBaseBranch(baseCtx),
     params: await withStagedUploads(baseCtx.params, baseCtx.threadId, baseCtx.projectPath),
   };
   const { params, defaults, threadId, projectPath } = ctx;

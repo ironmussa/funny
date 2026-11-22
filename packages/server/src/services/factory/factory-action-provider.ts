@@ -89,6 +89,9 @@ function keptWorktreeLine(kept: KeptWorktree): string {
   return `The run's checkout was kept because it holds ${what}: \`${kept.worktreePath}\`.`;
 }
 
+/** Why a run that ended without a commit or a pull request waits for a person. */
+export const NO_CHANGE_REASON = 'no change';
+
 /** The fixed first line of the issue comment a "no change" run posts. */
 export const NO_CHANGE_LINE = 'The issue factory made no change for this issue. The agent said:';
 
@@ -626,7 +629,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         error: commented.error.message,
       });
     }
-    await deps.record({ state: 'waiting_human', failureReason: 'no change' });
+    await deps.record({ state: 'waiting_human', failureReason: NO_CHANGE_REASON });
     await count(metrics, { event: 'no_change' });
     return {
       ok: false,

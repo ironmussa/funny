@@ -1806,6 +1806,22 @@ describe('factory operator controls', () => {
     expect(retried._unsafeUnwrap().threadIds).toEqual(['t-ok']);
   });
 
+  // Run #229: the agent ended without committing, the run parked as "no
+  // change", and each Retry replayed the finished thread to the same result.
+  test('retrying a "no change" run starts a new agent instead of replaying its thread', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-none', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const run = await seedRun(factoryId, 'waiting_human', ['t-none']);
+    await createFactoryRunsRepository().update(run.id, { failureReason: 'no change' });
+    const { launcher } = await watch({ issues: [], waitThread: finishedThreads('completed') });
+
+    const retried = await createFactoryRunControl().retry(factoryId, run.id);
+
+    expect(retried._unsafeUnwrap().threadIds).toEqual([]);
+    await eventually(factoryId, (r) => r.state === 'merged');
+    expect(launcher.calls).toHaveLength(1);
+  });
+
   test('only a failed or waiting run can be retried', async () => {
     const factoryId = await enableFactory();
     const run = await seedRun(factoryId, 'merged', []);

@@ -228,7 +228,7 @@ export function ShareThreadButton({
               </button>
             ))}
           </div>
-          <p className="text-muted-foreground mt-1.5 text-[11px]">{LEVEL_HINT[level]}</p>
+          <p className="text-muted-foreground text-compact mt-1.5">{LEVEL_HINT[level]}</p>
           <SteerRepositoryWarning level={level} />
           <SteerSecretsWarning level={level} />
         </div>

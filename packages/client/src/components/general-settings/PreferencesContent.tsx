@@ -386,7 +386,7 @@ function SmtpStatusBadge({ source }: { source: SmtpSource }) {
   return (
     <span
       className={cn(
-        'rounded-full px-2 py-0.5 text-[10px] font-medium',
+        'rounded-full px-2 py-0.5 text-2xs font-medium',
         fromDatabase ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
       )}
       data-testid="preferences-smtp-status"

@@ -427,6 +427,11 @@ All UI text — including code in diffs, terminals, Monaco editors, and chat mes
 - **Prose / chat messages**: use `PROSE_FONT_SIZE_PX[fontSize]` and `PROSE_LINE_HEIGHT_PX[fontSize]` with the `makeProseFont()` / `makeMonoFont()` helpers from `@/hooks/use-pretext` for pretext layout measurements.
 - **Terminals (xterm.js)**: read font size from the store at creation and add a reactive `useEffect` to sync `terminal.options.fontSize` + `fitAddon.fit()` when the setting changes.
 
+- **Small UI text**: use the rem steps `text-4xs` (8px) / `text-3xs` (9px) / `text-2xs` (10px) / `text-compact` (11px) from `globals.css`, never `text-[Npx]`.
+- **Monaco**: the dark theme is defined once in `lib/monaco-theme.ts`; every `<Editor>` passes `beforeMount={defineFunnyDarkTheme}` and `theme={monacoThemeFor(resolvedTheme)}`. Monaco themes are global, so a second `defineTheme('funny-dark', …)` recolors every editor.
+
+`fitness:client-styling` (in `bun run lint`) fails on `text-[Npx]`, pixel `fontSize`, Tailwind arbitrary colors (`text-[#…]`), inline color literals and `defineTheme(` outside `lib/monaco-theme.ts`. A deliberate exception carries `ui-rules-allow: <reason>` on the line or the line above.
+
 Similarly, all components **MUST** respect the active theme (light/dark). Use CSS variables from the theme (e.g., `hsl(var(--foreground))`, `bg-card`, `text-muted-foreground`) — never hardcode color values like `#1b1b1b` or `rgb(255,255,255)`.
 
 ## OpenWiki

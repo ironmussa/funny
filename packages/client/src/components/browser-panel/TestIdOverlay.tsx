@@ -93,7 +93,7 @@ export function TestIdOverlay() {
             style={{ left, top, width, height }}
           >
             <span
-              className="bg-primary text-primary-foreground absolute -top-4 right-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium"
+              className="bg-primary text-primary-foreground text-2xs absolute -top-4 right-0 rounded-sm px-1.5 py-0.5 font-medium"
               style={{ whiteSpace: 'nowrap' }}
             >
               {label.testid}

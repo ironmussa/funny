@@ -35,7 +35,9 @@
   --font-mono-explorer: var(--font-mono-explorer);
 
   /* Small text steps in rem, so they follow the font size setting (Settings > Appearance
-     sets the root font size). Use these instead of text-[9px] / text-[10px] / text-[11px]. */
+     sets the root font size). Use these instead of pixel sizes (8px / 9px / 10px / 11px):
+     scripts/fitness/check-client-styling.ts fails on text-[Npx]. */
+  --text-4xs: 0.5rem;
   --text-3xs: 0.5625rem;
   --text-2xs: 0.625rem;
   --text-compact: 0.6875rem;
@@ -313,7 +315,7 @@ mark.md-search-match[data-active='true'] {
 }
 
 @utility thread-timestamp {
-  @apply shrink-0 text-[10px] leading-4 whitespace-nowrap tabular-nums;
+  @apply text-2xs shrink-0 leading-4 whitespace-nowrap tabular-nums;
 }
 
 @utility icon-2xs {
@@ -332,7 +334,7 @@ mark.md-search-match[data-active='true'] {
 }
 
 @utility icon-xs {
-  /* 10px — pairs with text-[10px] */
+  /* 10px — pairs with text-2xs */
   width: 0.75rem;
   height: 0.75rem;
 }
@@ -487,6 +489,10 @@ mark.md-search-match[data-active='true'] {
     /* Git diff colors — always green/red regardless of theme */
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Search / annotation match highlight — the same in every theme */
+    --search-highlight: #ffe500;
+    --search-highlight-current: #ff8a00;
 
     /* Terminal ANSI colors (light default) */
     --terminal-black: #000000;
@@ -1710,8 +1716,8 @@ mark.md-search-match[data-active='true'] {
 
   /* Tab strip sizing — compact, matches the previous Radix tab look. */
   --dv-tabs-and-actions-container-height: 30px;
-  --dv-tabs-and-actions-container-font-size: 11px;
-  --dv-tab-font-size: 11px;
+  --dv-tabs-and-actions-container-font-size: 0.6875rem;
+  --dv-tab-font-size: 0.6875rem;
 
   /* Scrollbar inside the tab overflow list */
   --dv-tabs-container-scrollbar-color: hsl(var(--muted-foreground));

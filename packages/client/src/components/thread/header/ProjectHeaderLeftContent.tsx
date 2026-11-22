@@ -205,7 +205,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
               <BreadcrumbSeparator />
               <BreadcrumbItem className="shrink-0">
                 <span
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                  className="text-2xs flex items-center gap-1 rounded px-1.5 py-0.5 font-medium"
                   style={{
                     backgroundColor: activeTemplate.color
                       ? `${activeTemplate.color}22`

@@ -75,7 +75,7 @@ export function CommandTabContent({
         <div className="flex shrink-0 items-center gap-3 px-2 py-0.5">
           {metrics && (
             <div
-              className="text-muted-foreground flex items-center gap-3 text-[10px]"
+              className="text-muted-foreground text-2xs flex items-center gap-3"
               data-testid="command-metrics"
             >
               <span>
@@ -109,7 +109,7 @@ export function CommandTabContent({
       )}
       <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-1">
         <pre
-          className="font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap text-[#fafafa]"
+          className="text-foreground font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap"
           dangerouslySetInnerHTML={{ __html: htmlOutput }}
         />
       </div>

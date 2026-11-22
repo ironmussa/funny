@@ -1213,7 +1213,7 @@ function PanelHost({
 /** Tab renderer for right-pane tabs — title only, no close button. */
 function RightTabHeader(props: IDockviewPanelHeaderProps) {
   return (
-    <div className="dv-funny-right-tab flex h-full items-center px-2.5 text-[11px] font-medium">
+    <div className="dv-funny-right-tab text-compact flex h-full items-center px-2.5 font-medium">
       {props.api.title}
     </div>
   );

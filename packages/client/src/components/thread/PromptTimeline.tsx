@@ -157,7 +157,7 @@ export function PromptTimeline({
             <div key={group.date}>
               {/* Date separator */}
               {group.date && (
-                <div className="text-muted-foreground/60 mt-1 mb-2 text-[10px] font-medium tracking-wider uppercase">
+                <div className="text-muted-foreground/60 text-2xs mt-1 mb-2 font-medium tracking-wider uppercase">
                   {group.date}
                 </div>
               )}
@@ -260,7 +260,7 @@ function TimelineMilestone({
           >
             <div
               className={cn(
-                'text-[11px] leading-snug line-clamp-2 transition-colors',
+                'text-compact leading-snug line-clamp-2 transition-colors',
                 milestone.inProgress
                   ? 'text-status-info font-medium'
                   : milestone.type !== 'prompt'
@@ -277,7 +277,7 @@ function TimelineMilestone({
         </TooltipTrigger>
         <TooltipContent side="left" align="start" className="max-w-[300px] p-3">
           <div className="space-y-1.5">
-            <div className="text-muted-foreground font-mono text-[10px]">
+            <div className="text-muted-foreground text-2xs font-mono">
               {formatRelativeTime(milestone.timestamp, now)}
             </div>
             <ScrollArea className="max-h-[200px]">

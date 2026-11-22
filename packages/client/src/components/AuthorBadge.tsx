@@ -10,8 +10,8 @@ const emailUrlCache = new Map<string, string>();
 type Size = 'xs' | 'sm';
 
 const SIZE_CLASSES: Record<Size, { avatar: string; text: string }> = {
-  xs: { avatar: 'h-3.5 w-3.5', text: 'text-[8px]' },
-  sm: { avatar: 'h-4 w-4', text: 'text-[9px]' },
+  xs: { avatar: 'h-3.5 w-3.5', text: 'text-4xs' },
+  sm: { avatar: 'h-4 w-4', text: 'text-3xs' },
 };
 
 export interface AuthorBadgeProps {
@@ -32,7 +32,7 @@ export function AuthorBadge({
   children,
 }: AuthorBadgeProps) {
   const avatarSize = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
-  const fallbackText = size === 'xs' ? 'text-[8px]' : 'text-[9px]';
+  const fallbackText = size === 'xs' ? 'text-4xs' : 'text-3xs';
   const [emailUrl, setEmailUrl] = useState<string | null>(() =>
     email ? (emailUrlCache.get(email) ?? null) : null,
   );

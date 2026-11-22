@@ -13,6 +13,7 @@ import { resolveCorsOrigins } from '../../lib/cors-origins.js';
 import { ensureDataDir } from '../../lib/data-dir.js';
 import { attachFileLogTransport, log } from '../../lib/logger.js';
 import { mountBunAssets } from './assets.js';
+import { serveExclusive } from './listen.js';
 
 export interface BunHostOptions {
   /** Built client bundle (`packages/client/dist`), served when it exists. */
@@ -147,15 +148,6 @@ export async function startBunServer(opts: BunHostOptions) {
   // longer hosts the brain in-process — see README "Running the scheduler
   // standalone" for the migration path.
 
-  // Automations: the server owns the cron and dispatches each run to the
-  // automation owner's runner (services/automation-scheduler.ts).
-  const automationScheduler = await import('../../services/automation-scheduler.js');
-  if (runnerTransport) {
-    const ports = { requests: runnerTransport.requests, presence: runnerTransport.presence };
-    await automationScheduler.startAutomationScheduler({ ports });
-    await startIssueFactory(ports, browserEvents);
-  }
-
   // Runners outside the private network reach the gRPC listener through a
   // WebSocket carrier on this public origin (see services/grpc/websocket-carrier.ts).
   const {
@@ -183,14 +175,15 @@ export async function startBunServer(opts: BunHostOptions) {
   };
 
   // `any` WebSocket data: one server hosts Socket.IO sockets and runner carrier sockets.
-  const server = Bun.serve<any>({
+  // Exclusive bind (./listen.ts): a second process on this port fails here,
+  // before it starts the automation cron or the factory watcher below.
+  const server = serveExclusive<any>({
     // Spread Bun engine handler FIRST — provides idle/body limits; the
     // `websocket` lifecycle is shared with the runner carrier.
     ...socketEngineHandler,
     websocket: withRunnerCarrier(socketEngineHandler.websocket, runnerCarrier),
     port: PORT,
     hostname: HOST,
-    reusePort: true,
     async fetch(req, server) {
       // Handle Socket.IO requests BEFORE Hono — WebSocket upgrades need
       // direct access to Bun's server.upgrade(), which returns undefined
@@ -215,6 +208,16 @@ export async function startBunServer(opts: BunHostOptions) {
   log.info(`funny-server running on http://${HOST}:${PORT}`, {
     namespace: 'server',
   });
+
+  // Automations: the server owns the cron and dispatches each run to the
+  // automation owner's runner (services/automation-scheduler.ts). Started only
+  // after the exclusive bind above, so this process is the port's only owner.
+  const automationScheduler = await import('../../services/automation-scheduler.js');
+  if (runnerTransport) {
+    const ports = { requests: runnerTransport.requests, presence: runnerTransport.presence };
+    await automationScheduler.startAutomationScheduler({ ports });
+    await startIssueFactory(ports, browserEvents);
+  }
 
   // Sandboxes that cannot reach this server get dialed into (reverse runner
   // link); their traffic enters through a separate loopback listener so it is

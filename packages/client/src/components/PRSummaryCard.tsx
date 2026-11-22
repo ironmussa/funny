@@ -97,7 +97,7 @@ export function PRSummaryCard({
           rateLimited ? (
             <Tooltip>
               <TooltipTrigger>
-                <span className="text-status-warning shrink-0 text-[11px]">Rate limited</span>
+                <span className="text-status-warning text-compact shrink-0">Rate limited</span>
               </TooltipTrigger>
               <TooltipContent>GitHub API rate limit reached. Polling paused.</TooltipContent>
             </Tooltip>
@@ -129,7 +129,7 @@ function PRChecksSection({ detail }: { detail: PRDetail }) {
     <Collapsible open={checksOpen} onOpenChange={setChecksOpen} className="mt-1.5">
       <div className="flex items-center gap-3">
         <CollapsibleTrigger
-          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
+          className="text-muted-foreground hover:text-foreground text-compact flex items-center gap-1"
           data-testid="pr-summary-checks-toggle"
         >
           {checksOpen ? (
@@ -155,7 +155,7 @@ function PRChecksSection({ detail }: { detail: PRDetail }) {
           ))}
           {hasMoreChecks && !checksOpen && (
             <button
-              className="text-primary text-[11px] hover:underline"
+              className="text-primary text-compact hover:underline"
               onClick={() => setChecksOpen(true)}
               data-testid="pr-summary-show-more-checks"
             >
@@ -170,7 +170,7 @@ function PRChecksSection({ detail }: { detail: PRDetail }) {
 
 function PRCheckRow({ check }: { check: CICheck }) {
   return (
-    <div className="flex items-center gap-1.5 text-[11px]">
+    <div className="text-compact flex items-center gap-1.5">
       <CheckIcon check={check} />
       {check.html_url ? (
         <a

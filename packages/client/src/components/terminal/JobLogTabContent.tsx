@@ -89,7 +89,7 @@ export function JobLogTabContent({
     >
       <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-1">
         <pre
-          className="font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap text-[#fafafa]"
+          className="text-foreground font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap"
           dangerouslySetInnerHTML={{ __html: htmlOutput }}
         />
       </div>

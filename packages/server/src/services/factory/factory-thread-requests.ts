@@ -265,7 +265,8 @@ export async function sendFactoryFollowUp(
  * With `keepUnsaved` (a run that ended without a pull request) the runner
  * removes a worktree only when nothing would be lost with it, and the ones it
  * kept are returned. A runner that cannot answer (offline, or from before that
- * route) leaves the worktree in place: never delete on a guess.
+ * route) leaves the worktree in place, never deleting on a guess, and it is
+ * returned too (with zero counts): unchecked is not clean.
  */
 export async function cleanupFactoryWorktrees(
   ports: RunnerPorts,
@@ -316,6 +317,15 @@ export async function cleanupFactoryWorktrees(
         reason,
         error: removed.error.message,
       });
+      // Not checked is not clean: the caller must not take the run for "nothing left behind".
+      if (options.keepUnsaved) {
+        kept.push({
+          threadId: thread.id,
+          worktreePath: thread.worktreePath,
+          dirtyFileCount: 0,
+          unpushedCommitCount: 0,
+        });
+      }
       continue;
     }
     if (options.keepUnsaved) {

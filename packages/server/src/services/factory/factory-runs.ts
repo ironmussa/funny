@@ -79,10 +79,16 @@ export type FactoryRunState =
   | 'fixing'
   | 'waiting_human'
   | 'merged'
+  | 'no_change'
   | 'failed'
   | 'stopped';
 
-const TERMINAL_STATES = ['merged', 'failed', 'stopped'] as const satisfies FactoryRunState[];
+const TERMINAL_STATES = [
+  'merged',
+  'no_change',
+  'failed',
+  'stopped',
+] as const satisfies FactoryRunState[];
 const TERMINAL: ReadonlySet<FactoryRunState> = new Set(TERMINAL_STATES);
 
 /**
@@ -124,8 +130,14 @@ export const IN_FLIGHT_STATES = [
  */
 export const REOPENED_STEP = 'retrying';
 
-/** States a run can be retried or taken over from. */
+/** States in which a run may still close by a pull request found on its branch. */
 const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies FactoryRunState[];
+
+/**
+ * States a run can be retried or taken over from: the ones above, and a run
+ * that ended with no change (a person may disagree with the agent).
+ */
+const RETRYABLE_STATES = [...REOPENABLE_STATES, 'no_change'] as const satisfies FactoryRunState[];
 
 /**
  * How long a failed run keeps showing on its thread in the thread lists. The
@@ -311,12 +323,13 @@ function changesFor(input: UpdateRunInput): Partial<Row> | null {
 function updateFromParked(
   runId: string,
   changes: Partial<Row>,
+  from: readonly FactoryRunState[] = REOPENABLE_STATES,
 ): ResultAsync<boolean, FactoryRunsError> {
   return ResultAsync.fromPromise(
     db
       .update(factoryRuns)
       .set(changes)
-      .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...REOPENABLE_STATES])))
+      .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
       .returning({ id: factoryRuns.id }),
     storage,
   ).map((rows) => rows.length > 0);
@@ -586,6 +599,30 @@ export function createFactoryRunsRepository(
       ).map((rows) => (rows[0] ? toView(rows[0]) : null));
     },
 
+    /**
+     * Whether a run of the issue ended with no change: the label does not admit
+     * it again (the agent would only say the same). A person sends or retries it.
+     */
+    endedWithoutChange(
+      factoryId: string,
+      issueNumber: number,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ id: factoryRuns.id })
+          .from(factoryRuns)
+          .where(
+            and(
+              eq(factoryRuns.factoryId, factoryId),
+              eq(factoryRuns.issueNumber, issueNumber),
+              eq(factoryRuns.state, 'no_change'),
+            ),
+          )
+          .limit(1),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
     /** How many times an issue's run has failed — the retry cap. */
     failedCount(factoryId: string, issueNumber: number): ResultAsync<number, FactoryRunsError> {
       return ResultAsync.fromPromise(
@@ -756,7 +793,7 @@ export function createFactoryRunsRepository(
           .from(factoryRuns)
           .where(
             and(
-              inArray(factoryRuns.state, [...REOPENABLE_STATES]),
+              inArray(factoryRuns.state, [...RETRYABLE_STATES]),
               // Narrowed in SQL (thread_ids is a JSON array); the exact match is below.
               like(factoryRuns.threadIds, `%${JSON.stringify(threadId)}%`),
             ),
@@ -776,14 +813,18 @@ export function createFactoryRunsRepository(
      * its own executions for a resume after a restart.
      */
     reopen(runId: string, threadIds: string[]): ResultAsync<boolean, FactoryRunsError> {
-      return updateFromParked(runId, {
-        state: 'queued',
-        currentStep: REOPENED_STEP,
-        completedAt: null,
-        launchStartedAt: null,
-        threadIds: JSON.stringify(threadIds),
-        failureReason: null,
-      }).andThen((reopened) =>
+      return updateFromParked(
+        runId,
+        {
+          state: 'queued',
+          currentStep: REOPENED_STEP,
+          completedAt: null,
+          launchStartedAt: null,
+          threadIds: JSON.stringify(threadIds),
+          failureReason: null,
+        },
+        RETRYABLE_STATES,
+      ).andThen((reopened) =>
         reopened
           ? ResultAsync.fromPromise(
               db.delete(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, runId)),

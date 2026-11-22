@@ -93,6 +93,27 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
         .map((meta) => meta.default_branch);
     },
 
+    /**
+     * Take `remove` off the issue (when given; an issue that does not carry it
+     * is fine) and put `add` on it, as the App. GitHub creates `add` when the
+     * repository has no such label.
+     */
+    relabelIssue(
+      issueNumber: number,
+      labels: { remove?: string; add: string },
+    ): ResultAsync<void, GithubCallError> {
+      const issuePath = `/repos/${repo}/issues/${issueNumber}/labels`;
+      const removed: ResultAsync<void, GithubCallError> = labels.remove
+        ? github
+            .json(repo, 'DELETE', `${issuePath}/${encodeURIComponent(labels.remove)}`)
+            .map(() => undefined)
+            .orElse((error) => (error.status === 404 ? okAsync(undefined) : errAsync(error)))
+        : okAsync(undefined);
+      return removed.andThen(() =>
+        github.json(repo, 'POST', issuePath, { labels: [labels.add] }).map(() => undefined),
+      );
+    },
+
     /** Comment on the issue, as the App. */
     commentOnIssue(issueNumber: number, body: string): ResultAsync<void, GithubCallError> {
       return github

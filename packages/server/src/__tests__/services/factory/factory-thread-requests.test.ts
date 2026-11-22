@@ -257,7 +257,10 @@ describe('factory thread requests', () => {
         keepUnsaved: true,
       });
 
-      expect(kept).toEqual([]);
+      // Reported as kept, unchecked: the run must not end as "nothing left behind".
+      expect(kept).toEqual([
+        { threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 0, unpushedCommitCount: 0 },
+      ]);
       expect((await row('t1')).worktreePath).toBe('/srv/wt/t1');
     });
 

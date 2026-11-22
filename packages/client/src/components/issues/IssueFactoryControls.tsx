@@ -152,7 +152,8 @@ function statusText(t: TFunction, run: FactoryRun, position: number | undefined)
 
 /** The pastel of a run's state chip, next to the issue's GitHub labels. */
 function factoryRunTone(state: FactoryRun['state']): LabelBadgeTone {
-  if (state === 'merged') return 'success';
+  // Ended well either way: merged, or the agent found nothing to change.
+  if (state === 'merged' || state === 'no_change') return 'success';
   if (state === 'failed') return 'danger';
   if (state === 'waiting_human') return 'warning';
   if (state === 'stopped') return 'neutral';

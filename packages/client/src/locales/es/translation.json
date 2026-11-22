@@ -1721,6 +1721,7 @@
       "fixing": "Arreglando CI",
       "waitingHuman": "Te espera",
       "merged": "Merged",
+      "noChange": "Sin cambios necesarios",
       "failed": "Falló",
       "stopped": "Detenida"
     },
@@ -1788,7 +1789,8 @@
     },
     "noChange": {
       "title": "El agente no hizo ningún cambio",
-      "body": "No abrió un pull request ni hizo commits. Su explicación está publicada en el issue #{{issue}}: cierra el issue o reintenta el run."
+      "body": "No abrió ningún pull request ni hizo commits. Su explicación está en el issue #{{issue}}, que quedó marcado para revisión: cierra el issue o reintenta el run.",
+      "unsavedBody": "No abrió ningún pull request ni hizo commits, pero dejó trabajo sin guardar en su checkout, que se conservó (la ruta está en el issue #{{issue}}). Escribe en este hilo para que haga commit y abra el pull request, o reintenta el run."
     }
   },
   "projectSecrets": {

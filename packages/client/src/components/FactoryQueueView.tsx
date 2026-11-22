@@ -125,6 +125,7 @@ const STATE_ORDER: readonly FactoryRun['state'][] = [
   'fixing',
   'failed',
   'merged',
+  'no_change',
   'stopped',
 ];
 

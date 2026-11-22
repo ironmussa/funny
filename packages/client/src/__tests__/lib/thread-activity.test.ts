@@ -50,7 +50,8 @@ describe('threadActivity', () => {
   });
 
   test('an ended or queued run adds nothing', () => {
-    for (const state of ['merged', 'stopped', 'requested'] as const) {
+    // `no_change` too: the agent found nothing to change, which is not an error.
+    for (const state of ['merged', 'no_change', 'stopped', 'requested'] as const) {
       expect(threadActivity(thread('completed'), run(state))).toBe('none');
     }
   });

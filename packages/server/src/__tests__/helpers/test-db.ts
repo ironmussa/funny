@@ -380,7 +380,7 @@ export function createTestDb() {
   testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
-    WHERE state NOT IN ('merged', 'failed', 'stopped')
+    WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')
   `);
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS workflow_node_executions (

@@ -116,4 +116,50 @@ describe('RunnerTerminalAdapter', () => {
       failure: expect.objectContaining({ message: TERMINAL_SESSION_UNAVAILABLE, retryable: true }),
     });
   });
+
+  test('frees replay history and owner when the user closes the terminal', () => {
+    const send = vi.fn((_name: 'terminal', _message: Record<string, any>) => true);
+    const store = new GrpcTerminalReplayStore();
+    // Like `killPty`, the handler flushes pending output while killing.
+    const handle = vi.fn((command: { type: string }, respond: (event: any) => void) => {
+      if (command.type === 'pty:kill') {
+        respond({ type: 'pty:data', threadId: '', data: { ptyId: 'pty-1', data: 'bye' } });
+      }
+    });
+    const adapter = new RunnerTerminalAdapter({ send }, store, handle);
+    adapter.receive({ terminalId: 'pty-1', open: { userId: 'user-1' } });
+    adapter.publish({ type: 'pty:data', threadId: '', data: { ptyId: 'pty-1', data: 'hello' } });
+    expect(store.replay('pty-1', 0n)).toMatchObject({ latestSequence: 1n });
+
+    adapter.receive({ terminalId: 'pty-1', close: { reason: 'pty:close' } });
+    expect(handle).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'pty:kill' }),
+      expect.any(Function),
+    );
+    expect(store.replay('pty-1', 0n)).toEqual({ kind: 'replay', outputs: [], latestSequence: 0n });
+
+    // The owner is gone too: later commands report the session unavailable.
+    send.mockClear();
+    adapter.receive({ terminalId: 'pty-1', resize: { columns: 80, rows: 24 } });
+    expect(send).toHaveBeenCalledWith('terminal', {
+      terminalId: 'pty-1',
+      failure: expect.objectContaining({ message: TERMINAL_SESSION_UNAVAILABLE }),
+    });
+  });
+
+  test('frees replay history and owner when the terminal fails', () => {
+    const send = vi.fn((_name: 'terminal', _message: Record<string, any>) => true);
+    const handle = vi.fn();
+    const store = new GrpcTerminalReplayStore();
+    const adapter = new RunnerTerminalAdapter({ send }, store, handle);
+    adapter.receive({ terminalId: 'pty-1', open: { userId: 'user-1' } });
+    adapter.publish({ type: 'pty:data', threadId: '', data: { ptyId: 'pty-1', data: 'hello' } });
+
+    adapter.publish({ type: 'pty:error', threadId: '', data: { ptyId: 'pty-1', error: 'boom' } });
+    expect(store.replay('pty-1', 0n)).toEqual({ kind: 'replay', outputs: [], latestSequence: 0n });
+
+    handle.mockClear();
+    adapter.receive({ terminalId: 'pty-1', resize: { columns: 80, rows: 24 } });
+    expect(handle).not.toHaveBeenCalled();
+  });
 });

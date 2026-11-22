@@ -27,9 +27,15 @@ interface ProjectSymbolIndex {
 
 // ── Singleton state ──────────────────────────────────────────
 
+/**
+ * Indexes keyed by project or worktree path, in least-recently-used order
+ * (a Map keeps insertion order; `touch` re-inserts on use). Bounded so a
+ * long-lived runner does not keep every path it ever indexed.
+ */
 const projectIndexes = new Map<string, ProjectSymbolIndex>();
 const SEARCH_LIMIT = 100;
 const CONCURRENCY = 8;
+export const MAX_PROJECT_INDEXES = 16;
 
 // ── Public API ───────────────────────────────────────────────
 
@@ -38,7 +44,7 @@ const CONCURRENCY = 8;
  * Skips files already indexed with matching mtime.
  */
 export async function indexProject(projectPath: string): Promise<void> {
-  let index = projectIndexes.get(projectPath);
+  let index = touch(projectPath);
   if (index?.indexing) return; // Already indexing
 
   if (!index) {
@@ -47,6 +53,7 @@ export async function indexProject(projectPath: string): Promise<void> {
   }
 
   index.indexing = true;
+  evictLeastRecentlyUsed();
 
   try {
     const allFiles = await resolveGitFiles(projectPath);
@@ -104,7 +111,7 @@ export function searchSymbols(
   query?: string,
   fileScope?: string,
 ): { symbols: SymbolSearchResult[]; truncated: boolean; indexed: boolean } {
-  const index = projectIndexes.get(projectPath);
+  const index = touch(projectPath);
 
   if (!index || index.files.size === 0) {
     return { symbols: [], truncated: false, indexed: !!index && !index.indexing };
@@ -173,7 +180,41 @@ export function isIndexing(projectPath: string): boolean {
   return projectIndexes.get(projectPath)?.indexing ?? false;
 }
 
+/**
+ * Drop the symbol index of a path that is going away (a removed worktree or
+ * scratch directory). An indexing run still in flight finishes into the
+ * detached index, which is then garbage.
+ */
+export function forgetProjectIndex(projectPath: string): boolean {
+  return projectIndexes.delete(projectPath);
+}
+
+/** Number of retained indexes (for tests and diagnostics). */
+export function projectIndexCount(): number {
+  return projectIndexes.size;
+}
+
 // ── Helpers ──────────────────────────────────────────────────
+
+/** Reads an index and marks it most recently used. */
+function touch(projectPath: string): ProjectSymbolIndex | undefined {
+  const index = projectIndexes.get(projectPath);
+  if (index) {
+    projectIndexes.delete(projectPath);
+    projectIndexes.set(projectPath, index);
+  }
+  return index;
+}
+
+/** Evicts the least recently used idle indexes beyond the cap. */
+function evictLeastRecentlyUsed(): void {
+  for (const [path, index] of projectIndexes) {
+    if (projectIndexes.size <= MAX_PROJECT_INDEXES) return;
+    if (index.indexing) continue;
+    projectIndexes.delete(path);
+    log.info('Evicted symbol index', { namespace: 'symbol-index', projectPath: path });
+  }
+}
 
 function fuzzyMatch(text: string, query: string): boolean {
   let qi = 0;

@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { parseWorkflowYaml } from '../parse.js';
+import { workflowWarnings } from '../warnings.js';
 
 function flow(reviewYaml: string, mergeYaml = 'merge: { method: squash }') {
   return `
@@ -81,5 +82,40 @@ describe('review schema', () => {
     );
     expect(merge(flow('review: {}'))?.require_review).toBeUndefined();
     parseErr(flow('review: {}', 'merge: { require_reviews: false }'));
+  });
+
+  describe('warnings', () => {
+    const noReview = (mergeYaml: string) =>
+      parse(
+        `
+name: test-flow
+nodes:
+  - id: implement
+    spawn_agent: { prompt: do it }
+  - id: land
+    depends_on: [implement]
+    ${mergeYaml}
+`.trim(),
+      );
+    const aboutReview = (workflow: ReturnType<typeof parse>) =>
+      workflowWarnings(workflow).filter((warning) => warning.message.includes('review'));
+
+    test('a merge that needs a review in a flow without a review step is warned about', () => {
+      const warnings = aboutReview(
+        noReview('merge: { method: squash, require_regression_proof: false }'),
+      );
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.path).toBe('nodes.1.merge');
+      expect(warnings[0]?.message).toContain('"land"');
+    });
+
+    test('require_review: false, or a review step, silences it', () => {
+      expect(
+        aboutReview(noReview('merge: { require_review: false, require_regression_proof: false }')),
+      ).toEqual([]);
+      expect(
+        aboutReview(parse(flow('review: {}', 'merge: { require_regression_proof: false }'))),
+      ).toEqual([]);
+    });
   });
 });

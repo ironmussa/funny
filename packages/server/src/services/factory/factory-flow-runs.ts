@@ -490,6 +490,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         }),
       issueLabels: job.issue.labels ?? [],
       sensitivePaths: job.factory.sensitivePaths,
+      autoMerge: job.factory.autoMerge,
       reviews: job.run.reviews,
       admittedAt: job.run.admittedAt ?? job.run.startedAt,
       findReviewThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),

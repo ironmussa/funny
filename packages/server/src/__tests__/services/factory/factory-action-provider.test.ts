@@ -34,10 +34,20 @@ const scope = {
   branch: 'factory/issue-7-r1',
 };
 
+/** A passing verdict of the flow's review step for `sha` (the merge gate needs one). */
+const reviewed = (sha: string) => ({
+  sha,
+  verdict: 'pass' as const,
+  findings: [],
+  reviewedAt: '2026-11-22T00:00:00.000Z',
+});
+
 function providerWith(over: Partial<Parameters<typeof createFactoryActionProvider>[0]> = {}) {
   const waited: string[] = [];
   const deps = {
     scope,
+    // The fakes' head commit passed review, so these tests reach what they test.
+    reviews: [reviewed('sha-head')],
     threadIds: new Array<string>(),
     prUrl: null,
     launchStartedAt: null,
@@ -377,6 +387,7 @@ describe('factory action provider merge gate', () => {
     const { provider } = providerWith({
       threadIds: ['t1'],
       prUrl: 'https://github.com/o/r/pull/9',
+      reviews: [reviewed(opts.head ?? 'sha-head')],
       proof: {
         startProof: async () => ok({ proofId: `p${++proofs}`, state: 'running' }),
         pollProof: async () =>
@@ -450,10 +461,17 @@ describe('factory action provider merge gate', () => {
     expect(merges).toHaveLength(0);
   });
 
-  test('the opt-out merges as before, unpinned', async () => {
+  test('both gates opted out: merges as before, unpinned', async () => {
+    const { provider, merges } = gated({});
+    const merged = await provider.merge({ requireRegressionProof: false, requireReview: false });
+    expect(merged.ok).toBe(true);
+    expect(merges[0]?.sha).toBeUndefined();
+  });
+
+  test('the proof opted out, the review kept: the reviewed commit is the one merged', async () => {
     const { provider, merges } = gated({});
     expect((await provider.merge({ requireRegressionProof: false })).ok).toBe(true);
-    expect(merges[0]?.sha).toBeUndefined();
+    expect(merges[0]?.sha).toBe('sha-head');
   });
 
   test('a head that is not the proved commit is not merged', async () => {

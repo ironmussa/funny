@@ -39,6 +39,8 @@
 
 import {
   EMPTY_FACTORY_RUN_METRICS,
+  reviewAllowsMerge,
+  type FactoryAutoMerge,
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
@@ -101,6 +103,19 @@ function keptWorktreeLine(kept: KeptWorktree): string {
   return `The run's checkout was kept because it holds ${what}: \`${kept.worktreePath}\`.`;
 }
 
+/**
+ * Why `merge` left a run for a person instead of merging (change
+ * factory-agent-roles, D8). The run row shows the reason.
+ */
+export const MERGE_HOLD_REASONS = {
+  /** The head commit has no verdict of the flow's `review` step. */
+  noReview: 'no review',
+  /** Its verdict does not allow a merge. */
+  reviewFailed: 'review failed',
+  /** The change is high risk and the factory merges only low-risk changes. */
+  highRisk: 'high risk',
+} as const;
+
 /** Why a run that ended without a commit or a pull request waits for a person. */
 export const NO_CHANGE_REASON = 'no change';
 
@@ -142,6 +157,8 @@ export interface FactoryActionProviderDeps {
   issueLabels?: string[];
   /** The factory's own sensitive path globs (they make a change high risk). */
   sensitivePaths?: readonly string[];
+  /** Which reviewed changes the factory merges by itself (default: only low-risk ones). */
+  autoMerge?: FactoryAutoMerge;
   /** The review verdicts the run already has (a resumed run). */
   reviews?: readonly FactoryReviewVerdict[];
   /** When the run was admitted: review threads from before are not this run's. */
@@ -792,27 +809,76 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return true;
   }
 
+  /** Leave the run for a person instead of merging, with why. Not ok, so the flow stops here. */
+  async function holdMerge(reason: string, error: string): Promise<ActionResult> {
+    await deps.record({ state: 'waiting_human', failureReason: reason });
+    await count(metrics, { event: `merge_held_${reason.replaceAll(' ', '_')}` });
+    return { ok: false, error, metadata: { outcome: 'held', reason } };
+  }
+
   /**
-   * The merge gate: merge only a pull request head with a passing proof of
-   * that exact commit, pinned to it. Runs the flow's proof when none is held.
+   * What `merge` checks itself on entry, whatever path led to it (a repository
+   * flow draws its own): the head commit has a verdict of the flow's own
+   * `review` step that allows a merge (unless `require_review: false`), and
+   * its risk class is one the factory merges by itself. A check, status or
+   * approval an external reviewer left on the pull request is not a verdict.
+   * Null when the merge may go on.
+   */
+  async function mergeHeld(opts: MergeOpts, sha: string): Promise<ActionResult | null> {
+    if (opts.requireReview !== false) {
+      const verdict = reviewer.verdicts().find((review) => review.sha === sha);
+      if (!verdict) {
+        return holdMerge(
+          MERGE_HOLD_REASONS.noReview,
+          `Not merged: commit ${sha} has no review. A flow's merge needs a passing review step for the commit it merges, or \`require_review: false\`.`,
+        );
+      }
+      if (!reviewAllowsMerge(verdict)) {
+        return holdMerge(
+          MERGE_HOLD_REASONS.reviewFailed,
+          `Not merged: the review of commit ${sha} did not pass.`,
+        );
+      }
+    }
+    const change = await classifyHead();
+    if (change?.sha === sha && change.risk.level === 'high' && deps.autoMerge !== 'all') {
+      return holdMerge(
+        MERGE_HOLD_REASONS.highRisk,
+        `Not merged: the change is high risk (${change.risk.reasons.join('; ')}). This factory merges only low-risk changes by itself.`,
+      );
+    }
+    return null;
+  }
+
+  /**
+   * The merge gate: merge only a pull request head that passed the flow's
+   * review and has a passing proof of that exact commit, pinned to it. Runs
+   * the flow's proof when none is held.
    */
   async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
-    if (opts.requireRegressionProof === false) return ci.merge(opts);
-    // A proof without rules proves nothing: no merge, whatever it answered.
-    const config = opts.regressionProof;
-    if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
+    await enterStage('merge');
     const pr = pullRequest();
     if (!pr) return ci.merge(opts);
     const head = await deps.github.pullRequests.pullHead(pr);
     if (head.isErr()) {
       return { ok: false, error: head.error.message, metadata: { kind: head.error.kind } };
     }
-    const proof = await proofOfHead(config, head.value.sha);
+    const sha = head.value.sha;
+    const held = await mergeHeld(opts, sha);
+    if (held) return held;
+    if (opts.requireRegressionProof === false) {
+      // A reviewed commit is merged as that commit; without the review gate, as before.
+      return opts.requireReview === false ? ci.merge(opts) : ci.merge({ ...opts, sha });
+    }
+    // A proof without rules proves nothing: no merge, whatever it answered.
+    const config = opts.regressionProof;
+    if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
+    const proof = await proofOfHead(config, sha);
     if ('refused' in proof) return proof.refused;
     // Auto-merge only on the proved commit whose check GitHub can hold.
     return ci.merge({
       ...opts,
-      sha: head.value.sha,
+      sha,
       autoMergeWhenHeld: await checkOnGithub(proof.held),
     });
   }

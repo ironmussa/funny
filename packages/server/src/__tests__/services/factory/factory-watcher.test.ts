@@ -995,7 +995,7 @@ describe('factory flow', () => {
       '  - id: merge',
       '    depends_on: [ci]',
       '    concurrency: { group: "merge-{{inputs.repo}}", limit: 1 }',
-      '    merge: { method: squash, require_regression_proof: false }',
+      '    merge: { method: squash, require_regression_proof: false, require_review: false }',
     ].join('\n');
     const twoIssues = [
       { number: 1, title: 'a', url: 'u/1' },

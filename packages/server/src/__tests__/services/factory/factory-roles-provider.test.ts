@@ -10,6 +10,7 @@ import type { FactoryRisk } from '@funny/shared/contracts/factory';
 import { err, errAsync, ok, okAsync } from 'neverthrow';
 
 import { createFactoryActionProvider } from '../../../services/factory/factory-action-provider.js';
+import { MERGE_HOLD_REASONS } from '../../../services/factory/factory-action-provider.js';
 import {
   NO_VERDICT_REASON,
   REVIEWER_DISALLOWED_TOOLS,
@@ -405,5 +406,123 @@ describe('the review step', () => {
     expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
     expect(bodies).toHaveLength(1);
     expect(stored()).toMatchObject([{ threadId: 'rev-1' }]);
+  });
+});
+
+describe('what merge checks on entry', () => {
+  const at = '2026-11-22T02:00:00.000Z';
+  const pass = (sha: string) => ({ sha, verdict: 'pass' as const, findings: [], reviewedAt: at });
+  const fail = (sha: string) => ({
+    sha,
+    verdict: 'fail' as const,
+    findings: [{ severity: 'high' as const, title: 'Wrong' }],
+    reviewedAt: at,
+  });
+
+  /** A provider at its merge step: green checks, head `SHA_A`, the given verdicts and files. */
+  function merging(over: Partial<ProviderDeps> & { files?: PullRequestFile[] } = {}) {
+    const merges: Array<{ sha?: string } | undefined> = [];
+    const recorded: UpdateRunInput[] = [];
+    const { files, ...deps } = over;
+    const { provider } = providerWith(
+      {
+        pullHead: () => okAsync({ sha: SHA_A, baseRef: 'main', autoMerge: false }),
+        changedFiles: () => okAsync({ files: files ?? [], truncated: false }),
+        merge: (_pr, options) => {
+          merges.push(options);
+          return okAsync({
+            kind: 'merged' as const,
+            method: 'squash' as const,
+            branchDeleted: false,
+          });
+        },
+      },
+      {
+        record: async (input) => {
+          recorded.push(input);
+        },
+        ...deps,
+      },
+    );
+    // The proof gate has its own tests; these are about the review and the risk.
+    const merge = (opts: { requireReview?: boolean } = {}) =>
+      provider.merge({ requireRegressionProof: false, ...opts });
+    return { merge, merges, recorded };
+  }
+
+  test('a reviewed, low-risk commit is merged as that commit', async () => {
+    const { merge, merges } = merging({ reviews: [pass(SHA_A)] });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(merges).toMatchObject([{ sha: SHA_A }]);
+  });
+
+  // Green checks and whatever an external review bot left on the pull request
+  // are checks like any other: only the flow's own review step is a review.
+  test('green checks without a verdict of the review step: not merged, "no review"', async () => {
+    const { merge, merges, recorded } = merging();
+    const result = await merge();
+    expect(result).toMatchObject({
+      ok: false,
+      metadata: { outcome: 'held', reason: MERGE_HOLD_REASONS.noReview },
+    });
+    expect(merges).toEqual([]);
+    expect(recorded).toContainEqual({
+      state: 'waiting_human',
+      failureReason: MERGE_HOLD_REASONS.noReview,
+    });
+  });
+
+  test('a pass of an older commit does not allow merging the new head', async () => {
+    const { merge, merges } = merging({ reviews: [pass(SHA_B)] });
+    expect(await merge()).toMatchObject({ metadata: { reason: MERGE_HOLD_REASONS.noReview } });
+    expect(merges).toEqual([]);
+  });
+
+  test('a failed review is not merged, whatever path led to merge', async () => {
+    const { merge, merges } = merging({ reviews: [fail(SHA_A)] });
+    expect(await merge()).toMatchObject({
+      ok: false,
+      metadata: { reason: MERGE_HOLD_REASONS.reviewFailed },
+    });
+    expect(merges).toEqual([]);
+  });
+
+  test('require_review: false merges without a verdict', async () => {
+    const { merge, merges } = merging();
+    expect(await merge({ requireReview: false })).toMatchObject({ ok: true });
+    expect(merges).toHaveLength(1);
+  });
+
+  test('a reviewed high-risk change waits for a person when the factory merges only low risk', async () => {
+    const { merge, merges, recorded } = merging({
+      reviews: [pass(SHA_A)],
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+    });
+    const result = await merge();
+    expect(result).toMatchObject({ ok: false, metadata: { reason: MERGE_HOLD_REASONS.highRisk } });
+    expect(result.error).toContain('.github/workflows/ci.yml');
+    expect(merges).toEqual([]);
+    expect(recorded).toContainEqual({
+      state: 'waiting_human',
+      failureReason: MERGE_HOLD_REASONS.highRisk,
+    });
+  });
+
+  test('a factory that merges every reviewed change merges a high-risk one', async () => {
+    const { merge, merges } = merging({
+      reviews: [pass(SHA_A)],
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+      autoMerge: 'all',
+    });
+    expect(await merge()).toMatchObject({ ok: true });
+    expect(merges).toHaveLength(1);
+  });
+
+  test('a high-risk change is held even with the review gate off', async () => {
+    const { merge, merges } = merging({ files: [changed('src/auth/session.ts', ['+x'])] });
+    expect(await merge({ requireReview: false })).toMatchObject({
+      metadata: { reason: MERGE_HOLD_REASONS.highRisk },
+    });
+    expect(merges).toEqual([]);
   });
 });

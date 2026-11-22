@@ -689,8 +689,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   // Deletes are optimistic: the row leaves every list at once and comes back
   // (with a toast) if the server refuses. Local payload/selection state is
   // dropped once the delete is confirmed.
-  deleteThread: async (threadId) => {
-    const result = await deleteThreadRow(threadId, { stopFirst: isAgentActive(get(), threadId) });
+  deleteThread: async (threadId, _projectId, options) => {
+    const result = await deleteThreadRow(threadId, {
+      stopFirst: isAgentActive(get(), threadId),
+      deleteBranch: options?.deleteBranch,
+    });
     if (result.isOk()) forgetThread(threadId);
   },
 

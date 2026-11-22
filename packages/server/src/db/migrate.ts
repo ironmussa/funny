@@ -2184,6 +2184,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'regression_proof', 'TEXT');
     },
   },
+  {
+    // track-funny-actions (design D4): who started an activity and what it
+    // changed. Existing rows read as user-started with no effects.
+    name: '107_activities_origin_effects',
+    async up() {
+      await ctx().addColumn('activities', 'origin', 'TEXT NOT NULL', "'user'");
+      await ctx().addColumn('activities', 'effects', 'TEXT');
+    },
+  },
 ];
 
 /**

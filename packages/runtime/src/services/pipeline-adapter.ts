@@ -471,8 +471,9 @@ export class RuntimeActionProvider implements ActionProvider {
     }
     try {
       // Delegate to thread-service so the canonical thread:stage-changed
-      // event fires with fromStage/toStage and (where applicable) the
-      // archive-cleanup side effects run.
+      // event fires with fromStage/toStage. Stage changes remove nothing: a
+      // thread's workspace is removed only on the server's archive / delete
+      // request (track-funny-actions).
       await updateThreadService({
         threadId: opts.threadId,
         userId,

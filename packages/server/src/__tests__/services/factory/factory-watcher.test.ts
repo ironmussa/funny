@@ -1289,6 +1289,7 @@ describe('factory operator controls', () => {
       runsPushedCommits?: (threadId: string) => Promise<boolean>;
     } = {},
   ) {
+    const recorded: Array<{ spec: any; outcome: any }> = [];
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', opts.issues ?? issue7, opts.github);
@@ -1305,10 +1306,15 @@ describe('factory operator controls', () => {
         cleanups.push({ userId, threadIds });
       },
       notify: async () => undefined,
+      activities: {
+        recordServerActivity: async (spec, outcome) => {
+          recorded.push({ spec, outcome });
+        },
+      },
       proof: opts.proof ?? passingProof,
       runsPushedCommits: opts.runsPushedCommits,
     });
-    return { poll, launcher, github, cleanups };
+    return { poll, launcher, github, cleanups, recorded };
   }
 
   /** A run that parked a minute ago (its `completedAt` is when it parked). */
@@ -1731,12 +1737,23 @@ describe('factory operator controls', () => {
   test("losing the enabler's access stops their open runs too", async () => {
     const factoryId = await enableFactory();
     const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
-    const { poll } = await watch({ checkAccess: async () => false });
+    const { poll, recorded } = await watch({ checkAccess: async () => false });
 
     await poll.ticks[0]!();
 
     const [after] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
     expect(after).toMatchObject({ id: run.id, state: 'stopped' });
+    // The enabler sees why the factory went off (track-funny-actions).
+    expect(recorded.map((r) => r.spec)).toContainEqual(
+      expect.objectContaining({ kind: 'factory.disabled', userId: 'alice', origin: 'system' }),
+    );
+  });
+
+  test('a factory whose enabler keeps access records no factory.disabled', async () => {
+    await enableFactory();
+    const { poll, recorded } = await watch({ checkAccess: async () => true });
+    await poll.ticks[0]!();
+    expect(recorded.some((r) => r.spec.kind === 'factory.disabled')).toBe(false);
   });
 
   test('stopping a run ends it and its flow does not go on', async () => {

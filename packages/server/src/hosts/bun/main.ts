@@ -95,6 +95,13 @@ export async function startBunServer(opts: BunHostOptions) {
   await purgeAllRunners();
   await purgeStaleRunners();
 
+  // Server-run activities still `running` were cut short by the restart
+  // (track-funny-actions, design D7). Before the sandbox lifecycle and the
+  // factory watcher start, so a new run is never marked.
+  const { interruptServerActivities } =
+    await import('../../services/activities/server-activities.js');
+  await interruptServerActivities();
+
   // ── App ─────────────────────────────────────────────────
 
   const corsOrigins = resolveCorsOrigins();

@@ -145,7 +145,7 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
     });
 
     expect(mockNavigate).toHaveBeenCalledWith('/projects/p1');
-    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: undefined });
     expect(mockDeleteScratchThread).not.toHaveBeenCalled();
     expect(callOrder).toEqual(['navigate', 'delete']);
   });
@@ -173,7 +173,7 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: undefined });
   });
 
   test('deletes a worktree thread in one request, without a separate worktree removal', async () => {
@@ -209,7 +209,28 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
     });
 
     expect(mockRemoveWorktree).not.toHaveBeenCalled();
-    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: undefined });
+  });
+
+  test("passes the dialog's delete-branch choice to the delete", async () => {
+    const threadId = 'wt2';
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: null,
+        threadsById: {
+          [threadId]: { id: threadId, projectId: 'p1', title: 'x', mode: 'worktree' },
+        },
+        threadIdsByProject: { p1: [threadId] },
+      } as any),
+    );
+    const { result } = renderHook(() => useSidebarActions());
+    act(() => {
+      result.current.handleDeleteThreadFromList(threadId, 'p1', 'x', true);
+    });
+    await act(async () => {
+      await result.current.handleDeleteThreadConfirm({ deleteBranch: true });
+    });
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: true });
   });
 });
 

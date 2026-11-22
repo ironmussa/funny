@@ -11,18 +11,14 @@ import {
   getStatusSummary,
   listWorktrees,
   previewWorktree,
-  pruneOrphanWorktrees,
-  removeBranch,
-  removeWorktree,
 } from '@funny/core/git';
 import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
-import { log } from '../lib/logger.js';
-import { projectSearchRegistry } from '../services/project-search-registry.js';
+import { cleanupWorkspace, pruneOrphans } from '../services/workspace-cleanup.js';
 import type { HonoEnv } from '../types/hono-env.js';
-import { resultToResponse } from '../utils/result-response.js';
+import { recordedFailureResponse, resultToResponse } from '../utils/result-response.js';
 import { requireProject } from '../utils/route-helpers.js';
 import { createWorktreeSchema, deleteWorktreeSchema, validate } from '../validation/schemas.js';
 
@@ -92,8 +88,13 @@ worktreeRoutes.get('/', async (c) => {
   );
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
-  // Prune orphan worktrees before listing (best-effort, non-blocking on failure)
-  await pruneOrphanWorktrees(projectResult.value.path);
+  // Prune orphan worktrees before listing (best-effort, non-blocking on
+  // failure); recorded as an activity only when a folder was removed.
+  await pruneOrphans({
+    userId: c.get('userId'),
+    projectId,
+    projectPath: projectResult.value.path,
+  });
 
   const worktreesResult = await listWorktrees(projectResult.value.path);
   if (worktreesResult.isErr()) return resultToResponse(c, worktreesResult);
@@ -124,7 +125,7 @@ worktreeRoutes.delete('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(deleteWorktreeSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, worktreePath, branchName, deleteBranch } = parsed.value;
+  const { projectId, worktreePath, branchName, deleteBranch, reason, threadId } = parsed.value;
 
   const projectResult = await requireProject(
     projectId,
@@ -133,21 +134,19 @@ worktreeRoutes.delete('/', async (c) => {
   );
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
-  await projectSearchRegistry.invalidate(worktreePath).match(
-    () => undefined,
-    (error) =>
-      log.warn('Failed to dispose worktree search index', {
-        namespace: 'worktrees',
-        error: error.message,
-      }),
-  );
-  const removeResult = await removeWorktree(projectResult.value.path, worktreePath);
-  if (removeResult.isErr()) return resultToResponse(c, removeResult);
-
-  if (deleteBranch && branchName) {
-    const branchResult = await removeBranch(projectResult.value.path, branchName);
-    if (branchResult.isErr()) return resultToResponse(c, branchResult);
-  }
+  // Stops what runs inside, validates the target, removes, records
+  // (services/workspace-cleanup.ts).
+  const cleanup = await cleanupWorkspace({
+    userId: c.get('userId'),
+    projectId,
+    projectPath: projectResult.value.path,
+    threadId: threadId ?? null,
+    worktreePath,
+    branch: branchName ?? null,
+    deleteBranch,
+    reason,
+  });
+  if (cleanup.isErr()) return recordedFailureResponse(c, cleanup.error);
 
   return c.json({ ok: true });
 });

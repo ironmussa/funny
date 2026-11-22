@@ -149,6 +149,23 @@ describe('RunnerGrpcClient', () => {
     client.shutdown();
   });
 
+  test('waitForDrain resolves on drain and settles false when the session ends', async () => {
+    const transport = new FakeTransport();
+    const client = createClient(() => transport, { reconnectMinimumMs: 60_000 });
+    expect(await client.waitForDrain('tunnel')).toBe(false);
+
+    client.start();
+    transport.streams.get('control')!.emit('data', { hello: { sessionEpoch: '5' } });
+    const drained = client.waitForDrain('tunnel');
+    transport.streams.get('tunnel')!.emit('drain');
+    expect(await drained).toBe(true);
+
+    const pending = client.waitForDrain('tunnel');
+    transport.streams.get('tunnel')!.emit('error', new Error('reset'));
+    expect(await pending).toBe(false);
+    client.shutdown();
+  });
+
   test('reconnects with backoff after a stream failure and ignores stale cleanup', () => {
     const transports = [new FakeTransport(), new FakeTransport()];
     const factory = vi.fn(() => transports[factory.mock.calls.length - 1]!);

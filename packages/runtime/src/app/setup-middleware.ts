@@ -1,4 +1,5 @@
-import type { Hono } from 'hono';
+import { FRAME_SRC, frameAncestorsFor } from '@funny/shared/frame-policy';
+import type { Context, Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
@@ -23,7 +24,7 @@ import type { HonoEnv } from '../types/hono-env.js';
  * `wss://` upgrades, so the wildcard was both broader than needed and a
  * convenient exfil channel for any compromised script.
  */
-function buildSecureHeadersConfig() {
+export function buildSecureHeadersConfig() {
   return {
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
@@ -41,10 +42,12 @@ function buildSecureHeadersConfig() {
       connectSrc: ["'self'"],
       fontSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
-      frameAncestors: ["'none'"],
+      // Only the raw-file response may be framed, and only by the app (#222).
+      frameAncestors: [(c: Context) => frameAncestorsFor(c.req.path)],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      frameSrc: ["'none'"],
+      // Same-origin frames only: the PDF preview iframes `/api/files/raw` (#222).
+      frameSrc: FRAME_SRC,
     },
     // Match the server: Satteri's WASM workers require shared memory.
     crossOriginOpenerPolicy: 'same-origin' as const,

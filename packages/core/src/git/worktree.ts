@@ -299,10 +299,10 @@ export function createWorktree(
 }
 
 /**
- * Runner setting: `1` makes worktree creation always run `git worktree add`
- * instead of trying gitoxide first.
+ * Runner setting: `1` makes worktree creation and removal always run
+ * `git worktree add` / `remove` instead of trying gitoxide first.
  */
-export const DISABLE_NATIVE_WORKTREE_ADD_ENV = 'FUNNY_DISABLE_NATIVE_WORKTREE_ADD';
+export const DISABLE_NATIVE_WORKTREE_ENV = 'FUNNY_DISABLE_NATIVE_WORKTREE';
 
 /**
  * `git worktree add` for `branchName` at `worktreePath`: a new branch from
@@ -335,7 +335,7 @@ function addWorktree(
     );
   };
   const addNative = getNativeGit()?.addWorktree;
-  if (!addNative || process.env[DISABLE_NATIVE_WORKTREE_ADD_ENV] === '1') return cli();
+  if (!addNative || process.env[DISABLE_NATIVE_WORKTREE_ENV] === '1') return cli();
   const options =
     startPoint === null
       ? { branch: branchName, createBranch: false }
@@ -551,6 +551,22 @@ function assertWorktreeInProjectBase(
   return null;
 }
 
+/**
+ * `git worktree remove -f` in-process with gitoxide, which deletes the files
+ * on several threads (a worktree with `node_modules` holds a great many).
+ * False when the native module lacks it or it failed; the caller then runs
+ * git, whose own fallback force-deletes what is left. The native side only
+ * removes the worktree registered at exactly `worktreePath`.
+ */
+async function removeWorktreeNatively(projectPath: string, worktreePath: string): Promise<boolean> {
+  const removeNative = getNativeGit()?.removeWorktree;
+  if (!removeNative || process.env[DISABLE_NATIVE_WORKTREE_ENV] === '1') return false;
+  return nativeGitWrite(projectPath, () => removeNative(projectPath, worktreePath)).then(
+    () => true,
+    () => false,
+  );
+}
+
 export function removeWorktree(
   projectPath: string,
   worktreePath: string,
@@ -559,6 +575,11 @@ export function removeWorktree(
     (async () => {
       const containmentErr = assertWorktreeInProjectBase(projectPath, worktreePath);
       if (containmentErr) throw containmentErr;
+
+      if (await removeWorktreeNatively(projectPath, worktreePath)) {
+        await forgetSafeDirectory(worktreePath);
+        return;
+      }
 
       const result = await gitWrite(['worktree', 'remove', '-f', worktreePath], {
         cwd: projectPath,

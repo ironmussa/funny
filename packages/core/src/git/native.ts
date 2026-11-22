@@ -154,6 +154,8 @@ interface NativeGitModule {
     destination: string,
     options: NativeAddWorktreeOptions,
   ): Promise<NativeAddWorktreeOutcome>;
+  /** Absent in a binary built before it existed. */
+  removeWorktree?(cwd: string, worktreePath: string): Promise<void>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -212,6 +214,8 @@ export interface PooledNativeGitModule {
     destination: string,
     options: NativeAddWorktreeOptions,
   ): Promise<NativeAddWorktreeOutcome>;
+  /** Absent in a binary built before it existed. */
+  removeWorktree?(cwd: string, worktreePath: string): Promise<void>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -246,8 +250,9 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     listUnmergedFiles: (...args) => lightPool(() => mod.listUnmergedFiles(...args)),
     getRefFingerprint: (...args) => lightPool(() => mod.getRefFingerprint(...args)),
     listWorktrees: (...args) => lightPool(() => mod.listWorktrees(...args)),
-    // A write: callers run it through `nativeGitWrite`, not a read pool.
+    // Writes: callers run them through `nativeGitWrite`, not a read pool.
     addWorktree: mod.addWorktree?.bind(mod),
+    removeWorktree: mod.removeWorktree?.bind(mod),
     getBranchSummary: (...args) => heavyPool(() => mod.getBranchSummary(...args)),
     blameFile: (...args) => lightPool(() => mod.blameFile(...args)),
   };

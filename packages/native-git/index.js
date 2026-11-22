@@ -804,4 +804,5 @@ module.exports.listFiles = nativeBinding.listFiles;
 module.exports.listUnmergedFiles = nativeBinding.listUnmergedFiles;
 module.exports.listWorktrees = nativeBinding.listWorktrees;
 module.exports.ping = nativeBinding.ping;
+module.exports.removeWorktree = nativeBinding.removeWorktree;
 module.exports.resetSoft = nativeBinding.resetSoft;

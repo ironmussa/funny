@@ -265,6 +265,12 @@ export declare function listWorktrees(cwd: string): Promise<Array<WorktreeEntry>
 /** Simple ping function to verify the native module loads correctly. */
 export declare function ping(): string;
 
+/**
+ * Remove the linked worktree at `worktree_path` and its registration, like
+ * `git worktree remove -f`, without spawning git. The branch is kept.
+ */
+export declare function removeWorktree(cwd: string, worktreePath: string): Promise<void>;
+
 export declare function resetSoft(cwd: string): Promise<void>;
 
 export interface StashEntry {

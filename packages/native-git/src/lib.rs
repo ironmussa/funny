@@ -18,6 +18,7 @@ mod branch_summary;
 mod ref_fingerprint;
 mod worktree_list;
 mod worktree_add;
+mod worktree_remove;
 
 pub use status_summary::*;
 pub use diff_summary::*;

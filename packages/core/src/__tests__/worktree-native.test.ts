@@ -1,8 +1,10 @@
-// Worktree creation through gitoxide (`addWorktree` in @funny/native-git):
-// the worktree it makes must be the one `git worktree add` makes, the cases
-// it declines must reach git, and a failure must leave nothing behind.
+// Worktree creation and removal through gitoxide (`addWorktree` /
+// `removeWorktree` in @funny/native-git): the worktree it makes must be the
+// one `git worktree add` makes, the cases it declines must reach git, a
+// failure must leave nothing behind, and removal must touch only the
+// worktree it was given.
 //
-// Skipped when the native module (or a binary with `addWorktree`) is not
+// Skipped when the native module (or a binary with these functions) is not
 // loadable, so a CLI-only run never passes for the native path.
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -21,11 +23,12 @@ import { resolve } from 'path';
 
 import { getNativeGit } from '../git/native.js';
 import { executeSync } from '../git/process.js';
-import { createWorktree, DISABLE_NATIVE_WORKTREE_ADD_ENV } from '../git/worktree.js';
+import { createWorktree, DISABLE_NATIVE_WORKTREE_ENV, removeWorktree } from '../git/worktree.js';
 
 const TMP = resolve(tmpdir(), 'core-worktree-native-add-' + Date.now());
 const native = getNativeGit();
 const hasNativeAdd = typeof native?.addWorktree === 'function';
+const hasNativeRemove = typeof native?.removeWorktree === 'function';
 let count = 0;
 
 function git(cwd: string, args: string[]): string {
@@ -54,11 +57,11 @@ function initRepo(): string {
 }
 
 async function withCli<T>(fn: () => Promise<T>): Promise<T> {
-  process.env[DISABLE_NATIVE_WORKTREE_ADD_ENV] = '1';
+  process.env[DISABLE_NATIVE_WORKTREE_ENV] = '1';
   try {
     return await fn();
   } finally {
-    delete process.env[DISABLE_NATIVE_WORKTREE_ADD_ENV];
+    delete process.env[DISABLE_NATIVE_WORKTREE_ENV];
   }
 }
 
@@ -266,5 +269,71 @@ describe.skipIf(!hasNativeAdd)('native worktree add', () => {
     ).rejects.toThrow();
     expect(gitOk(repoPath, ['rev-parse', '--verify', '--quiet', 'refs/heads/master'])).toBe(true);
     expect(existsSync(resolve(dest, 'README.md'))).toBe(false);
+  });
+});
+
+describe.skipIf(!hasNativeRemove)('native worktree remove', () => {
+  let repoPath: string;
+
+  beforeEach(() => {
+    repoPath = initRepo();
+  });
+
+  afterEach(() => {
+    rmSync(TMP, { recursive: true, force: true });
+  });
+
+  function registered(): string {
+    return git(repoPath, ['worktree', 'list', '--porcelain']);
+  }
+
+  test('removes a dirty worktree and its registration, keeping the branch', async () => {
+    const path = (await createWorktree(repoPath, 'to-remove'))._unsafeUnwrap();
+    writeFileSync(resolve(path, 'README.md'), 'changed\n');
+    writeFileSync(resolve(path, 'untracked.txt'), 'new\n');
+    mkdirSync(resolve(path, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(resolve(path, 'node_modules', 'pkg', 'index.js'), '');
+
+    await native!.removeWorktree!(repoPath, path);
+
+    expect(existsSync(path)).toBe(false);
+    expect(registered()).not.toContain(path);
+    expect(gitOk(repoPath, ['rev-parse', '--verify', '--quiet', 'refs/heads/to-remove'])).toBe(
+      true,
+    );
+    // Nothing is left for `git worktree prune` to clean.
+    expect(git(repoPath, ['worktree', 'prune', '--dry-run', '-v'])).toBe('');
+  });
+
+  test('removeWorktree leaves the state git leaves', async () => {
+    const viaNative = (await createWorktree(repoPath, 'gone-native'))._unsafeUnwrap();
+    const viaCli = (await createWorktree(repoPath, 'gone-cli'))._unsafeUnwrap();
+
+    expect((await removeWorktree(repoPath, viaNative)).isOk()).toBe(true);
+    expect((await withCli(() => removeWorktree(repoPath, viaCli))).isOk()).toBe(true);
+
+    for (const path of [viaNative, viaCli]) {
+      expect(existsSync(path)).toBe(false);
+      expect(registered()).not.toContain(path);
+    }
+    expect(git(repoPath, ['branch', '--list', 'gone-*'])).toContain('gone-native');
+  });
+
+  test('refuses a path that only ends like a registered worktree', async () => {
+    const path = (await createWorktree(repoPath, 'topic'))._unsafeUnwrap();
+    const lookalike = resolve(TMP, `case-${count}`, 'elsewhere', 'topic');
+
+    await expect(native!.removeWorktree!(repoPath, lookalike)).rejects.toThrow();
+
+    expect(existsSync(resolve(path, 'README.md'))).toBe(true);
+    expect(registered()).toContain(path);
+  });
+
+  test('respects a lock like `git worktree remove -f`', async () => {
+    const path = (await createWorktree(repoPath, 'locked'))._unsafeUnwrap();
+    git(repoPath, ['worktree', 'lock', path]);
+
+    await expect(native!.removeWorktree!(repoPath, path)).rejects.toThrow();
+    expect(existsSync(resolve(path, 'README.md'))).toBe(true);
   });
 });

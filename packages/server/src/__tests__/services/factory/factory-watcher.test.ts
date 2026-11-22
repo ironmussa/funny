@@ -1286,6 +1286,7 @@ describe('factory operator controls', () => {
       checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
       github?: GithubScript;
       proof?: Parameters<typeof startFactoryWatcher>[0]['proof'];
+      runsPushedCommits?: (threadId: string) => Promise<boolean>;
     } = {},
   ) {
     const poll = fakePoll();
@@ -1305,6 +1306,7 @@ describe('factory operator controls', () => {
       },
       notify: async () => undefined,
       proof: opts.proof ?? passingProof,
+      runsPushedCommits: opts.runsPushedCommits,
     });
     return { poll, launcher, github, cleanups };
   }
@@ -1499,6 +1501,34 @@ describe('factory operator controls', () => {
       expect(github.checks).toEqual([]);
       expect((await runById(run.id)).regressionProof?.headSha).toBe('sha-old');
     });
+
+    for (const [where, inSandbox, fetchHead] of [
+      ['on a host runner is not fetched', undefined, false],
+      ['in a sandbox is fetched', async () => true, true],
+    ] as const) {
+      test(`a head pushed from elsewhere ${where}`, async () => {
+        const factoryId = await enableFactory();
+        await seedAutoMergeRun(factoryId);
+        const bodies: Array<Record<string, unknown>> = [];
+        const { poll } = await watch({
+          issues: [],
+          github: { head: { sha: 'sha-new', autoMerge: true } },
+          runsPushedCommits: inSandbox,
+          proof: () => ({
+            startProof: async (_threadId: string, body: Record<string, unknown>) => {
+              bodies.push(body);
+              return ok({ proofId: 'p1', state: 'running' });
+            },
+            pollProof: async () =>
+              ok({ state: 'done', result: { verdict: 'skipped', headSha: 'sha-new' } }),
+          }),
+        });
+
+        await poll.ticks[0]!();
+        await settle();
+        expect(bodies).toMatchObject([{ headSha: 'sha-new', fetchHead }]);
+      });
+    }
 
     test('a check that could not be published is published on a later tick, without proving again', async () => {
       const factoryId = await enableFactory();

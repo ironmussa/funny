@@ -98,6 +98,7 @@ async function startProof(
     rules: input.rules,
     supportGlobs: input.supportGlobs,
     timeoutMs: input.timeoutMs,
+    fetchHead: input.fetchHead,
   });
   return { proofId: job.id, state: job.state };
 }

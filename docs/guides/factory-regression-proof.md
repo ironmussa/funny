@@ -149,12 +149,16 @@ proves the new head and publishes its check before GitHub can merge it; a failin
 a failing check and its finding on the run. When the issue cannot be read at that moment, nothing
 is published and the next pass tries again: an unread label never exempts a change from its test.
 
-**Who can push to the branch runs code on your runner.** Proving the new head means checking it
-out on the enabler's runner and running its setup (`setup_command`, else the head's `.funny.json`
-`postCreate`) and its tests, unattended. With auto-merge on, a commit pushed to the pull request's
-branch by anyone with write access to the repository is run that way. Turn auto-merge behind the
-gate on only in repositories where you trust everyone who can push, or run the factory in a
-sandbox runtime.
+**A commit pushed by someone else is only run in a sandbox.** Proving a head means checking it
+out and running its setup (`setup_command`, else the head's `.funny.json` `postCreate`) and its
+tests, unattended. A head the run's own checkout already has was made there by the run's agent
+(or by you), and is proved wherever the run lives. A head it does not have was pushed from
+elsewhere, by anyone with write access to the repository:
+
+- **Sandbox runtime:** the runner fetches that commit and proves it, isolated.
+- **Local runtime (your machine):** the runner does not fetch or run it. The new head gets a
+  failing `funny/regression-proof` check that says so, and the run shows the same finding, so
+  GitHub does not auto-merge it. Review the commit and merge it yourself, or retry the run.
 
 Require the check only where every pull request comes from the factory: a pull request from a
 person has no such check and could not merge. Do not require it on a repository with a merge

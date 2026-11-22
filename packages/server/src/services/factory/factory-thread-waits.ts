@@ -87,6 +87,19 @@ async function dbReadThread(threadId: string): Promise<ThreadRecord | null> {
   return row ?? null;
 }
 
+/**
+ * Whether a commit pushed to the run's branch by someone else may be fetched
+ * and run for this thread: only where it runs isolated in a sandbox. On a host
+ * runner that commit's setup and tests would run as the enabler.
+ */
+export async function runsPushedCommits(threadId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ runtime: threads.runtime })
+    .from(threads)
+    .where(eq(threads.id, threadId));
+  return row?.runtime === 'sandbox';
+}
+
 /** The thread's last assistant message, or null when it has none. */
 export async function lastThreadMessage(threadId: string): Promise<string | null> {
   const [row] = await db

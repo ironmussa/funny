@@ -632,6 +632,8 @@ export const startRegressionProofSchema = z.object({
   /** Run in each temporary worktree before the tests (e.g. a dependency install). */
   setupCommand: z.string().min(1).max(1000).optional(),
   timeoutMs: z.number().int().positive().default(600_000),
+  /** Fetch `headSha` when the checkout does not have it (only for a sandbox thread). */
+  fetchHead: z.boolean().default(false),
 });
 
 // ── Helper ───────────────────────────────────────────────────────

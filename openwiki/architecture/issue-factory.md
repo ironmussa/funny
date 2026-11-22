@@ -81,7 +81,9 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    the direct merge is refused for a requirement, auto-merge only where that check is required
    pinned to this App, and only for the proved head (`expectedHeadOid`); while such a run waits,
    the watcher re-proves a moved head (`reproveMovedHead`) and publishes again a check that did
-   not reach GitHub (the stored proof's `checkPublished: false`), without proving again. A flow that is not proof-ready (`isProofReady`: no rules and no opt-out)
+   not reach GitHub (the stored proof's `checkPublished: false`), without proving again. A head
+   the run's checkout lacks (pushed from elsewhere) is fetched and run only for a sandbox thread
+   (`runsPushedCommits`); on a host runner it gets a failing check saying so. A flow that is not proof-ready (`isProofReady`: no rules and no opt-out)
    is never admitted: the watcher leaves its issues queued and sets the factory's
    `blockedReason`.
 6. **End**: merged → `merged`; completed without a merge → `waiting_human`; failed with the PR

@@ -67,6 +67,8 @@ export async function proveOnRunner(
   signal: AbortSignal,
   /** Prove this commit instead of the checkout's HEAD (a head pushed from elsewhere). */
   headSha?: string,
+  /** Let the runner fetch `headSha` when its checkout lacks it: only for a sandbox thread. */
+  fetchHead = false,
 ): Promise<ProofRun> {
   const timeoutMs = opts.timeoutMs ?? 600_000;
   const body: Record<string, unknown> = {
@@ -75,7 +77,10 @@ export async function proveOnRunner(
     setupCommand: opts.setupCommand,
     timeoutMs,
   };
-  if (headSha) body.headSha = headSha;
+  if (headSha) {
+    body.headSha = headSha;
+    body.fetchHead = fetchHead;
+  }
 
   const started = await proof.startProof(threadId, body);
   if (started.isErr()) return unavailable(`could not start: ${started.error}`);

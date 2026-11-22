@@ -52,6 +52,13 @@ export interface ProofRequest {
   setupCommand?: string;
   /** The budget of the whole proof: setup and every test run, both phases. */
   timeoutMs: number;
+  /**
+   * Fetch `headSha` when this checkout does not have it (a commit pushed from
+   * elsewhere). Off by default: such a commit is someone else's code, and
+   * proving it runs its setup and tests here. The server turns it on only for
+   * a thread isolated in a sandbox.
+   */
+  fetchHead?: boolean;
 }
 
 /**
@@ -353,8 +360,11 @@ interface ProofPlan {
   context: { files: string[]; commands: string[]; baseSha: string };
 }
 
-/** Bring the default branch and the head commit into the checkout. */
-async function fetchCommits(projectPath: string, request: ProofRequest): Promise<void> {
+/**
+ * Bring the default branch and the head commit into the checkout. Answers why
+ * the head is not run, when it is not here and may not be fetched.
+ */
+async function fetchCommits(projectPath: string, request: ProofRequest): Promise<string | null> {
   await gitNetwork(['fetch', 'origin', request.defaultBranch], {
     cwd: projectPath,
     reject: false,
@@ -366,12 +376,16 @@ async function fetchCommits(projectPath: string, request: ProofRequest): Promise
     cwd: projectPath,
     reject: false,
   });
-  if (present.exitCode === 0) return;
+  if (present.exitCode === 0) return null;
+  if (!request.fetchHead) {
+    return `The commit ${request.headSha} is not in this checkout: it was pushed from elsewhere, and a commit pushed from elsewhere is only run in a sandbox. Review it and merge it yourself, or retry the run.`;
+  }
   await gitNetwork(['fetch', 'origin', request.headSha], {
     cwd: projectPath,
     reject: false,
     timeout: 60_000,
   });
+  return null;
 }
 
 /** The plan of a proof, or the outcome when there is nothing to run. */
@@ -503,7 +517,8 @@ async function runOnBase(
 }
 
 async function proveCommit(run: ProofRun): Promise<Outcome> {
-  await fetchCommits(run.projectPath, run.request);
+  const notRun = await fetchCommits(run.projectPath, run.request);
+  if (notRun) return failed(notRun);
   const planned = await planProof(run.projectPath, run.request);
   if ('outcome' in planned) return planned.outcome;
   return (await proveHead(run, planned.plan)) ?? (await proveBase(run, planned.plan));

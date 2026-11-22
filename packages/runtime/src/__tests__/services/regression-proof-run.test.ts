@@ -151,7 +151,7 @@ describe('regression proof run', () => {
     expect(result.failureKind).toBe('environment');
   });
 
-  test('a head pushed from elsewhere is fetched by its SHA before it is proved', async () => {
+  test('a head pushed from elsewhere is fetched and proved only when the caller allows it', async () => {
     const fixed = repoWithFix({ 'lib.test.sh': ASSERTS_FIX });
     const origin = git(fixed.path, 'remote', 'get-url', 'origin');
     git(fixed.path, 'push', '-q', 'origin', 'fix');
@@ -159,10 +159,18 @@ describe('regression proof run', () => {
     git(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
     // A checkout that has only main: the fix commit is not here.
     const other = tempDir('funny-proof-other-');
-    git(other, 'clone', '-q', '--single-branch', '-b', 'main', origin, '.');
+    // --no-local: a local clone would hardlink every object, the fix commit included.
+    git(other, 'clone', '-q', '--no-local', '--single-branch', '-b', 'main', origin, '.');
+    expect(() => git(other, 'cat-file', '-e', fixed.headSha)).toThrow();
     expect(git(other, 'log', '--all', '--format=%H')).not.toContain(fixed.headSha);
 
-    const result = await prove({ path: other, headSha: fixed.headSha });
+    // Not fetched, so not run, unless the caller says this checkout may run it.
+    const refused = await prove({ path: other, headSha: fixed.headSha });
+    expect(refused).toMatchObject({ verdict: 'fail', failureKind: 'environment' });
+    expect(refused.finding).toContain('pushed from elsewhere');
+    expect(git(other, 'log', '--all', '--format=%H')).not.toContain(fixed.headSha);
+
+    const result = await prove({ path: other, headSha: fixed.headSha }, { fetchHead: true });
     expect(result.verdict).toBe('pass');
   });
 

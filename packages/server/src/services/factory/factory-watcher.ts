@@ -91,7 +91,7 @@ import {
   startRegressionProofOnRunner,
   stopFactoryThreads,
 } from './factory-thread-requests.js';
-import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
+import { runsPushedCommits, type ThreadOutcome, type WaitAfter } from './factory-thread-waits.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
 export interface FactoryPoll {
@@ -119,6 +119,8 @@ export interface FactoryWatcherDeps {
     userId: string,
     body: Record<string, unknown>,
   ) => Promise<Result<StartedThread, StartThreadError>>;
+  /** Override for tests of `runsPushedCommits` (whether the thread is isolated in a sandbox). */
+  runsPushedCommits?: (threadId: string) => Promise<boolean>;
   /** Runtime resolver override for tests; defaults to the enabler's `project_sandbox_settings`. */
   resolveRuntime?: (userId: string, projectId: string) => Promise<ThreadRuntimeMode>;
   /** Thread wait override for tests; defaults to the DB status plus the terminal signal. */
@@ -830,7 +832,16 @@ async function proveParkedHead(
   signal: AbortSignal,
 ): Promise<RegressionProofRecord | null> {
   const { run, sha } = target;
-  const proof = await proveOnRunner(proofDeps, target.threadId, target.config, signal, sha);
+  // A head this checkout lacks was pushed by someone else: fetched and run only in a sandbox.
+  const fetchHead = await (deps?.runsPushedCommits ?? runsPushedCommits)(target.threadId);
+  const proof = await proveOnRunner(
+    proofDeps,
+    target.threadId,
+    target.config,
+    signal,
+    sha,
+    fetchHead,
+  );
   // A verdict of another commit (or of none) says nothing about this head.
   const why =
     proof.kind === 'unavailable'

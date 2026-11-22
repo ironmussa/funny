@@ -93,7 +93,7 @@
       settings and queue responses. Verify with watcher tests: not configured (no run, blocker
       set), rules added (admitted, blocker cleared), opt-out (admitted), and a run in flight
       untouched.
-- [ ] 4.7 Count proofs with `factory.integration_event` (`regression_proof_pass`,
+- [x] 4.7 Count proofs with `factory.integration_event` (`regression_proof_pass`,
       `regression_proof_fail`, `regression_proof_skipped`, `no_change`). Verify in the provider
       tests.
 

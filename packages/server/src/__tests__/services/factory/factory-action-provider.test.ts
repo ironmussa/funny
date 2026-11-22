@@ -2,12 +2,13 @@
  * The factory's server provider on its own: replaying steps that continued the
  * same thread, and a thread whose launch raced a stop.
  */
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import type { GithubCallError } from '@funny/core/github-app';
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
 import { err, errAsync, ok, okAsync, type ResultAsync } from 'neverthrow';
 
+import * as telemetry from '../../../lib/telemetry.js';
 import {
   countCiResult,
   createFactoryActionProvider,
@@ -513,5 +514,65 @@ describe('factory action provider regression proof outcomes', () => {
         'docs',
       ]),
     ).toBe(false);
+  });
+});
+
+describe('factory action provider proof counters (task 4.7)', () => {
+  const rules = [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }];
+  const metricSpy = spyOn(telemetry, 'metric');
+  // Earlier tests in this file emit metrics too: count only this test's.
+  beforeEach(() => metricSpy.mockClear());
+
+  /** The `factory.integration_event` events emitted so far. */
+  const events = () =>
+    metricSpy.mock.calls
+      .filter(([name]) => name === 'factory.integration_event')
+      .map(
+        ([, , options]) => (options as { attributes?: Record<string, string> }).attributes?.event,
+      );
+
+  const proving = (verdict: string) =>
+    providerWith({
+      threadIds: ['t1'],
+      proof: {
+        startProof: async () => ok({ proofId: 'p1', state: 'running' }),
+        pollProof: async () => ok({ state: 'done', result: { verdict, failureKind: 'test' } }),
+      },
+    }).provider;
+
+  test('each proof verdict is counted once', async () => {
+    await proving('pass').regressionProof!({ rules });
+    await proving('fail').regressionProof!({ rules });
+    await proving('skipped').regressionProof!({ rules, requireTest: 'never' });
+    expect(events()).toEqual([
+      'regression_proof_pass',
+      'regression_proof_fail',
+      'regression_proof_skipped',
+    ]);
+  });
+
+  test('a missing required test counts as a failed proof', async () => {
+    await proving('skipped').regressionProof!({ rules });
+    expect(events()).toEqual(['regression_proof_fail']);
+  });
+
+  test('"no change" is counted', async () => {
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      github: {
+        findPullRequest: () => okAsync(null),
+        branchAhead: () => okAsync(false),
+        commentOnIssue: () => okAsync(undefined),
+        pullRequests: {
+          prState: () => okAsync('open' as const),
+          headSha: () => okAsync('sha-head'),
+          ciState: () => okAsync({ kind: 'green' as const }),
+          merge: () =>
+            okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
+        },
+      },
+    });
+    await provider.createPr({ cwd: '', title: 'Fix it' });
+    expect(events()).toEqual(['no_change']);
   });
 });

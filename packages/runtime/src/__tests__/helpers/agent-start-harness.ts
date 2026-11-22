@@ -164,7 +164,7 @@ export interface QueueEntry {
 }
 
 /** A WS event the lifecycle sent to a thread's owner. */
-export interface SentEvent {
+interface SentEvent {
   threadId: string;
   userId: string | undefined;
   type: string;

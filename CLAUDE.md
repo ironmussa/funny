@@ -102,7 +102,7 @@ bun run db:studio
 
 ### Client Architecture
 
-**State management:** server-backed entity state lives in the **data layer** (`src/data/`, TanStack DB collections plus a shared query-core `QueryClient`). Zustand stores (`stores/project-store.ts`, `stores/thread-store.ts`, `stores/ui-store.ts`, …) hold UI state and the loaded thread payload (messages, tool calls) only. `stores/app-store.ts` remains as a backward-compatible facade for legacy callers.
+**State management:** server-backed entity state lives in the **data layer** (`src/data/`, TanStack DB collections plus a shared query-core `QueryClient`). Zustand stores (`stores/project-store.ts`, `stores/thread-store.ts`, `stores/ui-store.ts`, …) hold UI state and the loaded thread payload (messages, tool calls) only. `stores/app-store.ts` remains only so tests and stories can seed the three stores with one `useAppStore.setState`; production code selects from `project-store` / `thread-store` / `ui-store` directly (`fitness:client-data-layer` fails on an `app-store` import outside tests and stories), because the facade's hook subscribes to all three stores and rebuilds their combined state on every change.
 
 **Data layer (`packages/client/src/data/`).** One `DataLayer` per session (`data/runtime.ts`), recreated when the user or active organization changes, so a logout drops every collection and cached request in one step. Each entity has its own folder (`threads/`, `projects/`, `templates/`, `git-status/`, `automations/`, `comments/`, `background/` (jobs + watchers), `activities/` (background activities: clone, worktree setup, git workflow), `scheduler/`, `approvals/`, `runner/`, `pull-requests/`, `profile/`, `queue/`, `context-usage/`):
 

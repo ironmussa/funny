@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useProjects } from '@/data/projects/hooks';
 import { sendTerminalRealtime } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
 function stopStartupCommand(cmd: StartupCommand) {
@@ -26,7 +26,7 @@ function stopStartupCommand(cmd: StartupCommand) {
 
 export function StartupCommandsSettings() {
   const { t } = useTranslation();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjects();
   const [commands, setCommands] = useState<StartupCommand[]>([]);
   const [adding, setAdding] = useState(false);

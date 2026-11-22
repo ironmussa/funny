@@ -29,7 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { isLightTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
 /* ── Inline shell editor (Monaco) ── */
@@ -244,7 +244,7 @@ function HookItem({
 
 export function ProjectHooksSettings() {
   const { t } = useTranslation();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [hooks, setHooks] = useState<ProjectHook[]>([]);
   const [adding, setAdding] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);

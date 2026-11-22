@@ -19,6 +19,7 @@ mock.module('@/lib/api', () => ({
 }));
 
 mock.module('@/lib/client-logger', () => ({
+  isClientLogLevelEnabled: () => false,
   createClientLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),

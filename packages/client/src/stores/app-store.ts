@@ -1,6 +1,9 @@
 /**
- * Backward-compatible facade that combines project-store, thread-store, and ui-store.
- * Components should gradually migrate to importing from the individual stores directly.
+ * Facade that combines project-store, thread-store, and ui-store, kept for tests
+ * and stories (`useAppStore.setState` seeds all three). Production code must
+ * select from the individual stores: this hook subscribes to all three and
+ * rebuilds the combined state on every change, i.e. every streaming flush.
+ * `scripts/fitness/check-client-data-layer.ts` fails on a production import.
  *
  * Optimized: Uses useSyncExternalStore to subscribe to all three stores but only
  * triggers re-renders when the selector result changes (shallow equality check).

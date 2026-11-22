@@ -218,4 +218,22 @@ describe('ThreadPowerline', () => {
       await screen.findAllByText(`Worktree branch: ${branch} — goliiive-v2-worktree`),
     ).not.toHaveLength(0);
   });
+
+  test('showTooltips={false} renders no segment tooltip (sidebar)', async () => {
+    const branch = 'funny/feat-x';
+    renderWithProviders(
+      <ThreadPowerline
+        thread={mockThread({ mode: 'worktree', baseBranch: 'main', branch })}
+        projectName="funny"
+        showTooltips={false}
+      />,
+    );
+
+    fireEvent.pointerMove(screen.getByTestId('powerline-segment-worktree-branch'), {
+      pointerType: 'mouse',
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(screen.queryByText(`Worktree branch: ${branch}`)).toBeNull();
+  });
 });

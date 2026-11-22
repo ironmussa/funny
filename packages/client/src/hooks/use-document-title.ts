@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useProjectById, useProjectCurrentBranch } from '@/data/projects/hooks';
 import { useThreadById } from '@/data/threads/hooks';
@@ -8,11 +9,12 @@ import { cleanThreadTitle } from '@/lib/thread-title';
 import { isScratch } from '@/lib/thread-variant';
 import { resolveLocalThreadBranch, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadStore, type ThreadState } from '@/stores/thread-store';
 
 const log = createClientLogger('document-title');
 
 type ThreadLike = {
+  id?: string;
   isScratch?: boolean;
   mode?: string;
   title?: string | null;
@@ -83,11 +85,32 @@ function titleBranch(
  * back-and-forth switch. The listing is only used when no thread is focused
  * (a project is selected but no thread is open).
  */
+/**
+ * Only the loaded payload's fields the title reads. The payload object is
+ * replaced on every streaming flush (messages, tool calls), so selecting it
+ * whole re-rendered the app root at stream rate; with `useShallow` the
+ * selection only changes when one of these fields does.
+ */
+function pickTitleThread(s: Pick<ThreadState, 'activeThread'>): ThreadLike | null {
+  const t = s.activeThread;
+  if (!t) return null;
+  return {
+    id: t.id,
+    isScratch: t.isScratch,
+    mode: t.mode,
+    title: t.title,
+    projectId: t.projectId,
+    branch: t.branch,
+    baseBranch: t.baseBranch,
+    worktreePath: t.worktreePath,
+  };
+}
+
 /** The URL-focused thread's row, falling back to the loaded right-pane payload. */
-function useFocusThread() {
+function useFocusThread(): ThreadLike | null {
   const activeThreadId = useActiveThreadId();
   const listedThread = useThreadById(activeThreadId);
-  const loadedThread = useThreadStore((s) => s.activeThread);
+  const loadedThread = useThreadStore(useShallow(pickTitleThread));
   return listedThread ?? loadedThread;
 }
 

@@ -62,9 +62,11 @@ export function cleanupThreadActor(threadId: string): void {
 // ── Data actor registry ─────────────────────────────────────────
 //
 // Per-thread data actors own the fetch lifecycle (unloaded → fetching →
-// loaded → stale). The actor's context is the cache — there is no parallel
-// store. INVALIDATE transitions back to `unloaded`, structurally guaranteeing
-// no stale data can be read after invalidation.
+// loaded). The actor's context is the cache — there is no parallel store.
+// INVALIDATE on a loaded actor transitions back to `unloaded`. INVALIDATE
+// during `fetching` only marks the coming snapshot `stale`: the fetch keeps
+// running, its waiter resolves (and replays the buffered WS events), and the
+// next `loadThreadData` refetches instead of serving the stale snapshot.
 
 const DATA_ACTOR_LIMIT = 8;
 const dataActors = new Map<string, ReturnType<typeof createActor<typeof threadDataMachine>>>();
@@ -103,14 +105,15 @@ export function isThreadDataPrefetched(threadId: string): boolean {
   const actor = dataActors.get(threadId);
   if (!actor) return false;
   const snap = actor.getSnapshot();
-  return snap.matches('loaded') || snap.matches('fetching');
+  return (snap.matches('loaded') && !snap.context.stale) || snap.matches('fetching');
 }
 
-/** Returns true only when the actor has fully loaded data (no in-flight fetch). */
+/** Returns true only when the actor has fresh, fully loaded data (no in-flight fetch). */
 export function isThreadDataLoaded(threadId: string): boolean {
   const actor = dataActors.get(threadId);
   if (!actor) return false;
-  return actor.getSnapshot().matches('loaded');
+  const snap = actor.getSnapshot();
+  return snap.matches('loaded') && !snap.context.stale;
 }
 
 function loadedDataContainsStoredScrollPosition(snapshot: ThreadDataSnapshot, threadId: string) {
@@ -151,22 +154,19 @@ function loadedDataContainsStoredScrollPosition(snapshot: ThreadDataSnapshot, th
 const LOAD_THREAD_TIMEOUT_MS = 15_000;
 
 /**
- * Hard cap on retries when the actor cycles through `unloaded` due to
- * repeated `INVALIDATE` events. Each transition to `unloaded` while a caller
- * is waiting triggers a fresh `LOAD`. If invalidates keep pouring in faster
- * than the fetcher can complete, we bail out instead of refetching forever.
+ * Safety cap on re-sent `LOAD`s when the actor is seen in `unloaded` while a
+ * caller waits. INVALIDATE during `fetching` no longer leaves the state, so
+ * this only guards against an unexpected loop.
  */
 const LOAD_THREAD_MAX_REATTEMPTS = 5;
 
 /**
  * Resolve once the actor finishes loading (reuses any in-flight fetch).
  *
- * Resilient to two failure modes that previously hung the caller:
  *  - `INVALIDATE` during `fetching` (a WS event arrived for the thread while
- *    its `selectThread` was awaiting initial load) — the actor transitions
- *    `fetching → unloaded`, the old `invoke` is torn down, and the original
- *    `waitFor(loaded || failed)` never matched. Now we observe the unloaded
- *    state and re-send `LOAD` so the awaiter eventually gets a snapshot.
+ *    its `selectThread` was awaiting the load) does not restart the fetch;
+ *    the snapshot resolves marked stale and the events are replayed from the
+ *    WS buffer. A loaded-but-stale snapshot is refetched here.
  *  - Indefinite hangs — bounded by `LOAD_THREAD_TIMEOUT_MS` so the caller
  *    can recover (clears `selectingThreadId`, allows re-clicking the thread).
  */
@@ -175,8 +175,9 @@ export function loadThreadData(threadId: string): Promise<ThreadDataSnapshot> {
   const snapshot = actor.getSnapshot();
   if (
     snapshot.matches('loaded') &&
-    snapshot.context.data &&
-    !loadedDataContainsStoredScrollPosition(snapshot.context.data, threadId)
+    (snapshot.context.stale ||
+      (snapshot.context.data &&
+        !loadedDataContainsStoredScrollPosition(snapshot.context.data, threadId)))
   ) {
     actor.send({ type: 'INVALIDATE' });
   }

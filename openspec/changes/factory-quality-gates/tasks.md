@@ -142,9 +142,12 @@
 
 ## 7. Rollout and integration
 
-- [ ] 7.1 Before turning the gate on, list the enabled factories whose repository has its own
+- [x] 7.1 Before turning the gate on, list the enabled factories whose repository has its own
       flow copy or relies on auto-merge, ask each installation to accept `checks: write`, and
       record in the change who was told.
+      Done 2026-11-22: no factory was enabled on the deployment, so no owner had to be told.
+      The deployment's App (`funny-sandboxes-ironmussa`) was given `checks: write` by its
+      admin.
 - [ ] 7.2 Run a built-in flow against real issues on a test repository: a fix with a real
       regression test merges; a test that passes without the fix gets a fix round and, unfixed,
       parks the run; an issue whose claim is false ends in `no change` with a comment. Record the

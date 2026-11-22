@@ -2,13 +2,13 @@
 
 ## 1. Git and GitHub helpers (core)
 
-- [ ] 1.1 Add `@funny/core/git` helpers: create a detached temporary worktree at a commit under
+- [x] 1.1 Add `@funny/core/git` helpers: create a detached temporary worktree at a commit under
       the worktree root with a fixed name prefix, copy files from another commit into it, list
       files changed between two commits (added or modified only), and remove a temporary
       worktree; all return `ResultAsync`, reject `-`-prefixed refs and paths outside the
       worktree. Verify with tests against a real git repo (create, copy, diff filter, remove,
       refusal of a hostile ref).
-- [ ] 1.2 Add to `@funny/core/github-app` a merge option that merges a given head SHA directly
+- [x] 1.2 Add to `@funny/core/github-app` a merge option that merges a given head SHA directly
       and never enables auto-merge (returns `not-mergeable` with GitHub's reason instead), a
       query for whether a branch exists with commits ahead of the default branch, creation of a
       check run on a commit, and a query for whether a named check is required on a branch and

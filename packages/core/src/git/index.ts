@@ -168,3 +168,13 @@ export {
 } from './github.js';
 
 export { cloneAuthEnv, cloneRepository, type CloneOptions } from './clone.js';
+
+export {
+  createTempWorktree,
+  removeTempWorktree,
+  copyFilesFromCommit,
+  changedFilesBetween,
+  mergeBase,
+  sweepTempWorktrees,
+  TEMP_WORKTREE_PREFIX,
+} from './temp-worktree.js';

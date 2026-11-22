@@ -15,7 +15,7 @@ import { badRequest, notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
-import { scratchPathFor } from '../services/thread-context.js';
+import { isScratchThread, scratchPathFor } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import { removeScratchWorkspace } from '../services/workspace-cleanup.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -35,7 +35,7 @@ threadWorkspaceRoutes.delete('/:id/scratch', async (c) => {
   const thread = await tm.getThread(id);
   // Another user's thread answers as if it did not exist.
   if (thread && thread.userId !== userId) return resultToResponse(c, err(notFound('Not found')));
-  if (thread && !thread.isScratch) {
+  if (thread && !isScratchThread(thread)) {
     return resultToResponse(c, err(badRequest('Not a scratch thread')));
   }
 

@@ -3,7 +3,7 @@ import type { Job, Thread } from '@funny/shared';
 import { isTauri } from '@/components/terminal/xterm-utils';
 import { readProject, readProjects } from '@/data/projects/read';
 import type { TerminalScope } from '@/hooks/use-terminal-scope';
-import { runsInSandbox } from '@/lib/thread-variant';
+import { isScratch, runsInSandbox } from '@/lib/thread-variant';
 import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import {
   SCRATCH_TERMINAL_SCOPE_ID,
@@ -136,7 +136,7 @@ interface OpenThreadTerminalArgs {
 export function openThreadTerminal({ thread, shell = 'default' }: OpenThreadTerminalArgs): void {
   const { addTab } = useTerminalStore.getState();
 
-  if (thread.isScratch) {
+  if (isScratch(thread)) {
     addTab(
       buildTab({
         projectId: SCRATCH_TERMINAL_SCOPE_ID,

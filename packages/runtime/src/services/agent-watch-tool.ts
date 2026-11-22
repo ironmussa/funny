@@ -29,6 +29,7 @@ import type {
 } from './agent-mcp-http.js';
 import { createOrReschedule } from './agent-watcher-manager.js';
 import { CHECK_INSTRUCTIONS, checkToolDefinition } from './checks/check-tool.js';
+import { isScratchThread } from './thread-context.js';
 import { getThread } from './thread-manager.js';
 import { createAndStartThread } from './thread-service/create.js';
 
@@ -85,7 +86,7 @@ export async function spawnThreadForAgent(
     return { ok: false, error: `parent thread ${parentThreadId} was not found` };
   }
 
-  const isScratch = !!parent.isScratch;
+  const isScratch = isScratchThread(parent);
   const projectId = parent.projectId || null;
   if (!isScratch && !projectId) {
     return { ok: false, error: 'parent thread has no project' };

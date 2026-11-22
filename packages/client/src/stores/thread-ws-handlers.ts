@@ -45,6 +45,7 @@ import i18n from '@/i18n/config';
 import { saveAgentAccounts } from '@/lib/agent-account-storage';
 import { createClientLogger } from '@/lib/client-logger';
 import { loadContextUsage, saveContextUsage } from '@/lib/context-usage-storage';
+import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 
 import { settlePreSendState } from './optimistic-run-state';
@@ -962,7 +963,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
   const payloadEntry = get().threadDataById[threadId];
   const projectIdForRefresh =
-    payloadEntry && !payloadEntry.isScratch
+    payloadEntry && !isScratch(payloadEntry)
       ? payloadEntry.projectId
       : getProjectIdForThread(threadId);
 
@@ -1174,7 +1175,7 @@ function notifyThreadResult(
     threadTitle = t.title ?? threadTitle;
     // Scratch threads keep projectId = null, so downstream notification
     // routing falls through to a no-op rather than guessing.
-    if (!t.isScratch) projectId = t.projectId;
+    if (!isScratch(t)) projectId = t.projectId;
   }
 
   // Fallback: use the loaded payload if the thread wasn't found in sidebar data.

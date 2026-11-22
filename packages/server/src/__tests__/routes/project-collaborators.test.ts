@@ -200,7 +200,7 @@ describe('project collaborators', () => {
     });
   });
 
-  describe('2b — only project admins may edit shared config (startup commands)', () => {
+  describe('2b — only the project owner may edit startup commands', () => {
     test('a plain member can READ commands but cannot create one → 403', async () => {
       seedProjectMember(t.db, { projectId: 'p1', userId: 'alice', role: 'member' });
 
@@ -216,10 +216,11 @@ describe('project collaborators', () => {
       expect(res.status).toBe(200);
     });
 
-    test('an admin member can create a command → 200', async () => {
+    // Issue #203: the command runs as whoever starts it (usually the owner).
+    test('an admin member cannot create a command → 403', async () => {
       seedProjectMember(t.db, { projectId: 'p1', userId: 'admin-user', role: 'admin' });
       const res = await createCommand('admin-user');
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
     });
   });
 

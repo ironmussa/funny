@@ -1,18 +1,14 @@
 import { AlertCircle, CheckCircle2, Clock, GitMerge, GitPullRequest } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
+import { LabelBadge } from '@/components/ui/label-badge';
 
 export function PRStateBadge({ draft }: { state: string; draft: boolean; merged: boolean }) {
   if (!draft) return null;
   return (
-    <Badge
-      variant="outline"
-      size="xxs"
-      className="border-muted-foreground/30 bg-muted text-muted-foreground gap-1"
-    >
+    <LabelBadge tone="neutral">
       <GitPullRequest className="size-2.5" />
       Draft
-    </Badge>
+    </LabelBadge>
   );
 }
 
@@ -21,19 +17,19 @@ export function ReviewDecisionBadge({ decision }: { decision: string | null }) {
   switch (decision) {
     case 'APPROVED':
       return (
-        <span className="text-status-success text-compact flex items-center gap-1">
+        <span className="text-status-success flex items-center gap-1 text-xs">
           <CheckCircle2 className="size-3.5" /> Approved
         </span>
       );
     case 'CHANGES_REQUESTED':
       return (
-        <span className="text-status-error text-compact flex items-center gap-1">
+        <span className="text-status-error flex items-center gap-1 text-xs">
           <AlertCircle className="size-3.5" /> Changes requested
         </span>
       );
     case 'REVIEW_REQUIRED':
       return (
-        <span className="text-status-pending text-compact flex items-center gap-1">
+        <span className="text-status-pending flex items-center gap-1 text-xs">
           <Clock className="size-3.5" /> Review required
         </span>
       );
@@ -47,13 +43,13 @@ export function MergeStatus({ mergeable, merged }: { mergeable: string; merged: 
   switch (mergeable) {
     case 'mergeable':
       return (
-        <span className="text-status-success text-compact flex items-center gap-1">
+        <span className="text-status-success flex items-center gap-1 text-xs">
           <GitMerge className="size-3.5" /> Ready to merge
         </span>
       );
     case 'conflicting':
       return (
-        <span className="text-status-error text-compact flex items-center gap-1">
+        <span className="text-status-error flex items-center gap-1 text-xs">
           <AlertCircle className="size-3.5" /> Merge conflicts
         </span>
       );

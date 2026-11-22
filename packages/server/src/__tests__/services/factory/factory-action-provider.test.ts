@@ -259,6 +259,42 @@ describe('factory action provider regression proof', () => {
     expect(polled).toEqual(['p1', 'p2']);
   });
 
+  test('a runner restarting mid-proof is waited for, then the lost job is started again', async () => {
+    const polled: string[] = [];
+    let starts = 0;
+    let offlineLooks = 2;
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      proof: {
+        pollMs: 1,
+        startProof: async () => ok({ proofId: `p${++starts}`, state: 'running' }),
+        pollProof: async (_threadId, proofId) => {
+          polled.push(proofId);
+          if (offlineLooks-- > 0) return err('runner unavailable: general-runner-offline');
+          return proofId === 'p1' ? err('proof-not-found') : done('pass');
+        },
+      },
+    });
+    const result = await provider.regressionProof!({ rules });
+    expect(result.ok).toBe(true);
+    expect(polled).toEqual(['p1', 'p1', 'p1', 'p2']);
+  });
+
+  test('a runner that stays unreachable past the grace ends the wait', async () => {
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      proof: {
+        pollMs: 1,
+        offlineGraceMs: 5,
+        startProof: async () => ok({ proofId: 'p1', state: 'running' }),
+        pollProof: async () => err('runner unavailable: general-runner-offline'),
+      },
+    });
+    const result = await provider.regressionProof!({ rules });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('poll failed: runner unavailable: general-runner-offline');
+  });
+
   test('an issue with a required label fails a proof that found no test', async () => {
     const proof = {
       startProof: async () => ok({ proofId: 'p1', state: 'running' }),

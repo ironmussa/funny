@@ -778,6 +778,7 @@ if (!nativeBinding) {
 }
 
 module.exports = nativeBinding;
+module.exports.addWorktree = nativeBinding.addWorktree;
 module.exports.blameFile = nativeBinding.blameFile;
 module.exports.checkIgnore = nativeBinding.checkIgnore;
 module.exports.getBranchSummary = nativeBinding.getBranchSummary;
@@ -803,4 +804,5 @@ module.exports.listFiles = nativeBinding.listFiles;
 module.exports.listUnmergedFiles = nativeBinding.listUnmergedFiles;
 module.exports.listWorktrees = nativeBinding.listWorktrees;
 module.exports.ping = nativeBinding.ping;
+module.exports.removeWorktree = nativeBinding.removeWorktree;
 module.exports.resetSoft = nativeBinding.resetSoft;

@@ -64,7 +64,7 @@ export function ProjectActionsMenu({
           'flex items-center gap-0.5',
           open
             ? 'opacity-100'
-            : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto',
+            : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto',
         )}
       >
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -72,7 +72,7 @@ export function ProjectActionsMenu({
             <Button
               variant="ghost"
               size="icon-xs"
-              tabIndex={-1}
+              aria-label={t('sidebar.projectActions', 'Project actions')}
               data-testid={`project-more-actions-${project.id}`}
               onClick={(event) => event.stopPropagation()}
               className="text-muted-foreground hover:text-foreground"

@@ -85,6 +85,23 @@ describe('ThreadItem', () => {
     expect(container.querySelector('button button')).not.toBeInTheDocument();
   });
 
+  test('the more-actions menu is reachable by keyboard and labelled', () => {
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({ status: 'idle' })}
+        projectPath=""
+        isSelected={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const more = screen.getByTestId('thread-item-more-scratch-1');
+    expect(more).not.toHaveAttribute('tabindex', '-1');
+    expect(more).toHaveAccessibleName('Thread actions');
+    act(() => more.focus());
+    expect(more).toHaveFocus();
+  });
+
   test('does not commit a rename while Enter confirms an IME composition', async () => {
     const onRename = vi.fn();
     renderWithProviders(

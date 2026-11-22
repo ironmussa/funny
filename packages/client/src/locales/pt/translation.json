@@ -26,6 +26,8 @@
     "reopenProject": "Reabrir projeto",
     "closedProjects": "Projetos fechados",
     "rename": "Renomear",
+    "threadActions": "Ações do thread",
+    "projectActions": "Ações do projeto",
     "openDirectory": "Abrir diretório",
     "openTerminal": "Abrir terminal",
     "openInEditor": "Abrir no {{editor}}",

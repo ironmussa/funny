@@ -94,5 +94,3 @@ From `factory-quality-gates` (see [docs/guides/factory-regression-proof.md](../.
 - **Load errors are recognised by their output** (`Cannot find module`, `SyntaxError`, …): an
   unrecognised one still counts as a base failure. Collect real inconclusive and false-pass cases
   before widening the patterns or adding a per-runner rule.
-- **The client does not show the proof** (task 6.1): its verdict, finding and output are only in
-  the run's row and the server log.

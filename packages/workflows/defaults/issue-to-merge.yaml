@@ -108,15 +108,18 @@ nodes:
   # twice; the base must fail by an assertion: a timeout, a setup failure or a
   # test file that cannot load there proves nothing. Every issue needs a
   # regression test except those labelled `docs` or `chore`.
-  # The implementing agent's turn after a gate sent the change back. Skipped on
-  # the first pass: there is nothing to address until a review has failed.
+  # The implementing agent's turn after a gate sent the change back: the
+  # review's findings, or what `merge` found when it brought the branch up to
+  # date (a conflict, or checks that fail on the current base). Skipped on the
+  # first pass: there is nothing to address yet.
   - id: address
     depends_on: [pull-request]
-    when: 'review.json.allowsMerge = false'
+    when: 'review.json.allowsMerge = false or merge.json.outcome = "sent_back"'
     spawn_agent:
       prompt: |
         You are working unattended: nobody will answer questions.
 
+        {{#review.json.blocking}}
         An independent review of commit {{review.json.sha}} of the pull request
         from `{{branch}}` (GitHub issue #{{issue_number}} of {{repo}}) found
         problems that must be fixed before it can merge:
@@ -126,9 +129,21 @@ nodes:
         Check out `{{branch}}` and pull it. Fix each finding in the code. Do not
         disable, skip or weaken tests or checks, and keep the regression test.
         If a finding is wrong, change nothing for it and say why in your final
-        message. Run the project's checks, commit, and push to `{{branch}}`.
+        message.
+        {{/review.json.blocking}}
+        {{^review.json.blocking}}
+        The pull request from `{{branch}}` (GitHub issue #{{issue_number}} of
+        {{repo}}) passed its review but cannot merge yet:
+
+        {{merge.json.feedback}}
+
+        Fix it on `{{branch}}` so your change and what merged first both work.
+        Do not disable, skip or weaken tests or checks.
+        {{/review.json.blocking}}
+
+        Run the project's checks, commit, and push to `{{branch}}`.
         Do not rebase or force push, and do not open another pull request.
-        End with a short summary of what you changed for each finding.
+        End with a short summary of what you changed and why.
 
   - id: regression-proof
     depends_on: [address]
@@ -186,8 +201,15 @@ nodes:
       until: 'review.json.allowsMerge = true'
       max_iterations: 3
 
+  # `merge` brings the branch up to date with its base first and waits for the
+  # checks there. A conflict or failing checks go back to `address`; the proof,
+  # the checks and the review then run again: three tries in all.
   - id: merge
     depends_on: [review]
+    loop:
+      back_to: address
+      until: '$not(merge.json.outcome = "sent_back")'
+      max_iterations: 3
     merge:
       method: squash
       delete_branch: true

@@ -14,7 +14,10 @@
  */
 
 import {
+  baseChangesSince,
+  baseDistance,
   commentReview,
+  commitParents,
   createPullRequestCi,
   createRepoCheckOps,
   createRepoGithub,
@@ -22,10 +25,14 @@ import {
   REGRESSION_PROOF_CHECK,
   REVIEW_STATUS_CONTEXT,
   setCommitStatus,
+  updateBranch,
+  type BaseChanges,
+  type BaseDistance,
   type CiState,
   type GithubCallError,
   type MergeMethod,
   type PullRequestFiles,
+  type UpdateBranchResult,
 } from '@funny/core/github-app';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -141,6 +148,31 @@ export interface FactoryPullRequests {
     pr: FactoryPullRequestRef,
     check: FactoryProofCheck,
   ): ResultAsync<void, FactoryPullRequestError>;
+  /** How far `headSha` is behind (and ahead of) the base branch `baseRef`. */
+  baseDistance(
+    pr: FactoryPullRequestRef,
+    baseRef: string,
+    headSha: string,
+  ): ResultAsync<BaseDistance, FactoryPullRequestError>;
+  /**
+   * Have GitHub merge the base branch into the pull request's branch, only
+   * while its head is `headSha` (a merge commit, never a rebase).
+   */
+  updateBranch(
+    pr: FactoryPullRequestRef,
+    headSha: string,
+  ): ResultAsync<UpdateBranchResult, FactoryPullRequestError>;
+  /** The parents of a commit of the repository, first parent first. */
+  commitParents(
+    pr: FactoryPullRequestRef,
+    sha: string,
+  ): ResultAsync<string[], FactoryPullRequestError>;
+  /** What the base branch gained that `headSha` does not have. */
+  baseChanges(
+    pr: FactoryPullRequestRef,
+    headSha: string,
+    baseRef: string,
+  ): ResultAsync<BaseChanges, FactoryPullRequestError>;
   /**
    * Put a review verdict on the pull request: a review comment that never
    * approves, then the `funny/review` status on the reviewed commit with a
@@ -338,6 +370,26 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
 
     changedFiles(pr) {
       return listPullRequestFiles(repoGithubFor(pr, 'read'), pr.repo, pr.number).mapErr(callError);
+    },
+
+    baseDistance(pr, baseRef, headSha) {
+      return baseDistance(repoGithubFor(pr, 'read'), pr.repo, baseRef, headSha).mapErr(callError);
+    },
+
+    updateBranch(pr, headSha) {
+      return updateBranch(repoGithubFor(pr, 'write'), pr.repo, pr.number, headSha).mapErr(
+        callError,
+      );
+    },
+
+    commitParents(pr, sha) {
+      return commitParents(repoGithubFor(pr, 'read'), pr.repo, sha).mapErr(callError);
+    },
+
+    baseChanges(pr, headSha, baseRef) {
+      return baseChangesSince(repoGithubFor(pr, 'read'), pr.repo, headSha, baseRef).mapErr(
+        callError,
+      );
     },
 
     publishProofCheck(pr, check) {

@@ -61,6 +61,7 @@ import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
+import { createMergeLane } from './factory-merge-lane.js';
 import {
   proofAllowsMerge,
   proofCheckOf,
@@ -108,6 +109,8 @@ function keptWorktreeLine(kept: KeptWorktree): string {
  * factory-agent-roles, D8). The run row shows the reason.
  */
 export const MERGE_HOLD_REASONS = {
+  /** The branch no longer contains the commit that was reviewed before (a force push). */
+  rewritten: 'branch history rewritten',
   /** The head commit has no verdict of the flow's `review` step. */
   noReview: 'no review',
   /** Its verdict does not allow a merge. */
@@ -845,6 +848,43 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   }
 
   /**
+   * A branch whose head no longer contains the commit reviewed before it was
+   * rewritten (a rebase or a force push): the run waits for a person. An
+   * unreadable history holds nothing here; the review gate still applies.
+   */
+  async function historyRewritten(sha: string): Promise<ActionResult | null> {
+    const pr = pullRequest();
+    const previous = reviewer
+      .verdicts()
+      .filter((review) => review.sha !== sha)
+      .at(-1);
+    if (!pr || !previous) return null;
+    // Commits of the reviewed commit that the head lacks: none, unless history was rewritten.
+    const distance = await deps.github.pullRequests.baseDistance(pr, previous.sha, sha);
+    if (distance.isErr() || distance.value.behindBy === 0) return null;
+    return holdMerge(
+      MERGE_HOLD_REASONS.rewritten,
+      `Not merged: the branch was rewritten. Its head ${sha} no longer contains ${previous.sha}, which was reviewed.`,
+    );
+  }
+
+  /** The `wait_ci` options of the flow's last look, reused when the merge waits on a new head. */
+  let lastWaitCi: Parameters<typeof ci.waitCi>[0] = {};
+
+  const lane = createMergeLane({
+    prs: deps.github.pullRequests,
+    pullRequest,
+    branch: scope.branch,
+    signal: deps.signal,
+    waitChecks: async () => {
+      const result = await ci.waitCi(lastWaitCi);
+      const verdict = result.metadata?.verdict;
+      await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });
+      return result;
+    },
+  });
+
+  /**
    * What `merge` checks itself on entry, whatever path led to it (a repository
    * flow draws its own): the head commit has a verdict of the flow's own
    * `review` step that allows a merge (unless `require_review: false`), and
@@ -853,6 +893,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
    * Null when the merge may go on.
    */
   async function mergeHeld(opts: MergeOpts, sha: string): Promise<ActionResult | null> {
+    const rewritten = await historyRewritten(sha);
+    if (rewritten) return rewritten;
     if (opts.requireReview !== false) {
       const verdict = reviewer.verdicts().find((review) => review.sha === sha);
       if (!verdict) {
@@ -891,9 +933,26 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     if (head.isErr()) {
       return { ok: false, error: head.error.message, metadata: { kind: head.error.kind } };
     }
-    const sha = head.value.sha;
-    const held = await mergeHeld(opts, sha);
+    const held = await mergeHeld(opts, head.value.sha);
     if (held) return held;
+
+    // Green on an old base proves nothing about the base as it is now.
+    const current = await lane.bringUpToDate();
+    if (current.kind === 'failed') return { ok: false, error: current.error };
+    if (current.kind === 'sent-back') {
+      await count(metrics, { event: `merge_sent_back_${current.why}` });
+      return {
+        ok: true,
+        output: 'sent_back',
+        metadata: { outcome: 'sent_back', why: current.why, feedback: current.feedback },
+      };
+    }
+    for (const step of current.carried) await reviewer.carry(step.from, step.to);
+    const sha = current.sha;
+    if (sha !== head.value.sha) {
+      const heldNow = await mergeHeld(opts, sha);
+      if (heldNow) return heldNow;
+    }
     if (opts.requireRegressionProof === false) {
       // A reviewed commit is merged as that commit; without the review gate, as before.
       return opts.requireReview === false ? ci.merge(opts) : ci.merge({ ...opts, sha });
@@ -954,6 +1013,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     },
 
     async waitCi(opts) {
+      lastWaitCi = {
+        timeoutMs: opts.timeoutMs,
+        intervalMs: opts.intervalMs,
+        requiredChecks: opts.requiredChecks,
+      };
       await deps.record({ state: 'waiting_ci' });
       // When the commit's checks start: the report is ready before the review,
       // and the reviewer starts on this commit without waiting for green

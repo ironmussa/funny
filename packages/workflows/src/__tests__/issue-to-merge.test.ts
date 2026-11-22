@@ -20,7 +20,13 @@ const ok: ActionResult = { ok: true, output: '' };
 const verdict = (allowsMerge: boolean, feedback = ''): ActionResult => ({
   ok: true,
   output: allowsMerge ? 'pass' : 'fail',
-  metadata: { verdict: allowsMerge ? 'pass' : 'fail', allowsMerge, sha: 'abc123', feedback },
+  metadata: {
+    verdict: allowsMerge ? 'pass' : 'fail',
+    allowsMerge,
+    blocking: !allowsMerge,
+    sha: 'abc123',
+    feedback,
+  },
 });
 const pass = verdict(true);
 
@@ -28,7 +34,11 @@ const pass = verdict(true);
  * A provider whose `wait_ci` answers from `ci` and whose `review` answers from
  * `reviews`, each in order (the last repeats).
  */
-function provider(ci: ActionResult[], reviews: ActionResult[] = [pass]) {
+function provider(
+  ci: ActionResult[],
+  reviews: ActionResult[] = [pass],
+  mergeResults: ActionResult[] = [ok],
+) {
   const prompts: string[] = [];
   let looks = 0;
   let merges = 0;
@@ -52,10 +62,7 @@ function provider(ci: ActionResult[], reviews: ActionResult[] = [pass]) {
       waits.push(opts);
       return ci[Math.min(looks++, ci.length - 1)]!;
     },
-    merge: async () => {
-      merges++;
-      return ok;
-    },
+    merge: async () => mergeResults[Math.min(merges++, mergeResults.length - 1)]!,
     requestApproval: async () => ({ decision: 'approve' }),
   };
   return { p, prompts, merges: () => merges, looks: () => looks, reviews: () => reviewed, waits };
@@ -65,10 +72,15 @@ const red: ActionResult = { ok: false, error: 'Failing checks: test\n\n--- test 
 const green: ActionResult = { ok: true, output: 'green' };
 const timeout: ActionResult = { ok: false, error: 'The checks did not finish within 3600 s.' };
 
-async function run(ci: ActionResult[], flow = 'issue-to-merge', reviews?: ActionResult[]) {
+async function run(
+  ci: ActionResult[],
+  flow = 'issue-to-merge',
+  reviews?: ActionResult[],
+  mergeResults?: ActionResult[],
+) {
   const { workflows } = await loadWorkflowCatalog();
   const pipeline = compileYamlPipeline(workflows.get(flow)!.workflow);
-  const fake = provider(ci, reviews);
+  const fake = provider(ci, reviews, mergeResults);
   const result = await runPipeline(pipeline, {
     provider: fake.p,
     progress: nullReporter,
@@ -218,6 +230,59 @@ describe('issue-to-merge workflow', () => {
     test('issue-to-pr has no review step', async () => {
       const r = await run([green], 'issue-to-pr');
       expect(r.reviews()).toBe(0);
+    });
+  });
+
+  // Change factory-agent-roles, D8/D9: `merge` sends a conflict back to the implementer.
+  describe('merge loop', () => {
+    const conflict = 'The pull request from `factory/issue-7` conflicts with `main`';
+    const sentBack: ActionResult = {
+      ok: true,
+      output: 'sent_back',
+      metadata: { outcome: 'sent_back', why: 'conflict', feedback: conflict },
+    };
+    const merged: ActionResult = { ok: true, output: 'merged', metadata: { outcome: 'merged' } };
+
+    test('a conflict goes to the implementer, then the checks and the review run again before the merge', async () => {
+      const r = await run([green], 'issue-to-merge', [pass], [sentBack, merged]);
+      expect(r.outcome).toBe('completed');
+      expect(r.merges()).toBe(2);
+      // The implement turn, then the conflict as a follow-up: not the review's wording.
+      expect(r.prompts).toHaveLength(2);
+      expect(r.prompts[1]).toContain(conflict);
+      expect(r.prompts[1]).toContain('passed its review but cannot merge yet');
+      expect(r.prompts[1]).not.toContain('An independent review');
+      expect(r.prompts[1]).toContain('Do not rebase or force push');
+      // The new commit went through the checks and the review again.
+      expect(r.looks()).toBe(2);
+      expect(r.reviews()).toBe(2);
+    });
+
+    test('a review that fails after a conflict fix sends its own findings, not the conflict again', async () => {
+      const findings = '- [high] src/sum.ts:3: the merge dropped a case';
+      const r = await run(
+        [green],
+        'issue-to-merge',
+        [pass, verdict(false, findings), pass],
+        [sentBack, merged],
+      );
+      expect(r.outcome).toBe('completed');
+      expect(r.prompts).toHaveLength(3);
+      expect(r.prompts[2]).toContain(findings);
+      expect(r.prompts[2]).not.toContain(conflict);
+    });
+
+    test('a branch that conflicts every time ends the run without a merge', async () => {
+      const r = await run([green], 'issue-to-merge', [pass], [sentBack]);
+      expect(r.outcome).toBe('failed');
+      expect(r.error).toContain('loop exhausted');
+      expect(r.merges()).toBe(3);
+    });
+
+    test('a provider whose merge reports no outcome ends the loop after one merge', async () => {
+      const r = await run([green]);
+      expect(r.outcome).toBe('completed');
+      expect(r.merges()).toBe(1);
     });
   });
 });

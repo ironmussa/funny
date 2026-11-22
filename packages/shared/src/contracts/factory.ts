@@ -368,6 +368,12 @@ export function reviewAllowsMerge(result: FactoryReviewResult): boolean {
 export const factoryReviewVerdictSchema = factoryReviewResultSchema.extend({
   /** The reviewer's thread. */
   threadId: z.string().optional(),
+  /**
+   * The reviewed commit this verdict was carried from: `sha` is a merge of it
+   * with the base branch (update-branch), so the pull request's own change is
+   * the one that was reviewed.
+   */
+  carriedFrom: z.string().optional(),
   reviewedAt: z.string(),
   /** Whether the verdict is on the pull request as a review comment. */
   published: z.boolean().optional(),

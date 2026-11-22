@@ -219,6 +219,8 @@ export function verdictResult(verdict: FactoryReviewVerdict): ActionResult {
     metadata: {
       verdict: verdict.verdict,
       allowsMerge,
+      // For templates: a section that shows only when the review sends the change back.
+      blocking: !allowsMerge,
       sha: verdict.sha,
       feedback: reviewFeedback(verdict),
       threadId: verdict.threadId,
@@ -465,6 +467,25 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
   return {
     /** The run's verdicts so far, oldest first. */
     verdicts: (): readonly FactoryReviewVerdict[] => reviews,
+
+    /**
+     * Keep the verdict of `from` for `to`: `to` is a merge of `from` with the
+     * base branch, so the pull request's own change is the reviewed one. The
+     * caller verified that. Nothing happens when `from` has no verdict.
+     */
+    async carry(from: string, to: string): Promise<void> {
+      const verdict = reviews.find((review) => review.sha === from);
+      if (!verdict || reviews.some((review) => review.sha === to)) return;
+      reviews = withReviewVerdict(reviews, {
+        ...verdict,
+        sha: to,
+        carriedFrom: verdict.carriedFrom ?? from,
+        published: false,
+        statusPublished: false,
+      });
+      await deps.record({ reviews });
+      await deps.count('review_carried');
+    },
 
     /**
      * Start reviewing `sha` without waiting for it (when the commit's checks

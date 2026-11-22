@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { PullRequestFile } from '@funny/core/github-app';
+import type { CiState } from '@funny/core/github-app';
 import type { FactoryRisk } from '@funny/shared/contracts/factory';
 import { err, errAsync, ok, okAsync } from 'neverthrow';
 
@@ -60,6 +61,10 @@ function providerWith(pullRequests: Partial<PullRequestsPort>, over: Partial<Pro
         prState: () => okAsync('open' as const),
         changedFiles: () => okAsync({ files: [], truncated: false }),
         publishReview: () => okAsync({ status: true }),
+        baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
+        updateBranch: () => okAsync({ kind: 'updating' as const }),
+        commitParents: () => okAsync([]),
+        baseChanges: () => okAsync({ commits: [], files: [] }),
         pullHead: () => okAsync({ sha: 'sha-1', baseRef: 'main', autoMerge: false }),
         publishProofCheck: () => okAsync(undefined),
         ciState: () => okAsync({ kind: 'green' as const }),
@@ -711,5 +716,213 @@ describe('what merge checks on entry', () => {
     expect(result).toMatchObject({ ok: false, metadata: { kind: 'no-access' } });
     expect(result.error).toContain('merging needs write access');
     expect(followUps).toEqual([]);
+  });
+});
+
+describe('merge brings the branch up to date with its base first', () => {
+  const at = '2026-11-22T02:00:00.000Z';
+  const SHA_M = 'c'.repeat(40);
+  const SHA_M2 = 'd'.repeat(40);
+  const BASE_1 = 'e'.repeat(40);
+  const reviewedA = { sha: SHA_A, verdict: 'pass' as const, findings: [], reviewedAt: at };
+
+  interface LaneScript {
+    /** How many commits behind its base each head is (default 0). */
+    behind?: Record<string, number>;
+    /** What update-branch answers for a head: the merge commit it makes, or a refusal. */
+    updates?: Record<string, string | { kind: 'conflict' | 'refused'; reason: string }>;
+    /** A commit's parents. */
+    parents?: Record<string, string[]>;
+    /** The checks of each head (default green). */
+    checks?: Record<string, CiState>;
+    reviews?: ProviderDeps['reviews'];
+    /** Commits of the first that the second lacks (a rewritten history), by `first...second`. */
+    lacks?: Record<string, number>;
+  }
+
+  function lane(script: LaneScript) {
+    let head = SHA_A;
+    const updates: string[] = [];
+    const merges: Array<{ sha?: string } | undefined> = [];
+    const recorded: UpdateRunInput[] = [];
+    const followUps: string[] = [];
+    const { provider } = providerWith(
+      {
+        pullHead: () => okAsync({ sha: head, baseRef: 'main', autoMerge: false }),
+        baseDistance: (_pr, base, sha) => {
+          // A commit of the base has nothing the base lacks.
+          if (sha === BASE_1) return okAsync({ behindBy: 0, aheadBy: 0 });
+          if (base === 'main') return okAsync({ behindBy: script.behind?.[sha] ?? 0, aheadBy: 1 });
+          // The head compared with a commit reviewed before it.
+          return okAsync({ behindBy: script.lacks?.[`${base}...${sha}`] ?? 0, aheadBy: 1 });
+        },
+        updateBranch: (_pr, sha) => {
+          updates.push(sha);
+          const answer = script.updates?.[sha];
+          if (!answer) return okAsync({ kind: 'refused' as const, reason: 'unexpected' });
+          if (typeof answer !== 'string') return okAsync(answer);
+          head = answer;
+          return okAsync({ kind: 'updating' as const });
+        },
+        commitParents: (_pr, sha) => okAsync(script.parents?.[sha] ?? []),
+        baseChanges: () =>
+          okAsync({
+            commits: [{ sha: BASE_1, title: 'fix: rounding (#12)' }],
+            files: ['src/sum.ts', 'bun.lock'],
+          }),
+        changedFiles: () =>
+          okAsync({
+            files: [changed('src/sum.ts', ['+x']), changed('bun.lock', ['+y'])],
+            truncated: false,
+          }),
+        ciState: () => okAsync(script.checks?.[head] ?? { kind: 'green' as const }),
+        merge: (_pr, options) => {
+          merges.push(options);
+          return okAsync({
+            kind: 'merged' as const,
+            method: 'squash' as const,
+            branchDeleted: false,
+          });
+        },
+      },
+      {
+        reviews: script.reviews ?? [reviewedA],
+        record: async (input) => {
+          recorded.push(input);
+        },
+        continuation: {
+          followUp: async (_threadId, content) => {
+            followUps.push(content);
+            return ok(undefined);
+          },
+          completedAt: async () => null,
+          followedUpSince: async () => false,
+        },
+      },
+    );
+    const merge = () => provider.merge({ requireRegressionProof: false });
+    const reviews = () => {
+      const writes = recorded.flatMap((input) => (input.reviews ? [input.reviews] : []));
+      return writes.at(-1) ?? [];
+    };
+    return { merge, merges, updates, reviews, recorded, followUps };
+  }
+
+  test('a head that has its base is merged without touching the branch', async () => {
+    const { merge, merges, updates } = lane({});
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(updates).toEqual([]);
+    expect(merges).toMatchObject([{ sha: SHA_A }]);
+  });
+
+  // Two runs green on the same old base: the second is merged only once its
+  // checks are green on a commit that has what the first one merged.
+  test('green on an old base: the base is merged in, the checks pass again, and that commit is merged', async () => {
+    const { merge, merges, updates, reviews } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(updates).toEqual([SHA_A]);
+    expect(merges).toMatchObject([{ sha: SHA_M }]);
+    // Only base changes came in: the review of A stands for the merge commit, no new review.
+    expect(reviews()).toMatchObject([
+      { sha: SHA_A, verdict: 'pass' },
+      { sha: SHA_M, verdict: 'pass', carriedFrom: SHA_A },
+    ]);
+  });
+
+  test('the base moves again while the checks run: it is merged in again before the merge', async () => {
+    const { merge, merges, updates } = lane({
+      behind: { [SHA_A]: 1, [SHA_M]: 1 },
+      updates: { [SHA_A]: SHA_M, [SHA_M]: SHA_M2 },
+      parents: { [SHA_M]: [SHA_A, BASE_1], [SHA_M2]: [SHA_M, BASE_1] },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(updates).toEqual([SHA_A, SHA_M]);
+    expect(merges).toMatchObject([{ sha: SHA_M2 }]);
+  });
+
+  test('checks that fail on the updated branch go back to the implementer, and nothing is merged', async () => {
+    const { merge, merges } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      checks: {
+        [SHA_M]: {
+          kind: 'failing',
+          checks: [{ name: 'test', conclusion: 'failure', excerpt: 'expected 3, got 2' }],
+        },
+      },
+    });
+    const result = await merge();
+    expect(result).toMatchObject({
+      ok: true,
+      output: 'sent_back',
+      metadata: { outcome: 'sent_back', why: 'checks' },
+    });
+    expect(String(result.metadata?.feedback)).toContain('after `main` was merged into the branch');
+    expect(String(result.metadata?.feedback)).toContain('expected 3, got 2');
+    expect(merges).toEqual([]);
+  });
+
+  test('a conflict goes back with what merged first, the files on both sides and the lockfile rule', async () => {
+    const { merge, merges } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: { kind: 'conflict', reason: 'merge conflict between base and head' } },
+    });
+    const result = await merge();
+    expect(result).toMatchObject({ ok: true, metadata: { outcome: 'sent_back', why: 'conflict' } });
+    const feedback = String(result.metadata?.feedback);
+    expect(feedback).toContain('conflicts with `main`');
+    expect(feedback).toContain(`${BASE_1.slice(0, 8)} fix: rounding (#12)`);
+    expect(feedback).toContain('- src/sum.ts');
+    expect(feedback).toContain('regenerate it with the package manager');
+    expect(feedback).toContain('Never rebase and never force push');
+    expect(merges).toEqual([]);
+  });
+
+  test('a refusal that is not a conflict fails the step: no merge, and no agent is asked', async () => {
+    const { merge, merges, followUps } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: { kind: 'refused', reason: 'Protected branch update failed' } },
+    });
+    const result = await merge();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Protected branch update failed');
+    expect(merges).toEqual([]);
+    expect(followUps).toEqual([]);
+  });
+
+  test('a new head that is not a merge of the reviewed commit with the base is not merged', async () => {
+    const { merge, merges, reviews } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      // Someone pushed their own commit instead: one parent, not a base merge.
+      parents: { [SHA_M]: [SHA_B] },
+    });
+    const result = await merge();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('is not a merge of');
+    expect(merges).toEqual([]);
+    expect(reviews()).toEqual([]);
+  });
+
+  test('a branch rewritten so it no longer contains the reviewed commit waits for a person', async () => {
+    const { merge, merges, recorded } = lane({
+      reviews: [{ sha: SHA_B, verdict: 'pass', findings: [], reviewedAt: at }, reviewedA],
+      // The head (A) lacks two commits of B, which was reviewed before: a force push.
+      lacks: { [`${SHA_B}...${SHA_A}`]: 2 },
+    });
+    expect(await merge()).toMatchObject({
+      ok: false,
+      metadata: { reason: MERGE_HOLD_REASONS.rewritten },
+    });
+    expect(merges).toEqual([]);
+    expect(recorded).toContainEqual({
+      state: 'waiting_human',
+      failureReason: MERGE_HOLD_REASONS.rewritten,
+    });
   });
 });

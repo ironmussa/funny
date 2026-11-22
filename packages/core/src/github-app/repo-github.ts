@@ -15,6 +15,8 @@ export interface GithubCallError {
   status?: number;
   /** The token source's error kind (e.g. `not-installed`), when the token was refused. */
   kind?: string;
+  /** What GitHub said in the body of a refusal (its `message`, or the start of the body). */
+  detail?: string;
 }
 
 /** Where a repository's token comes from. */
@@ -40,6 +42,23 @@ const fail = (message: string, status?: number, kind?: string): GithubCallError 
   kind,
 });
 
+/** At most this much of a refusal's body is kept. */
+const MAX_DETAIL = 500;
+
+/** What a refusal's body says: its JSON `message` when it has one, else the start of the text. */
+function refusalDetail(text: string): string | undefined {
+  if (!text) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && 'message' in parsed) {
+      return String(parsed.message).slice(0, MAX_DETAIL);
+    }
+  } catch {
+    // Not JSON: the text itself is the detail.
+  }
+  return text.slice(0, MAX_DETAIL);
+}
+
 export function createRepoGithub(deps: {
   tokenFor: RepoTokenSource;
   fetch?: typeof fetch;
@@ -59,11 +78,15 @@ export function createRepoGithub(deps: {
           body: body === undefined ? undefined : JSON.stringify(body),
         }).mapErr((e) => fail(e.message)),
       )
-      .andThen((res) =>
-        res.ok
-          ? okAsync(res)
-          : errAsync(fail(`GitHub answered ${res.status} to ${method} ${path}`, res.status)),
-      );
+      .andThen((res) => {
+        if (res.ok) return okAsync(res);
+        return ResultAsync.fromSafePromise(res.text().catch(() => '')).andThen((text) => {
+          const error = fail(`GitHub answered ${res.status} to ${method} ${path}`, res.status);
+          const detail = refusalDetail(text);
+          if (detail) error.detail = detail;
+          return errAsync(error);
+        });
+      });
 
   return {
     json: <T>(repo: string, method: string, path: string, body?: unknown) =>

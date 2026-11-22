@@ -249,6 +249,13 @@ export const createThreadSchema = z
     effort: effortLevelSchema.optional(),
     source: threadSourceSchema.default('web'),
     baseBranch: optionalBaseBranchSchema,
+    /**
+     * The worktree's branch name (worktree mode only). The issue factory sends
+     * the run's branch so the thread, its worktree and the pull request share
+     * one branch. Absent, or already present in the repository: a name is
+     * generated from the title.
+     */
+    branch: branchNameSchema.optional(),
     prompt: z.string().min(1, 'prompt is required').max(500_000),
     images: z.array(imageAttachmentSchema).max(10).optional(),
     ...agentRunInputFields,

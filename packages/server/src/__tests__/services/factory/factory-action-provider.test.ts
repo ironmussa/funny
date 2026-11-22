@@ -63,6 +63,19 @@ describe('factory action provider', () => {
     expect(waited).toEqual(['A']);
   });
 
+  test("a new thread is launched on the run's branch, so its worktree and the PR share one", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const { provider } = providerWith({
+      launch: async (body) => {
+        bodies.push(body);
+        return ok({ thread: { id: 't-new' }, threadId: 't-new', runnerId: 'r' });
+      },
+    });
+    await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({ branch: 'factory/issue-7-r1', source: 'factory' });
+  });
+
   test('a thread whose launch finished after the run was stopped is stopped', async () => {
     const controller = new AbortController();
     const abandoned: string[] = [];

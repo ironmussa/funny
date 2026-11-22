@@ -46,7 +46,8 @@ nodes:
         Read the issue first: {{issue_url}}
 
         How to work:
-        - Work on a new branch named `{{branch}}`, created from the default branch.
+        - Work on the branch `{{branch}}`. You may already be on it (check with
+          `git branch --show-current`); otherwise create it from the default branch.
         - Read the code around the change before editing, follow the conventions
           you find, and keep the change to what the issue asks.
         - Add or update tests when the change affects behavior, and run the

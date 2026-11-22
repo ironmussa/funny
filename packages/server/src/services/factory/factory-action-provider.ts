@@ -331,6 +331,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       projectId: scope.projectId,
       title,
       mode: scope.mode,
+      // A worktree thread is created on the run's branch, so the thread, its
+      // worktree and the pull request share one branch.
+      branch: scope.branch,
       source: 'factory',
       prompt: prompted(opts),
       model: opts.model ?? undefined,

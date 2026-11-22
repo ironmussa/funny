@@ -59,6 +59,7 @@ import {
   formatShellEscapeOutput,
 } from './shell-escape.js';
 import { copyThreadUploads } from './staged-uploads.js';
+import { worktreeBranchName } from './worktree-branch.js';
 import { prepareWorktree } from './worktree-preparation.js';
 
 /**
@@ -269,6 +270,8 @@ export interface CreateAndStartThreadParams {
   effort?: string;
   source?: string;
   baseBranch?: string;
+  /** Branch for a `worktree` thread's worktree; generated from the title when absent. */
+  branch?: string;
   prompt: string;
   images?: ImageAttachment[];
   allowedTools?: string[];
@@ -502,7 +505,11 @@ async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
   // Titles may carry the attachments block (badge) — never slug the XML.
   const slug = slugifyTitle(stripReferencedFilesBlock(ctx.titleSource));
   const projectSlug = slugifyTitle(ctx.project.name);
-  const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
+  const branchName = await worktreeBranchName(
+    projectPath,
+    params.branch,
+    `${projectSlug}/${slug}-${threadId.slice(0, 6)}`,
+  );
 
   const thread = {
     ...baseProjectThreadRow(ctx),

@@ -145,7 +145,7 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   stopped: 'ended',
 };
 
-export const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [
+const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [
   'waiting',
   'active',
   'queue',
@@ -167,4 +167,33 @@ export function groupFactoryRuns<R extends FactoryRun>(
   for (const run of runs) groups[SECTION_OF[run.state]].push(run);
   groups.queue.sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0));
   return groups;
+}
+
+/** What the factory view filters its runs by. */
+export interface FactoryRunFilter {
+  /** Matches the issue number (a leading `#` is ignored), the project name or the current step. */
+  search: string;
+  caseSensitive: boolean;
+  /** The states to keep; empty keeps every state. */
+  states: ReadonlySet<string>;
+  projectNameById: ReadonlyMap<string, string>;
+}
+
+/** The runs the factory view shows, in its order (waiting, in progress, queue, failed, ended). */
+export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
+  runs: R[],
+  { search, caseSensitive, states, projectNameById }: FactoryRunFilter,
+): R[] {
+  const fold = (text: string) => (caseSensitive ? text : text.toLowerCase());
+  const needle = fold(search.trim().replace(/^#/, ''));
+  const matchesSearch = (run: R) =>
+    !needle ||
+    String(run.issueNumber).includes(needle) ||
+    fold(projectNameById.get(run.projectId) ?? '').includes(needle) ||
+    fold(run.currentStep ?? '').includes(needle);
+  const kept = runs.filter(
+    (run) => (states.size === 0 || states.has(run.state)) && matchesSearch(run),
+  );
+  const groups = groupFactoryRuns(kept);
+  return FACTORY_QUEUE_SECTIONS.flatMap((section) => groups[section]);
 }

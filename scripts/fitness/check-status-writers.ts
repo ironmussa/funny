@@ -14,8 +14,10 @@
  * violation; `--self-test` checks the allowed and forbidden fixtures.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+
+import { walkSources } from './walk-sources';
 
 const ROOT = join(import.meta.dir, '..', '..');
 const SCANNED = [
@@ -94,15 +96,6 @@ export function classify(file: string, source: string): string[] {
   return violations;
 }
 
-function* walk(dir: string): Generator<string> {
-  for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === 'dist' || entry === '__tests__') continue;
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) yield* walk(full);
-    else if (/\.(ts|tsx)$/.test(entry) && !/\.test\.tsx?$/.test(entry)) yield full;
-  }
-}
-
 function runSelfTest(): void {
   const route = 'packages/server/src/trpc/ports/background.ts';
   const allowed: Array<[string, string]> = [
@@ -143,7 +136,7 @@ function main(): void {
   if (process.argv.includes('--self-test')) runSelfTest();
   const violations: string[] = [];
   for (const dir of SCANNED) {
-    for (const abs of walk(join(ROOT, dir))) {
+    for (const abs of walkSources(join(ROOT, dir), /\.test\.tsx?$/)) {
       // Owners are listed with `/`; `relative` answers backslashes on Windows.
       const file = relative(ROOT, abs).split(sep).join('/');
       violations.push(...classify(file, readFileSync(abs, 'utf8')));

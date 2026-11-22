@@ -612,12 +612,15 @@ export const respondPermissionRequestSchema = z.object({
 // ── Regression proof schemas ────────────────────────────────────
 
 export const startRegressionProofSchema = z.object({
-  headSha: gitRefSchema,
+  /** The commit to prove; the runner resolves the thread checkout's HEAD when absent. */
+  headSha: gitRefSchema.optional(),
+  /** The base branch; the runner resolves the repository's default branch when absent. */
   defaultBranch: z
     .string()
     .min(1)
     .max(255)
-    .refine((s) => !s.startsWith('-'), 'branch must not start with "-"'),
+    .refine((s) => !s.startsWith('-'), 'branch must not start with "-"')
+    .optional(),
   rules: z.array(
     z.object({
       globs: z.array(z.string()).min(1),

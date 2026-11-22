@@ -8,6 +8,7 @@
  * without a checkout.
  */
 
+import { getDefaultBranch, gitRead } from '@funny/core/git';
 import { Hono } from 'hono';
 
 import { startProofJob, getProofJob } from '../services/regression-proof.js';
@@ -49,9 +50,32 @@ regressionProofRoutes.post('/:id/regression-proof', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const input = parsed.value;
 
+  // The commit the thread's checkout is on: the run's branch, never the
+  // project directory's HEAD when the thread has its own worktree.
+  const checkout = thread.worktreePath ?? thread.projectPath;
+  let headSha = input.headSha;
+  if (!headSha) {
+    const head = await gitRead(['rev-parse', 'HEAD'], { cwd: checkout, reject: false });
+    if (head.exitCode !== 0 || !head.stdout.trim()) {
+      return c.json({ error: 'Could not resolve the thread HEAD', code: 'head-unresolved' }, 409);
+    }
+    headSha = head.stdout.trim();
+  }
+  let defaultBranch = input.defaultBranch;
+  if (!defaultBranch) {
+    const detected = await getDefaultBranch(thread.projectPath);
+    defaultBranch = detected.isOk() && detected.value ? detected.value : undefined;
+  }
+  if (!defaultBranch) {
+    return c.json(
+      { error: 'Could not resolve the default branch', code: 'default-branch-unresolved' },
+      409,
+    );
+  }
+
   const job = startProofJob(thread.id, thread.projectPath, thread.worktreePath ?? null, {
-    headSha: input.headSha,
-    defaultBranch: input.defaultBranch,
+    headSha,
+    defaultBranch,
     rules: input.rules,
     supportGlobs: input.supportGlobs,
     timeoutMs: input.timeoutMs,

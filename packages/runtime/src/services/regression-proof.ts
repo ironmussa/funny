@@ -43,6 +43,8 @@ export interface ProofRequest {
 
 export interface ProofResult {
   verdict: ProofVerdict;
+  /** The commit the proof ran against. */
+  headSha: string;
   finding?: string;
   files: string[];
   commands: string[];
@@ -133,6 +135,16 @@ export async function runProof(
   request: ProofRequest,
   signal: AbortSignal,
 ): Promise<ProofResult> {
+  const result = await proveCommit(projectPath, worktreePath, request, signal);
+  return { ...result, headSha: request.headSha };
+}
+
+async function proveCommit(
+  projectPath: string,
+  worktreePath: string | null,
+  request: ProofRequest,
+  signal: AbortSignal,
+): Promise<Omit<ProofResult, 'headSha'>> {
   const { headSha, defaultBranch, rules, timeoutMs } = request;
   const supportGlobs =
     request.supportGlobs.length > 0 ? request.supportGlobs : DEFAULT_SUPPORT_GLOBS;
@@ -366,7 +378,9 @@ export function startProofJob(
   const existing = jobs.get(key);
 
   if (existing) {
-    if (existing.headSha === request.headSha) {
+    // Join a proof of the same commit that is still running; a finished one is
+    // never reused, so a retry always runs again.
+    if (existing.state === 'running' && existing.headSha === request.headSha) {
       return existing;
     }
     existing.controller.abort();
@@ -392,6 +406,7 @@ export function startProofJob(
     .catch((err) => {
       job.result = {
         verdict: 'fail',
+        headSha: request.headSha,
         finding: `Proof error: ${err instanceof Error ? err.message : String(err)}`,
         files: [],
         commands: [],

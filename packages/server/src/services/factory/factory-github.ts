@@ -29,6 +29,7 @@ import { createSandboxRunnerCalls } from '../thread-sandboxes/sandbox-runner-cal
 import { createFactoryPullRequests, type FactoryPullRequests } from './factory-pull-requests.js';
 import {
   createFactoryRepoReads,
+  labelNames,
   type FactoryPullRequestFound,
   type PullRequestLookup,
   type RepoIssue,
@@ -39,6 +40,8 @@ export interface FactoryIssue {
   number: number;
   title: string;
   url: string;
+  /** The issue's label names, when known (a flow's `require_test: labels` reads them). */
+  labels?: string[];
 }
 
 /** One issue as GitHub has it now: what a send and the queue check before admitting. */
@@ -107,6 +110,7 @@ interface RawIssue {
   title: string;
   html_url: string;
   pull_request?: unknown;
+  labels?: Array<string | { name?: string }>;
 }
 
 /** Open, labelled issues from GitHub, oldest first, with PRs filtered out. */
@@ -146,7 +150,12 @@ function fetchIssues(
       // GitHub's issues endpoint also returns PRs; they carry `pull_request`.
       raw
         .filter((i) => !i.pull_request)
-        .map((i) => ({ number: i.number, title: i.title, url: i.html_url })),
+        .map((i) => ({
+          number: i.number,
+          title: i.title,
+          url: i.html_url,
+          labels: labelNames(i.labels),
+        })),
     );
   });
 }

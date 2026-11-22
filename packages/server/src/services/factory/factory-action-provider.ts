@@ -494,9 +494,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         requireTest === 'always' ||
         (requireTest === 'labels' && opts.labels?.some((l) => issueLabels.includes(l)));
 
+      // The runner resolves the commit (the thread checkout's HEAD) and the
+      // repository's default branch itself.
       const body = {
-        headSha: 'HEAD',
-        defaultBranch: 'main',
         rules: opts.rules ?? [],
         supportGlobs: opts.supportGlobs ?? [],
         timeoutMs: opts.timeoutMs ?? 600_000,
@@ -508,7 +508,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         return { ok: false, error: `Regression proof: could not start: ${started.error}` };
       }
 
-      const { proofId } = started.value;
+      let { proofId } = started.value;
       const pollInterval = 5_000;
       const deadline = Date.now() + (opts.timeoutMs ?? 600_000) + 60_000;
       let restartAttempts = 0;
@@ -535,6 +535,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
                 error: `Regression proof: could not restart: ${restarted.error}`,
               };
             }
+            proofId = restarted.value.proofId;
+            firstPoll = true;
             continue;
           }
           return { ok: false, error: `Regression proof: poll failed: ${polled.error}` };
@@ -544,6 +546,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           const result = polled.value.result as
             | {
                 verdict?: string;
+                headSha?: string;
                 finding?: string;
                 files?: string[];
                 commands?: string[];
@@ -557,7 +560,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           }
 
           const proofRecord: RegressionProofRecord = {
-            headSha: body.headSha,
+            headSha: result.headSha ?? '',
             verdict: result.verdict ?? 'fail',
             finding: result.finding,
             files: result.files,

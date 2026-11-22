@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
-import { ok, okAsync } from 'neverthrow';
+import { err, ok, okAsync } from 'neverthrow';
 
 import {
   countCiResult,
@@ -192,5 +192,64 @@ describe('factory action provider integration metrics', () => {
     expect(
       countCiResult(base, { ok: false, error: 'x', metadata: { verdict: 'conflict' } }),
     ).toMatchObject({ ciRounds: 1, conflicts: 1 });
+  });
+});
+
+describe('factory action provider regression proof', () => {
+  const rules = [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }];
+  const done = (verdict: string) =>
+    ok({ state: 'done', result: { verdict, headSha: 'sha-head', files: [] } });
+
+  test('the runner resolves the commit: the server sends no headSha or defaultBranch', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const recorded: unknown[] = [];
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      proof: {
+        startProof: async (_threadId, body) => {
+          bodies.push(body);
+          return ok({ proofId: 'p1', state: 'running' });
+        },
+        pollProof: async () => done('pass'),
+      },
+      record: async (input) => {
+        if (input.regressionProof) recorded.push(input.regressionProof);
+      },
+    });
+    const result = await provider.regressionProof!({ rules });
+    expect(result.ok).toBe(true);
+    expect(bodies[0]).not.toHaveProperty('headSha');
+    expect(bodies[0]).not.toHaveProperty('defaultBranch');
+    expect(recorded[0]).toMatchObject({ headSha: 'sha-head', verdict: 'pass' });
+  });
+
+  test('after a lost job is restarted, polling follows the new proof id', async () => {
+    const polled: string[] = [];
+    let starts = 0;
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      proof: {
+        startProof: async () => ok({ proofId: `p${++starts}`, state: 'running' }),
+        pollProof: async (_threadId, proofId) => {
+          polled.push(proofId);
+          return proofId === 'p1' ? err('proof-not-found') : done('pass');
+        },
+      },
+    });
+    const result = await provider.regressionProof!({ rules });
+    expect(result.ok).toBe(true);
+    expect(polled).toEqual(['p1', 'p2']);
+  });
+
+  test('an issue with a required label fails a proof that found no test', async () => {
+    const proof = {
+      startProof: async () => ok({ proofId: 'p1', state: 'running' }),
+      pollProof: async () => done('skipped'),
+    };
+    const opts = { rules, requireTest: 'labels' as const, labels: ['bug'] };
+    const bug = providerWith({ threadIds: ['t1'], proof, issueLabels: ['bug'] });
+    expect((await bug.provider.regressionProof!(opts)).ok).toBe(false);
+    const other = providerWith({ threadIds: ['t1'], proof, issueLabels: ['enhancement'] });
+    expect((await other.provider.regressionProof!(opts)).ok).toBe(true);
   });
 });

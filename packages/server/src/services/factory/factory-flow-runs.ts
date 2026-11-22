@@ -440,6 +440,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           }
         : undefined,
       github: deps.github,
+      issueLabels: job.issue.labels ?? [],
       proof: deps.proof
         ? {
             startProof: (threadId, body) =>

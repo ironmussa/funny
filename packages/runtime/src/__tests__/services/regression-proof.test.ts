@@ -41,6 +41,17 @@ describe('proof job registry', () => {
     job2.controller.abort();
   });
 
+  test('a start for the same headSha after the job finished runs a new job', async () => {
+    const job1 = startProofJob('thread-7', '/nonexistent', null, baseRequest);
+    // '/nonexistent' fails at once: wait for the job to finish.
+    for (let i = 0; i < 100 && job1.state !== 'done'; i++) await Bun.sleep(10);
+    expect(job1.state).toBe('done');
+    expect(job1.result?.headSha).toBe('abc123');
+    const job2 = startProofJob('thread-7', '/nonexistent', null, baseRequest);
+    expect(job2.id).not.toBe(job1.id);
+    job2.controller.abort();
+  });
+
   test('getProofJob returns null for unknown proofId', () => {
     startProofJob('thread-4', '/nonexistent', null, baseRequest);
     const result = getProofJob('thread-4', 'unknown-id');

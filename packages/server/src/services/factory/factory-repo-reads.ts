@@ -28,6 +28,8 @@ export interface RepoIssue {
   /** GitHub's issues endpoint also answers for pull requests. */
   pullRequest: boolean;
   createdAt: string;
+  /** The issue's label names. */
+  labels?: string[];
 }
 
 /** An open pull request found by its head branch. */
@@ -37,6 +39,13 @@ export type PullRequestLookup = 'open' | 'all';
 export interface FactoryPullRequestFound {
   number: number;
   url: string;
+}
+
+/** Label names from GitHub's issue payload, which lists labels as objects or strings. */
+export function labelNames(labels: Array<string | { name?: string }> | undefined): string[] {
+  return (labels ?? [])
+    .map((l) => (typeof l === 'string' ? l : (l.name ?? '')))
+    .filter((name) => name.length > 0);
 }
 
 export function createFactoryRepoReads(repo: string, github: RepoGithub) {
@@ -50,6 +59,7 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
           state?: string;
           pull_request?: unknown;
           created_at?: string;
+          labels?: Array<string | { name?: string }>;
         }>(repo, 'GET', `/repos/${repo}/issues/${issueNumber}`)
         .map((raw) => ({
           number: raw.number,
@@ -58,6 +68,7 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
           state: raw.state === 'closed' ? 'closed' : 'open',
           pullRequest: Boolean(raw.pull_request),
           createdAt: raw.created_at ?? '',
+          labels: labelNames(raw.labels),
         }));
     },
 

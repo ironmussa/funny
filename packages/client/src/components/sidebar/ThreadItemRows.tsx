@@ -402,6 +402,7 @@ export function ThreadItemMetaRow(props: ThreadItemMetaRowProps) {
           gitStatus={gitStatus}
           showDiffStats={false}
           showPRBadge={false}
+          showTooltips={false}
           diffStatsSize="xs"
           data-testid={`thread-powerline-${thread.id}`}
         />

@@ -4,7 +4,9 @@
  * run (`requireProjectAccess` / `projectProcedure`); creation and the filesystem
  * / git operations are the runner's and stay in routes/projects.ts.
  *
- * Built per request: the listing names the session's active organization.
+ * Built per request: the listing names the session's active organization, and
+ * a removed member is evicted from live thread rooms through the request's
+ * browser event sink.
  */
 
 import { isAbsolute, resolve } from 'path';
@@ -17,7 +19,9 @@ import { err, ok } from 'neverthrow';
 import { authorizer, projectRole } from '../../lib/server-authorizer.js';
 import * as pm from '../../services/project-manager.js';
 import * as projectRepo from '../../services/project-repository.js';
+import type { BrowserEventSink } from '../../services/runner-ports.js';
 import * as cmdRepo from '../../services/startup-commands-repository.js';
+import { revokeProjectThreadShares } from '../../services/thread-access-revocation.js';
 
 /** Roles a project admin may assign to a collaborator (owner = creator only). */
 const ASSIGNABLE_PROJECT_ROLES = new Set(['viewer', 'member', 'admin']);
@@ -105,7 +109,10 @@ async function listPersonalProjects(userId: string): Promise<Project[]> {
   return [...personalProjects, ...sharedProjects];
 }
 
-export function createProjectsPort(organizationName: string | null | undefined): ProjectsPort {
+export function createProjectsPort(
+  organizationName: string | null | undefined,
+  browserEvents?: Pick<BrowserEventSink, 'evictFromThread' | 'publish'>,
+): ProjectsPort {
   return {
     async list({ userId, organizationId }, query) {
       const search = query.q?.trim();
@@ -193,6 +200,9 @@ export function createProjectsPort(organizationName: string | null | undefined):
         return err(failure(403, 'Only project admins can remove members'));
       }
       await pm.removeMember(projectId, userId);
+      // Issue #202: a thread share needs project membership, so the removed
+      // member's shares here end too, and their live sockets leave the threads.
+      await revokeProjectThreadShares(browserEvents, userId, projectId);
       return ok200();
     },
 

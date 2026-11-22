@@ -36,7 +36,8 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
 | `factory-run-control.ts`, `factory-follow-ups.ts`   | Stop, retry, take-over.                                                                                                                                                                                                                                                                     |
 | `factory-thread-requests.ts`                        | Stop / follow-up to a run's threads, routed by the thread's path (`withRunnerFor` `request` target), waking a sleeping sandbox.                                                                                                                                                             |
 | `factory-sandbox-launch.ts`                         | Starts a thread in the enabler's sandbox (the `thread-sandboxes` launcher, `source: 'factory'`).                                                                                                                                                                                            |
-| `factory-pull-requests.ts`, `factory-ci-actions.ts` | CI verdict (green / red / conflict / timeout, `required_checks`) and merge only on green, with the App token capped by the enabler (`accessCapToken`).                                                                                                                                      |
+| `factory-pull-requests.ts`, `factory-ci-actions.ts` | CI verdict (green / red / conflict / timeout, `required_checks`) and merge only on green, with the App token capped by the enabler (`accessCapToken`); a merge pinned to a SHA (`sha`) is direct and never enables auto-merge.                                                              |
+| `runtime/services/regression-proof.ts`              | The regression proof job on the enabler's runner (`POST/GET/DELETE /api/threads/:id/regression-proof`): head checkout twice, then base checkout, both temporary and prepared alike; verdict `pass` / `fail` (`failureKind` `test` / `environment`) / `skipped`.                             |
 
 ## A run
 
@@ -65,14 +66,29 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    `expectedBranch` (the run's branch): the runner refuses it with 409 while the thread's
    worktree is on another branch (`checkExpectedBranch`), so a worktree someone switched never
    gets the next fix, and the run parks with that reason.
-3. **CI**: `wait_ci` polls the PR; red or conflict hands the failure (check names and log tails)
+3. **Regression proof** (the `regression_proof` step, between `create_pr` and `wait_ci` in the
+   built-ins): the server starts a proof job on the run's thread and polls it
+   (`factory-thread-requests.ts`). The changed test files must pass twice on the head and fail by
+   an assertion on the merge-base; `Regression proof failed` (the agent can fix it) is retried
+   with the implementer, `Regression proof unavailable` is not. The proof is stored in
+   `factory_runs.regression_proof`. Guide:
+   [docs/guides/factory-regression-proof.md](../../docs/guides/factory-regression-proof.md).
+4. **CI**: `wait_ci` polls the PR; red or conflict hands the failure (check names and log tails)
    to the fix step via `retry.before_retry`, up to the flow's attempts. A timeout is not retried.
-4. **End**: merged → `merged`; completed without a merge → `waiting_human`; failed with the PR
+5. **Merge**: unless `merge.require_regression_proof: false`, the merge reads the PR head and
+   merges only a head with a passing proof of that commit (the step's, or a new proof it runs),
+   pinned to that SHA. A flow that is not proof-ready (`isProofReady`: no rules and no opt-out)
+   is never admitted: the watcher leaves its issues queued and sets the factory's
+   `blockedReason`.
+6. **End**: merged → `merged`; completed without a merge → `waiting_human`; failed with the PR
    open → `waiting_human` at the failed step + Web Push to the enabler; failed earlier → `failed`
    (a labelled issue is re-admitted up to 3 times; a sent one is not, use Retry); failed before
    any agent ran → a label run is dropped, a sent one goes back to `requested` in its place, and
    the reason is shown as the factory's `blockedReason`.
-5. **Finished outside the factory**: each tick looks at the parked runs (`waiting_human`, `failed`)
+   **No change**: when `create_pr` finds no PR and the branch has no commits ahead of the
+   default branch, the run comments the agent's last message on the issue, removes its
+   worktrees and parks `waiting_human` with reason `no change` (the flow stops there).
+7. **Finished outside the factory**: each tick looks at the parked runs (`waiting_human`, `failed`)
    that have a PR. If a person merged it, the run becomes `merged`; if it was closed without a
    merge, `stopped` with that reason. The write is a compare-and-set from the parked states
    (`closeParked`), so a run retried in the meantime is left alone. This works for any flow: a run
@@ -80,7 +96,7 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    (`factoryRunBranch`, any state) for `BRANCH_LOOKUP_WINDOW_MS` (14 days) after it parked, and
    the PR found is recorded. A paused factory keeps polling while it has such a run
    (`awaitsPullRequest`), and stops once none is left.
-6. **Cleanup on merge**: when a run becomes `merged` (by its `merge` step or by step 5), the
+8. **Cleanup on merge**: when a run becomes `merged` (by its `merge` step or by step 5), the
    server removes its threads' worktrees and local branches on the enabler's runner
    (`cleanupFactoryWorktrees`, `DELETE /api/worktrees`) and clears them on the thread rows.
    Only idle worktree threads on a local runner; a sandbox has its own lifecycle. Best effort:

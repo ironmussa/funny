@@ -116,10 +116,14 @@
       Done: `pass` in about 10 s; the base fails by an assertion in exactly the test the pull
       request adds ("keeps image attachments per thread…", 27 pass / 1 fail), the head passes
       twice (28 / 28).
-- [ ] 5.4 Document the step, the default-on gate, the opt-out, the check run and how to require it
+- [x] 5.4 Document the step, the default-on gate, the opt-out, the check run and how to require it
       (pinned to the App; when not to: merge queue, pull requests from people) and the "no change" outcome in `docs/guides/issue-factory.md`, and the run shape in
       `openwiki/architecture/issue-factory.md`; remove what this resolves from
       `openwiki/architecture/issue-factory-improvements.md`. Verify the links resolve.
+      Done in `docs/guides/factory-regression-proof.md` instead: `issue-factory.md` is the
+      standalone orchestrator's guide (it has no proof), and now points to it. The check run
+      and requiring it are documented as not yet available (task 4.4). Nothing in
+      `issue-factory-improvements.md` was resolved; its new entry 7 lists what stays open.
 
 ## 6. Client
 

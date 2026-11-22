@@ -15,6 +15,10 @@ orchestrator, factory run, factory settings, Factory App) is in
 
 Read [the security model](#security-model) before you start it on a repository.
 
+> This guide is for the standalone orchestrator. The factory that runs inside the funny server
+> (a project's settings) is a different one; its regression proof gate is in
+> [factory-regression-proof.md](./factory-regression-proof.md).
+
 ## 1. Create the Factory App
 
 The factory reaches GitHub only through its own GitHub App, the **Factory App**. There is

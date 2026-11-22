@@ -14,6 +14,7 @@ import {
   graphGutterViewportWidth,
   graphRefLeaderLineXRange,
   renderedGraphLaneCount,
+  threadBranchShaftPath,
 } from '@/lib/commit-graph-layout';
 import {
   inferUnpulledHashesFromGraphEntries,
@@ -150,6 +151,20 @@ describe('graphRefLeaderLineXRange', () => {
         graphViewportWidth: 120,
         chipLeftX: 144,
       }),
+    ).toBeNull();
+  });
+});
+
+describe('threadBranchShaftPath', () => {
+  test('turns off the leader line down to a thread chip below the first chip', () => {
+    expect(threadBranchShaftPath({ x1: 40, chipLeftX: 144, leaderY: 20, threadChipY: 40 })).toBe(
+      'M 40 20 L 132 20 L 132 35 Q 132 40 137 40 L 144 40',
+    );
+  });
+
+  test('draws nothing when the thread chip is on the leader line', () => {
+    expect(
+      threadBranchShaftPath({ x1: 40, chipLeftX: 144, leaderY: 20, threadChipY: 20 }),
     ).toBeNull();
   });
 });

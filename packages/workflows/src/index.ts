@@ -8,12 +8,14 @@
 
 export {
   workflowSchema,
+  isProofReady,
   type ParsedWorkflow,
   type ParsedNode,
   type ParsedInputDef,
   type ParsedRetry,
   type ParsedLoop,
   type ParsedConcurrency,
+  type ParsedRegressionProofRule,
   type TriggerRuleName,
   TRIGGER_RULES,
 } from './schema.js';

@@ -152,6 +152,50 @@ const mergeAction = z
     delete_branch: z.boolean().optional(),
     /** Enable auto-merge instead of merging directly (for required-check repos). */
     auto: z.boolean().optional(),
+    /** When false, skip the regression proof gate on merge (default true). */
+    require_regression_proof: z.boolean().optional(),
+  })
+  .strict();
+
+// ── Regression proof action ────────────────────────────────
+
+const regressionProofRule = z
+  .object({
+    /** Globs that identify test files for this rule. */
+    globs: z.array(z.string()).min(1),
+    /** Test command with a `{{files}}` placeholder for matched files. */
+    command: z.string(),
+    /** Working directory relative to the repository root (default: root). */
+    cwd: z.string().optional(),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    if (!val.command.includes('{{files}}')) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'regression_proof rule command must contain a {{files}} placeholder',
+      });
+    }
+    if (val.cwd?.includes('..')) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'regression_proof rule cwd must not contain ".." (path traversal)',
+      });
+    }
+  });
+
+const regressionProofAction = z
+  .object({
+    /** Rules mapping test file globs to commands. Empty means not configured. */
+    rules: z.array(regressionProofRule).default([]),
+    /** Globs of test support files copied to the base with the tests. */
+    support_globs: z.array(z.string()).optional(),
+    /** Whether a changed test is required. */
+    require_test: z.enum(['always', 'labels', 'never']).optional(),
+    /** Issue labels that require a test when require_test is 'labels'. */
+    labels: z.array(z.string()).optional(),
+    /** Time limit for the proof in milliseconds. */
+    timeout_ms: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -276,6 +320,7 @@ export const ACTION_KEYS = [
   'merge',
   'approval',
   'pipeline',
+  'regression_proof',
 ] as const;
 
 export type WorkflowActionKey = (typeof ACTION_KEYS)[number];
@@ -337,6 +382,7 @@ const pipelineNodeFields = z
     merge: mergeAction.optional(),
     approval: approvalAction.optional(),
     pipeline: pipelineCallAction.optional(),
+    regression_proof: regressionProofAction.optional(),
   })
   .strict();
 
@@ -391,3 +437,17 @@ export type ParsedRetry = z.infer<typeof retryConfig>;
 export type ParsedLoop = z.infer<typeof loopConfig>;
 export type ParsedConcurrency = z.infer<typeof concurrencyConfig>;
 export type TriggerRuleName = (typeof TRIGGER_RULES)[number];
+export type ParsedRegressionProofRule = z.infer<typeof regressionProofRule>;
+
+/**
+ * A flow is proof-ready when its `merge` step does not require the proof
+ * (opt-out or no merge step), or its `regression_proof` step has at least
+ * one rule.
+ */
+export function isProofReady(workflow: ParsedWorkflow): boolean {
+  const mergeNode = workflow.nodes.find((n) => n.merge !== undefined);
+  if (!mergeNode) return true;
+  if (mergeNode.merge!.require_regression_proof === false) return true;
+  const proofNode = workflow.nodes.find((n) => n.regression_proof !== undefined);
+  return proofNode !== undefined && (proofNode.regression_proof!.rules?.length ?? 0) > 0;
+}

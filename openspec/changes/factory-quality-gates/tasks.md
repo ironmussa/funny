@@ -41,13 +41,13 @@
 
 ## 3. Flow schema
 
-- [ ] 3.1 Add the `regression_proof` action to `packages/workflows` (`rules` of
+- [x] 3.1 Add the `regression_proof` action to `packages/workflows` (`rules` of
       `{ globs, command, cwd? }`, `support_globs`, `require_test` `always | labels | never`,
       `labels`, `timeout_ms`) and to the action catalog; validation refuses a rule whose command
       has no `{{files}}` and a `cwd` outside the repository; `rules` may be empty (not
       configured). Verify with
       schema and validation tests, and that the existing flows still parse.
-- [ ] 3.2 Add `require_regression_proof` (default `true`) to the `merge` action; flow validation
+- [x] 3.2 Add `require_regression_proof` (default `true`) to the `merge` action; flow validation
       reports `false` as a warning and exports a `isProofReady(flow)` predicate (no `merge`,
       the opt-out, or at least one rule) and reports a flow that is not proof-ready as a warning
       that its factory will admit nothing. Verify with validation tests for both

@@ -342,13 +342,7 @@ export class RunnerGrpcTunnelDispatcher {
         return;
       }
       state.responseSequence = sequence;
-      const reader = state.readers.shift();
-      if (reader) reader.resolve({ value: data, done: false });
-      else {
-        state.chunks.push(data);
-        state.bufferedBytes += data.byteLength;
-        if (state.bufferedBytes > this.highWaterBytes()) this.saturate(state);
-      }
+      this.deliver(state, data);
       return;
     }
     if (frame.end) {
@@ -421,6 +415,18 @@ export class RunnerGrpcTunnelDispatcher {
       if (next.done) return;
       yield next.value;
     }
+  }
+
+  /** Hand a response frame to a waiting reader, or buffer it (pausing the call at the high-water mark). */
+  private deliver(state: TunnelState, data: Uint8Array): void {
+    const reader = state.readers.shift();
+    if (reader) {
+      reader.resolve({ value: data, done: false });
+      return;
+    }
+    state.chunks.push(data);
+    state.bufferedBytes += data.byteLength;
+    if (state.bufferedBytes > this.highWaterBytes()) this.saturate(state);
   }
 
   /**

@@ -125,30 +125,7 @@ export class RunnerTunnelAdapter {
         tunnelId,
         responseStart: { statusCode: response.status, headers: responseHeaders },
       });
-      let sequence = 0n;
-      if (response.body) {
-        const reader = response.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          for (let offset = 0; offset < value.byteLength; offset += this.maxFrameBytes) {
-            const chunk = value.subarray(
-              offset,
-              Math.min(offset + this.maxFrameBytes, value.byteLength),
-            );
-            const writable = this.sender.send('tunnel', {
-              tunnelId,
-              data: { sequence: String(++sequence), data: Buffer.from(chunk).toString('base64') },
-            });
-            // Respect gRPC backpressure: the server pauses a tunnel whose browser
-            // reads slowly, so stop reading the local response until it drains.
-            if (!writable && this.sender.whenWritable) {
-              await writableOrAborted(this.sender.whenWritable(), state.controller.signal);
-              if (state.controller.signal.aborted) throw new Error('tunnel request cancelled');
-            }
-          }
-        }
-      }
+      const sequence = await this.sendResponseBody(tunnelId, state, response.body);
       this.sender.send('tunnel', { tunnelId, end: { finalSequence: String(sequence) } });
       if (this.requests.get(tunnelId) === state) this.requests.delete(tunnelId);
     } catch {
@@ -159,6 +136,42 @@ export class RunnerTunnelAdapter {
         cancelled ? 'tunnel request cancelled' : 'local tunnel request failed',
       );
     }
+  }
+
+  /** Frame the local response body; returns the final data sequence. */
+  private async sendResponseBody(
+    tunnelId: string,
+    state: TunnelRequestState,
+    body: ReadableStream<Uint8Array> | null,
+  ): Promise<bigint> {
+    let sequence = 0n;
+    if (!body) return sequence;
+    const reader = body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return sequence;
+      for (let offset = 0; offset < value.byteLength; offset += this.maxFrameBytes) {
+        const chunk = value.subarray(
+          offset,
+          Math.min(offset + this.maxFrameBytes, value.byteLength),
+        );
+        const writable = this.sender.send('tunnel', {
+          tunnelId,
+          data: { sequence: String(++sequence), data: Buffer.from(chunk).toString('base64') },
+        });
+        if (!writable) await this.waitWritable(state);
+      }
+    }
+  }
+
+  /**
+   * Respect gRPC backpressure: the server pauses a tunnel whose browser reads
+   * slowly, so stop reading the local response until the stream drains.
+   */
+  private async waitWritable(state: TunnelRequestState): Promise<void> {
+    if (!this.sender.whenWritable) return;
+    await writableOrAborted(this.sender.whenWritable(), state.controller.signal);
+    if (state.controller.signal.aborted) throw new Error('tunnel request cancelled');
   }
 
   private fail(tunnelId: string, code: FailureCode, message: string): void {

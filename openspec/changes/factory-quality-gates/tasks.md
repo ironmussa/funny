@@ -110,9 +110,12 @@
       case or a reason, concurrency and edge cases, verify or measure first and push nothing when
       the claim does not hold, full test suite of touched packages, how the test was shown to
       fail). Verify with a test on the prompt's required instructions.
-- [ ] 5.3 Add this repository's own `.funny/workflows/issue-to-merge.yaml` rules for its packages
-      (the client's `--isolate`, the `--parallel` packages, default `bun test`). Verify by
+- [x] 5.3 Add this repository's own `.funny/workflows/issue-to-merge.yaml` rules for its packages
+      (the server's `--isolate`, the `--parallel` packages, default `bun test`). Verify by
       running the proof locally against pull request #399's commits (expected `pass`).
+      Done: `pass` in about 10 s; the base fails by an assertion in exactly the test the pull
+      request adds ("keeps image attachments per thread…", 27 pass / 1 fail), the head passes
+      twice (28 / 28).
 - [ ] 5.4 Document the step, the default-on gate, the opt-out, the check run and how to require it
       (pinned to the App; when not to: merge queue, pull requests from people) and the "no change" outcome in `docs/guides/issue-factory.md`, and the run shape in
       `openwiki/architecture/issue-factory.md`; remove what this resolves from

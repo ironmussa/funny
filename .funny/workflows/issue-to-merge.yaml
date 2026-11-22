@@ -1,0 +1,179 @@
+# funny's copy of the built-in `issue-to-merge` flow, with this repository's
+# regression proof rules. The factory reads it from the default branch; it
+# replaces the built-in of the same name, so keep it in step with
+# packages/workflows/defaults/issue-to-merge.yaml.
+#
+# Built-in flow of the server-run issue factory (change factory-flow-execution,
+# factory-quality-gates): implement an issue, open a pull request, prove the
+# regression test, wait for green CI and merge it.
+#
+# The server runs this flow as the factory's enabler. Agent steps are threads
+# on the enabler's runner; the agent commits, pushes and opens the pull request
+# itself (the server has no checkout), and the `pull-request` step finds that
+# pull request on GitHub by its branch. `regression-proof`, `wait_ci` and
+# `merge` run on the server with the deployment's GitHub App token, capped by
+# the enabler's own access; a merge happens only on green checks and a passing
+# proof.
+#
+# Regression proof: runs the pull request's changed test files against the base
+# commit (they must fail) and the head commit (they must pass). Configure rules
+# per repository in `.funny/workflows/issue-to-merge.yaml` on the DEFAULT
+# branch. Without rules, the factory will not admit issues.
+#
+# CI fix loop: when the checks fail (or the pull request conflicts with its
+# base), the implementing agent gets the failing checks and their log excerpts
+# as a follow-up on its own thread (so it keeps the context of its change),
+# pushes a fix to the same branch, and `wait_ci` looks again — up to 3 looks
+# in all. Add `required_checks: [name, ...]` to `wait_ci` to wait on (and
+# merge on) only those checks. A timeout or a GitHub access error is not
+# retried. When the loop runs out, the run fails and nothing is merged.
+#
+# The factory supplies every input. `issue_url` points at the issue: the agent
+# reads its text there (issue text is untrusted input, so it is not inlined).
+#
+# To customize per repository, copy this file to
+# `.funny/workflows/issue-to-merge.yaml` on the DEFAULT branch and edit it,
+# keeping the inputs. A copy on any other branch (e.g. a pull request's) is
+# ignored.
+
+name: issue-to-merge
+description: Implement a GitHub issue, open a pull request, prove the regression test, wait for green CI and merge it
+
+inputs:
+  repo: { type: string, required: true }
+  issue_number: { type: string, required: true }
+  issue_title: { type: string, required: true }
+  issue_url: { type: string, required: true }
+  branch: { type: string, required: true }
+
+nodes:
+  - id: implement
+    spawn_agent:
+      prompt: |
+        You are working unattended: nobody will answer questions, so make
+        reasonable decisions and state them in your final message.
+
+        Implement GitHub issue #{{issue_number}} of {{repo}}: {{issue_title}}
+        Read the issue first: {{issue_url}}
+
+        How to work:
+        - Work on the branch `{{branch}}`. You may already be on it (check with
+          `git branch --show-current`); otherwise create it from the default branch.
+        - Read the code around the change before editing, follow the conventions
+          you find, and keep the change to what the issue asks.
+        - **Find the root cause** before making changes. Do not fix symptoms.
+        - **Cover every case the issue names** or state in the pull request why
+          one is left out. Consider concurrency and edge cases.
+        - **If the issue asks you to verify or measure first**, do it and report
+          the result. If the issue's claim does not hold, push nothing, explain
+          why in your final message, and stop.
+        - Add or update a **regression test** that fails without the fix and
+          passes with it. Run the **full test suite** of each package you change.
+          State in the pull request body how the test was shown to fail without
+          the fix.
+        - Commit, push the branch `{{branch}}` to `origin`, and open a pull
+          request from it against the default branch whose body contains
+          `Closes #{{issue_number}}`.
+        - End with a short summary of what you changed and why.
+
+  - id: pull-request
+    depends_on: [implement]
+    create_pr:
+      title: '{{issue_title}}'
+
+  # Regression proof: runs the changed test files against the base (must fail)
+  # and the head (must pass). Configure rules per repository by copying this
+  # file and adding rules, e.g.:
+  #
+  #   regression_proof:
+  #     rules:
+  #       - globs: ['packages/client/**/*.test.ts', 'packages/client/**/*.test.tsx']
+  #         cwd: packages/client
+  #         command: 'bun test --isolate --timeout 20000 {{files}}'
+  #       - globs: ['**/*.test.ts']
+  #         command: 'bun test {{files}}'
+  #     support_globs: ['**/__fixtures__/**', '**/testing/**']
+  #     setup_command: 'bun install --frozen-lockfile'
+  #
+  # Both commits run in fresh temporary checkouts prepared alike by
+  # `setup_command`, else by the head's `.funny.json` `postCreate` (what a
+  # thread worktree runs, e.g. `bun install`). The head must pass
+  # twice; the base must fail by an assertion: a timeout, a setup failure or a
+  # test file that cannot load there proves nothing. Every issue needs a
+  # regression test except those labelled `docs` or `chore`.
+  - id: regression-proof
+    depends_on: [pull-request]
+    regression_proof:
+      # funny's own rules (first match wins). Packages with a bunfig.toml run
+      # from their directory with their own flags; the rest from the root.
+      rules:
+        - globs: ['packages/client/**/*.test.ts', 'packages/client/**/*.test.tsx']
+          cwd: packages/client
+          command: 'bun test --parallel {{files}}'
+        - globs: ['packages/server/**/*.test.ts']
+          cwd: packages/server
+          command: 'bun test --isolate --timeout 20000 {{files}}'
+        - globs: ['packages/runtime/**/*.test.ts']
+          cwd: packages/runtime
+          command: 'bun test --parallel --timeout 20000 {{files}}'
+        - globs: ['packages/core/**/*.test.ts']
+          cwd: packages/core
+          command: 'bun test --parallel {{files}}'
+        - globs: ['packages/harness/**/*.test.ts']
+          cwd: packages/harness
+          command: 'bun test --parallel {{files}}'
+        - globs: ['packages/orchestrator/**/*.test.ts']
+          cwd: packages/orchestrator
+          command: 'bun test --timeout 20000 {{files}}'
+        - globs: ['packages/**/*.test.ts', 'packages/**/*.test.tsx']
+          command: 'bun test {{files}}'
+      require_test: always
+      exempt_labels: [docs, chore]
+      timeout_ms: 600000
+    retry:
+      max_attempts: 3
+      should_retry: "$contains(error, 'Regression proof failed')"
+      before_retry:
+        prompt: |
+          You are working unattended: nobody will answer questions.
+
+          The regression proof of the pull request from `{{branch}}`
+          (GitHub issue #{{issue_number}} of {{repo}}) failed:
+
+          ```
+          {{LAST_ERROR}}
+          ```
+
+          The test must fail without your fix and pass with it.
+          Check out `{{branch}}` and pull it, fix the test, commit and
+          push to `{{branch}}`. Do not open another pull request.
+          End with a short summary of the fix.
+
+  - id: ci
+    depends_on: [regression-proof]
+    wait_ci: {}
+    retry:
+      max_attempts: 3
+      should_retry: "$contains(error, 'Failing checks') or $contains(error, 'conflicts with its base')"
+      before_retry:
+        prompt: |
+          You are working unattended: nobody will answer questions.
+
+          The pull request from the branch `{{branch}}` (GitHub issue
+          #{{issue_number}} of {{repo}}) did not pass its checks:
+
+          ```
+          {{LAST_ERROR}}
+          ```
+
+          Check out `{{branch}}` and pull it, fix the cause in the code (do not
+          disable, skip or weaken checks; if the branch conflicts with the
+          default branch, merge the default branch in and resolve the
+          conflicts), run the project's checks, commit, and push to `{{branch}}`.
+          Do not open another pull request. End with a short summary of the fix.
+
+  - id: merge
+    depends_on: [ci]
+    merge:
+      method: squash
+      delete_branch: true

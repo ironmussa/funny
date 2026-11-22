@@ -70,6 +70,7 @@ export interface ProofResult {
   files: string[];
   commands: string[];
   baseSha: string;
+  /** A pass keeps the base's failing output (the evidence); a fail, the failing run's. */
   outputTail: string;
 }
 
@@ -406,7 +407,8 @@ async function proveCommit(run: ProofRun): Promise<Omit<ProofResult, 'headSha'>>
   }
   const baseTail = baseOutput.slice(-OUTPUT_TAIL);
   if (caught) {
-    return { verdict: 'pass', ...context, outputTail: headOutput.slice(-2000) };
+    // The evidence of a pass is the base failing: keep that output, not the head's.
+    return { verdict: 'pass', ...context, outputTail: baseTail };
   }
   if (inconclusive) {
     return failed(

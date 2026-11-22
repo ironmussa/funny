@@ -86,6 +86,8 @@ describe('regression proof run', () => {
     expect(result.verdict).toBe('pass');
     expect(result.files).toEqual(['lib.test.sh']);
     expect(result.commands).toEqual(["sh 'lib.test.sh'"]);
+    // The evidence kept is the base's assertion failure.
+    expect(result.outputTail).toContain('assertion failed: expected 2');
   });
 
   test('a test that also passes on the base does not catch the bug', async () => {

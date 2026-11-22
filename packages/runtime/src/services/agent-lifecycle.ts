@@ -295,8 +295,7 @@ export class AgentLifecycleManager {
   /**
    * The start sequence from the user-message insert through handing the process
    * to the orchestrator. Any throw here is caught by `startAgent`'s single
-   * failure path (#195). Returns early (leaving the thread failed via
-   * `resolveCwdOrFail`) when the cwd cannot be resolved.
+   * failure path (#195), an unresolvable cwd included.
    */
   private async runStartSequence(req: StartRequest, startState: StartState): Promise<void> {
     const { threadId, prompt, model, permissionMode, provider } = req;
@@ -328,9 +327,7 @@ export class AgentLifecycleManager {
     // The caller passes a best-effort cwd, but `resolveThreadCwd` is the source
     // of truth (see scratch-threads design D3).
     if (thread) {
-      const resolvedCwd = await this.resolveCwdOrFail(threadId, thread, project);
-      if (resolvedCwd === null) return;
-      cwd = resolvedCwd;
+      cwd = this.resolveCwdOrThrow(threadId, thread, project);
       await this.prepareWorkspace(threadId, thread, project, cwd);
     }
 
@@ -566,12 +563,16 @@ export class AgentLifecycleManager {
     this.eventRouter.emitWSToUser(threadId, userId, 'agent:status', { status: 'failed' });
   }
 
-  /** Resolve the thread cwd; on failure marks the thread failed and returns null. */
-  private async resolveCwdOrFail(
+  /**
+   * Resolve the thread cwd, or throw so the start fails through `startAgent`'s
+   * single failure path: the thread is marked failed AND the caller gets an
+   * `Err` (#234). Returning early here used to report the failed start `Ok`.
+   */
+  private resolveCwdOrThrow(
     threadId: string,
     thread: RuntimeThreadRecord,
     project: StartProject,
-  ): Promise<string | null> {
+  ): string {
     const cwdResult = resolveThreadCwd(
       // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
       thread as unknown as Thread,
@@ -586,8 +587,7 @@ export class AgentLifecycleManager {
       kind: errInfo.kind,
       message: errInfo.message,
     });
-    await this.failStart(threadId, thread.userId, errInfo.message);
-    return null;
+    throw new Error(errInfo.message);
   }
 
   /** Get the working directory ready before the agent touches it. */

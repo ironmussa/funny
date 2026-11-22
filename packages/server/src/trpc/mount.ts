@@ -49,7 +49,7 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     designs: designsPort,
     analytics: analyticsPort,
     push: pushPort,
-    projects: createProjectsPort(c.get('organizationName')),
+    projects: createProjectsPort(c.get('organizationName'), c.env?.browserEvents),
     runners: runnersPort,
     githubApp: createGithubAppPort(defaultGithubAppDeps(), c.req.header('origin')),
     personalTokens: personalTokensPort,

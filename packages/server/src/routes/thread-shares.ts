@@ -9,9 +9,6 @@
  * is not captured by the `/:id` pattern.
  */
 
-import { create } from '@bufbuild/protobuf';
-import { DeliveryClass, DeliveryMetadataSchema } from '@funny/shared/browser-v1/common';
-import { ApplicationEventSchema } from '@funny/shared/browser-v1/events';
 import {
   THREAD_SHARE_GRANTED_EVENT,
   THREAD_SHARE_REVOKED_EVENT,
@@ -25,6 +22,7 @@ import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
 import { isProjectMember } from '../services/project-manager.js';
+import { publishShareEvent } from '../services/thread-access-revocation.js';
 import { parseJsonBody } from '../validation/request.js';
 import { requireThreadOwner } from './threads.js';
 
@@ -36,30 +34,6 @@ const createThreadShareSchema = z.object({
   userId: z.string().min(1, 'userId is required'),
   level: z.unknown().optional(),
 });
-
-function publishShareEvent(
-  sink: ServerEnv['Bindings']['browserEvents'],
-  targetUserId: string,
-  eventType: string,
-  threadId: string,
-): void {
-  sink?.publish({
-    scope: { kind: 'user', userId: targetUserId },
-    logicalType: eventType,
-    trafficClass: 'events',
-    delivery: { class: 'snapshot-recoverable' },
-    legacyEvent: { type: eventType, threadId },
-    browserV1: create(ApplicationEventSchema, {
-      delivery: create(DeliveryMetadataSchema, {
-        deliveryClass: DeliveryClass.SNAPSHOT_RECOVERABLE,
-      }),
-      payload: {
-        case: 'user',
-        value: { eventType, data: { threadId } },
-      },
-    }),
-  });
-}
 
 // GET /api/threads/shared-with-me — threads other users have shared TO the
 // caller. Backs the "Shared with me" nav bucket. Returns only the caller's own

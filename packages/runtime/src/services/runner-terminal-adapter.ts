@@ -41,7 +41,12 @@ export class RunnerTerminalAdapter {
     const command = message.open
       ? this.openCommand(terminalId, message.open)
       : this.sessionCommand(terminalId, message);
-    if (command) this.handle(command, (event) => this.publish(event));
+    if (!command) return;
+    this.handle(command, (event) => this.publish(event));
+    // `killPty` forgets the session without a `pty:exit`, so free the replay
+    // history and owner here or they live as long as the runner. After the
+    // handler, so the output it flushes while killing cannot recreate them.
+    if (command.type === 'pty:kill') this.forget(terminalId);
   }
 
   private openCommand(
@@ -157,8 +162,7 @@ export class RunnerTerminalAdapter {
         terminalId,
         close: { exitCode: data.exitCode ?? 0, reason: 'terminal exited' },
       });
-      this.users.delete(terminalId);
-      this.store.close(terminalId);
+      this.forget(terminalId);
       return;
     }
     if (event.type === 'pty:error') {
@@ -170,7 +174,14 @@ export class RunnerTerminalAdapter {
           retryable: false,
         },
       });
+      // The PTY manager drops a session that errors (or never spawned it).
+      this.forget(terminalId);
     }
+  }
+
+  private forget(terminalId: string): void {
+    this.users.delete(terminalId);
+    this.store.close(terminalId);
   }
 
   shutdown(): void {

@@ -144,13 +144,30 @@ describe.skipIf(!hasNativeAdd)('native worktree add', () => {
     expect(gitOk(repoPath, ['rev-parse', '--verify', '--quiet', 'refs/heads/hooked'])).toBe(false);
   });
 
-  test('a remote-tracking start point still gets its upstream (through git)', async () => {
-    const origin = resolve(TMP, `case-${count}`, 'origin.git');
-    git(repoPath, ['init', '--bare', origin]);
-    git(repoPath, ['remote', 'add', 'origin', origin]);
-    git(repoPath, ['push', 'origin', 'master']);
-    git(repoPath, ['fetch', 'origin']);
+  /** `origin` with `master` fetched into `refs/remotes/origin/master`. */
+  function addOrigin(name = 'origin'): void {
+    const bare = resolve(TMP, `case-${count}`, `${name}.git`);
+    git(repoPath, ['init', '-q', '--bare', bare]);
+    git(repoPath, ['remote', 'add', name, bare]);
+    git(repoPath, ['push', '-q', name, 'master']);
+    git(repoPath, ['fetch', '-q', name]);
+  }
 
+  /** `branch.<name>.*` as git reads it back. */
+  function branchConfig(name: string): string {
+    return executeSync('git', ['config', '--get-regexp', `^branch\\.${name}\\.`], {
+      cwd: repoPath,
+      reject: false,
+    }).stdout.trim();
+  }
+
+  async function nativeAdd(branch: string, startPoint: string) {
+    const dest = resolve(TMP, `case-${count}`, branch);
+    return native!.addWorktree!(repoPath, dest, { branch, createBranch: true, startPoint });
+  }
+
+  test('a remote-tracking start point gets the upstream git gives it', async () => {
+    addOrigin();
     const viaNative = (await createWorktree(repoPath, 'tracks', 'origin/master'))._unsafeUnwrap();
     const viaCli = (
       await withCli(() => createWorktree(repoPath, 'tracks-cli', 'origin/master'))
@@ -158,6 +175,72 @@ describe.skipIf(!hasNativeAdd)('native worktree add', () => {
 
     expect(git(viaNative, ['rev-parse', '--abbrev-ref', '@{upstream}'])).toBe('origin/master');
     expect(snapshot(viaNative)).toEqual(snapshot(viaCli));
+    expect(branchConfig('tracks')).toBe(
+      branchConfig('tracks-cli').replaceAll('branch.tracks-cli.', 'branch.tracks.'),
+    );
+  });
+
+  test('the upstream is written by the native call itself', async () => {
+    addOrigin();
+    expect(await nativeAdd('direct-up', 'origin/master')).toEqual({ created: true });
+    expect(branchConfig('direct-up')).toBe(
+      'branch.direct-up.remote origin\nbranch.direct-up.merge refs/heads/master',
+    );
+  });
+
+  test('autoSetupRebase=always adds branch.<name>.rebase', async () => {
+    addOrigin();
+    git(repoPath, ['config', 'branch.autoSetupRebase', 'always']);
+    expect((await nativeAdd('rebases', 'origin/master')).created).toBe(true);
+    expect(git(repoPath, ['config', 'branch.rebases.rebase'])).toBe('true');
+  });
+
+  test('autoSetupMerge=false and a mismatched simple mode set no upstream', async () => {
+    addOrigin();
+    git(repoPath, ['config', 'branch.autoSetupMerge', 'false']);
+    expect((await nativeAdd('untracked', 'origin/master')).created).toBe(true);
+    git(repoPath, ['config', 'branch.autoSetupMerge', 'simple']);
+    expect((await nativeAdd('other-name', 'origin/master')).created).toBe(true);
+    expect(branchConfig('untracked')).toBe('');
+    expect(branchConfig('other-name')).toBe('');
+  });
+
+  test('autoSetupMerge=simple tracks a remote branch of the same name', async () => {
+    addOrigin();
+    git(repoPath, ['branch', '-m', 'master', 'main']);
+    git(repoPath, ['config', 'branch.autoSetupMerge', 'simple']);
+    // `refs/remotes/origin/master` exists; a new branch named `master` matches it.
+    expect((await nativeAdd('master', 'origin/master')).created).toBe(true);
+    expect(git(repoPath, ['config', 'branch.master.merge'])).toBe('refs/heads/master');
+  });
+
+  test('two remotes mapping onto the start point are left to git', async () => {
+    addOrigin();
+    git(repoPath, ['remote', 'add', 'mirror', resolve(TMP, `case-${count}`, 'origin.git')]);
+    git(repoPath, ['config', 'remote.mirror.fetch', '+refs/heads/*:refs/remotes/origin/*']);
+    const outcome = await nativeAdd('ambiguous', 'origin/master');
+    expect(outcome).toEqual({ created: false, unsupportedReason: 'ambiguous upstream' });
+    expect(gitOk(repoPath, ['rev-parse', '--verify', '--quiet', 'refs/heads/ambiguous'])).toBe(
+      false,
+    );
+  });
+
+  test('a failed native add removes the upstream it wrote', async () => {
+    addOrigin();
+    const dest = resolve(TMP, `case-${count}`, 'occupied-up');
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(resolve(dest, 'keep.txt'), 'not ours');
+    await expect(
+      native!.addWorktree!(repoPath, dest, {
+        branch: 'doomed-up',
+        createBranch: true,
+        startPoint: 'origin/master',
+      }),
+    ).rejects.toThrow();
+    expect(branchConfig('doomed-up')).toBe('');
+    expect(gitOk(repoPath, ['rev-parse', '--verify', '--quiet', 'refs/heads/doomed-up'])).toBe(
+      false,
+    );
   });
 
   test('a failed native add removes the branch it created', async () => {

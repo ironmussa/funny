@@ -309,10 +309,11 @@ export const DISABLE_NATIVE_WORKTREE_ADD_ENV = 'FUNNY_DISABLE_NATIVE_WORKTREE_AD
  * `startPoint`, or the existing branch when `startPoint` is null.
  *
  * Done in-process with gitoxide when the native module has it, which spares
- * a git process and its checkout. gitoxide runs no hooks and sets no
- * upstream, so the native side declines repositories with a post-checkout or
- * reference-transaction hook, remote-tracking start points and
- * `branch.autoSetupMerge=always|inherit`, and git does those. A native
+ * a git process and its checkout. A remote-tracking start point gets the
+ * upstream `git branch` would set. gitoxide runs no hooks, so the native side
+ * declines repositories with a post-checkout or reference-transaction hook,
+ * and also `branch.autoSetupMerge=always|inherit`, an ambiguous upstream and
+ * stale `branch.<name>` config; git does those. A native
  * failure has already been rolled back (registration, files, the branch it
  * created), so git gets a clean second try and reports its own error.
  */

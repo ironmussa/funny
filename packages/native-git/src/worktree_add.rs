@@ -20,7 +20,7 @@ pub struct AddWorktreeOptions {
 }
 
 /// `created` is false when the request needs something only the git CLI does
-/// (hooks, upstream tracking); `unsupported_reason` then says what, and
+/// (hooks, some upstream setups); `unsupported_reason` then says what, and
 /// nothing was written, so the caller can run `git worktree add` instead.
 #[napi(object)]
 #[derive(Debug, Clone)]
@@ -93,8 +93,8 @@ fn cli_only_reason(
   if !options.create_branch {
     return Ok(None);
   }
-  // `git branch` sets an upstream for the new branch from these; gitoxide
-  // does not, and the status counts read `<branch>@{upstream}`.
+  // Upstreams from a local branch (`always`) or copied from the start point
+  // (`inherit`) are left to `git branch`; `plan_upstream` handles the rest.
   let auto_setup = repo
     .config_snapshot()
     .string("branch.autoSetupMerge")
@@ -102,16 +102,137 @@ fn cli_only_reason(
   if matches!(auto_setup.as_deref(), Some("always") | Some("inherit")) {
     return Ok(Some(format!("branch.autoSetupMerge={}", auto_setup.unwrap())));
   }
-  let start = options.start_point.as_deref().unwrap_or("HEAD");
-  if let Some(reference) = repo
+  Ok(None)
+}
+
+/// `branch.<name>.*` git writes for a new branch, from `git branch`'s rules.
+struct Upstream {
+  remote: String,
+  merge: String,
+  rebase: bool,
+}
+
+/// How a new branch from `start` is tracked, like `git branch` with
+/// `branch.autoSetupMerge` unset, `true`, `false` or `simple`: only a
+/// remote-tracking start point is tracked, by the remote whose fetch refspec
+/// maps a branch onto it. `Err` names a case left to the CLI (an ambiguous
+/// or excluded mapping, stale `branch.<name>` config).
+fn plan_upstream(
+  repo: &gix::Repository,
+  branch: &str,
+  start: &str,
+) -> napi::Result<Result<Option<Upstream>, String>> {
+  let config = repo.config_snapshot();
+  let mode = config
+    .string("branch.autoSetupMerge")
+    .map(|v| v.to_string().to_ascii_lowercase());
+  let simple = mode.as_deref() == Some("simple");
+  if !simple && config.boolean("branch.autoSetupMerge") == Some(false) {
+    return Ok(Ok(None));
+  }
+  let Some(reference) = repo
     .try_find_reference(start)
     .map_err(|e| reason("Failed to look up the start point", e))?
-  {
-    if reference.name().category() == Some(Category::RemoteBranch) {
-      return Ok(Some("remote-tracking start point".into()));
+  else {
+    return Ok(Ok(None));
+  };
+  if reference.name().category() != Some(Category::RemoteBranch) {
+    return Ok(Ok(None));
+  }
+  let tracking = reference.name().as_bstr().to_string();
+
+  let mut found: Vec<(String, String)> = Vec::new();
+  for remote_name in repo.remote_names() {
+    let remote_name = remote_name.to_string();
+    let Ok(remote) = repo.find_remote(remote_name.as_str()) else {
+      return Ok(Err(format!("unreadable remote {remote_name}")));
+    };
+    let mut merge = None;
+    for spec in remote.refspecs(gix::remote::Direction::Fetch) {
+      match spec.to_ref().instruction() {
+        gix::refspec::Instruction::Fetch(gix::refspec::instruction::Fetch::Exclude { .. }) => {
+          return Ok(Err(format!("negative refspec on remote {remote_name}")));
+        }
+        gix::refspec::Instruction::Fetch(gix::refspec::instruction::Fetch::AndUpdate {
+          src,
+          dst,
+          ..
+        }) if merge.is_none() => {
+          merge = reverse_map(&src.to_string(), &dst.to_string(), &tracking);
+        }
+        _ => {}
+      }
+    }
+    if let Some(merge) = merge {
+      found.push((remote_name, merge));
     }
   }
-  Ok(None)
+  if found.len() > 1 {
+    return Ok(Err("ambiguous upstream".into()));
+  }
+  let Some((remote, merge)) = found.pop() else {
+    return Ok(Ok(None));
+  };
+  if simple && merge != format!("refs/heads/{branch}") {
+    return Ok(Ok(None));
+  }
+  let rebase = matches!(
+    config
+      .string("branch.autoSetupRebase")
+      .map(|v| v.to_string().to_ascii_lowercase())
+      .as_deref(),
+    Some("always") | Some("remote")
+  );
+  Ok(Ok(Some(Upstream {
+    remote,
+    merge,
+    rebase,
+  })))
+}
+
+/// The source ref a fetch refspec `src:dst` maps onto `tracking`, like git's
+/// `remote_find_tracking` (one `*` on each side, or an exact `dst`).
+fn reverse_map(src: &str, dst: &str, tracking: &str) -> Option<String> {
+  match (src.split_once('*'), dst.split_once('*')) {
+    (Some((src_pre, src_suf)), Some((dst_pre, dst_suf))) => {
+      let middle = tracking.strip_prefix(dst_pre)?.strip_suffix(dst_suf)?;
+      Some(format!("{src_pre}{middle}{src_suf}"))
+    }
+    (None, None) if dst == tracking => Some(src.to_string()),
+    _ => None,
+  }
+}
+
+fn common_config(repo: &gix::Repository) -> napi::Result<gix::config::FileTransaction> {
+  repo
+    .config_file_mut(repo.common_dir().join("config"))
+    .map_err(|e| reason("Failed to open the repository config", e))
+}
+
+fn write_upstream(repo: &gix::Repository, branch: &str, upstream: &Upstream) -> napi::Result<()> {
+  let mut config = common_config(repo)?;
+  let mut set = |key: &str, value: &str| {
+    config
+      .set_raw_value_by("branch", branch, key, value)
+      .map(|_| ())
+      .map_err(|e| reason(&format!("Failed to set branch.{branch}.{key}"), e))
+  };
+  set("remote", &upstream.remote)?;
+  set("merge", &upstream.merge)?;
+  if upstream.rebase {
+    set("rebase", "true")?;
+  }
+  config
+    .commit()
+    .map_err(|e| reason("Failed to write the repository config", e))
+}
+
+/// Undo `write_upstream`: the section did not exist before it.
+fn remove_upstream(repo: &gix::Repository, branch: &str) {
+  if let Ok(mut config) = common_config(repo) {
+    config.remove_section("branch", branch);
+    let _ = config.commit();
+  }
 }
 
 fn delete_created_branch(repo: &gix::Repository, name: FullName, id: gix::ObjectId) {
@@ -133,11 +254,29 @@ fn add(cwd: &str, destination: &str, options: &AddWorktreeOptions) -> napi::Resu
     return unsupported(why);
   }
 
+  let start = options.start_point.as_deref().unwrap_or("HEAD");
+  let upstream = if options.create_branch {
+    match plan_upstream(&repo, &options.branch, start)? {
+      Ok(upstream) => upstream,
+      Err(why) => return unsupported(why),
+    }
+  } else {
+    None
+  };
+  if upstream.is_some()
+    && repo
+      .config_snapshot()
+      .plumbing()
+      .section("branch", options.branch.as_str())
+      .is_ok()
+  {
+    return unsupported(format!("existing branch.{} config", options.branch));
+  }
+
   let name = FullName::try_from(format!("refs/heads/{}", options.branch))
     .map_err(|e| reason("Invalid branch name", e))?;
 
   let created = if options.create_branch {
-    let start = options.start_point.as_deref().unwrap_or("HEAD");
     let commit = repo
       .rev_parse_single(start)
       .map_err(|e| reason(&format!("Invalid start point '{start}'"), e))?
@@ -161,6 +300,13 @@ fn add(cwd: &str, destination: &str, options: &AddWorktreeOptions) -> napi::Resu
         deref: false,
       })
       .map_err(|e| reason(&format!("Failed to create branch '{}'", options.branch), e))?;
+    if let Some(upstream) = &upstream {
+      if let Err(e) = write_upstream(&repo, &options.branch, upstream) {
+        remove_upstream(&repo, &options.branch);
+        delete_created_branch(&repo, name, commit);
+        return Err(e);
+      }
+    }
     Some(commit)
   } else {
     None
@@ -182,6 +328,9 @@ fn add(cwd: &str, destination: &str, options: &AddWorktreeOptions) -> napi::Resu
       // `add_worktree` already removed the registration and files it made;
       // the branch is ours to remove, and only if this call created it.
       if let Some(id) = created {
+        if upstream.is_some() {
+          remove_upstream(&repo, &options.branch);
+        }
         delete_created_branch(&repo, name, id);
       }
       Err(reason("Failed to add worktree", e))

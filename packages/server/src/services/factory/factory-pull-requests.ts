@@ -17,10 +17,12 @@ import {
   createPullRequestCi,
   createRepoCheckOps,
   createRepoGithub,
+  listPullRequestFiles,
   REGRESSION_PROOF_CHECK,
   type CiState,
   type GithubCallError,
   type MergeMethod,
+  type PullRequestFiles,
 } from '@funny/core/github-app';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -114,6 +116,8 @@ export interface FactoryPullRequests {
   ): ResultAsync<'open' | 'merged' | 'closed', FactoryPullRequestError>;
   /** The pull request's head commit now, its base branch, and whether auto-merge is on. */
   pullHead(pr: FactoryPullRequestRef): ResultAsync<FactoryPullHead, FactoryPullRequestError>;
+  /** The files the pull request changes, with their patches (the server's own checks read them). */
+  changedFiles(pr: FactoryPullRequestRef): ResultAsync<PullRequestFiles, FactoryPullRequestError>;
   /**
    * Publish the proof as the `funny/regression-proof` check run, with a
    * server-only token that can write checks and nothing else.
@@ -282,6 +286,10 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
           autoMerge: merge.autoMerge,
         }))
         .mapErr(callError);
+    },
+
+    changedFiles(pr) {
+      return listPullRequestFiles(repoGithubFor(pr, 'read'), pr.repo, pr.number).mapErr(callError);
     },
 
     publishProofCheck(pr, check) {

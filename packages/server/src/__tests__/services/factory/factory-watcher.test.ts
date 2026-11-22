@@ -178,6 +178,7 @@ function fakeGithub(
     },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
+      changedFiles: () => okAsync({ files: [], truncated: false }),
       pullHead: () =>
         okAsync({ sha: 'sha-head', autoMerge: false, ...script.head, baseRef: 'main' }),
       publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {

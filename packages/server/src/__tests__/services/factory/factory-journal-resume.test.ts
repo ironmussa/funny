@@ -83,6 +83,7 @@ function journaledProvider(over: Partial<Parameters<typeof createFactoryActionPr
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),
+        changedFiles: () => okAsync({ files: [], truncated: false }),
         pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
         publishProofCheck: () => okAsync(undefined),
         ciState: () => okAsync({ kind: 'green' as const }),

@@ -480,6 +480,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           projectId: scope.projectId,
         }),
       issueLabels: job.issue.labels ?? [],
+      sensitivePaths: job.factory.sensitivePaths,
       lastThreadMessage,
       removeUnchangedWorktrees: async () => {
         const run = await deps.runs.get(job.run.id);

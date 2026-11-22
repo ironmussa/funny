@@ -33,7 +33,11 @@
  *   is nowhere on the server to run them (checks belong in the repository's CI).
  */
 
-import { EMPTY_FACTORY_RUN_METRICS, type FactoryRunMetrics } from '@funny/shared/contracts/factory';
+import {
+  EMPTY_FACTORY_RUN_METRICS,
+  type FactoryRisk,
+  type FactoryRunMetrics,
+} from '@funny/shared/contracts/factory';
 import type {
   ActionProvider,
   ActionResult,
@@ -60,7 +64,9 @@ import {
   type ProofResultBody,
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
+import { classifyRisk } from './factory-risk.js';
 import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
@@ -126,6 +132,8 @@ export interface FactoryActionProviderDeps {
   metrics?: FactoryRunMetrics;
   /** The issue's labels (for require_test: labels). */
   issueLabels?: string[];
+  /** The factory's own sensitive path globs (they make a change high risk). */
+  sensitivePaths?: readonly string[];
   /** Proof start/poll through the runner. */
   proof?: FactoryProofDeps;
   /** The implementing thread's last assistant message (the "no change" explanation). */
@@ -247,6 +255,13 @@ const VERDICT_COUNTERS = {
   blocked: 'ciBlocked',
   timeout: 'ciTimeouts',
 } satisfies Record<z.infer<typeof CI_VERDICT>, keyof FactoryRunMetrics | null>;
+
+/** What the server found in one commit of the run's pull request. */
+interface ClassifiedHead {
+  sha: string;
+  findings: TestWeakeningFinding[];
+  risk: FactoryRisk;
+}
 
 /** A proof the merge gate holds: its record, and what publishing it needs. */
 interface HeldProof {
@@ -601,6 +616,47 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       : { ...proofUnavailable(finding), metadata: meta };
   }
 
+  /**
+   * What the server found in the last classified commit of the pull request:
+   * its weakened tests and its risk class (change factory-agent-roles, D6).
+   */
+  let classified: ClassifiedHead | null = null;
+
+  /**
+   * Check the pull request's head commit for weakened tests and class its risk,
+   * once per commit, and store the class on the run. A change that cannot be
+   * read is high risk: what was not read was not checked.
+   */
+  async function classifyHead(): Promise<ClassifiedHead | null> {
+    const pr = pullRequest();
+    if (!pr) return null;
+    const head = await deps.github.pullRequests.pullHead(pr);
+    if (head.isErr()) return null;
+    const sha = head.value.sha;
+    if (classified?.sha === sha) return classified;
+    const files = await deps.github.pullRequests.changedFiles(pr);
+    const findings = files.isOk() ? checkTestWeakening(files.value) : [];
+    const risk: FactoryRisk = files.isOk()
+      ? classifyRisk({
+          headSha: sha,
+          change: files.value,
+          findings,
+          sensitivePaths: deps.sensitivePaths,
+        })
+      : {
+          headSha: sha,
+          level: 'high',
+          reasons: [`the change could not be read: ${files.error.message}`],
+        };
+    classified = { sha, findings, risk };
+    await deps.record({ risk });
+    metric('factory.integration_event', 1, {
+      type: 'sum',
+      attributes: { event: `risk_${risk.level}`, repo: scope.repo },
+    });
+    return classified;
+  }
+
   /** The enabler reads the repository: the App token capped by their access. */
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
 
@@ -741,6 +797,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
     async waitCi(opts) {
       await deps.record({ state: 'waiting_ci' });
+      // When the commit's checks start: the report is ready before the review.
+      await classifyHead();
       const result = await ci.waitCi(opts);
       const verdict = result.metadata?.verdict;
       await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });

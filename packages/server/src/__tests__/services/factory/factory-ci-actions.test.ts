@@ -29,6 +29,7 @@ function scripted(
   const merges: unknown[] = [];
   const prs: FactoryPullRequests = {
     prState: () => okAsync('open'),
+    changedFiles: () => okAsync({ files: [], truncated: false }),
     pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
     publishProofCheck: () => okAsync(undefined),
     ciState: () => {
@@ -131,6 +132,7 @@ describe('wait_ci', () => {
     const merged: unknown[] = [];
     const prs: FactoryPullRequests = {
       prState: () => okAsync('open'),
+      changedFiles: () => okAsync({ files: [], truncated: false }),
       pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
       publishProofCheck: () => okAsync(undefined),
       ciState: (_pr, required) => {

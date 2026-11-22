@@ -21,9 +21,9 @@ Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, 
 
 ## 5. Test-weakening check and risk class
 
-- [ ] 5.1 Add the test-weakening check over a pull request's file list and patch (removed tests, skip / focus markers for TS/JS and Python, coverage thresholds, `.github/workflows/`), run on each head commit when its checks start; verify with fixture-diff unit tests for each finding and a clean diff
-- [ ] 5.2 Add the risk classifier (findings, > 400 changed lines, default and configured sensitive paths, and the contract's risk hints when the run has a contract); verify with unit tests per rule, a run without a contract, and that a review result cannot change it
-- [ ] 5.3 Add pull request file list / patch reads to `@funny/core/github-app` if missing; verify with its tests
+- [x] 5.1 Add the test-weakening check over a pull request's file list and patch (removed tests, skip / focus markers for TS/JS and Python, coverage thresholds, `.github/workflows/`), run on each head commit when its checks start; verify with fixture-diff unit tests for each finding and a clean diff
+- [x] 5.2 Add the risk classifier (findings, > 400 changed lines, default and configured sensitive paths, and the contract's risk hints when the run has a contract); verify with unit tests per rule, a run without a contract, and that a review result cannot change it
+- [x] 5.3 Add pull request file list / patch reads to `@funny/core/github-app` if missing; verify with its tests
 
 ## 6. Review gate
 

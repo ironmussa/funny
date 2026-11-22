@@ -2,6 +2,7 @@ import { RefreshCw, Hammer, CircleCheck, CircleX, Circle, Copy } from 'lucide-re
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { SettingAnchor } from '@/components/settings/SettingRow';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -94,7 +95,7 @@ export function SystemSettings() {
 
       {/* Native Git Section */}
       <div className="settings-card">
-        <div className="px-4 py-3.5">
+        <SettingAnchor settingId="system.native-git" className="px-4 py-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <p className="settings-row-title">Native Git (gitoxide)</p>
@@ -247,7 +248,7 @@ export function SystemSettings() {
               </ScrollArea>
             </div>
           )}
-        </div>
+        </SettingAnchor>
       </div>
 
       {/* Build identity — compare this between two installs to tell who has the newer build */}
@@ -274,7 +275,7 @@ function BuildIdentityCard() {
 
   return (
     <div className="settings-card">
-      <div className="px-4 py-3.5">
+      <SettingAnchor settingId="system.build" className="px-4 py-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <p className="settings-row-title">Build</p>
@@ -316,7 +317,7 @@ function BuildIdentityCard() {
         >
           {BUILD_INFO.label}
         </code>
-      </div>
+      </SettingAnchor>
     </div>
   );
 }

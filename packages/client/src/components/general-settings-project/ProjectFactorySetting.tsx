@@ -19,7 +19,7 @@ import { toastError } from '@/lib/toast-error';
 
 import { ProjectFactoryMetrics } from './ProjectFactoryMetrics';
 import { ProjectFactoryRuns } from './ProjectFactoryRuns';
-import { SegmentedControl, SettingRow } from './setting-primitives';
+import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
 type OnOff = 'on' | 'off';
 
@@ -69,7 +69,8 @@ function FactoryModeRows({
   const { t } = useTranslation();
   return (
     <>
-      <SettingRow
+      <ProjectSettingRow
+        settingId="factory.mode"
         title={t('settings.projectFactoryMode', 'Mode')}
         description={
           mode === 'automatic'
@@ -96,10 +97,11 @@ function FactoryModeRows({
             },
           ]}
         />
-      </SettingRow>
+      </ProjectSettingRow>
 
       {mode === 'automatic' && (
-        <SettingRow
+        <ProjectSettingRow
+          settingId="factory.label"
           title={t('settings.projectFactoryLabel', 'Issue label')}
           description={t(
             'settings.projectFactoryLabelDesc',
@@ -113,7 +115,7 @@ function FactoryModeRows({
             data-testid="settings-factory-label"
             onBlur={(e) => onLabel(e.target.value)}
           />
-        </SettingRow>
+        </ProjectSettingRow>
       )}
     </>
   );
@@ -154,7 +156,8 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <SettingRow
+      <ProjectSettingRow
+        settingId="factory.status"
         title={t('settings.projectFactoryStatus', 'Status')}
         description={t(
           'settings.projectFactoryStatusDesc',
@@ -177,7 +180,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
             },
           ]}
         />
-      </SettingRow>
+      </ProjectSettingRow>
 
       {/* The mode can change while paused, so switching to manual never lets labelled issues in. */}
       <FactoryModeRows
@@ -190,7 +193,8 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
 
       {enabled && (
         <>
-          <SettingRow
+          <ProjectSettingRow
+            settingId="factory.flow"
             title={t('settings.projectFactoryFlow', 'Flow')}
             description={t(
               'settings.projectFactoryFlowDesc',
@@ -204,9 +208,10 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
               data-testid="settings-factory-flow"
               onBlur={(e) => setFlow(e.target.value)}
             />
-          </SettingRow>
+          </ProjectSettingRow>
 
-          <SettingRow
+          <ProjectSettingRow
+            settingId="factory.concurrency"
             title={t('settings.projectFactoryConcurrency', 'Max in flight')}
             description={t('settings.projectFactoryConcurrencyDesc', 'How many issues run at once')}
           >
@@ -220,7 +225,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
               data-testid="settings-factory-concurrency"
               onBlur={(e) => setConcurrency(e.target.value)}
             />
-          </SettingRow>
+          </ProjectSettingRow>
         </>
       )}
 

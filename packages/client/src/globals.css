@@ -272,6 +272,21 @@ mark.md-search-match[data-active='true'] {
   @apply text-muted-foreground mt-0.5 text-sm;
 }
 
+@utility setting-focus-highlight {
+  /* Briefly marks the setting the sidebar filter jumped to (settings-filter). */
+  animation: setting-focus 1.6s ease-out;
+}
+
+@keyframes setting-focus {
+  0%,
+  40% {
+    background-color: hsl(var(--accent));
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 @utility settings-input {
   /* Settings compact input (inside setting rows) */
   @apply h-8 text-sm;

@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { settingsLabelKeys, type SettingsItemId } from '@/components/settings/items';
 import { SettingsPageContent } from '@/components/settings/SettingsPageContent';
+import { useSettingFocusScroll } from '@/components/settings/use-settings-filter';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -23,6 +24,7 @@ export function SettingsDetailView() {
   const page = activeSettingsPage as SettingsItemId | null;
   const label = page ? t(settingsLabelKeys[page] ?? page) : null;
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  useSettingFocusScroll();
 
   if (!page) {
     return (

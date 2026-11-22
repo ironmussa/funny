@@ -17,6 +17,7 @@ import {
 import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SettingsSection } from '@/components/settings/SettingRow';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -662,7 +663,9 @@ export function McpServerSettings() {
       {/* Installed servers */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="settings-section-header px-0 pb-0">{t('mcp.installedServers')}</h3>
+          <SettingsSection settingId="mcp-server.installed" className="px-0 pb-0">
+            {t('mcp.installedServers')}
+          </SettingsSection>
           <div className="flex items-center gap-2">
             <Select
               value={selectedProvider}
@@ -827,7 +830,9 @@ export function McpServerSettings() {
       {/* Recommended servers */}
       {recommended.length > 0 && (
         <div>
-          <h3 className="settings-section-header mb-2 px-0 pb-0">{t('mcp.recommendedServers')}</h3>
+          <SettingsSection settingId="mcp-server.recommended" className="mb-2 px-0 pb-0">
+            {t('mcp.recommendedServers')}
+          </SettingsSection>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {recommended.map((server) => (
               <RecommendedServerCard

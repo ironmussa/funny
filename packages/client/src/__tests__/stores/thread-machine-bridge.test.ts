@@ -209,52 +209,36 @@ describe('thread-machine-bridge — data actors', () => {
       expect(() => invalidateThreadData(uniqueId('unknown'))).not.toThrow();
     });
 
-    test('regresión: loadThreadData no se cuelga si INVALIDATE llega durante fetching', async () => {
-      // Reproduce el bug observado: cuando el usuario clickea un hilo y un
-      // WS event para ese mismo hilo llega mientras está en `fetching`, el
-      // actor transita `fetching → unloaded` y el `waitFor(loaded || failed)`
-      // original quedaba colgado para siempre (timeout: Infinity). Eso dejaba
-      // `selectingThreadId` stuck y los siguientes clicks no-op.
+    test('regression #208: more than 5 INVALIDATEs during a fetch still resolve the load', async () => {
+      // A busy thread emits a WS event (and an INVALIDATE) for every message,
+      // tool call and status change. Each one used to restart the fetch, and
+      // after 5 restarts the load was rejected and the thread failed to open.
       const id = uniqueId('invalidate-during-fetch');
 
-      // Primer fetch: deferred — controlamos cuándo (si) resuelve.
-      let resolveFirst: (v: ThreadWithMessages) => void = () => {};
-      const firstFetch = new Promise<ThreadWithMessages>((res) => {
-        resolveFirst = res;
+      let resolveFetch: (v: ThreadWithMessages) => void = () => {};
+      const pendingFetch = new Promise<ThreadWithMessages>((res) => {
+        resolveFetch = res;
       });
-      mockGetThread.mockReturnValueOnce(ResultAsync.fromPromise(firstFetch, (e) => e));
-      mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
-
-      // Segundo fetch (después del re-LOAD): resuelve inmediato.
-      mockGetThread.mockReturnValueOnce(okAsync(buildThreadWithMessages({ id })));
+      mockGetThread.mockReturnValueOnce(ResultAsync.fromPromise(pendingFetch, (e) => e));
       mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
 
       const loadPromise = loadThreadData(id);
-
-      // Dar un tick para que el actor entre en `fetching`.
       await new Promise((r) => setTimeout(r, 10));
 
-      // Simular llegada de WS event: invalida durante fetch.
-      invalidateThreadData(id);
+      for (let i = 0; i < 12; i += 1) invalidateThreadData(id);
+      resolveFetch(buildThreadWithMessages({ id }));
 
-      // Liberar el primer fetch — ya no debería importar (el invoke fue
-      // descartado al transitar a `unloaded`), pero lo resolvemos para
-      // confirmar que el fix no depende de que el primer fetch resuelva.
-      resolveFirst(buildThreadWithMessages({ id }));
+      const data = await loadPromise;
+      expect(data.thread.id).toBe(id);
+      // The in-flight fetch was kept, not restarted.
+      expect(mockGetThread).toHaveBeenCalledTimes(1);
+      // The snapshot missed events, so it is not served from cache again.
+      expect(isThreadDataPrefetched(id)).toBe(false);
 
-      // Race contra un timeout de seguridad. Antes del fix, loadPromise
-      // hangueaba para siempre y este test colgaba hasta el timeout de Vitest.
-      const winner = await Promise.race([
-        loadPromise.then((data) => ({ kind: 'resolved' as const, data })),
-        new Promise<{ kind: 'hung' }>((res) => setTimeout(() => res({ kind: 'hung' }), 2000)),
-      ]);
-
-      expect(winner.kind).toBe('resolved');
-      if (winner.kind === 'resolved') {
-        expect(winner.data.thread.id).toBe(id);
-      }
-      // Después del re-LOAD, debería haber dos llamadas a getThread.
+      mockOk(id);
+      await loadThreadData(id);
       expect(mockGetThread).toHaveBeenCalledTimes(2);
+      expect(isThreadDataPrefetched(id)).toBe(true);
 
       cleanupThreadActor(id);
     });

@@ -83,8 +83,8 @@ Out of this change: merge queue support. Repositories with a merge queue park at
 out; the intended design is recorded in `design.md` (Future Work) for a separate change.
 
 Also out of this change: the rule that an external reviewer's check (CodeRabbit) is not a review. It
-is a rule about the run's review state, which `factory-agent-roles` introduces, and belongs
-there with a test.
+is a rule about the run's review state, which `factory-agent-roles` introduces; it is in that
+change's `merge` requirement with a scenario, and its test is part of that change's task 7.2.
 
 ## Capabilities
 

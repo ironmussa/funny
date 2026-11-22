@@ -261,7 +261,10 @@ A `merge` workflow step SHALL merge the run's pull request only when all of thes
 pull request's head commit has a passing review (unless the step sets `require_review: false`),
 the change's risk class is allowed by the factory's auto-merge setting (`low_risk` by default,
 or `all`), and the pull request's checks are green on a commit that is up to date with the
-current base branch, reached through the repository's merge lane. It MAY delete the working
+current base branch, reached through the repository's merge lane. Only a verdict of the flow's
+own `review` step SHALL count as that review: a check, status, comment or approval that an
+external reviewer (a review bot such as CodeRabbit, or any other app) leaves on the pull request
+is a check like any other and SHALL NOT stand in for it. It MAY delete the working
 branch, and SHALL mark the run merged on success. A `merge` step SHALL NOT merge a pull request
 whose required checks are not green. A run whose review is missing or not passing, or whose risk
 class is not allowed, SHALL park in `waiting_human` with that reason.
@@ -282,6 +285,14 @@ class is not allowed, SHALL park in `waiting_human` with that reason.
 - **WHEN** a `merge` step runs on a reviewed PR whose risk class is `high` and the factory
   allows only `low_risk`
 - **THEN** the run parks in `waiting_human` with the reason "high risk" and the PR is not merged
+
+#### Scenario: An external reviewer's check is not a review
+
+- **WHEN** a `merge` step runs on a PR whose head commit has a successful check and an approval
+  from an external review bot, all checks green, and no passing verdict from the flow's `review`
+  step for that commit
+- **THEN** the run parks in `waiting_human` with the reason "no review" and the PR is not
+  merged
 
 #### Scenario: An unreviewed PR in a flow without a review step
 

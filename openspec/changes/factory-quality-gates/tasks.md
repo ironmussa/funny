@@ -148,7 +148,7 @@
       regression test merges; a test that passes without the fix gets a fix round and, unfixed,
       parks the run; an issue whose claim is false ends in `no change` with a comment. Record the
       outcomes in the change.
-- [ ] 7.3 Move the external-review rule ("an external reviewer's check is not a review") into
+- [x] 7.3 Move the external-review rule ("an external reviewer's check is not a review") into
       `factory-agent-roles`' spec delta with a scenario. Verify with
       `openspec validate factory-agent-roles --strict`.
 - [ ] 7.4 Before archiving, merge this change's `merge` requirement text with

@@ -73,7 +73,8 @@
     "githubIssues": "GitHub Issues",
     "viewDesigns": "Ver designs",
     "createAutomation": "Criar automação",
-    "browser_panel": "Anotador do navegador"
+    "browser_panel": "Anotador do navegador",
+    "factory": "Fila da factory"
   },
   "externalClaude": {
     "title": "Claude Code",
@@ -1789,5 +1790,17 @@
     "clearFinished": "Limpar concluídas",
     "failedToast": "Falhou: {{title}}",
     "openPanel": "Ver"
+  },
+  "factoryView": {
+    "title": "Fila da factory",
+    "summary": "{{projects}} projetos · {{runs}} execuções",
+    "searchPlaceholder": "Filtrar por issue, projeto ou etapa",
+    "waiting": "Aguardando você",
+    "active": "Em andamento",
+    "queue": "Na fila",
+    "failed": "Falharam recentemente",
+    "empty": "Nada na factory",
+    "emptyDescription": "As issues enviadas à factory de um projeto aparecem aqui enquanto aguardam e executam.",
+    "issueTitle": "Issue #{{number}}"
   }
 }

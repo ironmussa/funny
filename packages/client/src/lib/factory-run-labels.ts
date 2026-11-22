@@ -115,3 +115,44 @@ export function factoryRunSteps(
     return { name, status: MOVING.has(run.state) ? 'current' : 'pending' };
   });
 }
+
+/** The factory view's groups (`/factory`), in the order it shows them. */
+export type FactoryQueueSection = 'waiting' | 'active' | 'queue' | 'failed';
+
+const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection | null> = {
+  waiting_human: 'waiting',
+  queued: 'active',
+  working: 'active',
+  pr_open: 'active',
+  waiting_ci: 'active',
+  fixing: 'active',
+  requested: 'queue',
+  failed: 'failed',
+  merged: null,
+  stopped: null,
+};
+
+export const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [
+  'waiting',
+  'active',
+  'queue',
+  'failed',
+];
+
+/** Runs per section; the queue in its order, the others newest first (the server's order). */
+export function groupFactoryRuns<R extends FactoryRun>(
+  runs: R[],
+): Record<FactoryQueueSection, R[]> {
+  const groups: Record<FactoryQueueSection, R[]> = {
+    waiting: [],
+    active: [],
+    queue: [],
+    failed: [],
+  };
+  for (const run of runs) {
+    const section = SECTION_OF[run.state];
+    if (section) groups[section].push(run);
+  }
+  groups.queue.sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0));
+  return groups;
+}

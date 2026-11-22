@@ -58,6 +58,7 @@ import type {
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueClearResult,
+  FactoryQueueRun,
   FactoryRun,
   FactorySettings,
   FactorySubmitResult,
@@ -437,6 +438,11 @@ export interface FactoryPort {
    * and have not ended (in flight, or waiting for the caller).
    */
   activeRuns(userId: string): PortResult<FactoryRun[]>;
+  /**
+   * The factory view: the runs of all the caller's factories, across projects,
+   * that have not ended (queued too) or failed recently, newest first.
+   */
+  queueRuns(userId: string): PortResult<FactoryQueueRun[]>;
   /** Stop one run of the caller's factory and its agent threads; audited. */
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */

@@ -1,4 +1,4 @@
-import { BarChart3, Columns3, LayoutGrid, PanelLeftClose, Search } from 'lucide-react';
+import { BarChart3, Columns3, Factory, LayoutGrid, PanelLeftClose, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { OrgSwitcher } from '@/components/OrgSwitcher';
@@ -9,8 +9,8 @@ import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
 
 /**
- * Top of AppSidebar: organization switcher + 5 icon-button shortcuts
- * (search/list, kanban, grid, analytics, collapse). Hidden until hover.
+ * Top of AppSidebar: organization switcher + 6 icon-button shortcuts
+ * (search/list, factory queue, kanban, grid, analytics, collapse). Hidden until hover.
  *
  * Extracted from Sidebar.tsx as part of the god-file split.
  */
@@ -40,6 +40,22 @@ export function SidebarTopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{t('sidebar.search', 'Search')}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              tabIndex={-1}
+              data-testid="sidebar-factory"
+              aria-label={t('sidebar.factory', 'Factory queue')}
+              onClick={() => navigate(buildPath('/factory'))}
+              className="text-muted-foreground"
+            >
+              <Factory className="icon-base" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t('sidebar.factory', 'Factory queue')}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

@@ -28,5 +28,7 @@ describe('renderer-neutral route parser', () => {
       settingsPage: 'git',
     });
     expect(parseClientRoute('/grid').liveColumns).toBe(true);
+    expect(parseClientRoute('/factory')).toMatchObject({ factory: true, orgSlug: null });
+    expect(parseClientRoute('/acme/factory')).toMatchObject({ factory: true, orgSlug: 'acme' });
   });
 });

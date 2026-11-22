@@ -138,6 +138,9 @@ const AddProjectView = lazy(() =>
 const AnalyticsView = lazy(() =>
   import('@/components/AnalyticsView').then((m) => ({ default: m.AnalyticsView })),
 );
+const FactoryQueueView = lazy(() =>
+  import('@/components/FactoryQueueView').then((m) => ({ default: m.FactoryQueueView })),
+);
 const WorkflowsView = lazy(() =>
   import('@/components/WorkflowsSettings').then((m) => ({ default: m.WorkflowsView })),
 );
@@ -249,6 +252,7 @@ export function App() {
   const parsedRoute = useMemo(() => parseRoute(pathname), [pathname]);
   const externalClaudeSessionId = parsedRoute.externalClaudeSessionId;
   const workflowsProjectId = parsedRoute.workflowsProjectId;
+  const factoryViewOpen = parsedRoute.factory;
 
   // --- Right panel layout ---
   const isFullScreenView =
@@ -256,6 +260,7 @@ export function App() {
     generalSettingsOpen ||
     analyticsOpen ||
     !!workflowsProjectId ||
+    factoryViewOpen ||
     liveColumnsOpen ||
     schedulerOpen ||
     !!externalClaudeSessionId ||
@@ -391,6 +396,8 @@ export function App() {
               <div className="absolute inset-0 z-10 flex">
                 {workflowsProjectId ? (
                   <WorkflowsView projectId={workflowsProjectId} />
+                ) : factoryViewOpen ? (
+                  <FactoryQueueView />
                 ) : generalSettingsOpen ? (
                   <GeneralSettingsView />
                 ) : settingsOpen ? (
@@ -437,6 +444,7 @@ export function App() {
       automationInboxOpen,
       displayThreadId,
       externalClaudeSessionId,
+      factoryViewOpen,
       generalSettingsOpen,
       isFullScreenView,
       liveColumnsOpen,

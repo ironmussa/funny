@@ -248,6 +248,10 @@ function createFactoryPort(
       return runs.activeForOwner(userId).mapErr(storageFailure);
     },
 
+    async queueRuns(userId) {
+      return runs.queueForOwner(userId).mapErr(storageFailure);
+    },
+
     async runs(userId, projectId) {
       return settings
         .factoryId(userId, projectId)

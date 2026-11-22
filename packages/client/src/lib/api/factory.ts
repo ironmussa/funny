@@ -12,6 +12,7 @@ import { trpc, trpcCall } from './_trpc';
 export type {
   FactoryMode,
   FactoryQueueClearResult,
+  FactoryQueueRun,
   FactoryRun,
   FactorySettings,
   FactorySubmitResult,
@@ -26,6 +27,7 @@ export const factoryApi = {
   saveSettings: (data: SaveFactorySettingsInput) => trpcCall(() => procedures.save.mutate(data)),
   listRuns: (projectId: string) => trpcCall(() => procedures.runs.query({ projectId })),
   listActiveRuns: () => trpcCall(() => procedures.activeRuns.query()),
+  listQueueRuns: () => trpcCall(() => procedures.queueRuns.query()),
   stopRun: (projectId: string, runId: string) =>
     trpcCall(() => procedures.stopRun.mutate({ projectId, runId })),
   retryRun: (projectId: string, runId: string) =>

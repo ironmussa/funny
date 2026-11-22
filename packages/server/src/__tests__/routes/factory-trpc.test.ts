@@ -190,6 +190,36 @@ describe('factory over tRPC', () => {
     expect((await query('carol', 'activeRuns', undefined)).body).toEqual([]);
   });
 
+  test('queueRuns lists the caller own unended runs, queued ones too, with their project', async () => {
+    const { createFactorySettingsService } =
+      await import('../../services/factory/factory-settings.js');
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const repo = createFactoryRunsRepository();
+    const factoryOf = async (userId: string, projectId: string) => {
+      await save(userId, { projectId, enabled: false });
+      return (await createFactorySettingsService().factoryId(userId, projectId))._unsafeUnwrap()!;
+    };
+    const alice = await factoryOf('alice', 'p1');
+    const bob = await factoryOf('bob', 'bob-project');
+    const seed = async (factoryId: string, issueNumber: number, state: FactoryRunState) =>
+      (await repo.start({ factoryId, issueNumber, state }))._unsafeUnwrap();
+
+    const queued = await seed(alice, 1, 'requested');
+    const working = await seed(alice, 2, 'working');
+    const parked = await seed(alice, 3, 'waiting_human');
+    await seed(alice, 4, 'merged');
+    await seed(alice, 5, 'stopped');
+    await seed(bob, 6, 'requested');
+
+    const listed = await query('alice', 'queueRuns', undefined);
+    expect(listed.status).toBe(200);
+    expect(listed.body.map((run: { id: string }) => run.id).sort()).toEqual(
+      [queued.id, working.id, parked.id].sort(),
+    );
+    expect(listed.body.every((run: { projectId: string }) => run.projectId === 'p1')).toBe(true);
+    expect((await query('carol', 'queueRuns', undefined)).body).toEqual([]);
+  });
+
   test('the mode is saved and read back, a new factory is manual, and a bad mode is refused', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
       mode: 'manual',

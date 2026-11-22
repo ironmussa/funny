@@ -2,6 +2,7 @@ import type {
   FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
+  FactoryQueueRun,
   FactoryRun,
   FactorySettings,
 } from '@funny/shared/contracts/factory';
@@ -91,6 +92,22 @@ export function activeFactoryRunsQuery() {
   };
 }
 
+const queueRunsKey = ['factory', 'queue-runs'] as const;
+
+/**
+ * The factory view: the caller's unended runs across projects, queued ones
+ * included, each with its project. Polled while the view is shown, like the
+ * per-project run list.
+ */
+export function factoryQueueRunsQuery() {
+  return {
+    queryKey: queueRunsKey,
+    queryFn: (): Promise<FactoryQueueRun[]> => unwrapResult(factoryApi.listQueueRuns()),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  };
+}
+
 /** What a thread that is not a factory thread reads instead: never fetched. */
 export const NO_ACTIVE_FACTORY_RUNS = {
   queryKey: ['factory', 'active-runs', 'none'] as const,
@@ -103,6 +120,7 @@ export function refreshFactoryRuns(projectId: string, layer: DataLayer = getData
   if (layer.disposed) return;
   void layer.queryClient.invalidateQueries({ queryKey: factoryRunsKey(projectId) });
   void layer.queryClient.invalidateQueries({ queryKey: activeFactoryRunsKey, exact: true });
+  void layer.queryClient.invalidateQueries({ queryKey: queueRunsKey, exact: true });
 }
 
 /**
@@ -153,8 +171,10 @@ export function writeFactoryRun(
   layer.queryClient.setQueryData<FactoryRun[]>(factoryRunsKey(projectId), (runs) =>
     runs?.map((r) => (r.id === run.id ? run : r)),
   );
-  // The thread lists' copy: the run may have ended, which drops it from there.
+  // The thread lists' and the factory view's copies: the run may have ended,
+  // which drops it from there.
   void layer.queryClient.invalidateQueries({ queryKey: activeFactoryRunsKey, exact: true });
+  void layer.queryClient.invalidateQueries({ queryKey: queueRunsKey, exact: true });
 }
 
 /** Record the settings a save returned (the server's confirmed state). */

@@ -1,3 +1,4 @@
+import { stringHash } from '@/lib/string-hash';
 import { cn } from '@/lib/utils';
 
 const PALETTE = [
@@ -13,11 +14,7 @@ const PALETTE = [
 
 /** Pick a deterministic color from the palette based on a string hash. */
 export function colorFromName(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  }
-  return PALETTE[Math.abs(hash) % PALETTE.length];
+  return PALETTE[stringHash(name) % PALETTE.length];
 }
 
 /** Parse a hex color (#RGB or #RRGGBB) into [r, g, b] (0-255). */

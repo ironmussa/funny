@@ -301,6 +301,27 @@ export function graphBranchTipHashByLabel(
   return tips;
 }
 
+/**
+ * Commit hash → the branch name its graph color is keyed on, for the commits
+ * that are branch tips. The checked-out branch wins on a commit with several,
+ * then the first local branch, then the first remote one with its remote
+ * prefix dropped (so `origin/foo` and `foo` share a color).
+ */
+export function graphBranchColorNameByHash(
+  entries: readonly GraphNodeParentRefEntry[],
+): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const entry of entries) {
+    const folded = foldGraphRefs(entry.refs, entry.headBranch);
+    const current = folded.find((ref) => ref.kind === 'local' && ref.isCurrent);
+    const local = folded.find((ref) => ref.kind === 'local' && ref.name !== 'HEAD');
+    const remote = folded.find((ref) => ref.kind === 'remote');
+    const name = current?.name ?? local?.name ?? (remote ? remoteBranchOf(remote.name) : null);
+    if (name) names.set(entry.hash, name);
+  }
+  return names;
+}
+
 export interface GraphNodeParentLabel {
   commit: string;
   branchLabels: string[];

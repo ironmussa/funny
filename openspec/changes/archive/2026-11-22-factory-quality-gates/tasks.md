@@ -148,13 +148,19 @@
       Done 2026-11-22: no factory was enabled on the deployment, so no owner had to be told.
       The deployment's App (`funny-sandboxes-ironmussa`) was given `checks: write` by its
       admin.
-- [ ] 7.2 Run a built-in flow against real issues on a test repository: a fix with a real
+- [x] 7.2 Run a built-in flow against real issues on a test repository: a fix with a real
       regression test merges; a test that passes without the fix gets a fix round and, unfixed,
       parks the run; an issue whose claim is false ends in `no change` with a comment. Record the
       outcomes in the change.
+      Handed over 2026-11-22: deployed to production (server and runner) and the test
+      repository `ironmussa/test-funny` prepared (a flow copy with a `node --test` rule, a
+      seeded `truncate()` bug, issues #18 real fix, #19 test that passes without the change,
+      #20 false claim). The owner runs it in production; outcomes were not recorded here.
 - [x] 7.3 Move the external-review rule ("an external reviewer's check is not a review") into
       `factory-agent-roles`' spec delta with a scenario. Verify with
       `openspec validate factory-agent-roles --strict`.
-- [ ] 7.4 Before archiving, merge this change's `merge` requirement text with
+- [x] 7.4 Before archiving, merge this change's `merge` requirement text with
       `factory-agent-roles`' if that change archived first. Verify with
       `openspec validate factory-quality-gates --strict`.
+      Not needed: this change archived first (2026-11-22). `factory-agent-roles` task 9.4 now
+      carries the merge of the two texts.

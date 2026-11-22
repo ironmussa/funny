@@ -64,3 +64,8 @@ Prerequisites: `workflow-dag-engine` groups 1–3 (executor, loops, concurrency 
 - [ ] 9.1 Update `openwiki/architecture/issue-factory.md` (roles, invariants, loops, merge group, stage limits, sentinel) and add the role names to `GLOSSARY.md`; verify the doc's file references exist
 - [ ] 9.2 Run `bun run lint`, `bun run typecheck` and the pipelines, workflows, server, shared and client test suites; all pass
 - [ ] 9.3 End to end on a test repository with `maxConcurrent: 2`: two issues touching the same file run one after the other, a review failure is fixed and re-reviewed, the second PR is updated and re-checked before merging, and a deliberately breaking merge opens an incident and a revert PR
+- [ ] 9.4 Before archiving, merge this change's MODIFIED `merge` requirement with the text
+      `factory-quality-gates` left in `openspec/specs/issue-factory/spec.md` (archived
+      2026-11-22: the regression proof gate, the published `funny/regression-proof` check and
+      the auto-merge pinned to the proved commit), so archiving this change does not drop
+      them. Verify with `openspec validate factory-agent-roles --strict`.

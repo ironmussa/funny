@@ -71,7 +71,7 @@ const listed = (items: string[], max: number) => {
 
 /**
  * What the implementing agent is told about a conflict: what the base gained,
- * the files both sides changed, and the known fileRules that are not merged by
+ * the files both sides changed, and the kinds of file that are not merged by
  * hand (a lockfile is regenerated, a numbered migration is renumbered).
  */
 export function conflictFeedback(input: {

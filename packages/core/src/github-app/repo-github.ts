@@ -5,7 +5,9 @@
  * own App, or the server's App token capped by a user's access.
  */
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { createGithubRest } from './installation-tokens.js';
 
@@ -45,18 +47,13 @@ const fail = (message: string, status?: number, kind?: string): GithubCallError 
 /** At most this much of a refusal's body is kept. */
 const MAX_DETAIL = 500;
 
+const REFUSAL_BODY = z.object({ message: z.string() });
+
 /** What a refusal's body says: its JSON `message` when it has one, else the start of the text. */
 function refusalDetail(text: string): string | undefined {
   if (!text) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (parsed && typeof parsed === 'object' && 'message' in parsed) {
-      return String(parsed.message).slice(0, MAX_DETAIL);
-    }
-  } catch {
-    // Not JSON: the text itself is the detail.
-  }
-  return text.slice(0, MAX_DETAIL);
+  const parsed = parseStoredJson(REFUSAL_BODY, text, 'GitHub refusal');
+  return (parsed.ok ? parsed.value.message : text).slice(0, MAX_DETAIL);
 }
 
 export function createRepoGithub(deps: {

@@ -9,6 +9,7 @@ import type { Thread } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryQueueRun, FactoryRegressionProof, FactoryRun } from '@/lib/api/factory';
 
@@ -183,7 +184,12 @@ describe('the "regression proof not configured" blocker', () => {
         projectId: 'p1',
       },
     ];
-    render(<FactoryQueueView />);
+    // The view's search bar and status pins carry tooltips.
+    render(
+      <TooltipProvider>
+        <FactoryQueueView />
+      </TooltipProvider>,
+    );
     expect(screen.getByTestId('factory-view-run-r2')).toHaveTextContent(
       'Regression proof not configured',
     );

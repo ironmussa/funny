@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 
 import type { TerminalShell } from './settings-store';
+import { createThrottledJSONStorage } from './throttled-json-storage';
 
 /**
  * Synthetic project-id used for terminal tabs that belong to a scratch
@@ -11,6 +12,24 @@ import type { TerminalShell } from './settings-store';
  * `tab.cwd`.
  */
 export const SCRATCH_TERMINAL_SCOPE_ID = '__scratch__';
+
+/**
+ * Most characters of output kept per server-managed command. Older output is
+ * dropped from the front (at a line break when one is near), so a long-running
+ * dev server cannot grow the buffer, and the re-rendered HTML, without bound.
+ */
+export const MAX_COMMAND_OUTPUT_CHARS = 256 * 1024;
+
+/** Append `data` to `previous`, keeping at most `MAX_COMMAND_OUTPUT_CHARS`. */
+export function appendCapped(previous: string, data: string): string {
+  const next = previous + data;
+  if (next.length <= MAX_COMMAND_OUTPUT_CHARS) return next;
+  const start = next.length - MAX_COMMAND_OUTPUT_CHARS;
+  // Cut after a newline so the kept output does not begin mid-line (or in
+  // the middle of an ANSI escape sequence on that line).
+  const newline = next.indexOf('\n', start);
+  return newline !== -1 && newline - start < 4096 ? next.slice(newline + 1) : next.slice(start);
+}
 
 export interface TerminalTab {
   id: string;
@@ -246,7 +265,7 @@ export const useTerminalStore = create<TerminalState>()(
         set((state) => ({
           commandOutput: {
             ...state.commandOutput,
-            [commandId]: (state.commandOutput[commandId] ?? '') + data,
+            [commandId]: appendCapped(state.commandOutput[commandId] ?? '', data),
           },
         })),
 
@@ -410,7 +429,10 @@ export const useTerminalStore = create<TerminalState>()(
     }),
     {
       name: 'funny-terminal-store',
-      storage: createJSONStorage(() => localStorage),
+      // persist writes after every `set`, including each output chunk and
+      // metrics update; coalesce those into at most one write per second and
+      // skip writes when the persisted slice did not change.
+      storage: createThrottledJSONStorage(() => localStorage),
       partialize: (state) => ({
         tabs: state.tabs.map((t) => ({
           ...t,

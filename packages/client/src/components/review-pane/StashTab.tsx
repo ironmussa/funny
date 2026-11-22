@@ -343,7 +343,7 @@ function StashRow({
         <span className={cn(listRowTitleClassName, 'line-clamp-2 break-words')}>
           {entry.message}
         </span>
-        <span className="text-muted-foreground text-2xs">{timeAgo(entry.createdAt, t, now)}</span>
+        <span className="text-muted-foreground text-xs">{timeAgo(entry.createdAt, t, now)}</span>
       </div>
       <StashPopButton
         idx={idx}

@@ -1,5 +1,6 @@
 import { GitBranch } from 'lucide-react';
 
+import { colorFromName, contrastText, pastelize } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn, ICON_SIZE } from '@/lib/utils';
 
@@ -7,7 +8,8 @@ interface BranchBadgeProps {
   branch: string;
   size?: 'xs' | 'sm' | 'md';
   /**
-   * `badge` (default): muted chip, for a branch inside a row's metadata or a sentence.
+   * `badge` (default): pastel chip (color picked from the branch name), for a
+   * branch inside a row's metadata or a sentence.
    * `plain`: no chip, inherits the surrounding color, for headers, toggles and row titles.
    */
   variant?: 'badge' | 'plain';
@@ -16,9 +18,10 @@ interface BranchBadgeProps {
 }
 
 const sizeStyles = {
-  xs: { icon: ICON_SIZE['2xs'], text: 'text-2xs leading-tight', chip: 'px-1 py-px' },
-  sm: { icon: ICON_SIZE.xs, text: 'text-xs', chip: 'px-1 py-px' },
-  md: { icon: ICON_SIZE.sm, text: 'text-sm', chip: 'px-1.5 py-0.5' },
+  // `xs` is the History tab's chip size (15px tall, `text-2xs`).
+  xs: { icon: ICON_SIZE['2xs'], text: 'text-2xs leading-none', chip: 'h-[0.9375rem] px-1.5' },
+  sm: { icon: ICON_SIZE.xs, text: 'text-xs', chip: 'px-1.5 py-px' },
+  md: { icon: ICON_SIZE.sm, text: 'text-sm', chip: 'px-2 py-0.5' },
 };
 
 /**
@@ -33,6 +36,7 @@ export function BranchBadge({
   'data-testid': testId = 'branch-badge',
 }: BranchBadgeProps) {
   const s = sizeStyles[size];
+  const bg = variant === 'badge' ? pastelize(colorFromName(branch)) : undefined;
 
   return (
     <Tooltip>
@@ -41,9 +45,10 @@ export function BranchBadge({
           className={cn(
             'inline-flex min-w-0 items-center gap-1 font-mono',
             s.text,
-            variant === 'badge' && ['bg-muted text-muted-foreground rounded font-medium', s.chip],
+            variant === 'badge' && ['rounded-full font-medium', s.chip],
             className,
           )}
+          style={bg ? { backgroundColor: bg, color: contrastText(bg) } : undefined}
           data-testid={testId}
         >
           <GitBranch className={cn(s.icon, 'shrink-0')} aria-hidden="true" />

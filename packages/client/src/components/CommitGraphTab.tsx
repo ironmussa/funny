@@ -58,6 +58,7 @@ import { useElementWidth } from '@/hooks/use-element-width';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
+import { useStartThreadOnBranch } from '@/hooks/use-start-thread-on-branch';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 import { api } from '@/lib/api';
 import type { GitRebaseReflogEventDTO, GraphBranchScope, GraphRefDTO } from '@/lib/api/git';
@@ -93,6 +94,7 @@ import {
   inferUnpulledHashesFromGraphEntries,
   pinThreadBranchFirst,
   summarizeGraphBranches,
+  threadBaseBranchesAt,
   type GraphBranchSummary,
 } from '@/lib/graph-refs';
 import {
@@ -482,6 +484,11 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   // Walk the GitHub commit-author endpoint, anchored at the first uncovered SHA,
   // to fill in avatar URLs.
   const ghProjectId = projectModeId ?? (effectiveThreadId ? gitThread?.projectId : null);
+  const startThreadOnBranch = useStartThreadOnBranch();
+  const createThreadFromBranch = useMemo(
+    () => (ghProjectId ? (branch: string) => startThreadOnBranch(ghProjectId, branch) : null),
+    [ghProjectId, startThreadOnBranch],
+  );
   useEffect(() => {
     if (!ghProjectId || entries.length === 0) return;
     const firstMissing = entries.find(
@@ -838,6 +845,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   effectiveThreadId={effectiveThreadId}
                   projectModeId={projectModeId}
                   onAfterAction={refreshLog}
+                  onCreateThreadFromBranch={createThreadFromBranch}
                   branchSummaryByName={branchSummaryByName}
                   branchActionInProgress={branchActionInProgress}
                   onPushBranch={pushBranch}
@@ -1528,6 +1536,7 @@ function GraphCommitRow({
   effectiveThreadId,
   projectModeId,
   onAfterAction,
+  onCreateThreadFromBranch,
   branchSummaryByName,
   branchActionInProgress,
   onPushBranch,
@@ -1560,6 +1569,8 @@ function GraphCommitRow({
   effectiveThreadId: string | undefined;
   projectModeId: string | null;
   onAfterAction: () => void;
+  /** Opens the new-thread composer on a branch; null when there is no project. */
+  onCreateThreadFromBranch: ((branch: string) => void) | null;
   branchSummaryByName: ReadonlyMap<string, GraphBranchSummary>;
   branchActionInProgress: string | null;
   onPushBranch: (branch: string) => void;
@@ -1648,6 +1659,7 @@ function GraphCommitRow({
       ),
     [branchSummaryByName, foldedRefs],
   );
+  const threadBranches = useMemo(() => threadBaseBranchesAt(foldedRefs), [foldedRefs]);
 
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
   const commitTime = useMemo(
@@ -1937,6 +1949,8 @@ function GraphCommitRow({
               projectModeId={projectModeId}
               localBranches={pushableBranches}
               targetBranches={targetBranches}
+              threadBranches={threadBranches}
+              onCreateThreadFromBranch={onCreateThreadFromBranch ?? undefined}
               rebaseEvents={rebaseEvents}
               onSelectRebaseEvent={onSelectRebaseEvent}
               onAfterAction={onAfterAction}

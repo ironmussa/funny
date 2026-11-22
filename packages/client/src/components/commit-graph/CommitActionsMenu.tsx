@@ -9,6 +9,7 @@ import {
   Hash,
   History,
   MoreVertical,
+  Plus,
   RotateCcw,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -46,6 +47,10 @@ interface Props {
   localBranches?: string[];
   /** Local branches at this commit that can be used as merge/rebase targets. */
   targetBranches?: string[];
+  /** Branches at this commit a new thread can start from (see `threadBaseBranchesAt`). */
+  threadBranches?: string[];
+  /** Opens the new-thread composer on a branch. No "New thread" items without it. */
+  onCreateThreadFromBranch?: (branch: string) => void;
   rebaseEvents?: GitRebaseReflogEventDTO[];
   onSelectRebaseEvent?: (event: GitRebaseReflogEventDTO) => void;
   /** Reload the graph log after a mutating action. */
@@ -67,6 +72,7 @@ interface Props {
  * would be a fresh reference each render and churn referential equality. */
 const NO_BRANCHES: string[] = [];
 const NO_TARGET_BRANCHES: string[] = [];
+const NO_THREAD_BRANCHES: string[] = [];
 const NO_REBASE_EVENTS: GitRebaseReflogEventDTO[] = [];
 
 /**
@@ -87,6 +93,8 @@ export function CommitActionsMenu({
   projectModeId,
   localBranches = NO_BRANCHES,
   targetBranches = NO_TARGET_BRANCHES,
+  threadBranches = NO_THREAD_BRANCHES,
+  onCreateThreadFromBranch,
   rebaseEvents = NO_REBASE_EVENTS,
   onSelectRebaseEvent,
   onAfterAction,
@@ -217,6 +225,22 @@ export function CommitActionsMenu({
                 </>
               )}
               <DropdownMenuSeparator />
+              {onCreateThreadFromBranch &&
+                threadBranches.map((branch) => (
+                  <DropdownMenuItem
+                    key={`new-thread:${branch}`}
+                    onClick={() => onCreateThreadFromBranch(branch)}
+                    data-testid={`graph-commit-menu-new-thread-${branch}`}
+                  >
+                    <Plus className="icon-sm" />
+                    <span className="min-w-0 truncate">
+                      {t('graph.newThreadFromBranch', {
+                        branch,
+                        defaultValue: `New thread from ${branch}`,
+                      })}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
               <DropdownMenuItem
                 onClick={() => setCreateBranchOpen(true)}
                 data-testid={`graph-commit-menu-create-branch-${shortHash}`}

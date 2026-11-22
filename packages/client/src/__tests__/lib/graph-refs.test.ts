@@ -10,6 +10,7 @@ import {
   graphNodeParentRefLabels,
   graphNodeRefLabel,
   summarizeGraphBranches,
+  threadBaseBranchesAt,
 } from '@/lib/graph-refs';
 
 const local = (name: string): GraphRefDTO => ({ name, kind: 'local' });
@@ -539,5 +540,20 @@ describe('pinThreadBranchFirst', () => {
 
   it('does not pin a tag that shares the thread branch name', () => {
     expect(pinThreadBranchFirst(refs, 'v1.0')).toBe(refs);
+  });
+});
+
+describe('threadBaseBranchesAt', () => {
+  it('lists local and lone remote branches by bare name, skipping tags and HEAD', () => {
+    const refs = foldGraphRefs(
+      [local('main'), remote('origin/main'), remote('origin/feat/x'), tag('v1.0'), local('HEAD')],
+      'main',
+    );
+    expect(threadBaseBranchesAt(refs)).toEqual(['main', 'feat/x']);
+  });
+
+  it('de-duplicates a branch present on two remotes', () => {
+    const refs = foldGraphRefs([remote('origin/feat/y'), remote('upstream/feat/y')], null);
+    expect(threadBaseBranchesAt(refs)).toEqual(['feat/y']);
   });
 });

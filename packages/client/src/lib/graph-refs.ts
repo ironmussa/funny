@@ -156,6 +156,21 @@ export function foldGraphRefs(
 }
 
 /**
+ * Branches a new thread can start from at a commit: every branch chip on it
+ * (local, or a lone remote-tracking ref named without its remote, since the
+ * composer's branch picker lists remote branches by bare name). Tags and the
+ * detached-HEAD pseudo-ref are not branches. De-duplicated, chip order kept.
+ */
+export function threadBaseBranchesAt(refs: readonly FoldedRef[]): string[] {
+  const out = new Set<string>();
+  for (const ref of refs) {
+    if (ref.kind === 'tag' || ref.name === 'HEAD') continue;
+    out.add(ref.kind === 'remote' ? remoteBranchOf(ref.name) : ref.name);
+  }
+  return [...out];
+}
+
+/**
  * Move the open thread's branch chip to the front of a commit's chips, so the
  * row's leader line (and the thread arrow on it) reaches it straight instead of
  * bending down to a lower chip. Other chips keep their order; returns `refs`

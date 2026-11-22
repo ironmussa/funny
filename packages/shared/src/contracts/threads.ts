@@ -102,6 +102,15 @@ const messagesQuery = z.object({
     .transform((value): 'before' | 'after' => (value === 'after' ? 'after' : 'before')),
 });
 
+/**
+ * `GET /api/threads/:id/comments`: one page, counted back from the newest
+ * comment (`offset` 0 is the latest `limit`), returned oldest first.
+ */
+export const threadCommentsQuery = z.object({
+  limit: clampedInt(200, 1, 500),
+  offset: clampedInt(0, 0, Number.MAX_SAFE_INTEGER),
+});
+
 const messageSearchQuery = z.object({
   q: z.string().optional(),
   limit: clampedInt(100, 1, 200),

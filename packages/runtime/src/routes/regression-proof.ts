@@ -3,6 +3,7 @@
  *
  * POST /api/threads/:id/regression-proof — start a proof (or join a running one)
  * GET  /api/threads/:id/regression-proof/:proofId — poll a proof's state
+ * DELETE /api/threads/:id/regression-proof/:proofId — stop a running proof
  *
  * Owner only (no steer delegation). Refuses scratch threads and threads
  * without a checkout.
@@ -11,7 +12,7 @@
 import { getDefaultBranch, gitRead } from '@funny/core/git';
 import { Hono } from 'hono';
 
-import { startProofJob, getProofJob } from '../services/regression-proof.js';
+import { cancelProofJob, getProofJob, startProofJob } from '../services/regression-proof.js';
 import { canDoGitOps, isWorktreeCheckoutMissing } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -73,9 +74,10 @@ regressionProofRoutes.post('/:id/regression-proof', async (c) => {
     );
   }
 
-  const job = startProofJob(thread.id, thread.projectPath, thread.worktreePath ?? null, {
+  const job = startProofJob(thread.id, thread.projectPath, {
     headSha,
     defaultBranch,
+    setupCommand: input.setupCommand,
     rules: input.rules,
     supportGlobs: input.supportGlobs,
     timeoutMs: input.timeoutMs,
@@ -100,4 +102,13 @@ regressionProofRoutes.get('/:id/regression-proof/:proofId', async (c) => {
   }
 
   return c.json({ state: 'running' }, 200);
+});
+
+regressionProofRoutes.delete('/:id/regression-proof/:proofId', async (c) => {
+  const userId = c.get('userId');
+  const threadResult = await requireThread(c.req.param('id'), userId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const cancelled = cancelProofJob(threadResult.value.id, c.req.param('proofId'));
+  if (!cancelled) return c.json({ error: 'Proof job not found', code: 'proof-not-found' }, 404);
+  return c.json({ state: 'cancelled' }, 200);
 });

@@ -629,6 +629,8 @@ export const startRegressionProofSchema = z.object({
     }),
   ),
   supportGlobs: z.array(z.string()).default([]),
+  /** Run in each temporary worktree before the tests (e.g. a dependency install). */
+  setupCommand: z.string().min(1).max(1000).optional(),
   timeoutMs: z.number().int().positive().default(600_000),
 });
 

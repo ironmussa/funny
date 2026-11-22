@@ -2,6 +2,7 @@ import { waitFor } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { nanoid } from 'nanoid';
 
+import { log } from '../lib/logger.js';
 import { GrpcOperationOutbox } from './grpc-operation-outbox.js';
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 
@@ -482,9 +483,26 @@ export class GrpcOperationsAdapter {
         item.idempotencyKey ? [item.idempotencyKey] : [],
       ),
     );
-    for (const item of this.outbox.pending()) {
-      if (!liveKeys.has(item.idempotencyKey)) {
+    const reportDropped = (idempotencyKey: string, reason: string, detail?: string) => {
+      log.warn('Dropped gRPC outbox entry instead of replaying it', {
+        namespace: 'grpc-outbox',
+        idempotencyKey,
+        reason,
+        detail,
+      });
+    };
+    for (const item of this.outbox.replayable({ onDropped: reportDropped })) {
+      if (liveKeys.has(item.idempotencyKey)) continue;
+      try {
         this.send(nanoid(), item.operationKind, item.payload, item.idempotencyKey);
+      } catch (error) {
+        // A row that cannot be encoded never will be: drop it and keep replaying.
+        this.outbox.discard(item.idempotencyKey);
+        reportDropped(
+          item.idempotencyKey,
+          'unsendable',
+          error instanceof Error ? error.message : String(error),
+        );
       }
     }
   }

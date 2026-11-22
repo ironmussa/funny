@@ -14,6 +14,12 @@ export interface ActivityUpdateOutcome {
   activity: Activity;
   /** The row moved to `failed` with this event (not: was already failed, or a list load). */
   becameFailed: boolean;
+  /**
+   * The project a clone created, when the row moved to `succeeded` with this
+   * event. The clone screen that started it may be long closed, so the caller
+   * reloads the project list itself.
+   */
+  createdProjectId: string | null;
 }
 
 /** Realtime `activity:updated`: the authoritative row replaces the stored one. */
@@ -27,9 +33,14 @@ export function applyActivityUpdated(
   const previous = store.getSynced(activity.id);
   store.upsert([activity]);
   if (activity.status !== 'running') getActivityProgressData(layer).remove([activity.id]);
+  const becameSucceeded = activity.status === 'succeeded' && previous?.status !== 'succeeded';
   return {
     activity,
     becameFailed: activity.status === 'failed' && previous?.status !== 'failed',
+    createdProjectId:
+      becameSucceeded && activity.kind === 'project.clone'
+        ? (activity.resultRef?.projectId ?? null)
+        : null,
   };
 }
 

@@ -175,7 +175,7 @@ export function AgentResultCard({
         </div>
       </div>
       {!isSuccess && error && (
-        <pre className="text-status-interrupted/80 overflow-x-auto pl-7 font-mono text-[10px] whitespace-pre-wrap">
+        <pre className="text-status-interrupted/80 text-2xs overflow-x-auto pl-7 font-mono whitespace-pre-wrap">
           {error}
         </pre>
       )}

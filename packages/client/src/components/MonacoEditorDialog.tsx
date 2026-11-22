@@ -45,9 +45,9 @@ import {
 import { isHtmlFile } from '@/lib/html-preview';
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { isMarkdownFile } from '@/lib/markdown-file';
+import { monacoThemeFor } from '@/lib/monaco-theme';
 import { toRawFileSrc } from '@/lib/raw-file-src';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
-import { isLightTheme } from '@/lib/theme';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
@@ -163,7 +163,7 @@ export function MonacoEditorDialog({
   const showHistory = hiddenHistoryFile !== filePath;
 
   // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
-  const monacoTheme = isLightTheme(resolvedTheme) ? 'vs' : 'funny-dark';
+  const monacoTheme = monacoThemeFor(resolvedTheme);
 
   // Initialize the editor buffer synchronously, DURING render — not in an
   // effect. This guarantees Monaco's <Editor> mounts with the real content
@@ -733,7 +733,7 @@ function FileHistorySidebar({
             >
               <div className="flex min-w-0 items-center justify-between gap-2">
                 <span className="min-w-0 truncate text-sm font-medium">{entry.author}</span>
-                <span className="text-muted-foreground shrink-0 font-mono text-[11px]">
+                <span className="text-muted-foreground text-compact shrink-0 font-mono">
                   {entry.shortHash}
                 </span>
               </div>
@@ -748,11 +748,11 @@ function FileHistorySidebar({
               </div>
               <div className="mt-1 line-clamp-2 text-xs">{entry.summary}</div>
               {entry.ranges.length > 0 ? (
-                <div className="text-muted-foreground mt-1 truncate font-mono text-[11px]">
+                <div className="text-muted-foreground text-compact mt-1 truncate font-mono">
                   {formatBlameLineRanges(entry.ranges)}
                 </div>
               ) : (
-                <div className="text-muted-foreground mt-1 truncate text-[11px]">
+                <div className="text-muted-foreground text-compact mt-1 truncate">
                   {formatHistoryPath(entry)}
                 </div>
               )}

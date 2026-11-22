@@ -30,35 +30,35 @@ export function CommandHighlight({ command }: { command: string }) {
           </span>,
         );
       parts.push(
-        <span key={`c${idx}`} className="text-[#e5c07b]">
+        <span key={`c${idx}`} className="text-[var(--terminal-yellow)]">
           {match[2]}
         </span>,
       );
     } else if (m.startsWith('"') || m.startsWith("'")) {
       // String
       parts.push(
-        <span key={`s${idx}`} className="text-[#98c379]">
+        <span key={`s${idx}`} className="text-[var(--terminal-green)]">
           {m}
         </span>,
       );
     } else if (m.startsWith('-')) {
       // Flag
       parts.push(
-        <span key={`f${idx}`} className="text-[#61afef]">
+        <span key={`f${idx}`} className="text-[var(--terminal-blue)]">
           {m}
         </span>,
       );
     } else if (m.startsWith('$')) {
       // Variable
       parts.push(
-        <span key={`v${idx}`} className="text-[#c678dd]">
+        <span key={`v${idx}`} className="text-[var(--terminal-magenta)]">
           {m}
         </span>,
       );
     } else {
       // Operators (&&, ||, |, ;)
       parts.push(
-        <span key={`o${idx}`} className="text-[#c678dd]">
+        <span key={`o${idx}`} className="text-[var(--terminal-magenta)]">
           {m}
         </span>,
       );
@@ -77,7 +77,7 @@ export function CommandHighlight({ command }: { command: string }) {
   }
 
   return (
-    <div className="mt-0.5 min-w-0 truncate overflow-hidden rounded px-1.5 py-0.5 font-mono text-[11px]">
+    <div className="text-compact mt-0.5 min-w-0 truncate overflow-hidden rounded px-1.5 py-0.5 font-mono">
       {parts.length > 0 ? parts : command}
     </div>
   );

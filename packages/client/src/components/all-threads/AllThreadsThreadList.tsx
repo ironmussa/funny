@@ -245,7 +245,7 @@ export function AllThreadsThreadList({
                   contentSnippet={contentSnippet}
                   metadataBadge={
                     thread.archived ? (
-                      <span className="bg-muted text-status-warning/80 inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[10px] leading-tight font-medium">
+                      <span className="bg-muted text-status-warning/80 text-2xs inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px leading-tight font-medium">
                         <Archive className="icon-2xs" />
                         {t('allThreads.archived')}
                       </span>

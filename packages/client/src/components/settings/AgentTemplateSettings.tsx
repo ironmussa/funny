@@ -333,7 +333,7 @@ function TemplateCardSummary({
         <span className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium">{template.name}</span>
           {isBuiltin && (
-            <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium">
+            <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5 font-medium">
               Built-in
             </span>
           )}
@@ -345,13 +345,13 @@ function TemplateCardSummary({
         )}
       </span>
       <span
-        className="text-muted-foreground shrink-0 text-[10px]"
+        className="text-muted-foreground text-2xs shrink-0"
         data-testid={`agent-template-thread-count-${template.id}`}
       >
         {threadCount} {threadCount === 1 ? 'thread' : 'threads'}
       </span>
       {template.model && (
-        <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px]">
+        <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded px-1.5 py-0.5">
           {template.model}
         </span>
       )}
@@ -534,7 +534,7 @@ function IdentitySection({
           ))}
           {template.color && (
             <button
-              className="text-muted-foreground hover:text-foreground ml-1 text-[10px]"
+              className="text-muted-foreground hover:text-foreground text-2xs ml-1"
               onClick={() => onSave({ color: undefined })}
             >
               clear
@@ -596,7 +596,7 @@ function ModelSection({
           ))}
         </SelectContent>
       </Select>
-      <p className="text-muted-foreground mt-1 text-[10px]">
+      <p className="text-muted-foreground text-2xs mt-1">
         Provider is always Deep Agent. Model can be overridden per-thread.
       </p>
     </div>
@@ -635,7 +635,7 @@ function SystemPromptSection({
             </button>
           ))}
         </div>
-        <p className="text-muted-foreground mt-1 text-[10px]">
+        <p className="text-muted-foreground text-2xs mt-1">
           {
             // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
             template.systemPromptMode === 'replace'
@@ -695,7 +695,7 @@ function ToolsSection({
 
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-[10px]">
+      <p className="text-muted-foreground text-2xs mb-2">
         Uncheck tools to disable them for this agent template.
       </p>
       <div className="grid grid-cols-2 gap-1.5">
@@ -711,7 +711,7 @@ function ToolsSection({
               onCheckedChange={() => toggleTool(tool)}
               data-testid={`agent-template-tool-${tool}`}
             />
-            <span className="font-mono text-[11px]">{tool}</span>
+            <span className="text-compact font-mono">{tool}</span>
           </label>
         ))}
       </div>
@@ -744,7 +744,7 @@ function SkillsSection({
 
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-[10px]">
+      <p className="text-muted-foreground text-2xs mb-2">
         Toggle built-in skills for this agent template.
       </p>
       <div className="space-y-1">
@@ -802,7 +802,7 @@ function McpServersSection({
 
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-[10px]">
+      <p className="text-muted-foreground text-2xs mb-2">
         Configure MCP servers that will be attached to this agent at startup.
       </p>
 
@@ -824,7 +824,7 @@ function McpServersSection({
               >
                 <Server className="text-muted-foreground size-3 shrink-0" />
                 <span className="font-medium">{srv.name}</span>
-                <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[10px]">
+                <span className="bg-muted text-muted-foreground text-2xs rounded px-1 py-0.5">
                   {srv.type}
                 </span>
                 <span className="text-muted-foreground truncate">
@@ -923,7 +923,7 @@ function McpServerForm({
     <div className="bg-muted/30 space-y-2 rounded border p-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label htmlFor="agent-template-mcp-name" className="text-muted-foreground text-[10px]">
+          <label htmlFor="agent-template-mcp-name" className="text-muted-foreground text-2xs">
             Name
           </label>
           <Input
@@ -936,7 +936,7 @@ function McpServerForm({
           />
         </div>
         <div>
-          <span id="agent-template-mcp-type-label" className="text-muted-foreground text-[10px]">
+          <span id="agent-template-mcp-type-label" className="text-muted-foreground text-2xs">
             Type
           </span>
           <Select value={type} onValueChange={(v) => setType(v as McpServerType)}>
@@ -959,10 +959,7 @@ function McpServerForm({
       {type === 'stdio' ? (
         <>
           <div>
-            <label
-              htmlFor="agent-template-mcp-command"
-              className="text-muted-foreground text-[10px]"
-            >
+            <label htmlFor="agent-template-mcp-command" className="text-muted-foreground text-2xs">
               Command
             </label>
             <Input
@@ -975,7 +972,7 @@ function McpServerForm({
             />
           </div>
           <div>
-            <label htmlFor="agent-template-mcp-args" className="text-muted-foreground text-[10px]">
+            <label htmlFor="agent-template-mcp-args" className="text-muted-foreground text-2xs">
               Args <span className="text-muted-foreground">(comma-separated)</span>
             </label>
             <Input
@@ -990,7 +987,7 @@ function McpServerForm({
         </>
       ) : (
         <div>
-          <label htmlFor="agent-template-mcp-url" className="text-muted-foreground text-[10px]">
+          <label htmlFor="agent-template-mcp-url" className="text-muted-foreground text-2xs">
             URL
           </label>
           <Input
@@ -1005,7 +1002,7 @@ function McpServerForm({
       )}
 
       <div>
-        <label htmlFor="agent-template-mcp-env" className="text-muted-foreground text-[10px]">
+        <label htmlFor="agent-template-mcp-env" className="text-muted-foreground text-2xs">
           Environment Variables{' '}
           <span className="text-muted-foreground">(KEY=VALUE, one per line)</span>
         </label>
@@ -1074,7 +1071,7 @@ function VariablesSection({
 
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-[10px]">
+      <p className="text-muted-foreground text-2xs mb-2">
         Define variables that users fill in when selecting this template. Use{' '}
         <code className="bg-muted rounded px-1">{'{{VARIABLE_NAME}}'}</code> in your system prompt.
       </p>
@@ -1159,7 +1156,7 @@ function SharingSection({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-medium">Share with all users</p>
-          <p className="text-muted-foreground text-[10px]">
+          <p className="text-muted-foreground text-2xs">
             Shared templates are visible to everyone on this instance.
           </p>
         </div>

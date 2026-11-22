@@ -68,7 +68,7 @@ export function useThreadSearchState(
       const matchNode = textNode.splitText(start);
       const mark = document.createElement('mark');
       mark.setAttribute('data-search-hl', '');
-      mark.style.cssText = 'background-color:#FFE500;color:black';
+      mark.style.cssText = 'background-color:var(--search-highlight);color:black';
       mark.className = 'rounded-sm px-px font-semibold';
       mark.textContent = matchNode.textContent;
       matchNode.parentNode!.replaceChild(mark, matchNode);
@@ -103,7 +103,7 @@ export function useThreadSearchState(
         });
         viewport?.querySelectorAll<HTMLElement>('mark[data-search-current]').forEach((mark) => {
           mark.removeAttribute('data-search-current');
-          mark.style.backgroundColor = '#FFE500';
+          mark.style.backgroundColor = 'var(--search-highlight)';
         });
 
         if (!el) return false;
@@ -118,13 +118,13 @@ export function useThreadSearchState(
         marks.forEach((m) => {
           const mEl = m as HTMLElement;
           mEl.removeAttribute('data-search-current');
-          Object.assign(mEl.style, { backgroundColor: '#FFE500', boxShadow: '' });
+          Object.assign(mEl.style, { backgroundColor: 'var(--search-highlight)', boxShadow: '' });
         });
         const clampedIdx = Math.max(0, Math.min(withinIdx, marks.length - 1));
         const target = marks[clampedIdx] as HTMLElement | undefined;
         if (target) {
           target.setAttribute('data-search-current', '');
-          target.style.backgroundColor = '#FF8A00';
+          target.style.backgroundColor = 'var(--search-highlight-current)';
           if (scroll) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         return true;

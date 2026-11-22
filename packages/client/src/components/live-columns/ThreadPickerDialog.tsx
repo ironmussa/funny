@@ -77,7 +77,7 @@ export function ThreadPickerDialog({
                   <span className="truncate">{t('common.untitled', 'Untitled')}</span>
                 )}
                 {inGrid && (
-                  <span className="text-muted-foreground ml-auto shrink-0 text-[10px]">
+                  <span className="text-muted-foreground text-2xs ml-auto shrink-0">
                     {t('live.inGrid', 'in grid')}
                   </span>
                 )}

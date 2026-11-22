@@ -29,7 +29,7 @@ export function GridPicker({ cols, rows, onChange }: Props) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" className="h-6 min-w-0 gap-1.5 px-2 text-[10px]">
+        <Button variant="ghost" className="text-2xs h-6 min-w-0 gap-1.5 px-2">
           <Grid2x2 className="icon-sm" />
           {cols}×{rows}
         </Button>
@@ -70,7 +70,7 @@ export function GridPicker({ cols, rows, onChange }: Props) {
             }),
           )}
         </div>
-        <p className="text-muted-foreground mt-2 text-center text-[10px]">
+        <p className="text-muted-foreground text-2xs mt-2 text-center">
           {displayCol}×{displayRow}
         </p>
       </PopoverContent>

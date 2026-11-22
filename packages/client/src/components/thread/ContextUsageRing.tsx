@@ -98,7 +98,7 @@ export function ContextUsageRing({
           disabled={disabled}
           onClick={onCompact}
           className={cn(
-            'mr-1 flex h-6 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-muted',
+            'mr-1 flex h-6 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-compact text-muted-foreground hover:bg-muted',
             disabled && 'cursor-not-allowed opacity-50',
           )}
         >

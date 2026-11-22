@@ -58,7 +58,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                   {step.label}
                 </span>
                 {stepElapsed != null && (
-                  <span className="text-muted-foreground/60 shrink-0 text-[10px] tabular-nums">
+                  <span className="text-muted-foreground/60 text-2xs shrink-0 tabular-nums">
                     {formatElapsed(stepElapsed)}
                   </span>
                 )}
@@ -68,7 +68,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                   href={step.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+                  className="text-primary text-compact mt-0.5 flex items-center gap-1 hover:underline"
                 >
                   <ExternalLink className="icon-xs" />
                   {step.url}
@@ -79,7 +79,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
               )}
               {step.error && !(step.subItems && step.subItems.length > 0) && (
                 <ScrollArea className="bg-destructive/5 mt-0.5 max-h-40 rounded">
-                  <pre className="text-destructive/80 p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
+                  <pre className="text-destructive/80 text-compact p-1.5 font-mono wrap-break-word whitespace-pre-wrap">
                     {stripAnsi(step.error)}
                   </pre>
                 </ScrollArea>
@@ -90,7 +90,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
       })}
       {showTotal && visibleSteps.length > 0 && (
         <div className="flex justify-end">
-          <span className="text-muted-foreground/50 text-[10px] tabular-nums">
+          <span className="text-muted-foreground/50 text-2xs tabular-nums">
             {formatElapsed(totalElapsed)}
           </span>
         </div>

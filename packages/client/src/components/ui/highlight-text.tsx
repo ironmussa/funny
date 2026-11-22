@@ -93,8 +93,7 @@ export function HighlightText({
         part.highlight ? (
           <mark
             key={`hl-${i}`}
-            style={{ backgroundColor: '#FFE500', color: 'black' }}
-            className="rounded-sm px-px font-semibold"
+            className="rounded-sm bg-[var(--search-highlight)] px-px font-semibold text-black"
           >
             {part.text}
           </mark>

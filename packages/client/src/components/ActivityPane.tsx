@@ -120,7 +120,7 @@ function ActivitySection({
           {title}
         </span>
         {count !== undefined && count > 0 && (
-          <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 font-mono text-[10px]">
+          <span className="bg-muted text-muted-foreground text-2xs rounded-full px-1.5 py-0.5 font-mono">
             {count}
           </span>
         )}
@@ -155,7 +155,7 @@ function InlineTodoList({
         </div>
         <span
           className={cn(
-            'font-mono text-[10px]',
+            'font-mono text-2xs',
             allDone ? 'text-status-success/80' : 'text-muted-foreground',
           )}
         >
@@ -226,7 +226,7 @@ function AgentCard({
           {label}
         </span>
         {childToolCallCount !== undefined && childToolCallCount > 0 && (
-          <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]">
+          <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded px-1.5 py-0.5 font-mono">
             {childToolCallCount} {t('activity.toolCalls', 'tool calls')}
           </span>
         )}

@@ -125,10 +125,8 @@ export function ActionTimeline({
 
       {/* Time labels */}
       <div className="pointer-events-none absolute inset-x-1 top-0 flex h-full items-center justify-between">
-        <span className="text-muted-foreground/60 text-[9px]">0s</span>
-        <span className="text-muted-foreground/60 text-[9px]">
-          {formatTimeLabel(totalDuration)}
-        </span>
+        <span className="text-muted-foreground/60 text-3xs">0s</span>
+        <span className="text-muted-foreground/60 text-3xs">{formatTimeLabel(totalDuration)}</span>
       </div>
     </div>
   );

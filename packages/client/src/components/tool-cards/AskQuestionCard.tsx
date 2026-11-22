@@ -310,7 +310,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
           {questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}
         </span>
         {displayTime && (
-          <span className="text-muted-foreground/50 text-[10px] tabular-nums">{displayTime}</span>
+          <span className="text-muted-foreground/50 text-2xs tabular-nums">{displayTime}</span>
         )}
         {submitted && (
           <span className="bg-status-success/10 text-status-success/80 ml-auto shrink-0 rounded px-1.5 py-0.5 text-xs font-medium">

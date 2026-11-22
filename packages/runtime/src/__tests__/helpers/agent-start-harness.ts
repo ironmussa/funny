@@ -111,8 +111,11 @@ mock.module('../../services/thread-event-bus.js', () => ({
   },
 }));
 
+// Every name the real importers (event router, message handler) import must be
+// here: Bun before 1.4.6 refuses to link a module mock missing one.
 mock.module('../../services/remote-thread-data-client.js', () => ({
   remoteGetAgentTemplate: vi.fn(async () => undefined),
+  flushPendingMessageUpdates: vi.fn(),
 }));
 mock.module('../../services/permission-rules-client.js', () => ({
   findPermissionRule: vi.fn(async () => undefined),

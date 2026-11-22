@@ -279,6 +279,26 @@ const refreshLog = createClientLogger('thread-refresh');
 const SELECT_LOG_NS = 'thread-select';
 const selectLog = createClientLogger(SELECT_LOG_NS);
 
+/**
+ * Diagnostic: who is driving selection? Surfaces the caller chain behind the
+ * route-sync ↔ back-fill re-select ping-pong. Off in prod by default; enable
+ * with `__funnyLog.setNamespaceLevel('thread-select', 'debug')`.
+ *
+ * The stack is built only when the level is on: `selectThread` runs on every
+ * route sync, and capturing a stack costs far more than the call itself.
+ */
+function traceSelectCaller(threadId: string, state: ThreadState): void {
+  if (!isClientLogLevelEnabled(SELECT_LOG_NS, 'debug')) return;
+  // Frames 0-2 are `Error`, this function and `selectThread`: start at the caller.
+  const caller = new Error().stack?.split('\n').slice(3, 8).join(' <- ').replace(/\s+/g, ' ');
+  selectLog.debug('selectThread called', {
+    threadId,
+    prevSelectedId: state.selectedThreadId ?? null,
+    prevActiveId: state.activeThread?.id ?? null,
+    caller,
+  });
+}
+
 type LocalMessage = import('@funny/shared').Message & { toolCalls?: any[] };
 const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
 
@@ -390,20 +410,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Skip if already loading this exact thread (prevents StrictMode double-fire)
     if (threadId && threadId === getSelectingThreadId()) return;
 
-    // Diagnostic: who is driving selection? Surfaces the caller chain behind the
-    // route-sync ↔ back-fill re-select ping-pong. Off in prod by default; enable
-    // with `__funnyLog.setNamespaceLevel('thread-select', 'debug')`.
-    // The stack is built only when the level is on: `selectThread` runs on
-    // every route sync, and capturing a stack costs far more than the call.
-    if (threadId && isClientLogLevelEnabled(SELECT_LOG_NS, 'debug')) {
-      const caller = new Error().stack?.split('\n').slice(2, 7).join(' <- ').replace(/\s+/g, ' ');
-      selectLog.debug('selectThread called', {
-        threadId,
-        prevSelectedId: get().selectedThreadId ?? null,
-        prevActiveId: get().activeThread?.id ?? null,
-        caller,
-      });
-    }
+    if (threadId) traceSelectCaller(threadId, get());
 
     const gen = nextSelectGeneration();
     // Allocate span / timer BEFORE claiming the in-flight slot so a synchronous

@@ -89,9 +89,9 @@ function titleBranch(
  * Only the loaded payload's fields the title reads. The payload object is
  * replaced on every streaming flush (messages, tool calls), so selecting it
  * whole re-rendered the app root at stream rate; with `useShallow` the
- * selection only changes when one of these fields does. Exported for tests.
+ * selection only changes when one of these fields does.
  */
-export function pickTitleThread(s: Pick<ThreadState, 'activeThread'>): ThreadLike | null {
+function pickTitleThread(s: Pick<ThreadState, 'activeThread'>): ThreadLike | null {
   const t = s.activeThread;
   if (!t) return null;
   return {

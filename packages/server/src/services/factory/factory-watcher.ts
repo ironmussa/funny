@@ -291,6 +291,11 @@ export function factoryRunnerPorts(): RunnerPorts | null {
   return deps?.ports ?? null;
 }
 
+/** Where the watcher tells the enabler's browsers about changed threads, while it runs. */
+export function factoryBrowserEvents(): BrowserEventsPort | undefined {
+  return deps?.browserEvents;
+}
+
 function schedule(factory: WatchedFactory): void {
   if (!deps || jobs.has(factory.id)) return;
   const job = (deps.createPoll ?? startIntervalPoll)(() => tick(factory.id));

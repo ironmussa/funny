@@ -1822,6 +1822,46 @@ describe('factory operator controls', () => {
     expect(launcher.calls).toHaveLength(1);
   });
 
+  // Runs #228 / #229: a retry that started a new agent left the old failed
+  // thread in the list under the same title, so deleting "the" run's thread
+  // seemed to do nothing.
+  test('a retry archives the threads it does not keep', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-old', projectId: 'p1', userId: 'alice', status: 'failed' });
+    seedThread(testDb.db, { id: 't-busy', projectId: 'p1', userId: 'alice', status: 'running' });
+    const run = await seedRun(factoryId, 'failed', ['t-old', 't-busy']);
+    await watch({ issues: [], waitThread: finishedThreads('completed') });
+
+    (await createFactoryRunControl().retry(factoryId, run.id))._unsafeUnwrap();
+
+    const archived = (id: string) =>
+      (
+        testDb.sqlite.query('SELECT archived FROM threads WHERE id = ?').get(id) as {
+          archived: number;
+        }
+      ).archived;
+    expect(archived('t-old')).toBe(1);
+    // A thread a member is still running is not taken from them.
+    expect(archived('t-busy')).toBe(0);
+  });
+
+  test('a retry that keeps the implement thread leaves it in the list', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-ok', projectId: 'p1', userId: 'alice', status: 'completed' });
+    seedThread(testDb.db, { id: 't-fix', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const run = await seedRun(factoryId, 'waiting_human', ['t-ok', 't-fix']);
+
+    (await createFactoryRunControl().retry(factoryId, run.id))._unsafeUnwrap();
+
+    const rows = testDb.sqlite
+      .query("SELECT id, archived FROM threads WHERE id IN ('t-ok', 't-fix') ORDER BY id")
+      .all();
+    expect(rows).toEqual([
+      { id: 't-fix', archived: 1 },
+      { id: 't-ok', archived: 0 },
+    ]);
+  });
+
   test('only a failed or waiting run can be retried', async () => {
     const factoryId = await enableFactory();
     const run = await seedRun(factoryId, 'merged', []);

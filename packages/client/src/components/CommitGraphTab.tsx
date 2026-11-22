@@ -80,9 +80,10 @@ import {
   githubBrowseBaseUrl as resolveGithubBrowseBaseUrl,
   githubCommitUrlForRemoteCommit,
 } from '@/lib/github-url';
-import { graphLanePastel } from '@/lib/graph-colors';
+import { graphColorKey, graphLanePastel } from '@/lib/graph-colors';
 import {
   foldGraphRefs,
+  graphBranchColorNameByHash,
   graphBranchTipHashByLabel,
   graphHeadHash,
   graphNodeForkedFromRefLabels,
@@ -1397,13 +1398,22 @@ function graphLayout(entries: GraphLayoutEntries, isFiltering: boolean) {
       laneCount: 1,
     };
   }
+  const colorNames = graphBranchColorNameByHash(entries);
   return computeGraphRows(
     entries.map((e) => ({
       hash: e.hash,
       parentHashes: e.parentHashes,
     })),
-    // The checked-out commit takes the leftmost lane, under the WIP node.
-    { headHash: graphHeadHash(entries) },
+    {
+      // The checked-out commit takes the leftmost lane, under the WIP node.
+      headHash: graphHeadHash(entries),
+      // Each branch keeps one color, keyed on its name, whatever lane it lands on.
+      colorKeyOf: (hash) => {
+        const name = colorNames.get(hash);
+        return name === undefined ? undefined : graphColorKey(name);
+      },
+      fallbackColorKeyOf: graphColorKey,
+    },
   );
 }
 

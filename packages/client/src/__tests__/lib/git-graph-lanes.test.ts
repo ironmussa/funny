@@ -215,3 +215,56 @@ describe('computeGraphRows with headHash', () => {
     expect(computeGraphRows(commits, { headHash: 'Z' })).toEqual(computeGraphRows(commits));
   });
 });
+
+describe('computeGraphRows branch colors', () => {
+  // Branch tips: F = feature, M = main. Keys stand in for hashed branch names.
+  const keys: Record<string, number> = { F: 100, M: 200 };
+  const colorKeyOf = (hash: string) => keys[hash];
+  const fallbackColorKeyOf = (hash: string) => 900 + hash.charCodeAt(0);
+
+  test('a branch keeps its color whatever lane it lands on', () => {
+    // feature tip F is newer than main tip M; both fork from B.
+    const featureFirst = computeGraphRows([c('F', 'B'), c('M', 'B'), c('B')], {
+      colorKeyOf,
+      fallbackColorKeyOf,
+    });
+    // Reserving lane 0 for HEAD = M moves feature off lane 0.
+    const mainFirst = computeGraphRows([c('F', 'B'), c('M', 'B'), c('B')], {
+      headHash: 'M',
+      colorKeyOf,
+      fallbackColorKeyOf,
+    });
+    expect(featureFirst.rows[0].commitLane).not.toBe(mainFirst.rows[0].commitLane);
+    for (const layout of [featureFirst, mainFirst]) {
+      expect(layout.rows[0].nodeColor).toBe(100);
+      expect(layout.rows[1].nodeColor).toBe(200);
+      // Each tip's rail down to the fork point keeps the tip's color.
+      const featureLane = layout.rows[0].commitLane;
+      const featureSegments = layout.rows[0].segments.filter((s) => s.fromLane === featureLane);
+      expect(featureSegments.map((s) => s.color)).toEqual([100]);
+    }
+  });
+
+  test('an unnamed commit inherits its child rail color; a tip recolors the rail below it', () => {
+    // F (feature) -> X (unnamed) -> M (main tip) -> R
+    const layout = computeGraphRows([c('F', 'X'), c('X', 'M'), c('M', 'R'), c('R')], {
+      colorKeyOf,
+      fallbackColorKeyOf,
+    });
+    expect(layout.rows.map((r) => r.nodeColor)).toEqual([100, 100, 200, 200]);
+    // The line coming into M is still the feature's; the one leaving it is main's.
+    expect(layout.rows[2].segments).toEqual([
+      { fromLane: 0, fromY: 0, toLane: 0, toY: 0.5, color: 100 },
+      { fromLane: 0, fromY: 0.5, toLane: 0, toY: 1, color: 200 },
+    ]);
+  });
+
+  test('a merged side branch with no name gets a color keyed on its commit', () => {
+    // M merges S (unnamed) into main.
+    const layout = computeGraphRows([c('M', 'A', 'S'), c('S', 'A'), c('A')], {
+      colorKeyOf,
+      fallbackColorKeyOf,
+    });
+    expect(layout.rows[1].nodeColor).toBe(fallbackColorKeyOf('S'));
+  });
+});

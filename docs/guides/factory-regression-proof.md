@@ -9,8 +9,8 @@ not merge on it.
 This guide is for the server factory. The standalone orchestrator (`packages/orchestrator`,
 [its guide](./issue-factory.md)) has no regression proof.
 
-Design and rules: `openspec/changes/factory-quality-gates` (`design.md`, and
-`specs/issue-factory/spec.md`). Architecture: [openwiki/architecture/issue-factory.md](../../openwiki/architecture/issue-factory.md).
+Rules: [`openspec/specs/issue-factory/spec.md`](../../openspec/specs/issue-factory/spec.md).
+Design: [`openspec/changes/archive/2026-11-22-factory-quality-gates/design.md`](../../openspec/changes/archive/2026-11-22-factory-quality-gates/design.md). Architecture: [openwiki/architecture/issue-factory.md](../../openwiki/architecture/issue-factory.md).
 
 ## What changes for a repository
 

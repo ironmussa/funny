@@ -6,7 +6,7 @@
  * @domain emits: thread:stage-changed, thread:deleted
  */
 
-import { rmSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 
 import {
   findWorktreeForBranch,
@@ -446,7 +446,7 @@ async function deleteThreadImpl(threadId: string): Promise<void> {
             error: e.message,
           }),
       );
-      rmSync(scratchPath, { recursive: true, force: true });
+      await rm(scratchPath, { recursive: true, force: true });
       log.info('Removed scratch directory', {
         namespace: 'scratch-threads',
         threadId,

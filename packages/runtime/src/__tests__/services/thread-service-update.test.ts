@@ -106,6 +106,12 @@ mock.module('../../services/project-search-registry.js', () => ({
   projectSearchRegistry: { invalidate: mocks.invalidateSearch },
 }));
 
+// Scratch deletion must remove its directory with the async `rm` (#227): a
+// recursive `rmSync` held the runner's event loop for the whole tree.
+const realFsPromises = await import('node:fs/promises');
+const rmSpy = vi.fn(async (..._args: unknown[]) => undefined);
+mock.module('node:fs/promises', () => ({ ...realFsPromises, rm: rmSpy }));
+
 import { ok, err, okAsync } from 'neverthrow';
 
 import {
@@ -243,6 +249,18 @@ describe('deleteThread', () => {
     expect(result.isOk()).toBe(true);
     expect(mocks.killPtysUnderPath).toHaveBeenCalledWith(
       expect.stringMatching(/[\\/]\.funny[\\/]scratch[\\/]u-1[\\/]t-1$/),
+    );
+  });
+
+  test('removes the scratch directory with the async rm, not rmSync (#227)', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...baseThread, isScratch: 1, projectId: '' });
+
+    const result = await deleteThread('t-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(rmSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]\.funny[\\/]scratch[\\/]u-1[\\/]t-1$/),
+      { recursive: true, force: true },
     );
   });
 

@@ -13,6 +13,7 @@ import {
 } from '../../services/external-claude-sessions.js';
 import { resetServices, setServices } from '../../services/service-registry.js';
 import { buildProject, buildThreadRecord, createServiceProviderFake } from '../helpers/builders.js';
+import { countEventLoopTurns, installSlowBinary } from '../helpers/slow-binary.js';
 
 const tempDirs: string[] = [];
 
@@ -76,6 +77,25 @@ describe('external Claude sessions', () => {
     ).toBe(true);
     expect(isClaudeCodeProcess({ command: 'node', args: 'node server.js' })).toBe(false);
   });
+
+  test.skipIf(process.platform === 'win32')(
+    'reads the process table without blocking the event loop (#227)',
+    async () => {
+      const homeDir = makeHome();
+      const restore = installSlowBinary('ps', '42 1 00:10:00 claude claude');
+      try {
+        const { result, turns } = await countEventLoopTurns(() =>
+          listExternalClaudeSessions({ homeDir, currentPid: 999, getCwd: () => null }),
+        );
+
+        expect(result.map((session) => session.pid)).toEqual([42]);
+        // ps sleeps 400 ms; a sync spawn would let the 10 ms timer run ~0 times.
+        expect(turns).toBeGreaterThanOrEqual(10);
+      } finally {
+        restore();
+      }
+    },
+  );
 
   test('excludes Claude processes managed by the current Funny runtime', async () => {
     const sessions = await listExternalClaudeSessions({

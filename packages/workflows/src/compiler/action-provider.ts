@@ -161,6 +161,12 @@ export interface WaitCiOpts {
   intervalMs?: number;
   /** Subset of check names that must pass; default is all required checks. */
   requiredChecks?: string[];
+  /**
+   * The flow's `review` step configuration, when it has one that starts early
+   * (`early` is not false): the provider may start reviewing the commit while
+   * its checks run.
+   */
+  earlyReview?: ReviewOpts;
 }
 
 export interface MergeOpts {

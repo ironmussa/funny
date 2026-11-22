@@ -429,7 +429,13 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
   /** Start (or adopt) the review of `sha`. */
   function start(sha: string, opts: ReviewOpts): RunningReview {
     const state: ReviewState = { threadId: null, discarded: false };
-    const review = { state, end: run(sha, opts, state) };
+    // An early review is not awaited by anyone until the `review` step: its
+    // failure must be a result, never an unhandled rejection.
+    const end = run(sha, opts, state).catch((error: unknown): ReviewEnd => {
+      const message = error instanceof Error ? error.message : String(error);
+      return { kind: 'none', error: `The review could not finish: ${message}.` };
+    });
+    const review = { state, end };
     running.set(sha, review);
     return review;
   }
@@ -462,12 +468,14 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
 
     /**
      * Start reviewing `sha` without waiting for it (when the commit's checks
-     * start), and stop the reviews of older commits.
+     * start), and stop the reviews of older commits. The run stays in the
+     * state its checks put it in: it enters `reviewing` at the `review` step.
      */
     async startEarly(sha: string, opts: ReviewOpts): Promise<void> {
       await discardExcept(sha);
       if (reviews.some((review) => review.sha === sha) || running.has(sha)) return;
       start(sha, opts);
+      await deps.count('review_started_early');
     },
 
     /** The `review` step: the verdict of the pull request's head commit. */

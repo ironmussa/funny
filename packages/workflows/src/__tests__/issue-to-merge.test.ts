@@ -33,6 +33,7 @@ function provider(ci: ActionResult[], reviews: ActionResult[] = [pass]) {
   let looks = 0;
   let merges = 0;
   let reviewed = 0;
+  const waits: Array<{ earlyReview?: unknown }> = [];
   const p: ActionProvider = {
     spawnAgent: async (opts) => {
       prompts.push(opts.prompt);
@@ -47,14 +48,17 @@ function provider(ci: ActionResult[], reviews: ActionResult[] = [pass]) {
     setStage: async () => ok,
     regressionProof: async () => ok,
     review: async () => reviews[Math.min(reviewed++, reviews.length - 1)]!,
-    waitCi: async () => ci[Math.min(looks++, ci.length - 1)]!,
+    waitCi: async (opts) => {
+      waits.push(opts);
+      return ci[Math.min(looks++, ci.length - 1)]!;
+    },
     merge: async () => {
       merges++;
       return ok;
     },
     requestApproval: async () => ({ decision: 'approve' }),
   };
-  return { p, prompts, merges: () => merges, looks: () => looks, reviews: () => reviewed };
+  return { p, prompts, merges: () => merges, looks: () => looks, reviews: () => reviewed, waits };
 }
 
 const red: ActionResult = { ok: false, error: 'Failing checks: test\n\n--- test ---\nboom' };
@@ -177,6 +181,38 @@ describe('issue-to-merge workflow', () => {
       expect(r.outcome).toBe('failed');
       expect(r.reviews()).toBe(1);
       expect(r.merges()).toBe(0);
+    });
+
+    test('the checks are told about the review, so it can start with them', async () => {
+      const r = await run([green]);
+      expect(r.waits[0]?.earlyReview).toEqual({ early: true });
+    });
+
+    test('a flow whose review sets early: false tells the checks nothing', async () => {
+      const { workflows } = await loadWorkflowCatalog();
+      const builtIn = workflows.get('issue-to-merge')!.workflow;
+      const late = {
+        ...builtIn,
+        nodes: builtIn.nodes.map((node) =>
+          node.review ? { ...node, review: { ...node.review, early: false } } : node,
+        ),
+      };
+      const fake = provider([green]);
+      await runPipeline(compileYamlPipeline(late), {
+        provider: fake.p,
+        progress: nullReporter,
+        cwd: '',
+        inputs: {
+          repo: 'o/r',
+          issue_number: '7',
+          issue_title: 'Fix it',
+          issue_url: 'u/7',
+          branch: 'b',
+        },
+        outputs: {},
+      });
+      expect(fake.waits[0]?.earlyReview).toBeUndefined();
+      expect(fake.reviews()).toBe(1);
     });
 
     test('issue-to-pr has no review step', async () => {

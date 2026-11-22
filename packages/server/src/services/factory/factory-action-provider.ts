@@ -955,8 +955,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
     async waitCi(opts) {
       await deps.record({ state: 'waiting_ci' });
-      // When the commit's checks start: the report is ready before the review.
-      await classifyHead();
+      // When the commit's checks start: the report is ready before the review,
+      // and the reviewer starts on this commit without waiting for green
+      // (D7). A review of an older commit is stopped and its result dropped.
+      const head = await classifyHead();
+      if (head && opts.earlyReview) await reviewer.startEarly(head.sha, opts.earlyReview);
       const result = await ci.waitCi(opts);
       const verdict = result.metadata?.verdict;
       await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });

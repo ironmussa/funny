@@ -180,6 +180,8 @@ interface ReviewScript {
   followUpFails?: boolean;
   /** How putting the verdict on the pull request goes (default: comment and status). */
   publishes?: 'comment-only' | 'fails';
+  /** A reviewer thread finishes only once this settles (default: at once). */
+  gate?: (threadId: string) => Promise<void>;
 }
 
 /** A provider whose reviewer threads answer from a script; records what the server did. */
@@ -215,6 +217,9 @@ function reviewing(script: ReviewScript) {
       },
       findReviewThread: async () => script.launched ?? null,
       waitThread: async (threadId) => {
+        await script.gate?.(threadId);
+        // A stopped thread ends stopped, whatever it would have said.
+        if (abandoned.includes(threadId)) return { status: 'stopped' as const };
         const status =
           threadId === script.launched
             ? (script.launchedEnds ?? 'completed')
@@ -417,6 +422,105 @@ describe('the review step', () => {
     expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
     expect(bodies).toHaveLength(1);
     expect(stored()).toMatchObject([{ threadId: 'rev-1' }]);
+  });
+});
+
+describe('the review starts with the checks', () => {
+  /** A gate the test opens per thread: a reviewer still working until then. */
+  function gates() {
+    const open = new Map<string, () => void>();
+    const waiting = new Map<string, Promise<void>>();
+    const gate = (threadId: string) => {
+      if (!waiting.has(threadId)) {
+        waiting.set(threadId, new Promise<void>((resolve) => open.set(threadId, resolve)));
+      }
+      return waiting.get(threadId)!;
+    };
+    return { gate, finish: (threadId: string) => open.get(threadId)?.() };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+  test('wait_ci starts the review of the commit; the review step does not start another', async () => {
+    const { provider, bodies, stored } = reviewing({ says: [[passOf(SHA_A)]] });
+    await provider.waitCi({ earlyReview: {} });
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({ title: `[Factory review] #7 ${SHA_A.slice(0, 8)} Fix it` });
+    // The review finished while the checks ran: its verdict is waiting for the step.
+    await settle();
+    expect(stored()).toMatchObject([{ sha: SHA_A, verdict: 'pass' }]);
+    expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
+    expect(bodies).toHaveLength(1);
+  });
+
+  test('the checks finish first: the review step waits for the review in flight', async () => {
+    const { gate, finish } = gates();
+    const { provider, bodies, stored } = reviewing({ says: [[passOf(SHA_A)]], gate });
+    expect(await provider.waitCi({ earlyReview: {} })).toMatchObject({ ok: true });
+    expect(stored()).toEqual([]);
+    const step = provider.review!({});
+    await settle();
+    finish('rev-1');
+    expect(await step).toMatchObject({ ok: true, output: 'pass' });
+    expect(bodies).toHaveLength(1);
+  });
+
+  test('a CI fix replaces the commit under review: its review is stopped and never stored', async () => {
+    let head = SHA_A;
+    const { gate, finish } = gates();
+    const { provider, bodies, abandoned, stored } = reviewing({
+      head: () => head,
+      says: [[passOf(SHA_A)], [passOf(SHA_B)]],
+      gate,
+    });
+    await provider.waitCi({ earlyReview: {} });
+    head = SHA_B;
+    await provider.waitCi({ earlyReview: {} });
+    expect(abandoned).toEqual(['rev-1']);
+    expect(bodies).toHaveLength(2);
+    // The stopped reviewer ends; nothing of commit A is kept.
+    finish('rev-1');
+    finish('rev-2');
+    await settle();
+    expect(stored().map((review) => review.sha)).toEqual([SHA_B]);
+    expect(await provider.review!({})).toMatchObject({ output: 'pass', metadata: { sha: SHA_B } });
+  });
+
+  test('a flow that turns it off: nothing starts before the review step', async () => {
+    const { provider, bodies } = reviewing({ says: [[passOf(SHA_A)]] });
+    // `early: false`: the compiler passes no review configuration to wait_ci.
+    await provider.waitCi({});
+    expect(bodies).toEqual([]);
+    await provider.review!({ early: false });
+    expect(bodies).toHaveLength(1);
+  });
+
+  test('a commit that already has a verdict is not reviewed again when its checks rerun', async () => {
+    const { provider, bodies } = reviewing({
+      says: [],
+      reviews: [
+        { sha: SHA_A, verdict: 'pass', findings: [], reviewedAt: '2026-11-22T02:00:00.000Z' },
+      ],
+    });
+    await provider.waitCi({ earlyReview: {} });
+    expect(bodies).toEqual([]);
+  });
+
+  test('after a restart the early review in flight is adopted, not started twice', async () => {
+    const { provider, bodies, stored } = reviewing({
+      says: [[passOf(SHA_A)]],
+      launched: 'rev-old',
+    });
+    await provider.waitCi({ earlyReview: {} });
+    await settle();
+    expect(bodies).toEqual([]);
+    expect(stored()).toMatchObject([{ threadId: 'rev-old' }]);
+  });
+
+  test('the checks do not wait for the review, and a red build is still red', async () => {
+    const { gate } = gates();
+    const { provider } = reviewing({ says: [[passOf(SHA_A)]], gate });
+    // The reviewer never finishes here; wait_ci answers all the same.
+    expect(await provider.waitCi({ earlyReview: {} })).toMatchObject({ ok: true });
   });
 });
 

@@ -37,7 +37,12 @@ import {
 import type { AgentDefinition } from '@funny/shared';
 
 import type { ParsedNode, ParsedWorkflow } from '../schema.js';
-import type { ActionResult, PipelineContext, RegressionProofOpts } from './action-provider.js';
+import type {
+  ActionResult,
+  PipelineContext,
+  RegressionProofOpts,
+  ReviewOpts,
+} from './action-provider.js';
 import { approvalNode } from './approval.js';
 
 // ── Compile-time errors ─────────────────────────────────────
@@ -298,7 +303,7 @@ async function dispatchGithubNode(
   parsed: ParsedWorkflow,
 ): Promise<NodeOutput | null> {
   if (yamlNode.wait_ci)
-    return githubOutput(yamlNode, 'wait_ci', await waitCi(yamlNode, ctx, scope));
+    return githubOutput(yamlNode, 'wait_ci', await waitCi(yamlNode, ctx, scope, parsed));
   if (yamlNode.merge)
     return githubOutput(yamlNode, 'merge', await merge(yamlNode, ctx, scope, parsed));
   if (yamlNode.regression_proof) {
@@ -314,13 +319,27 @@ function githubOutput(yamlNode: ParsedNode, kind: string, result: ActionResult):
   return { output: result.output ?? '', json: result.metadata };
 }
 
-function waitCi(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: TemplateScope) {
+function waitCi(
+  yamlNode: ParsedNode,
+  ctx: YamlPipelineContext,
+  scope: TemplateScope,
+  parsed: ParsedWorkflow,
+) {
   const opts = interpolateObject(yamlNode.wait_ci!, scope);
   return ctx.provider.waitCi({
     timeoutMs: opts.timeout_ms,
     intervalMs: opts.interval_ms,
     requiredChecks: opts.required_checks,
+    earlyReview: earlyReviewOpts(parsed, scope),
   });
+}
+
+/** The flow's `review` step as provider options, when it has one that starts with the checks. */
+function earlyReviewOpts(parsed: ParsedWorkflow, scope: TemplateScope): ReviewOpts | undefined {
+  const reviewNode = parsed.nodes.find((n) => n.review !== undefined);
+  if (!reviewNode?.review || reviewNode.review.early === false) return undefined;
+  const opts = interpolateObject(reviewNode.review, scope);
+  return { provider: opts.provider, model: opts.model, effort: opts.effort, early: true };
 }
 
 function merge(

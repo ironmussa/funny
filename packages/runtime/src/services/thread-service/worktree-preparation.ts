@@ -35,6 +35,8 @@ export interface PrepareWorktreeParams {
   projectPath: string;
   branchName: string;
   baseBranch?: string;
+  /** Start from `origin/<baseBranch>`, fetched first (see `createWorktree`). */
+  baseFromRemote?: boolean;
   /** Check out `branchName` when it exists already (see `createWorktree`). */
   reuseExistingBranch?: boolean;
   userId: string;
@@ -108,7 +110,10 @@ async function runPreparation(
   let outcome: 'ok' | 'create_failed' | 'error' = 'error';
   try {
     const created = await runPhase(root, 'create', () =>
-      createWorktree(projectPath, branchName, baseBranch, onProgress, { reuseExistingBranch }),
+      createWorktree(projectPath, branchName, baseBranch, onProgress, {
+        reuseExistingBranch,
+        fromRemote: params.baseFromRemote,
+      }),
     );
     if (created.isErr()) {
       outcome = 'create_failed';

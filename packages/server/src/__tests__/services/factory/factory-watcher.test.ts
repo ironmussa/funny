@@ -164,6 +164,7 @@ function fakeGithub(
       return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
     },
     branchAhead: () => okAsync(script.branchAhead ?? true),
+    defaultBranch: () => okAsync('main'),
     commentOnIssue: (_reader: unknown, issue: number, body: string) => {
       port.comments.push({ issue, body });
       return okAsync(undefined);
@@ -297,6 +298,9 @@ describe('factory watcher', () => {
       projectId: 'p1',
       mode: 'worktree',
       source: 'factory',
+      // From the remote's default branch, whatever the enabler's checkout is on.
+      baseBranch: 'main',
+      baseFromRemote: true,
     });
     expect(launcher.calls[0]!.body.prompt).toContain('issue #7 of acme/repo');
 

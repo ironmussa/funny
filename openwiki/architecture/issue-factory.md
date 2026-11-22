@@ -59,7 +59,11 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    **continues that thread** with a follow-up message, so the agent keeps its context. The agent
    commits, pushes the run's branch (`factory/issue-<n>-<runId8>`) and opens the PR; the server has no
    checkout. A worktree thread is created on that branch (the launch passes `branch`), so the
-   thread, its worktree and the PR share one branch. If the branch exists already (a retried
+   thread, its worktree and the PR share one branch. A new branch starts from the remote's copy
+   of the repository's DEFAULT branch, fetched first (the launch passes `baseBranch` and
+   `baseFromRemote`; `createWorktree`'s `fromRemote`), so the PR holds the agent's commits only:
+   not the branch the enabler's checkout is on, nor their unpushed commits. A default branch that
+   cannot be read fails the step. If the branch exists already (a retried
    run), the worktree checks it out and the agent goes on from the earlier attempt
    (`worktreeBranchName`, `createWorktree`'s `reuseExistingBranch`); only when another worktree
    still holds it does the runner fall back to a name from the title. Each follow-up step sends

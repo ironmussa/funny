@@ -86,6 +86,13 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
         .map((compare) => compare.ahead);
     },
 
+    /** The name of the repository's DEFAULT branch. */
+    defaultBranch(): ResultAsync<string, GithubCallError> {
+      return github
+        .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
+        .map((meta) => meta.default_branch);
+    },
+
     /** Comment on the issue, as the App. */
     commentOnIssue(issueNumber: number, body: string): ResultAsync<void, GithubCallError> {
       return github

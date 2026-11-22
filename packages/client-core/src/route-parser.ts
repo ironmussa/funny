@@ -13,6 +13,8 @@ export interface ParsedClientRoute {
   designId: string | null;
   designsList: boolean;
   scheduler: boolean;
+  /** The factory view (`/factory`): the caller's factory runs across projects. */
+  factory: boolean;
   scratchNew: boolean;
   externalClaudeSessionId: string | null;
 }
@@ -25,6 +27,7 @@ const STATIC_ROUTES = new Set([
   'list',
   'kanban',
   'analytics',
+  'factory',
   'grid',
   'new',
   'invite',
@@ -70,6 +73,7 @@ function blank(orgSlug: string | null): ParsedClientRoute {
     designId: null,
     designsList: false,
     scheduler: false,
+    factory: false,
     scratchNew: false,
     externalClaudeSessionId: null,
   };
@@ -137,6 +141,7 @@ export function parseClientRoute(pathname: string): ParsedClientRoute {
   if (path === '/analytics') return { ...result, analytics: true };
   if (path === '/grid') return { ...result, liveColumns: true };
   if (path === '/scheduler') return { ...result, scheduler: true };
+  if (path === '/factory') return { ...result, factory: true };
   if (path === '/new') return { ...result, addProject: true };
   if (path === '/scratch/new') return { ...result, scratchNew: true };
   const externalSession = matchPath('/external/claude/:sessionId', path);

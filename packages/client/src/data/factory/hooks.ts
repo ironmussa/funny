@@ -2,6 +2,7 @@ import type {
   FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
+  FactoryQueueRun,
   FactoryRun,
   FactorySettings,
 } from '@funny/shared/contracts/factory';
@@ -13,6 +14,7 @@ import {
   factoryBlockersQuery,
   factoryFlowDefinitionQuery,
   factoryFlowsQuery,
+  factoryQueueRunsQuery,
   factoryRunsQuery,
   factorySettingsQuery,
 } from './queries';
@@ -64,6 +66,11 @@ export function useActiveFactoryRunForThread(thread: {
     isFactoryThread ? activeFactoryRunsQuery() : NO_ACTIVE_FACTORY_RUNS,
   ).data;
   return runs?.find((run) => run.threadIds.includes(thread.id)) ?? null;
+}
+
+/** The factory view's runs across projects, newest first; `undefined` while loading. */
+export function useFactoryQueueRuns(): FactoryQueueRun[] | undefined {
+  return useDataQuery(factoryQueueRunsQuery()).data;
 }
 
 /** The flows a send may pick; `undefined` while loading. */

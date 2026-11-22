@@ -707,6 +707,7 @@ describe('createAndStartThread', () => {
       'my-app/new-feature-fixed-',
       undefined,
       expect.any(Function),
+      { reuseExistingBranch: false },
     );
     expect(mocks.setupWorktree).toHaveBeenCalledWith(
       '/projects/my-app',

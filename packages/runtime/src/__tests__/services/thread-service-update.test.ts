@@ -594,6 +594,7 @@ describe('convertToWorktree', () => {
         expect.stringContaining('my-app/my-thread'),
         'main',
         expect.any(Function),
+        { reuseExistingBranch: undefined },
       );
       expect(mocks.tm.updateThread).toHaveBeenCalledWith(
         't-1',

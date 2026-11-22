@@ -35,6 +35,8 @@ export interface PrepareWorktreeParams {
   projectPath: string;
   branchName: string;
   baseBranch?: string;
+  /** Check out `branchName` when it exists already (see `createWorktree`). */
+  reuseExistingBranch?: boolean;
   userId: string;
   threadId: string;
   flow: WorktreeFlow;
@@ -86,7 +88,8 @@ async function runPreparation(
   onStep: (label: string) => void,
   onSetupErrors: (errors: string[]) => void,
 ): Promise<Result<string, DomainError>> {
-  const { projectPath, branchName, baseBranch, userId, threadId, flow } = params;
+  const { projectPath, branchName, baseBranch, reuseExistingBranch, userId, threadId, flow } =
+    params;
   const root = startSpan('worktree.prepare', {
     attributes: {
       'thread.id': threadId,
@@ -105,7 +108,7 @@ async function runPreparation(
   let outcome: 'ok' | 'create_failed' | 'error' = 'error';
   try {
     const created = await runPhase(root, 'create', () =>
-      createWorktree(projectPath, branchName, baseBranch, onProgress),
+      createWorktree(projectPath, branchName, baseBranch, onProgress, { reuseExistingBranch }),
     );
     if (created.isErr()) {
       outcome = 'create_failed';

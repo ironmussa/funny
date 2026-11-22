@@ -85,7 +85,12 @@ export interface FactoryFlowRunsDeps {
    * Send a follow-up to the enabler's thread, so later agent steps continue
    * the first one; without it each agent step starts a new thread.
    */
-  followUp?: (userId: string, threadId: string, content: string) => Promise<Result<void, string>>;
+  followUp?: (
+    userId: string,
+    threadId: string,
+    content: string,
+    expectedBranch?: string,
+  ) => Promise<Result<void, string>>;
   /** Record why the factory cannot make progress (a run that could not start). */
   reportBlocked?: (factoryId: string, reason: string) => Promise<void>;
   /** Stop the enabler's threads (one a launch started after its run was stopped). */
@@ -424,7 +429,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       waitThread,
       continuation: deps.followUp
         ? {
-            followUp: (threadId, content) => deps.followUp!(scope.userId, threadId, content),
+            // The run's branch: a worktree switched away refuses the step.
+            followUp: (threadId, content) =>
+              deps.followUp!(scope.userId, threadId, content, scope.branch),
             completedAt: threadCompletedAt,
             followedUpSince,
           }

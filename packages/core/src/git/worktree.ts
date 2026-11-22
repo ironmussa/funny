@@ -165,11 +165,21 @@ export interface WorktreePreview {
   alreadyExists: boolean;
 }
 
+export interface CreateWorktreeOptions {
+  /**
+   * Check out `branchName` when it already exists (and is not checked out in
+   * another worktree) instead of failing: a retried issue-factory run goes on
+   * from its earlier attempt on the same branch. `baseBranch` is then unused.
+   */
+  reuseExistingBranch?: boolean;
+}
+
 export function createWorktree(
   projectPath: string,
   branchName: string,
   baseBranch?: string,
   onProgress?: SetupProgressFn,
+  { reuseExistingBranch = false }: CreateWorktreeOptions = {},
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
@@ -267,32 +277,24 @@ export function createWorktree(
           })
         ).exitCode === 0;
 
-      onProgress?.(
-        'worktree:create',
-        `Creating worktree from ${effectiveBase ?? 'HEAD'}`,
-        'running',
-      );
-      const args = ['worktree', 'add', '-b', branchName, worktreePath];
-      if (effectiveBase) args.push(effectiveBase);
+      const reuse = reuseExistingBranch && branchExisted;
+      const source = reuse ? branchName : (effectiveBase ?? 'HEAD');
+      onProgress?.('worktree:create', `Creating worktree from ${source}`, 'running');
+      const args = reuse
+        ? ['worktree', 'add', worktreePath, branchName]
+        : ['worktree', 'add', '-b', branchName, worktreePath];
+      if (!reuse && effectiveBase) args.push(effectiveBase);
       // No deadline: the checkout of a large repository and its post-checkout
       // hook can take minutes, and killing git halfway leaves a broken worktree.
       const result = await validatePath(projectPath).andThen((cwd) =>
         ResultAsync.fromPromise(gitWrite(args, { cwd, timeout: 0 }), toDomainError),
       );
       if (result.isErr()) {
-        onProgress?.(
-          'worktree:create',
-          `Creating worktree from ${effectiveBase ?? 'HEAD'}`,
-          'failed',
-        );
+        onProgress?.('worktree:create', `Creating worktree from ${source}`, 'failed');
         await discardFailedWorktree(projectPath, worktreePath, branchName, branchExisted);
         throw result.error;
       }
-      onProgress?.(
-        'worktree:create',
-        `Creating worktree from ${effectiveBase ?? 'HEAD'}`,
-        'completed',
-      );
+      onProgress?.('worktree:create', `Creating worktree from ${source}`, 'completed');
       return worktreePath;
     })(),
     (error) => {

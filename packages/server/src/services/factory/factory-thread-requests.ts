@@ -16,8 +16,10 @@
  * A follow-up to a sandbox stopped while idle wakes it first, as the proxy does.
  */
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
@@ -75,15 +77,28 @@ async function sendToThreadRunner(
         sandboxAsleep: reason === 'thread-sandbox-unavailable',
       });
     }
-    return sent.value.status < 400
-      ? ok(undefined)
-      : err({ message: `the runner answered ${sent.value.status}`, sandboxAsleep: false });
+    if (sent.value.status < 400) return ok(undefined);
+    const reason = runnerErrorText(sent.value.body);
+    return err({
+      message: `the runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`,
+      sandboxAsleep: false,
+    });
   } catch (error) {
     return err({
       message: error instanceof Error ? error.message : String(error),
       sandboxAsleep: false,
     });
   }
+}
+
+/** A runner's JSON error body (`resultToResponse`). */
+const runnerErrorBody = z.object({ error: z.string() });
+
+/** The `error` of a runner's JSON error body, so a refusal says why (a branch mismatch). */
+function runnerErrorText(body: string | null | undefined): string | null {
+  if (!body) return null;
+  const parsed = parseStoredJson(runnerErrorBody, body, 'runner error');
+  return parsed.ok ? parsed.value.error.slice(0, 500) : null;
 }
 
 /** Stop the running agent threads among `threadIds` (a stopped run). */
@@ -115,12 +130,18 @@ export async function stopFactoryThreads(
   }
 }
 
-/** Send `content` as a follow-up to the enabler's thread, which runs its agent again. */
+/**
+ * Send `content` as a follow-up to the enabler's thread, which runs its agent
+ * again. With `expectedBranch` (the run's branch) the runner refuses it when
+ * the thread's worktree was switched to another branch, so the step fails
+ * with that reason instead of pushing the wrong branch.
+ */
 export async function sendFactoryFollowUp(
   ports: RunnerPorts,
   userId: string,
   threadId: string,
   content: string,
+  expectedBranch?: string,
 ): Promise<Result<void, string>> {
   const [thread] = await db
     .select({ id: threads.id })
@@ -128,14 +149,15 @@ export async function sendFactoryFollowUp(
     .where(and(eq(threads.id, threadId), eq(threads.userId, userId)));
   if (!thread) return err('the thread no longer exists');
   const path = `/api/threads/${threadId}/message`;
-  const sent = await postToThread(ports, userId, path, { content });
+  const message = expectedBranch ? { content, expectedBranch } : { content };
+  const sent = await postToThread(ports, userId, path, message);
   if (sent.isOk() || !sent.error.sandboxAsleep) return sent.mapErr((e) => e.message);
   // The run waited (e.g. on CI) long enough for its sandbox to sleep: wake it once.
   const waker = sandboxWaker();
   if (!waker) return err(sent.error.message);
   const woken = await waker.wake(threadId, userId);
   if (woken.isErr()) return err(`the sandbox could not be woken: ${woken.error.message}`);
-  return (await postToThread(ports, userId, path, { content })).mapErr((e) => e.message);
+  return (await postToThread(ports, userId, path, message)).mapErr((e) => e.message);
 }
 
 /**

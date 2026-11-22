@@ -59,7 +59,7 @@ import {
   formatShellEscapeOutput,
 } from './shell-escape.js';
 import { copyThreadUploads } from './staged-uploads.js';
-import { worktreeBranchName } from './worktree-branch.js';
+import { worktreeBranchName, type WorktreeBranch } from './worktree-branch.js';
 import { prepareWorktree } from './worktree-preparation.js';
 
 /**
@@ -505,11 +505,12 @@ async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
   // Titles may carry the attachments block (badge) — never slug the XML.
   const slug = slugifyTitle(stripReferencedFilesBlock(ctx.titleSource));
   const projectSlug = slugifyTitle(ctx.project.name);
-  const branchName = await worktreeBranchName(
+  const worktreeBranch = await worktreeBranchName(
     projectPath,
     params.branch,
     `${projectSlug}/${slug}-${threadId.slice(0, 6)}`,
   );
+  const branchName = worktreeBranch.name;
 
   const thread = {
     ...baseProjectThreadRow(ctx),
@@ -551,7 +552,7 @@ async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
   });
 
   // Background: create worktree, run post-create commands, start agent
-  void setupWorktreeAndStartAgent(ctx, branchName);
+  void setupWorktreeAndStartAgent(ctx, worktreeBranch);
 
   return thread;
 }
@@ -563,13 +564,14 @@ async function markThreadFailed(userId: string, threadId: string): Promise<void>
 
 async function setupWorktreeAndStartAgent(
   ctx: ProjectThreadContext,
-  branchName: string,
+  { name: branchName, reuse }: WorktreeBranch,
 ): Promise<void> {
   const { params, threadId, projectPath } = ctx;
   try {
     const wtResult = await prepareWorktree({
       projectPath,
       branchName,
+      reuseExistingBranch: reuse,
       baseBranch: ctx.resolvedBaseBranch,
       userId: params.userId,
       threadId,

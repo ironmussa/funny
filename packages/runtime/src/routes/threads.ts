@@ -22,6 +22,7 @@ import { requestSpan } from '../middleware/tracing.js';
 import { getServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
 import { createIdleThread, createAndStartThread } from '../services/thread-service/create.js';
+import { checkExpectedBranch } from '../services/thread-service/expected-branch.js';
 import { forkThread } from '../services/thread-service/fork.js';
 import { ThreadServiceError } from '../services/thread-service/helpers.js';
 import {
@@ -180,7 +181,19 @@ threadRoutes.post('/:id/message', async (c) => {
       err(forbidden('Shell escape commands are not allowed on a shared thread')),
     );
   }
-  const body = isSteerDelegation ? pickSteerMessageFields(parsed.value) : parsed.value;
+  const { expectedBranch, ...message } = parsed.value;
+  // The factory's follow-ups name the run's branch: a worktree switched to
+  // another one refuses them before the agent runs (409).
+  const onBranch = await checkExpectedBranch(threadResult.value.worktreePath, expectedBranch);
+  if (onBranch.isErr()) {
+    log.warn('Refused a follow-up: the worktree is not on the expected branch', {
+      namespace: 'agent',
+      threadId: id,
+      expectedBranch,
+    });
+    return resultToResponse(c, onBranch);
+  }
+  const body = isSteerDelegation ? pickSteerMessageFields(message) : message;
 
   const span = requestSpan(c, 'thread.send_message', { threadId: id });
   const result = await sendMessage({ ...body, threadId: id, userId });

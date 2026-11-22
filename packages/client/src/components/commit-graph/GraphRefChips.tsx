@@ -637,12 +637,16 @@ export function GraphRefChips({
           />
         );
         if (!isThreadBranch) return chip;
+        // The marker hangs in the gap LEFT of the chip (absolute), so marking the
+        // thread's branch never shifts its chip out of line with the others.
         return (
           <div
             key={`${ref.kind}:${ref.name}`}
-            className="flex max-w-full min-w-0 items-center gap-0.5"
+            className="relative flex max-w-full min-w-0 items-center"
           >
-            <ThreadBranchMarker branch={ref.name} color={color} />
+            <span className="absolute top-1/2 right-full mr-0.5 inline-flex -translate-y-1/2">
+              <ThreadBranchMarker branch={ref.name} color={color} />
+            </span>
             {chip}
           </div>
         );

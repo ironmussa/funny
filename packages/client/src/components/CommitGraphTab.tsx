@@ -1876,7 +1876,9 @@ function GraphCommitRow({
           {/* Branch/tag chips on their own line above the commit title. */}
           {foldedRefs.length > 0 && (
             <div
-              className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
+              // -ml-3/pl-3: widen the clip box into the gap left of the chips so
+              // the thread-branch marker (absolute, left of its chip) isn't cut.
+              className="mb-1.5 -ml-3 flex min-w-0 shrink-0 items-center overflow-hidden pl-3"
               style={{
                 height:
                   foldedRefs.length * GRAPH_REF_CHIP_HEIGHT_PX +

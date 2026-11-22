@@ -25,6 +25,7 @@
 import type { IssueBlocker } from '@funny/core/github-app';
 import type { ConcurrencyGate } from '@funny/pipelines';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
+import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
 import { and, eq } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
@@ -551,6 +552,9 @@ async function admitQueued(
   const flowName = run.flowName ?? factory.flowName;
   if (!(await flowProofReady(ctx, flowName))) {
     await reportBlocked(factory.id, proofNotConfigured(flowName));
+    // The queue shows it on the run too; the next pass clears it once rules exist.
+    const reason: FactoryWaitReason = { kind: 'proof-not-configured', blockers: [] };
+    if (!sameWaitReason(reason, run.waitReason)) await runs.setWaitReason(run.id, reason);
     return false;
   }
   // The issue first: one closed since it was sent leaves the queue even while

@@ -16,6 +16,8 @@
  */
 import {
   EMPTY_FACTORY_RUN_METRICS,
+  factoryRegressionProofSchema,
+  type FactoryRegressionProof,
   type FactoryRunMetrics,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
@@ -62,6 +64,7 @@ const WAIT_REASON_SCHEMA = z.object({
     'blocker-other-repo',
     'circular',
     'blockers-unreadable',
+    'proof-not-configured',
   ]),
   blockers: z.array(z.number().int()),
 });
@@ -182,6 +185,8 @@ export interface FactoryRunView {
   failureReason: string | null;
   /** How integrating its pull request went (CI rounds, conflicts, agent fixes). */
   metrics: FactoryRunMetrics;
+  /** The last regression proof of its pull request, or null. */
+  regressionProof: RegressionProofRecord | null;
 }
 
 export type FactoryRunSource = 'manual' | 'label';
@@ -214,6 +219,7 @@ const toView = (row: Row): FactoryRunView => ({
   flowSteps: parseStepNames(row.flowSteps ?? null),
   failureReason: row.failureReason ?? null,
   metrics: parseMetrics(row.metrics ?? null),
+  regressionProof: parseRegressionProof(row.regressionProof ?? null),
 });
 
 function parseWaitReason(raw: string | null): FactoryWaitReason | null {
@@ -234,6 +240,16 @@ function parseMetrics(raw: string | null): FactoryRunMetrics {
   return parsed.ok ? parsed.value : { ...EMPTY_FACTORY_RUN_METRICS };
 }
 
+function parseRegressionProof(raw: string | null): RegressionProofRecord | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(
+    factoryRegressionProofSchema,
+    raw,
+    'factory_runs.regression_proof',
+  );
+  return parsed.ok ? parsed.value : null;
+}
+
 function parseStepNames(raw: string | null): string[] {
   if (!raw) return [];
   const parsed = parseStoredJson(STEP_NAMES_SCHEMA, raw, 'factory_runs.flow_steps');
@@ -251,16 +267,8 @@ export interface StartRunInput {
   flowName?: string;
 }
 
-export interface RegressionProofRecord {
-  headSha: string;
-  verdict: string;
-  finding?: string;
-  files?: string[];
-  commands?: string[];
-  baseSha?: string;
-  outputTail?: string;
-  ranAt: string;
-}
+/** What the run stores of a regression proof (the contract's shape). */
+export type RegressionProofRecord = FactoryRegressionProof;
 
 export interface UpdateRunInput {
   state?: FactoryRunState;

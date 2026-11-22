@@ -6,6 +6,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { cn } from '@/lib/utils';
 
 import { FactoryRunFailureCard } from './FactoryRunFailureCard';
+import { FactoryRunProofCard } from './FactoryRunProofCard';
 import type { MessageStreamProps } from './message-stream-types';
 import { MessageStreamStatusTail } from './MessageStreamStatusTail';
 import { ProviderAuthRecovery } from './ProviderAuthRecovery';
@@ -156,6 +157,7 @@ export function MessageStreamShell({
           onPermissionDecision={onPermissionDecision}
         />
 
+        <FactoryRunProofCard threadId={copyThreadId} />
         <FactoryRunFailureCard threadId={copyThreadId} agentRunning={isRunning} />
 
         {/* Prompt pin spacer (full mode only) */}

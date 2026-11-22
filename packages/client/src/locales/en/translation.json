@@ -1727,7 +1727,8 @@
       "failed": "Blocked by {{blockers}}, whose run failed or was stopped",
       "otherRepo": "Blocked by {{blockers}} in another repository",
       "circular": "Circular dependency with {{blockers}}",
-      "unreadable": "Its blockers could not be read from GitHub"
+      "unreadable": "Its blockers could not be read from GitHub",
+      "proofNotConfigured": "Regression proof not configured: its flow has no proof rules, so it would never merge"
     },
     "selectIssue": "Select #{{number}} for the factory",
     "queuePosition": "{{label}} · #{{position}}",
@@ -1770,6 +1771,20 @@
       "redRate": "Red CI rounds",
       "conflictRate": "Runs with a conflict",
       "agentFixes": "Agent fixes per run"
+    },
+    "proof": {
+      "title": "Regression proof",
+      "pass": "Passed",
+      "fail": "Failed",
+      "skipped": "Skipped",
+      "passSummary": "The changed tests pass on this commit and fail without the fix.",
+      "files": "Tests",
+      "evidence": "Commands and the failure without the fix",
+      "details": "Commands and output"
+    },
+    "noChange": {
+      "title": "The agent made no change",
+      "body": "It opened no pull request and committed nothing. Its explanation is posted on issue #{{issue}}: close the issue, or retry the run."
     }
   },
   "projectSecrets": {

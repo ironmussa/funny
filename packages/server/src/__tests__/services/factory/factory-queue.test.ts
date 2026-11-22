@@ -5,6 +5,7 @@
  * launcher + fake poll, real test DB.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 import type { IssueBlocker } from '@funny/core/github-app';
 import { errAsync, okAsync } from 'neverthrow';
@@ -570,6 +571,23 @@ describe('pause, clear and stop all', () => {
 });
 
 describe('blocked issues', () => {
+  test('a sent issue whose flow has no proof rules stays queued, and says why', async () => {
+    const builtIn = readFileSync(
+      new URL('../../../../../workflows/defaults/issue-to-merge.yaml', import.meta.url),
+      'utf8',
+    );
+    const { factoryId, queue, launcher, tick } = await setUp({
+      script: { repoFiles: { '.funny/workflows/issue-to-merge.yaml': builtIn } },
+    });
+    await queue.submit(factoryId, { issueNumbers: [1], flowName: 'issue-to-merge' });
+
+    await tick();
+    expect(launcher.issues()).toEqual([]);
+    const run = await runFor(factoryId, 1);
+    expect(run.state).toBe('requested');
+    expect(run.waitReason).toEqual({ kind: 'proof-not-configured', blockers: [] });
+  });
+
   test('a blocked issue waits and does not hold up the next one', async () => {
     const { factoryId, queue, launcher, tick } = await setUp({
       maxConcurrent: 1,

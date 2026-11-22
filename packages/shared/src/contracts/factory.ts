@@ -110,7 +110,32 @@ export interface FactoryRun {
   failureReason: string | null;
   /** How integrating the run's pull request went; zeros before its CI was looked at. */
   metrics: FactoryRunMetrics;
+  /** The last regression proof of the run's pull request, or null before one ran. */
+  regressionProof: FactoryRegressionProof | null;
 }
+
+/**
+ * A regression proof as the run stores it (change factory-quality-gates): the
+ * changed tests must pass on the head and fail by an assertion on the base.
+ */
+export const factoryRegressionProofSchema = z.object({
+  /** The commit proved. */
+  headSha: z.string(),
+  verdict: z.enum(['pass', 'fail', 'skipped']),
+  /** Why it failed or was skipped. */
+  finding: z.string().optional(),
+  /** The changed test files that ran. */
+  files: z.array(z.string()).optional(),
+  /** The commands that ran them. */
+  commands: z.array(z.string()).optional(),
+  /** The merge-base the tests ran against. */
+  baseSha: z.string().optional(),
+  /** A pass: the base's failing output (the evidence); a fail: the failing run's. */
+  outputTail: z.string().optional(),
+  ranAt: z.string(),
+});
+
+export type FactoryRegressionProof = z.infer<typeof factoryRegressionProofSchema>;
 
 /** A run of the caller's factories as the factory view lists it: with its project. */
 export interface FactoryQueueRun extends FactoryRun {
@@ -150,8 +175,10 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
 export type FactoryRunSource = 'manual' | 'label';
 
 /**
- * Why a queued issue waits on another one (GitHub's "blocked by" relation).
- * `blockers` are the issue numbers in the same repository that hold it back.
+ * Why a queued issue is not admitted yet: it waits on another one (GitHub's
+ * "blocked by" relation; `blockers` are the issue numbers in the same
+ * repository that hold it back), or its flow could never merge
+ * (`proof-not-configured`, no blockers).
  */
 export interface FactoryWaitReason {
   kind:
@@ -162,7 +189,9 @@ export interface FactoryWaitReason {
     /** A blocker in another repository: it counts only by its issue state. */
     | 'blocker-other-repo'
     | 'circular'
-    | 'blockers-unreadable';
+    | 'blockers-unreadable'
+    /** Its flow's merge needs a regression proof and the flow has no proof rules. */
+    | 'proof-not-configured';
   blockers: number[];
 }
 

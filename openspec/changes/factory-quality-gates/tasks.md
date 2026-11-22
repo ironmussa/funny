@@ -127,10 +127,13 @@
 
 ## 6. Client
 
-- [ ] 6.1 Show the proof on the factory run (verdict, finding, files, commands, output tail) the
+- [x] 6.1 Show the proof on the factory run (verdict, finding, files, commands, output tail) the
       `no change` reason, and the "regression proof not configured" blocker in the factory
       settings and the queue view, using shadcn components and `data-testid`s. Verify with a
       component test for pass, fail, skipped, no change and the blocker.
+      Done: the proof card at the end of a factory run's thread (`FactoryRunProofCard`), a "no
+      change" card instead of the failure card, the blocker in the settings (`blockedReason`)
+      and, per queued issue, a new wait reason `proof-not-configured` in the factory view.
 
 ## 7. Rollout and integration
 

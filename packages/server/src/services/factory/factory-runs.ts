@@ -25,6 +25,7 @@ import { parseStoredJson } from '@funny/shared/json-validation';
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   gte,
@@ -33,12 +34,13 @@ import {
   like,
   notInArray,
   or,
+  sql,
   type SQL,
 } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
-import { db } from '../../db/index.js';
+import { db, dbDialect, withDatabaseTransaction } from '../../db/index.js';
 import { factoryRuns, factorySettings, workflowNodeExecutions } from '../../db/schema.js';
 
 const THREAD_IDS_SCHEMA = z.array(z.string());
@@ -342,6 +344,64 @@ function moveRun(
   ).map((rows) => rows.length > 0);
 }
 
+/** A slot-taking write refused: the factory already runs `maxConcurrent` runs. */
+export const NO_FREE_SLOT = 'no-free-slot' as const;
+
+/** Runs of a factory holding a concurrency slot (`IN_FLIGHT_STATES`). */
+const holdsSlot = (factoryId: string): SQL =>
+  and(eq(factoryRuns.factoryId, factoryId), inArray(factoryRuns.state, [...IN_FLIGHT_STATES]))!;
+
+/** Per factory: the tail of the in-process chain that serializes slot-taking writes. */
+const slotLocks = new Map<string, Promise<unknown>>();
+
+/**
+ * Hold a Postgres advisory lock on the factory's slots until the transaction
+ * ends, so slot-taking writes of every server instance run one at a time.
+ */
+async function lockSlotsAcrossServers(factoryId: string): Promise<void> {
+  // SAFETY: only called on the Postgres dialect, whose Drizzle database has `execute`.
+  const pg = db as { execute?: (query: SQL) => Promise<unknown> };
+  await pg.execute?.(sql`SELECT pg_advisory_xact_lock(hashtext(${`factory-slots:${factoryId}`}))`);
+}
+
+/** Whether the factory runs fewer runs than its stored `maxConcurrent`. */
+async function hasFreeSlot(factoryId: string): Promise<boolean> {
+  const [factory] = await db
+    .select({ max: factorySettings.maxConcurrent })
+    .from(factorySettings)
+    .where(eq(factorySettings.id, factoryId));
+  if (!factory) return false;
+  const [active] = await db.select({ n: count() }).from(factoryRuns).where(holdsSlot(factoryId));
+  return Number(active?.n ?? 0) < factory.max;
+}
+
+/**
+ * Run a write that puts a run of `factoryId` in flight (admit, label admission,
+ * retry, take-over) only when the factory has a free slot, with the check and
+ * the write as one step (issue #328): serialized per factory in this process,
+ * and on Postgres in one transaction holding an advisory lock on the factory,
+ * so writers on other server instances wait too (SQLite runs one server).
+ * Resolves `take`'s result, or `NO_FREE_SLOT` without calling it.
+ */
+function withFreeSlot<T>(
+  factoryId: string,
+  take: () => Promise<T>,
+): ResultAsync<T | typeof NO_FREE_SLOT, FactoryRunsError> {
+  const previous = slotLocks.get(factoryId) ?? Promise.resolve();
+  const run = previous.then(() =>
+    withDatabaseTransaction(async () => {
+      if (dbDialect === 'pg') await lockSlotsAcrossServers(factoryId);
+      return (await hasFreeSlot(factoryId)) ? take() : NO_FREE_SLOT;
+    }),
+  );
+  const tail = run.catch(() => undefined);
+  slotLocks.set(factoryId, tail);
+  void tail.then(() => {
+    if (slotLocks.get(factoryId) === tail) slotLocks.delete(factoryId);
+  });
+  return ResultAsync.fromPromise(run, storage);
+}
+
 /**
  * The queue's reads and writes (change factory-manual-queue): sent issues wait
  * in `requested` until the watcher admits them; each move out of the queue is
@@ -420,9 +480,23 @@ function queueOperations(newId: () => string) {
       ).map((rows) => rows.map(toView));
     },
 
-    /** `requested → queued`; false when the run left the queue meanwhile (cancelled). */
-    admit: (runId: string) =>
-      moveRun(runId, 'admit', { admittedAt: new Date().toISOString(), waitReason: null }),
+    /**
+     * `requested → queued` when the factory has a free slot (`withFreeSlot`):
+     * `admitted`, `NO_FREE_SLOT`, or `gone` when the run left the queue
+     * meanwhile (cancelled).
+     */
+    admit: (
+      factoryId: string,
+      runId: string,
+    ): ResultAsync<'admitted' | 'gone' | typeof NO_FREE_SLOT, FactoryRunsError> =>
+      withFreeSlot(factoryId, async () => {
+        const moved = await moveRun(runId, 'admit', {
+          admittedAt: new Date().toISOString(),
+          waitReason: null,
+        });
+        if (moved.isErr()) throw new Error(moved.error.message);
+        return moved.value ? ('admitted' as const) : ('gone' as const);
+      }),
 
     /** `queued → requested`, keeping its place: its flow could not start any agent. */
     requeue: (runId: string) =>
@@ -492,6 +566,34 @@ export function createFactoryRunsRepository(
         ),
       storage,
     ).map((rows) => rows.map(toView));
+
+  /** Insert a run row as given. */
+  const insertRun = (input: StartRunInput): ResultAsync<FactoryRunView, FactoryRunsError> => {
+    const row: Row = {
+      id: deps.newId(),
+      factoryId: input.factoryId,
+      issueNumber: input.issueNumber,
+      prUrl: null,
+      state: input.state ?? 'queued',
+      currentStep: input.currentStep ?? null,
+      threadIds: JSON.stringify(input.threadIds ?? []),
+      launchStartedAt: null,
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      source: input.source ?? 'label',
+      flowName: input.flowName ?? null,
+      queueOrder: null,
+      waitReason: null,
+      admittedAt: input.state === 'requested' ? null : new Date().toISOString(),
+      flowSteps: null,
+      failureReason: null,
+      metrics: null,
+      regressionProof: null,
+    };
+    return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
+      toView(row),
+    );
+  };
 
   return {
     /** Runs for a factory, newest first. */
@@ -610,32 +712,26 @@ export function createFactoryRunsRepository(
       return inFlight(factoryId).map((rows) => rows.length);
     },
 
-    start(input: StartRunInput): ResultAsync<FactoryRunView, FactoryRunsError> {
-      const row: Row = {
-        id: deps.newId(),
-        factoryId: input.factoryId,
-        issueNumber: input.issueNumber,
-        prUrl: null,
-        state: input.state ?? 'queued',
-        currentStep: input.currentStep ?? null,
-        threadIds: JSON.stringify(input.threadIds ?? []),
-        launchStartedAt: null,
-        startedAt: new Date().toISOString(),
-        completedAt: null,
-        source: input.source ?? 'label',
-        flowName: input.flowName ?? null,
-        queueOrder: null,
-        waitReason: null,
-        admittedAt: input.state === 'requested' ? null : new Date().toISOString(),
-        flowSteps: null,
-        failureReason: null,
-        metrics: null,
-        regressionProof: null,
-      };
-      return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
-        toView(row),
-      );
+    /**
+     * Record a labelled issue's run in flight (`queued`) when the factory has a
+     * free slot (`withFreeSlot`); `NO_FREE_SLOT` otherwise. The unique index
+     * refuses it while another run of the issue is open (a storage error).
+     */
+    startInFlight(
+      input: Omit<StartRunInput, 'state'>,
+    ): ResultAsync<FactoryRunView | typeof NO_FREE_SLOT, FactoryRunsError> {
+      return withFreeSlot(input.factoryId, async () => {
+        const started = await insertRun({ ...input, state: 'queued' });
+        if (started.isErr()) throw new Error(started.error.message);
+        return started.value;
+      });
     },
+
+    /**
+     * Record a run as given, without checking the factory's capacity: for a
+     * run that holds no slot. A run put in flight goes through `startInFlight`.
+     */
+    start: (input: StartRunInput) => insertRun(input),
 
     ...queueOperations(deps.newId),
 
@@ -767,30 +863,33 @@ export function createFactoryRunsRepository(
 
     /**
      * Put a failed or parked run back in flight (`queued`) with `threadIds` as
-     * the steps to replay — a retry or a take-over. Resolves whether it was
-     * reopenable; the unique index refuses it while another run of the issue
-     * is in flight (a storage error).
+     * the steps to replay — a retry or a take-over — when its factory has a
+     * free slot (`withFreeSlot`): `reopened`, `NO_FREE_SLOT`, or
+     * `not-reopenable` when it was not failed nor parked. The unique index
+     * refuses it while another run of the issue is in flight (a storage error).
      *
      * The run's journal is cleared: the reopened attempt replays `threadIds`
      * by call order (the steps the retry or take-over chose), then journals
      * its own executions for a resume after a restart.
      */
-    reopen(runId: string, threadIds: string[]): ResultAsync<boolean, FactoryRunsError> {
-      return updateFromParked(runId, {
-        state: 'queued',
-        currentStep: REOPENED_STEP,
-        completedAt: null,
-        launchStartedAt: null,
-        threadIds: JSON.stringify(threadIds),
-        failureReason: null,
-      }).andThen((reopened) =>
-        reopened
-          ? ResultAsync.fromPromise(
-              db.delete(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, runId)),
-              storage,
-            ).map(() => true)
-          : okAsync(false),
-      );
+    reopen(
+      run: Pick<FactoryRunView, 'id' | 'factoryId'>,
+      threadIds: string[],
+    ): ResultAsync<'reopened' | 'not-reopenable' | typeof NO_FREE_SLOT, FactoryRunsError> {
+      return withFreeSlot(run.factoryId, async () => {
+        const reopened = await updateFromParked(run.id, {
+          state: 'queued',
+          currentStep: REOPENED_STEP,
+          completedAt: null,
+          launchStartedAt: null,
+          threadIds: JSON.stringify(threadIds),
+          failureReason: null,
+        });
+        if (reopened.isErr()) throw new Error(reopened.error.message);
+        if (!reopened.value) return 'not-reopenable' as const;
+        await db.delete(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, run.id));
+        return 'reopened' as const;
+      });
     },
 
     /** Drop a run that never started (its launch failed before any agent ran). */

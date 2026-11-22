@@ -48,7 +48,11 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    missing, or already in the factory.
 1. **Admit**: each tick fills `maxConcurrent − slot-holding runs`: first the `requested` runs in
    queue order (compare-and-set `requested → queued`), then, in automatic mode, labelled issues
-   (a new `queued` row, `source = 'label'`). An issue whose blockers are unfinished is skipped,
+   (a new `queued` row, `source = 'label'`). The tick's count is only a first guess: every write
+   that puts a run in flight (admit, label admission, Retry, take-over) re-checks the cap in the
+   same step (`withFreeSlot` in `factory-runs.ts`: serialized per factory in-process, and on
+   Postgres in a transaction holding an advisory lock on the factory), so a Retry during the
+   tick's GitHub reads cannot push the factory over `maxConcurrent` (#328). An issue whose blockers are unfinished is skipped,
    with its `wait_reason` recorded, and the next one is tried. A blocker is finished when its
    issue is closed or it has a merged run in this factory; an unreadable blocker list blocks for
    that tick. A partial unique index (migration 098) allows one non-terminal run per issue, so a
@@ -137,10 +141,12 @@ at the PR for teams that merge by hand).
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
-  branch and PR; a completed implement step is kept, later steps run again.
+  branch and PR; a completed implement step is kept, later steps run again. Refused (409) while
+  the factory already runs `maxConcurrent` runs.
 - **Take over**: when the thread's **owner** follows up on a parked run's last thread after it
   parked (noted by `POST /api/threads/:id/message`), the run resumes from that step when the thread
-  completes. A steer sharee's follow-up never does: it would otherwise move the flow toward a merge
+  completes (when the factory is full, the run stays parked; a later completion of the follow-up,
+  or a Retry, takes it over once a slot frees). A steer sharee's follow-up never does: it would otherwise move the flow toward a merge
   in the enabler's name. The note is in memory; after a restart use Retry.
 - **Lost access**: if the enabler loses `steer`, the factory is turned off and their open runs are
   stopped (`factory.disabled_access_lost` audit).

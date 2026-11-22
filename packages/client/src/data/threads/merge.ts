@@ -14,6 +14,11 @@ function timeValue(value: string | undefined): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+/** True when `next` ends the run `prev` was in (an active status became terminal). */
+export function endsRun(prev: Thread, next: Thread): boolean {
+  return TERMINAL_STATUSES.has(next.status) && !TERMINAL_STATUSES.has(prev.status);
+}
+
 /**
  * Per-field write fences (spec: *Optimistic writes never revert on stale data*).
  *
@@ -76,6 +81,7 @@ export function mergeIncomingThread(
   prev: Thread | undefined,
   incoming: Thread,
   fenced: ReadonlySet<keyof Thread> = new Set(),
+  startedBeforeRunEnded = false,
 ): Thread {
   if (!prev) return incoming;
 
@@ -83,11 +89,16 @@ export function mergeIncomingThread(
   // request that started earlier can resolve later with the old active row and
   // make Activity show a permanent spinner again. Keep the terminal row unless
   // the incoming active row proves it is newer (a follow-up run started
-  // elsewhere).
+  // elsewhere). Two clock-free proofs of staleness:
+  //  - the request started before the realtime event that ended the run
+  //    (`startedBeforeRunEnded`, from the data layer's request sequence);
+  //  - its server `updatedAt` is not after the held row's server `updatedAt`.
+  // The client never writes `updatedAt`, so both timestamps come from the
+  // server clock: a skewed client clock cannot discard a newer row.
   if (
     TERMINAL_STATUSES.has(prev.status) &&
     ACTIVE_STATUSES.has(incoming.status) &&
-    timeValue(incoming.updatedAt) <= timeValue(prev.updatedAt)
+    (startedBeforeRunEnded || timeValue(incoming.updatedAt) <= timeValue(prev.updatedAt))
   ) {
     return prev;
   }

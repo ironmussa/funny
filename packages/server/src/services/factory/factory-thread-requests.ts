@@ -27,6 +27,7 @@ import { log } from '../../lib/logger.js';
 import { authorizedRunnerRequests, runnerActor, withRunnerFor } from '../runner-access/index.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { sandboxWaker } from '../thread-sandboxes/sandbox-lifecycle.js';
+import { RUNNER_UNAVAILABLE_PREFIX } from './factory-proof-runner.js';
 
 const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 
@@ -128,7 +129,7 @@ export async function startRegressionProofOnRunner(
           body: JSON.stringify(body),
         }),
     );
-    if (sent.isErr()) return err(`runner unavailable: ${sent.error.reason}`);
+    if (sent.isErr()) return err(`${RUNNER_UNAVAILABLE_PREFIX}${sent.error.reason}`);
     if (sent.value.status >= 400) {
       const reason = runnerErrorText(sent.value.body);
       return err(`runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`);
@@ -167,7 +168,7 @@ export async function pollRegressionProofOnRunner(
           body: null,
         }),
     );
-    if (sent.isErr()) return err(`runner unavailable: ${sent.error.reason}`);
+    if (sent.isErr()) return err(`${RUNNER_UNAVAILABLE_PREFIX}${sent.error.reason}`);
     if (sent.value.status === 404) return err('proof-not-found');
     if (sent.value.status >= 400) {
       const reason = runnerErrorText(sent.value.body);

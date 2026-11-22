@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { SettingsSection } from '@/components/settings/SettingRow';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -152,7 +153,7 @@ export function OrganizationManagement() {
   return (
     <>
       {/* Create Organization */}
-      <h3 className="settings-section-header">Create Organization</h3>
+      <SettingsSection settingId="organizations.create">Create Organization</SettingsSection>
       <div className="settings-card">
         <div className="px-4 py-3.5">
           <p className="text-muted-foreground mb-3 text-sm">
@@ -212,7 +213,9 @@ export function OrganizationManagement() {
       </div>
 
       {/* Your Organizations */}
-      <h3 className="settings-section-header">Your Organizations ({orgs.length})</h3>
+      <SettingsSection settingId="organizations.list">
+        Your Organizations ({orgs.length})
+      </SettingsSection>
       <div className="settings-card">
         {orgs.length === 0 ? (
           <EmptyState

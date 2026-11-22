@@ -21,8 +21,9 @@ import { ProjectSandboxSetting } from '@/components/general-settings-project/Pro
 import { ProjectThreadModeSetting } from '@/components/general-settings-project/ProjectThreadModeSetting';
 import {
   SegmentedControl,
-  SettingRow,
+  ProjectSettingRow,
 } from '@/components/general-settings-project/setting-primitives';
+import { SettingAnchor, SettingsSection } from '@/components/settings/SettingRow';
 import { useProjects } from '@/data/projects/hooks';
 import { useAcpModels } from '@/data/runner/hooks';
 import { projectsApi } from '@/lib/api/projects';
@@ -132,7 +133,8 @@ export function GeneralSettings() {
               currentColor={selectedProject.color}
               onSave={saveProject}
             />
-            <SettingRow
+            <ProjectSettingRow
+              settingId="project-general.follow-up-mode"
               title={t('settings.followUpMode')}
               description={t('settings.followUpModeDesc')}
             >
@@ -157,8 +159,12 @@ export function GeneralSettings() {
                   },
                 ]}
               />
-            </SettingRow>
-            <SettingRow title={t('settings.fastMode')} description={t('settings.fastModeDesc')}>
+            </ProjectSettingRow>
+            <ProjectSettingRow
+              settingId="project-general.fast-mode"
+              title={t('settings.fastMode')}
+              description={t('settings.fastModeDesc')}
+            >
               <SegmentedControl<string>
                 value={selectedProject.fastMode ? 'on' : 'off'}
                 onChange={(v) => saveProject(selectedProject.id, { fastMode: v === 'on' })}
@@ -175,9 +181,10 @@ export function GeneralSettings() {
                   },
                 ]}
               />
-            </SettingRow>
+            </ProjectSettingRow>
             <ProjectRedirectChecksSetting project={selectedProject} onSave={saveProject} />
-            <SettingRow
+            <ProjectSettingRow
+              settingId="project-general.default-model"
               title={t('settings.projectDefaultModel', 'Default Model')}
               description={t(
                 'settings.projectDefaultModelDesc',
@@ -216,9 +223,10 @@ export function GeneralSettings() {
                   searchPlaceholder={t('settings.searchModel')}
                 />
               </div>
-            </SettingRow>
+            </ProjectSettingRow>
             {projectEffortOptions.length > 0 && (
-              <SettingRow
+              <ProjectSettingRow
+                settingId="project-general.default-effort"
                 title={t('settings.projectDefaultEffort')}
                 description={t('settings.projectDefaultEffortDesc')}
               >
@@ -231,10 +239,11 @@ export function GeneralSettings() {
                     testId: `settings-default-effort-${level.value}`,
                   }))}
                 />
-              </SettingRow>
+              </ProjectSettingRow>
             )}
             <ProjectThreadModeSetting projectId={selectedProject.id} />
-            <SettingRow
+            <ProjectSettingRow
+              settingId="project-general.permission-mode"
               title={t('settings.projectDefaultPermission', 'Default Permission Mode')}
               description={t(
                 'settings.projectDefaultPermissionDesc',
@@ -252,8 +261,9 @@ export function GeneralSettings() {
                   { value: 'confirmEdit', label: t('prompt.askBeforeEdits') },
                 ]}
               />
-            </SettingRow>
-            <SettingRow
+            </ProjectSettingRow>
+            <ProjectSettingRow
+              settingId="project-general.default-branch"
               title={t('settings.projectDefaultBranch', 'Default Branch')}
               description={t(
                 'settings.projectDefaultBranchDesc',
@@ -281,7 +291,7 @@ export function GeneralSettings() {
                 showCopy={false}
                 testId="settings-default-branch-trigger"
               />
-            </SettingRow>
+            </ProjectSettingRow>
             <ProjectUrlPatterns
               projectId={selectedProject.id}
               currentUrls={selectedProject.urls || []}
@@ -309,11 +319,11 @@ export function GeneralSettings() {
       )}
 
       {/* Permissions */}
-      <h3 className="text-muted-foreground mt-6 px-1 pb-2 text-xs font-semibold tracking-wider uppercase">
+      <SettingsSection settingId="project-general.permissions" className="mt-6">
         {t('settings.permissions')}
-      </h3>
+      </SettingsSection>
       <div className="border-border/50 overflow-hidden rounded-lg border">
-        <div className="px-4 py-3.5">
+        <SettingAnchor settingId="project-general.tool-permissions" className="px-4 py-3.5">
           <p className="text-foreground text-sm font-medium">{t('settings.toolPermissions')}</p>
           <p className="text-muted-foreground mt-0.5 mb-3 text-xs">
             {t('settings.toolPermissionsDesc')}
@@ -352,7 +362,7 @@ export function GeneralSettings() {
               {t('settings.resetDefaults')}
             </button>
           </div>
-        </div>
+        </SettingAnchor>
       </div>
     </>
   );

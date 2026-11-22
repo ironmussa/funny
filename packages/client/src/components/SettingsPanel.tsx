@@ -1,21 +1,20 @@
 import { ArrowLeft } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { buildSettingsItems, settingsLabelKeys } from '@/components/settings/items';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-} from '@/components/ui/sidebar';
+  SettingsNavFilter,
+  type OtherSettingsSurface,
+} from '@/components/settings/SettingsNavFilter';
+import {
+  usePreferencesNavPages,
+  useProjectSettingsNavPages,
+} from '@/components/settings/use-settings-filter';
+import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
-import { useProjectById } from '@/data/projects/hooks';
 import { buildPath } from '@/lib/url';
-import { useAuthStore } from '@/stores/auth-store';
-import { useProjectStore } from '@/stores/project-store';
+import { useSettingsFilterStore } from '@/stores/settings-filter-store';
 import { useUIStore } from '@/stores/ui-store';
 
 export function SettingsPanelBody() {
@@ -24,25 +23,20 @@ export function SettingsPanelBody() {
   const activeSettingsPage = useUIStore((s) => s.activeSettingsPage);
   const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
   const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProject = useProjectById(useProjectStore((s) => s.selectedProjectId));
-  const authUser = useAuthStore((s) => s.user);
+  const resetFilter = useSettingsFilterStore((s) => s.reset);
 
-  // Project-config tabs mutate shared project state, so they're limited to the
-  // project's admins (owner or `admin` member). Plain collaborators get a
-  // read-only experience: the config tabs are hidden (the server also rejects
-  // their writes — defense in depth). The owner fallback covers older payloads
-  // that predate the `role` field.
-  const isProjectAdmin =
-    selectedProject?.role === 'owner' ||
-    selectedProject?.role === 'admin' ||
-    selectedProject?.userId === authUser?.id;
-
-  const items = buildSettingsItems({
-    selectedProjectId,
-    isProjectAdmin,
-    isProjectOwner: !!selectedProject && selectedProject.userId === authUser?.id,
-  });
+  // Which pages a member may open (project-admin / owner gating) is decided
+  // by buildSettingsItems, behind this hook.
+  const { selectedProjectId, pages } = useProjectSettingsNavPages();
+  const preferencesPages = usePreferencesNavPages();
+  const other = useMemo<OtherSettingsSurface>(
+    () => ({
+      scope: 'preferences',
+      pages: preferencesPages,
+      openPage: (id) => navigate(buildPath(`/preferences/${id}`)),
+    }),
+    [preferencesPages, navigate],
+  );
 
   const settingsPath = (pageId: string) =>
     selectedProjectId ? `/projects/${selectedProjectId}/settings/${pageId}` : `/settings/${pageId}`;
@@ -61,6 +55,7 @@ export function SettingsPanelBody() {
               const target =
                 settingsReturnPath ?? (selectedProjectId ? `/projects/${selectedProjectId}` : '/');
               setSettingsReturnPath(null);
+              resetFilter();
               navigate(buildPath(target));
             }}
             className="text-muted-foreground hover:text-foreground"
@@ -75,23 +70,14 @@ export function SettingsPanelBody() {
 
       {/* Menu list */}
       <SidebarContent className="px-2 pb-2">
-        <SidebarMenu>
-          {items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
-                  isActive={activeSettingsPage === item.id}
-                  onClick={() => navigate(buildPath(settingsPath(item.id)))}
-                  data-testid={`settings-nav-${item.id}`}
-                >
-                  <Icon className="icon-base" />
-                  <span>{t(settingsLabelKeys[item.id] ?? item.label)}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
+        <SettingsNavFilter
+          scope="project"
+          pages={pages}
+          activePageId={activeSettingsPage}
+          openPage={(id) => navigate(buildPath(settingsPath(id)))}
+          testIdPrefix="settings"
+          other={other}
+        />
       </SidebarContent>
     </>
   );

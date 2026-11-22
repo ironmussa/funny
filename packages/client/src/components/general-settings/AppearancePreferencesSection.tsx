@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilitySettings';
-import { SettingRow } from '@/components/settings/SettingRow';
+import { SettingAnchor, SettingRow, SettingsSection } from '@/components/settings/SettingRow';
 import {
   Select,
   SelectContent,
@@ -156,7 +156,11 @@ function FontSizeCard() {
 
   return (
     <div className="settings-card">
-      <SettingRow title={t('settings.fontSize')} description={t('settings.fontSizeDesc')}>
+      <SettingRow
+        settingId="appearance.font-size"
+        title={t('settings.fontSize')}
+        description={t('settings.fontSizeDesc')}
+      >
         <Select value={fontSize} onValueChange={handleFontSizeChange}>
           <SelectTrigger className="w-[140px]" data-testid="preferences-font-size-select">
             <SelectValue />
@@ -180,6 +184,7 @@ function ThreadViewerCard() {
   return (
     <div className="settings-card">
       <SettingRow
+        settingId="appearance.thread-viewer"
         title={t('settings.threadViewer', 'Thread viewer')}
         description={t(
           'settings.threadViewerDesc',
@@ -209,11 +214,18 @@ export function AppearancePreferencesSection() {
   const { t } = useTranslation();
   return (
     <>
-      <p className="text-muted-foreground px-1 pb-3 text-sm">{t('settings.themeDesc')}</p>
-      <ThemeGrid />
-      <h3 className="settings-section-header mt-6">{t('settings.fontSize')}</h3>
+      <SettingAnchor settingId="appearance.theme" className="rounded-lg">
+        <p className="text-muted-foreground px-1 pb-3 text-sm">{t('settings.themeDesc')}</p>
+        <ThemeGrid />
+      </SettingAnchor>
+      {/* Not indexed: the font size row below already carries the same title. */}
+      <SettingsSection settingId={null} className="mt-6">
+        {t('settings.fontSize')}
+      </SettingsSection>
       <FontSizeCard />
-      <h3 className="settings-section-header mt-6">{t('settings.experimental', 'Experimental')}</h3>
+      <SettingsSection settingId="appearance.experimental" className="mt-6">
+        {t('settings.experimental', 'Experimental')}
+      </SettingsSection>
       <ThreadViewerCard />
     </>
   );

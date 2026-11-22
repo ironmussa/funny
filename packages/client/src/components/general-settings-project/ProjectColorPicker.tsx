@@ -1,3 +1,4 @@
+import { SettingAnchor } from '@/components/settings/SettingRow';
 import {
   ColorPicker,
   ColorPickerAlpha,
@@ -34,7 +35,10 @@ interface Props {
  */
 export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
   return (
-    <div className="border-border/50 flex flex-col gap-3 border-b px-4 py-3.5 last:border-b-0">
+    <SettingAnchor
+      settingId="project-general.color"
+      className="border-border/50 flex flex-col gap-3 border-b px-4 py-3.5 last:border-b-0"
+    >
       <div className="min-w-0">
         <p className="text-foreground text-sm font-medium">Project Color</p>
         <p className="text-muted-foreground mt-0.5 text-xs">Pick any color for this project</p>
@@ -115,6 +119,6 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
           <span className="text-muted-foreground font-mono text-xs">{currentColor}</span>
         )}
       </div>
-    </div>
+    </SettingAnchor>
   );
 }

@@ -81,7 +81,11 @@ function EditorRows() {
 
   return (
     <>
-      <SettingRow title={t('settings.defaultEditor')} description={t('settings.defaultEditorDesc')}>
+      <SettingRow
+        settingId="general.default-editor"
+        title={t('settings.defaultEditor')}
+        description={t('settings.defaultEditorDesc')}
+      >
         <Select value={defaultEditor} onValueChange={handleEditorChange}>
           <SelectTrigger className="w-[140px]" data-testid="preferences-editor-select">
             <SelectValue />
@@ -96,6 +100,7 @@ function EditorRows() {
         </Select>
       </SettingRow>
       <SettingRow
+        settingId="general.internal-editor"
         title={t('settings.useInternalEditor')}
         description={t('settings.useInternalEditorDesc')}
       >
@@ -120,7 +125,11 @@ function LanguageRow() {
   );
 
   return (
-    <SettingRow title={t('settings.language')} description={t('settings.languageDesc')}>
+    <SettingRow
+      settingId="general.language"
+      title={t('settings.language')}
+      description={t('settings.languageDesc')}
+    >
       <Select value={i18n.language} onValueChange={handleLanguageChange}>
         <SelectTrigger className="w-[140px]" data-testid="preferences-language-select">
           <SelectValue />
@@ -156,7 +165,11 @@ function ShellRow() {
   );
 
   return (
-    <SettingRow title={t('settings.terminalShell')} description={t('settings.terminalShellDesc')}>
+    <SettingRow
+      settingId="general.terminal-shell"
+      title={t('settings.terminalShell')}
+      description={t('settings.terminalShellDesc')}
+    >
       <Select value={terminalShell} onValueChange={handleShellChange}>
         <SelectTrigger className="w-[160px]" data-testid="preferences-shell-select">
           <SelectValue />
@@ -251,6 +264,7 @@ function NotificationsRow() {
 
   return (
     <SettingRow
+      settingId="general.notifications"
       title={t('settings.notifications')}
       description={t(notificationsDescriptionKey(notifications))}
     >
@@ -291,6 +305,7 @@ function NotificationSoundRow() {
 
   return (
     <SettingRow
+      settingId="general.notifications-sound"
       title={t('settings.notificationsSound')}
       description={t('settings.notificationsSoundDesc')}
     >

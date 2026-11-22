@@ -719,7 +719,15 @@
     "projectFactoryConcurrency": "Max in flight",
     "projectFactoryConcurrencyDesc": "How many issues run at once",
     "projectFactoryStatus": "Status",
-    "projectFactoryStatusDesc": "Running: takes the issues you send from the Issues tab. Paused: nothing new starts; queued issues wait"
+    "projectFactoryStatusDesc": "Running: takes the issues you send from the Issues tab. Paused: nothing new starts; queued issues wait",
+    "filter": {
+      "placeholder": "Search settings…",
+      "noResults": "No settings match",
+      "inPreferences_one": "{{count}} result in Preferences",
+      "inPreferences_other": "{{count}} results in Preferences",
+      "inProject_one": "{{count}} result in Project Settings",
+      "inProject_other": "{{count}} results in Project Settings"
+    }
   },
   "skills": {
     "showingFor": "Showing skills for:",

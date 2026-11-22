@@ -1,17 +1,28 @@
 import type { ReactNode } from 'react';
 
+import type { SettingId } from '@/components/settings/settings-index';
+import { useSettingDimmed } from '@/components/settings/use-settings-filter';
 import { cn } from '@/lib/utils';
 
 interface RowProps {
+  /** Id in the settings index (`settings-index.ts`); `null` = not indexed. */
+  settingId: SettingId | null;
   title: string;
   description: string;
   children: ReactNode;
 }
 
 /** Setting row: label/description on the left, control on the right. */
-export function SettingRow({ title, description, children }: RowProps) {
+export function ProjectSettingRow({ settingId, title, description, children }: RowProps) {
+  const dimmed = useSettingDimmed(settingId);
   return (
-    <div className="border-border/50 flex items-center justify-between gap-4 border-b px-4 py-3.5 last:border-b-0">
+    <div
+      className={cn(
+        'border-border/50 flex items-center justify-between gap-4 border-b px-4 py-3.5 last:border-b-0',
+        dimmed && 'opacity-50 transition-opacity',
+      )}
+      data-setting-id={settingId ?? undefined}
+    >
       <div className="min-w-0">
         <p className="text-foreground text-sm font-medium">{title}</p>
         <p className="text-muted-foreground mt-0.5 text-xs">{description}</p>

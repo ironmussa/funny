@@ -401,6 +401,10 @@ Every interactive element (buttons, inputs, selects, checkboxes, toggles, clicka
 
 Naming convention: `{area}-{element}-{qualifier}`. Examples: `sidebar-search`, `review-commit-title`, `kanban-card-{id}`.
 
+### Make new settings findable
+
+The Preferences and Project Settings sidebars have a filter that searches a static index of the settings UI, `components/settings/settings-index.ts` (openspec `settings-filter`), because closed pages are not mounted. When you add a setting row or a section header, add its entry there (i18n key or literal title, description, optional keywords) and render it with the indexed primitives from `components/settings/SettingRow.tsx`: `SettingRow` / `SettingsSection` take a required `settingId` (`null` for an element that is deliberately not indexed), and `SettingAnchor` marks a hand-laid-out setting. Index only static UI, never user data. `fitness:settings-index` (in `bun run lint`) fails on an indexed id that nothing renders and on a raw `settings-section-header` class.
+
 ### Import from `@/components/ui/`
 
 All base component imports must come from `@/components/ui/`. Example:

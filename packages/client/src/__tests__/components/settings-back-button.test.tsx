@@ -19,10 +19,15 @@ import { useUIStore } from '@/stores/ui-store';
 // path and leaves the overlay flag untouched (route-sync, not mounted here, owns
 // closing it).
 
+// `t(key, 'fallback')` and `t(key, { defaultValue })` both resolve to the
+// fallback; `getFixedT` is what the settings filter uses for English labels.
+const translate = (key: string, fallback?: string | { defaultValue?: string }) =>
+  (typeof fallback === 'string' ? fallback : fallback?.defaultValue) ?? key;
+
 mock.module('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
-    i18n: { language: 'en' },
+    t: translate,
+    i18n: { language: 'en', getFixedT: () => translate },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));

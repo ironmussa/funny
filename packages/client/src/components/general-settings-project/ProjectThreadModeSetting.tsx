@@ -12,7 +12,7 @@ import { useCanSteerProject } from '@/data/projects/hooks';
 import { saveProjectSandbox } from '@/data/runner/actions';
 import { useProjectSandbox } from '@/data/runner/hooks';
 
-import { SegmentedControl, SettingRow } from './setting-primitives';
+import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
 type ThreadRuntimeMode = 'local' | 'worktree' | 'sandbox';
 
@@ -44,7 +44,8 @@ function ProjectThreadModeSettingRows({ projectId }: Props) {
       );
 
   return (
-    <SettingRow
+    <ProjectSettingRow
+      settingId="project-general.thread-mode"
       title={t('settings.projectDefaultMode', 'Default Thread Mode')}
       description={description}
     >
@@ -73,7 +74,7 @@ function ProjectThreadModeSettingRows({ projectId }: Props) {
           },
         ]}
       />
-    </SettingRow>
+    </ProjectSettingRow>
   );
 }
 

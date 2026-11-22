@@ -1,106 +1,37 @@
-import { SiGithub } from '@icons-pack/react-simple-icons';
-import {
-  ArrowLeft,
-  Bot,
-  Boxes,
-  Building2,
-  Cpu,
-  KeyRound,
-  Mail,
-  Mic,
-  Palette,
-  Plug,
-  Puzzle,
-  Server,
-  SlidersHorizontal,
-  Sparkles,
-  Users,
-  UsersRound,
-} from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '@/components/ui/sidebar';
+  PREFERENCES_NAV_ITEMS,
+  preferencesItemLabel,
+  type GeneralPage,
+} from '@/components/settings/preferences-items';
+import {
+  SettingsNavFilter,
+  type OtherSettingsSurface,
+} from '@/components/settings/SettingsNavFilter';
+import {
+  usePreferencesNavPages,
+  useProjectSettingsNavPages,
+} from '@/components/settings/use-settings-filter';
+import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { buildPath } from '@/lib/url';
-import { useAuthStore } from '@/stores/auth-store';
+import { useSettingsFilterStore } from '@/stores/settings-filter-store';
 import { useUIStore } from '@/stores/ui-store';
 
-export type GeneralPage =
-  | 'general'
-  | 'models'
-  | 'appearance'
-  | 'github'
-  | 'github-app'
-  | 'api-tokens'
-  | 'ai-keys'
-  | 'speech'
-  | 'email'
-  | 'users'
-  | 'organizations'
-  | 'team-members'
-  | 'runners'
-  | 'sandboxes'
-  | 'system'
-  | 'extensions'
-  | 'providers'
-  | 'agent-profiles'
-  | 'agent-templates';
-
-export const PREFERENCES_NAV_ITEMS: Array<{
-  id: GeneralPage;
-  label: string;
-  icon: typeof SlidersHorizontal;
-}> = [
-  { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
-  { id: 'providers', label: 'Providers', icon: Plug },
-  { id: 'models', label: 'settings.models', icon: Sparkles },
-  { id: 'appearance', label: 'settings.appearance', icon: Palette },
-  { id: 'github', label: 'GitHub', icon: SiGithub },
-  { id: 'github-app', label: 'GitHub App', icon: SiGithub },
-  { id: 'api-tokens', label: 'settings.apiTokens', icon: KeyRound },
-  { id: 'ai-keys', label: 'AI Providers', icon: Bot },
-  { id: 'agent-profiles', label: 'settings.agentProfiles', icon: Bot },
-  { id: 'speech', label: 'Speech', icon: Mic },
-  { id: 'email', label: 'Email (SMTP)', icon: Mail },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'organizations', label: 'settings.organizations', icon: Building2 },
-  { id: 'team-members', label: 'Team Members', icon: UsersRound },
-  { id: 'runners', label: 'settings.runners', icon: Server },
-  { id: 'sandboxes', label: 'settings.sandboxes', icon: Boxes },
-  { id: 'agent-templates', label: 'settings.agentTemplates', icon: Bot },
-  { id: 'extensions', label: 'Extensions', icon: Puzzle },
-  { id: 'system', label: 'settings.system', icon: Cpu },
-];
-
-/**
- * Instance-wide preference pages — only meaningful to the server admin. Hidden
- * from non-admins (some are already enforced server-side via requireAdmin;
- * hiding keeps the menu honest and avoids dead-ends). Organizations is here
- * because, under the project-collaborator model, orgs are an optional admin
- * grouping rather than a per-user concern.
- */
-export const ADMIN_ONLY_PREFERENCES: ReadonlySet<GeneralPage> = new Set([
-  'email',
-  'github-app',
-  'users',
-  'organizations',
-  'team-members',
-  'extensions',
-  'system',
-]);
+export {
+  ADMIN_ONLY_PREFERENCES,
+  PREFERENCES_NAV_ITEMS,
+  type GeneralPage,
+} from '@/components/settings/preferences-items';
 
 export function preferencesPageLabel(page: GeneralPage, t: (key: string) => string): string {
   const item = PREFERENCES_NAV_ITEMS.find((i) => i.id === page);
   if (!item) return page;
-  return item.label.startsWith('settings.') ? t(item.label) : item.label;
+  return preferencesItemLabel(item.label, t);
 }
 
 export function PreferencesPanelBody() {
@@ -109,11 +40,23 @@ export function PreferencesPanelBody() {
   const activePreferencesPage = useUIStore((s) => s.activePreferencesPage) as GeneralPage;
   const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
   const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
-  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+  const resetFilter = useSettingsFilterStore((s) => s.reset);
+  const pages = usePreferencesNavPages();
+  const project = useProjectSettingsNavPages();
 
-  const navItems = isAdmin
-    ? PREFERENCES_NAV_ITEMS
-    : PREFERENCES_NAV_ITEMS.filter((item) => !ADMIN_ONLY_PREFERENCES.has(item.id));
+  // Project Settings only exist for a selected project, so the hint does too.
+  const projectId = project.selectedProjectId;
+  const other = useMemo<OtherSettingsSurface | null>(
+    () =>
+      projectId
+        ? {
+            scope: 'project',
+            pages: project.pages,
+            openPage: (id) => navigate(buildPath(`/projects/${projectId}/settings/${id}`)),
+          }
+        : null,
+    [projectId, project.pages, navigate],
+  );
 
   return (
     <>
@@ -127,6 +70,7 @@ export function PreferencesPanelBody() {
               // new-thread compose input. See use-view-route-sync.ts.
               const target = settingsReturnPath ?? '/';
               setSettingsReturnPath(null);
+              resetFilter();
               navigate(buildPath(target));
             }}
             className="text-muted-foreground hover:text-foreground"
@@ -140,23 +84,14 @@ export function PreferencesPanelBody() {
       </SidebarHeader>
 
       <SidebarContent className="px-2 pb-2">
-        <SidebarMenu>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
-                  isActive={activePreferencesPage === item.id}
-                  onClick={() => navigate(buildPath(`/preferences/${item.id}`))}
-                  data-testid={`preferences-nav-${item.id}`}
-                >
-                  <Icon className="icon-base" />
-                  <span>{item.label.startsWith('settings.') ? t(item.label) : item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
+        <SettingsNavFilter
+          scope="preferences"
+          pages={pages}
+          activePageId={activePreferencesPage}
+          openPage={(id) => navigate(buildPath(`/preferences/${id}`))}
+          testIdPrefix="preferences"
+          other={other}
+        />
       </SidebarContent>
     </>
   );

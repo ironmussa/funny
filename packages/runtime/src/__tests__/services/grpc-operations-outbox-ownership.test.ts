@@ -92,4 +92,26 @@ describe('GrpcOperationsAdapter outbox ownership', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0][1].metadata.idempotencyKey).toBe('crashed-key');
   });
+
+  // Issue #206: a reconnect replays the whole backlog, not only the first 100 rows,
+  // and a row that cannot be sent does not stop the rows after it.
+  test('replays more than one page and skips a row that cannot be sent', () => {
+    for (let index = 0; index < 150; index += 1) {
+      outbox.enqueue({
+        idempotencyKey: `backlog-${String(index).padStart(3, '0')}`,
+        operationKind: 'updateThread',
+        payload: { threadId: 't1', updates: { status: 'completed' } },
+      });
+    }
+    send.mockImplementation((_name, message) => {
+      if (message.metadata?.idempotencyKey === 'backlog-010') throw new Error('cannot encode');
+      return true;
+    });
+
+    adapter.activated();
+
+    expect(send).toHaveBeenCalledTimes(150);
+    expect(outbox.get('backlog-010')).toBeNull();
+    expect(outbox.get('backlog-149')?.attemptCount).toBe(1);
+  });
 });

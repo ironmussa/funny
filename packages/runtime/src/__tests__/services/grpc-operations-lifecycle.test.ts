@@ -7,6 +7,7 @@ mock.module('../../services/grpc-operation-outbox.js', () => ({
   GrpcOperationOutbox: class {
     enqueue = vi.fn();
     pending = vi.fn(() => []);
+    replayable = vi.fn(() => []);
     markAttempt = vi.fn();
     confirm = vi.fn();
     discard = vi.fn();

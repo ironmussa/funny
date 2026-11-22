@@ -24,7 +24,6 @@ import { useUIStore } from '@/stores/ui-store';
 
 export {
   ADMIN_ONLY_PREFERENCES,
-  buildPreferencesItems,
   PREFERENCES_NAV_ITEMS,
   type GeneralPage,
 } from '@/components/settings/preferences-items';

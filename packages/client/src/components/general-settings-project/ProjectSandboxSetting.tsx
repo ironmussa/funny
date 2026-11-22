@@ -20,7 +20,7 @@ import { clearProjectSandbox, saveProjectSandbox } from '@/data/runner/actions';
 import { useProjectSandbox, useSandboxConnections, useSandboxProviders } from '@/data/runner/hooks';
 import { buildPath } from '@/lib/url';
 
-import { SettingRow } from './setting-primitives';
+import { ProjectSettingRow } from './setting-primitives';
 
 const NO_SANDBOX = '__none__';
 
@@ -49,7 +49,7 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
 
   if (!loading && connections.length === 0) {
     return (
-      <SettingRow
+      <ProjectSettingRow
         settingId="project-general.sandbox"
         title={t('settings.projectSandbox', 'Sandbox')}
         description={t(
@@ -65,7 +65,7 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
         >
           {t('settings.projectSandboxAddConnection', 'Add a connection')}
         </Button>
-      </SettingRow>
+      </ProjectSettingRow>
     );
   }
 
@@ -88,7 +88,7 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <SettingRow
+      <ProjectSettingRow
         settingId="project-general.sandbox"
         title={t('settings.projectSandbox', 'Sandbox')}
         description={t(
@@ -116,9 +116,9 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
             ))}
           </SelectContent>
         </Select>
-      </SettingRow>
+      </ProjectSettingRow>
       {settings?.connectionId && (
-        <SettingRow
+        <ProjectSettingRow
           settingId="project-general.sandbox-size"
           title={t('settings.projectSandboxSize', 'Sandbox size')}
           description={t('settings.projectSandboxSizeDesc', 'Machine size for new sandboxes')}
@@ -148,7 +148,7 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
               ))}
             </SelectContent>
           </Select>
-        </SettingRow>
+        </ProjectSettingRow>
       )}
     </>
   );

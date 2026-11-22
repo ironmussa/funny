@@ -48,7 +48,8 @@ interface HoverTimeMenuProps {
  * rows. Both the resting timestamp and the (hover-revealed) kebab menu occupy
  * the SAME grid cell (`col-start-1 row-start-1`), so the row reserves space for
  * one of them — not both — keeping dense rows compact. On hover the time fades
- * out and the menu fades in; while `open` is true the menu stays pinned.
+ * out and the menu fades in; the same swap happens while the menu holds
+ * keyboard focus, and while `open` is true the menu stays pinned.
  */
 export function HoverTimeMenu({
   time,
@@ -60,11 +61,14 @@ export function HoverTimeMenu({
 }: HoverTimeMenuProps) {
   const swap = SWAP[group];
   return (
-    <div className={cn('grid place-items-center justify-items-center', className)}>
+    <div className={cn('group/swap grid place-items-center justify-items-center', className)}>
       <span
         className={cn(
           'col-start-1 row-start-1',
           swap.time,
+          // Keyboard users reach the menu by tabbing to it: hide the time while
+          // the menu holds focus, like on hover.
+          'group-focus-within/swap:pointer-events-none group-focus-within/swap:opacity-0',
           timeClassName,
           open && 'pointer-events-none opacity-0',
         )}
@@ -73,7 +77,7 @@ export function HoverTimeMenu({
       </span>
       <div
         className={cn(
-          'col-start-1 row-start-1 flex items-center opacity-0',
+          'col-start-1 row-start-1 flex items-center opacity-0 focus-within:opacity-100',
           swap.menu,
           open && 'opacity-100!',
         )}

@@ -18,6 +18,13 @@ interface ThreadDataContext {
   threadId: string;
   data: ThreadDataSnapshot | null;
   error: string | null;
+  /**
+   * An INVALIDATE arrived while the fetch was in flight, so `data` may miss
+   * the events behind it. The fetch is not restarted (a busy thread would
+   * never finish loading): the waiting `selectThread` replays those events
+   * from its WS buffer, and the next load of a stale snapshot refetches.
+   */
+  stale: boolean;
 }
 
 type ThreadDataEvent =
@@ -81,6 +88,7 @@ export const threadDataMachine = setup({
     threadId: input.threadId,
     data: null,
     error: null,
+    stale: false,
   }),
   states: {
     unloaded: {
@@ -90,6 +98,7 @@ export const threadDataMachine = setup({
       },
     },
     fetching: {
+      entry: assign({ stale: false }),
       invoke: {
         src: 'fetcher',
         input: ({ context }) => ({ threadId: context.threadId }),
@@ -109,9 +118,10 @@ export const threadDataMachine = setup({
         },
       },
       on: {
+        // Keep the fetch running: restarting it on every event meant a thread
+        // with a steady stream of events could never finish loading (#208).
         INVALIDATE: {
-          target: 'unloaded',
-          actions: assign({ data: null, error: null }),
+          actions: assign({ stale: true }),
         },
       },
     },
@@ -119,7 +129,7 @@ export const threadDataMachine = setup({
       on: {
         INVALIDATE: {
           target: 'unloaded',
-          actions: assign({ data: null, error: null }),
+          actions: assign({ data: null, error: null, stale: false }),
         },
       },
     },
@@ -130,7 +140,7 @@ export const threadDataMachine = setup({
         RETRY: 'fetching',
         INVALIDATE: {
           target: 'unloaded',
-          actions: assign({ data: null, error: null }),
+          actions: assign({ data: null, error: null, stale: false }),
         },
       },
     },

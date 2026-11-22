@@ -26,6 +26,8 @@
     "reopenProject": "Reopen project",
     "closedProjects": "Closed projects",
     "rename": "Rename",
+    "threadActions": "Thread actions",
+    "projectActions": "Project actions",
     "openDirectory": "Open directory",
     "openTerminal": "Open terminal",
     "openInEditor": "Open in {{editor}}",

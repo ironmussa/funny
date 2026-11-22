@@ -986,3 +986,31 @@ test('opens Pi setup before sending when the bundled SDK has no credentials', as
   expect(textarea.value).toBe('Pi task');
   expect(onSubmit).not.toHaveBeenCalled();
 });
+
+test('keeps image attachments per thread and restores them from the draft', async () => {
+  const { useDraftStore } = await import('@/stores/draft-store');
+  useDraftStore.setState({ drafts: {} });
+  const ui = (threadId: string) => (
+    <ThreadProvider threadId={threadId}>
+      <PromptInput onSubmit={vi.fn()} projectId="p1" />
+    </ThreadProvider>
+  );
+  const view = await renderPrompt(ui('thread-a'), { threadId: null });
+
+  const input = expectInstance(screen.getByTestId('prompt-file-input'), HTMLInputElement);
+  const image = new File([new Uint8Array([137, 80, 78, 71])], 'shot.png', { type: 'image/png' });
+  fireEvent.change(input, { target: { files: [image] } });
+  await screen.findByRole('img', { name: 'Attachment 1' });
+
+  // Thread B has no draft: the image from A must not follow.
+  view.rerender(ui('thread-b'));
+  await flushAsyncUpdates();
+  await waitFor(() => expect(screen.queryByRole('img', { name: 'Attachment 1' })).toBeNull());
+  expect(useDraftStore.getState().drafts['thread-a']?.images).toHaveLength(1);
+
+  // Back to A: the image is restored from the draft.
+  view.rerender(ui('thread-a'));
+  await flushAsyncUpdates();
+  await screen.findByRole('img', { name: 'Attachment 1' });
+  view.unmount();
+});

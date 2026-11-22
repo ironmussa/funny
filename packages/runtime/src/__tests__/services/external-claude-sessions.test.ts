@@ -1,5 +1,5 @@
 import { describe, expect, test, afterEach, vi } from 'bun:test';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -77,8 +77,8 @@ describe('external Claude sessions', () => {
     expect(isClaudeCodeProcess({ command: 'node', args: 'node server.js' })).toBe(false);
   });
 
-  test('excludes Claude processes managed by the current Funny runtime', () => {
-    const sessions = listExternalClaudeSessions({
+  test('excludes Claude processes managed by the current Funny runtime', async () => {
+    const sessions = await listExternalClaudeSessions({
       currentPid: 10,
       psOutput: [
         '10 1 00:10:00 bun bun packages/runtime/dist/index.js',
@@ -91,12 +91,12 @@ describe('external Claude sessions', () => {
     expect(sessions.map((session) => session.pid)).toEqual([30]);
   });
 
-  test('enriches external processes with Claude project metadata', () => {
+  test('enriches external processes with Claude project metadata', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
     writeClaudeLog(homeDir, cwd, 'session-123');
 
-    const sessions = listExternalClaudeSessions({
+    const sessions = await listExternalClaudeSessions({
       homeDir,
       currentPid: 999,
       now: new Date('2026-06-23T12:10:00.000Z'),
@@ -118,7 +118,7 @@ describe('external Claude sessions', () => {
     });
   });
 
-  test('keeps a visible prompt title when a later last-prompt only has internal markers', () => {
+  test('keeps a visible prompt title when a later last-prompt only has internal markers', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
     const sessionId = 'session-visible-then-internal';
@@ -143,7 +143,7 @@ describe('external Claude sessions', () => {
       ].join('\n'),
     );
 
-    const sessions = listExternalClaudeSessions({
+    const sessions = await listExternalClaudeSessions({
       homeDir,
       currentPid: 999,
       now: new Date('2026-06-23T12:10:00.000Z'),
@@ -395,7 +395,7 @@ describe('external Claude sessions', () => {
     );
   });
 
-  test('attaches pasted images instead of dumping them as JSON text', () => {
+  test('attaches pasted images instead of dumping them as JSON text', async () => {
     const homeDir = makeHome();
     const sessionId = 'session-image';
     const projectDir = join(homeDir, '.claude/projects', '-work-funny');
@@ -428,7 +428,7 @@ describe('external Claude sessions', () => {
         .join('\n'),
     );
 
-    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    const transcript = await readExternalClaudeTranscript(sessionId, { homeDir });
     expect(transcript?.messages).toHaveLength(2);
     expect(transcript?.messages[0]).toMatchObject({
       role: 'user',
@@ -439,7 +439,7 @@ describe('external Claude sessions', () => {
     expect(transcript?.messages[1]?.author).toBeUndefined();
   });
 
-  test('identifies meta user entries as automatic Claude context', () => {
+  test('identifies meta user entries as automatic Claude context', async () => {
     const homeDir = makeHome();
     const sessionId = 'session-meta';
     const projectDir = join(homeDir, '.claude/projects', '-work-funny');
@@ -464,7 +464,7 @@ describe('external Claude sessions', () => {
         .map((entry) => JSON.stringify(entry))
         .join('\n'),
     );
-    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    const transcript = await readExternalClaudeTranscript(sessionId, { homeDir });
     expect(transcript?.messages[0]).toMatchObject({
       role: 'user',
       content: 'Internal instructions',
@@ -473,7 +473,7 @@ describe('external Claude sessions', () => {
     expect(transcript?.messages[1]?.author).toBeUndefined();
   });
 
-  test('ignores api-request-blob entries and titles the session with its ai-title', () => {
+  test('ignores api-request-blob entries and titles the session with its ai-title', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
     const sessionId = 'session-api-blobs';
@@ -529,14 +529,14 @@ describe('external Claude sessions', () => {
         .join('\n'),
     );
 
-    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    const transcript = await readExternalClaudeTranscript(sessionId, { homeDir });
 
     expect(transcript?.title).toBe('Setup skills');
     expect(transcript?.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
     expect(transcript?.messages[1]?.content).toBe('Exploring the repo.');
   });
 
-  test('reads a Claude JSONL transcript without importing it as a thread', () => {
+  test('reads a Claude JSONL transcript without importing it as a thread', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
     const sessionId = 'session-456';
@@ -580,7 +580,7 @@ describe('external Claude sessions', () => {
       ].join('\n'),
     );
 
-    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    const transcript = await readExternalClaudeTranscript(sessionId, { homeDir });
 
     expect(transcript).toMatchObject({
       sessionId,
@@ -609,7 +609,7 @@ describe('external Claude sessions', () => {
     ]);
   });
 
-  test('omits internal thinking blocks from text and extracts tool_use cards', () => {
+  test('omits internal thinking blocks from text and extracts tool_use cards', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
     const sessionId = 'session-thinking';
@@ -667,7 +667,7 @@ describe('external Claude sessions', () => {
       ].join('\n'),
     );
 
-    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    const transcript = await readExternalClaudeTranscript(sessionId, { homeDir });
 
     expect(transcript?.messages.map((message) => [message.role, message.content])).toEqual([
       ['assistant', 'Visible response'],
@@ -693,7 +693,7 @@ describe('external Claude sessions', () => {
     ]);
   });
 
-  test('strips IDE opened-file markers from user-visible transcript text', () => {
+  test('strips IDE opened-file markers from user-visible transcript text', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
     const sessionId = 'session-ide-marker';
@@ -726,7 +726,7 @@ describe('external Claude sessions', () => {
       ].join('\n'),
     );
 
-    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    const transcript = await readExternalClaudeTranscript(sessionId, { homeDir });
 
     expect(transcript?.title).toBe('Continue this change');
     expect(transcript?.messages.map((message) => message.content)).toEqual([
@@ -734,7 +734,7 @@ describe('external Claude sessions', () => {
     ]);
   });
 
-  test('attaches tool_result output to the matching tool_use card', () => {
+  test('attaches tool_result output to the matching tool_use card', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
     const sessionId = 'session-tool-result';
@@ -780,7 +780,7 @@ describe('external Claude sessions', () => {
       ].join('\n'),
     );
 
-    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    const transcript = await readExternalClaudeTranscript(sessionId, { homeDir });
 
     expect(transcript?.messages.map((message) => [message.role, message.content])).toEqual([
       ['assistant', 'Reading the file.'],
@@ -795,5 +795,65 @@ describe('external Claude sessions', () => {
         author: 'Claude Code',
       },
     ]);
+  });
+});
+
+describe('incremental session metadata', () => {
+  test('picks up lines Claude Code appends after an earlier read', async () => {
+    const homeDir = makeHome();
+    const cwd = '/work/funny';
+    const sessionId = 'session-appended';
+    const projectDir = join(homeDir, '.claude/projects', cwd.replace(/[\\/]/g, '-'));
+    mkdirSync(projectDir, { recursive: true });
+    const file = join(projectDir, `${sessionId}.jsonl`);
+    const projects = [{ id: 'project-1', name: 'funny', path: cwd }];
+    const list = () => listExternalClaudeSessions({ homeDir, psOutput: '', projects });
+
+    const userLine = JSON.stringify({
+      type: 'user',
+      sessionId,
+      cwd,
+      timestamp: '2026-06-23T12:00:00.000Z',
+      message: { role: 'user', content: 'start here' },
+    });
+    writeFileSync(file, `${userLine}\n`);
+    expect((await list())[0]).toMatchObject({ title: 'start here' });
+
+    // A line still being written is not valid JSON yet.
+    const titleLine = JSON.stringify({ type: 'ai-title', sessionId, aiTitle: 'Generated title' });
+    appendFileSync(file, titleLine.slice(0, 10));
+    expect((await list())[0]).toMatchObject({ title: 'start here' });
+
+    appendFileSync(file, titleLine.slice(10));
+    expect((await list())[0]).toMatchObject({ title: 'Generated title' });
+
+    appendFileSync(
+      file,
+      `\n${JSON.stringify({ type: 'assistant', sessionId, timestamp: '2026-06-23T12:05:00.000Z' })}\n`,
+    );
+    expect((await list())[0]).toMatchObject({
+      title: 'Generated title',
+      startedAt: '2026-06-23T12:00:00.000Z',
+      updatedAt: '2026-06-23T12:05:00.000Z',
+    });
+  });
+
+  test('reads a rewritten, shorter session file from the start', async () => {
+    const homeDir = makeHome();
+    const cwd = '/work/funny';
+    const sessionId = 'session-rewritten';
+    const projectDir = join(homeDir, '.claude/projects', cwd.replace(/[\\/]/g, '-'));
+    mkdirSync(projectDir, { recursive: true });
+    const file = join(projectDir, `${sessionId}.jsonl`);
+    const projects = [{ id: 'project-1', name: 'funny', path: cwd }];
+    const list = () => listExternalClaudeSessions({ homeDir, psOutput: '', projects });
+    const userLine = (content: string) =>
+      JSON.stringify({ type: 'user', sessionId, cwd, message: { role: 'user', content } });
+
+    writeFileSync(file, `${userLine('a much longer first prompt')}\n`);
+    expect((await list())[0]?.title).toBe('a much longer first prompt');
+
+    writeFileSync(file, `${userLine('short')}\n`);
+    expect((await list())[0]?.title).toBe('short');
   });
 });

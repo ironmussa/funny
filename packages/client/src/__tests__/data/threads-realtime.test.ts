@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test, vi } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
 import { runAllTimersAsync } from '@funny/test-kit';
@@ -50,7 +50,47 @@ beforeEach(async () => {
 });
 afterEach(() => {
   vi.useRealTimers();
+  setSystemTime();
   resetTestDataLayer();
+});
+
+describe('stale-row guard after a realtime run end (issue #214)', () => {
+  const SERVER_RUN_START = '2026-01-01T00:05:00.000Z';
+
+  function serverRow(overrides: Partial<Thread>): Thread {
+    return thread('t1', { updatedAt: SERVER_RUN_START, ...overrides });
+  }
+
+  test('a fast client clock does not discard a newer server row', () => {
+    // The client clock runs a year ahead of the server.
+    setSystemTime(new Date('2027-01-01T00:00:00.000Z'));
+    useThreadStore.getState().handleWSStatus('t1', { status: 'running' });
+    useThreadStore.getState().handleWSStatus('t1', { status: 'completed' });
+
+    // The run end does not stamp the client clock on the server timestamp.
+    expect(getThreadsData().getSynced('t1')?.updatedAt).toBe('2026-01-01T00:00:00.000Z');
+
+    // A follow-up run started elsewhere, read by a request started after the run end.
+    const data = getThreadsData();
+    const seq = data.beginRequest();
+    data.upsertFromServer([serverRow({ status: 'running' })], seq);
+    expect(data.getSynced('t1')?.status).toBe('running');
+  });
+
+  test('a request that started before the run ended cannot revive the old run', () => {
+    useThreadStore.getState().handleWSStatus('t1', { status: 'running' });
+    const data = getThreadsData();
+    const seq = data.beginRequest();
+    useThreadStore.getState().handleWSStatus('t1', { status: 'completed' });
+
+    // Its server row is newer than the held one, but it predates the run end.
+    data.upsertFromServer([serverRow({ status: 'running' })], seq);
+    expect(data.getSynced('t1')?.status).toBe('completed');
+
+    // The next request, started after the run end, applies again.
+    data.upsertFromServer([serverRow({ status: 'running' })], data.beginRequest());
+    expect(data.getSynced('t1')?.status).toBe('running');
+  });
 });
 
 describe('realtime row updates', () => {

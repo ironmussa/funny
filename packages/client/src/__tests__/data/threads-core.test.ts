@@ -83,6 +83,12 @@ describe('mergeIncomingThread', () => {
     expect(mergeIncomingThread(local, newer)).toBe(newer);
   });
 
+  test('a request that started before the run ended keeps the terminal row, whatever its time', () => {
+    const local = thread('t', { status: 'completed', updatedAt: '2026-01-01T00:00:00.000Z' });
+    const stale = thread('t', { status: 'running', updatedAt: '2026-01-02T00:00:00.000Z' });
+    expect(mergeIncomingThread(local, stale, new Set(), true)).toBe(local);
+  });
+
   test('an equal incoming row keeps the held reference', () => {
     const local = thread('t');
     expect(mergeIncomingThread(local, { ...local })).toBe(local);

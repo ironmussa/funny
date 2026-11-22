@@ -88,7 +88,7 @@ const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
  * the member after a failure (the flow's `on_failure` parked it).
  */
 /** The failure reason a run parks with when the agent made no change (no commit, no PR). */
-export const NO_CHANGE_REASON = 'no change';
+const NO_CHANGE_REASON = 'no change';
 
 /** The agent found nothing to change: the run waits for the member, explained on the issue. */
 export function isFactoryRunNoChange(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {

@@ -466,26 +466,40 @@ async function proveBase(run: ProofRun, plan: ProofPlan): Promise<Outcome> {
   if (!base.ok) {
     return failed(`Inconclusive: ${base.finding}`, { ...context, outputTail: base.output });
   }
+  const ran = await runOnBase(run, plan, base.checkout);
+  if (!ran) return failed('Aborted', context);
+  const baseTail = ran.output.slice(-OUTPUT_TAIL);
+  // The evidence of a pass is the base failing: keep that output, not the head's.
+  if (ran.caught) return { verdict: 'pass', ...context, outputTail: baseTail };
+  return failed(
+    ran.inconclusive
+      ? `Inconclusive: the tests failed on the base commit, but not by an assertion (${ran.inconclusive})`
+      : 'The tests pass on the base commit: they do not catch the bug',
+    { ...context, outputTail: baseTail, failureKind: 'test' },
+  );
+}
+
+/**
+ * Run every rule's tests on the base checkout: whether one failed by an
+ * assertion (`caught`), and why a failure was not one. Null when stopped.
+ */
+async function runOnBase(
+  run: ProofRun,
+  plan: ProofPlan,
+  checkout: Checkout,
+): Promise<{ caught: boolean; inconclusive: string | null; output: string } | null> {
   let caught = false;
   let inconclusive: string | null = null;
-  let baseOutput = '';
+  let output = '';
   for (const { rule, command } of plan.activeRules) {
-    const outcome = await run.run(command, base.checkout, rule.cwd);
-    baseOutput += outcome.output;
-    if (outcome.kind === 'aborted') return failed('Aborted', context);
+    const outcome = await run.run(command, checkout, rule.cwd);
+    output += outcome.output;
+    if (outcome.kind === 'aborted') return null;
     const why = inconclusiveBaseFailure(outcome);
     if (why) inconclusive ??= why;
     else if (outcome.kind === 'exited' && outcome.exitCode !== 0) caught = true;
   }
-  const baseTail = baseOutput.slice(-OUTPUT_TAIL);
-  // The evidence of a pass is the base failing: keep that output, not the head's.
-  if (caught) return { verdict: 'pass', ...context, outputTail: baseTail };
-  return failed(
-    inconclusive
-      ? `Inconclusive: the tests failed on the base commit, but not by an assertion (${inconclusive})`
-      : 'The tests pass on the base commit: they do not catch the bug',
-    { ...context, outputTail: baseTail, failureKind: 'test' },
-  );
+  return { caught, inconclusive, output };
 }
 
 async function proveCommit(run: ProofRun): Promise<Outcome> {

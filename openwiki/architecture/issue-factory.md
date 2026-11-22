@@ -79,8 +79,9 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    merges only a head with a passing proof of that commit (the step's, or a new proof it runs),
    pinned to that SHA; every proof is also published as the `funny/regression-proof` check. When
    the direct merge is refused for a requirement, auto-merge only where that check is required
-   pinned to this App; while such a run waits, the watcher re-proves a moved head
-   (`reproveMovedHead`). A flow that is not proof-ready (`isProofReady`: no rules and no opt-out)
+   pinned to this App, and only for the proved head (`expectedHeadOid`); while such a run waits,
+   the watcher re-proves a moved head (`reproveMovedHead`) and publishes again a check that did
+   not reach GitHub (the stored proof's `checkPublished: false`), without proving again. A flow that is not proof-ready (`isProofReady`: no rules and no opt-out)
    is never admitted: the watcher leaves its issues queued and sets the factory's
    `blockedReason`.
 6. **End**: merged → `merged`; completed without a merge → `waiting_human`; failed with the PR

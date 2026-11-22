@@ -5,6 +5,7 @@
  * global search view; a row opens the run's last agent thread, and carries the
  * run's controls (PR, retry, stop).
  */
+import type { TFunction } from 'i18next';
 import { Factory } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,6 +41,12 @@ interface RowProps {
   now: number;
 }
 
+/** The row's second line: why it waits, why it failed, or the step it is on. */
+function runDetail(t: TFunction, run: FactoryQueueRun): string | null {
+  if (run.state === 'requested' && run.waitReason) return factoryWaitReasonText(t, run.waitReason);
+  return run.state === 'failed' ? run.failureReason : run.currentStep;
+}
+
 const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: RowProps) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
@@ -50,12 +57,7 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: Row
     t('factoryView.issueTitle', 'Issue #{{number}}', {
       number: run.issueNumber,
     });
-  const detail =
-    run.state === 'requested' && run.waitReason
-      ? factoryWaitReasonText(t, run.waitReason)
-      : run.state === 'failed'
-        ? run.failureReason
-        : run.currentStep;
+  const detail = runDetail(t, run);
   const open = () => {
     if (!lastThreadId) return;
     navigate(

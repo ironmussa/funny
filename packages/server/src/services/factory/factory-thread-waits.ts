@@ -87,15 +87,19 @@ async function dbReadThread(threadId: string): Promise<ThreadRecord | null> {
   return row ?? null;
 }
 
-async function dbReadOutput(threadId: string): Promise<string> {
+/** The thread's last assistant message, or null when it has none. */
+export async function lastThreadMessage(threadId: string): Promise<string | null> {
   const [row] = await db
     .select({ content: messages.content })
     .from(messages)
     .where(and(eq(messages.threadId, threadId), eq(messages.role, 'assistant')))
     .orderBy(desc(messages.timestamp))
     .limit(1);
-  return row?.content ?? '';
+  return row?.content ?? null;
 }
+
+const dbReadOutput = async (threadId: string): Promise<string> =>
+  (await lastThreadMessage(threadId)) ?? '';
 
 export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
   const readThread = deps.readThread ?? dbReadThread;

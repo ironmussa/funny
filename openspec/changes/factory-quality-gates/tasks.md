@@ -36,8 +36,9 @@
       schemas in `validation/schemas.ts`: owner only (no steer delegation), refuses scratch
       threads and threads without a checkout. Verify with route tests for each refusal, a
       repeated start joining the job, a new head replacing it, and an unknown job answering 404.
-- [x] 2.3 Sweep leftover proof worktrees (by prefix) at runner start. Verify with a test that
-      plants one and starts the sweep.
+- [x] 2.3 Sweep leftover proof worktrees (by prefix) before a runner process's first proof in a
+      project (a runner has no project list at start). Verify with a test that plants one and
+      starts a proof.
 
 ## 3. Flow schema
 

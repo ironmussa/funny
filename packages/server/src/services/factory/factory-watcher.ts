@@ -566,28 +566,42 @@ async function admitQueued(
   ctx: AdmissionContext,
 ): Promise<boolean> {
   if (!runs || !deps) return false;
-  // Its flow could never merge: it stays queued, holding no slot.
-  const flowName = run.flowName ?? factory.flowName;
-  if (!(await flowProofReady(ctx, flowName))) {
-    await reportBlocked(factory.id, proofNotConfigured(flowName));
-    // The queue shows it on the run too; the next pass clears it once rules exist.
-    const reason: FactoryWaitReason = { kind: 'proof-not-configured', blockers: [] };
-    if (!sameWaitReason(reason, run.waitReason)) await runs.setWaitReason(run.id, reason);
-    return false;
-  }
+  if (await heldWithoutProofRules(factory, run, ctx)) return false;
   // The issue first: one closed since it was sent leaves the queue even while
   // something still blocks it.
   const issue = await openQueuedIssue(factory, run, ctx);
   if (!issue) return false;
 
   const reason = await blockedReason(ctx, run.issueNumber);
-  if (!sameWaitReason(reason, run.waitReason)) await runs.setWaitReason(run.id, reason);
+  await noteWaitReason(run, reason);
   if (reason) return false;
 
   const admitted = await runs.admit(run.id);
   // Cancelled meanwhile (or another pass took it): not ours to start.
   if (admitted.isErr() || !admitted.value) return false;
   return startFlow(factory, repo, mode, issue, { ...run, state: 'queued', waitReason: null });
+}
+
+/** Store why a queued run waits (or that it no longer does), when that changed. */
+async function noteWaitReason(run: FactoryRunView, reason: FactoryWaitReason | null) {
+  if (!sameWaitReason(reason, run.waitReason)) await runs?.setWaitReason(run.id, reason);
+}
+
+/**
+ * Whether the run's flow has no proof rules, so it could never merge: the run
+ * stays queued, holding no slot, and says so until rules exist.
+ */
+async function heldWithoutProofRules(
+  factory: WatchedFactory,
+  run: FactoryRunView,
+  ctx: AdmissionContext,
+): Promise<boolean> {
+  const flowName = run.flowName ?? factory.flowName;
+  if (await flowProofReady(ctx, flowName)) return false;
+  await reportBlocked(factory.id, proofNotConfigured(flowName));
+  // The queue shows it on the run too; the next pass clears it once rules exist.
+  await noteWaitReason(run, { kind: 'proof-not-configured', blockers: [] });
+  return true;
 }
 
 /** A queued issue as GitHub has it, or null: unreadable now, or closed (then it leaves the queue). */
@@ -775,29 +789,38 @@ async function parkedProofTarget(
   const threadId = run.threadIds[0];
   const proved = run.regressionProof;
   if (!deps || !threadId || !proved) return null;
-  const github = deps.github;
   const pr = { repo, number, userId: factory.userId, projectId: factory.projectId };
-  const head = await github.pullRequests.pullHead(pr);
-  if (head.isErr() || !head.value.autoMerge) return null;
-  const sha = head.value.sha;
-  if (sha === proved.headSha && proved.checkPublished !== false) return null;
+  const head = await deps.github.pullRequests.pullHead(pr);
+  // Only while GitHub's auto-merge waits on it; an unread head is looked at again.
+  const sha = head.isOk() && head.value.autoMerge ? head.value.sha : null;
+  if (!sha || (sha === proved.headSha && proved.checkPublished !== false)) return null;
   const config = await proofConfigOf(factory, repo, run);
   if (!config) return null;
-  // Whether the issue needs a test decides the check's conclusion: without
-  // its labels nothing is published (an unread label must not exempt it).
+  const testRequired = await parkedTestRequired(factory, repo, run, config);
+  return testRequired === null ? null : { run, threadId, pr, sha, config, testRequired };
+}
+
+/**
+ * Whether a parked run's issue needs a regression test, which decides its
+ * check's conclusion. Null when the issue cannot be read: nothing is published
+ * then (an unread label must not exempt it).
+ */
+async function parkedTestRequired(
+  factory: WatchedFactory,
+  repo: string,
+  run: FactoryRunView,
+  config: RegressionProofOpts,
+): Promise<boolean | null> {
+  if (!deps) return null;
   const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
-  const issue = await github.getIssue(reader, run.issueNumber);
-  if (issue.isErr()) {
-    log.warn("Issue factory could not read a parked run's issue, its new head is not proved yet", {
-      namespace: 'factory',
-      runId: run.id,
-      headSha: sha,
-      error: issue.error.message,
-    });
-    return null;
-  }
-  const testRequired = regressionTestRequired(config, issue.value.labels ?? []);
-  return { run, threadId, pr, sha, config, testRequired };
+  const issue = await deps.github.getIssue(reader, run.issueNumber);
+  if (issue.isOk()) return regressionTestRequired(config, issue.value.labels ?? []);
+  log.warn("Issue factory could not read a parked run's issue, its new head is not proved yet", {
+    namespace: 'factory',
+    runId: run.id,
+    error: issue.error.message,
+  });
+  return null;
 }
 
 /** Prove the target's head on the runner; null when there is no verdict of that commit. */
@@ -838,16 +861,29 @@ async function settleParkedProof(
   repository: ReturnType<typeof createFactoryRunsRepository>,
   signal: AbortSignal,
 ): Promise<void> {
-  if (!deps) return;
-  const { run, sha, testRequired } = target;
+  const { run, sha } = target;
   const held = run.regressionProof?.headSha === sha ? run.regressionProof : null;
   const proved = held ?? (await proveParkedHead(target, proofDeps, signal));
   if (!proved) return;
-  const reason = held
-    ? run.failureReason
-    : proofAllowsMerge(proved, testRequired)
-      ? null
-      : `Regression proof failed on the new head ${sha}: ${proved.finding ?? 'no regression test'}`;
+  const reason = held ? run.failureReason : parkedFailureReason(target, proved);
+  await publishParkedProof(target, repository, proved, reason);
+}
+
+/** Why a parked run cannot merge after `proved`, the proof of its new head; null when it can. */
+function parkedFailureReason(target: ParkedProofTarget, proved: RegressionProofRecord) {
+  if (proofAllowsMerge(proved, target.testRequired)) return null;
+  return `Regression proof failed on the new head ${target.sha}: ${proved.finding ?? 'no regression test'}`;
+}
+
+/** Store the proof marked unpublished, publish its check, then mark it published. */
+async function publishParkedProof(
+  target: ParkedProofTarget,
+  repository: ReturnType<typeof createFactoryRunsRepository>,
+  proved: RegressionProofRecord,
+  reason: string | null,
+): Promise<void> {
+  if (!deps) return;
+  const { run } = target;
   const stored = await repository.recordParkedProof(
     run.id,
     { ...proved, checkPublished: false },
@@ -857,13 +893,13 @@ async function settleParkedProof(
   if (stored.isErr() || !stored.value) return;
   const published = await deps.github.pullRequests.publishProofCheck(
     target.pr,
-    proofCheckOf(proved, testRequired),
+    proofCheckOf(proved, target.testRequired),
   );
   if (published.isErr()) {
     log.warn('Issue factory could not publish the regression proof check', {
       namespace: 'factory',
       runId: run.id,
-      headSha: sha,
+      headSha: target.sha,
       error: published.error.message,
     });
     return;

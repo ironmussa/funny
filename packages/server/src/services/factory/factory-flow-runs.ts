@@ -67,7 +67,12 @@ import {
   type UpdateRunInput,
 } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
-import { createThreadWaits, type ThreadOutcome, type WaitAfter } from './factory-thread-waits.js';
+import {
+  createThreadWaits,
+  lastThreadMessage,
+  type ThreadOutcome,
+  type WaitAfter,
+} from './factory-thread-waits.js';
 
 export interface FactoryRunJob {
   factory: WatchedFactory;
@@ -129,6 +134,28 @@ interface FlowTrace {
   parked: boolean;
 }
 
+/** Note what a recorded update means for the flow's end; whether it recorded an agent thread. */
+function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
+  if (input.prUrl) trace.prOpen = true;
+  if (input.state === 'waiting_human') trace.parked = true;
+  if (!input.threadIds) return false;
+  trace.agentsRan = true;
+  return true;
+}
+
+function logFlowWarnings(job: FactoryRunJob, flow: FactoryFlow): void {
+  for (const warning of flow.warnings) {
+    log.warn('Issue factory flow has a warning', {
+      namespace: 'factory',
+      factoryId: job.factory.id,
+      runId: job.run.id,
+      flow: flow.name,
+      path: warning.path,
+      warning: warning.message,
+    });
+  }
+}
+
 /** Allowance for the runner's clock being behind the server's when matching a launch. */
 const LAUNCH_CLOCK_SLACK_MS = 60 * 1000;
 
@@ -141,17 +168,6 @@ async function threadCompletedAt(threadId: string): Promise<string | null> {
     .from(threads)
     .where(eq(threads.id, threadId));
   return row?.completedAt ?? null;
-}
-
-/** The thread's last assistant message, or null when it has none. */
-async function lastThreadMessage(threadId: string): Promise<string | null> {
-  const [row] = await db
-    .select({ content: messages.content })
-    .from(messages)
-    .where(and(eq(messages.threadId, threadId), eq(messages.role, 'assistant')))
-    .orderBy(desc(messages.timestamp))
-    .limit(1);
-  return row?.content ?? null;
 }
 
 /** A user message on the thread since `since`: an interrupted follow-up reached it. */
@@ -338,6 +354,26 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     );
   }
 
+  /** A flow that failed: dropped before any agent ran, left as a step parked it, failed, or parked. */
+  async function settleFailed(job: FactoryRunJob, trace: FlowTrace, error?: string): Promise<void> {
+    const { run } = job;
+    if (!trace.agentsRan && !wasReopened(job)) return dropUnstarted(job, error);
+    if (trace.parked) {
+      await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
+      await noticeWaiting(job, error ?? 'It waits for you.');
+      return;
+    }
+    if (trace.prOpen) {
+      await park(job, trace.step, error);
+      return;
+    }
+    await deps.runs.updateInFlight(run.id, {
+      state: 'failed',
+      currentStep: trace.step,
+      failureReason: failureReason(error),
+    });
+  }
+
   async function settle(
     job: FactoryRunJob,
     outcome: 'completed' | 'failed' | 'cancelled',
@@ -346,21 +382,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   ): Promise<void> {
     const { run } = job;
     if (outcome === 'cancelled') return;
-    const neverRan = !trace.agentsRan && !wasReopened(job);
-    if (outcome === 'failed' && neverRan) {
-      await dropUnstarted(job, error);
-    } else if (outcome === 'failed' && trace.parked) {
-      await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
-      await noticeWaiting(job, error ?? 'It waits for you.');
-    } else if (outcome === 'failed' && !trace.prOpen) {
-      await deps.runs.updateInFlight(run.id, {
-        state: 'failed',
-        currentStep: trace.step,
-        failureReason: failureReason(error),
-      });
-    } else {
-      await park(job, outcome === 'failed' ? trace.step : null, error);
-    }
+    if (outcome === 'failed') await settleFailed(job, trace, error);
+    else await park(job, null, error);
     log.info('Issue factory run ended', {
       namespace: 'factory',
       factoryId: job.factory.id,
@@ -381,16 +404,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       await flowUnavailable(job, flow.error);
       return 'not-started';
     }
-    for (const warning of flow.value.warnings) {
-      log.warn('Issue factory flow has a warning', {
-        namespace: 'factory',
-        factoryId: job.factory.id,
-        runId: job.run.id,
-        flow: flow.value.name,
-        path: warning.path,
-        warning: warning.message,
-      });
-    }
+    logFlowWarnings(job, flow.value);
     const trace: FlowTrace = {
       agentsRan: job.run.threadIds.length > 0,
       prOpen: job.run.prUrl !== null,
@@ -406,12 +420,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       // Stopped (or finished) elsewhere: stop driving it.
       if (live.isOk() && !live.value) controller.abort();
       if (live.isOk() && live.value && input.state === 'merged') cleanUpMerged(job);
-      if (input.prUrl) trace.prOpen = true;
-      if (input.state === 'waiting_human') trace.parked = true;
-      if (input.threadIds) {
-        trace.agentsRan = true;
-        agentStarted();
-      }
+      if (traceRecorded(trace, input)) agentStarted();
     };
 
     // The thread view draws the run's step chain from these.

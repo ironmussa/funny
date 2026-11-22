@@ -33,8 +33,8 @@ const VERDICT_STYLE = {
   skipped: { Icon: ShieldMinus, tone: 'text-muted-foreground', badge: 'outline' },
 } as const;
 
-/** One proof: shown in the run's thread; exported for its test and stories. */
-export function RegressionProofDetails({ proof }: { proof: FactoryRegressionProof }) {
+/** One proof, shown in the run's thread. */
+function RegressionProofDetails({ proof }: { proof: FactoryRegressionProof }) {
   const { t } = useTranslation();
   const style = VERDICT_STYLE[proof.verdict];
   const verdict = {
@@ -42,8 +42,6 @@ export function RegressionProofDetails({ proof }: { proof: FactoryRegressionProo
     fail: t('factory.proof.fail', 'Failed'),
     skipped: t('factory.proof.skipped', 'Skipped'),
   }[proof.verdict];
-  const files = proof.files ?? [];
-  const commands = proof.commands ?? [];
 
   return (
     <div
@@ -81,51 +79,65 @@ export function RegressionProofDetails({ proof }: { proof: FactoryRegressionProo
         </p>
       )}
 
-      {files.length > 0 && (
-        <div className="space-y-0.5">
-          <span className="text-muted-foreground">{t('factory.proof.files', 'Tests')}</span>
-          <ul className="space-y-0.5" data-testid="factory-run-proof-files">
-            {files.map((file) => (
-              <li key={file} className="truncate font-mono" title={file}>
-                {file}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {(commands.length > 0 || proof.outputTail) && (
-        <Collapsible>
-          <CollapsibleTrigger
-            className="group text-muted-foreground hover:text-foreground flex items-center gap-1"
-            data-testid="factory-run-proof-details-toggle"
-          >
-            <ChevronRight className="icon-xs transition-transform group-data-[state=open]:rotate-90" />
-            {proof.verdict === 'pass'
-              ? t('factory.proof.evidence', 'Commands and the failure without the fix')
-              : t('factory.proof.details', 'Commands and output')}
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-1 space-y-1">
-            {commands.map((command) => (
-              <pre
-                key={command}
-                className="bg-muted overflow-x-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)]"
-                data-testid="factory-run-proof-command"
-              >
-                {command}
-              </pre>
-            ))}
-            {proof.outputTail && (
-              <pre
-                className="bg-muted max-h-64 overflow-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)] whitespace-pre-wrap"
-                data-testid="factory-run-proof-output"
-              >
-                {proof.outputTail}
-              </pre>
-            )}
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+      <ProofFiles files={proof.files ?? []} />
+      <ProofEvidence proof={proof} />
     </div>
+  );
+}
+
+/** The changed test files the proof ran. */
+function ProofFiles({ files }: { files: string[] }) {
+  const { t } = useTranslation();
+  if (files.length === 0) return null;
+  return (
+    <div className="space-y-0.5">
+      <span className="text-muted-foreground">{t('factory.proof.files', 'Tests')}</span>
+      <ul className="space-y-0.5" data-testid="factory-run-proof-files">
+        {files.map((file) => (
+          <li key={file} className="truncate font-mono" title={file}>
+            {file}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The commands the proof ran and the end of their output, folded. */
+function ProofEvidence({ proof }: { proof: FactoryRegressionProof }) {
+  const { t } = useTranslation();
+  const commands = proof.commands ?? [];
+  if (commands.length === 0 && !proof.outputTail) return null;
+  return (
+    <Collapsible>
+      <CollapsibleTrigger
+        className="group text-muted-foreground hover:text-foreground flex items-center gap-1"
+        data-testid="factory-run-proof-details-toggle"
+      >
+        <ChevronRight className="icon-xs transition-transform group-data-[state=open]:rotate-90" />
+        {proof.verdict === 'pass'
+          ? t('factory.proof.evidence', 'Commands and the failure without the fix')
+          : t('factory.proof.details', 'Commands and output')}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-1 space-y-1">
+        {commands.map((command) => (
+          <pre
+            key={command}
+            className="bg-muted overflow-x-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)]"
+            data-testid="factory-run-proof-command"
+          >
+            {command}
+          </pre>
+        ))}
+        {proof.outputTail && (
+          <pre
+            className="bg-muted max-h-64 overflow-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)] whitespace-pre-wrap"
+            data-testid="factory-run-proof-output"
+          >
+            {proof.outputTail}
+          </pre>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

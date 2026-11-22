@@ -76,45 +76,67 @@ export async function proveOnRunner(
     timeoutMs,
   };
   if (headSha) body.headSha = headSha;
-  const unavailable = (why: string): ProofRun => ({ kind: 'unavailable', why });
 
   const started = await proof.startProof(threadId, body);
   if (started.isErr()) return unavailable(`could not start: ${started.error}`);
-  let { proofId } = started.value;
+  const job: PolledJob = { threadId, body, proofId: started.value.proofId, restarted: false };
   // The runner's budget plus slack for its git fetch and cleanup.
   const deadline = Date.now() + timeoutMs + 60_000;
-  let restarted = false;
   let wait = 0;
 
   while (Date.now() < deadline) {
     await interruptibleSleep(wait, signal).catch(() => undefined);
-    wait = PROOF_POLL_MS;
-    if (signal.aborted) {
-      await proof.cancelProof?.(threadId, proofId);
-      return unavailable('the run was stopped.');
-    }
-    const polled = await proof.pollProof(threadId, proofId);
-    if (polled.isErr()) {
-      // The runner lost the job (it restarted): start it once more.
-      if (polled.error !== 'proof-not-found' || restarted) {
-        return unavailable(`poll failed: ${polled.error}`);
-      }
-      restarted = true;
-      const again = await proof.startProof(threadId, body);
-      if (again.isErr()) return unavailable(`could not restart: ${again.error}`);
-      proofId = again.value.proofId;
-      wait = 0;
-      continue;
-    }
-    if (polled.value.state !== 'done') continue;
-    const parsed = PROOF_RESULT.safeParse(polled.value.result);
-    return parsed.success
-      ? { kind: 'result', result: parsed.data }
-      : unavailable('the runner sent no readable result.');
+    if (signal.aborted) break;
+    const look = await pollProofJob(proof, job);
+    if (look.kind === 'done') return look.run;
+    wait = look.kind === 'restarted' ? 0 : PROOF_POLL_MS;
   }
 
-  await proof.cancelProof?.(threadId, proofId);
-  return unavailable('timed out waiting for the proof.');
+  await proof.cancelProof?.(threadId, job.proofId);
+  return unavailable(signal.aborted ? 'the run was stopped.' : 'timed out waiting for the proof.');
+}
+
+const unavailable = (why: string): ProofRun => ({ kind: 'unavailable', why });
+
+/** The proof job being waited for; `proofId` changes when it is started again. */
+interface PolledJob {
+  threadId: string;
+  body: Record<string, unknown>;
+  proofId: string;
+  /** It was started again once already. */
+  restarted: boolean;
+}
+
+type JobLook = { kind: 'done'; run: ProofRun } | { kind: 'running' } | { kind: 'restarted' };
+
+/** One look at the job: its verdict, still running, or started again. */
+async function pollProofJob(proof: FactoryProofDeps, job: PolledJob): Promise<JobLook> {
+  const polled = await proof.pollProof(job.threadId, job.proofId);
+  if (polled.isErr()) return restartLostJob(proof, job, polled.error);
+  if (polled.value.state !== 'done') return { kind: 'running' };
+  const parsed = PROOF_RESULT.safeParse(polled.value.result);
+  return {
+    kind: 'done',
+    run: parsed.success
+      ? { kind: 'result', result: parsed.data }
+      : unavailable('the runner sent no readable result.'),
+  };
+}
+
+/** The runner lost the job (it restarted): start it once more; any other error ends the wait. */
+async function restartLostJob(
+  proof: FactoryProofDeps,
+  job: PolledJob,
+  error: string,
+): Promise<JobLook> {
+  if (error !== 'proof-not-found' || job.restarted) {
+    return { kind: 'done', run: unavailable(`poll failed: ${error}`) };
+  }
+  job.restarted = true;
+  const again = await proof.startProof(job.threadId, job.body);
+  if (again.isErr()) return { kind: 'done', run: unavailable(`could not restart: ${again.error}`) };
+  job.proofId = again.value.proofId;
+  return { kind: 'restarted' };
 }
 
 /**

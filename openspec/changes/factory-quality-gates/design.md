@@ -94,7 +94,8 @@ the repository (not generic, and no structured verdict); asking the agent to run
   base, inconclusive on the base, no test when one is required) are retried with the
   implementer; environment failures (setup, git, time, the runner) are not.
 - Both temporary worktrees are removed in a `finally`, including on timeout (the process group is
-  killed first). A sweep at runner start removes leftovers by their name prefix.
+  killed first). Before a runner process's first proof in a project, a sweep removes the leftovers
+  of a killed process by their name prefix.
 
 _Why both phases in temporary worktrees?_ It doubles the setup time (installs) on every proof,
 but the thread's worktree is not prepared like a fresh base checkout (its dependencies, build

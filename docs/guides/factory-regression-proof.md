@@ -130,17 +130,31 @@ tokens keep `checks: read`, so an agent cannot forge it.
 
 The App needs the `checks: write` permission for this. An App created before the factory had it
 lacks it: **Preferences > GitHub App** says so; add the permission in the App's settings, then
-accept it on each installation. Until then no check is published (the proof still gates the
-factory's own direct merges) and the factory never turns on auto-merge.
+accept it on each installation (the same screen names the installations that have not accepted
+it yet). Until then no check is published (the proof still gates the factory's own direct
+merges) and the factory never turns on auto-merge.
+
+A check that could not be published (GitHub was down, the permission was not accepted yet) is
+published again without proving again: at the merge step, and on each watcher pass while the run
+waits on auto-merge.
 
 **Auto-merge behind the gate.** To let the factory merge in a repository that requires reviews,
 require the check on the base branch, **pinned to this App**: in a ruleset (or branch protection),
 add the required status check `funny/regression-proof` with this GitHub App as its source.
 Without the pin, a workflow job named `funny/regression-proof` would satisfy the rule, so the
 factory treats an unpinned rule as not held. When the rule holds and the published check is for
-the head, `merge` turns on auto-merge and the run waits for GitHub. If the head moves while it
-waits, the watcher proves the new head and publishes its check before GitHub can merge it; a
-failing re-proof leaves a failing check and its finding on the run.
+the head, `merge` turns on auto-merge for that commit only (GitHub refuses it if the head is
+another by then) and the run waits for GitHub. If the head moves while it waits, the watcher
+proves the new head and publishes its check before GitHub can merge it; a failing re-proof leaves
+a failing check and its finding on the run. When the issue cannot be read at that moment, nothing
+is published and the next pass tries again: an unread label never exempts a change from its test.
+
+**Who can push to the branch runs code on your runner.** Proving the new head means checking it
+out on the enabler's runner and running its setup (`setup_command`, else the head's `.funny.json`
+`postCreate`) and its tests, unattended. With auto-merge on, a commit pushed to the pull request's
+branch by anyone with write access to the repository is run that way. Turn auto-merge behind the
+gate on only in repositories where you trust everyone who can push, or run the factory in a
+sandbox runtime.
 
 Require the check only where every pull request comes from the factory: a pull request from a
 person has no such check and could not merge. Do not require it on a repository with a merge

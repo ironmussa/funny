@@ -22,6 +22,44 @@ export function workflowWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {
   return [...continuedFailureSkips(workflow), ...regressionProofWarnings(workflow)];
 }
 
+function regressionProofWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {
+  return [...proofOptOuts(workflow), ...proofWithoutRules(workflow)];
+}
+
+/** A `merge` that opts out of the regression proof gate. */
+function proofOptOuts(workflow: WarnedWorkflow): WorkflowIssue[] {
+  return workflow.nodes.flatMap((n, index) =>
+    n.merge?.require_regression_proof === false
+      ? [
+          {
+            path: `nodes.${index}.merge.require_regression_proof`,
+            message:
+              `"${n.id}" opts out of the regression proof gate. ` +
+              'Runs of this flow can merge without proving their tests catch the bug.',
+          },
+        ]
+      : [],
+  );
+}
+
+/** A gated `merge` whose flow has a `regression_proof` step with no rules. */
+function proofWithoutRules(workflow: WarnedWorkflow): WorkflowIssue[] {
+  const gated = workflow.nodes.some((n) => n.merge && n.merge.require_regression_proof !== false);
+  if (!gated) return [];
+  const index = workflow.nodes.findIndex((n) => n.regression_proof !== undefined);
+  const rules = workflow.nodes[index]?.regression_proof?.rules ?? [];
+  if (index < 0 || rules.length > 0) return [];
+  return [
+    {
+      path: `nodes.${index}.regression_proof`,
+      message:
+        'This flow has a regression_proof step with no rules. ' +
+        'Its factory will not admit issues until rules are added or ' +
+        'merge sets require_regression_proof: false.',
+    },
+  ];
+}
+
 /**
  * A node that fails with `on_error: continue` is marked failed, so a
  * dependent on the default join (`all_success`) is skipped. Before the
@@ -29,37 +67,6 @@ export function workflowWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {
  * dependents that did not choose a join. Any explicit `trigger_rule`
  * (even `all_success`) is a choice and silences the warning.
  */
-function regressionProofWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {
-  const warnings: WorkflowIssue[] = [];
-  for (const [index, n] of workflow.nodes.entries()) {
-    if (n.merge?.require_regression_proof === false) {
-      warnings.push({
-        path: `nodes.${index}.merge.require_regression_proof`,
-        message:
-          `"${n.id}" opts out of the regression proof gate. ` +
-          'Runs of this flow can merge without proving their tests catch the bug.',
-      });
-    }
-  }
-
-  const mergeNode = workflow.nodes.find((n) => n.merge !== undefined);
-  if (mergeNode && mergeNode.merge!.require_regression_proof !== false) {
-    const proofNode = workflow.nodes.find((n) => n.regression_proof !== undefined);
-    if (proofNode && (proofNode.regression_proof!.rules?.length ?? 0) === 0) {
-      const idx = workflow.nodes.indexOf(proofNode);
-      warnings.push({
-        path: `nodes.${idx}.regression_proof`,
-        message:
-          'This flow has a regression_proof step with no rules. ' +
-          'Its factory will not admit issues until rules are added or ' +
-          'merge sets require_regression_proof: false.',
-      });
-    }
-  }
-
-  return warnings;
-}
-
 function continuedFailureSkips(workflow: WarnedWorkflow): WorkflowIssue[] {
   const continues = new Set(
     workflow.nodes.filter((n) => n.on_error === 'continue').map((n) => n.id),

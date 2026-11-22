@@ -13,6 +13,7 @@ import { sleep as effectSleep } from '@funny/shared/async';
 import { log } from '../lib/logger.js';
 import type { PtyBackend, PtyBackendCallbacks } from './pty-backend.js';
 import { ensureDaemonRunning, SOCKET_PATH } from './pty-daemon-launcher.js';
+import { NdjsonLineDecoder, SocketWriteQueue } from './pty-socket-framing.js';
 
 /** Pending capture requests waiting for a response from the daemon. */
 interface PendingCapture {
@@ -27,7 +28,8 @@ export class DaemonPtyBackend implements PtyBackend {
 
   private callbacks: PtyBackendCallbacks | null = null;
   private socket: import('bun').Socket | null = null;
-  private lineBuffer = '';
+  private reader = new NdjsonLineDecoder();
+  private writer: SocketWriteQueue | null = null;
   private connected = false;
   private reconnecting = false;
   private pendingCaptures = new Map<string, PendingCapture>();
@@ -238,25 +240,28 @@ export class DaemonPtyBackend implements PtyBackend {
           open: (_socket) => {
             this.connected = true;
             this.reconnecting = false;
-            this.lineBuffer = '';
+            this.reader = new NdjsonLineDecoder();
+            this.writer = new SocketWriteQueue(_socket);
             log.info('Connected to PTY daemon', { namespace: 'pty-backend-daemon' });
 
             // Flush queued messages
-            for (const msg of this.sendQueue) {
-              try {
-                _socket.write(msg);
-              } catch {}
-            }
+            const queued = this.sendQueue;
             this.sendQueue = [];
+            for (const msg of queued) this.writeLine(msg);
           },
 
           data: (_socket, data) => {
-            this.handleData(data.toString());
+            this.handleData(data);
+          },
+
+          drain: (_socket) => {
+            this.writer?.drain();
           },
 
           close: (_socket) => {
             this.connected = false;
             this.socket = null;
+            this.writer = null;
             log.warn('Disconnected from PTY daemon', { namespace: 'pty-backend-daemon' });
             this.scheduleReconnect();
           },
@@ -276,16 +281,8 @@ export class DaemonPtyBackend implements PtyBackend {
     }
   }
 
-  private handleData(raw: string): void {
-    this.lineBuffer += raw;
-
-    let newlineIdx: number;
-    while ((newlineIdx = this.lineBuffer.indexOf('\n')) !== -1) {
-      const line = this.lineBuffer.slice(0, newlineIdx).trim();
-      this.lineBuffer = this.lineBuffer.slice(newlineIdx + 1);
-
-      if (line.length === 0) continue;
-
+  private handleData(chunk: Uint8Array): void {
+    for (const line of this.reader.push(chunk)) {
       try {
         const msg = JSON.parse(line);
         this.handleEvent(msg);
@@ -344,14 +341,8 @@ export class DaemonPtyBackend implements PtyBackend {
   private send(msg: Record<string, unknown>): void {
     const line = JSON.stringify(msg) + '\n';
 
-    if (this.connected && this.socket) {
-      try {
-        this.socket.write(line);
-      } catch {
-        // Queue for retry after reconnect
-        this.sendQueue.push(line);
-        this.scheduleReconnect();
-      }
+    if (this.connected && this.writer) {
+      this.writeLine(line);
     } else {
       // Queue messages while disconnected
       this.sendQueue.push(line);
@@ -363,6 +354,27 @@ export class DaemonPtyBackend implements PtyBackend {
       if (!this.reconnecting) {
         void this.connectToDaemon();
       }
+    }
+  }
+
+  /** Writes one NDJSON line; the queue keeps what a backpressured socket did not take. */
+  private writeLine(line: string): void {
+    if (!this.writer) {
+      this.sendQueue.push(line);
+      return;
+    }
+    try {
+      if (!this.writer.write(line)) {
+        log.warn('PTY daemon write queue full — dropping message', {
+          namespace: 'pty-backend-daemon',
+          pendingBytes: this.writer.pendingBytes,
+          bytes: line.length,
+        });
+      }
+    } catch {
+      // Queue for retry after reconnect
+      this.sendQueue.push(line);
+      this.scheduleReconnect();
     }
   }
 

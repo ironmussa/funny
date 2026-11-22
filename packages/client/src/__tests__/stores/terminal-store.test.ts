@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, vi } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
-import { useTerminalStore } from '@/stores/terminal-store';
+import { appendCapped, MAX_COMMAND_OUTPUT_CHARS, useTerminalStore } from '@/stores/terminal-store';
 import type { TerminalTab } from '@/stores/terminal-store';
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -484,5 +484,35 @@ describe('useTerminalStore', () => {
       useTerminalStore.getState().resetSessionsChecked();
       expect(useTerminalStore.getState().sessionsChecked).toBe(false);
     });
+  });
+});
+
+describe('appendCapped', () => {
+  test('appends while under the cap', () => {
+    expect(appendCapped('a', 'b')).toBe('ab');
+  });
+
+  test('keeps at most MAX_COMMAND_OUTPUT_CHARS, cut after a line break', () => {
+    const line = 'x'.repeat(99) + '\n';
+    let output = '';
+    for (let i = 0; i < 5000; i++) output = appendCapped(output, line);
+
+    expect(output.length).toBeLessThanOrEqual(MAX_COMMAND_OUTPUT_CHARS);
+    expect(output.length).toBeGreaterThan(MAX_COMMAND_OUTPUT_CHARS - line.length);
+    expect(output.startsWith('x')).toBe(true);
+    expect(output.endsWith(line)).toBe(true);
+  });
+
+  test('cuts at the cap when there is no line break near it', () => {
+    const output = appendCapped('', 'y'.repeat(MAX_COMMAND_OUTPUT_CHARS + 10));
+    expect(output.length).toBe(MAX_COMMAND_OUTPUT_CHARS);
+  });
+
+  test('appendCommandOutput stays bounded', () => {
+    const chunk = 'z'.repeat(64 * 1024);
+    for (let i = 0; i < 10; i++) useTerminalStore.getState().appendCommandOutput('cmd-big', chunk);
+    expect(useTerminalStore.getState().commandOutput['cmd-big'].length).toBe(
+      MAX_COMMAND_OUTPUT_CHARS,
+    );
   });
 });

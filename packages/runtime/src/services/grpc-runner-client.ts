@@ -26,10 +26,7 @@ export interface RunnerGrpcDuplexStream {
   cancel(): void;
   on(event: 'data', listener: (message: RunnerGrpcWireMessage) => void): this;
   on(event: 'error', listener: (error: Error) => void): this;
-  on(event: 'close' | 'end', listener: () => void): this;
-  /** Present on real gRPC calls; used to wait for `drain` after a write returned false. */
-  once?(event: 'drain' | 'close' | 'end' | 'error', listener: () => void): this;
-  removeListener?(event: 'drain' | 'close' | 'end' | 'error', listener: () => void): this;
+  on(event: 'close' | 'end' | 'drain', listener: () => void): this;
 }
 
 export interface RunnerGrpcTransport {
@@ -163,6 +160,7 @@ export class RunnerGrpcClient {
   private transport: RunnerGrpcTransport | null = null;
   private control: RunnerGrpcDuplexStream | null = null;
   private readonly streams = new Map<RunnerGrpcStreamName, RunnerGrpcDuplexStream>();
+  private readonly drainWaiters = new Map<RunnerGrpcStreamName, Set<(drained: boolean) => void>>();
   private epoch: string | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTask: ReturnType<typeof scheduleTask> | null = null;
@@ -195,23 +193,29 @@ export class RunnerGrpcClient {
   }
 
   /**
-   * Resolve once the stream accepts writes again (`drain`) or goes away. A
-   * caller whose `send` returned false awaits this before sending more, so a
-   * slow server reader holds the producer back instead of growing the queue.
+   * Resolves `true` once the named stream drains its write buffer, or `false`
+   * when the session ends first (or there is no session), so a writer that hit
+   * backpressure never resumes on a replacement session.
    */
-  whenWritable(name: RunnerGrpcStreamName): Promise<void> {
-    const stream = this.streams.get(name);
-    const once = stream?.once?.bind(stream);
-    const removeListener = stream?.removeListener?.bind(stream);
-    if (!once || !removeListener) return Promise.resolve();
-    const events = ['drain', 'close', 'end', 'error'] as const;
+  waitForDrain(name: RunnerGrpcStreamName): Promise<boolean> {
+    if (!this.streams.has(name) || !this.epoch) return Promise.resolve(false);
     return new Promise((resolve) => {
-      const done = () => {
-        for (const event of events) removeListener(event, done);
-        resolve();
-      };
-      for (const event of events) once(event, done);
+      let waiters = this.drainWaiters.get(name);
+      if (!waiters) {
+        waiters = new Set();
+        this.drainWaiters.set(name, waiters);
+      }
+      waiters.add(resolve);
     });
+  }
+
+  private settleDrainWaiters(name: RunnerGrpcStreamName | null, drained: boolean): void {
+    const names = name ? [name] : [...this.drainWaiters.keys()];
+    for (const key of names) {
+      const waiters = this.drainWaiters.get(key);
+      this.drainWaiters.delete(key);
+      for (const resolve of waiters ?? []) resolve(drained);
+    }
   }
 
   sendControl(message: RunnerGrpcWireMessage): boolean {
@@ -329,6 +333,9 @@ export class RunnerGrpcClient {
       stream.on('data', (message) => {
         if (generation === this.generation) this.options.onStreamMessage?.(name, message);
       });
+      stream.on('drain', () => {
+        if (generation === this.generation) this.settleDrainWaiters(name, true);
+      });
       stream.on('error', (error) => this.disconnect(generation, error));
       stream.on('close', () => this.disconnect(generation));
       stream.on('end', () => this.disconnect(generation));
@@ -414,6 +421,7 @@ export class RunnerGrpcClient {
       } catch {}
     }
     this.streams.clear();
+    this.settleDrainWaiters(null, false);
     if (this.control) {
       try {
         this.control.end();

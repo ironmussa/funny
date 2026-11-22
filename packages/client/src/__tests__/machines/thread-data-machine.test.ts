@@ -151,16 +151,37 @@ describe('threadDataMachine', () => {
   });
 
   describe('INVALIDATE', () => {
-    test('fetching → unloaded resets data/error', () => {
-      const { actor } = makeDeferredActor();
+    test('during fetching keeps the fetch and marks the result stale', async () => {
+      const { actor, resolve, fetchSpy } = makeDeferredActor();
       actor.start();
       actor.send({ type: 'LOAD' });
       expect(actor.getSnapshot().value).toBe('fetching');
-      actor.send({ type: 'INVALIDATE' });
+      for (let i = 0; i < 10; i += 1) actor.send({ type: 'INVALIDATE' });
+      expect(actor.getSnapshot().value).toBe('fetching');
+      expect(actor.getSnapshot().context.stale).toBe(true);
+
+      const data = snapshot();
+      resolve(data);
+      await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
       const snap = actor.getSnapshot();
-      expect(snap.value).toBe('unloaded');
-      expect(snap.context.data).toBeNull();
-      expect(snap.context.error).toBeNull();
+      expect(snap.context.data).toBe(data);
+      expect(snap.context.stale).toBe(true);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      actor.stop();
+    });
+
+    test('a fetch started from a stale snapshot clears the stale flag', async () => {
+      const { actor } = makeOkActor(snapshot());
+      actor.start();
+      actor.send({ type: 'LOAD' });
+      actor.send({ type: 'INVALIDATE' });
+      await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
+      expect(actor.getSnapshot().context.stale).toBe(true);
+      actor.send({ type: 'INVALIDATE' });
+      expect(actor.getSnapshot().context.stale).toBe(false);
+      actor.send({ type: 'LOAD' });
+      await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
+      expect(actor.getSnapshot().context.stale).toBe(false);
       actor.stop();
     });
 

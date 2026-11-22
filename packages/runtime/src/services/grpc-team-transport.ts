@@ -65,7 +65,7 @@ export class GrpcTeamTransport {
     this.tunnel = new RunnerTunnelAdapter(
       {
         send: (_name, message) => this.client.send('tunnel', message),
-        whenWritable: () => this.client.whenWritable('tunnel'),
+        waitForDrain: (name) => this.client.waitForDrain(name),
       },
       options.handleTunnel,
     );
@@ -90,7 +90,13 @@ export class GrpcTeamTransport {
         this.events.activated();
         onActivated?.(hello);
       },
-      onDisconnected: (error) => onDisconnected?.(error),
+      onDisconnected: (error) => {
+        // Tunnel requests are bound to the session they arrived on: the server
+        // dropped them with it, so stop the local work instead of streaming a
+        // response nobody will read (or onto the next session).
+        this.tunnel.shutdown('gRPC session disconnected');
+        onDisconnected?.(error);
+      },
       onControl: (message) => {
         this.control.receive(message);
         options.onControl?.(message);

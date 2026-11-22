@@ -41,6 +41,7 @@ import { projectSearchRegistry } from '../project-search-registry.js';
 import { killPtysUnderPath } from '../pty-manager.js';
 import type { IProjectRepository } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
+import { forgetProjectIndex } from '../symbol-index-service.js';
 import { scratchPathFor } from '../thread-context.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
@@ -103,6 +104,7 @@ async function updateThreadImpl(params: UpdateThreadParams) {
     if (archivePath) {
       await stopCommandsByCwd(thread.worktreePath).catch(() => {});
       killPtysUnderPath(thread.worktreePath);
+      forgetProjectIndex(thread.worktreePath);
       await projectSearchRegistry.invalidate(thread.worktreePath).match(
         () => undefined,
         (e) =>
@@ -400,6 +402,7 @@ async function deleteThreadImpl(threadId: string): Promise<void> {
   if (thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
     await stopCommandsByCwd(thread.worktreePath).catch(() => {});
     killPtysUnderPath(thread.worktreePath);
+    forgetProjectIndex(thread.worktreePath);
     await projectSearchRegistry.invalidate(thread.worktreePath).match(
       () => undefined,
       (e) =>
@@ -433,6 +436,7 @@ async function deleteThreadImpl(threadId: string): Promise<void> {
   if (thread.isScratch) {
     const scratchPath = scratchPathFor(thread.userId, threadId);
     killPtysUnderPath(scratchPath);
+    forgetProjectIndex(scratchPath);
     try {
       await projectSearchRegistry.invalidate(scratchPath).match(
         () => undefined,

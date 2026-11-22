@@ -5,6 +5,8 @@
  * Each package defines its own migrations array and calls `runMigrations()`.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { sql } from 'drizzle-orm';
 
 import type { DbDialect } from './provider.js';
@@ -35,6 +37,22 @@ export interface MigrationLogger {
   info: (msg: string, meta?: any) => void;
   error: (msg: string, meta?: any) => void;
 }
+
+// ── Transaction scope ────────────────────────────────────────────
+
+/**
+ * The PostgreSQL transaction the running migration belongs to. Migrations
+ * build their context from the module-level `db` (a pool), so `runMigrations`
+ * cannot hand them a transaction handle: it sets the transaction here instead,
+ * and a context for that same `db` sends its statements through it.
+ */
+const pgMigrationTx = new AsyncLocalStorage<{ db: unknown; tx: any }>();
+
+/**
+ * Advisory lock key held by the transaction that applies a migration, so two
+ * instances starting together cannot run the same migration (PostgreSQL).
+ */
+const MIGRATION_LOCK_KEY = 'funny:_migrations';
 
 // ── Context factory ──────────────────────────────────────────────
 
@@ -98,14 +116,29 @@ function createSqliteMigrationContext(db: any): MigrationContext {
 }
 
 function createPgMigrationContext(db: any): MigrationContext {
+  /** The migration's transaction when `runMigrations` is applying one on this `db`. */
+  function currentTx(): any {
+    const scope = pgMigrationTx.getStore();
+    return scope && scope.db === db ? scope.tx : undefined;
+  }
+
   async function exec(query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>): Promise<void> {
-    await db.execute(query);
+    const tx = currentTx();
+    if (!tx) {
+      await db.execute(query);
+      return;
+    }
+    // A failed statement aborts a PostgreSQL transaction. Run each one in a
+    // savepoint (a nested drizzle transaction) so a migration that catches an
+    // expected failure (a rename already done, a column already dropped) can
+    // go on, as it could before migrations ran in a transaction.
+    await tx.transaction((savepoint: any) => savepoint.execute(query));
   }
 
   async function queryOne<T>(
     query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>,
   ): Promise<T | undefined> {
-    const result = await db.execute(query);
+    const result = await (currentTx() ?? db).execute(query);
     // db.execute() returns pg QueryResult — rows are in .rows
     const rows = result?.rows ?? result;
     return rows?.[0] as T | undefined;
@@ -149,13 +182,16 @@ export async function runMigrations(
 ): Promise<void> {
   const ctx = createMigrationContext(db, dialect);
 
-  // Ensure migration tracking table exists
-  await ctx.exec(sql`
-    CREATE TABLE IF NOT EXISTS _migrations (
-      name TEXT PRIMARY KEY,
-      applied_at TEXT NOT NULL
-    )
-  `);
+  // Ensure migration tracking table exists. Under the lock: two PostgreSQL
+  // sessions running CREATE TABLE IF NOT EXISTS at once can still collide.
+  await inMigrationTransaction(db, dialect, () =>
+    ctx.exec(sql`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        name TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      )
+    `),
+  );
 
   // One query for every applied migration instead of one per migration: on
   // PostgreSQL each was a network round trip before the server could serve.
@@ -166,11 +202,22 @@ export async function runMigrations(
     if (done.has(migration.name)) continue;
 
     try {
-      await migration.up();
-      await ctx.exec(
-        sql`INSERT INTO _migrations (name, applied_at) VALUES (${migration.name}, ${new Date().toISOString()})`,
-      );
-      applied++;
+      // Each migration and its `_migrations` row commit together, so a crash
+      // midway leaves nothing half applied. The transaction holds the
+      // migration lock, and re-checks the row under it: another instance may
+      // have applied this migration while we waited.
+      const ran = await inMigrationTransaction(db, dialect, async () => {
+        const row = await ctx.queryOne<{ name: string }>(
+          sql`SELECT name FROM _migrations WHERE name = ${migration.name}`,
+        );
+        if (row) return false;
+        await migration.up();
+        await ctx.exec(
+          sql`INSERT INTO _migrations (name, applied_at) VALUES (${migration.name}, ${new Date().toISOString()})`,
+        );
+        return true;
+      });
+      if (ran) applied++;
     } catch (err) {
       log.error(`Migration ${migration.name} failed`, { namespace: label, error: err });
       throw err;
@@ -181,6 +228,44 @@ export async function runMigrations(
     log.info(`Applied ${applied} migration(s)`, { namespace: label });
   }
   log.info('Tables ready', { namespace: label });
+}
+
+/**
+ * Run `work` in one transaction that holds the migration lock, committing when
+ * it resolves and rolling back when it throws.
+ *
+ * - PostgreSQL: a drizzle transaction that takes a transaction-level advisory
+ *   lock (released at commit or rollback). The migration's context finds the
+ *   transaction through `pgMigrationTx`.
+ * - SQLite: `BEGIN IMMEDIATE` takes the database write lock up front, so a
+ *   second process waits (busy_timeout) instead of running the same migration.
+ *   The connection is the process's only one, so its statements are in the
+ *   transaction without routing.
+ */
+async function inMigrationTransaction<T>(
+  db: any,
+  dialect: DbDialect,
+  work: () => Promise<T>,
+): Promise<T> {
+  if (dialect === 'pg') {
+    return db.transaction(async (tx: any) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${MIGRATION_LOCK_KEY}))`);
+      return pgMigrationTx.run({ db, tx }, work);
+    });
+  }
+
+  db.run(sql`BEGIN IMMEDIATE`);
+  let result: T;
+  try {
+    result = await work();
+  } catch (err) {
+    // SQLite may already have rolled the transaction back on its own (disk
+    // full, I/O error); report the migration's error, not "no transaction".
+    if (db.$client?.inTransaction !== false) db.run(sql`ROLLBACK`);
+    throw err;
+  }
+  db.run(sql`COMMIT`);
+  return result;
 }
 
 async function appliedMigrationNames(db: any, dialect: DbDialect): Promise<Set<string>> {

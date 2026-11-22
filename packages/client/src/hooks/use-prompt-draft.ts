@@ -1,7 +1,7 @@
-import type { ImageAttachment } from '@funny/shared';
 import { useEffect, useRef, type MutableRefObject, type RefObject } from 'react';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import type { PromptAttachmentsHandle } from '@/components/prompt-input/use-prompt-attachments';
 import { useDraftStore } from '@/stores/draft-store';
 
 type Draft = ReturnType<typeof useDraftStore.getState>['drafts'][string];
@@ -11,22 +11,40 @@ function pickDraftContent(draft: Draft | undefined, initialPrompt: string | unde
   return draft?.editorContent || draft?.prompt || initialPrompt || undefined;
 }
 
-/** Saves the previous thread's editor draft and loads the next thread's. */
+/**
+ * Loads a thread's saved images into the composer. On the first run (mount)
+ * the composer keeps its `initialImages` unless the draft has images of its own.
+ */
+function restoreDraftImages(
+  attachments: PromptAttachmentsHandle | null,
+  draft: Draft | undefined,
+  isMount: boolean,
+) {
+  const images = draft?.images ?? [];
+  if (isMount && images.length === 0) return;
+  attachments?.reset(images);
+}
+
+/** Saves the previous thread's draft (editor + images) and loads the next thread's. */
 function swapDraftOnThreadChange(
   editor: PromptEditorHandle | null,
+  attachments: PromptAttachmentsHandle | null,
   prevId: string | null | undefined,
   nextId: string | undefined,
-  saveDraft: (threadId: string, editor: PromptEditorHandle | null) => void,
+  saveDraft: (threadId: string) => void,
   initialPrompt: string | undefined,
 ) {
-  if (prevId && prevId !== nextId) saveDraft(prevId, editor);
+  if (prevId && prevId !== nextId) saveDraft(prevId);
 
   if (nextId && nextId !== prevId) {
-    const content = pickDraftContent(useDraftStore.getState().drafts[nextId], initialPrompt);
+    const draft = useDraftStore.getState().drafts[nextId];
+    const content = pickDraftContent(draft, initialPrompt);
     if (content) editor?.setContent(content);
     else editor?.clear();
+    restoreDraftImages(attachments, draft, prevId === null);
   } else if (!nextId && prevId) {
     editor?.clear();
+    attachments?.reset([]);
   }
 }
 
@@ -49,11 +67,14 @@ function useEditorAutoFocus(
 }
 
 /**
- * Per-thread draft persistence for the prompt editor: save on thread switch
- * and unmount (unless the prompt was just submitted), restore on switch.
+ * Per-thread draft persistence for the composer (editor content and image
+ * attachments): save on thread switch and unmount (unless the prompt was just
+ * submitted), restore on switch. Text-file attachments are not kept in drafts;
+ * they are dropped on switch so they never follow the user to another thread.
  */
 export function usePromptDraft({
   editorRef,
+  attachmentsRef,
   effectiveThreadId,
   threadIdRef,
   stopRecordingRef,
@@ -62,6 +83,7 @@ export function usePromptDraft({
   loading,
 }: {
   editorRef: RefObject<PromptEditorHandle | null>;
+  attachmentsRef: RefObject<PromptAttachmentsHandle | null>;
   effectiveThreadId: string | undefined;
   threadIdRef: MutableRefObject<string | undefined>;
   stopRecordingRef: MutableRefObject<() => void>;
@@ -72,17 +94,19 @@ export function usePromptDraft({
   const { setEditorDraft, clearPromptDraft } = useDraftStore();
   const prevThreadIdRef = useRef<string | null | undefined>(null);
   const hasSubmittedRef = useRef(false);
-  const imagesRef = useRef<ImageAttachment[]>([]);
 
   useEffect(() => {
     const prevId = prevThreadIdRef.current;
     prevThreadIdRef.current = effectiveThreadId;
-    const saveDraft = (threadId: string, editor: PromptEditorHandle | null) => {
+    const editor = editorRef.current;
+    const attachments = attachmentsRef.current;
+    const saveDraft = (threadId: string) => {
       const editorJSON = editor?.getJSON();
-      if (editorJSON) setEditorDraft(threadId, editorJSON, imagesRef.current);
+      if (editorJSON) setEditorDraft(threadId, editorJSON, attachments?.getImages() ?? []);
     };
     swapDraftOnThreadChange(
-      editorRef.current,
+      editor,
+      attachments,
       prevId,
       effectiveThreadId,
       saveDraft,
@@ -94,14 +118,14 @@ export function usePromptDraft({
 
   useEffect(() => {
     const editorRefCurrent = editorRef.current;
-    const currentImages = imagesRef.current;
     return () => {
       if (hasSubmittedRef.current) return;
       const threadId = threadIdRef.current;
       const editorJSON = threadId ? editorRefCurrent?.getJSON() : undefined;
-      if (threadId && editorJSON) setEditorDraft(threadId, editorJSON, currentImages);
+      const images = attachmentsRef.current?.getImages() ?? [];
+      if (threadId && editorJSON) setEditorDraft(threadId, editorJSON, images);
     };
-  }, [setEditorDraft, editorRef, threadIdRef]);
+  }, [setEditorDraft, editorRef, attachmentsRef, threadIdRef]);
 
   useEditorAutoFocus(editorRef, effectiveThreadId, running, loading);
 

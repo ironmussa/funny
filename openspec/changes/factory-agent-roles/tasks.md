@@ -48,7 +48,7 @@ Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, 
 - [ ] 7.8 Show the slot a run waits for and the merge reason in the run row; verify with a `ProjectFactoryRuns` test
 - [x] 7.9 A merge failure no code change can fix (missing App permission, branch rule, GitHub error after the provider's retries) parks the run in `waiting_human` with the reason and starts no agent; verify with merge-node tests for a branch-rule refusal and a permission error, asserting no follow-up was sent
 - [x] 7.10 A run waiting for the merge slot counts toward `maxConcurrent`; verify with a watcher test where two runs of a `maxConcurrent: 2` factory wait for the slot and no issue is admitted
-- [ ] 7.11 Record per factory the review verdicts (pass / fail, rounds) and the reasons runs park in `waiting_human`, as metrics; verify with a test over a passed, a failed and a high-risk run
+- [x] 7.11 Record per factory the review verdicts (pass / fail, rounds) and the reasons runs park in `waiting_human`, as metrics; verify with a test over a passed, a failed and a high-risk run
 
 ## Phase 1 exit
 

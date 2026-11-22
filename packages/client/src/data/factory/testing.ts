@@ -1,3 +1,4 @@
+import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
 import type { FactoryRun } from '@funny/shared/contracts/factory';
 
 /** A complete `FactoryRun` for tests and stories (a merged label run); overrides win. */
@@ -19,7 +20,7 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     flowSteps: [],
     failureReason: null,
     admittedAt: null,
-    metrics: { ciRounds: 0, ciRed: 0, conflicts: 0, ciBlocked: 0, ciTimeouts: 0, agentFixes: 0 },
+    metrics: { ...EMPTY_FACTORY_RUN_METRICS },
     regressionProof: null,
     reviews: [],
     risk: null,

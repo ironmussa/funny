@@ -211,6 +211,14 @@ export interface FactoryRunMetrics {
   ciTimeouts: number;
   /** Agent follow-ups after the pull request was opened (fix steps). */
   agentFixes: number;
+  /** Review verdicts the run got (one per reviewed commit). */
+  reviews: number;
+  /** Verdicts that sent the change back to the implementing agent. */
+  reviewFails: number;
+  /** Times `merge` left the run for a person (no review, review failed, high risk, rewritten). */
+  mergeHolds: number;
+  /** Times `merge` sent the change back (a conflict, or checks failing on the current base). */
+  mergeSentBack: number;
 }
 
 export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
@@ -220,6 +228,10 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
   ciBlocked: 0,
   ciTimeouts: 0,
   agentFixes: 0,
+  reviews: 0,
+  reviewFails: 0,
+  mergeHolds: 0,
+  mergeSentBack: 0,
 };
 
 export type FactoryRunSource = 'manual' | 'label';

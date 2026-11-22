@@ -58,6 +58,10 @@ const METRICS_SCHEMA = z.object({
   ciBlocked: z.number().int().nonnegative().default(0),
   ciTimeouts: z.number().int().nonnegative().default(0),
   agentFixes: z.number().int().nonnegative().default(0),
+  reviews: z.number().int().nonnegative().default(0),
+  reviewFails: z.number().int().nonnegative().default(0),
+  mergeHolds: z.number().int().nonnegative().default(0),
+  mergeSentBack: z.number().int().nonnegative().default(0),
 });
 
 const WAIT_REASON_SCHEMA = z.object({

@@ -246,6 +246,10 @@ describe('factory action provider integration metrics', () => {
         ciBlocked: 0,
         ciTimeouts: 0,
         agentFixes: 1,
+        reviews: 0,
+        reviewFails: 0,
+        mergeHolds: 0,
+        mergeSentBack: 0,
       },
       record: async (input) => {
         if (input.metrics) recorded.push(input.metrics);

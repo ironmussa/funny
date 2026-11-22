@@ -327,6 +327,15 @@ const PROOF_NOT_CONFIGURED: ActionResult = {
     'Regression proof not configured: the flow has no regression_proof rules, so the factory does not merge.',
 };
 
+/** The counters after a reviewer event: a verdict counts as a review, a failing one also as a fail. */
+export function reviewCounted(metrics: FactoryRunMetrics, event: string): FactoryRunMetrics {
+  if (event === 'review_pass') return { ...metrics, reviews: metrics.reviews + 1 };
+  if (event === 'review_fail') {
+    return { ...metrics, reviews: metrics.reviews + 1, reviewFails: metrics.reviewFails + 1 };
+  }
+  return metrics;
+}
+
 /**
  * The counters after one `wait_ci` result. A stop or a GitHub access error is
  * not a CI round (no verdict about the code), so it counts nothing.
@@ -766,7 +775,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     publish: publishVerdict,
     record: deps.record,
     enterReview: () => enterStage('review'),
-    count: (event) => count(metrics, { event }),
+    count: (event) => count(reviewCounted(metrics, event), { event }),
   });
 
   /** The enabler reads the repository: the App token capped by their access. */
@@ -843,7 +852,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   /** Leave the run for a person instead of merging, with why. Not ok, so the flow stops here. */
   async function holdMerge(reason: string, error: string): Promise<ActionResult> {
     await deps.record({ state: 'waiting_human', failureReason: reason });
-    await count(metrics, { event: `merge_held_${reason.replaceAll(' ', '_')}` });
+    // Why runs stop being unattended: the reason is the event, per repository.
+    await count(
+      { ...metrics, mergeHolds: metrics.mergeHolds + 1 },
+      { event: `merge_held_${reason.replaceAll(' ', '_')}` },
+    );
     return { ok: false, error, metadata: { outcome: 'held', reason } };
   }
 
@@ -940,7 +953,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const current = await lane.bringUpToDate();
     if (current.kind === 'failed') return { ok: false, error: current.error };
     if (current.kind === 'sent-back') {
-      await count(metrics, { event: `merge_sent_back_${current.why}` });
+      await count(
+        { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
+        { event: `merge_sent_back_${current.why}` },
+      );
       return {
         ok: true,
         output: 'sent_back',

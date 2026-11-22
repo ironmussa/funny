@@ -1,3 +1,4 @@
+import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, within } from 'storybook/test';
@@ -29,7 +30,7 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   flowSteps: [],
   failureReason: null,
   admittedAt: null,
-  metrics: { ciRounds: 0, ciRed: 0, conflicts: 0, ciBlocked: 0, ciTimeouts: 0, agentFixes: 0 },
+  metrics: { ...EMPTY_FACTORY_RUN_METRICS },
   regressionProof: null,
   reviews: [],
   risk: null,

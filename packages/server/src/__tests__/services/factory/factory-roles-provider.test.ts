@@ -926,3 +926,36 @@ describe('merge brings the branch up to date with its base first', () => {
     });
   });
 });
+
+// Change factory-agent-roles, task 7.11: whether the reviewer pays, and why runs
+// stop being unattended, are counted on the run.
+describe('what a run counts about its review and its merge', () => {
+  const lastMetrics = (recorded: UpdateRunInput[]) =>
+    recorded.flatMap((input) => (input.metrics ? [input.metrics] : [])).at(-1);
+
+  test('a passed review counts one review and no fail', async () => {
+    const { provider, recorded } = reviewing({ says: [[passOf(SHA_A)]] });
+    await provider.review!({});
+    expect(lastMetrics(recorded)).toMatchObject({ reviews: 1, reviewFails: 0 });
+  });
+
+  test('a failed review counts a review and a fail', async () => {
+    const { provider, recorded } = reviewing({ says: [[failOf(SHA_A)]] });
+    await provider.review!({});
+    expect(lastMetrics(recorded)).toMatchObject({ reviews: 1, reviewFails: 1 });
+  });
+
+  test('a high-risk run held at the merge counts a hold, after its review', async () => {
+    const { provider, recorded } = reviewing({
+      says: [[passOf(SHA_A)]],
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+    });
+    await provider.review!({});
+    await provider.merge({ requireRegressionProof: false });
+    expect(lastMetrics(recorded)).toMatchObject({ reviews: 1, reviewFails: 0, mergeHolds: 1 });
+    expect(recorded).toContainEqual({
+      state: 'waiting_human',
+      failureReason: MERGE_HOLD_REASONS.highRisk,
+    });
+  });
+});

@@ -34,6 +34,7 @@ import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
+import { createServerActivities, type ServerActivities } from '../activities/server-activities.js';
 import {
   startThreadOnRunner,
   type RunnerPorts,
@@ -95,6 +96,8 @@ export interface FactoryWatcherDeps {
   launch?: typeof startThreadOnRunner;
   /** Access check override for tests; defaults to `steer` via the server's role resolver. */
   checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
+  /** Records what the watcher does on its own (default: the server's activities). */
+  activities?: Pick<ServerActivities, 'recordServerActivity'>;
   /**
    * Start a sandbox thread for the enabler (the sandbox thread launcher of
    * `thread-sandboxes`, with their own connection). Without it a sandbox
@@ -590,6 +593,18 @@ async function enablerCanStillSteer(factory: WatchedFactory): Promise<boolean> {
   await disableFactory(factory.id);
   unscheduleFactory(factory.id);
   await stopOpenRuns(factory);
+  // The enabler sees why their factory stopped (track-funny-actions).
+  await (deps?.activities ?? recordFactoryActivities()).recordServerActivity(
+    {
+      kind: 'factory.disabled',
+      userId: factory.userId,
+      projectId: factory.projectId,
+      title: 'Turned the issue factory off: you can no longer start threads in this project',
+      input: { reason: 'access-lost' },
+      origin: 'system',
+    },
+    { ok: true, effects: [{ effect: 'factory-disabled', target: factory.projectId }] },
+  );
   audit({
     action: 'factory.disabled_access_lost',
     actorId: factory.userId,
@@ -612,6 +627,12 @@ async function stopOpenRuns(factory: WatchedFactory): Promise<void> {
     factory.userId,
     open.flatMap((run) => run.threadIds),
   );
+}
+
+let factoryActivities: ServerActivities | null = null;
+function recordFactoryActivities(): ServerActivities {
+  factoryActivities ??= createServerActivities();
+  return factoryActivities;
 }
 
 async function defaultCheckAccess(userId: string, projectId: string): Promise<boolean> {

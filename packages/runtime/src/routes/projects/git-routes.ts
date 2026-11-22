@@ -15,6 +15,7 @@ import { Hono, type Context } from 'hono';
 import { ok, type Result } from 'neverthrow';
 
 import { requestSpan } from '../../middleware/tracing.js';
+import { recordCheckoutSwitch } from '../../services/checkout-activity.js';
 import { gitRuntimeService } from '../../services/git-runtime-service.js';
 import { resolveIdentity } from '../../services/git-service.js';
 import * as tm from '../../services/thread-manager.js';
@@ -190,6 +191,54 @@ projectGitRoutes.get('/:id/checkout-preflight', async (c) => {
   });
 });
 
+/**
+ * Checks `branch` out in the project checkout. When the route stashed the
+ * user's changes first, the switch is recorded as a `checkout.switch`
+ * activity (track-funny-actions), and a failed checkout restores the stash,
+ * recording it as failed when the stash could not be restored. Resolves to
+ * the checkout error, or null.
+ */
+async function checkoutRecordingStash(
+  projectPath: string,
+  change: {
+    userId: string;
+    projectId: string;
+    threadId: string | null;
+    fromBranch: string | null;
+    branch: string;
+    create: boolean;
+    stashed: boolean;
+  },
+): Promise<string | null> {
+  const args = change.create ? ['checkout', '-b', change.branch] : ['checkout', change.branch];
+  const checkoutResult = await git(args, projectPath);
+  const switched = {
+    userId: change.userId,
+    projectId: change.projectId,
+    threadId: change.threadId,
+    fromBranch: change.fromBranch,
+    toBranch: change.branch,
+    stashed: change.stashed,
+    reason: 'branch-checkout' as const,
+    origin: 'user' as const,
+  };
+  if (checkoutResult.isOk()) {
+    if (change.stashed) void recordCheckoutSwitch(switched);
+    return null;
+  }
+  if (change.stashed) {
+    const popped = await git(['stash', 'pop'], projectPath);
+    if (popped.isErr()) {
+      void recordCheckoutSwitch({
+        ...switched,
+        switched: false,
+        error: `Checkout failed and the stashed changes could not be restored (they are still in git stash): ${popped.error.message}`,
+      });
+    }
+  }
+  return checkoutResult.error.message;
+}
+
 // POST /api/projects/:id/checkout — perform branch checkout with a strategy for dirty files
 projectGitRoutes.post('/:id/checkout', async (c) => {
   const projectResult = await requireProject(
@@ -246,14 +295,16 @@ projectGitRoutes.post('/:id/checkout', async (c) => {
     }
   }
 
-  const checkoutArgs = create ? ['checkout', '-b', branch] : ['checkout', branch];
-  const checkoutResult = await git(checkoutArgs, project.path);
-  if (checkoutResult.isErr()) {
-    if (strategy === 'stash') {
-      await git(['stash', 'pop'], project.path);
-    }
-    return c.json({ error: `Checkout failed: ${checkoutResult.error.message}` }, 500);
-  }
+  const checkoutError = await checkoutRecordingStash(project.path, {
+    userId: c.get('userId') as string,
+    projectId: project.id,
+    threadId: threadId ?? null,
+    fromBranch: currentBranch,
+    branch,
+    create,
+    stashed: strategy === 'stash',
+  });
+  if (checkoutError) return c.json({ error: `Checkout failed: ${checkoutError}` }, 500);
 
   invalidateStatusCache(project.path);
 

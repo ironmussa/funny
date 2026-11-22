@@ -41,6 +41,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { createServerActivities, type ServerActivities } from '../activities/server-activities.js';
 import { mintLlmProxyToken } from '../llm-proxy/llm-proxy-tokens.js';
 import type { ProvisionTokenError } from '../runner-provision-tokens.js';
 import { fromResult, runToResult } from './effect-bridge.js';
@@ -89,6 +90,8 @@ export interface ThreadSandboxDeps extends ThreadSandboxControlDeps {
     branch?: string;
   }): ResultAsync<void, string>;
   readyTimeoutMs?: number;
+  /** Records the provisioning as a `sandbox.provision` activity (default: the server's). */
+  activities?: Pick<ServerActivities, 'trackServerActivity'>;
 }
 
 export interface ProvisionInput {
@@ -100,6 +103,12 @@ export interface ProvisionInput {
   checkout?: { path: string; repoUrl: string; branch?: string };
   /** Aborting it (the thread was deleted) interrupts the preparation. */
   signal?: AbortSignal;
+}
+
+let sharedActivities: ServerActivities | null = null;
+function defaultServerActivities(): ServerActivities {
+  sharedActivities ??= createServerActivities();
+  return sharedActivities;
 }
 
 /** Absolute path made only of characters that need no shell quoting beyond '…'. */
@@ -239,6 +248,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
     template: TemplateRef | null,
     provisionToken: string,
     llmToken: string,
+    step: (label: string) => void,
   ) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -252,12 +262,14 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
           return yield* Effect.fail<ProvisionError>({ kind: 'connection', message: envFile.error });
         }
 
+        step('Creating the machine');
         const handle = yield* acquireMachine(input, row, provider, template);
         yield* ops.update(input.threadId, { sandboxId: handle.sandboxId });
         yield* waitRunning(provider, handle);
 
         // No template: install the runner on the fly.
         if (!template) {
+          step('Installing the runner');
           yield* ops.transition(input.threadId, 'INSTALL');
           yield* exec(provider, handle, runnerInstallCommand(deps.build), 'runner install');
         }
@@ -266,6 +278,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
         );
         yield* exec(provider, handle, start, 'runner start');
         // The connect timeout starts here, once the runner is started.
+        step('Connecting the runner');
         yield* ops.transition(input.threadId, 'CONNECT');
         const runnerId = yield* waitForSandboxRunner(
           deps,
@@ -273,6 +286,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
           'sandbox runner connection',
         );
 
+        step('Checking out the project');
         yield* checkoutProject(input, provider, handle);
         yield* ops.transition(input.threadId, 'READY', { runnerId, error: null });
         return runnerId;
@@ -297,7 +311,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       return (existing?.generation ?? -1) + 1;
     });
 
-  const provision = (input: ProvisionInput) =>
+  const provision = (input: ProvisionInput, step: (label: string) => void) =>
     Effect.gen(function* () {
       const startedAt = Date.now();
       const generation = yield* nextGeneration(input.threadId);
@@ -355,7 +369,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
           // No template yet: install on the fly now, build it for the next thread.
           if (!template) void deps.templates.ensure(input.connectionId, provider);
 
-          yield* bringUp(input, row, provider, template, token, llm.token);
+          yield* bringUp(input, row, provider, template, token, llm.token, step);
           metric('thread_sandboxes.provision_ms', Date.now() - startedAt, {
             type: 'gauge',
             unit: 'ms',
@@ -378,12 +392,37 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       );
     });
 
+  const activities = deps.activities ?? defaultServerActivities();
+
   return {
+    /**
+     * Provisions the thread's sandbox, recorded as a `sandbox.provision`
+     * activity for the thread's owner with a step per phase (track-funny-actions).
+     */
     provision(input: ProvisionInput): ResultAsync<ThreadSandboxRow, ProvisionError> {
-      return runToResult(provision(input), {
-        signal: input.signal,
-        onInterrupt: () => ({ kind: 'cancelled', message: 'sandbox preparation cancelled' }),
-      });
+      return new ResultAsync(
+        activities.trackServerActivity(
+          {
+            kind: 'sandbox.provision',
+            userId: input.userId,
+            threadId: input.threadId,
+            title: 'Prepare the sandbox',
+            input: { connectionId: input.connectionId },
+            origin: 'user',
+          },
+          (activity) =>
+            runToResult(
+              provision(input, (label) => activity.step(label)),
+              {
+                signal: input.signal,
+                onInterrupt: () => ({
+                  kind: 'cancelled',
+                  message: 'sandbox preparation cancelled',
+                }),
+              },
+            ),
+        ),
+      );
     },
     ...control,
   };

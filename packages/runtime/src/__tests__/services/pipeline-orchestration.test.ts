@@ -144,8 +144,10 @@ mock.module('../../services/agent-runner-control.js', () => ({
 mock.module('@funny/core/git', () => ({
   gitRead: vi.fn(),
   gitWrite: vi.fn(),
-  removeWorktree: vi.fn().mockReturnValue(okAsync(undefined)),
-  removeBranch: vi.fn().mockReturnValue(okAsync(undefined)),
+}));
+const mockCleanupWorkspace = vi.fn().mockReturnValue(okAsync({ effects: [] }));
+mock.module('../../services/workspace-cleanup.js', () => ({
+  cleanupWorkspace: mockCleanupWorkspace,
 }));
 mock.module('../../services/git-service.js', () => ({
   commitChanges: vi.fn(),
@@ -347,9 +349,16 @@ describe('Pipeline Orchestration', () => {
 
       await cleanupReviewerThread('rev-1', 'proj-1');
 
-      const { removeWorktree, removeBranch } = await import('@funny/core/git');
-      expect(removeWorktree).toHaveBeenCalledWith('/tmp/repo', '/tmp/repo/.worktrees/rev');
-      expect(removeBranch).toHaveBeenCalledWith('/tmp/repo', 'review/fix');
+      expect(mockCleanupWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectPath: '/tmp/repo',
+          worktreePath: '/tmp/repo/.worktrees/rev',
+          branch: 'review/fix',
+          deleteBranch: true,
+          reason: 'review-finished',
+          origin: 'system',
+        }),
+      );
       expect(tm.updateThread).toHaveBeenCalledWith('rev-1', {
         archived: 1,
         worktreePath: null,
@@ -368,10 +377,10 @@ describe('Pipeline Orchestration', () => {
         branch: 'main',
       }));
 
+      mockCleanupWorkspace.mockClear();
       await cleanupReviewerThread('rev-local', 'proj-1');
 
-      const { removeWorktree } = await import('@funny/core/git');
-      expect(removeWorktree).not.toHaveBeenCalled();
+      expect(mockCleanupWorkspace).not.toHaveBeenCalled();
       expect(tm.updateThread).toHaveBeenCalledWith('rev-local', {
         archived: 1,
         worktreePath: null,

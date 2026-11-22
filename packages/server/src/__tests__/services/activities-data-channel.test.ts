@@ -218,4 +218,72 @@ describe('activity data channel', () => {
       resultRef: { projectId: 'pa' },
     });
   });
+
+  // ── track-funny-actions ──────────────────────────────────────────────────
+
+  const CLEANUP_INPUT = { reason: 'manual', branch: 'b', deleteBranch: true };
+
+  test('an instant activity is inserted finished and broadcast once', async () => {
+    const res = await start('laptop', 'alice', {
+      id: 'i1',
+      kind: 'workspace.cleanup',
+      title: 'Removed worktree',
+      projectId: 'pa',
+      input: CLEANUP_INPUT,
+      origin: 'implicit',
+      status: 'failed',
+      error: 'branch is checked out',
+      effects: [
+        { effect: 'worktree-removed', target: '/w' },
+        { effect: 'nope', target: 'x' },
+      ],
+    });
+    expect(res.applied).toBe(true);
+    const row = await repos.activities().getById('i1');
+    expect(row).toMatchObject({
+      status: 'failed',
+      origin: 'implicit',
+      error: 'branch is checked out',
+      effects: [{ effect: 'worktree-removed', target: '/w' }],
+    });
+    expect(row?.endedAt).toBe(row?.startedAt ?? 'missing');
+    expect(activityEvents()).toHaveLength(1);
+    expect((await update('laptop', 'alice', 'i1', { status: 'succeeded' })).applied).toBe(false);
+  });
+
+  test('an update cannot change the origin; effects are replaced', async () => {
+    await start('laptop', 'alice', {
+      id: 'o1',
+      kind: 'workspace.cleanup',
+      title: 'Cleanup',
+      projectId: 'pa',
+      input: CLEANUP_INPUT,
+      origin: 'implicit',
+      effects: [{ effect: 'command-stopped', target: 'dev' }],
+    });
+    await update('laptop', 'alice', 'o1', {
+      origin: 'user',
+      effects: [{ effect: 'worktree-removed', target: '/w' }],
+    });
+    const row = await repos.activities().getById('o1');
+    expect(row?.origin).toBe('implicit');
+    expect(row?.effects).toEqual([{ effect: 'worktree-removed', target: '/w' }]);
+  });
+
+  test('a runner of the owner cannot update a server-run activity', async () => {
+    await repos.activities().insert({
+      id: 's1',
+      userId: 'alice',
+      runnerId: null,
+      kind: 'sandbox.provision',
+      projectId: null,
+      threadId: 'ta',
+      title: 'Provision',
+      input: { connectionId: 'conn-1' },
+      origin: 'user',
+      startedAt: new Date().toISOString(),
+    });
+    expect((await update('laptop', 'alice', 's1', { status: 'failed' })).applied).toBe(false);
+    expect((await repos.activities().getById('s1'))?.status).toBe('running');
+  });
 });

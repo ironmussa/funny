@@ -18,6 +18,7 @@ import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweepe
 import { createInfraConnectionService } from './infra-connections.js';
 import { cancelAllProvisions, cancelProvision } from './provision-registry.js';
 import { startReverseLinks, type ReverseLinks } from './reverse-link/wiring.js';
+import { recordingSandboxControl, type SandboxDestroyReason } from './sandbox-activities.js';
 import { postSandboxError, sandboxErrorEventData } from './sandbox-events.js';
 import { createSandboxReconciler } from './sandbox-reconciler.js';
 import { createThreadSandboxControl, type ThreadSandboxControl } from './thread-sandbox-control.js';
@@ -103,7 +104,11 @@ export async function destroyThreadSandbox(threadId: string): Promise<void> {
   // it created; the destroy below covers a machine that already exists.
   cancelProvision(threadId);
   if (!control) return;
-  const result = await control.destroy(threadId);
+  const result = await recordingSandboxControl(control, {
+    destroyReason: 'thread-deleted',
+    origin: 'implicit',
+    store: sqlThreadSandboxStore,
+  }).destroy(threadId);
   if (result.isErr()) {
     log.error('Failed to destroy the sandbox of a deleted thread', {
       namespace: 'thread-sandboxes',
@@ -150,8 +155,11 @@ export function startSandboxLifecycle(deps: {
     store: sqlThreadSandboxStore,
     removeRunner,
   });
+  // Each caller records what it does to a sandbox, with its own reason.
+  const recordFor = (destroyReason: SandboxDestroyReason, origin: 'implicit' | 'system') =>
+    recordingSandboxControl(control!, { destroyReason, origin, store: sqlThreadSandboxStore });
   waker = createSandboxWaker({
-    control,
+    control: recordFor('reconciled', 'implicit'),
     store: sqlThreadSandboxStore,
     onWakeFailed: (threadId, ownerId, error) =>
       void postSandboxError(
@@ -159,8 +167,14 @@ export function startSandboxLifecycle(deps: {
         deps.browserEvents,
       ),
   });
-  const sweeper = createSandboxIdleSweeper({ control, idleMs: idleWindowMs() });
-  const reconciler = createSandboxReconciler({ control, bootedAtMs: Date.now() });
+  const sweeper = createSandboxIdleSweeper({
+    control: recordFor('idle', 'system'),
+    idleMs: idleWindowMs(),
+  });
+  const reconciler = createSandboxReconciler({
+    control: recordFor('reconciled', 'system'),
+    bootedAtMs: Date.now(),
+  });
 
   // Reconcile first (sandboxes a previous process left mid-operation), then
   // every interval; passes never overlap. A failing pass is logged and the

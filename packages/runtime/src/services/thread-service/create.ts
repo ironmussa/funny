@@ -38,6 +38,7 @@ import {
   type SymbolRef,
 } from '../../utils/file-mentions.js';
 import { startAgent } from '../agent-runner-control.js';
+import { recordCheckoutSwitch } from '../checkout-activity.js';
 import { listPermissionRules } from '../permission-rules-client.js';
 import { launchContainer } from '../podman-service.js';
 import { getServices } from '../service-registry.js';
@@ -666,6 +667,8 @@ interface LocalPlacement {
   worktreePath: string | undefined;
   threadBranch: string | undefined;
   needsBranchCheckout: boolean;
+  /** The checkout's branch before the thread was placed. */
+  currentBranch?: string;
 }
 
 /**
@@ -716,7 +719,12 @@ async function resolveLocalPlacement(ctx: ProjectThreadContext): Promise<LocalPl
       needsBranchCheckout: false,
     };
   }
-  return { worktreePath, threadBranch: resolvedBaseBranch, needsBranchCheckout: true };
+  return {
+    worktreePath,
+    threadBranch: resolvedBaseBranch,
+    needsBranchCheckout: true,
+    currentBranch,
+  };
 }
 
 /** Local mode with branch checkout (synchronous, no setting_up UI). */
@@ -724,6 +732,7 @@ async function checkoutBaseBranch(
   ctx: ProjectThreadContext,
   branch: string,
   checkoutCwd: string,
+  fromBranch?: string,
 ): Promise<void> {
   const fetchResult = await git(['fetch', 'origin', branch], checkoutCwd);
   if (fetchResult.isErr()) {
@@ -736,21 +745,39 @@ async function checkoutBaseBranch(
   }
 
   const checkoutResult = await git(['checkout', branch], checkoutCwd);
+  // Starting the thread switched the user's checkout (track-funny-actions).
+  const switched = {
+    userId: ctx.params.userId,
+    projectId: ctx.projectId,
+    threadId: ctx.threadId,
+    fromBranch,
+    toBranch: branch,
+    stashed: false,
+    reason: 'thread-created' as const,
+    origin: 'implicit' as const,
+  };
   if (checkoutResult.isErr()) {
+    void recordCheckoutSwitch({
+      ...switched,
+      switched: false,
+      error: checkoutResult.error.message,
+    });
     throw new ThreadServiceError(
       `Failed to checkout branch "${branch}": ${checkoutResult.error.message}`,
       400,
     );
   }
+  void recordCheckoutSwitch(switched);
 }
 
 async function createLocalThread(baseCtx: ProjectThreadContext) {
-  const { worktreePath, threadBranch, needsBranchCheckout } = await resolveLocalPlacement(baseCtx);
+  const { worktreePath, threadBranch, needsBranchCheckout, currentBranch } =
+    await resolveLocalPlacement(baseCtx);
   const cwd = worktreePath ?? baseCtx.projectPath;
 
   if (needsBranchCheckout) {
     // Falls through to the normal path below (status: 'pending')
-    await checkoutBaseBranch(baseCtx, baseCtx.resolvedBaseBranch!, cwd);
+    await checkoutBaseBranch(baseCtx, baseCtx.resolvedBaseBranch!, cwd, currentBranch);
   }
 
   const ctx = {

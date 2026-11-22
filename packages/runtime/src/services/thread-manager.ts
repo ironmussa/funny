@@ -26,7 +26,6 @@ export const resolvePendingPermissionRequest = (
     NonNullable<ReturnType<typeof getServices>['threads']['resolvePendingPermissionRequest']>
   >
 ) => getServices().threads.resolvePendingPermissionRequest?.(...args);
-export const deleteThread = (id: string) => getServices().threads.deleteThread(id);
 
 // ── Messages ────────────────────────────────────────────────
 export const getThreadWithMessages = (

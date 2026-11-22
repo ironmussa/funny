@@ -465,6 +465,10 @@ export const activities = sqliteTable(
     input: text('input').notNull().default('{}'),
     // JSON `ActivityResultRef`.
     resultRef: text('result_ref'),
+    // `user` | `implicit` | `system` (track-funny-actions, design D4).
+    origin: text('origin').notNull().default('user'),
+    // JSON array of `ActivityEffect`.
+    effects: text('effects'),
     startedAt: text('started_at').notNull(),
     endedAt: text('ended_at'),
     updatedAt: text('updated_at').notNull(),

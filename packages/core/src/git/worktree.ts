@@ -5,7 +5,7 @@ import { homedir } from 'os';
 import { resolve, dirname, basename, normalize, join, isAbsolute } from 'path';
 
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
-import { ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import type { SetupProgressFn } from '../ports/setup-progress.js';
 import { toDomainError } from './errors.js';
@@ -595,6 +595,16 @@ export function checkWorktreePathInProject(
   return assertWorktreeInProjectBase(projectPath, worktreePath);
 }
 
+/** `git branch -D` of a branch that does not exist: already gone, not a failure. */
+function isMissingBranch(stderr: string): boolean {
+  return /not found/i.test(stderr);
+}
+
+/**
+ * Deletes a local branch. A branch that does not exist is already gone (ok);
+ * any other refusal from git (the branch is checked out somewhere, a locked
+ * ref) is an error, so callers can report it instead of claiming success.
+ */
 export function removeBranch(
   projectPath: string,
   branchName: string,
@@ -603,17 +613,21 @@ export function removeBranch(
   // argument — it would be interpreted as a flag (potentially something like
   // `--exec=...`). The branch arg position here is positional but git's CLI
   // does not have a unanimous `--` separator across all commands; the safer
-  // course is to reject the name outright. Caller is responsible for
-  // surfacing this — `removeBranch` is best-effort cleanup that should never
-  // execute on a hostile-looking name.
+  // course is to reject the name outright.
   if (branchName.startsWith('-')) {
-    return ResultAsync.fromSafePromise(Promise.resolve());
+    return errAsync(badRequest('Branch name must not start with "-"'));
   }
   return ResultAsync.fromPromise(
-    gitWrite(['branch', '-D', '--', branchName], { cwd: projectPath, reject: false }).then(
-      () => undefined,
-    ),
+    gitWrite(['branch', '-D', '--', branchName], { cwd: projectPath, reject: false }),
     (error) => internal(String(error)),
+  ).andThen((result) =>
+    result.exitCode === 0 || isMissingBranch(result.stderr)
+      ? okAsync(undefined)
+      : errAsync(
+          internal(
+            `Failed to delete branch ${branchName}: ${result.stderr.trim() || `exit ${result.exitCode}`}`,
+          ),
+        ),
   );
 }
 
@@ -660,8 +674,11 @@ export async function getLastGitActivity(worktreePath: string): Promise<number |
  * Returns the sanitized directory name, branch name, path, and whether it already exists.
  */
 /** Remove the folders of a worktree base that git no longer registers. */
-async function pruneUnregisteredDirs(base: string, registeredPaths: Set<string>): Promise<number> {
-  let pruned = 0;
+async function pruneUnregisteredDirs(
+  base: string,
+  registeredPaths: Set<string>,
+): Promise<string[]> {
+  const pruned: string[] = [];
   try {
     const { readdir } = await import('fs/promises');
     const entries = await readdir(base, { withFileTypes: true });
@@ -671,7 +688,7 @@ async function pruneUnregisteredDirs(base: string, registeredPaths: Set<string>)
       if (registeredPaths.has(dirPath)) continue;
       try {
         await rm(dirPath, { recursive: true, force: true });
-        pruned++;
+        pruned.push(dirPath);
       } catch {
         // Best-effort cleanup
       }
@@ -686,26 +703,27 @@ async function pruneUnregisteredDirs(base: string, registeredPaths: Set<string>)
  * Prune orphan worktrees for a given project path.
  * Runs `git worktree prune` to clean up stale bookkeeping entries,
  * then removes any leftover directories under the worktree base that
- * are no longer registered with git.
+ * are no longer registered with git. Resolves to the directories it removed.
  */
-export function pruneOrphanWorktrees(projectPath: string): ResultAsync<number, DomainError> {
+export function pruneOrphanWorktrees(projectPath: string): ResultAsync<string[], DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
       // Run git worktree prune to clean stale entries
       await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
 
       const bases = getWorktreeBasePaths(projectPath).filter((base) => existsSync(base));
-      if (bases.length === 0) return 0;
+      if (bases.length === 0) return [];
 
       // List registered worktrees
       const listResult = await readWorktreeEntries(projectPath);
       // Without the registered list every directory would look orphaned and
       // be deleted, including live worktrees: skip the cleanup instead.
-      if (listResult.isErr()) return 0;
+      if (listResult.isErr()) return [];
       const registeredPaths = new Set<string>(listResult.value.map((w) => normalize(w.path)));
 
-      let pruned = 0;
-      for (const base of bases) pruned += await pruneUnregisteredDirs(base, registeredPaths);
+      const pruned: string[] = [];
+      for (const base of bases)
+        pruned.push(...(await pruneUnregisteredDirs(base, registeredPaths)));
       return pruned;
     })(),
     (error) => internal(String(error)),

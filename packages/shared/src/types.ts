@@ -1033,9 +1033,37 @@ export interface WSJobData {
   job: Job;
 }
 
-// ─── Background activities (user-started operations: clone, worktree setup, git workflow) ──
+// ─── Background activities (operations a user starts and actions funny takes on its own) ──
 
 export type ActivityStatus = 'running' | 'succeeded' | 'failed' | 'interrupted';
+
+/**
+ * Who started an activity (track-funny-actions): the user asked for it, it
+ * followed from another action of the user, or funny started it on its own.
+ */
+export type ActivityOrigin = 'user' | 'implicit' | 'system';
+
+/** The things an activity can remove, stop or change (`ACTIVITY_EFFECTS`). */
+export type ActivityEffectType =
+  | 'worktree-removed'
+  | 'branch-deleted'
+  | 'command-stopped'
+  | 'terminal-closed'
+  | 'directory-removed'
+  | 'branch-checked-out'
+  | 'changes-stashed'
+  | 'sandbox-stopped'
+  | 'sandbox-destroyed'
+  | 'pr-merged'
+  | 'remote-branch-deleted'
+  | 'agent-stopped'
+  | 'factory-disabled';
+
+/** One thing an activity changed, with the name of the thing (a path, a branch, a PR). */
+export interface ActivityEffect {
+  effect: ActivityEffectType;
+  target: string;
+}
 
 /** A reference to what a finished activity produced. */
 export interface ActivityResultRef {
@@ -1059,6 +1087,9 @@ export interface Activity {
   /** The kind's input, validated and stripped of undeclared fields. */
   input: Record<string, unknown>;
   resultRef: ActivityResultRef | null;
+  origin: ActivityOrigin;
+  /** What it removed, stopped or changed; null when it reported nothing. */
+  effects: ActivityEffect[] | null;
   startedAt: string;
   endedAt: string | null;
 }

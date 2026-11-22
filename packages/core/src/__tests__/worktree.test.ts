@@ -231,24 +231,33 @@ describe('worktree operations', () => {
       // Create a branch
       executeSync('git', ['branch', 'temp-branch'], { cwd: repoPath });
 
-      await removeBranch(repoPath, 'temp-branch');
+      expect((await removeBranch(repoPath, 'temp-branch')).isOk()).toBe(true);
 
       // Verify branch is gone
       const branches = executeSync('git', ['branch', '--list'], { cwd: repoPath }).stdout;
       expect(branches).not.toContain('temp-branch');
     });
 
-    test('does not throw for non-existent branch', async () => {
-      // Should not throw because reject=false
-      await removeBranch(repoPath, 'nonexistent-branch');
+    test('a branch that does not exist is already gone (ok)', async () => {
+      expect((await removeBranch(repoPath, 'nonexistent-branch')).isOk()).toBe(true);
+    });
+
+    test('a refused deletion is an error', async () => {
+      // The checked-out branch cannot be deleted.
+      const current = executeSync('git', ['branch', '--show-current'], {
+        cwd: repoPath,
+      }).stdout.trim();
+      const result = await removeBranch(repoPath, current);
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toContain(current);
     });
 
     test('refuses to act on branch names starting with - (L4 flag-injection)', async () => {
       // Create a real branch we can verify is NOT touched even though the
       // attacker tries to pass `--all` or `-rf` as the branch name.
       executeSync('git', ['branch', 'real-branch'], { cwd: repoPath });
-      await removeBranch(repoPath, '--all');
-      await removeBranch(repoPath, '-rf');
+      expect((await removeBranch(repoPath, '--all')).isErr()).toBe(true);
+      expect((await removeBranch(repoPath, '-rf')).isErr()).toBe(true);
       const branches = executeSync('git', ['branch', '--list'], { cwd: repoPath }).stdout;
       // real-branch must still exist — the dash-leading inputs must have been
       // dropped without ever reaching `git branch -D`.

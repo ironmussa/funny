@@ -21,6 +21,11 @@ import { startSpan } from '../../lib/telemetry.js';
 import { toThread, toThreadDetail } from '../../lib/thread-response.js';
 import * as messageQueueRepo from '../../services/message-queue-repository.js';
 import type { BrowserEventSink } from '../../services/runner-ports.js';
+import type { RunnerPorts } from '../../services/runner-thread-launcher.js';
+import {
+  cleanUpArchivedThread,
+  workspaceToRemoveOnArchive,
+} from '../../services/thread-workspace-cleanup.js';
 
 const stageHistoryRepo = repos.stageHistory();
 const threadRepo = repos.threads();
@@ -126,7 +131,24 @@ async function currentThread(id: string) {
   return updated ? ok(toThread(updated)) : threadNotFound();
 }
 
-export function createThreadsPort(browserEvents: BrowserEventSink | undefined): ThreadsPort {
+export interface ThreadsPortOptions {
+  /** The request's runner ports; without them an archive removes nothing. */
+  runnerPorts?: RunnerPorts;
+  /** Runs work that follows an answer (tests await it). */
+  background?: (task: Promise<void>) => void;
+}
+
+function runInBackground(task: Promise<void>): void {
+  task.catch((error) =>
+    log.warn('Background thread work failed', { namespace: 'threads', error: String(error) }),
+  );
+}
+
+export function createThreadsPort(
+  browserEvents: BrowserEventSink | undefined,
+  options: ThreadsPortOptions = {},
+): ThreadsPort {
+  const background = options.background ?? runInBackground;
   return {
     async list({ userId, organizationId }, query) {
       const { projectId, designId, includeArchived, limit, offset } = query;
@@ -295,6 +317,17 @@ export function createThreadsPort(browserEvents: BrowserEventSink | undefined): 
       const updates = threadPatchUpdates(data);
       if (Object.keys(updates).length > 0) {
         await threadRepo.updateThread(id, updates);
+      }
+
+      // Archiving removes a worktree thread's worktree and branch on its
+      // runner, after the answer (track-funny-actions, design D8). The path
+      // and branch come from the stored row, and the owner is the actor.
+      const workspace =
+        data.archived === true && !thread.archived ? workspaceToRemoveOnArchive(thread) : null;
+      if (workspace && options.runnerPorts) {
+        background(
+          cleanUpArchivedThread(options.runnerPorts, thread.userId, workspace, browserEvents),
+        );
       }
 
       // Kanban drag moves and archive/unarchive both flow through here.

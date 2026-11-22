@@ -165,15 +165,18 @@ export function setThreadPermissionMode(
  */
 export function deleteThread(
   threadId: string,
-  options: { stopFirst?: boolean } = {},
+  options: { stopFirst?: boolean; deleteBranch?: boolean } = {},
   layer: DataLayer = getDataLayer(),
 ): ResultAsync<void, DomainError> {
-  return new ResultAsync(runDelete(threadId, options.stopFirst ?? false, layer));
+  return new ResultAsync(
+    runDelete(threadId, options.stopFirst ?? false, options.deleteBranch ?? false, layer),
+  );
 }
 
 async function runDelete(
   threadId: string,
   stopFirst: boolean,
+  deleteBranch: boolean,
   layer: DataLayer,
 ): Promise<Result<void, DomainError>> {
   const data = getThreadsData(layer);
@@ -185,7 +188,7 @@ async function runDelete(
   });
 
   if (stopFirst) await api.stopThread(threadId);
-  const result = await api.deleteThread(threadId);
+  const result = await api.deleteThread(threadId, { deleteBranch });
   // NOT_FOUND means the thread is already gone (a concurrent delete won the
   // race): the goal of the write is met, so rolling back would resurrect a
   // row the server no longer has.

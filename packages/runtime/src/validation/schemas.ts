@@ -4,6 +4,7 @@
  * @domain layer: domain
  */
 
+import { WORKSPACE_CLEANUP_REASONS } from '@funny/shared/activities';
 import { validationErr, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_PROVIDER, MODEL_REGISTRY } from '@funny/shared/models';
 import { getManifest } from '@funny/shared/provider-manifests';
@@ -468,6 +469,10 @@ export const deleteWorktreeSchema = z.object({
   worktreePath: z.string().min(1),
   branchName: z.string().optional(),
   deleteBranch: z.boolean().default(false),
+  // track-funny-actions: why the server asks (archive, delete, factory merge);
+  // absent for the worktree settings screen.
+  reason: z.enum(WORKSPACE_CLEANUP_REASONS).default('manual'),
+  threadId: z.string().min(1).max(128).optional(),
 });
 
 export const addSkillSchema = z.object({

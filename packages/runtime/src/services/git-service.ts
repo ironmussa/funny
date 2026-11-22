@@ -27,8 +27,6 @@ import {
   gitRead,
   invalidateStatusCache,
   sanitizePath,
-  removeWorktree,
-  removeBranch,
   type GitIdentityOptions,
   type PullStrategy,
 } from '@funny/core/git';
@@ -37,11 +35,12 @@ import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { type Result, ResultAsync, err, errAsync, ok } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { recordCheckoutSwitch } from './checkout-activity.js';
 import { invalidatePRInfo } from './pr-info-cache.js';
-import { projectSearchRegistry } from './project-search-registry.js';
 import { getServices } from './service-registry.js';
 import { threadEventBus } from './thread-event-bus.js';
 import * as tm from './thread-manager.js';
+import { cleanupWorkspace } from './workspace-cleanup.js';
 import { wsBroker } from './ws-broker.js';
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -533,13 +532,15 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
       const project = await getServices().projects.getProject(thread.projectId);
       if (!project) return { err: notFound('Project not found') } as const;
 
-      return { thread, project } as const;
+      // The merge runs in the main checkout and leaves it on the target branch.
+      const mainBranchBefore = await getCurrentBranch(project.path).unwrapOr(null);
+      return { thread, project, mainBranchBefore } as const;
     })(),
     (e) => internal(String(e)),
   )
     .andThen((lookup) => {
       if ('err' in lookup) return errAsync(lookup.err);
-      const { thread, project } = lookup;
+      const { thread, project, mainBranchBefore } = lookup;
       const sourceBranch = thread.branch;
 
       const targetBranch = params.targetBranch || thread.baseBranch;
@@ -557,6 +558,18 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
           identity,
           thread.worktreePath ?? undefined,
         ).andThen((mergeOutput) => {
+          if (mainBranchBefore && mainBranchBefore !== targetBranch) {
+            void recordCheckoutSwitch({
+              userId: params.userId,
+              projectId: thread.projectId,
+              threadId: params.threadId,
+              fromBranch: mainBranchBefore,
+              toBranch: targetBranch,
+              stashed: false,
+              reason: 'merged',
+              origin: 'implicit',
+            });
+          }
           threadEventBus.emit('git:merged', {
             threadId: params.threadId,
             userId: params.userId,
@@ -579,30 +592,24 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
               }
 
               if (params.cleanup && thread.worktreePath) {
-                await projectSearchRegistry.invalidate(thread.worktreePath).match(
+                // One recorded cleanup (stop processes, remove worktree, delete
+                // branch); a failure is recorded there and never fails the merge.
+                await cleanupWorkspace({
+                  userId: params.userId,
+                  projectId: thread.projectId,
+                  projectPath: project.path,
+                  threadId: params.threadId,
+                  worktreePath: thread.worktreePath,
+                  branch: sourceBranch,
+                  deleteBranch: true,
+                  reason: 'merged',
+                }).match(
                   () => undefined,
                   (e) =>
-                    log.warn('Failed to dispose worktree search index', {
-                      namespace: 'git',
-                      error: e.message,
-                    }),
-                );
-                await removeWorktree(project.path, thread.worktreePath).match(
-                  () => undefined,
-                  (e) =>
-                    log.warn('Worktree directory could not be removed (will be orphaned)', {
+                    log.warn('Cleanup after merge failed (worktree may be orphaned)', {
                       namespace: 'git',
                       worktreePath: thread.worktreePath,
-                      error: String(e),
-                    }),
-                );
-
-                await removeBranch(project.path, sourceBranch).match(
-                  () => undefined,
-                  (e) =>
-                    log.warn('Failed to remove branch after merge', {
-                      namespace: 'git',
-                      error: String(e),
+                      error: e.message,
                     }),
                 );
                 await tm.updateThread(params.threadId, {

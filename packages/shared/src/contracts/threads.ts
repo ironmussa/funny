@@ -193,6 +193,16 @@ export const threadQueries = {
   searchContent: contentSearchQuery,
 };
 
+/**
+ * The query of `DELETE /api/threads/:id` (track-funny-actions): whether the
+ * worktree thread's branch goes with its worktree. Absent means keep it.
+ */
+export const threadDeleteQuery = z
+  .object({ deleteBranch: z.enum(['true', 'false']).optional() })
+  .strip();
+
+export type ThreadDeleteQuery = z.input<typeof threadDeleteQuery>;
+
 /** The body of each thread field update. */
 export const threadBodies = {
   update: threadPatchBody,

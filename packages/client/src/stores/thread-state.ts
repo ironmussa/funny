@@ -70,7 +70,12 @@ export interface ThreadState {
     threadId: string,
     permissionMode: PermissionMode,
   ) => Promise<boolean>;
-  deleteThread: (threadId: string, projectId: string) => Promise<void>;
+  /** `deleteBranch`: the worktree thread's branch goes with its worktree. */
+  deleteThread: (
+    threadId: string,
+    projectId: string,
+    options?: { deleteBranch?: boolean },
+  ) => Promise<void>;
   /** Delete a scratch thread (no project / no worktree). */
   deleteScratchThread: (threadId: string) => Promise<void>;
   /**

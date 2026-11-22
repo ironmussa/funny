@@ -294,6 +294,8 @@ export function createTestDb() {
       error TEXT,
       input TEXT NOT NULL DEFAULT '{}',
       result_ref TEXT,
+      origin TEXT NOT NULL DEFAULT 'user',
+      effects TEXT,
       started_at TEXT NOT NULL,
       ended_at TEXT,
       updated_at TEXT NOT NULL

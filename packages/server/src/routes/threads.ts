@@ -8,6 +8,7 @@
  */
 
 import type { CommentAuthor, Thread, ThreadComment } from '@funny/shared';
+import { threadDeleteQuery } from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context, type Next } from 'hono';
@@ -44,17 +45,18 @@ import {
 import { forgetThreadOwnership } from '../services/data-ownership.js';
 import { noteOwnerFollowUp } from '../services/factory/factory-follow-ups.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
-import {
-  authorizedRunnerRequests,
-  runnerActor,
-  withRunnerFor,
-} from '../services/runner-access/index.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
 import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
 import { retrySandboxThreadSchema } from '../services/thread-sandboxes/sandbox-thread.js';
+import {
+  requestScratchCleanup,
+  removesScratchOnDelete,
+  requestThreadWorkspaceCleanup,
+  workspaceToRemoveOnDelete,
+} from '../services/thread-workspace-cleanup.js';
 import { parseJsonBody } from '../validation/request.js';
 import { refuseRetiredRoute } from './retired-rest.js';
 
@@ -631,52 +633,44 @@ threadRoutes.patch('/:id/queue/:messageId', requireThreadOwner, async (c) => {
   return c.json({ ok: !!updated, queuedCount, message: updated });
 });
 
-// ── Delete thread (native + proxy cleanup) ───────────────────────
+// ── Delete thread ─────────────────────────────────────────────
 
 threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
   const threadId = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const thread = c.get('thread');
+  const query = threadDeleteQuery.safeParse(c.req.query());
+  const deleteBranch = query.success && query.data.deleteBranch === 'true';
 
-  // Delete from local DB
+  // Read before the row goes: the runner cannot look a deleted thread up.
+  const workspace = workspaceToRemoveOnDelete(thread);
+
   await threadRepo.deleteThread(threadId);
   forgetThreadOwnership(threadId);
-
-  // Find which runner handles this thread and clean up there too
-  const runnerInfo = await threadRegistry.getRunnerForThread(threadId, userId);
-
-  // Unregister from central DB and cache
   await threadRegistry.unregisterThread(threadId);
   runnerResolver.uncacheThread(threadId);
-
-  // Proxy the delete to the runner. The runner may have lost access to the
-  // thread's project since (binding change), so this certifies ownership only.
-  // A refused or offline runner is fine: the central DB is already clean.
-  if (runnerInfo) {
-    const thread = c.get('thread');
-    await withRunnerFor(
-      runnerActor({
-        userId,
-        role: c.get('userRole') as string | undefined,
-        orgId: c.get('organizationId') as string | undefined,
-        orgName: c.get('organizationName') as string | undefined,
-      }),
-      { kind: 'owned-runner', runnerId: runnerInfo.runnerId },
-      c.env?.runnerPresence,
-      (actor, runner, proof) =>
-        authorizedRunnerRequests(c.env?.runnerRequests)
-          .send(actor, runner, proof, {
-            method: 'DELETE',
-            path: `/api/threads/${threadId}`,
-            headers: { 'Content-Type': 'application/json' },
-          })
-          .catch(() => undefined),
-    ).catch(() => undefined);
-    void thread;
-  }
 
   // A sandbox thread's machine goes with it (thread-sandboxes). Provider calls
   // take seconds, so the answer does not wait for them.
   void destroyThreadSandbox(threadId);
+
+  // The thread's workspace on its runner, after the answer (track-funny-actions,
+  // design D8): the owner's runner only; a runner that cannot be reached is
+  // recorded as a failed cleanup. The worktree path comes from the row.
+  const requests = c.env?.runnerRequests;
+  if (requests) {
+    const ports = { requests, presence: c.env?.runnerPresence };
+    const ownerId = thread.userId;
+    if (workspace) {
+      void requestThreadWorkspaceCleanup(ports, {
+        userId: ownerId,
+        thread: workspace,
+        deleteBranch,
+        reason: 'thread-deleted',
+      });
+    } else if (removesScratchOnDelete(thread)) {
+      void requestScratchCleanup(ports, { userId: ownerId, threadId });
+    }
+  }
 
   return c.json({ ok: true });
 });

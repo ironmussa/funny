@@ -22,6 +22,7 @@ import {
 } from '@funny/core/github-app';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
+import { createServerActivities, type ServerActivities } from '../activities/server-activities.js';
 import type { AccessLevel, IssueError, RepoToken } from '../github-app/token-issuer.js';
 
 /** The pull request of a run, and whose access caps the token. */
@@ -100,6 +101,8 @@ export interface FactoryPullRequestsDeps {
   ownerToken(userId: string, projectId: string): Promise<string | null>;
   fetch?: typeof fetch;
   api?: string;
+  /** Records each merge as a `factory.merge` activity of the enabler (default: the server's). */
+  activities?: Pick<ServerActivities, 'recordServerActivity'>;
 }
 
 /** What to do about each way a token could not be minted. */
@@ -131,6 +134,40 @@ const callError = (error: GithubCallError): FactoryPullRequestError =>
     : { kind: 'github-error', message: error.message };
 
 export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): FactoryPullRequests {
+  const activities = deps.activities ?? createServerActivities();
+
+  /**
+   * A merge the factory made for its enabler (track-funny-actions): the merged
+   * pull request, and the remote branch when it was deleted. A branch left
+   * behind fails the activity, not the merge step.
+   */
+  const recordMerge = (pr: FactoryPullRequestRef, branchError: string | null, deleted: boolean) =>
+    activities.recordServerActivity(
+      {
+        kind: 'factory.merge',
+        userId: pr.userId,
+        projectId: pr.projectId,
+        title: `Merged ${pr.repo}#${pr.number}`,
+        input: { prNumber: pr.number },
+        origin: 'system',
+      },
+      branchError
+        ? {
+            ok: false,
+            error: `Merged, but the branch ${pr.branch} could not be deleted: ${branchError}`,
+            effects: [{ effect: 'pr-merged', target: `${pr.repo}#${pr.number}` }],
+          }
+        : {
+            ok: true,
+            effects: [
+              { effect: 'pr-merged', target: `${pr.repo}#${pr.number}` },
+              ...(deleted && pr.branch
+                ? [{ effect: 'remote-branch-deleted' as const, target: pr.branch }]
+                : []),
+            ],
+          },
+    );
+
   /** A token for the run's repository, refused when the enabler's level is below `needs`. */
   const tokenFor =
     (pr: FactoryPullRequestRef, needs: AccessLevel) =>
@@ -188,22 +225,27 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
                 return okAsync({ kind: 'not-mergeable', reason: result.reason });
               }
               if (!options.deleteBranch || !pr.branch) {
-                return okAsync({ kind: 'merged', method: result.method, branchDeleted: false });
-              }
-              return github
-                .deleteBranch(pr.repo, pr.branch)
-                .map((): FactoryMergeOutcome => ({
-                  kind: 'merged',
-                  method: result.method,
-                  branchDeleted: true,
-                }))
-                .orElse(() =>
-                  // The merge stands; a branch left behind is not a failed merge.
-                  okAsync<FactoryMergeOutcome, FactoryPullRequestError>({
+                return ResultAsync.fromSafePromise(recordMerge(pr, null, false)).map(
+                  (): FactoryMergeOutcome => ({
                     kind: 'merged',
                     method: result.method,
                     branchDeleted: false,
                   }),
+                );
+              }
+              return github
+                .deleteBranch(pr.repo, pr.branch)
+                .map(() => null)
+                .orElse((error) => okAsync<string | null, never>(error.message))
+                .andThen((branchError) =>
+                  // The merge stands; a branch left behind is not a failed merge.
+                  ResultAsync.fromSafePromise(recordMerge(pr, branchError, !branchError)).map(
+                    (): FactoryMergeOutcome => ({
+                      kind: 'merged',
+                      method: result.method,
+                      branchDeleted: !branchError,
+                    }),
+                  ),
                 );
             });
         });

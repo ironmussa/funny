@@ -105,7 +105,7 @@ describe('worktrees under FUNNY_WORKTREE_ROOT', () => {
     mkdirSync(orphan);
 
     const pruned = await pruneOrphanWorktrees(repoPath);
-    expect(pruned._unsafeUnwrap()).toBe(1);
+    expect(pruned._unsafeUnwrap()).toEqual([orphan]);
     expect(existsSync(orphan)).toBe(false);
     expect(existsSync(own._unsafeUnwrap())).toBe(true);
     expect(existsSync(other._unsafeUnwrap())).toBe(true);

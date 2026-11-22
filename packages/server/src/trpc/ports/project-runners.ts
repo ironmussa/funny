@@ -16,6 +16,10 @@ import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import {
+  createServerActivities,
+  type ServerActivities,
+} from '../../services/activities/server-activities.js';
 import * as projectRepo from '../../services/project-repository.js';
 import {
   authorizedRunnerRequests,
@@ -51,6 +55,8 @@ export async function stopProjectSessionsOnRunners(
   ports: RunnerPorts,
   projectId: string,
   runnerIds: string[],
+  reason: 'runner-binding-changed' | 'runner-revoked' = 'runner-binding-changed',
+  activities: Pick<ServerActivities, 'recordServerActivity'> = defaultActivities(),
 ): Promise<void> {
   if (!ports.requests || runnerIds.length === 0) return;
   const project = await projectRepo.getProject(projectId);
@@ -58,7 +64,7 @@ export async function stopProjectSessionsOnRunners(
   const owner = runnerActor({ userId: project.userId });
   const sink = authorizedRunnerRequests(ports.requests);
   const active = await db
-    .select({ id: threads.id, runnerId: threads.runnerId })
+    .select({ id: threads.id, runnerId: threads.runnerId, title: threads.title })
     .from(threads)
     .where(
       and(
@@ -67,6 +73,7 @@ export async function stopProjectSessionsOnRunners(
         inArray(threads.status, ACTIVE_STATUSES),
       ),
     );
+  const stopped: string[] = [];
   for (const t of active) {
     if (!t.runnerId) continue;
     const result = await withRunnerFor(
@@ -82,6 +89,7 @@ export async function stopProjectSessionsOnRunners(
             headers: { 'Content-Type': 'application/json' },
             body: null,
           });
+          stopped.push(t.title || t.id);
         } catch (e) {
           log.warn('Failed to stop thread on revoked runner', {
             namespace: 'project-runner-settings',
@@ -102,6 +110,32 @@ export async function stopProjectSessionsOnRunners(
       });
     }
   }
+  // The owner is told which agents the binding change stopped (track-funny-actions).
+  if (stopped.length > 0) {
+    await activities.recordServerActivity(
+      {
+        kind: 'agents.stopped',
+        userId: project.userId,
+        projectId,
+        title:
+          stopped.length === 1
+            ? 'Stopped 1 agent: its runner no longer serves this project'
+            : `Stopped ${stopped.length} agents: their runner no longer serves this project`,
+        input: { reason },
+        origin: 'implicit',
+      },
+      {
+        ok: true,
+        effects: stopped.map((target) => ({ effect: 'agent-stopped' as const, target })),
+      },
+    );
+  }
+}
+
+let sharedActivities: ServerActivities | null = null;
+function defaultActivities(): ServerActivities {
+  sharedActivities ??= createServerActivities();
+  return sharedActivities;
 }
 
 const projectNotFound = () => err(failure(404, 'Project not found'));

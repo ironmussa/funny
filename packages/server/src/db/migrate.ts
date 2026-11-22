@@ -2178,6 +2178,15 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    // track-funny-actions (design D4): who started an activity and what it
+    // changed. Existing rows read as user-started with no effects.
+    name: '106_activities_origin_effects',
+    async up() {
+      await ctx().addColumn('activities', 'origin', 'TEXT NOT NULL', "'user'");
+      await ctx().addColumn('activities', 'effects', 'TEXT');
+    },
+  },
 ];
 
 /**

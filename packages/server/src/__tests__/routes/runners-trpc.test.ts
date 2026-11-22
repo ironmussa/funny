@@ -252,11 +252,44 @@ describe('runners over tRPC', () => {
           return { status: 200, headers: {}, body: '{}' };
         },
       };
-      await stopProjectSessionsOnRunners({ requests }, 'px', ['bob-r', 'laptop']);
+      const recorded: Array<{ spec: any; outcome: any }> = [];
+      const activities = {
+        recordServerActivity: async (spec: any, outcome: any) => {
+          recorded.push({ spec, outcome });
+        },
+      };
+      await stopProjectSessionsOnRunners(
+        { requests },
+        'px',
+        ['bob-r', 'laptop'],
+        'runner-binding-changed',
+        activities,
+      );
       expect(sent.map((s) => [s.runnerId, s.path])).toEqual([
         ['laptop', '/api/threads/on-laptop/stop'],
       ]);
       expect(signedFor('alice', sent[0]!)).toBe(true);
+      // The owner is told which agent was stopped (track-funny-actions).
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0]!.spec).toMatchObject({
+        kind: 'agents.stopped',
+        userId: 'alice',
+        projectId: 'px',
+        input: { reason: 'runner-binding-changed' },
+      });
+      expect(recorded[0]!.outcome.effects).toHaveLength(1);
+      expect(recorded[0]!.outcome.effects[0].effect).toBe('agent-stopped');
+
+      // Nothing running: nothing stopped, nothing recorded.
+      recorded.length = 0;
+      await stopProjectSessionsOnRunners(
+        { requests },
+        'px',
+        ['nobody-r'],
+        'runner-binding-changed',
+        activities,
+      );
+      expect(recorded).toHaveLength(0);
     });
 
     test('the project GitHub token is stored but never returned', async () => {

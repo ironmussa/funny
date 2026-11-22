@@ -818,6 +818,8 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'activity:updated': (_threadId, data) => {
     const outcome = applyActivityUpdated(data);
     if (outcome?.becameFailed) notifyActivityFailed(outcome.activity);
+    // A clone can outlive the screen that started it: show its project anyway.
+    if (outcome?.createdProjectId) void useProjectStore.getState().loadProjects();
   },
   'activity:removed': (_threadId, data) => applyActivitiesRemoved(data),
   'activity:progress': (_threadId, data) => applyActivityProgress(data),

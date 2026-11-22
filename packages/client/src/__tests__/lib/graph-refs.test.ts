@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import type { GraphRefDTO } from '@/lib/api/git';
 import {
+  pinThreadBranchFirst,
   foldGraphRefs,
   graphBranchTipHashByLabel,
   graphNodeForkedFromRefLabels,
@@ -509,5 +510,34 @@ describe('graphBranchTipHashByLabel', () => {
       ['feat/x', 'feature-tip'],
       ['master', 'master-tip'],
     ]);
+  });
+});
+
+describe('pinThreadBranchFirst', () => {
+  const refs = foldGraphRefs(
+    [
+      { name: 'funny/check-run', kind: 'local' },
+      { name: 'funny/regression', kind: 'local' },
+      { name: 'v1.0', kind: 'tag' },
+    ],
+    null,
+  );
+
+  it('moves the thread branch to the front and keeps the others in order', () => {
+    expect(pinThreadBranchFirst(refs, 'funny/regression').map((r) => r.name)).toEqual([
+      'funny/regression',
+      'funny/check-run',
+      'v1.0',
+    ]);
+  });
+
+  it('returns the same array when the thread branch is already first or absent', () => {
+    expect(pinThreadBranchFirst(refs, 'funny/check-run')).toBe(refs);
+    expect(pinThreadBranchFirst(refs, 'other')).toBe(refs);
+    expect(pinThreadBranchFirst(refs, null)).toBe(refs);
+  });
+
+  it('does not pin a tag that shares the thread branch name', () => {
+    expect(pinThreadBranchFirst(refs, 'v1.0')).toBe(refs);
   });
 });

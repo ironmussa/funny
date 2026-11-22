@@ -190,7 +190,7 @@ describe('factory over tRPC', () => {
     expect((await query('carol', 'activeRuns', undefined)).body).toEqual([]);
   });
 
-  test('queueRuns lists the caller own unended runs, queued ones too, with their project', async () => {
+  test('queueRuns lists the caller own unended runs and the recently ended ones, with their project', async () => {
     const { createFactorySettingsService } =
       await import('../../services/factory/factory-settings.js');
     const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
@@ -207,14 +207,25 @@ describe('factory over tRPC', () => {
     const queued = await seed(alice, 1, 'requested');
     const working = await seed(alice, 2, 'working');
     const parked = await seed(alice, 3, 'waiting_human');
-    await seed(alice, 4, 'merged');
-    await seed(alice, 5, 'stopped');
+    const merged = await seed(alice, 4, 'merged');
+    const stopped = await seed(alice, 5, 'stopped');
+    const failed = await seed(alice, 7, 'failed');
+    const oldMerge = await seed(alice, 8, 'merged');
     await seed(bob, 6, 'requested');
+    const { db } = await import('../../db/index.js');
+    const { factoryRuns } = await import('../../db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    // An ended run (merged, failed or stopped) shows for two weeks after it ended.
+    const endedAt = async (id: string, completedAt: string) =>
+      db.update(factoryRuns).set({ completedAt }).where(eq(factoryRuns.id, id));
+    const recently = new Date().toISOString();
+    for (const run of [merged, stopped, failed]) await endedAt(run.id, recently);
+    await endedAt(oldMerge.id, '2026-01-01T00:00:00.000Z');
 
     const listed = await query('alice', 'queueRuns', undefined);
     expect(listed.status).toBe(200);
     expect(listed.body.map((run: { id: string }) => run.id).sort()).toEqual(
-      [queued.id, working.id, parked.id].sort(),
+      [queued.id, working.id, parked.id, merged.id, stopped.id, failed.id].sort(),
     );
     expect(listed.body.every((run: { projectId: string }) => run.projectId === 'p1')).toBe(true);
     expect((await query('carol', 'queueRuns', undefined)).body).toEqual([]);

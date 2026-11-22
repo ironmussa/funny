@@ -1,32 +1,35 @@
 /**
  * The factory view (`/factory`): every run of the caller's issue factories,
- * across projects, that has not ended or failed recently — grouped as waiting
- * for the member, in progress, in the queue and failed. Laid out like the
- * global search view; a row opens the run's last agent thread, and carries the
- * run's controls (PR, retry, stop).
+ * across projects, that has not ended or ended in the last two weeks — ordered
+ * as waiting for the member, in progress, in the queue, failed and ended
+ * (merged or stopped). Laid out like the
+ * global search view (search bar and a status filter on top, one row per run
+ * with its thread's status icon); a row opens the run's last agent thread, and
+ * carries the run's controls (PR, retry, stop).
  */
-import { Factory } from 'lucide-react';
+import { Clock, Factory } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
 import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
+import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { useFactoryQueueRuns } from '@/data/factory/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import type { FactoryQueueRun } from '@/lib/api/factory';
+import type { FactoryQueueRun, FactoryRun } from '@/lib/api/factory';
 import {
   FACTORY_QUEUE_SECTIONS,
   factoryRunStateLabel,
   factoryRunStateVariant,
   factoryWaitReasonText,
   groupFactoryRuns,
-  type FactoryQueueSection,
 } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
@@ -65,9 +68,16 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: Row
 
   return (
     <li
-      className="hover:bg-accent/50 flex items-center gap-3 rounded-md px-3 py-2"
+      className="group/row text-muted-foreground hover:bg-accent/50 hover:text-foreground flex items-center gap-1.5 rounded-md py-1.5 pr-3 pl-2"
       data-testid={`factory-view-run-${run.id}`}
     >
+      <span className="flex w-4 shrink-0 justify-center self-start pt-0.5">
+        {thread ? (
+          <ThreadStatusPin thread={thread} hoverGroup="row" showStatusTooltip />
+        ) : (
+          <Clock className="icon-sm text-muted-foreground" />
+        )}
+      </span>
       <button
         type="button"
         className={cn(
@@ -78,7 +88,7 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: Row
         onClick={open}
         data-testid={`factory-view-open-${run.id}`}
       >
-        <span className="w-full truncate text-sm">{title}</span>
+        <span className="text-foreground w-full truncate text-sm">{title}</span>
         <span className="text-muted-foreground flex w-full min-w-0 items-center gap-1.5 text-xs">
           {projectName && <span className="shrink-0">{projectName}</span>}
           <span className="shrink-0">/</span>
@@ -103,39 +113,67 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: Row
   );
 });
 
+/** The run states, in the order the status filter lists them. */
+const STATE_ORDER: readonly FactoryRun['state'][] = [
+  'waiting_human',
+  'requested',
+  'queued',
+  'working',
+  'pr_open',
+  'waiting_ci',
+  'fixing',
+  'failed',
+  'merged',
+  'stopped',
+];
+
 export function FactoryQueueView() {
   const { t } = useTranslation();
   const runs = useFactoryQueueRuns();
   const projects = useProjects();
   const now = useMinuteTick();
   const [search, setSearch] = useState('');
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [stateFilter, setStateFilter] = useState<Set<string>>(() => new Set());
 
   const projectNameById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
     [projects],
   );
 
+  const stateCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const run of runs ?? []) counts[run.state] = (counts[run.state] ?? 0) + 1;
+    return counts;
+  }, [runs]);
+
+  /** Runs in the view's order: waiting for the member, in progress, in the queue, failed, ended. */
   const filtered = useMemo(() => {
     if (!runs) return undefined;
-    const needle = search.trim().toLowerCase().replace(/^#/, '');
-    if (!needle) return runs;
-    return runs.filter(
+    const raw = search.trim().replace(/^#/, '');
+    const needle = caseSensitive ? raw : raw.toLowerCase();
+    const matches = (text: string) => (caseSensitive ? text : text.toLowerCase()).includes(needle);
+    const kept = runs.filter(
       (run) =>
-        String(run.issueNumber).includes(needle) ||
-        (projectNameById.get(run.projectId) ?? '').toLowerCase().includes(needle) ||
-        (run.currentStep ?? '').toLowerCase().includes(needle),
+        (stateFilter.size === 0 || stateFilter.has(run.state)) &&
+        (!needle ||
+          String(run.issueNumber).includes(needle) ||
+          matches(projectNameById.get(run.projectId) ?? '') ||
+          matches(run.currentStep ?? '')),
     );
-  }, [runs, search, projectNameById]);
+    const groups = groupFactoryRuns(kept);
+    return FACTORY_QUEUE_SECTIONS.flatMap((section) => groups[section]);
+  }, [runs, search, caseSensitive, stateFilter, projectNameById]);
 
-  const groups = useMemo(() => (filtered ? groupFactoryRuns(filtered) : undefined), [filtered]);
+  const toggleState = (state: string) =>
+    setStateFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(state)) next.delete(state);
+      else next.add(state);
+      return next;
+    });
 
-  const sectionTitle: Record<FactoryQueueSection, string> = {
-    waiting: t('factoryView.waiting', 'Waiting for you'),
-    active: t('factoryView.active', 'In progress'),
-    queue: t('factoryView.queue', 'In queue'),
-    failed: t('factoryView.failed', 'Failed recently'),
-  };
-
+  const hasActiveFilters = stateFilter.size > 0;
   const projectCount = runs ? new Set(runs.map((run) => run.projectId)).size : 0;
 
   return (
@@ -155,19 +193,50 @@ export function FactoryQueueView() {
         </div>
       </div>
 
-      <div className="border-border border-b px-4 py-2">
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
+      <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
+        <SearchBar
+          query={search}
+          onQueryChange={setSearch}
+          totalMatches={filtered?.length ?? 0}
+          resultLabel={search.trim() ? `${filtered?.length ?? 0}/${runs?.length ?? 0}` : ''}
+          caseSensitive={caseSensitive}
+          onCaseSensitiveChange={setCaseSensitive}
+          onClose={search ? () => setSearch('') : undefined}
+          autoFocus={false}
           placeholder={t('factoryView.searchPlaceholder', 'Filter by issue, project or step')}
-          className="h-7 max-w-sm text-sm"
-          data-testid="factory-view-search"
+          testIdPrefix="factory-view-search"
+          className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
         />
+
+        <div className="bg-border h-4 w-px" />
+
+        <FilterDropdown
+          testId="factory-view-status-filter"
+          label={t('allThreads.filterStatus')}
+          options={STATE_ORDER.map((state) => ({
+            value: state,
+            label: factoryRunStateLabel(t, state),
+          }))}
+          selected={stateFilter}
+          onToggle={toggleState}
+          counts={stateCounts}
+        />
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            data-testid="factory-view-clear-filters"
+            onClick={() => setStateFilter(new Set())}
+            className="text-muted-foreground hover:text-foreground px-2 py-1 text-xs whitespace-nowrap transition-colors"
+          >
+            {t('allThreads.clearFilters')}
+          </button>
+        )}
       </div>
 
-      {!groups ? (
+      {!filtered ? (
         <LoadingState testId="factory-view-loading" />
-      ) : filtered?.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={Factory}
           title={t('factoryView.empty', 'Nothing in the factory')}
@@ -179,26 +248,16 @@ export function FactoryQueueView() {
         />
       ) : (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-4 p-3">
-            {FACTORY_QUEUE_SECTIONS.filter((id) => groups[id].length > 0).map((id) => (
-              <section key={id} data-testid={`factory-view-section-${id}`}>
-                <h3 className="text-muted-foreground mb-1 flex items-center gap-2 px-3 text-xs font-medium uppercase">
-                  {sectionTitle[id]}
-                  <span>{groups[id].length}</span>
-                </h3>
-                <ul>
-                  {groups[id].map((run) => (
-                    <FactoryRunRow
-                      key={run.id}
-                      run={run}
-                      projectName={projectNameById.get(run.projectId)}
-                      now={now}
-                    />
-                  ))}
-                </ul>
-              </section>
+          <ul className="flex flex-col gap-0.5 p-2" data-testid="factory-view-list">
+            {filtered.map((run) => (
+              <FactoryRunRow
+                key={run.id}
+                run={run}
+                projectName={projectNameById.get(run.projectId)}
+                now={now}
+              />
             ))}
-          </div>
+          </ul>
         </ScrollArea>
       )}
     </div>

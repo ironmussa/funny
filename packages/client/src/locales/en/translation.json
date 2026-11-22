@@ -1091,7 +1091,7 @@
   },
   "worktreeSettings": {
     "main": "Main",
-    "active": "Active",
+    "active": "Current",
     "mainDescription": "Original repository checkout. It cannot be deleted as a linked worktree.",
     "activeDescription": "Working directory currently shown in the review panel.",
     "noProject": "No project selected. Add a project first to manage worktrees.",
@@ -1105,7 +1105,8 @@
     "baseBranch": "Base branch",
     "creating": "Creating...",
     "loadingWorktrees": "Loading worktrees...",
-    "noWorktrees": "No worktrees found. Create one to get started."
+    "noWorktrees": "No worktrees found. Create one to get started.",
+    "openThread": "Open thread: {{title}}"
   },
   "common": {
     "cancel": "Cancel",
@@ -1844,10 +1845,6 @@
     "title": "Factory queue",
     "summary": "{{projects}} projects · {{runs}} runs",
     "searchPlaceholder": "Filter by issue, project or step",
-    "waiting": "Waiting for you",
-    "active": "In progress",
-    "queue": "In queue",
-    "failed": "Failed recently",
     "empty": "Nothing in the factory",
     "emptyDescription": "Issues sent to a project factory show here while they wait and run.",
     "issueTitle": "Issue #{{number}}"

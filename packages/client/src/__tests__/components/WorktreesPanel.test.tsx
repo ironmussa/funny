@@ -126,15 +126,15 @@ describe('Worktrees sidebar', () => {
     const view = renderWithProviders(<WorktreesPanel />);
     await screen.findByText('feature/test');
     const mainBadge = screen.getByText('Main');
-    const activeBadge = screen.getByText('Active');
+    const currentBadge = screen.getByText('Current');
     expect(mainBadge.parentElement).toHaveTextContent('main');
-    expect(activeBadge.parentElement).toHaveTextContent('feature/test');
+    expect(currentBadge.parentElement).toHaveTextContent('feature/test');
     context.basePath = '/second';
     view.rerender(<WorktreesPanel />);
-    expect(screen.getByText('Main').parentElement).toContainElement(screen.getByText('Active'));
+    expect(screen.getByText('Main').parentElement).toContainElement(screen.getByText('Current'));
     context.basePath = '';
     view.rerender(<WorktreesPanel />);
-    expect(screen.queryByText('Active')).not.toBeInTheDocument();
+    expect(screen.queryByText('Current')).not.toBeInTheDocument();
   });
 
   test('removes worktrees from project settings', () => {

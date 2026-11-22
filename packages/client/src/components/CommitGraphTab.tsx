@@ -67,7 +67,6 @@ import { createClientLogger } from '@/lib/client-logger';
 import {
   graphGutterViewportWidth,
   graphRefLeaderLineXRange,
-  threadBranchShaftPath,
   renderedGraphLaneCount,
 } from '@/lib/commit-graph-layout';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
@@ -91,6 +90,7 @@ import {
   graphNodeParentRefLabels,
   type GraphNodeParentLabel,
   inferUnpulledHashesFromGraphEntries,
+  pinThreadBranchFirst,
   summarizeGraphBranches,
   type GraphBranchSummary,
 } from '@/lib/graph-refs';
@@ -944,13 +944,29 @@ function useScrollToThreadBranch({
   }, [visible, threadId, threadBranch, index, virtualizer]);
 }
 
-function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: number): number {
-  if (entry.refs.length === 0) return rowHeight / 2;
+function refsContentHeight(entry: Pick<GraphEntry, 'refs' | 'headBranch'>): number {
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const count = foldGraphRefs(entry.refs, entry.headBranch).length;
-  const refsContentH = count * chipLineH + (count - 1) * 4 + 6 + titleLineH;
-  return (rowHeight - refsContentH) / 2 + chipLineH / 2;
+  return count * chipLineH + (count - 1) * 4 + 6 + titleLineH;
+}
+
+function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: number): number {
+  if (entry.refs.length === 0) return rowHeight / 2;
+  return (rowHeight - refsContentHeight(entry)) / 2 + (META_PX + 5) / 2;
+}
+
+/**
+ * Center Y of the commit title line. In a row with branch/tag chips the title
+ * sits under the chips, so it is below the row's middle.
+ */
+export function titleYForRow(
+  entry: Pick<GraphEntry, 'refs' | 'headBranch'>,
+  rowHeight: number,
+): number {
+  if (entry.refs.length === 0) return rowHeight / 2;
+  const titleLineH = Math.round(TITLE_PX * 1.5);
+  return (rowHeight + refsContentHeight(entry)) / 2 - titleLineH / 2;
 }
 
 interface RowRange {
@@ -1586,8 +1602,10 @@ function GraphCommitRow({
   // `Cloud`, a tag shows `Tag`.
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
   const foldedRefs = useMemo(
-    () => foldGraphRefs(entry.refs, entry.headBranch),
-    [entry.refs, entry.headBranch],
+    // The open thread's branch goes first so its arrow runs straight along the
+    // leader line; the order changes with the selected thread.
+    () => pinThreadBranchFirst(foldGraphRefs(entry.refs, entry.headBranch), threadBranch),
+    [entry.refs, entry.headBranch, threadBranch],
   );
   const pullRequestLinks = useMemo(() => {
     const seen = new Set<string>();
@@ -1637,17 +1655,10 @@ function GraphCommitRow({
   // matches the rendered DOM exactly — otherwise line-height/padding rounding
   // leaves the leader line a couple px off the chip's true center.
   const hasRefs = foldedRefs.length > 0;
-  const threadBranchChipIndex = useMemo(
-    () => foldedRefs.findIndex((ref) => isThreadBranchRef(ref, threadBranch)),
-    [foldedRefs, threadBranch],
-  );
+  const threadBranchOnLeader = !!foldedRefs[0] && isThreadBranchRef(foldedRefs[0], threadBranch);
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const chipCenterY = nodeYForRow(entry, rowHeight);
-  // Chips stack with a 4px gap (see the chip column below), so the thread
-  // branch chip's center sits that many chip lines under the first one.
-  const threadChipY =
-    threadBranchChipIndex > 0 ? chipCenterY + threadBranchChipIndex * (chipLineH + 4) : null;
   const nodeYFrac = hasRefs ? chipCenterY / rowHeight : 0.5;
 
   return (
@@ -1709,29 +1720,9 @@ function GraphCommitRow({
                   x2={leaderLine.x2}
                   y2={chipCenterY}
                   stroke={lanePastel}
-                  strokeWidth={threadBranchChipIndex === 0 ? 3 : 1.6}
+                  strokeWidth={threadBranchOnLeader ? 3 : 1.6}
                   strokeLinecap="round"
                 />
-                {threadChipY !== null &&
-                  (() => {
-                    const shaft = threadBranchShaftPath({
-                      x1: leaderLine.x1,
-                      chipLeftX: leaderLine.x2,
-                      leaderY: chipCenterY,
-                      threadChipY,
-                    });
-                    return shaft ? (
-                      <path
-                        d={shaft}
-                        fill="none"
-                        stroke={lanePastel}
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        data-testid="graph-thread-branch-shaft"
-                      />
-                    ) : null;
-                  })()}
               </svg>
             );
           })()}
@@ -1913,27 +1904,37 @@ function GraphCommitRow({
         {/* Time ↔ kebab swap (same component as the sidebar thread rows): the
             relative date rests here and the per-commit actions menu reveals on
             hover, so the two share one cell instead of each reserving width. */}
-        <HoverTimeMenu
-          time={commitTime}
-          timeClassName="text-muted-foreground text-2xs"
-          open={menuOpen}
-          className="min-w-12 self-center"
+        {/* Aligned with the title line, not the row's middle: in a row with
+            branch/tag chips the middle is the chip line. */}
+        <div
+          className="flex min-w-12 shrink-0 items-center self-start"
+          style={{
+            height: titleLineH,
+            marginTop: titleYForRow(entry, rowHeight) - titleLineH / 2,
+          }}
         >
-          <CommitActionsMenu
-            hash={entry.hash}
-            shortHash={entry.shortHash}
-            githubUrl={githubUrl}
-            effectiveThreadId={effectiveThreadId}
-            projectModeId={projectModeId}
-            localBranches={pushableBranches}
-            targetBranches={targetBranches}
-            rebaseEvents={rebaseEvents}
-            onSelectRebaseEvent={onSelectRebaseEvent}
-            onAfterAction={onAfterAction}
-            onOpenChange={setMenuOpen}
-            triggerClassName="text-muted-foreground hover:text-foreground"
-          />
-        </HoverTimeMenu>
+          <HoverTimeMenu
+            time={commitTime}
+            timeClassName="text-muted-foreground text-2xs"
+            open={menuOpen}
+            className="min-w-12"
+          >
+            <CommitActionsMenu
+              hash={entry.hash}
+              shortHash={entry.shortHash}
+              githubUrl={githubUrl}
+              effectiveThreadId={effectiveThreadId}
+              projectModeId={projectModeId}
+              localBranches={pushableBranches}
+              targetBranches={targetBranches}
+              rebaseEvents={rebaseEvents}
+              onSelectRebaseEvent={onSelectRebaseEvent}
+              onAfterAction={onAfterAction}
+              onOpenChange={setMenuOpen}
+              triggerClassName="text-muted-foreground hover:text-foreground"
+            />
+          </HoverTimeMenu>
+        </div>
       </div>
     </div>
   );

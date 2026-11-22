@@ -117,9 +117,9 @@ export function factoryRunSteps(
 }
 
 /** The factory view's groups (`/factory`), in the order it shows them. */
-export type FactoryQueueSection = 'waiting' | 'active' | 'queue' | 'failed';
+export type FactoryQueueSection = 'waiting' | 'active' | 'queue' | 'failed' | 'ended';
 
-const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection | null> = {
+const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   waiting_human: 'waiting',
   queued: 'active',
   working: 'active',
@@ -128,8 +128,8 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection | null> = {
   fixing: 'active',
   requested: 'queue',
   failed: 'failed',
-  merged: null,
-  stopped: null,
+  merged: 'ended',
+  stopped: 'ended',
 };
 
 export const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [
@@ -137,6 +137,7 @@ export const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [
   'active',
   'queue',
   'failed',
+  'ended',
 ];
 
 /** Runs per section; the queue in its order, the others newest first (the server's order). */
@@ -148,11 +149,9 @@ export function groupFactoryRuns<R extends FactoryRun>(
     active: [],
     queue: [],
     failed: [],
+    ended: [],
   };
-  for (const run of runs) {
-    const section = SECTION_OF[run.state];
-    if (section) groups[section].push(run);
-  }
+  for (const run of runs) groups[SECTION_OF[run.state]].push(run);
   groups.queue.sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0));
   return groups;
 }

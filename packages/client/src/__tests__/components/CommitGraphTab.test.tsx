@@ -9,12 +9,12 @@ import {
   GraphGutterHorizontalScroller,
   GraphWipRow,
   RebaseCopyLinksOverlay,
+  titleYForRow,
 } from '@/components/CommitGraphTab';
 import {
   graphGutterViewportWidth,
   graphRefLeaderLineXRange,
   renderedGraphLaneCount,
-  threadBranchShaftPath,
 } from '@/lib/commit-graph-layout';
 import {
   inferUnpulledHashesFromGraphEntries,
@@ -151,20 +151,6 @@ describe('graphRefLeaderLineXRange', () => {
         graphViewportWidth: 120,
         chipLeftX: 144,
       }),
-    ).toBeNull();
-  });
-});
-
-describe('threadBranchShaftPath', () => {
-  test('turns off the leader line down to a thread chip below the first chip', () => {
-    expect(threadBranchShaftPath({ x1: 40, chipLeftX: 144, leaderY: 20, threadChipY: 40 })).toBe(
-      'M 40 20 L 132 20 L 132 35 Q 132 40 137 40 L 144 40',
-    );
-  });
-
-  test('draws nothing when the thread chip is on the leader line', () => {
-    expect(
-      threadBranchShaftPath({ x1: 40, chipLeftX: 144, leaderY: 20, threadChipY: 20 }),
     ).toBeNull();
   });
 });
@@ -849,5 +835,22 @@ describe('RebaseCopyLinksOverlay', () => {
   test('skips a link whose rows are all outside the rendered range', () => {
     renderOverlay({ start: 4, end: 4 });
     expect(screen.queryByTestId('graph-rebase-copy-links')).toBeNull();
+  });
+});
+
+describe('titleYForRow', () => {
+  test('a row without refs centers the title (and the time) on the row', () => {
+    expect(titleYForRow({ refs: [], headBranch: null }, 22)).toBe(11);
+  });
+
+  test('a row with a branch chip puts the title line below the chip, not at the row middle', () => {
+    // Regression: the commit time was centered on the whole row, so in a row
+    // with a branch chip it sat beside the chip instead of beside the title.
+    const entry = { refs: [{ name: 'master', kind: 'local' as const }], headBranch: null };
+    const rowHeight = 43;
+    const titleLineH = 16;
+    const y = titleYForRow(entry, rowHeight);
+    expect(y).toBeGreaterThan(rowHeight / 2);
+    expect(y + titleLineH / 2).toBeLessThanOrEqual(rowHeight);
   });
 });

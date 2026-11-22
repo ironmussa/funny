@@ -80,6 +80,18 @@ describe('realtime', () => {
     expect(again?.becameFailed).toBe(false);
   });
 
+  test('a clone that succeeds reports the project it created, once', () => {
+    seedActivities([buildActivity({ id: 'c1', kind: 'project.clone', status: 'running' })]);
+    const done = buildActivity({
+      id: 'c1',
+      kind: 'project.clone',
+      status: 'succeeded',
+      resultRef: { projectId: 'p-new' },
+    });
+    expect(applyActivityUpdated({ activity: done })?.createdProjectId).toBe('p-new');
+    expect(applyActivityUpdated({ activity: done })?.createdProjectId).toBeNull();
+  });
+
   test('a removal deletes the rows', () => {
     seedActivities([buildActivity({ id: 'a1' }), buildActivity({ id: 'a2' })]);
     applyActivitiesRemoved({ ids: ['a1'] });

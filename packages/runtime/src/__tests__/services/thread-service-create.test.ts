@@ -682,6 +682,9 @@ describe('createAndStartThread', () => {
         mode: 'worktree',
         status: 'setting_up',
         branch: 'my-app/new-feature-fixed-',
+        // No explicit base: the worktree starts from the checkout's branch, and
+        // it is recorded so git status can count the thread's commits.
+        baseBranch: 'main',
       }),
     );
     expect(mocks.tm.insertMessage).toHaveBeenCalledWith(
@@ -705,7 +708,7 @@ describe('createAndStartThread', () => {
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       '/projects/my-app',
       'my-app/new-feature-fixed-',
-      undefined,
+      'main',
       expect.any(Function),
       { reuseExistingBranch: false },
     );
@@ -722,6 +725,24 @@ describe('createAndStartThread', () => {
       }),
     );
     expect(mocks.startAgent).toHaveBeenCalled();
+  });
+
+  test('records no base branch for a worktree thread created from a detached HEAD', async () => {
+    mocks.getCurrentBranch.mockResolvedValue(ok('HEAD'));
+    mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
+    mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
+
+    await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'worktree',
+      prompt: 'Build the feature',
+      title: 'New Feature',
+    });
+
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'worktree', baseBranch: undefined }),
+    );
   });
 
   test('marks worktree thread failed when background createWorktree fails', async () => {

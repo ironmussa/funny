@@ -1,3 +1,4 @@
+import type { Thread } from '@funny/shared';
 import {
   Trash2,
   Plus,
@@ -7,9 +8,10 @@ import {
   FolderOpen,
   ChevronUp,
   GitCommitHorizontal,
+  MessageSquare,
   RefreshCw,
 } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -25,6 +27,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
+import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import {
   listRowActionBusyClassName,
@@ -32,6 +35,9 @@ import {
   listRowClassName,
   listRowTitleClassName,
 } from '@/lib/list-row-styles';
+import { useThreadsForProject } from '@/lib/thread-selectors';
+import { getThreadRoute } from '@/lib/thread-variant';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -44,14 +50,80 @@ interface WorktreeInfo {
   isMain: boolean;
 }
 
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * Threads working in each worktree, keyed by worktree path. A thread matches
+ * by its recorded worktree path; a linked (non-main) worktree also claims a
+ * worktree-mode thread on its branch whose path was not recorded.
+ */
+export function groupThreadsByWorktree(
+  worktrees: WorktreeInfo[],
+  threads: Thread[],
+): Map<string, Thread[]> {
+  const byPath = new Map<string, Thread[]>();
+  const pathKeys = new Map(worktrees.map((wt) => [normalizePath(wt.path), wt.path]));
+  const linkedByBranch = new Map(
+    worktrees.flatMap((wt): [string, string][] =>
+      !wt.isMain && wt.branch ? [[wt.branch, wt.path]] : [],
+    ),
+  );
+  for (const thread of threads) {
+    if (thread.archived) continue;
+    const key = thread.worktreePath
+      ? pathKeys.get(normalizePath(thread.worktreePath))
+      : thread.mode === 'worktree' && thread.branch
+        ? linkedByBranch.get(thread.branch)
+        : undefined;
+    if (!key) continue;
+    const list = byPath.get(key);
+    if (list) list.push(thread);
+    else byPath.set(key, [thread]);
+  }
+  return byPath;
+}
+
+function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
+  const { t } = useTranslation();
+  const navigate = useStableNavigate();
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5" data-testid="worktree-threads">
+      {threads.map((thread) => {
+        const href = buildPath(getThreadRoute(thread));
+        return (
+          <a
+            key={thread.id}
+            href={href}
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+              e.preventDefault();
+              navigate(href);
+            }}
+            title={t('worktreeSettings.openThread', { title: thread.title })}
+            className="text-2xs text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-1.5 hover:underline"
+            data-testid={`worktree-thread-link-${thread.id}`}
+          >
+            <MessageSquare className="icon-xs shrink-0" />
+            <span className="truncate">{thread.title}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function WorktreeCard({
   worktree,
+  threads,
   onRemove,
   removing,
   active,
   readOnly,
 }: {
   worktree: WorktreeInfo;
+  threads: Thread[];
   onRemove: () => void;
   removing: boolean;
   active: boolean;
@@ -101,6 +173,7 @@ function WorktreeCard({
               <CommitHash hash={worktree.commit} />
             </span>
           )}
+          {threads.length > 0 && <WorktreeThreadLinks threads={threads} />}
         </div>
       </div>
       {!readOnly && !worktree.isMain && (
@@ -240,6 +313,11 @@ export function WorktreeSettings({
     : projectId === undefined
       ? projects[0]
       : undefined;
+  const projectThreads = useThreadsForProject(project?.id ?? '');
+  const threadsByWorktree = useMemo(
+    () => groupThreadsByWorktree(worktrees, projectThreads),
+    [worktrees, projectThreads],
+  );
 
   const loadWorktrees = useCallback(async () => {
     if (!project) return;
@@ -423,6 +501,7 @@ export function WorktreeSettings({
                   <WorktreeCard
                     key={wt.path}
                     worktree={wt}
+                    threads={threadsByWorktree.get(wt.path) ?? []}
                     active={!!activePath && wt.path === activePath}
                     readOnly={readOnly}
                     onRemove={() => setConfirmRemove(wt)}

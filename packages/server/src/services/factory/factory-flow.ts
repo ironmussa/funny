@@ -259,7 +259,34 @@ export async function readFactoryFlowDefinition(
   deps: LoadFactoryFlowDeps,
 ): Promise<Result<FactoryFlowDefinition, FactoryFlowError>> {
   const found = await findFactoryFlow(flowName, deps);
-  return found.map(({ source, path, yaml }) => ({ name: flowName, source, path, yaml }));
+  return found.map(({ source, path, yaml, origin }) => {
+    const definition: FactoryFlowDefinition = { name: flowName, source, path, yaml };
+    const same = reviewerSameAsImplementer(yaml, origin);
+    if (same !== undefined) definition.reviewerSameAsImplementer = same;
+    return definition;
+  });
+}
+
+/**
+ * Whether the flow's `review` step resolves to the provider and model of its
+ * implementing agent (its first `spawn_agent`), each falling back to the
+ * flow's `defaults`, then to the enabler's own default. Undefined when the
+ * flow does not parse or has no review step.
+ */
+export function reviewerSameAsImplementer(yaml: string, origin: string): boolean | undefined {
+  const parsed = parseWorkflowYaml(yaml, origin);
+  if (!parsed.ok) return undefined;
+  const { nodes, defaults } = parsed.workflow;
+  const review = nodes.find((node) => node.review)?.review;
+  if (!review) return undefined;
+  const implementer = nodes.find((node) => node.spawn_agent)?.spawn_agent;
+  const resolved = (step: { provider?: string; model?: string } | undefined) => ({
+    provider: step?.provider ?? defaults?.provider ?? null,
+    model: step?.model ?? defaults?.model ?? null,
+  });
+  const a = resolved(implementer);
+  const b = resolved(review);
+  return a.provider === b.provider && a.model === b.model;
 }
 
 /** The built-in flows written for a server-run factory (they push and open a pull request). */

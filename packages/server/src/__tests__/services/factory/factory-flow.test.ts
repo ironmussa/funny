@@ -12,6 +12,7 @@ import {
   isMergeLane,
   loadFactoryFlow,
   readFactoryFlowDefinition,
+  reviewerSameAsImplementer,
 } from '../../../services/factory/factory-flow.js';
 
 function fromRepository(yaml: string) {
@@ -271,5 +272,51 @@ describe('who gets a slot first', () => {
     expect(admissionPriority({ admittedAt: null, startedAt: '2026-11-22T10:00:00.000Z' })).toBe(
       admissionPriority({ admittedAt: '2026-11-22T10:00:00.000Z', startedAt: '' }),
     );
+  });
+});
+
+// Change factory-agent-roles: the settings warn when the reviewer is the implementer's model.
+describe('whether the reviewer is the implementer model', () => {
+  const flow = (implement: string, review: string | null, defaults = '') => `name: custom
+${defaults}nodes:
+  - id: implement
+    spawn_agent: { prompt: do it${implement} }
+${review === null ? '' : `  - id: second-opinion\n    depends_on: [implement]\n    review: ${review}\n`}`;
+  const same = (yaml: string) => reviewerSameAsImplementer(yaml, 'custom.yaml');
+
+  test('both left to the default are the same', () => {
+    expect(same(flow('', '{}'))).toBe(true);
+  });
+
+  test('a review with its own model, or its own provider, is different', () => {
+    expect(same(flow('', '{ model: opus }'))).toBe(false);
+    expect(same(flow(', model: sonnet', '{ provider: codex, model: sonnet }'))).toBe(false);
+  });
+
+  test('the same model named on both is the same', () => {
+    expect(same(flow(', model: sonnet', '{ model: sonnet }'))).toBe(true);
+  });
+
+  test("the flow's defaults count for a step that names nothing", () => {
+    const defaults = 'defaults: { model: sonnet }\n';
+    expect(same(flow('', '{}', defaults))).toBe(true);
+    expect(same(flow('', '{ model: opus }', defaults))).toBe(false);
+    expect(same(flow(', model: sonnet', '{}', defaults))).toBe(true);
+  });
+
+  test('a flow without a review step, or one that does not parse, says nothing', () => {
+    expect(same(flow('', null))).toBeUndefined();
+    expect(same('not: [a flow')).toBeUndefined();
+  });
+
+  test('the built-in flow is read with the answer', async () => {
+    const read = await readFactoryFlowDefinition('issue-to-merge', {
+      readDefaultBranchFile: async () => ok(null),
+    });
+    expect(read._unsafeUnwrap().reviewerSameAsImplementer).toBe(true);
+    const pr = await readFactoryFlowDefinition('issue-to-pr', {
+      readDefaultBranchFile: async () => ok(null),
+    });
+    expect(pr._unsafeUnwrap().reviewerSameAsImplementer).toBeUndefined();
   });
 });

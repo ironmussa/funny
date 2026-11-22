@@ -21,6 +21,8 @@ import { useFactoryRuns } from '@/data/factory/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
 import {
   ENDED_FACTORY_STATES as ENDED,
+  factoryRunReasonText,
+  factoryRunReviewLabel,
   factoryRunStateLabel as stateLabel,
   factoryRunStateVariant as stateVariant,
   factoryWaitReasonText,
@@ -31,6 +33,8 @@ import { toastError } from '@/lib/toast-error';
 function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
   const { t } = useTranslation();
   const lastThread = run.threadIds.at(-1);
+  const review = factoryRunReviewLabel(t, run);
+  const parked = run.state === 'waiting_human' || run.state === 'failed';
   return (
     <li className="flex items-center gap-2 py-1.5 text-sm" data-testid={`factory-run-${run.id}`}>
       <span className="w-14 shrink-0 font-medium">#{run.issueNumber}</span>
@@ -41,6 +45,34 @@ function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
       {run.state === 'requested' && run.waitReason && (
         <span className="text-muted-foreground truncate" data-testid={`factory-run-wait-${run.id}`}>
           {factoryWaitReasonText(t, run.waitReason)}
+        </span>
+      )}
+      {review && (
+        <Badge
+          size="xs"
+          variant={review.passed ? 'outline' : 'destructive'}
+          data-testid={`factory-run-review-${run.id}`}
+        >
+          {review.text}
+        </Badge>
+      )}
+      {run.risk?.level === 'high' && (
+        <Badge
+          size="xs"
+          variant="outline"
+          title={run.risk.reasons.join('; ')}
+          data-testid={`factory-run-risk-${run.id}`}
+        >
+          {t('factory.risk.high', 'High risk')}
+        </Badge>
+      )}
+      {parked && run.failureReason && (
+        <span
+          className="text-muted-foreground truncate"
+          title={run.failureReason}
+          data-testid={`factory-run-reason-${run.id}`}
+        >
+          {factoryRunReasonText(t, run.failureReason)}
         </span>
       )}
       <span className="ml-auto flex shrink-0 items-center gap-1">

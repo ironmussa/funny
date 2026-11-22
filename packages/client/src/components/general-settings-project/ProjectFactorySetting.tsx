@@ -17,6 +17,7 @@ import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryMode, FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
+import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
 import { ProjectFactoryMetrics } from './ProjectFactoryMetrics';
 import { ProjectFactoryRuns } from './ProjectFactoryRuns';
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
@@ -30,13 +31,17 @@ const DEFAULT_FORM = {
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
+  autoMerge: 'low_risk' as FactorySettings['autoMerge'],
+  sensitivePaths: [] as string[],
+  stageLimits: {} as Record<string, number>,
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
 function formValues(settings: FactorySettings | null | undefined) {
   if (!settings) return DEFAULT_FORM;
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
-  return { enabled, mode, label, flowName, maxConcurrent };
+  const { autoMerge, sensitivePaths, stageLimits } = settings;
+  return { enabled, mode, label, flowName, maxConcurrent, autoMerge, sensitivePaths, stageLimits };
 }
 
 /** The trimmed text when it is non-empty and differs from `current`, else null (nothing to save). */
@@ -136,7 +141,8 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
         () => setRevision((r) => r + 1),
       );
 
-  const { enabled, mode, label, flowName, maxConcurrent } = formValues(settings);
+  const form = formValues(settings);
+  const { enabled, mode, label, flowName, maxConcurrent } = form;
   const rowKey = `${settings?.updatedAt ?? 'none'}-${revision}`;
 
   const setEnabled = (value: OnOff) => void save({ enabled: value === 'on' });
@@ -226,6 +232,14 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
               onBlur={(e) => setConcurrency(e.target.value)}
             />
           </ProjectSettingRow>
+
+          <ProjectFactoryMergeRows
+            projectId={projectId}
+            flowName={flowName}
+            settings={form}
+            rowKey={rowKey}
+            onSave={(input) => void save({ enabled, ...input })}
+          />
         </>
       )}
 

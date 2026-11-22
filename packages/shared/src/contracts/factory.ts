@@ -306,6 +306,13 @@ export interface FactoryFlowDefinition {
   /** The file in the repository (`.funny/workflows/<name>.yaml`); null for a built-in. */
   path: string | null;
   yaml: string;
+  /**
+   * True when the flow has a `review` step that resolves to the same provider
+   * and model as its implementing agent (both left to the default count as the
+   * same): the reviewer then tends to miss what the implementer missed. Absent
+   * when the flow has no review step or cannot be parsed.
+   */
+  reviewerSameAsImplementer?: boolean;
 }
 
 /** The open blockers of some issues (the send bar's warning). */

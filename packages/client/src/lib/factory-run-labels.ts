@@ -23,7 +23,7 @@ export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): 
     waiting_ci: t('factory.state.waitingCi', 'Waiting for CI'),
     fixing: t('factory.state.fixing', 'Fixing CI'),
     reviewing: t('factory.state.reviewing', 'In review'),
-    merging: t('factory.state.merging', 'Merging'),
+    merging: t('factory.state.merging', 'In the merge lane'),
     waiting_human: t('factory.state.waitingHuman', 'Waiting for you'),
     merged: t('factory.state.merged', 'Merged'),
     failed: t('factory.state.failed', 'Failed'),
@@ -202,4 +202,45 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
   );
   const groups = groupFactoryRuns(kept);
   return FACTORY_QUEUE_SECTIONS.flatMap((section) => groups[section]);
+}
+
+/**
+ * Why a parked or failed run stopped, as the server recorded it. The merge
+ * gate's reasons (change factory-agent-roles) get their own wording; any other
+ * reason is shown as it is.
+ */
+export function factoryRunReasonText(t: TFunction, reason: string): string {
+  switch (reason) {
+    case 'no review':
+      return t('factory.reason.noReview', 'Not merged: this commit has no review');
+    case 'review failed':
+      return t('factory.reason.reviewFailed', 'Not merged: its review did not pass');
+    case 'high risk':
+      return t('factory.reason.highRisk', 'Not merged: high risk, it needs you');
+    case 'branch history rewritten':
+      return t('factory.reason.rewritten', 'Not merged: the branch was rewritten');
+    case 'review gave no verdict':
+      return t('factory.reason.noVerdict', 'The review gave no verdict');
+    default:
+      return reason;
+  }
+}
+
+/** The run's review as a short label: the verdict of its newest reviewed commit, or null. */
+export function factoryRunReviewLabel(
+  t: TFunction,
+  run: Pick<FactoryRun, 'reviews'>,
+): { text: string; passed: boolean } | null {
+  const last = run.reviews.at(-1);
+  if (!last) return null;
+  const blocking = last.findings.some(
+    (finding) => finding.severity === 'critical' || finding.severity === 'high',
+  );
+  const passed = last.verdict === 'pass' || (last.findings.length > 0 && !blocking);
+  return {
+    passed,
+    text: passed
+      ? t('factory.review.passed', 'Review passed')
+      : t('factory.review.failed', 'Review failed'),
+  };
 }

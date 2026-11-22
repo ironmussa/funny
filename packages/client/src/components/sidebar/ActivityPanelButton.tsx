@@ -478,6 +478,11 @@ function openRetryTarget(activity: Activity, navigate: (path: string) => void): 
       useUIStore.getState().setAddProjectOpen(true);
     },
     openReviewPane: () => useUIStore.getState().setReviewPaneOpen(true),
+    openWorktrees: () => {
+      const ui = useUIStore.getState();
+      ui.setReviewSubTab('worktrees');
+      ui.setReviewPaneOpen(true);
+    },
   });
 }
 

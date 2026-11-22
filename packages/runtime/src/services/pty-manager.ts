@@ -671,10 +671,10 @@ export function killPty(id: string): void {
  * Called before a thread's worktree or scratch directory is removed, so its
  * shells do not outlive the directory they run in. Each owner gets `pty:exit`
  * so their terminal tab closes: `killPty` forgets the session before the
- * backend reports the exit, so `onExit` cannot tell them. Returns how many
- * sessions were killed.
+ * backend reports the exit, so `onExit` cannot tell them. Returns the names
+ * of the sessions it killed (their label, else their working directory).
  */
-export function killPtysUnderPath(dir: string): number {
+export function killPtysUnderPath(dir: string): string[] {
   const doomed = [...activeSessions.entries()].filter(
     ([, meta]) => !!meta.cwd && isPathWithin(meta.cwd, dir),
   );
@@ -696,7 +696,7 @@ export function killPtysUnderPath(dir: string): number {
       count: doomed.length,
     });
   }
-  return doomed.length;
+  return doomed.map(([ptyId, meta]) => meta.label || meta.cwd || ptyId);
 }
 
 function killAllPtys(): void {

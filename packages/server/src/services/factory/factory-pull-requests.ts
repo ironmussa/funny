@@ -24,6 +24,7 @@ import {
 } from '@funny/core/github-app';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
+import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import type { AccessLevel, IssueError, RepoToken } from '../github-app/token-issuer.js';
 
 /** The pull request of a run, and whose access caps the token. */
@@ -143,6 +144,8 @@ export interface FactoryPullRequestsDeps {
   appId?(): ResultAsync<string | null, IssueError>;
   fetch?: typeof fetch;
   api?: string;
+  /** Records each merge as a `factory.merge` activity of the enabler (default: the server's). */
+  activities?: Pick<ServerActivities, 'recordServerActivity'>;
 }
 
 /** What to do about each way a token could not be minted. */
@@ -174,6 +177,40 @@ const callError = (error: GithubCallError): FactoryPullRequestError =>
     : { kind: 'github-error', message: error.message };
 
 export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): FactoryPullRequests {
+  const activities = deps.activities ?? serverActivities;
+
+  /**
+   * A merge the factory made for its enabler (track-funny-actions): the merged
+   * pull request, and the remote branch when it was deleted. A branch left
+   * behind fails the activity, not the merge step.
+   */
+  const recordMerge = (pr: FactoryPullRequestRef, branchError: string | null, deleted: boolean) =>
+    activities.recordServerActivity(
+      {
+        kind: 'factory.merge',
+        userId: pr.userId,
+        projectId: pr.projectId,
+        title: `Merged ${pr.repo}#${pr.number}`,
+        input: { prNumber: pr.number },
+        origin: 'system',
+      },
+      branchError
+        ? {
+            ok: false,
+            error: `Merged, but the branch ${pr.branch} could not be deleted: ${branchError}`,
+            effects: [{ effect: 'pr-merged', target: `${pr.repo}#${pr.number}` }],
+          }
+        : {
+            ok: true,
+            effects: [
+              { effect: 'pr-merged', target: `${pr.repo}#${pr.number}` },
+              ...(deleted && pr.branch
+                ? [{ effect: 'remote-branch-deleted' as const, target: pr.branch }]
+                : []),
+            ],
+          },
+    );
+
   /** A token for the run's repository, refused when the enabler's level is below `needs`. */
   const tokenFor =
     (pr: FactoryPullRequestRef, needs: AccessLevel) =>
@@ -326,14 +363,23 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
           const merged = options.sha
             ? mergePinned(pr, options.sha, options.method ?? 'squash', options)
             : autoMergeOrMerge(github, pr, options.method);
-          return merged.andThen((outcome) =>
-            outcome.kind === 'merged' && options.deleteBranch && pr.branch
-              ? github
-                  .deleteBranch(pr.repo, pr.branch)
-                  .map((): FactoryMergeOutcome => ({ ...outcome, branchDeleted: true }))
+          return merged.andThen(
+            (outcome): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
+              if (outcome.kind !== 'merged') return okAsync(outcome);
+              if (!options.deleteBranch || !pr.branch) {
+                return ResultAsync.fromSafePromise(recordMerge(pr, null, false)).map(() => outcome);
+              }
+              return github
+                .deleteBranch(pr.repo, pr.branch)
+                .map(() => null)
+                .orElse((error) => okAsync<string | null, never>(error.message))
+                .andThen((branchError) =>
                   // The merge stands; a branch left behind is not a failed merge.
-                  .orElse(() => okAsync<FactoryMergeOutcome, FactoryPullRequestError>(outcome))
-              : okAsync<FactoryMergeOutcome, FactoryPullRequestError>(outcome),
+                  ResultAsync.fromSafePromise(recordMerge(pr, branchError, !branchError)).map(
+                    (): FactoryMergeOutcome => ({ ...outcome, branchDeleted: !branchError }),
+                  ),
+                );
+            },
           );
         });
     },

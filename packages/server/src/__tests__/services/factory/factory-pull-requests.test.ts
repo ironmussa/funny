@@ -26,6 +26,7 @@ function fakeGithub(routes: Record<string, unknown>) {
     calls.push(key);
     if (!(key in routes)) return new Response('not found', { status: 404 });
     const body = routes[key];
+    if (body instanceof Response) return body;
     return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status: 200 });
   });
   return { calls, fetchImpl };
@@ -44,6 +45,7 @@ function portFor(
   token: { level: AccessLevel } | IssueError = { level: 'write' },
 ) {
   const gh = fakeGithub(routes);
+  const recorded: Array<{ spec: { kind: string; userId: string }; outcome: any }> = [];
   const prs = createFactoryPullRequests({
     issue: () =>
       'kind' in token
@@ -51,8 +53,13 @@ function portFor(
         : okAsync({ token: 'tok', expiresAt: '', repo: 'o/r', level: token.level }),
     ownerToken: async () => 'pat_alice',
     fetch: gh.fetchImpl,
+    activities: {
+      recordServerActivity: async (spec, outcome) => {
+        recorded.push({ spec, outcome });
+      },
+    },
   });
-  return { prs, calls: gh.calls };
+  return { prs, calls: gh.calls, recorded };
 }
 
 describe('factory pull requests', () => {
@@ -100,6 +107,53 @@ describe('factory pull requests', () => {
     const outcome = (await prs.merge(pr, { method: 'merge', deleteBranch: true }))._unsafeUnwrap();
     expect(outcome).toEqual({ kind: 'merged', method: 'merge', branchDeleted: true });
     expect(calls).toContain('PUT /repos/o/r/pulls/7/merge');
+  });
+
+  const mergeRoutes = {
+    ...checks('success'),
+    'GET /repos/o/r': {
+      allow_squash_merge: true,
+      allow_merge_commit: true,
+      allow_auto_merge: false,
+    },
+    'PUT /repos/o/r/pulls/7/merge': { merged: true },
+  };
+
+  test('a merge is a factory.merge activity of the enabler with its effects', async () => {
+    const { prs, recorded } = portFor({
+      ...mergeRoutes,
+      'DELETE /repos/o/r/git/refs/heads/factory/7': {},
+    });
+    await prs.merge(pr, { method: 'merge', deleteBranch: true });
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.spec).toMatchObject({ kind: 'factory.merge', userId: 'alice' });
+    expect(recorded[0]!.outcome).toEqual({
+      ok: true,
+      effects: [
+        { effect: 'pr-merged', target: 'o/r#7' },
+        { effect: 'remote-branch-deleted', target: 'factory/7' },
+      ],
+    });
+  });
+
+  test('a branch that cannot be deleted fails the activity, not the merge', async () => {
+    const { prs, recorded } = portFor({
+      ...mergeRoutes,
+      'DELETE /repos/o/r/git/refs/heads/factory/7': new Response('protected', { status: 403 }),
+    });
+    const outcome = (await prs.merge(pr, { method: 'merge', deleteBranch: true }))._unsafeUnwrap();
+    expect(outcome).toEqual({ kind: 'merged', method: 'merge', branchDeleted: false });
+    expect(recorded[0]!.outcome).toMatchObject({
+      ok: false,
+      effects: [{ effect: 'pr-merged', target: 'o/r#7' }],
+    });
+    expect(recorded[0]!.outcome.error).toContain('factory/7');
+  });
+
+  test('a PR not merged records nothing', async () => {
+    const { prs, recorded } = portFor(checks('failure'));
+    await prs.merge(pr);
+    expect(recorded).toHaveLength(0);
   });
 
   test('an enabler who can only read the repository cannot merge', async () => {

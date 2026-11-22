@@ -180,3 +180,81 @@ describe('reconcile', () => {
     expect(reports).toEqual([{ eventType: 'data:activity_reconcile', payload: { liveIds: [] } }]);
   });
 });
+
+describe('origin, effects and recordActivity (track-funny-actions)', () => {
+  const CLEANUP = {
+    kind: 'workspace.cleanup' as const,
+    userId: 'u1',
+    projectId: 'p1',
+    title: 'Clean up worktree',
+    input: { reason: 'manual', deleteBranch: true },
+    origin: 'implicit' as const,
+  };
+
+  test('origin rides on the start; effects on the next report and the terminal one', async () => {
+    const { tracker, reports } = setup();
+    await tracker.trackActivity(CLEANUP, async (activity) => {
+      activity.effect('command-stopped', 'dev');
+      activity.step('Removing worktree');
+      activity.effect('worktree-removed', '/w');
+      return ok(undefined);
+    });
+    await tracker.flush();
+    expect(reports[0].payload.origin).toBe('implicit');
+    expect(reports[1].payload.patch).toEqual({
+      step: 'Removing worktree',
+      effects: [{ effect: 'command-stopped', target: 'dev' }],
+    });
+    expect(reports[2].payload.patch).toEqual({
+      status: 'succeeded',
+      effects: [
+        { effect: 'command-stopped', target: 'dev' },
+        { effect: 'worktree-removed', target: '/w' },
+      ],
+    });
+  });
+
+  test('the origin defaults to user', async () => {
+    const { tracker, reports } = setup();
+    await tracker.trackActivity(SPEC, async () => ok(undefined));
+    await tracker.flush();
+    expect(reports[0].payload.origin).toBe('user');
+  });
+
+  test('recordActivity writes one finished start and does not join the live set', async () => {
+    const { tracker, reports } = setup();
+    const pending = tracker.recordActivity(CLEANUP, {
+      ok: false,
+      error: 'branch is checked out',
+      effects: [{ effect: 'worktree-removed', target: '/w' }],
+    });
+    expect(tracker.liveIds()).toEqual([]);
+    await pending;
+    expect(reports).toHaveLength(1);
+    expect(reports[0].eventType).toBe('data:activity_start');
+    expect(reports[0].payload).toMatchObject({
+      status: 'failed',
+      error: 'branch is checked out',
+      origin: 'implicit',
+      effects: [{ effect: 'worktree-removed', target: '/w' }],
+    });
+  });
+
+  test('recordActivity is retried while disconnected', async () => {
+    const { tracker, reports } = setup(async (_r, n) => {
+      if (n < 2) throw new Error('disconnected');
+      return { ok: true };
+    });
+    await tracker.recordActivity(CLEANUP, { ok: true });
+    expect(reports).toHaveLength(3);
+  });
+
+  test('a successful on-failure kind sends nothing', async () => {
+    const { tracker, reports } = setup();
+    const WAKE = { kind: 'sandbox.wake' as const, userId: 'u1', title: 'Wake', input: {} };
+    await tracker.recordActivity(WAKE, { ok: true });
+    expect(reports).toHaveLength(0);
+    await tracker.recordActivity(WAKE, { ok: false, error: 'lost' });
+    expect(reports).toHaveLength(1);
+  });
+});

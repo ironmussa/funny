@@ -12,11 +12,11 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { Separator } from '@/components/ui/separator';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 export function ProjectConfigSettings() {
   const { t } = useTranslation();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [config, setConfig] = useState<FunnyProjectConfig>({});
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
 

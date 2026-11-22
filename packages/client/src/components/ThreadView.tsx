@@ -15,7 +15,6 @@ import { useSandboxRetry } from '@/hooks/use-sandbox-retry';
 import { useSandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
 import { sandboxSetupFailed } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -60,7 +59,7 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
   const hasProjects = useProjects().length > 0;
-  const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
+  const setAddProjectOpen = useUIStore((s) => s.setAddProjectOpen);
   // Prompt handed over by NewThreadInput so the conversation layout stays put
   // while the freshly created thread loads.
   const location = useLocation();

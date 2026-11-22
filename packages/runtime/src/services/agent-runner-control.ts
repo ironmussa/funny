@@ -65,10 +65,6 @@ export function isAgentRunning(threadId: string): boolean {
   return currentControl().isAgentRunning(threadId);
 }
 
-export function cleanupThreadState(threadId: string): void {
-  currentControl().cleanupThreadState(threadId);
-}
-
 export function extractActiveAgentSnapshot(): ActiveAgentSnapshot {
   return currentControl().extractActiveAgentSnapshot();
 }

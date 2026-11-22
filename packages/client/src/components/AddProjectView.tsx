@@ -21,9 +21,9 @@ import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCloneRetryStore } from '@/stores/clone-retry-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { CloneRepoView } from './CloneRepoView';
 import { FolderPicker } from './FolderPicker';
@@ -33,7 +33,7 @@ type AddMode = 'local' | 'github';
 export function AddProjectView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const loadProjects = useAppStore((s) => s.loadProjects);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
   // A clone retried from the activity panel opens on the GitHub tab, filled.
   const [cloneRetry] = useState(() => useCloneRetryStore.getState().pending);
   useEffect(() => {

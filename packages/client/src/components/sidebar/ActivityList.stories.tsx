@@ -44,6 +44,21 @@ const succeeded = buildActivity({
   endedAt: '2026-11-20T09:30:00.000Z',
 });
 
+const automaticCleanup = buildActivity({
+  id: 'automatic-cleanup',
+  kind: 'workspace.cleanup',
+  title: 'Clean up worktree feature-login',
+  status: 'failed',
+  origin: 'implicit',
+  error: 'Failed to delete branch feature-login: checked out in another worktree',
+  input: { reason: 'thread-archived', branch: 'feature-login', deleteBranch: true },
+  effects: [
+    { effect: 'command-stopped', target: 'bun run dev' },
+    { effect: 'worktree-removed', target: '/home/me/.funny/worktrees/acme/feature-login' },
+  ],
+  endedAt: '2026-11-20T09:50:00.000Z',
+});
+
 const meta = {
   title: 'Sidebar/ActivityList',
   component: ActivityList,
@@ -93,4 +108,8 @@ export const Mixed: Story = {
 
 export const Empty: Story = {
   args: { activities: [] },
+};
+
+export const AutomaticCleanup: Story = {
+  args: { activities: [automaticCleanup, succeeded] },
 };

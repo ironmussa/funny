@@ -1856,7 +1856,24 @@
     "dismiss": "Dismiss",
     "clearFinished": "Clear finished",
     "failedToast": "{{title}} failed",
-    "openPanel": "View"
+    "openPanel": "View",
+    "automatic": "Automatic",
+    "destructive": "Removes or changes things on disk or on GitHub",
+    "effects": {
+      "worktree-removed": "Worktree removed",
+      "branch-deleted": "Branch deleted",
+      "command-stopped": "Command stopped",
+      "terminal-closed": "Terminal closed",
+      "directory-removed": "Folder removed",
+      "branch-checked-out": "Branch checked out",
+      "changes-stashed": "Changes stashed",
+      "sandbox-stopped": "Sandbox stopped",
+      "sandbox-destroyed": "Sandbox destroyed",
+      "pr-merged": "Pull request merged",
+      "remote-branch-deleted": "Remote branch deleted",
+      "agent-stopped": "Agent stopped",
+      "factory-disabled": "Factory turned off"
+    }
   },
   "factoryView": {
     "title": "Factory queue",

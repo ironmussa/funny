@@ -18,11 +18,6 @@ mock.module('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-mock.module('@/stores/app-store', () => ({
-  useAppStore: (selector: (s: any) => any) =>
-    selector({ projects: [{ id: 'p1', name: 'Proj', role: 'owner', userId: 'u1' }] }),
-}));
-
 mock.module('@/stores/auth-store', () => ({
   useAuthStore: (selector: (s: any) => any) => selector({ user: { id: 'u1', role: 'user' } }),
 }));

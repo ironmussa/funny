@@ -75,7 +75,7 @@ import {
 } from '@/data/threads/read';
 import { loadAgentAccounts } from '@/lib/agent-account-storage';
 import { api } from '@/lib/api';
-import { createClientLogger } from '@/lib/client-logger';
+import { createClientLogger, isClientLogLevelEnabled } from '@/lib/client-logger';
 import { loadContextUsage } from '@/lib/context-usage-storage';
 import { markMemoryPhase } from '@/lib/memory-phase';
 import { metric, startSpan } from '@/lib/telemetry';
@@ -276,7 +276,28 @@ function getActiveThread(state: ThreadState): ThreadWithMessages | null {
 }
 
 const refreshLog = createClientLogger('thread-refresh');
-const selectLog = createClientLogger('thread-select');
+const SELECT_LOG_NS = 'thread-select';
+const selectLog = createClientLogger(SELECT_LOG_NS);
+
+/**
+ * Diagnostic: who is driving selection? Surfaces the caller chain behind the
+ * route-sync ↔ back-fill re-select ping-pong. Off in prod by default; enable
+ * with `__funnyLog.setNamespaceLevel('thread-select', 'debug')`.
+ *
+ * The stack is built only when the level is on: `selectThread` runs on every
+ * route sync, and capturing a stack costs far more than the call itself.
+ */
+function traceSelectCaller(threadId: string, state: ThreadState): void {
+  if (!isClientLogLevelEnabled(SELECT_LOG_NS, 'debug')) return;
+  // Frames 0-2 are `Error`, this function and `selectThread`: start at the caller.
+  const caller = new Error().stack?.split('\n').slice(3, 8).join(' <- ').replace(/\s+/g, ' ');
+  selectLog.debug('selectThread called', {
+    threadId,
+    prevSelectedId: state.selectedThreadId ?? null,
+    prevActiveId: state.activeThread?.id ?? null,
+    caller,
+  });
+}
 
 type LocalMessage = import('@funny/shared').Message & { toolCalls?: any[] };
 const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
@@ -389,18 +410,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Skip if already loading this exact thread (prevents StrictMode double-fire)
     if (threadId && threadId === getSelectingThreadId()) return;
 
-    // Diagnostic: who is driving selection? Surfaces the caller chain behind the
-    // route-sync ↔ back-fill re-select ping-pong. Off in prod by default; enable
-    // with `__funnyLog.setNamespaceLevel('thread-select', 'debug')`.
-    if (threadId) {
-      const caller = new Error().stack?.split('\n').slice(2, 7).join(' <- ').replace(/\s+/g, ' ');
-      selectLog.debug('selectThread called', {
-        threadId,
-        prevSelectedId: get().selectedThreadId ?? null,
-        prevActiveId: get().activeThread?.id ?? null,
-        caller,
-      });
-    }
+    if (threadId) traceSelectCaller(threadId, get());
 
     const gen = nextSelectGeneration();
     // Allocate span / timer BEFORE claiming the in-flight slot so a synchronous
@@ -689,8 +699,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   // Deletes are optimistic: the row leaves every list at once and comes back
   // (with a toast) if the server refuses. Local payload/selection state is
   // dropped once the delete is confirmed.
-  deleteThread: async (threadId) => {
-    const result = await deleteThreadRow(threadId, { stopFirst: isAgentActive(get(), threadId) });
+  deleteThread: async (threadId, _projectId, options) => {
+    const result = await deleteThreadRow(threadId, {
+      stopFirst: isAgentActive(get(), threadId),
+      deleteBranch: options?.deleteBranch,
+    });
     if (result.isOk()) forgetThread(threadId);
   },
 

@@ -465,16 +465,19 @@ export async function stopAllCommands(): Promise<void> {
   await Promise.allSettled(ids.map((id) => stopCommand(id)));
 }
 
-/** Kill all running commands whose cwd starts with the given path. */
-export async function stopCommandsByCwd(cwdPrefix: string): Promise<void> {
-  const ids: string[] = [];
-  for (const [id, entry] of activeCommands) {
-    if (entry.cwd === cwdPrefix || entry.cwd.startsWith(cwdPrefix)) {
-      ids.push(id);
-    }
+/**
+ * Kill all running commands whose cwd is the given path or lies inside it.
+ * Returns the labels of the commands it stopped.
+ */
+export async function stopCommandsByCwd(cwdPrefix: string): Promise<string[]> {
+  const prefix = cwdPrefix.endsWith('/') ? cwdPrefix : `${cwdPrefix}/`;
+  const stopped: RunningCommand[] = [];
+  for (const entry of activeCommands.values()) {
+    if (entry.cwd === cwdPrefix || entry.cwd.startsWith(prefix)) stopped.push(entry);
   }
-  if (ids.length === 0) return;
-  await Promise.allSettled(ids.map((id) => stopCommand(id)));
+  if (stopped.length === 0) return [];
+  await Promise.allSettled(stopped.map((entry) => stopCommand(entry.commandId)));
+  return stopped.map((entry) => entry.label || entry.command);
 }
 
 // ── Self-register with ShutdownManager ──────────────────────

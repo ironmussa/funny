@@ -39,7 +39,7 @@ import { useThreadsForProject } from '@/lib/thread-selectors';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { BranchPicker } from './SearchablePicker';
 
@@ -295,7 +295,7 @@ export function WorktreeSettings({
 }) {
   const { t } = useTranslation();
   const projects = useProjects();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);

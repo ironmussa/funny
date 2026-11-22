@@ -387,7 +387,7 @@ describe('GraphRefChips', () => {
     expect(onPushBranch).not.toHaveBeenCalled();
   });
 
-  test('shows remote-only status on the remote branch chip', () => {
+  test('marks a remote-only branch with the cloud-download icon, without a status badge', () => {
     const refs: FoldedRef[] = [{ kind: 'remote', name: 'origin/feature', isCurrent: false }];
     const branch: GraphBranchSummary = {
       branch: 'feature',
@@ -417,10 +417,10 @@ describe('GraphRefChips', () => {
     expect(screen.getByTestId('graph-branch-info-origin/feature')).not.toHaveTextContent(
       'origin/feature',
     );
-    expect(screen.getByTestId('graph-branch-status-origin/feature')).toBeInTheDocument();
-    expect(screen.getByTestId('graph-branch-status-icon-origin/feature')).toHaveClass(
-      'lucide-download',
+    expect(screen.getByTestId('graph-ref-icon-origin/feature')).toHaveClass(
+      'lucide-cloud-download',
     );
+    expect(screen.queryByTestId('graph-branch-status-origin/feature')).not.toBeInTheDocument();
   });
 
   test('stacks branch chips vertically without shrinking their rows', () => {
@@ -443,7 +443,7 @@ describe('GraphRefChips', () => {
     expect(screen.getByTestId('graph-branch-info-worktree/second')).toBeVisible();
   });
 
-  test('shows local-only and synced status icons inside branch chips', () => {
+  test('says synced and local-only with the ref icon, without a status badge', () => {
     const refs: FoldedRef[] = [
       { kind: 'local', name: 'main', isCurrent: true, syncedRemote: 'origin/main' },
       { kind: 'local', name: 'draft', isCurrent: false },
@@ -490,10 +490,10 @@ describe('GraphRefChips', () => {
 
     expect(screen.getByTestId('graph-ref-chip-local:main')).toBeInTheDocument();
     expect(screen.getByTestId('graph-ref-chip-local:draft')).toBeInTheDocument();
-    expect(screen.getByTestId('graph-branch-status-main')).toBeInTheDocument();
-    expect(screen.getByTestId('graph-branch-status-icon-main')).toHaveClass('lucide-circle-check');
-    expect(screen.getByTestId('graph-branch-status-draft')).toBeInTheDocument();
-    expect(screen.getByTestId('graph-branch-status-icon-draft')).toHaveClass('lucide-upload');
+    expect(screen.getByTestId('graph-ref-icon-main')).toHaveClass('lucide-cloud-check');
+    expect(screen.queryByTestId('graph-branch-status-main')).not.toBeInTheDocument();
+    expect(screen.getByTestId('graph-ref-icon-draft')).toHaveClass('lucide-monitor-up');
+    expect(screen.queryByTestId('graph-branch-status-draft')).not.toBeInTheDocument();
     expect(screen.queryByTestId('graph-branch-action-main')).not.toBeInTheDocument();
     expect(screen.queryByTestId('graph-branch-action-draft')).not.toBeInTheDocument();
   });

@@ -3,10 +3,12 @@ import {
   CheckCircle2,
   Cloud,
   CloudCheck,
+  CloudDownload,
   Copy,
   Download,
   ExternalLink,
   Monitor,
+  MonitorUp,
   RefreshCw,
   Tag,
   Upload,
@@ -159,11 +161,23 @@ function ThreadBranchMarker({ branch, color }: { branch: string; color: string }
   );
 }
 
-function renderRefIcon(ref: FoldedRef) {
-  const props = { className: 'icon-2xs shrink-0', 'aria-hidden': true } as const;
+/**
+ * Where the ref lives: local only, remote only, both on this commit (folded), or
+ * a tag. A branch that exists on one side only gets the "upload" / "download"
+ * variant, so the chip needs no separate status badge to say it.
+ */
+function renderRefIcon(ref: FoldedRef, summary: GraphBranchSummary | undefined) {
+  const props = {
+    className: 'icon-2xs shrink-0',
+    'aria-hidden': true,
+    'data-testid': `graph-ref-icon-${ref.name}`,
+  } as const;
   if (ref.kind === 'tag') return <Tag {...props} />;
-  if (ref.kind === 'remote') return <Cloud {...props} />;
-  return ref.syncedRemote ? <CloudCheck {...props} /> : <Monitor {...props} />;
+  if (ref.kind === 'remote') {
+    return summary?.state === 'remote-only' ? <CloudDownload {...props} /> : <Cloud {...props} />;
+  }
+  if (ref.syncedRemote) return <CloudCheck {...props} />;
+  return summary?.state === 'local-only' ? <MonitorUp {...props} /> : <Monitor {...props} />;
 }
 
 /**
@@ -233,13 +247,18 @@ function branchChipStatusMeta(
     return null;
   }
 
+  // The badge only says what the ref icon cannot: how far the branch is ahead,
+  // behind or diverged. "Synced" (the folded chip's cloud-check icon) and
+  // "local / remote only" (the monitor-up / cloud-down icons) are in the icon.
   switch (summary.state) {
     case 'synced':
-      return {
-        icon: CheckCircle2,
-        label: null,
-        tooltip: branchStateLabel(t, summary),
-      };
+      return ref.kind === 'local' && ref.syncedRemote
+        ? null
+        : {
+            icon: CheckCircle2,
+            label: null,
+            tooltip: branchStateLabel(t, summary),
+          };
     case 'ahead':
       return ref.kind === 'local'
         ? {
@@ -263,21 +282,8 @@ function branchChipStatusMeta(
         tooltip: branchStateLabel(t, summary),
       };
     case 'local-only':
-      return ref.kind === 'local'
-        ? {
-            icon: Upload,
-            label: null,
-            tooltip: branchStateLabel(t, summary),
-          }
-        : null;
     case 'remote-only':
-      return ref.kind === 'remote'
-        ? {
-            icon: Download,
-            label: null,
-            tooltip: branchStateLabel(t, summary),
-          }
-        : null;
+      return null;
   }
 }
 
@@ -540,7 +546,7 @@ function GraphRefChip({
             onClick={(event) => event.stopPropagation()}
             data-testid={`graph-branch-info-${ref.name}`}
           >
-            {renderRefIcon(ref)}
+            {renderRefIcon(ref, summary)}
             <span
               className={cn(
                 'truncate text-2xs leading-tight font-medium whitespace-nowrap',

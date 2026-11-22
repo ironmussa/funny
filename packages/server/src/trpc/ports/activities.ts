@@ -13,7 +13,7 @@ import { broadcastActivitiesRemoved } from '../../services/activities/activity-s
 import type { RunnerPresencePort } from '../../services/runner-ports.js';
 
 /** How long a `running` server-run activity is protected from dismissal. */
-export const SERVER_ROW_STALE_MS = 30 * 60_000;
+const SERVER_ROW_STALE_MS = 30 * 60_000;
 
 export function createActivitiesPort(
   presence?: Pick<RunnerPresencePort, 'isAvailable'>,

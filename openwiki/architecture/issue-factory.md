@@ -132,3 +132,6 @@ at the PR for teams that merge by hand).
   bypass branch protections.
 - The flow is read only from the default branch; issue text is not inlined into prompts (the agent
   reads the issue by URL).
+
+Possible improvements not yet implemented (orphaned-worktree sweep, sandbox runs, metrics, …) are
+listed in [issue-factory-improvements.md](issue-factory-improvements.md).

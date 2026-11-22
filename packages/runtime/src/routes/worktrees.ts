@@ -14,10 +14,11 @@ import {
   pruneOrphanWorktrees,
   removeBranch,
   removeWorktree,
+  worktreeUnsavedWork,
 } from '@funny/core/git';
-import { badRequest } from '@funny/shared/errors';
+import { badRequest, type DomainError } from '@funny/shared/errors';
 import { Hono } from 'hono';
-import { err } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { projectSearchRegistry } from '../services/project-search-registry.js';
@@ -124,7 +125,7 @@ worktreeRoutes.delete('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(deleteWorktreeSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, worktreePath, branchName, deleteBranch } = parsed.value;
+  const { projectId } = parsed.value;
 
   const projectResult = await requireProject(
     projectId,
@@ -133,7 +134,57 @@ worktreeRoutes.delete('/', async (c) => {
   );
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
-  await projectSearchRegistry.invalidate(worktreePath).match(
+  const removed = await removeWorktreeAndBranch(projectResult.value.path, parsed.value);
+  if (removed.isErr()) return resultToResponse(c, removed);
+  return c.json({ ok: true });
+});
+
+// POST /api/worktrees/remove-unchanged
+//
+// Remove a worktree only when nothing would be lost with it: no uncommitted
+// file and no commit that no remote has. Otherwise answer `removed: false` with
+// the counts and leave it in place. The check and the removal are one request
+// on the runner, so a caller cannot delete on a stale reading. Used by the
+// issue factory for a run that ended without a commit on its branch.
+worktreeRoutes.post('/remove-unchanged', async (c) => {
+  const raw = await c.req.json();
+  const parsed = validate(deleteWorktreeSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { projectId, worktreePath } = parsed.value;
+
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  // The path runs `git status` below: keep it inside the project's worktrees.
+  const containmentErr = checkWorktreePathInProject(projectResult.value.path, worktreePath);
+  if (containmentErr) return resultToResponse(c, err(containmentErr));
+
+  const unsaved = await worktreeUnsavedWork(worktreePath);
+  if (unsaved.isErr()) return resultToResponse(c, unsaved);
+  if (unsaved.value.dirtyFileCount > 0 || unsaved.value.unpushedCommitCount > 0) {
+    log.info('Kept a worktree with unsaved work', {
+      namespace: 'worktrees',
+      worktreePath,
+      ...unsaved.value,
+    });
+    return c.json({ removed: false, ...unsaved.value });
+  }
+
+  const removed = await removeWorktreeAndBranch(projectResult.value.path, parsed.value);
+  if (removed.isErr()) return resultToResponse(c, removed);
+  return c.json({ removed: true });
+});
+
+/** Remove a worktree (its search index first) and, when asked, its branch. */
+async function removeWorktreeAndBranch(
+  projectPath: string,
+  target: { worktreePath: string; branchName?: string; deleteBranch: boolean },
+): Promise<Result<void, DomainError>> {
+  await projectSearchRegistry.invalidate(target.worktreePath).match(
     () => undefined,
     (error) =>
       log.warn('Failed to dispose worktree search index', {
@@ -141,13 +192,12 @@ worktreeRoutes.delete('/', async (c) => {
         error: error.message,
       }),
   );
-  const removeResult = await removeWorktree(projectResult.value.path, worktreePath);
-  if (removeResult.isErr()) return resultToResponse(c, removeResult);
+  const removeResult = await removeWorktree(projectPath, target.worktreePath);
+  if (removeResult.isErr()) return err(removeResult.error);
 
-  if (deleteBranch && branchName) {
-    const branchResult = await removeBranch(projectResult.value.path, branchName);
-    if (branchResult.isErr()) return resultToResponse(c, branchResult);
+  if (target.deleteBranch && target.branchName) {
+    const branchResult = await removeBranch(projectPath, target.branchName);
+    if (branchResult.isErr()) return err(branchResult.error);
   }
-
-  return c.json({ ok: true });
-});
+  return ok(undefined);
+}

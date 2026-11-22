@@ -654,6 +654,10 @@ describe('factory flow', () => {
       cleanupMerged: async (userId, threadIds) => {
         cleanups.push({ userId, threadIds });
       },
+      cleanupUnchanged: async (userId, threadIds) => {
+        cleanups.push({ userId, threadIds });
+        return [];
+      },
       notify: async (_userId, notice) => notices.push(notice),
       followUp: async (_userId, threadId, content, expectedBranch) => {
         followUps.push({ threadId, content, expectedBranch });

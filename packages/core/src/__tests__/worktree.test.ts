@@ -12,6 +12,7 @@ import {
   removeWorktree,
   removeBranch,
   shouldRegisterSafeDirectory,
+  worktreeUnsavedWork,
 } from '../git/worktree.js';
 
 const TMP = resolve(tmpdir(), 'core-worktree-test-' + Date.now());
@@ -223,6 +224,46 @@ describe('worktree operations', () => {
     test('does not throw for non-existent worktree', async () => {
       // Should not throw because reject=false
       await removeWorktree(repoPath, '/nonexistent/path');
+    });
+  });
+
+  // Issue #229: the issue factory removed a worktree holding 85 uncommitted
+  // files. This is what decides whether a worktree may be deleted.
+  describe('worktreeUnsavedWork', () => {
+    async function freshWorktree(): Promise<string> {
+      const result = await createWorktree(repoPath, 'unsaved-branch');
+      expect(result.isOk()).toBe(true);
+      return result._unsafeUnwrap();
+    }
+
+    test('a worktree just created has nothing to lose, even off an unpushed base', async () => {
+      // The test repo has no remote: its base commit is on no remote either,
+      // but the base branch keeps it.
+      const wtPath = await freshWorktree();
+      const work = (await worktreeUnsavedWork(wtPath))._unsafeUnwrap();
+      expect(work).toEqual({ dirtyFileCount: 0, unpushedCommitCount: 0 });
+    });
+
+    test('counts untracked and modified files', async () => {
+      const wtPath = await freshWorktree();
+      writeFileSync(resolve(wtPath, 'new-file.txt'), 'new');
+      writeFileSync(resolve(wtPath, 'another.txt'), 'new');
+      const work = (await worktreeUnsavedWork(wtPath))._unsafeUnwrap();
+      expect(work).toEqual({ dirtyFileCount: 2, unpushedCommitCount: 0 });
+    });
+
+    test('counts commits only its branch has', async () => {
+      const wtPath = await freshWorktree();
+      writeFileSync(resolve(wtPath, 'committed.txt'), 'x');
+      executeSync('git', ['add', '.'], { cwd: wtPath });
+      executeSync('git', ['commit', '-m', 'work'], { cwd: wtPath });
+      const work = (await worktreeUnsavedWork(wtPath))._unsafeUnwrap();
+      expect(work).toEqual({ dirtyFileCount: 0, unpushedCommitCount: 1 });
+    });
+
+    test('a path that is not a repository is an error, not "nothing to lose"', async () => {
+      const result = await worktreeUnsavedWork(resolve(TMP, `missing-${testCount}`));
+      expect(result.isErr()).toBe(true);
     });
   });
 

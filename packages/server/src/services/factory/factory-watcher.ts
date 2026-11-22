@@ -87,6 +87,7 @@ import {
   type BrowserEventsPort,
   cleanupFactoryWorktrees,
   cancelRegressionProofOnRunner,
+  type KeptWorktree,
   pollRegressionProofOnRunner,
   sendFactoryFollowUp,
   startRegressionProofOnRunner,
@@ -137,6 +138,8 @@ export interface FactoryWatcherDeps {
   browserEvents?: BrowserEventsPort;
   /** Merged-run cleanup override for tests; defaults to `cleanupFactoryWorktrees`. */
   cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
+  /** "No change" cleanup override for tests; defaults to `cleanupFactoryWorktrees` keeping unsaved work. */
+  cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
   /** Notification override for tests; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
@@ -216,6 +219,12 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
     stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
     cleanupMerged: (userId, threadIds) => cleanupMergedFor(d, userId, threadIds),
+    cleanupUnchanged: (userId, threadIds) =>
+      d.cleanupUnchanged
+        ? d.cleanupUnchanged(userId, threadIds)
+        : cleanupFactoryWorktrees(d.ports, userId, threadIds, d.browserEvents, {
+            keepUnsaved: true,
+          }),
     followUp:
       d.followUp ??
       ((userId, threadId, content, expectedBranch) =>
@@ -1010,7 +1019,7 @@ function cleanupMergedFor(
 ): Promise<void> {
   return d.cleanupMerged
     ? d.cleanupMerged(userId, threadIds)
-    : cleanupFactoryWorktrees(d.ports, userId, threadIds, d.browserEvents);
+    : cleanupFactoryWorktrees(d.ports, userId, threadIds, d.browserEvents).then(() => undefined);
 }
 
 /**

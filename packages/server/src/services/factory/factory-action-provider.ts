@@ -61,6 +61,7 @@ import {
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
 import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /**
@@ -77,6 +78,16 @@ const proofUnavailable = (why: string): ActionResult => ({
   ok: false,
   error: `Regression proof unavailable: ${why}`,
 });
+
+/** What a "no change" comment says about a checkout that was kept. */
+function keptWorktreeLine(kept: KeptWorktree): string {
+  const parts = [
+    kept.dirtyFileCount > 0 ? `${kept.dirtyFileCount} uncommitted file(s)` : null,
+    kept.unpushedCommitCount > 0 ? `${kept.unpushedCommitCount} unpushed commit(s)` : null,
+  ].filter(Boolean);
+  const what = parts.length > 0 ? parts.join(' and ') : 'work that could not be checked';
+  return `The run's checkout was kept because it holds ${what}: \`${kept.worktreePath}\`.`;
+}
 
 /** The fixed first line of the issue comment a "no change" run posts. */
 export const NO_CHANGE_LINE = 'The issue factory made no change for this issue. The agent said:';
@@ -116,8 +127,12 @@ export interface FactoryActionProviderDeps {
   proof?: FactoryProofDeps;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
-  /** Remove the run's worktrees on the enabler's runner (a "no change" run keeps no checkout). */
-  removeWorktrees?: () => Promise<void>;
+  /**
+   * Remove the run's worktrees on the enabler's runner (a "no change" run keeps
+   * no checkout), except the ones holding work that exists nowhere else
+   * (uncommitted files, unpushed commits), which are returned.
+   */
+  removeUnchangedWorktrees?: () => Promise<KeptWorktree[]>;
   /**
    * Set when the run was interrupted while starting its next agent thread:
    * that step first looks for the thread it may have started.
@@ -558,14 +573,21 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
 
   /**
-   * The agent made no commit and opened no pull request: say so on the issue
+   * The agent pushed no commit and opened no pull request: say so on the issue
    * with its explanation, remove the run's checkout, and leave the run for a
    * person (`no change`). Not ok, so the flow stops here.
+   *
+   * A checkout with uncommitted files or unpushed commits is kept and named in
+   * the comment: the agent may have stopped before committing (issue #229 lost
+   * 85 edited files this way).
    */
   async function noChange(): Promise<ActionResult> {
     const threadId = threadIds[0];
     const explanation = threadId ? await deps.lastThreadMessage?.(threadId) : null;
-    const body = explanation ? `${NO_CHANGE_LINE}\n\n${explanation}` : NO_CHANGE_LINE;
+    const kept = (await deps.removeUnchangedWorktrees?.()) ?? [];
+    const body = [NO_CHANGE_LINE, explanation, ...kept.map(keptWorktreeLine)]
+      .filter(Boolean)
+      .join('\n\n');
     const commented = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
     if (commented.isErr()) {
       log.warn('Issue factory could not comment a no-change outcome on the issue', {
@@ -575,7 +597,6 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         error: commented.error.message,
       });
     }
-    await deps.removeWorktrees?.();
     await deps.record({ state: 'waiting_human', failureReason: 'no change' });
     await count(metrics, { event: 'no_change' });
     return {

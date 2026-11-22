@@ -505,6 +505,58 @@ function assertWorktreeInProjectBase(
   return null;
 }
 
+/** Work in a worktree that exists nowhere else: removing the worktree loses it. */
+export interface WorktreeUnsavedWork {
+  /** Files changed or untracked and not committed. */
+  dirtyFileCount: number;
+  /** Commits on HEAD that no remote and no other local branch has. */
+  unpushedCommitCount: number;
+}
+
+/**
+ * Count the uncommitted files and the unpushed commits of a worktree, read from
+ * git now (no cache): the answer decides whether the worktree may be deleted.
+ * A git failure is an error, never "nothing to lose".
+ *
+ * A commit counts when only this worktree's branch has it. One that another
+ * local branch has (a base branch ahead of its remote) survives the removal.
+ */
+export function worktreeUnsavedWork(
+  worktreePath: string,
+): ResultAsync<WorktreeUnsavedWork, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      // Exits 1 on a detached HEAD: then no branch is left out below.
+      const head = await gitRead(['symbolic-ref', '--short', '-q', 'HEAD'], {
+        cwd: worktreePath,
+        reject: false,
+      });
+      const ownBranch = head.exitCode === 0 ? head.stdout.trim() : '';
+      const others = ownBranch ? [`--exclude=${ownBranch}`, '--branches'] : ['--branches'];
+      const [status, unpushed] = await Promise.all([
+        gitRead(['status', '--porcelain'], { cwd: worktreePath, reject: false }),
+        gitRead(['rev-list', '--count', 'HEAD', '--not', '--remotes', ...others], {
+          cwd: worktreePath,
+          reject: false,
+        }),
+      ]);
+      if (status.exitCode !== 0 || unpushed.exitCode !== 0) {
+        throw internal(
+          `Could not read the state of the worktree ${worktreePath}: ${(status.stderr || unpushed.stderr).trim()}`,
+        );
+      }
+      return {
+        dirtyFileCount: status.stdout.split('\n').filter((line) => line.trim() !== '').length,
+        unpushedCommitCount: parseInt(unpushed.stdout.trim(), 10) || 0,
+      };
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      return internal(String(error));
+    },
+  );
+}
+
 export function removeWorktree(
   projectPath: string,
   worktreePath: string,

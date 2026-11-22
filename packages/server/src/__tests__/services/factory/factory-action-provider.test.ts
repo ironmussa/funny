@@ -21,6 +21,7 @@ import type {
   FactoryMergeOutcome,
   FactoryProofCheck,
 } from '../../../services/factory/factory-pull-requests.js';
+import type { KeptWorktree } from '../../../services/factory/factory-thread-requests.js';
 
 const scope = {
   runId: 'r1',
@@ -421,15 +422,16 @@ describe('factory action provider merge gate', () => {
 });
 
 describe('factory action provider "no change" outcome', () => {
-  function noPr(branchAhead: ResultAsync<boolean, GithubCallError>) {
+  function noPr(branchAhead: ResultAsync<boolean, GithubCallError>, kept: KeptWorktree[] = []) {
     const comments: string[] = [];
     const records: Array<Record<string, unknown>> = [];
     let removed = 0;
     const { provider } = providerWith({
       threadIds: ['t1'],
       lastThreadMessage: async () => 'The bug is already fixed on main.',
-      removeWorktrees: async () => {
+      removeUnchangedWorktrees: async () => {
         removed++;
+        return kept;
       },
       github: {
         findPullRequest: () => okAsync(null),
@@ -461,6 +463,21 @@ describe('factory action provider "no change" outcome', () => {
     expect(result.metadata).toMatchObject({ outcome: 'no_change' });
     expect(comments).toEqual([`${NO_CHANGE_LINE}\n\nThe bug is already fixed on main.`]);
     expect(removed()).toBe(1);
+    expect(records).toContainEqual({ state: 'waiting_human', failureReason: 'no change' });
+  });
+
+  // Issue #229: the agent ended its turn before committing; the cleanup removed
+  // its 85 edited files. The checkout is kept and the comment says where it is.
+  test('a checkout with uncommitted work is kept and named in the comment', async () => {
+    const { provider, comments, records } = noPr(okAsync<boolean, GithubCallError>(false), [
+      { threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 85, unpushedCommitCount: 1 },
+    ]);
+    const result = await provider.createPr({ cwd: '', title: 'Fix it' });
+    expect(result.metadata).toMatchObject({ outcome: 'no_change' });
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toStartWith(NO_CHANGE_LINE);
+    expect(comments[0]).toContain('85 uncommitted file(s) and 1 unpushed commit(s)');
+    expect(comments[0]).toContain('/srv/wt/t1');
     expect(records).toContainEqual({ state: 'waiting_human', failureReason: 'no change' });
   });
 

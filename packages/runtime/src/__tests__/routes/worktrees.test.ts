@@ -10,7 +10,9 @@ const {
   mockGetStatusSummary,
   mockCheckWorktreePathInProject,
   mockInvalidateSearch,
+  mockWorktreeUnsavedWork,
 } = (() => ({
+  mockWorktreeUnsavedWork: vi.fn(),
   mockListWorktrees: vi.fn(),
   mockCreateWorktree: vi.fn(),
   mockRemoveWorktree: vi.fn(),
@@ -28,6 +30,7 @@ mock.module('@funny/core/git', () => ({
   checkWorktreePathInProject: mockCheckWorktreePathInProject,
   previewWorktree: vi.fn(),
   removeBranch: vi.fn().mockReturnValue(okAsync(undefined)),
+  worktreeUnsavedWork: mockWorktreeUnsavedWork,
 }));
 
 const { mockRequireProject } = (() => ({
@@ -55,6 +58,7 @@ describe('Worktree Routes', () => {
     mockGetStatusSummary.mockReset();
     mockCheckWorktreePathInProject.mockReset();
     mockInvalidateSearch.mockReset();
+    mockWorktreeUnsavedWork.mockReset();
     mockRequireProject.mockReset();
 
     mockListWorktrees.mockReturnValue(ok([{ path: '/tmp/wt1', branch: 'feature/x' }]));
@@ -135,6 +139,63 @@ describe('Worktree Routes', () => {
     expect(mockInvalidateSearch.mock.invocationCallOrder[0]).toBeLessThan(
       mockRemoveWorktree.mock.invocationCallOrder[0]!,
     );
+  });
+
+  const removeUnchanged = (worktreePath = '/tmp/wt1') =>
+    app.request('/worktrees/remove-unchanged', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: 'p1', worktreePath, deleteBranch: true, branchName: 'b' }),
+    });
+
+  test('POST /worktrees/remove-unchanged removes a worktree with nothing to lose', async () => {
+    mockCheckWorktreePathInProject.mockReturnValue(null);
+    mockWorktreeUnsavedWork.mockReturnValue(okAsync({ dirtyFileCount: 0, unpushedCommitCount: 0 }));
+    const res = await removeUnchanged();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ removed: true });
+    expect(mockRemoveWorktree).toHaveBeenCalledTimes(1);
+  });
+
+  test('POST /worktrees/remove-unchanged keeps a worktree with uncommitted files', async () => {
+    mockCheckWorktreePathInProject.mockReturnValue(null);
+    mockWorktreeUnsavedWork.mockReturnValue(
+      okAsync({ dirtyFileCount: 85, unpushedCommitCount: 0 }),
+    );
+    const res = await removeUnchanged();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      removed: false,
+      dirtyFileCount: 85,
+      unpushedCommitCount: 0,
+    });
+    expect(mockRemoveWorktree).not.toHaveBeenCalled();
+  });
+
+  test('POST /worktrees/remove-unchanged keeps a worktree with unpushed commits', async () => {
+    mockCheckWorktreePathInProject.mockReturnValue(null);
+    mockWorktreeUnsavedWork.mockReturnValue(okAsync({ dirtyFileCount: 0, unpushedCommitCount: 2 }));
+    const res = await removeUnchanged();
+    expect((await res.json()).removed).toBe(false);
+    expect(mockRemoveWorktree).not.toHaveBeenCalled();
+  });
+
+  test('POST /worktrees/remove-unchanged keeps a worktree whose state cannot be read', async () => {
+    mockCheckWorktreePathInProject.mockReturnValue(null);
+    mockWorktreeUnsavedWork.mockReturnValue(
+      err({ type: 'INTERNAL', message: 'Could not read the state of the worktree' }),
+    );
+    const res = await removeUnchanged();
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(mockRemoveWorktree).not.toHaveBeenCalled();
+  });
+
+  test('POST /worktrees/remove-unchanged rejects a path outside the project worktrees', async () => {
+    mockCheckWorktreePathInProject.mockReturnValue({ type: 'BAD_REQUEST', message: 'outside' });
+    const res = await removeUnchanged('/etc');
+    expect(res.status).toBe(400);
+    expect(mockWorktreeUnsavedWork).not.toHaveBeenCalled();
+    expect(mockRemoveWorktree).not.toHaveBeenCalled();
   });
 
   /*

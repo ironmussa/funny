@@ -31,8 +31,9 @@ interface Props {
    */
   distinctCommitter?: boolean;
   /**
-   * Draw a dashed stub from the node up to the top edge — used on the HEAD row to
-   * connect it to the "Uncommitted changes" (WIP) node sitting above the list.
+   * The "Uncommitted changes" (WIP) node is shown above the list and this row is
+   * at or above HEAD: draw the row's HEAD-rail segments (`wip`) dashed. Without
+   * them (HEAD not in the window), a dashed stub runs from the node to the top.
    */
   connectUp?: boolean;
   /**
@@ -96,6 +97,9 @@ export const GraphGutter = memo(function GraphGutter({
       aria-hidden="true"
     >
       {row.segments.map((s, i) => {
+        // The HEAD rail above HEAD exists only to connect the WIP node.
+        if (s.wip && !connectUp) return null;
+        const dash = s.wip ? '2 2' : undefined;
         const x1 = laneX(s.fromLane);
         const y1 = segY(s.fromY);
         const x2 = laneX(s.toLane);
@@ -111,6 +115,7 @@ export const GraphGutter = memo(function GraphGutter({
               y2={y2}
               stroke={color}
               strokeWidth={STROKE_WIDTH}
+              strokeDasharray={dash}
             />
           );
         }
@@ -135,13 +140,14 @@ export const GraphGutter = memo(function GraphGutter({
             fill="none"
             stroke={color}
             strokeWidth={STROKE_WIDTH}
+            strokeDasharray={dash}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         );
       })}
-      {/* Dashed stub up to the WIP node above (HEAD row only). */}
-      {connectUp && (
+      {/* Dashed stub up to the WIP node above, when the layout has no HEAD rail. */}
+      {connectUp && !row.segments.some((s) => s.wip) && (
         <line
           x1={nodeX}
           y1={0}

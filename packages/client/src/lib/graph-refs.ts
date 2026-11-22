@@ -505,3 +505,18 @@ export function summarizeGraphBranches(
     return a.branch.localeCompare(b.branch);
   });
 }
+
+/**
+ * The checked-out commit among `entries`: the one carrying the current branch,
+ * or the detached-HEAD pseudo-ref. Null when HEAD is outside the window.
+ */
+export function graphHeadHash(
+  entries: readonly Pick<GraphNodeParentRefEntry, 'hash' | 'refs' | 'headBranch'>[],
+): string | null {
+  const head = entries.find(
+    (entry) =>
+      !!entry.headBranch ||
+      entry.refs.some((ref) => (typeof ref === 'string' ? ref : ref.name) === 'HEAD'),
+  );
+  return head?.hash ?? null;
+}

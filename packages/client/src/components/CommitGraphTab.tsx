@@ -84,6 +84,7 @@ import { graphLanePastel } from '@/lib/graph-colors';
 import {
   foldGraphRefs,
   graphBranchTipHashByLabel,
+  graphHeadHash,
   graphNodeForkedFromRefLabels,
   graphNodeParentLabels,
   graphNodeParentRefLabels,
@@ -607,6 +608,13 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     !!visible && hasGitContext && entries.length > 0,
   );
   const wipStatus = !isFiltering && wipDirty ? wipRawStatus : undefined;
+  // Rows from the top down to HEAD carry the dashed line to the WIP node. When
+  // HEAD is not in the window, only the first row does (a stub to the top edge).
+  const headIndex = useMemo(() => {
+    const headHash = graphHeadHash(displayEntries);
+    return headHash ? displayEntries.findIndex((entry) => entry.hash === headHash) : -1;
+  }, [displayEntries]);
+  const lastWipRowIndex = wipStatus ? Math.max(headIndex, 0) : -1;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // The infinite-scroll sentinel only applies to the full (unfiltered) list;
@@ -721,7 +729,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       {!isFiltering && wipStatus && (
         <GraphWipRow
           status={wipStatus}
-          firstRow={layout.rows[0]}
+          firstRow={layout.rows[Math.max(headIndex, 0)]}
           laneCount={laneCount}
           gutterWidth={gutterWidth}
           graphViewportWidth={graphViewportWidth}
@@ -843,7 +851,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   branchColorByLabel={branchColorByLabel}
                   unpushed={unpushed.has(entry.hash)}
                   unpulled={unpulled.has(entry.hash) || inferredUnpulled.has(entry.hash)}
-                  connectToWip={!!wipStatus && virtualRow.index === 0}
+                  connectToWip={virtualRow.index <= lastWipRowIndex}
                   searchQuery={searchQuery}
                   threadBranch={threadBranch}
                   transform={virtualRow.start}
@@ -1377,6 +1385,8 @@ function graphLayout(entries: GraphLayoutEntries, isFiltering: boolean) {
       hash: e.hash,
       parentHashes: e.parentHashes,
     })),
+    // The checked-out commit takes the leftmost lane, under the WIP node.
+    { headHash: graphHeadHash(entries) },
   );
 }
 

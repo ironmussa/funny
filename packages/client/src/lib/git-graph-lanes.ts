@@ -27,6 +27,12 @@ export interface GraphSegment {
   toY: number;
   /** Stable color index = the lane this segment belongs to. */
   color: number;
+  /**
+   * Part of the rail reserved for HEAD above its row (see `headHash`): the
+   * connector from the "Uncommitted changes" node down to HEAD. Drawn dashed
+   * when the tree is dirty, hidden otherwise.
+   */
+  wip?: true;
 }
 
 export interface GraphRow {
@@ -47,14 +53,32 @@ const Y_TOP = 0;
 const Y_NODE = 0.5;
 const Y_BOTTOM = 1;
 
+export interface GraphLayoutOptions {
+  /**
+   * The checked-out commit. When it is in the window, lane 0 is reserved for it
+   * from the top of the graph, so HEAD and its first-parent line stay on the
+   * leftmost rail and the line from the "Uncommitted changes" node runs
+   * straight down to it; branches newer than HEAD take the lanes to its right
+   * and curve into it instead.
+   */
+  headHash?: string | null;
+}
+
 /**
  * Compute the lane layout for a list of commits already in child-before-parent
  * order (topo- or date-order). Robust to a windowed log (parents outside the
  * window simply terminate their lane with no further node).
  */
-export function computeGraphRows(commits: GraphCommit[]): GraphLayout {
+export function computeGraphRows(
+  commits: GraphCommit[],
+  { headHash = null }: GraphLayoutOptions = {},
+): GraphLayout {
   // lanes[i] = hash of the commit we next expect to reach on lane i, or null.
-  const lanes: (string | null)[] = [];
+  const reservedHead =
+    headHash && commits.some((commit) => commit.hash === headHash) ? headHash : null;
+  const lanes: (string | null)[] = reservedHead ? [reservedHead] : [];
+  // Lane 0 carries the reserved HEAD rail until HEAD's own row is reached.
+  let headRailOpen = reservedHead !== null;
   const rows: GraphRow[] = [];
   let laneCount = 0;
 
@@ -126,17 +150,19 @@ export function computeGraphRows(commits: GraphCommit[]): GraphLayout {
     for (let i = 0; i < incoming.length; i++) {
       const h = incoming[i];
       if (h === null) continue;
+      const wip = headRailOpen && i === 0 ? ({ wip: true } as const) : {};
       if (h === commit.hash) {
         // Converges into the node.
-        push({ fromLane: i, fromY: Y_TOP, toLane: commitLane, toY: Y_NODE, color: i });
+        push({ fromLane: i, fromY: Y_TOP, toLane: commitLane, toY: Y_NODE, color: i, ...wip });
       } else if (lanes[i] === h) {
         // Still flowing on its own lane — keep it straight. We must NOT use
         // `lanes.indexOf(h)` here: when sibling branches fan out, several lanes
         // hold the same (yet-to-be-reached) parent hash, and indexOf would snap
         // every one of them onto the first such lane, collapsing the fan.
-        push({ fromLane: i, fromY: Y_TOP, toLane: i, toY: Y_BOTTOM, color: i });
+        push({ fromLane: i, fromY: Y_TOP, toLane: i, toY: Y_BOTTOM, color: i, ...wip });
       }
     }
+    if (commit.hash === reservedHead) headRailOpen = false;
 
     // Node → parent lines.
     for (const p of parentLanes) {

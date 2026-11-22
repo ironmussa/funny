@@ -43,6 +43,18 @@ export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) })
 export const factoryMode = z.enum(['manual', 'automatic']);
 export type FactoryMode = z.infer<typeof factoryMode>;
 
+/**
+ * Which changes a factory merges by itself (change factory-agent-roles):
+ * `low_risk`, only changes the server classed low risk; `all`, every reviewed one.
+ */
+export type FactoryAutoMerge = 'low_risk' | 'all';
+
+/** At most this many sensitive path globs per factory. */
+export const MAX_SENSITIVE_PATHS = 50;
+
+/** The stage whose limit (one per repository and base branch) no setting changes. */
+export const MERGE_STAGE = 'merge';
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,
@@ -51,6 +63,15 @@ export const saveFactorySettingsInput = z
     label: label.optional(),
     flowName: flowName.optional(),
     maxConcurrent: z.number().int().min(1).max(20).optional(),
+    autoMerge: z.enum(['low_risk', 'all']).optional(),
+    sensitivePaths: z.array(z.string().trim().min(1).max(200)).max(MAX_SENSITIVE_PATHS).optional(),
+    stageLimits: z
+      .record(z.string().min(1).max(64), z.number().int().min(1).max(20))
+      .refine(
+        (limits) => !(MERGE_STAGE in limits),
+        'The merge limit cannot be changed: merges are one at a time per repository',
+      )
+      .optional(),
   })
   .strict();
 
@@ -65,6 +86,12 @@ export interface FactorySettings {
   label: string;
   flowName: string;
   maxConcurrent: number;
+  /** Which reviewed changes the factory merges by itself. */
+  autoMerge: FactoryAutoMerge;
+  /** Globs that make a change high risk, besides the default list. */
+  sensitivePaths: string[];
+  /** Runs inside a flow node at once, per node id; replaces the flow's own limit. */
+  stageLimits: Record<string, number>;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   updatedAt: string;
@@ -78,6 +105,10 @@ export type FactoryRunState =
   | 'pr_open'
   | 'waiting_ci'
   | 'fixing'
+  /** The reviewer judges the pull request's head commit. */
+  | 'reviewing'
+  /** In the merge step: waiting for the repository's merge slot, or merging. */
+  | 'merging'
   | 'waiting_human'
   | 'merged'
   | 'failed'
@@ -112,6 +143,10 @@ export interface FactoryRun {
   metrics: FactoryRunMetrics;
   /** The last regression proof of the run's pull request, or null before one ran. */
   regressionProof: FactoryRegressionProof | null;
+  /** The review verdicts of the run's pull request, one per commit, oldest first. */
+  reviews: FactoryReviewVerdict[];
+  /** The risk class of the pull request's last classified commit, or null before one. */
+  risk: FactoryRisk | null;
 }
 
 /**
@@ -328,3 +363,28 @@ export function reviewAllowsMerge(result: FactoryReviewResult): boolean {
   if (result.verdict === 'pass') return true;
   return result.findings.length > 0 && blockingReviewFindings(result).length === 0;
 }
+
+/** A review verdict as the run stores it: the validated result, and where it came from. */
+export const factoryReviewVerdictSchema = factoryReviewResultSchema.extend({
+  /** The reviewer's thread. */
+  threadId: z.string().optional(),
+  reviewedAt: z.string(),
+  /** Whether the verdict is on the pull request (comment, and status when allowed). */
+  published: z.boolean().optional(),
+});
+export type FactoryReviewVerdict = z.infer<typeof factoryReviewVerdictSchema>;
+
+/** At most this many verdicts are kept per run (the newest). */
+export const MAX_STORED_REVIEWS = 20;
+
+/**
+ * The risk class of one commit of the run's pull request, decided by the
+ * server from the diff. No agent result changes it.
+ */
+export const factoryRiskSchema = z.object({
+  headSha: z.string(),
+  level: z.enum(['low', 'high']),
+  /** Why it is high, in the order found; empty for low. */
+  reasons: z.array(z.string()),
+});
+export type FactoryRisk = z.infer<typeof factoryRiskSchema>;

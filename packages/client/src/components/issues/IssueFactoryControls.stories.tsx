@@ -31,6 +31,8 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   admittedAt: null,
   metrics: { ciRounds: 0, ciRed: 0, conflicts: 0, ciBlocked: 0, ciTimeouts: 0, agentFixes: 0 },
   regressionProof: null,
+  reviews: [],
+  risk: null,
   ...over,
 });
 
@@ -41,6 +43,9 @@ const settings = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
+  autoMerge: 'low_risk',
+  sensitivePaths: [],
+  stageLimits: {},
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

@@ -330,6 +330,9 @@ export function createTestDb() {
       max_concurrent INTEGER NOT NULL DEFAULT 2,
       blocked_reason TEXT,
       mode TEXT NOT NULL DEFAULT 'manual',
+      auto_merge TEXT NOT NULL DEFAULT 'low_risk',
+      sensitive_paths TEXT,
+      stage_limits TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -374,7 +377,9 @@ export function createTestDb() {
       flow_steps TEXT,
       failure_reason TEXT,
       metrics TEXT,
-      regression_proof TEXT
+      regression_proof TEXT,
+      review_verdicts TEXT,
+      risk TEXT
     )
   `);
   testDb.run(sql`

@@ -306,6 +306,12 @@ export const factorySettings = pgTable(
      * issues sent to it; `automatic`, also the open issues carrying `label`.
      */
     mode: text('mode').notNull().default('manual'),
+    /** Which reviewed changes the factory merges by itself: `low_risk` or `all`. */
+    autoMerge: text('auto_merge').notNull().default('low_risk'),
+    /** JSON array of globs that make a change high risk, besides the default list. */
+    sensitivePaths: text('sensitive_paths'),
+    /** JSON object: runs inside a flow node at once, per node id. */
+    stageLimits: text('stage_limits'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
@@ -355,6 +361,10 @@ export const factoryRuns = pgTable('factory_runs', {
   metrics: text('metrics'),
   /** JSON: the last regression proof of the run (`RegressionProofRecord`). */
   regressionProof: text('regression_proof'),
+  /** JSON array of the review verdicts of the run's pull request, one per commit. */
+  reviews: text('review_verdicts'),
+  /** JSON: the risk class of the last classified commit (`FactoryRisk`). */
+  risk: text('risk'),
 });
 
 /**

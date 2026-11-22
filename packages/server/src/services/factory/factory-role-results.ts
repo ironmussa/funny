@@ -15,6 +15,7 @@
  * data to validate, never an instruction.
  */
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { err, ok, type Result } from 'neverthrow';
 import type { z } from 'zod';
 
@@ -63,17 +64,13 @@ export function parseRoleResult<Schema extends z.ZodType>(
   const block = lastJsonBlock(message);
   if (block === null) return err('the final message has no fenced json block');
   if (block.length > MAX_RESULT_CHARS) return err('the json block is too large');
-  let value: unknown;
-  try {
-    value = JSON.parse(block);
-  } catch {
-    return err('the json block is not valid JSON');
-  }
-  const parsed = schema.safeParse(value);
-  if (parsed.success) return ok(parsed.data);
-  const problems = parsed.error.issues
+  const parsed = parseStoredJson(schema, block, 'result');
+  if (parsed.ok) return ok(parsed.value);
+  // No issues: the text is not JSON at all (the parser's own message may quote it).
+  if (parsed.issues.length === 0) return err('the json block is not valid JSON');
+  const problems = parsed.issues
     .slice(0, 5)
-    .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .map((issue) => `${issue.path}: ${issue.message}`)
     .join('; ');
   return err(`the json block does not match the result format (${problems})`);
 }

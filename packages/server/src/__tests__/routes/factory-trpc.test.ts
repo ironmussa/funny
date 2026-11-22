@@ -247,6 +247,109 @@ describe('factory over tRPC', () => {
     );
   });
 
+  test('a run in review or merging is listed with its verdicts and risk', async () => {
+    const { createFactoryRunsRepository, withReviewVerdict } =
+      await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('waiting_ci');
+    const sha = 'c'.repeat(40);
+    const verdict = {
+      sha,
+      verdict: 'fail' as const,
+      findings: [{ severity: 'high' as const, title: 'Missing null check' }],
+      threadId: 'th-review',
+      reviewedAt: '2026-11-22T10:00:00.000Z',
+    };
+
+    expect(
+      (
+        await runs.enterStage(run.id, 'review', {
+          reviews: withReviewVerdict([], verdict),
+          risk: { headSha: sha, level: 'high', reasons: ['touches .github/'] },
+        })
+      )._unsafeUnwrap(),
+    ).toBe(true);
+    const reviewing = (await query('alice', 'runs', { projectId: 'p1' })).body;
+    expect(reviewing).toMatchObject([
+      {
+        id: run.id,
+        state: 'reviewing',
+        reviews: [verdict],
+        risk: { headSha: sha, level: 'high', reasons: ['touches .github/'] },
+      },
+    ]);
+
+    expect((await runs.enterStage(run.id, 'merge'))._unsafeUnwrap()).toBe(true);
+    const merging = (await query('alice', 'runs', { projectId: 'p1' })).body;
+    expect(merging).toMatchObject([{ state: 'merging', reviews: [verdict] }]);
+    // Waiting for the merge slot holds one of the factory's slots.
+    expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(1);
+  });
+
+  test('a run enters review or merge only with a pull request and a flow driving it', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    for (const state of ['working', 'queued', 'requested', 'waiting_human', 'stopped'] as const) {
+      t.cleanup();
+      seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo-a' });
+      const run = await seededRun(state);
+      expect((await runs.enterStage(run.id, 'review'))._unsafeUnwrap()).toBe(false);
+      expect((await runs.enterStage(run.id, 'merge'))._unsafeUnwrap()).toBe(false);
+      expect((await runs.get(run.id))._unsafeUnwrap()?.state).toBe(state);
+    }
+  });
+
+  test('a new verdict of a commit replaces the old one', async () => {
+    const { withReviewVerdict } = await import('../../services/factory/factory-runs.js');
+    const at = '2026-11-22T10:00:00.000Z';
+    const first = { sha: 'a'.repeat(40), verdict: 'fail' as const, findings: [], reviewedAt: at };
+    const other = { sha: 'b'.repeat(40), verdict: 'pass' as const, findings: [], reviewedAt: at };
+    const again = { ...first, verdict: 'pass' as const };
+    expect(withReviewVerdict(withReviewVerdict([first], other), again)).toEqual([other, again]);
+  });
+
+  test('the merge policy, sensitive paths and stage limits are saved and read back', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      autoMerge: 'low_risk',
+      sensitivePaths: [],
+      stageLimits: {},
+    });
+    const saved = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      autoMerge: 'all',
+      sensitivePaths: ['billing/**'],
+      stageLimits: { review: 1, implement: 3 },
+    });
+    expect(saved.body).toMatchObject({
+      autoMerge: 'all',
+      sensitivePaths: ['billing/**'],
+      stageLimits: { review: 1, implement: 3 },
+    });
+    // Omitted fields keep their values.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      autoMerge: 'all',
+      sensitivePaths: ['billing/**'],
+      stageLimits: { review: 1, implement: 3 },
+    });
+    expect((await save('alice', { projectId: 'p1', enabled: true, autoMerge: 'yes' })).status).toBe(
+      400,
+    );
+  });
+
+  test('the merge limit cannot be raised', async () => {
+    await save('alice', { projectId: 'p1', enabled: true, stageLimits: { review: 2 } });
+    const refused = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      stageLimits: { merge: 2 },
+    });
+    expect(refused.status).toBe(400);
+    expect((await query('alice', 'settings', { projectId: 'p1' })).body).toMatchObject({
+      stageLimits: { review: 2 },
+    });
+  });
+
   test('a send needs a factory, a running one, and a usable input', async () => {
     const send = { projectId: 'p1', issueNumbers: [7], flowName: 'issue-to-merge' };
     expect((await mutate('alice', 'submitIssues', send)).status).toBe(404);

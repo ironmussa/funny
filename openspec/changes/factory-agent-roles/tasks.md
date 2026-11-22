@@ -14,10 +14,10 @@ Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, 
 
 ## 2. Run states and storage
 
-- [ ] 2.1 Migration in `server/src/db/migrate.ts` and both schemas: `factory_runs` verdicts (per SHA) and risk class, new states `reviewing` / `merging`; `factory_settings.auto_merge`, `sensitive_paths` and `stage_limits` (the contract, likely paths, `triaging` and `needs_info` are 3.7); verify with the migrate test and `bun run db:push` on a scratch DB
-- [ ] 2.2 Extend the run machine in `factory-runs.ts` with `reviewing` and `merging` (including a run waiting for the merge slot) as compare-and-sets; verify with transition tests including a refused transition from a wrong state
-- [ ] 2.3 Map the new states and fields in the `factory` tRPC port and `@funny/shared/contracts/factory`; verify with `factory-trpc` tests reading a run in each new state
-- [ ] 2.4 Add the run machine changes to `docs/architecture/state-machines.md`
+- [x] 2.1 Migration in `server/src/db/migrate.ts` and both schemas: `factory_runs` verdicts (per SHA) and risk class, new states `reviewing` / `merging`; `factory_settings.auto_merge`, `sensitive_paths` and `stage_limits` (the contract, likely paths, `triaging` and `needs_info` are 3.7); verify with the migrate test (`bun run db:push` was not run: its config writes to `~/.funny/data.db` and cannot target a scratch DB; the migration test runs `autoMigrate` on an in-memory DB instead)
+- [x] 2.2 Extend the run machine in `factory-runs.ts` with `reviewing` and `merging` (including a run waiting for the merge slot) as compare-and-sets; verify with transition tests including a refused transition from a wrong state
+- [x] 2.3 Map the new states and fields in the `factory` tRPC port and `@funny/shared/contracts/factory`; verify with `factory-trpc` tests reading a run in each new state
+- [x] 2.4 Add the run machine changes to `docs/architecture/state-machines.md`
 
 ## 5. Test-weakening check and risk class
 

@@ -22,6 +22,8 @@ export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): 
     pr_open: t('factory.state.prOpen', 'PR open'),
     waiting_ci: t('factory.state.waitingCi', 'Waiting for CI'),
     fixing: t('factory.state.fixing', 'Fixing CI'),
+    reviewing: t('factory.state.reviewing', 'In review'),
+    merging: t('factory.state.merging', 'Merging'),
     waiting_human: t('factory.state.waitingHuman', 'Waiting for you'),
     merged: t('factory.state.merged', 'Merged'),
     failed: t('factory.state.failed', 'Failed'),
@@ -81,6 +83,8 @@ const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
   'pr_open',
   'waiting_ci',
   'fixing',
+  'reviewing',
+  'merging',
 ]);
 
 /**
@@ -139,6 +143,8 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   pr_open: 'active',
   waiting_ci: 'active',
   fixing: 'active',
+  reviewing: 'active',
+  merging: 'active',
   requested: 'queue',
   failed: 'failed',
   merged: 'ended',

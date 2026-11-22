@@ -17,7 +17,12 @@
 import {
   EMPTY_FACTORY_RUN_METRICS,
   factoryRegressionProofSchema,
+  factoryReviewVerdictSchema,
+  factoryRiskSchema,
+  MAX_STORED_REVIEWS,
   type FactoryRegressionProof,
+  type FactoryReviewVerdict,
+  type FactoryRisk,
   type FactoryRunMetrics,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
@@ -77,6 +82,8 @@ export type FactoryRunState =
   | 'pr_open'
   | 'waiting_ci'
   | 'fixing'
+  | 'reviewing'
+  | 'merging'
   | 'waiting_human'
   | 'merged'
   | 'failed'
@@ -115,7 +122,23 @@ export const IN_FLIGHT_STATES = [
   'pr_open',
   'waiting_ci',
   'fixing',
+  'reviewing',
+  'merging',
 ] as const satisfies FactoryRunState[];
+
+/**
+ * The gates after the pull request (change factory-agent-roles): a run enters
+ * its review or its merge step only from a state in which it has a pull
+ * request and a flow driving it, as a compare-and-set (`enterStage`). `merging`
+ * covers waiting for the repository's merge slot: such a run is in flight and
+ * holds one of the factory's concurrency slots.
+ */
+const STAGE_TRANSITIONS = {
+  review: { from: ['pr_open', 'waiting_ci', 'fixing', 'reviewing', 'merging'], to: 'reviewing' },
+  merge: { from: ['pr_open', 'waiting_ci', 'fixing', 'reviewing', 'merging'], to: 'merging' },
+} as const satisfies Record<string, { from: readonly FactoryRunState[]; to: FactoryRunState }>;
+
+export type FactoryRunStage = keyof typeof STAGE_TRANSITIONS;
 
 /**
  * The `currentStep` of a run a retry or take-over put back in flight, until its
@@ -187,6 +210,10 @@ export interface FactoryRunView {
   metrics: FactoryRunMetrics;
   /** The last regression proof of its pull request, or null. */
   regressionProof: RegressionProofRecord | null;
+  /** The review verdicts of its pull request, one per commit, oldest first. */
+  reviews: FactoryReviewVerdict[];
+  /** The risk class of the last classified commit, or null. */
+  risk: FactoryRisk | null;
 }
 
 export type FactoryRunSource = 'manual' | 'label';
@@ -220,7 +247,35 @@ const toView = (row: Row): FactoryRunView => ({
   failureReason: row.failureReason ?? null,
   metrics: parseMetrics(row.metrics ?? null),
   regressionProof: parseRegressionProof(row.regressionProof ?? null),
+  reviews: parseReviews(row.reviews ?? null),
+  risk: parseRisk(row.risk ?? null),
 });
+
+const REVIEWS_SCHEMA = z.array(factoryReviewVerdictSchema);
+
+function parseReviews(raw: string | null): FactoryReviewVerdict[] {
+  if (!raw) return [];
+  const parsed = parseStoredJson(REVIEWS_SCHEMA, raw, 'factory_runs.review_verdicts');
+  return parsed.ok ? parsed.value : [];
+}
+
+function parseRisk(raw: string | null): FactoryRisk | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryRiskSchema, raw, 'factory_runs.risk');
+  return parsed.ok ? parsed.value : null;
+}
+
+/**
+ * The run's verdicts with `verdict` added: one per commit (a new verdict of a
+ * commit replaces the old one), oldest first, the newest `MAX_STORED_REVIEWS`.
+ */
+export function withReviewVerdict(
+  reviews: readonly FactoryReviewVerdict[],
+  verdict: FactoryReviewVerdict,
+): FactoryReviewVerdict[] {
+  const others = reviews.filter((review) => review.sha !== verdict.sha);
+  return [...others, verdict].slice(-MAX_STORED_REVIEWS);
+}
 
 function parseWaitReason(raw: string | null): FactoryWaitReason | null {
   if (!raw) return null;
@@ -280,11 +335,20 @@ export interface UpdateRunInput {
   failureReason?: string | null;
   metrics?: FactoryRunMetrics;
   regressionProof?: RegressionProofRecord;
+  reviews?: FactoryReviewVerdict[];
+  risk?: FactoryRisk;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
 const PLAIN_FIELDS = ['currentStep', 'prUrl', 'launchStartedAt', 'failureReason'] as const;
-const JSON_FIELDS = ['threadIds', 'flowSteps', 'metrics', 'regressionProof'] as const;
+const JSON_FIELDS = [
+  'threadIds',
+  'flowSteps',
+  'metrics',
+  'regressionProof',
+  'reviews',
+  'risk',
+] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
   const changes: Partial<Row> = {};
@@ -392,6 +456,8 @@ function queueOperations(newId: () => string) {
             failureReason: null,
             metrics: null,
             regressionProof: null,
+            reviews: null,
+            risk: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -631,6 +697,8 @@ export function createFactoryRunsRepository(
         failureReason: null,
         metrics: null,
         regressionProof: null,
+        reviews: null,
+        risk: null,
       };
       return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
         toView(row),
@@ -666,6 +734,29 @@ export function createFactoryRunsRepository(
           .update(factoryRuns)
           .set(changes)
           .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, from)))
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
+    /**
+     * Move a run into its review or merge step: only from a state in which it
+     * has a pull request and a flow driving it (`STAGE_TRANSITIONS`), a
+     * compare-and-set. Resolves whether it moved; false for a run that was
+     * stopped, parked or never opened a pull request.
+     */
+    enterStage(
+      runId: string,
+      stage: FactoryRunStage,
+      input: Omit<UpdateRunInput, 'state'> = {},
+    ): ResultAsync<boolean, FactoryRunsError> {
+      const { from, to } = STAGE_TRANSITIONS[stage];
+      const changes = changesFor({ ...input, state: to })!;
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set(changes)
+          .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
           .returning({ id: factoryRuns.id }),
         storage,
       ).map((rows) => rows.length > 0);

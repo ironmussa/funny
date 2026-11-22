@@ -21,6 +21,8 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     admittedAt: null,
     metrics: { ciRounds: 0, ciRed: 0, conflicts: 0, ciBlocked: 0, ciTimeouts: 0, agentFixes: 0 },
     regressionProof: null,
+    reviews: [],
+    risk: null,
     ...overrides,
   };
 }

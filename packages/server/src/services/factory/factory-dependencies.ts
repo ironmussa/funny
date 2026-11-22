@@ -55,6 +55,8 @@ const IN_PROGRESS: ReadonlySet<FactoryRunState> = new Set([
   'pr_open',
   'waiting_ci',
   'fixing',
+  'reviewing',
+  'merging',
 ]);
 
 /** Why one unfinished blocker of this repository holds the issue, from its latest run here. */

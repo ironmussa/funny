@@ -23,6 +23,9 @@ const settings: FactorySettings = {
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
+  autoMerge: 'low_risk',
+  sensitivePaths: [],
+  stageLimits: {},
   blockedReason: null,
   updatedAt: '2026-11-21T00:00:00.000Z',
 };

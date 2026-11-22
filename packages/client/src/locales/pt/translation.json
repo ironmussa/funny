@@ -1685,6 +1685,8 @@
       "prOpen": "PR aberto",
       "waitingCi": "Aguardando CI",
       "fixing": "Corrigindo CI",
+      "reviewing": "Em revisão",
+      "merging": "Fazendo merge",
       "waitingHuman": "Aguardando você",
       "merged": "Merged",
       "failed": "Falhou",

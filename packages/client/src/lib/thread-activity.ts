@@ -27,6 +27,8 @@ const FACTORY_IN_FLIGHT: ReadonlySet<FactoryRun['state']> = new Set([
   'pr_open',
   'waiting_ci',
   'fixing',
+  'reviewing',
+  'merging',
 ]);
 
 /** Thread states in which the agent itself is busy: its own status already says so. */

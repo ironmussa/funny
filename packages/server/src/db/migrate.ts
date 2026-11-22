@@ -2184,6 +2184,19 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'regression_proof', 'TEXT');
     },
   },
+  {
+    // Change factory-agent-roles, phase 1: the review verdicts and risk class of
+    // a run, and the factory's merge policy and stage limits. The new run
+    // states (`reviewing`, `merging`) need no column: `state` is free text.
+    name: '107_factory_review_and_merge_policy',
+    async up() {
+      await ctx().addColumn('factory_runs', 'review_verdicts', 'TEXT');
+      await ctx().addColumn('factory_runs', 'risk', 'TEXT');
+      await ctx().addColumn('factory_settings', 'auto_merge', 'TEXT NOT NULL', "'low_risk'");
+      await ctx().addColumn('factory_settings', 'sensitive_paths', 'TEXT');
+      await ctx().addColumn('factory_settings', 'stage_limits', 'TEXT');
+    },
+  },
 ];
 
 /**

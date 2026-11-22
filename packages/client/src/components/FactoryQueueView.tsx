@@ -123,6 +123,8 @@ const STATE_ORDER: readonly FactoryRun['state'][] = [
   'pr_open',
   'waiting_ci',
   'fixing',
+  'reviewing',
+  'merging',
   'failed',
   'merged',
   'stopped',

@@ -263,11 +263,11 @@ async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessag
     hasDraftMessage, // skipMessageInsert — draft already exists
     params.effort,
     steer,
-  ).catch((err) => {
+  ).mapErr((error) => {
     log.error('Failed to start agent in background', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: String(err),
+      error: error.message,
     });
   });
 
@@ -805,7 +805,8 @@ async function stopThreadImpl(threadId: string): Promise<void> {
     await cleanupExternalThread(threadId);
     return;
   }
-  await stopAgent(threadId);
+  const stopped = await stopAgent(threadId);
+  if (stopped.isErr()) throw new ThreadServiceError(stopped.error.message, 500);
 }
 
 // ── Approve / Deny Tool ─────────────────────────────────────────
@@ -891,7 +892,7 @@ async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
   const run = params.approved
     ? await buildApprovedRun(params, thread, cwd)
     : buildDeniedRun(params);
-  await startAgent(
+  const started = await startAgent(
     params.threadId,
     run.message,
     cwd,
@@ -902,6 +903,7 @@ async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
     run.allowedTools,
     (thread.provider || DEFAULT_PROVIDER) as AgentProvider,
   );
+  if (started.isErr()) throw new ThreadServiceError(started.error.message, 500);
 }
 
 function buildDeniedRun(params: ApproveToolParams): ApprovalRun {

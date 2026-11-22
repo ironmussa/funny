@@ -198,7 +198,7 @@ async function autoResumeStaleThreads(): Promise<void> {
         permissionMode: thread.permissionMode,
         author: AUTO_RESUME_MESSAGE_AUTHOR,
       });
-      await startAgent(
+      const resumed = await startAgent(
         thread.id,
         AUTO_RESUME_PROMPT,
         cwd,
@@ -211,6 +211,7 @@ async function autoResumeStaleThreads(): Promise<void> {
         undefined,
         true, // skipMessageInsert: the marked message above is the turn's prompt
       );
+      if (resumed.isErr()) throw new Error(resumed.error.message);
 
       log.info('Auto-resumed thread', {
         namespace: 'server',

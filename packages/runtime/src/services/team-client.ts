@@ -245,7 +245,7 @@ async function handleGrpcControl(
     const { startAgent, stopAgent } = await import('./agent-runner-control.js');
     const threadId = String(input.threadId ?? '');
     signal.addEventListener('abort', () => void stopAgent(threadId), { once: true });
-    await startAgent(
+    const started = await startAgent(
       threadId,
       String(input.prompt ?? ''),
       String(input.cwd ?? ''),
@@ -256,12 +256,14 @@ async function handleGrpcControl(
       input.allowedTools,
       input.provider || undefined,
     );
+    if (started.isErr()) throw new Error(started.error.message);
     return {};
   }
 
   if (command.stopAgent) {
     const { stopAgent } = await import('./agent-runner-control.js');
-    await stopAgent(String(command.stopAgent.threadId ?? ''));
+    const stopped = await stopAgent(String(command.stopAgent.threadId ?? ''));
+    if (stopped.isErr()) throw new Error(stopped.error.message);
     return {};
   }
 

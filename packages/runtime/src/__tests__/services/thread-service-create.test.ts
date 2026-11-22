@@ -22,7 +22,7 @@ const mocks = (() => ({
   threadEventBus: {
     emit: vi.fn(),
   },
-  startAgent: vi.fn(async (..._args: unknown[]) => undefined),
+  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
   getCurrentBranch: vi.fn(),
   createWorktree: vi.fn(),
   removeWorktree: vi.fn(),
@@ -129,6 +129,7 @@ mock.module('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 
+import { internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { ok, err, okAsync, errAsync } from 'neverthrow';
 
@@ -556,7 +557,7 @@ describe('createAndStartThread', () => {
       mocks.adoptStagedUploads.mockReturnValue(
         okAsync([{ path: '.funny/uploads/fixed-thread-id/spec.pdf' }]),
       );
-      mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+      mocks.startAgent.mockReturnValueOnce(errAsync(internal('spawn failed')));
 
       const result = await createAndStartThread({
         projectId: 'p-1',
@@ -853,7 +854,7 @@ describe('createAndStartThread', () => {
   test('marks worktree thread failed when startAgent throws after setup', async () => {
     mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
     mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
-    mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+    mocks.startAgent.mockReturnValueOnce(errAsync(internal('spawn failed')));
 
     const result = await createAndStartThread({
       projectId: 'p-1',

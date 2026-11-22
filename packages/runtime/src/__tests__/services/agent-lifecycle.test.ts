@@ -2,10 +2,17 @@ import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:tes
 
 import type { IAgentProcess, ProcessOptionsSnapshot, StartAgentOptions } from '@funny/core/agents';
 import type { Project, ResolvedAgentExecutionProfileResponse } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
 import { mocked } from '@funny/test-kit';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 const noResolvedProfile: ResolvedAgentExecutionProfileResponse = { profile: null, env: {} };
+
+/** A failed start is an `Err` carrying the cause, never a rejection (#230). */
+function expectStartFailed(result: Result<void, DomainError>, message: string) {
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) expect(result.error.message).toContain(message);
+}
 
 const mocks = (() => ({
   orchestrator: {
@@ -444,7 +451,8 @@ describe('AgentLifecycleManager', () => {
 
       const manager = createManager();
 
-      await expect(manager.startAgent('scratch-2', 'hello', '/ignored')).rejects.toThrow(
+      expectStartFailed(
+        await manager.startAgent('scratch-2', 'hello', '/ignored'),
         'permission denied',
       );
       expect(mocks.orchestrator.startAgent).not.toHaveBeenCalled();
@@ -655,15 +663,24 @@ describe('AgentLifecycleManager', () => {
   });
 
   describe('startAgent — orchestrator errors', () => {
+    // Service boundary (#230): even a failure before the thread turns
+    // `running` (here: the thread lookup) is an Err, never a rejection.
+    test('returns an Err when the running transition cannot read the thread', async () => {
+      mocks.threadManager.getThread.mockRejectedValueOnce(new Error('tunnel down'));
+
+      const result = await createManager().startAgent('thread-1', 'hello', '/tmp/repo');
+
+      expectStartFailed(result, 'tunnel down');
+      expect(mocks.orchestrator.startAgent).not.toHaveBeenCalled();
+    });
+
     test('ends run span and marks thread failed when orchestrator start throws', async () => {
       seedProjectThread();
       mocks.orchestrator.startAgent.mockRejectedValue(new Error('spawn failed'));
 
       const manager = createManager();
 
-      await expect(manager.startAgent('thread-1', 'hello', '/tmp/repo')).rejects.toThrow(
-        'spawn failed',
-      );
+      expectStartFailed(await manager.startAgent('thread-1', 'hello', '/tmp/repo'), 'spawn failed');
 
       expect(mocks.spanEnd).toHaveBeenCalledWith('error', 'spawn failed');
       expect(mocks.threadManager.updateThread).toHaveBeenCalledWith(
@@ -688,7 +705,8 @@ describe('AgentLifecycleManager', () => {
 
       const manager = createManager();
 
-      await expect(manager.startAgent('thread-1', 'hello', '/tmp/repo')).rejects.toThrow(
+      expectStartFailed(
+        await manager.startAgent('thread-1', 'hello', '/tmp/repo'),
         'db write failed',
       );
 
@@ -990,7 +1008,8 @@ describe('AgentLifecycleManager', () => {
         message: 'The project secret STRIPE_KEY cannot be decrypted.',
       });
 
-      await expect(createManager().startAgent('thread-1', 'hello', '/tmp/repo')).rejects.toThrow(
+      expectStartFailed(
+        await createManager().startAgent('thread-1', 'hello', '/tmp/repo'),
         'STRIPE_KEY cannot be decrypted',
       );
 
@@ -1249,9 +1268,32 @@ describe('AgentLifecycleManager', () => {
       mocks.threadManager.getThread.mockResolvedValue({ provider: 'claude' });
 
       const manager = createManager();
-      await manager.stopAgent('thread-1');
+      const result = await manager.stopAgent('thread-1');
 
+      expect(result.isOk()).toBe(true);
       expect(mocks.orchestrator.stopAgent).toHaveBeenCalledWith('thread-1');
+    });
+
+    // Service boundary (#230): a failed stop is an Err, never a rejection.
+    test('stopAgent returns an Err when the orchestrator cannot stop the process', async () => {
+      mocks.threadManager.getThread.mockResolvedValue({ provider: 'claude' });
+      mocks.orchestrator.stopAgent.mockRejectedValueOnce(new Error('kill failed'));
+
+      const result = await createManager().stopAgent('thread-1');
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toEqual({ type: 'INTERNAL', message: 'kill failed' });
+      }
+    });
+
+    test('stopAgent returns an Err when the thread lookup fails', async () => {
+      mocks.threadManager.getThread.mockRejectedValueOnce(new Error('tunnel down'));
+
+      const result = await createManager().stopAgent('thread-1');
+
+      expect(result.isErr()).toBe(true);
+      expect(mocks.orchestrator.stopAgent).not.toHaveBeenCalled();
     });
 
     test('cleanupThreadState clears orchestrator, state, and event queue', () => {

@@ -1,6 +1,8 @@
 import type { ActiveAgentSnapshot } from '@funny/core/agents';
 import type { PermissionDecision } from '@funny/core/agents';
 import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
+import type { ResultAsync } from 'neverthrow';
 
 type StartAgent = (
   threadId: string,
@@ -16,11 +18,11 @@ type StartAgent = (
   skipMessageInsert?: boolean,
   effort?: string,
   steer?: boolean,
-) => Promise<void>;
+) => ResultAsync<void, DomainError>;
 
 export interface AgentRunnerControl {
   startAgent: StartAgent;
-  stopAgent: (threadId: string) => Promise<void>;
+  stopAgent: (threadId: string) => ResultAsync<void, DomainError>;
   stopAllAgents: () => Promise<void>;
   isAgentRunning: (threadId: string) => boolean;
   cleanupThreadState: (threadId: string) => void;
@@ -53,7 +55,7 @@ export function registerAgentRunnerControl(next: AgentRunnerControl): void {
 
 export const startAgent: StartAgent = (...args) => currentControl().startAgent(...args);
 
-export function stopAgent(threadId: string): Promise<void> {
+export function stopAgent(threadId: string): ResultAsync<void, DomainError> {
   return currentControl().stopAgent(threadId);
 }
 

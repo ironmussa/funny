@@ -16,8 +16,8 @@ import {
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { remarkPlugins } from '@/lib/markdown-components';
+import { defineFunnyDarkTheme, monacoThemeFor } from '@/lib/monaco-theme';
 import { parsePlanSections, type PlanSection } from '@/lib/parse-plan-sections';
-import { isLightTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
@@ -44,26 +44,6 @@ const LazyEditor = lazy(async () => {
 const LazyReactMarkdown = lazy(() => import('react-markdown'));
 
 const PROSE_CLASSES = 'prose max-w-none';
-
-function definePlanEditorTheme(monaco: any) {
-  monaco.editor.defineTheme('funny-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [],
-    colors: {
-      'editor.background': '#000000',
-      'editorGutter.background': '#000000',
-      'minimap.background': '#0a0a0a',
-      'editorWidget.background': '#1e1e1e',
-      'editorWidget.border': '#454545',
-      'editorWidget.foreground': '#cccccc',
-      'input.background': '#2a2a2a',
-      'input.foreground': '#cccccc',
-      'input.border': '#454545',
-      focusBorder: '#007acc',
-    },
-  });
-}
 
 function planHeadingProps(children: React.ReactNode, titleToId: Map<string, number>) {
   const text = String(children ?? '');
@@ -209,7 +189,7 @@ export function PlanReviewDialog({
   const sections = useMemo(() => parsePlanSections(activePlan), [activePlan]);
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].level > 0);
 
-  const monacoTheme = isLightTheme(resolvedTheme) ? 'vs' : 'funny-dark';
+  const monacoTheme = monacoThemeFor(resolvedTheme);
 
   // ── Active section tracking via scroll ──
   const [trackedActiveSectionId, setTrackedActiveSectionId] = useState<number | null>(null);
@@ -300,7 +280,7 @@ export function PlanReviewDialog({
                 height="100%"
                 language="markdown"
                 theme={monacoTheme}
-                beforeMount={definePlanEditorTheme}
+                beforeMount={defineFunnyDarkTheme}
                 value={activePlan}
                 onChange={handleEditPlanChange}
                 options={{

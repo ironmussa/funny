@@ -21,7 +21,7 @@ const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
   backgroundColor: 'hsl(var(--popover))',
   border: '1px solid hsl(var(--border))',
   borderRadius: '6px',
-  fontSize: '12px',
+  fontSize: '0.75rem',
   color: 'hsl(var(--popover-foreground))',
 };
 const TOOLTIP_ITEM_STYLE: React.CSSProperties = { color: 'hsl(var(--popover-foreground))' };

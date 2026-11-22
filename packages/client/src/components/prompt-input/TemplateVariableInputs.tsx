@@ -27,7 +27,7 @@ export function TemplateVariableInputs({
               <TooltipTrigger asChild>
                 <label
                   htmlFor={`template-variable-${v.name}`}
-                  className="text-muted-foreground text-[10px] font-medium"
+                  className="text-muted-foreground text-2xs font-medium"
                 >
                   {v.name}
                 </label>

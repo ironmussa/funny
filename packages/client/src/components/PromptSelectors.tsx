@@ -345,13 +345,13 @@ const DesktopTemplateSelect = memo(function DesktopTemplateSelect({
         )}
         <span className="truncate">{tpl.name}</span>
         {tpl.model && (
-          <span className="bg-muted text-muted-foreground shrink-0 rounded px-1 py-0.5 text-[9px]">
+          <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1 py-0.5">
             {tpl.model}
           </span>
         )}
       </span>
       {tpl.description && (
-        <span className="text-muted-foreground block truncate pl-3.5 text-[10px]">
+        <span className="text-muted-foreground text-2xs block truncate pl-3.5">
           {tpl.description}
         </span>
       )}
@@ -381,21 +381,21 @@ const DesktopTemplateSelect = memo(function DesktopTemplateSelect({
         {userTemplates.length > 0 && (
           <SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-[10px]">My Templates</SelectLabel>
+            <SelectLabel className="text-2xs">My Templates</SelectLabel>
             {userTemplates.map(renderItem)}
           </SelectGroup>
         )}
         {sharedTemplates.length > 0 && (
           <SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-[10px]">Shared</SelectLabel>
+            <SelectLabel className="text-2xs">Shared</SelectLabel>
             {sharedTemplates.map(renderItem)}
           </SelectGroup>
         )}
         {builtinTemplates.length > 0 && (
           <SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-[10px]">Built-in</SelectLabel>
+            <SelectLabel className="text-2xs">Built-in</SelectLabel>
             {builtinTemplates.map(renderItem)}
           </SelectGroup>
         )}

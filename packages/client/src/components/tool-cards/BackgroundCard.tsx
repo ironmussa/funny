@@ -82,7 +82,7 @@ export function BackgroundCard({
         )}
         {status && <JobStatusBadge status={status} exitCode={exitCode} />}
         {displayTime && (
-          <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
+          <span className="text-muted-foreground/50 text-2xs ml-auto shrink-0 tabular-nums">
             {displayTime}
           </span>
         )}

@@ -72,7 +72,7 @@ export function FilterMultiSelect({
           {icon}
           <span>{label}</span>
           {active && (
-            <span className="bg-primary text-primary-foreground ml-0.5 rounded-full px-1 text-[9px] leading-4 font-semibold">
+            <span className="bg-primary text-primary-foreground text-3xs ml-0.5 rounded-full px-1 leading-4 font-semibold">
               {selected.length}
             </span>
           )}

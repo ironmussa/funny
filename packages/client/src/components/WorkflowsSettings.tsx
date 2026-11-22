@@ -410,7 +410,7 @@ function WorkflowList({
           >
             <GitBranch className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">{item.name}</span>
-            <span className="text-muted-foreground text-[11px]">
+            <span className="text-muted-foreground text-compact">
               {item.source === 'user' ? 'user' : 'base'}
             </span>
           </button>

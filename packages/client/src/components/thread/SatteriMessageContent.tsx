@@ -292,7 +292,7 @@ function MarkdownIsland({
   return (
     <div className="my-2">
       <div className="bg-muted overflow-x-auto rounded p-2">
-        <div className="text-muted-foreground/80 mb-1 text-[10px] tracking-wider uppercase select-none">
+        <div className="text-muted-foreground/80 text-2xs mb-1 tracking-wider uppercase select-none">
           {segment.language}
         </div>
         <Visualizer source={segment.source} />

@@ -57,7 +57,9 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    works in their own checkout; or their sandbox). Every later agent step (e.g. a CI fix)
    **continues that thread** with a follow-up message, so the agent keeps its context. The agent
    commits, pushes the run's branch (`factory/issue-<n>-<runId8>`) and opens the PR; the server has no
-   checkout.
+   checkout. A worktree thread is created on that branch (the launch passes `branch`), so the
+   thread, its worktree and the PR share one branch; if the branch already exists (a retried
+   run), the runner falls back to a name from the title.
 3. **CI**: `wait_ci` polls the PR; red or conflict hands the failure (check names and log tails)
    to the fix step via `retry.before_retry`, up to the flow's attempts. A timeout is not retried.
 4. **End**: merged → `merged`; completed without a merge → `waiting_human`; failed with the PR
@@ -73,6 +75,11 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    (`factoryRunBranch`, any state) for `BRANCH_LOOKUP_WINDOW_MS` (14 days) after it parked, and
    the PR found is recorded. A paused factory keeps polling while it has such a run
    (`awaitsPullRequest`), and stops once none is left.
+6. **Cleanup on merge**: when a run becomes `merged` (by its `merge` step or by step 5), the
+   server removes its threads' worktrees and local branches on the enabler's runner
+   (`cleanupFactoryWorktrees`, `DELETE /api/worktrees`) and clears them on the thread rows.
+   Only idle worktree threads on a local runner; a sandbox has its own lifecycle. Best effort:
+   an offline runner leaves them in place. A run closed without a merge keeps its worktree.
 
 Each run executes its own `flow_name` (resume, retry and take-over too); rows from before the
 queue fall back to the factory's flow.

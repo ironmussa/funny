@@ -601,6 +601,7 @@ describe('factory flow', () => {
     const github = fakeGithub('o/r', issue7, script);
     const notices: Array<{ title: string; body: string }> = [];
     const followUps: Array<{ threadId: string; content: string }> = [];
+    const cleanups: Array<{ userId: string; threadIds: string[] }> = [];
     await startFactoryWatcher({
       ports,
       github,
@@ -608,6 +609,9 @@ describe('factory flow', () => {
       launch: launcher.launch,
       resolveRuntime,
       waitThread,
+      cleanupMerged: async (userId, threadIds) => {
+        cleanups.push({ userId, threadIds });
+      },
       notify: async (_userId, notice) => notices.push(notice),
       followUp: async (_userId, threadId, content) => {
         followUps.push({ threadId, content });
@@ -615,7 +619,7 @@ describe('factory flow', () => {
       },
     });
     await poll.ticks[0]!();
-    return { factoryId, launcher, github, poll, notices, followUps };
+    return { factoryId, launcher, github, poll, notices, followUps, cleanups };
   }
 
   test('a completed agent step goes on to the pull request, green CI and the merge', async () => {
@@ -623,6 +627,15 @@ describe('factory flow', () => {
     const run = await eventually(factoryId, (r) => r.state === 'merged');
     expect(run).toMatchObject({ prUrl: 'https://github.com/o/r/pull/9', threadIds: ['t-1'] });
     expect(github.merges).toBe(1);
+  });
+
+  test("a merge cleans up the run's worktrees on the enabler's runner", async () => {
+    const { factoryId, cleanups } = await runFlow({}, finishedThreads('completed'));
+    await eventually(factoryId, (r) => r.state === 'merged');
+    for (let i = 0; i < 100 && cleanups.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
   });
 
   const red: CiState = {
@@ -1167,6 +1180,7 @@ describe('factory operator controls', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', opts.issues ?? issue7, opts.github);
+    const cleanups: Array<{ userId: string; threadIds: string[] }> = [];
     await startFactoryWatcher({
       ports,
       github,
@@ -1175,9 +1189,12 @@ describe('factory operator controls', () => {
       resolveRuntime,
       waitThread: opts.waitThread ?? pendingThreads,
       checkAccess: opts.checkAccess,
+      cleanupMerged: async (userId, threadIds) => {
+        cleanups.push({ userId, threadIds });
+      },
       notify: async () => undefined,
     });
-    return { poll, launcher, github };
+    return { poll, launcher, github, cleanups };
   }
 
   /** A run that parked a minute ago (its `completedAt` is when it parked). */
@@ -1216,7 +1233,7 @@ describe('factory operator controls', () => {
   test('a parked run whose pull request a person merged is closed as merged', async () => {
     const factoryId = await enableFactory();
     const run = await seedParkedWithPr(factoryId);
-    const { poll } = await watch({ issues: [], github: { prStates: { 9: 'merged' } } });
+    const { poll, cleanups } = await watch({ issues: [], github: { prStates: { 9: 'merged' } } });
 
     await poll.ticks[0]!();
 
@@ -1225,17 +1242,21 @@ describe('factory operator controls', () => {
       currentStep: null,
       failureReason: null,
     });
+    // Merged outside the flow: its worktree is cleaned up all the same.
+    expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
   });
 
   test('a parked run whose pull request was closed without a merge is stopped, saying so', async () => {
     const factoryId = await enableFactory();
     const run = await seedParkedWithPr(factoryId);
-    const { poll } = await watch({ issues: [], github: { prStates: { 9: 'closed' } } });
+    const { poll, cleanups } = await watch({ issues: [], github: { prStates: { 9: 'closed' } } });
 
     await poll.ticks[0]!();
 
     const closed = await runById(run.id);
     expect(closed.state).toBe('stopped');
+    // Not merged: the work exists only on its branch, so the worktree stays.
+    expect(cleanups).toEqual([]);
     expect(closed.failureReason).toContain('closed without a merge');
   });
 

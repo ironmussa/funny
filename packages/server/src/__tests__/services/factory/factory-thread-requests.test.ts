@@ -24,11 +24,13 @@ mock.module('../../../services/thread-sandboxes/sandbox-lifecycle.js', () => ({
 
 const { RunnerGrpcSessionRegistry } = await import('../../../services/grpc/session-registry.js');
 const { __resetRunnerScopeCache } = await import('../../../services/runner-scope.js');
-const { sendFactoryFollowUp, stopFactoryThreads } =
+const { cleanupFactoryWorktrees, sendFactoryFollowUp, stopFactoryThreads } =
   await import('../../../services/factory/factory-thread-requests.js');
 const { FakeRunnerRequestPort } = await import('../../helpers/runner-port-fakes.js');
 const { createTestDb, seedProject, seedRunner, seedRunnerProjectAssignment, seedThread } =
   await import('../../helpers/test-db.js');
+const { threads } = await import('../../../db/schema.js');
+const { eq } = await import('drizzle-orm');
 
 let testDb: ReturnType<typeof createTestDb>;
 let presence: InstanceType<typeof RunnerGrpcSessionRegistry>;
@@ -106,6 +108,69 @@ describe('factory thread requests', () => {
     await stopFactoryThreads(ports(), 'alice', ['t-run', 't-done']);
 
     expect(requests.requests.map((r) => r.request.path)).toEqual(['/api/threads/t-run/stop']);
+  });
+
+  describe('cleaning up a merged run', () => {
+    const worktreeThread = (id: string, extra: Record<string, unknown> = {}) =>
+      seedThread(testDb.db, {
+        id,
+        projectId: 'p1',
+        userId: 'alice',
+        status: 'completed',
+        mode: 'worktree',
+        branch: `factory/issue-7-${id}`,
+        worktreePath: `/srv/wt/${id}`,
+        ...extra,
+      });
+    const row = async (id: string) =>
+      (await testDb.db.select().from(threads).where(eq(threads.id, id)))[0]!;
+
+    test("removes the worktree and its branch on the enabler's runner, then clears them", async () => {
+      runner('r-bob', 'bob');
+      runner('r-alice', 'alice');
+      worktreeThread('t1');
+
+      await cleanupFactoryWorktrees(ports(), 'alice', ['t1', 't1']);
+
+      expect(requests.requests.map((r) => r.runnerId)).toEqual(['r-alice']);
+      expect(requests.requests[0]!.request).toMatchObject({
+        method: 'DELETE',
+        path: '/api/worktrees',
+      });
+      expect(JSON.parse(String(requests.requests[0]!.request.body))).toEqual({
+        projectId: 'p1',
+        worktreePath: '/srv/wt/t1',
+        branchName: 'factory/issue-7-t1',
+        deleteBranch: true,
+      });
+      expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
+    });
+
+    test("leaves running, local, sandbox and other users' threads alone", async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t-run', { status: 'running' });
+      worktreeThread('t-sb', { runtime: 'sandbox' });
+      worktreeThread('t-bob', { userId: 'bob' });
+      seedThread(testDb.db, { id: 't-local', projectId: 'p1', userId: 'alice', mode: 'local' });
+
+      await cleanupFactoryWorktrees(ports(), 'alice', ['t-run', 't-sb', 't-bob', 't-local']);
+
+      expect(requests.requests).toEqual([]);
+      expect((await row('t-run')).worktreePath).toBe('/srv/wt/t-run');
+    });
+
+    test('a runner that refuses keeps the worktree recorded on the thread', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t1');
+      requests.response = { status: 500, headers: {}, body: '', bodyEncoding: 'utf8' };
+
+      await cleanupFactoryWorktrees(ports(), 'alice', ['t1']);
+
+      expect(await row('t1')).toMatchObject({
+        worktreePath: '/srv/wt/t1',
+        branch: 'factory/issue-7-t1',
+      });
+    });
   });
 
   test('a follow-up to a sleeping sandbox wakes it for the enabler and tries once more', async () => {

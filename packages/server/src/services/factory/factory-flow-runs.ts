@@ -90,6 +90,8 @@ export interface FactoryFlowRunsDeps {
   reportBlocked?: (factoryId: string, reason: string) => Promise<void>;
   /** Stop the enabler's threads (one a launch started after its run was stopped). */
   stopThreads?: (userId: string, threadIds: string[]) => Promise<void>;
+  /** Remove the worktree and local branch of a merged run's threads (best effort). */
+  cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
@@ -305,6 +307,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   }
 
   /** Record the flow's end in the run (see the module comment). */
+  /** The run merged: clean its threads' worktrees up without holding the flow. */
+  function cleanUpMerged(job: FactoryRunJob): void {
+    if (!deps.cleanupMerged) return;
+    const cleanup = deps.cleanupMerged;
+    void deps.runs.get(job.run.id).match(
+      (run) => cleanup(job.factory.userId, run?.threadIds ?? job.run.threadIds),
+      () => cleanup(job.factory.userId, job.run.threadIds),
+    );
+  }
+
   async function settle(
     job: FactoryRunJob,
     outcome: 'completed' | 'failed' | 'cancelled',
@@ -368,6 +380,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       const live = await deps.runs.updateInFlight(job.run.id, input);
       // Stopped (or finished) elsewhere: stop driving it.
       if (live.isOk() && !live.value) controller.abort();
+      if (live.isOk() && live.value && input.state === 'merged') cleanUpMerged(job);
       if (input.prUrl) trace.prOpen = true;
       if (input.threadIds) {
         trace.agentsRan = true;

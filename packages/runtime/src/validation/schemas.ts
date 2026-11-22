@@ -250,6 +250,13 @@ export const createThreadSchema = z
     source: threadSourceSchema.default('web'),
     baseBranch: optionalBaseBranchSchema,
     /**
+     * Start a new worktree from the remote's copy of `baseBranch`
+     * (`origin/<baseBranch>`, fetched first) instead of the local branch. The
+     * issue factory sends it so a run's pull request holds the agent's commits
+     * only, whatever the project checkout has checked out or not yet pushed.
+     */
+    baseFromRemote: z.boolean().optional(),
+    /**
      * The worktree's branch name (worktree mode only). The issue factory sends
      * the run's branch so the thread, its worktree and the pull request share
      * one branch. Absent, or already present in the repository: a name is

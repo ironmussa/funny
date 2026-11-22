@@ -91,6 +91,56 @@ describe('factory action provider', () => {
     expect(bodies[0]).toMatchObject({ branch: 'factory/issue-7-r1', source: 'factory' });
   });
 
+  // Runs #227-#230 started from the branch the enabler's checkout was on:
+  // #227's pull request carried 11 commits that were not the agent's.
+  test("a worktree run starts from the remote's default branch, not the checkout's", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const { provider } = providerWith({
+      scope: { ...scope, mode: 'worktree' as const },
+      defaultBranch: async () => ok('master'),
+      launch: async (body) => {
+        bodies.push(body);
+        return ok({ thread: { id: 't-new' }, threadId: 't-new', runnerId: 'r' });
+      },
+    });
+    await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    expect(bodies[0]).toMatchObject({
+      mode: 'worktree',
+      branch: 'factory/issue-7-r1',
+      baseBranch: 'master',
+      baseFromRemote: true,
+    });
+  });
+
+  test('a worktree run does not start when the default branch cannot be read', async () => {
+    let launches = 0;
+    const { provider } = providerWith({
+      scope: { ...scope, mode: 'worktree' as const },
+      defaultBranch: async () => err({ message: 'GitHub answered 500' }),
+      launch: async () => {
+        launches++;
+        return ok({ thread: { id: 't-new' }, threadId: 't-new', runnerId: 'r' });
+      },
+    });
+    const result = await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('default branch');
+    expect(launches).toBe(0);
+  });
+
+  test('a local run names no base branch', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const { provider } = providerWith({
+      defaultBranch: async () => ok('master'),
+      launch: async (body) => {
+        bodies.push(body);
+        return ok({ thread: { id: 't-new' }, threadId: 't-new', runnerId: 'r' });
+      },
+    });
+    await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    expect(bodies[0]).not.toHaveProperty('baseBranch');
+  });
+
   test('a thread whose launch finished after the run was stopped is stopped', async () => {
     const controller = new AbortController();
     const abandoned: string[] = [];

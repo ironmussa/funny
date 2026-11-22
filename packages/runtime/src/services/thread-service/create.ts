@@ -272,6 +272,8 @@ export interface CreateAndStartThreadParams {
   effort?: string;
   source?: string;
   baseBranch?: string;
+  /** Start a new worktree from `origin/<baseBranch>` (fetched first), not the local branch. */
+  baseFromRemote?: boolean;
   /** Branch for a `worktree` thread's worktree; generated from the title when absent. */
   branch?: string;
   prompt: string;
@@ -591,6 +593,9 @@ async function setupWorktreeAndStartAgent(
       branchName,
       reuseExistingBranch: reuse,
       baseBranch: ctx.resolvedBaseBranch,
+      // Only with a base the caller named: the checkout's current branch
+      // (the default base) may not exist on the remote at all.
+      baseFromRemote: Boolean(params.baseFromRemote && params.baseBranch?.trim()),
       userId: params.userId,
       threadId,
       flow: 'create',

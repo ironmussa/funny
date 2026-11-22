@@ -172,6 +172,45 @@ export interface CreateWorktreeOptions {
    * from its earlier attempt on the same branch. `baseBranch` is then unused.
    */
   reuseExistingBranch?: boolean;
+  /**
+   * Start the new branch from the remote's copy of `baseBranch`
+   * (`origin/<baseBranch>`, fetched first) instead of the local branch: the
+   * issue factory's pull request must hold the agent's commits only, not the
+   * ones the local base branch has and the remote lacks. Falls back to the
+   * usual resolution when the remote has no such branch.
+   */
+  fromRemote?: boolean;
+}
+
+/** How long the fetch of a remote base may take before the last known ref is used. */
+const REMOTE_BASE_FETCH_TIMEOUT_MS = 60_000;
+
+/**
+ * `origin/<baseBranch>` after a best-effort fetch, or null when the remote has
+ * no such branch. A failed fetch (offline, no credentials) leaves the ref as
+ * last fetched, which still excludes the local base's unpushed commits.
+ *
+ * The start point is its commit, not the ref: a branch created from a
+ * remote-tracking ref gets that ref as its upstream, and the new branch must
+ * not track the base branch (a pull would merge it, a push could target it).
+ */
+async function remoteBaseRef(
+  projectPath: string,
+  baseBranch: string,
+): Promise<{ ref: string; commit: string } | null> {
+  if (baseBranch.startsWith('-')) return null;
+  await gitWrite(['fetch', 'origin', baseBranch], {
+    cwd: projectPath,
+    reject: false,
+    timeout: REMOTE_BASE_FETCH_TIMEOUT_MS,
+  }).catch(() => undefined);
+  const remoteRef = `origin/${baseBranch}`;
+  const check = await gitRead(
+    ['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteRef}^{commit}`],
+    { cwd: projectPath, reject: false },
+  );
+  const commit = check.stdout.trim();
+  return check.exitCode === 0 && commit ? { ref: remoteRef, commit } : null;
 }
 
 export function createWorktree(
@@ -179,7 +218,7 @@ export function createWorktree(
   branchName: string,
   baseBranch?: string,
   onProgress?: SetupProgressFn,
-  { reuseExistingBranch = false }: CreateWorktreeOptions = {},
+  { reuseExistingBranch = false, fromRemote = false }: CreateWorktreeOptions = {},
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
@@ -210,7 +249,12 @@ export function createWorktree(
       // Resolve the base branch ref. Try the name as-is first, then try
       // origin/<name> for remote-only branches (common after a fresh clone).
       let effectiveBase = baseBranch;
-      if (baseBranch) {
+      const remoteBase =
+        fromRemote && baseBranch ? await remoteBaseRef(projectPath, baseBranch) : null;
+      if (remoteBase) {
+        effectiveBase = remoteBase.commit;
+        onProgress?.('worktree:resolve', `Using remote branch "${remoteBase.ref}"`, 'completed');
+      } else if (baseBranch) {
         onProgress?.('worktree:resolve', `Resolving branch "${baseBranch}"`, 'running');
         const branchCheck = await gitRead(['rev-parse', '--verify', baseBranch], {
           cwd: projectPath,

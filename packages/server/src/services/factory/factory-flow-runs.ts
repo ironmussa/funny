@@ -473,6 +473,12 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           }
         : undefined,
       github: deps.github,
+      defaultBranch: () =>
+        deps.github.defaultBranch({
+          repo: scope.repo,
+          ownerId: scope.userId,
+          projectId: scope.projectId,
+        }),
       issueLabels: job.issue.labels ?? [],
       lastThreadMessage,
       removeUnchangedWorktrees: async () => {

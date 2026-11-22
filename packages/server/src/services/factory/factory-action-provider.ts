@@ -156,6 +156,13 @@ export interface FactoryActionProviderDeps {
     FactoryGithubPort,
     'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
   >;
+  /**
+   * The repository's default branch. A worktree run starts from the remote's
+   * copy of it, so the pull request holds the agent's commits only: not the
+   * branch the enabler's checkout happens to be on, nor their unpushed commits.
+   * Absent (tests): the runner picks the base.
+   */
+  defaultBranch?: () => PromiseLike<Result<string, { message: string }>>;
   /** Write the run's progress; ignored once the run is terminal (e.g. stopped). */
   record(input: UpdateRunInput): Promise<void>;
   /**
@@ -394,11 +401,32 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return finishedBefore ? { completedAt: current, sentAt: since } : undefined;
   }
 
+  /**
+   * Where a worktree run's branch starts: the remote's default branch. Not
+   * knowing it fails the step, since the runner would then start from whatever
+   * the enabler's checkout has (run #227 opened a pull request with 11 commits
+   * that were not the agent's).
+   */
+  async function worktreeBase(): Promise<
+    { baseBranch?: string; baseFromRemote?: boolean } | { error: string }
+  > {
+    if (scope.mode !== 'worktree' || !deps.defaultBranch) return {};
+    const branch = await deps.defaultBranch();
+    if (branch.isErr()) {
+      return {
+        error: `The agent could not start: the repository's default branch could not be read (${branch.error.message}).`,
+      };
+    }
+    return { baseBranch: branch.value, baseFromRemote: true };
+  }
+
   /** Start a new thread for this step, marked first so a crash in between is adopted. */
   async function launchNew(
     opts: SpawnAgentOpts,
     checkpoint: Checkpoint = noCheckpoint,
   ): Promise<StepThread | ActionResult> {
+    const base = await worktreeBase();
+    if ('error' in base) return { ok: false, error: base.error };
     const since = new Date().toISOString();
     await checkpoint({ phase: 'launching', since });
     await deps.record({ launchStartedAt: since });
@@ -406,6 +434,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       projectId: scope.projectId,
       title,
       mode: scope.mode,
+      ...base,
       // A worktree thread is created on the run's branch, so the thread, its
       // worktree and the pull request share one branch.
       branch: scope.branch,

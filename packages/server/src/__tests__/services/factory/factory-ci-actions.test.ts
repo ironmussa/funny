@@ -29,6 +29,7 @@ function scripted(
   const merges: unknown[] = [];
   const prs: FactoryPullRequests = {
     prState: () => okAsync('open'),
+    headSha: () => okAsync('sha-head'),
     ciState: () => {
       const next = states[Math.min(polls++, states.length - 1)]!;
       return 'message' in next ? errAsync(next) : okAsync(next);
@@ -129,6 +130,7 @@ describe('wait_ci', () => {
     const merged: unknown[] = [];
     const prs: FactoryPullRequests = {
       prState: () => okAsync('open'),
+      headSha: () => okAsync('sha-head'),
       ciState: (_pr, required) => {
         asked.push(required);
         return okAsync({ kind: 'green' });

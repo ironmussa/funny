@@ -65,7 +65,7 @@
 - [x] 4.2 Store the proof in `factory_runs.regression_proof` (JSON: head SHA, verdict, finding,
       files, commands, base SHA, output tail, time); migration in `server/src/db/migrate.ts` and
       both schemas. Verify with a repository test and the migration test.
-- [ ] 4.3 Make `merge` enforce the proof unless `require_regression_proof: false`: read the head
+- [x] 4.3 Make `merge` enforce the proof unless `require_regression_proof: false`: read the head
       SHA, use the stored proof when it is for that SHA, otherwise run the proof with the flow's
       configuration (no configuration: `fail`, "no regression proof configured"), park in
       `waiting_human` without an allowed verdict, and merge the proved SHA with the pinned merge

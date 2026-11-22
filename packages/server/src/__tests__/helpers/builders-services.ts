@@ -2,6 +2,8 @@
  * Typed fixtures and test doubles for the server service tests
  * (`__tests__/services/**`), so the tests do not need type assertions.
  */
+import { readFileSync } from 'node:fs';
+
 import type { WSEvent } from '@funny/shared';
 import type { StartAgentPayload } from '@funny/shared/runner-protocol';
 import { SANDBOX_STATES, type SandboxState } from '@funny/shared/sandbox-machine';
@@ -171,3 +173,20 @@ export const passingProof: NonNullable<FactoryFlowRunsDeps['proof']> = () => ({
       },
     }),
 });
+
+/**
+ * The built-in `issue-to-merge` flow as a repository copy with one proof rule,
+ * so it is proof-ready and its merge step may merge (the built-in has no rules).
+ */
+export function proofReadyFlowFiles(): Record<string, string> {
+  const builtIn = readFileSync(
+    new URL('../../../../workflows/defaults/issue-to-merge.yaml', import.meta.url),
+    'utf8',
+  );
+  const withRule = builtIn.replace(
+    '    regression_proof:\n',
+    "    regression_proof:\n      rules:\n        - globs: ['**/*.test.ts']\n          command: 'bun test {{files}}'\n",
+  );
+  if (withRule === builtIn) throw new Error('issue-to-merge.yaml has no regression_proof step');
+  return { '.funny/workflows/issue-to-merge.yaml': withRule };
+}

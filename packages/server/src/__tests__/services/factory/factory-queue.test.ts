@@ -25,6 +25,7 @@ import type { StartThreadInput } from '../../../services/runner-thread-launcher.
 import {
   launchedThread,
   passingProof,
+  proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
@@ -95,6 +96,7 @@ function fakeGithub(script: Script = {}): FakeGithub {
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
       prState: () => okAsync('open' as const),
+      headSha: () => okAsync('sha-head'),
       ciState: () => okAsync({ kind: 'green' as const }),
       merge: () => {
         port.merges++;
@@ -587,7 +589,8 @@ describe('blocked issues', () => {
     const { factoryId, queue, launcher, tick } = await setUp({
       maxConcurrent: 2,
       waitThread: finishedThreads('completed'),
-      script: { blockers: { 2: [blocker(1)] } },
+      // A proof-ready flow, so the blocker's run can merge.
+      script: { blockers: { 2: [blocker(1)] }, repoFiles: proofReadyFlowFiles() },
     });
     await queue.submit(factoryId, { issueNumbers: [1, 2], flowName: 'issue-to-merge' });
 

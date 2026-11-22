@@ -15,6 +15,7 @@
 
 import {
   createPullRequestCi,
+  createRepoCheckOps,
   createRepoGithub,
   type CiState,
   type GithubCallError,
@@ -53,6 +54,11 @@ export interface FactoryMergeOptions {
   deleteBranch?: boolean;
   /** Only these checks must be green (the flow's `wait_ci.required_checks`); all when absent. */
   requiredChecks?: readonly string[];
+  /**
+   * Merge exactly this commit (the one the regression proof proved): a direct
+   * merge that GitHub refuses when the head moved, never auto-merge.
+   */
+  sha?: string;
 }
 
 export type FactoryMergeOutcome =
@@ -83,6 +89,8 @@ export interface FactoryPullRequests {
   prState(
     pr: FactoryPullRequestRef,
   ): ResultAsync<'open' | 'merged' | 'closed', FactoryPullRequestError>;
+  /** The commit at the head of the pull request now. */
+  headSha(pr: FactoryPullRequestRef): ResultAsync<string, FactoryPullRequestError>;
   /** Merges only when the checks are green; otherwise answers `not-green` without acting. */
   merge(
     pr: FactoryPullRequestRef,
@@ -148,15 +156,33 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
             : okAsync(token.token),
         );
 
+  const repoGithubFor = (pr: FactoryPullRequestRef, needs: AccessLevel) =>
+    createRepoGithub({
+      tokenFor: tokenFor(pr, needs),
+      fetch: deps.fetch,
+      api: deps.api,
+      userAgent: 'funny-issue-factory',
+    });
   const pullRequestsFor = (pr: FactoryPullRequestRef, needs: AccessLevel) =>
-    createPullRequestCi(
-      createRepoGithub({
-        tokenFor: tokenFor(pr, needs),
-        fetch: deps.fetch,
-        api: deps.api,
-        userAgent: 'funny-issue-factory',
-      }),
-    );
+    createPullRequestCi(repoGithubFor(pr, needs));
+
+  /** Merge `sha` directly; GitHub refuses it (not-mergeable) when the head moved. */
+  const mergePinned = (
+    pr: FactoryPullRequestRef,
+    sha: string,
+    method: MergeMethod,
+  ): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> =>
+    createRepoCheckOps(repoGithubFor(pr, 'write'))
+      .pinnedMerge(pr.repo, pr.number, sha, method)
+      .mapErr(callError)
+      .map((result): FactoryMergeOutcome =>
+        result.kind === 'merged'
+          ? { kind: 'merged', method: result.method, branchDeleted: false }
+          : {
+              kind: 'not-mergeable',
+              reason: `GitHub refused to merge the proved commit ${sha}: ${result.reason}`,
+            },
+      );
 
   return {
     ciState(pr, required) {
@@ -170,6 +196,13 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
         .mapErr(callError);
     },
 
+    headSha(pr) {
+      return pullRequestsFor(pr, 'read')
+        .mergeState(pr.repo, pr.number)
+        .map((merge) => merge.headSha)
+        .mapErr(callError);
+    },
+
     merge(pr, options = {}) {
       const github = pullRequestsFor(pr, 'write');
       return github
@@ -177,36 +210,35 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
         .mapErr(callError)
         .andThen((ci): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
           if (ci.kind !== 'green') return okAsync({ kind: 'not-green', ci });
-          return github
-            .enableAutoMerge(pr.repo, pr.number, options.method)
-            .mapErr(callError)
-            .andThen((result): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
-              if (result.kind === 'enabled') {
-                return okAsync({ kind: 'auto-merge-enabled', method: result.method });
-              }
-              if (result.kind !== 'merged') {
-                return okAsync({ kind: 'not-mergeable', reason: result.reason });
-              }
-              if (!options.deleteBranch || !pr.branch) {
-                return okAsync({ kind: 'merged', method: result.method, branchDeleted: false });
-              }
-              return github
-                .deleteBranch(pr.repo, pr.branch)
-                .map((): FactoryMergeOutcome => ({
-                  kind: 'merged',
-                  method: result.method,
-                  branchDeleted: true,
-                }))
-                .orElse(() =>
+          const merged = options.sha
+            ? mergePinned(pr, options.sha, options.method ?? 'squash')
+            : autoMergeOrMerge(github, pr, options.method);
+          return merged.andThen((outcome) =>
+            outcome.kind === 'merged' && options.deleteBranch && pr.branch
+              ? github
+                  .deleteBranch(pr.repo, pr.branch)
+                  .map((): FactoryMergeOutcome => ({ ...outcome, branchDeleted: true }))
                   // The merge stands; a branch left behind is not a failed merge.
-                  okAsync<FactoryMergeOutcome, FactoryPullRequestError>({
-                    kind: 'merged',
-                    method: result.method,
-                    branchDeleted: false,
-                  }),
-                );
-            });
+                  .orElse(() => okAsync<FactoryMergeOutcome, FactoryPullRequestError>(outcome))
+              : okAsync<FactoryMergeOutcome, FactoryPullRequestError>(outcome),
+          );
         });
     },
   };
+}
+
+/** GitHub's auto-merge, or a merge now when the pull request already meets every requirement. */
+function autoMergeOrMerge(
+  github: ReturnType<typeof createPullRequestCi>,
+  pr: FactoryPullRequestRef,
+  method: MergeMethod | undefined,
+): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> {
+  return github
+    .enableAutoMerge(pr.repo, pr.number, method)
+    .mapErr(callError)
+    .map((result): FactoryMergeOutcome => {
+      if (result.kind === 'enabled') return { kind: 'auto-merge-enabled', method: result.method };
+      if (result.kind !== 'merged') return { kind: 'not-mergeable', reason: result.reason };
+      return { kind: 'merged', method: result.method, branchDeleted: false };
+    });
 }

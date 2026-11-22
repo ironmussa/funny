@@ -43,6 +43,8 @@ export interface MergeState {
   state: 'open' | 'merged' | 'closed';
   /** Whether GitHub's auto-merge is enabled on it (a push or a person may turn it off). */
   autoMerge: boolean;
+  /** The commit at the head of the pull request now. */
+  headSha: string;
 }
 
 export type MergeMethod = 'squash' | 'merge' | 'rebase';
@@ -306,6 +308,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
       return pull(repo, number).map((pr): MergeState => ({
         state: pr.merged ? 'merged' : pr.state === 'closed' ? 'closed' : 'open',
         autoMerge: !!pr.auto_merge,
+        headSha: pr.head.sha,
       }));
     },
 

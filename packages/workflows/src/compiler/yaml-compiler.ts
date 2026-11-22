@@ -37,7 +37,7 @@ import {
 import type { AgentDefinition } from '@funny/shared';
 
 import type { ParsedNode, ParsedWorkflow } from '../schema.js';
-import type { PipelineContext } from './action-provider.js';
+import type { PipelineContext, RegressionProofOpts } from './action-provider.js';
 import { approvalNode } from './approval.js';
 
 // ── Compile-time errors ─────────────────────────────────────
@@ -295,6 +295,7 @@ async function dispatchGithubNode(
   yamlNode: ParsedNode,
   ctx: YamlPipelineContext,
   scope: TemplateScope,
+  parsed: ParsedWorkflow,
 ): Promise<NodeOutput | null> {
   const provider = ctx.provider;
 
@@ -311,11 +312,16 @@ async function dispatchGithubNode(
 
   if (yamlNode.merge) {
     const opts = interpolateObject(yamlNode.merge, scope);
+    const proofNode = parsed.nodes.find((n) => n.regression_proof !== undefined);
     const result = await provider.merge({
       method: opts.method,
       deleteBranch: opts.delete_branch,
       auto: opts.auto,
       execution: ctx.execution,
+      requireRegressionProof: opts.require_regression_proof ?? true,
+      regressionProof: proofNode
+        ? regressionProofOpts(interpolateObject(proofNode.regression_proof!, scope))
+        : undefined,
     });
     if (!result.ok) throw new Error(`merge[${yamlNode.id}] failed: ${result.error}`);
     return { output: result.output ?? '', json: result.metadata };
@@ -328,18 +334,25 @@ async function dispatchGithubNode(
       );
     }
     const opts = interpolateObject(yamlNode.regression_proof, scope);
-    const result = await provider.regressionProof({
-      rules: opts.rules ?? [],
-      supportGlobs: opts.support_globs,
-      requireTest: opts.require_test,
-      labels: opts.labels,
-      timeoutMs: opts.timeout_ms,
-    });
+    const result = await provider.regressionProof(regressionProofOpts(opts));
     if (!result.ok) throw new Error(`regression_proof[${yamlNode.id}] failed: ${result.error}`);
     return { output: result.output ?? '', json: result.metadata };
   }
 
   return null;
+}
+
+/** A `regression_proof` step's YAML configuration as provider options. */
+function regressionProofOpts(
+  opts: NonNullable<ParsedNode['regression_proof']>,
+): RegressionProofOpts {
+  return {
+    rules: opts.rules ?? [],
+    supportGlobs: opts.support_globs,
+    requireTest: opts.require_test,
+    labels: opts.labels,
+    timeoutMs: opts.timeout_ms,
+  };
 }
 
 async function dispatch(
@@ -436,7 +449,7 @@ async function dispatch(
   const lifecycle = await dispatchThreadLifecycleNode(yamlNode, ctx, scope);
   if (lifecycle) return lifecycle;
 
-  const github = await dispatchGithubNode(yamlNode, ctx, scope);
+  const github = await dispatchGithubNode(yamlNode, ctx, scope, parsed);
   if (github) return github;
 
   if (yamlNode.pipeline) {

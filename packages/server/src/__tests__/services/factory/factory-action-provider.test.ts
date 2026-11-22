@@ -11,6 +11,10 @@ import {
   countCiResult,
   createFactoryActionProvider,
 } from '../../../services/factory/factory-action-provider.js';
+import type {
+  FactoryMergeOptions,
+  FactoryMergeOutcome,
+} from '../../../services/factory/factory-pull-requests.js';
 
 const scope = {
   runId: 'r1',
@@ -40,6 +44,7 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),
+        headSha: () => okAsync('sha-head'),
         ciState: () => okAsync({ kind: 'green' as const }),
         merge: () =>
           okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
@@ -130,6 +135,7 @@ describe('factory action provider integration metrics', () => {
         findPullRequest: () => okAsync(null),
         pullRequests: {
           prState: () => okAsync('open' as const),
+          headSha: () => okAsync('sha-head'),
           ciState: () => okAsync(looks.shift()!),
           merge: () =>
             okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
@@ -251,5 +257,113 @@ describe('factory action provider regression proof', () => {
     expect((await bug.provider.regressionProof!(opts)).ok).toBe(false);
     const other = providerWith({ threadIds: ['t1'], proof, issueLabels: ['enhancement'] });
     expect((await other.provider.regressionProof!(opts)).ok).toBe(true);
+  });
+});
+
+describe('factory action provider merge gate', () => {
+  const rules = [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }];
+  const proofConfig = { rules };
+
+  /** A provider with an open PR whose head is `head`, and a runner proving `proves`. */
+  function gated(opts: {
+    head?: string;
+    proves?: string;
+    verdict?: string;
+    outcome?: FactoryMergeOutcome;
+  }) {
+    const merges: Array<FactoryMergeOptions | undefined> = [];
+    let proofs = 0;
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      prUrl: 'https://github.com/o/r/pull/9',
+      proof: {
+        startProof: async () => ok({ proofId: `p${++proofs}`, state: 'running' }),
+        pollProof: async () =>
+          ok({
+            state: 'done',
+            result: { verdict: opts.verdict ?? 'pass', headSha: opts.proves ?? 'sha-head' },
+          }),
+      },
+      github: {
+        findPullRequest: () => okAsync(null),
+        pullRequests: {
+          prState: () => okAsync('open' as const),
+          headSha: () => okAsync(opts.head ?? 'sha-head'),
+          ciState: () => okAsync({ kind: 'green' as const }),
+          merge: (_pr: unknown, options?: FactoryMergeOptions) => {
+            merges.push(options);
+            return okAsync(
+              opts.outcome ?? {
+                kind: 'merged' as const,
+                method: 'squash' as const,
+                branchDeleted: false,
+              },
+            );
+          },
+        },
+      },
+    });
+    return { provider, merges, proofs: () => proofs };
+  }
+
+  test('a passing proof of the head merges that exact commit, without proving again', async () => {
+    const { provider, merges, proofs } = gated({});
+    expect((await provider.regressionProof!(proofConfig)).ok).toBe(true);
+    const merged = await provider.merge({ regressionProof: proofConfig });
+    expect(merged.ok).toBe(true);
+    expect(proofs()).toBe(1);
+    expect(merges[0]).toMatchObject({ sha: 'sha-head' });
+  });
+
+  test('a proof of an older commit is run again for the head before the merge', async () => {
+    const { provider, merges, proofs } = gated({});
+    await provider.regressionProof!(proofConfig);
+    // The PR head moved after the proof step: the gate proves the new head.
+    const later = gated({ head: 'sha-new', proves: 'sha-new' });
+    expect((await later.provider.merge({ regressionProof: proofConfig })).ok).toBe(true);
+    expect(later.proofs()).toBe(1);
+    expect(later.merges[0]).toMatchObject({ sha: 'sha-new' });
+    expect(proofs()).toBe(1);
+    expect(merges).toHaveLength(0);
+  });
+
+  test('a failing proof does not merge', async () => {
+    const { provider, merges } = gated({ verdict: 'fail' });
+    const merged = await provider.merge({ regressionProof: proofConfig });
+    expect(merged.ok).toBe(false);
+    expect(merged.error).toContain('Regression proof');
+    expect(merges).toHaveLength(0);
+  });
+
+  test('a flow without a configured proof does not merge', async () => {
+    const { provider, merges } = gated({});
+    const noStep = await provider.merge({});
+    expect(noStep.error).toContain('no regression proof configured');
+    const noRules = await provider.merge({ regressionProof: { rules: [] } });
+    expect(noRules.ok).toBe(false);
+    expect(merges).toHaveLength(0);
+  });
+
+  test('the opt-out merges as before, unpinned', async () => {
+    const { provider, merges } = gated({});
+    expect((await provider.merge({ requireRegressionProof: false })).ok).toBe(true);
+    expect(merges[0]?.sha).toBeUndefined();
+  });
+
+  test('a head that is not the proved commit is not merged', async () => {
+    const { provider, merges } = gated({ head: 'sha-pr', proves: 'sha-local' });
+    const merged = await provider.merge({ regressionProof: proofConfig });
+    expect(merged.ok).toBe(false);
+    expect(merged.error).toContain('not the proved commit');
+    expect(merges).toHaveLength(0);
+  });
+
+  test('GitHub refusing the direct merge leaves the run unmerged', async () => {
+    const { provider } = gated({
+      outcome: { kind: 'not-mergeable', reason: 'head moved' },
+    });
+    const merged = await provider.merge({ regressionProof: proofConfig });
+    expect(merged.ok).toBe(false);
+    expect(merged.error).toContain('head moved');
   });
 });

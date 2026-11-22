@@ -47,6 +47,8 @@ export interface MergeOptions {
   method?: MergeMethod;
   deleteBranch?: boolean;
   auto?: boolean;
+  /** Merge exactly this commit (the proved one), never auto-merge. */
+  sha?: string;
 }
 
 /** The tail of each failing check's log kept in the error (where the failure usually is). */
@@ -197,6 +199,7 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
       method: options.method,
       deleteBranch: options.deleteBranch,
       requiredChecks: required,
+      sha: options.sha,
     });
     if (merged.isErr()) {
       return { ok: false, error: merged.error.message, metadata: { kind: merged.error.kind } };

@@ -39,6 +39,7 @@ import { createWorkflowJournalRepository } from '../../../services/workflow-engi
 import {
   launchedThread,
   passingProof,
+  proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
@@ -82,6 +83,8 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
 interface GithubScript {
   /** The default branch's `.funny/workflows/*` files, by path. */
   files?: Record<string, string>;
+  /** No repository copy of `issue-to-merge`: the built-in flow, which has no proof rules. */
+  builtInFlow?: boolean;
   /** Whether the agent opened its pull request. */
   pr?: boolean;
   /** CI answers in order; the last one repeats. */
@@ -138,7 +141,8 @@ function fakeGithub(
     listDefaultBranchDir: () => okAsync([]),
     readDefaultBranchFile: (_reader: unknown, path: string) => {
       port.fileReads.push(path);
-      return okAsync(script.files?.[path] ?? null);
+      const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
+      return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
     },
     findPullRequest: (_reader: unknown, branch: string, state: 'open' | 'all' = 'open') => {
       port.prLookups.push({ branch, state });
@@ -149,6 +153,7 @@ function fakeGithub(
     },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
+      headSha: () => okAsync('sha-head'),
       ciState: () => okAsync(answers[Math.min(looks++, answers.length - 1)]!),
       merge: () => {
         port.merges++;
@@ -721,6 +726,17 @@ describe('factory flow', () => {
     expect(run.failureReason).toContain('No open pull request');
   });
 
+  test('the built-in flow, with no proof rules, never merges: the run waits for a person', async () => {
+    const { factoryId, github } = await runFlow(
+      { builtInFlow: true },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.currentStep).toBe('merge');
+    expect(run.failureReason).toContain('no regression proof configured');
+    expect(github.merges).toBe(0);
+  });
+
   test('a merged run has its steps and no failure reason', async () => {
     const { factoryId } = await runFlow({}, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'merged');
@@ -756,7 +772,7 @@ describe('factory flow', () => {
       '  - id: merge',
       '    depends_on: [ci]',
       '    concurrency: { group: "merge-{{inputs.repo}}", limit: 1 }',
-      '    merge: { method: squash }',
+      '    merge: { method: squash, require_regression_proof: false }',
     ].join('\n');
     const twoIssues = [
       { number: 1, title: 'a', url: 'u/1' },

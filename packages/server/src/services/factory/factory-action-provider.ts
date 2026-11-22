@@ -38,6 +38,7 @@ import type {
   ActionProvider,
   ActionResult,
   ApprovalDecision,
+  MergeOpts,
   RegressionProofOpts,
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
@@ -426,6 +427,175 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return adopted ? { threadId: await recordThread(adopted) } : launchNew(opts);
   }
 
+  /** The last proof this execution ran: which commit, and whether its verdict allows a merge. */
+  let lastProof: { headSha: string; ok: boolean } | null = null;
+
+  /** Run the proof on the runner, record it, and map its verdict to the step's result. */
+  async function runRegressionProof(opts: RegressionProofOpts): Promise<ActionResult> {
+    if (!deps.proof) {
+      return { ok: false, error: 'Regression proof: the proof service is not configured.' };
+    }
+    const threadId = threadIds[0];
+    if (!threadId) {
+      return { ok: false, error: 'Regression proof: no implementing thread.' };
+    }
+
+    const requireTest = opts.requireTest ?? 'never';
+    const issueLabels = deps.issueLabels ?? [];
+    const testRequired =
+      requireTest === 'always' ||
+      (requireTest === 'labels' && opts.labels?.some((l) => issueLabels.includes(l)));
+
+    // The runner resolves the commit (the thread checkout's HEAD) and the
+    // repository's default branch itself.
+    const body = {
+      rules: opts.rules ?? [],
+      supportGlobs: opts.supportGlobs ?? [],
+      timeoutMs: opts.timeoutMs ?? 600_000,
+    };
+
+    // Start the proof job on the runner
+    const started = await deps.proof.startProof(threadId, body);
+    if (started.isErr()) {
+      return { ok: false, error: `Regression proof: could not start: ${started.error}` };
+    }
+
+    let { proofId } = started.value;
+    const pollInterval = 5_000;
+    const deadline = Date.now() + (opts.timeoutMs ?? 600_000) + 60_000;
+    let restartAttempts = 0;
+    let firstPoll = true;
+
+    // Poll until done (first poll is immediate, then every pollInterval)
+    while (Date.now() < deadline) {
+      if (deps.signal.aborted) return { ok: false, error: 'Regression proof: run was stopped.' };
+
+      if (firstPoll) {
+        firstPoll = false;
+      } else {
+        await new Promise((r) => setTimeout(r, pollInterval));
+      }
+
+      const polled = await deps.proof.pollProof(threadId, proofId);
+      if (polled.isErr()) {
+        if (polled.error === 'proof-not-found' && restartAttempts < 1) {
+          restartAttempts++;
+          const restarted = await deps.proof.startProof(threadId, body);
+          if (restarted.isErr()) {
+            return {
+              ok: false,
+              error: `Regression proof: could not restart: ${restarted.error}`,
+            };
+          }
+          proofId = restarted.value.proofId;
+          firstPoll = true;
+          continue;
+        }
+        return { ok: false, error: `Regression proof: poll failed: ${polled.error}` };
+      }
+
+      if (polled.value.state === 'done') {
+        const result = polled.value.result as
+          | {
+              verdict?: string;
+              headSha?: string;
+              finding?: string;
+              files?: string[];
+              commands?: string[];
+              baseSha?: string;
+              outputTail?: string;
+            }
+          | undefined;
+
+        if (!result) {
+          return { ok: false, error: 'Regression proof: no result from runner.' };
+        }
+
+        const proofRecord: RegressionProofRecord = {
+          headSha: result.headSha ?? '',
+          verdict: result.verdict ?? 'fail',
+          finding: result.finding,
+          files: result.files,
+          commands: result.commands,
+          baseSha: result.baseSha,
+          outputTail: result.outputTail,
+          ranAt: new Date().toISOString(),
+        };
+        await deps.record({ regressionProof: proofRecord });
+
+        // SAFETY: proofRecord is a plain object whose fields are JSON-serializable strings/arrays
+        const meta: Record<string, unknown> = { ...proofRecord };
+
+        if (result.verdict === 'pass') {
+          await count(metrics, { event: 'regression_proof_pass' });
+          return { ok: true, output: 'pass', metadata: meta };
+        }
+        if (result.verdict === 'skipped') {
+          if (testRequired) {
+            await count(metrics, { event: 'regression_proof_fail' });
+            return {
+              ok: false,
+              error: `Regression proof: no regression test was added, but one is required for this issue.`,
+              metadata: meta,
+            };
+          }
+          await count(metrics, { event: 'regression_proof_skipped' });
+          return { ok: true, output: 'skipped', metadata: meta };
+        }
+        // verdict === 'fail'
+        await count(metrics, { event: 'regression_proof_fail' });
+        return {
+          ok: false,
+          error: `Regression proof: ${result.finding ?? 'failed'}`,
+          metadata: meta,
+        };
+      }
+    }
+
+    return { ok: false, error: 'Regression proof: timed out waiting for the proof.' };
+  }
+
+  /** Run the proof and remember what it proved, for the merge gate. */
+  async function proveHead(opts: RegressionProofOpts): Promise<ActionResult> {
+    const result = await runRegressionProof(opts);
+    const headSha = result.metadata?.headSha;
+    if (typeof headSha === 'string' && headSha) lastProof = { headSha, ok: result.ok };
+    return result;
+  }
+
+  /**
+   * The merge gate: merge only a pull request head with a passing proof of
+   * that exact commit, pinned to it. Runs the flow's proof when none is held.
+   */
+  async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
+    if (opts.requireRegressionProof === false) return ci.merge(opts);
+    // A proof without rules proves nothing: no merge, whatever it answered.
+    const config = opts.regressionProof;
+    if (!config || config.rules.length === 0) {
+      return {
+        ok: false,
+        error: 'Regression proof: no regression proof configured, so the factory does not merge.',
+      };
+    }
+    const pr = pullRequest();
+    if (!pr) return ci.merge(opts);
+    const head = await deps.github.pullRequests.headSha(pr);
+    if (head.isErr()) {
+      return { ok: false, error: head.error.message, metadata: { kind: head.error.kind } };
+    }
+    if (lastProof?.headSha !== head.value || !lastProof.ok) {
+      const proved = await proveHead(config);
+      if (!proved.ok) return proved;
+    }
+    if (lastProof?.headSha !== head.value) {
+      return {
+        ok: false,
+        error: `Regression proof: the pull request head ${head.value} is not the proved commit ${lastProof?.headSha ?? '(none)'}.`,
+      };
+    }
+    return ci.merge({ ...opts, sha: head.value });
+  }
+
   return {
     async spawnAgent(opts) {
       const index = agentSteps++;
@@ -477,131 +647,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       return result;
     },
 
-    merge: (opts) => ci.merge(opts),
+    merge: (opts) => provedMerge(opts),
 
-    async regressionProof(opts: RegressionProofOpts): Promise<ActionResult> {
-      if (!deps.proof) {
-        return { ok: false, error: 'Regression proof: the proof service is not configured.' };
-      }
-      const threadId = threadIds[0];
-      if (!threadId) {
-        return { ok: false, error: 'Regression proof: no implementing thread.' };
-      }
-
-      const requireTest = opts.requireTest ?? 'never';
-      const issueLabels = deps.issueLabels ?? [];
-      const testRequired =
-        requireTest === 'always' ||
-        (requireTest === 'labels' && opts.labels?.some((l) => issueLabels.includes(l)));
-
-      // The runner resolves the commit (the thread checkout's HEAD) and the
-      // repository's default branch itself.
-      const body = {
-        rules: opts.rules ?? [],
-        supportGlobs: opts.supportGlobs ?? [],
-        timeoutMs: opts.timeoutMs ?? 600_000,
-      };
-
-      // Start the proof job on the runner
-      const started = await deps.proof.startProof(threadId, body);
-      if (started.isErr()) {
-        return { ok: false, error: `Regression proof: could not start: ${started.error}` };
-      }
-
-      let { proofId } = started.value;
-      const pollInterval = 5_000;
-      const deadline = Date.now() + (opts.timeoutMs ?? 600_000) + 60_000;
-      let restartAttempts = 0;
-      let firstPoll = true;
-
-      // Poll until done (first poll is immediate, then every pollInterval)
-      while (Date.now() < deadline) {
-        if (deps.signal.aborted) return { ok: false, error: 'Regression proof: run was stopped.' };
-
-        if (firstPoll) {
-          firstPoll = false;
-        } else {
-          await new Promise((r) => setTimeout(r, pollInterval));
-        }
-
-        const polled = await deps.proof.pollProof(threadId, proofId);
-        if (polled.isErr()) {
-          if (polled.error === 'proof-not-found' && restartAttempts < 1) {
-            restartAttempts++;
-            const restarted = await deps.proof.startProof(threadId, body);
-            if (restarted.isErr()) {
-              return {
-                ok: false,
-                error: `Regression proof: could not restart: ${restarted.error}`,
-              };
-            }
-            proofId = restarted.value.proofId;
-            firstPoll = true;
-            continue;
-          }
-          return { ok: false, error: `Regression proof: poll failed: ${polled.error}` };
-        }
-
-        if (polled.value.state === 'done') {
-          const result = polled.value.result as
-            | {
-                verdict?: string;
-                headSha?: string;
-                finding?: string;
-                files?: string[];
-                commands?: string[];
-                baseSha?: string;
-                outputTail?: string;
-              }
-            | undefined;
-
-          if (!result) {
-            return { ok: false, error: 'Regression proof: no result from runner.' };
-          }
-
-          const proofRecord: RegressionProofRecord = {
-            headSha: result.headSha ?? '',
-            verdict: result.verdict ?? 'fail',
-            finding: result.finding,
-            files: result.files,
-            commands: result.commands,
-            baseSha: result.baseSha,
-            outputTail: result.outputTail,
-            ranAt: new Date().toISOString(),
-          };
-          await deps.record({ regressionProof: proofRecord });
-
-          // SAFETY: proofRecord is a plain object whose fields are JSON-serializable strings/arrays
-          const meta: Record<string, unknown> = { ...proofRecord };
-
-          if (result.verdict === 'pass') {
-            await count(metrics, { event: 'regression_proof_pass' });
-            return { ok: true, output: 'pass', metadata: meta };
-          }
-          if (result.verdict === 'skipped') {
-            if (testRequired) {
-              await count(metrics, { event: 'regression_proof_fail' });
-              return {
-                ok: false,
-                error: `Regression proof: no regression test was added, but one is required for this issue.`,
-                metadata: meta,
-              };
-            }
-            await count(metrics, { event: 'regression_proof_skipped' });
-            return { ok: true, output: 'skipped', metadata: meta };
-          }
-          // verdict === 'fail'
-          await count(metrics, { event: 'regression_proof_fail' });
-          return {
-            ok: false,
-            error: `Regression proof: ${result.finding ?? 'failed'}`,
-            metadata: meta,
-          };
-        }
-      }
-
-      return { ok: false, error: 'Regression proof: timed out waiting for the proof.' };
-    },
+    regressionProof: (opts) => proveHead(opts),
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

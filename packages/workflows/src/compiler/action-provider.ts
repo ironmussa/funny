@@ -168,6 +168,13 @@ export interface MergeOpts {
   auto?: boolean;
   /** The execution this merge belongs to; `execution.batch` is set when it leads a batch. */
   execution?: ActionExecution;
+  /**
+   * Whether the merge needs a regression proof of the head it merges (the
+   * step's `require_regression_proof`, default true).
+   */
+  requireRegressionProof?: boolean;
+  /** The flow's `regression_proof` step configuration, when it has one. */
+  regressionProof?: RegressionProofOpts;
 }
 
 // ── Approval (human-in-the-loop) ────────────────────────────

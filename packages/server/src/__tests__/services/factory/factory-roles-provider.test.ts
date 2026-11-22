@@ -187,6 +187,8 @@ interface ReviewScript {
   publishes?: 'comment-only' | 'fails';
   /** A reviewer thread finishes only once this settles (default: at once). */
   gate?: (threadId: string) => Promise<void>;
+  /** The factory's review slot: granted once this settles (default: reviews are not limited). */
+  slot?: (holder: string) => Promise<() => void>;
 }
 
 /** A provider whose reviewer threads answer from a script; records what the server did. */
@@ -221,6 +223,7 @@ function reviewing(script: ReviewScript) {
         return ok({ thread: { id: threadId }, threadId, runnerId: 'r' });
       },
       findReviewThread: async () => script.launched ?? null,
+      reviewSlot: script.slot ? (holder) => script.slot!(holder) : undefined,
       waitThread: async (threadId) => {
         await script.gate?.(threadId);
         // A stopped thread ends stopped, whatever it would have said.
@@ -526,6 +529,65 @@ describe('the review starts with the checks', () => {
     const { provider } = reviewing({ says: [[passOf(SHA_A)]], gate });
     // The reviewer never finishes here; wait_ci answers all the same.
     expect(await provider.waitCi({ earlyReview: {} })).toMatchObject({ ok: true });
+  });
+});
+
+describe("the factory's review limit", () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+  test('a review takes a slot for its commit and gives it back with its verdict', async () => {
+    const taken: string[] = [];
+    let released = 0;
+    const { provider } = reviewing({
+      says: [[passOf(SHA_A)]],
+      slot: async (holder) => {
+        taken.push(holder);
+        return () => {
+          released += 1;
+        };
+      },
+    });
+    await provider.review!({});
+    expect(taken).toEqual([SHA_A.slice(0, 12)]);
+    expect(released).toBe(1);
+  });
+
+  test('no free slot: the early review does not start, and the checks do not wait for it', async () => {
+    let grant!: (release: () => void) => void;
+    const slot = new Promise<() => void>((resolve) => (grant = resolve));
+    const { provider, bodies } = reviewing({ says: [[passOf(SHA_A)]], slot: () => slot });
+    expect(await provider.waitCi({ earlyReview: {} })).toMatchObject({ ok: true });
+    await settle();
+    expect(bodies).toEqual([]);
+    // A slot frees: the review starts, and the review step gets its verdict.
+    grant(() => {});
+    expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
+    expect(bodies).toHaveLength(1);
+  });
+
+  test('a slot granted after the commit was replaced is given back without a review', async () => {
+    let head = SHA_A;
+    let grantA!: (release: () => void) => void;
+    let released = 0;
+    const { provider, bodies } = reviewing({
+      head: () => head,
+      says: [[passOf(SHA_B)]],
+      slot: (holder) =>
+        holder === SHA_A.slice(0, 12)
+          ? new Promise<() => void>((resolve) => (grantA = resolve))
+          : Promise.resolve(() => {}),
+    });
+    await provider.waitCi({ earlyReview: {} });
+    head = SHA_B;
+    await provider.waitCi({ earlyReview: {} });
+    grantA(() => {
+      released += 1;
+    });
+    await settle();
+    // Only commit B was reviewed; A's slot went back unused.
+    expect(bodies).toHaveLength(1);
+    expect(String(bodies[0]?.title)).toContain(SHA_B.slice(0, 8));
+    expect(released).toBe(1);
   });
 });
 

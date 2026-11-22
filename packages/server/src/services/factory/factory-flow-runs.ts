@@ -273,6 +273,12 @@ function flowGate(
   return { gate: leases, stop: () => leases.stop() };
 }
 
+/** How many runs of a factory may be inside a stage at once, unless the flow or the factory says. */
+export const DEFAULT_STAGE_LIMIT = 20;
+
+/** The concurrency group of a stage of one factory (`<node>:<factoryId>`). */
+export const stageGroup = (stage: string, factoryId: string) => `${stage}:${factoryId}`;
+
 /** Admission times are ordered as whole seconds from here (they fit a 32-bit column). */
 const PRIORITY_EPOCH_MS = Date.parse('2025-01-01T00:00:00.000Z');
 
@@ -293,9 +299,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const journalRows = createWorkflowJournalRepository();
   /** Each run's place in a group's queue, by its id (the holder is `<runId>/<node>/<visit>`). */
   const priorities = new Map<string, number>();
+  /** Each factory's own stage limits, by its id: what replaces a flow's declared limit. */
+  const stageLimits = new Map<string, Record<string, number>>();
+  /** The factory's limit for a stage group (`<node>:<factoryId>`), when it set one. */
+  const stageLimitOf = (group: string): number | undefined => {
+    const at = group.lastIndexOf(':');
+    return at < 0 ? undefined : stageLimits.get(group.slice(at + 1))?.[group.slice(0, at)];
+  };
   const { gate, stop: stopGate } = flowGate(deps.gate, {
     // The merge lane is one at a time, whatever a flow or a setting says.
-    resolveLimit: (group, declared) => (isMergeLane(group) ? 1 : declared),
+    resolveLimit: (group, declared) => (isMergeLane(group) ? 1 : (stageLimitOf(group) ?? declared)),
     priority: (holder) => priorities.get(holder.split('/')[0] ?? '') ?? 0,
   });
 
@@ -450,6 +463,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     }
     logFlowWarnings(job, flow.value);
     priorities.set(job.run.id, admissionPriority(job.run));
+    stageLimits.set(job.factory.id, job.factory.stageLimits);
     const trace: FlowTrace = {
       agentsRan: job.run.threadIds.length > 0,
       prOpen: job.run.prUrl !== null,
@@ -528,6 +542,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       reviews: job.run.reviews,
       admittedAt: job.run.admittedAt ?? job.run.startedAt,
       findReviewThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
+      reviewSlot: async (holder, signal) => {
+        const grant = await gate.acquire({
+          group: stageGroup('review', job.factory.id),
+          limit: DEFAULT_STAGE_LIMIT,
+          holder: `${job.run.id}/review/${holder}`,
+          signal,
+          onWait: () => {},
+        });
+        return grant.kind === 'slot' ? grant.release : () => {};
+      },
       otherPullRequests: async () => {
         const others = await deps.runs.inFlight(job.factory.id);
         if (others.isErr()) return [];
@@ -596,6 +620,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         // A node waiting for its group's slot (a merge behind another run's)
         // is the run's current step too, though it has not entered yet.
         if (change.kind !== 'entering' && change.kind !== 'waiting_slot') return;
+        // Waiting for a stage's slot, the run is admitted and holds its place:
+        // the tick that admitted it does not wait for the slot.
+        if (change.kind === 'waiting_slot') agentStarted();
         trace.step = change.nodeName;
         void record({ currentStep: change.nodeName });
       },
@@ -635,6 +662,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     },
 
     isActive: (runId: string) => active.has(runId),
+
+    /** Take the factory's stage limits as saved now (each tick): they apply to the next slot asked for. */
+    noteFactory(factory: Pick<WatchedFactory, 'id' | 'stageLimits'>): void {
+      stageLimits.set(factory.id, factory.stageLimits);
+    },
 
     /** Stop driving one run's flow (the run was stopped); nothing more is written for it. */
     stop(runId: string): void {

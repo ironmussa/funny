@@ -265,6 +265,7 @@ async function enableFactory(
     maxConcurrent?: number;
     flowName?: string;
     mode?: 'manual' | 'automatic';
+    stageLimits?: Record<string, number>;
   } = {},
 ) {
   const settings = createFactorySettingsService();
@@ -577,6 +578,56 @@ describe('factory watcher', () => {
     await poll.ticks[0]!();
 
     expect(launcher.calls.map((call) => call.body.title)).toEqual(['[Factory] #2 b']);
+  });
+
+  // Change factory-agent-roles, D13: the factory's own limit for a stage.
+  test('a stage limit of one: the second run waits for the implement slot while the first works', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 2, stageLimits: { implement: 1 } });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [
+        { number: 1, title: 'a', url: 'u/1' },
+        { number: 2, title: 'b', url: 'u/2' },
+      ]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    // Both issues are admitted (two runs in flight), one agent is working.
+    const runs = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(runs).toHaveLength(2);
+    expect(launcher.calls).toHaveLength(1);
+    const waiters = testDb.sqlite
+      .query('SELECT group_key, holder FROM workflow_concurrency_waiters')
+      .all() as Array<{ group_key: string; holder: string }>;
+    expect(waiters.map((waiter) => waiter.group_key)).toEqual([`implement:${factoryId}`]);
+  });
+
+  test('without a stage limit both runs work at once', async () => {
+    await enableFactory({ maxConcurrent: 2 });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [
+        { number: 1, title: 'a', url: 'u/1' },
+        { number: 2, title: 'b', url: 'u/2' },
+      ]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(2);
   });
 
   // Change factory-agent-roles, D8: waiting for the repository's merge slot is in

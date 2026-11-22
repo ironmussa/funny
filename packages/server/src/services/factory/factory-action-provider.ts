@@ -168,6 +168,8 @@ export interface FactoryActionProviderDeps {
   admittedAt?: string;
   /** The newest review thread of this run by its title prefix, since `since`. */
   findReviewThread?(titlePrefix: string, since: string): Promise<string | null>;
+  /** Take one of the factory's review slots (its `review` stage limit); resolves with its release. */
+  reviewSlot?(holder: string, signal: AbortSignal): Promise<() => void>;
   /** The URLs of the factory's other open pull requests (the reviewer is told about them). */
   otherPullRequests?(): Promise<string[]>;
   /**
@@ -772,6 +774,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     abandon: deps.abandon,
     worktreeBase,
     otherPullRequests: deps.otherPullRequests,
+    acquireSlot: deps.reviewSlot,
     publish: publishVerdict,
     record: deps.record,
     enterReview: () => enterStage('review'),

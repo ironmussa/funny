@@ -47,7 +47,11 @@ inputs:
   branch: { type: string, required: true }
 
 nodes:
+  # Runs of one factory inside this step at once: this default, or the
+  # factory's own limit for `implement` (Settings > Factory). `review` has a
+  # limit there too; `merge` is always one per repository.
   - id: implement
+    concurrency: { group: 'implement:{{inputs.factory_id}}', limit: 20 }
     spawn_agent:
       prompt: |
         You are working unattended: nobody will answer questions, so make

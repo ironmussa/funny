@@ -330,6 +330,7 @@ async function fire(id: string): Promise<void> {
     unscheduleFactory(id);
     return;
   }
+  flows?.noteFactory(factory);
   // Resuming and admitting both act as the enabler: both need their access.
   if (!(await enablerCanStillSteer(factory))) return;
   const target = await resolveTarget(factory);

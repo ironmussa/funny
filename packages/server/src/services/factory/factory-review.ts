@@ -259,6 +259,11 @@ export interface FactoryReviewerDeps {
   worktreeBase(): Promise<{ baseBranch?: string; baseFromRemote?: boolean } | { error: string }>;
   /** The URLs of the factory's other open pull requests. */
   otherPullRequests?(): Promise<string[]>;
+  /**
+   * Take one of the factory's review slots for a reviewer (its stage limit);
+   * resolves with how to give it back. Absent: reviews are not limited.
+   */
+  acquireSlot?(holder: string, signal: AbortSignal): Promise<() => void>;
   /** Put the verdict on the pull request; resolves what got there (the comment, the status). */
   publish?(verdict: FactoryReviewVerdict): Promise<{ comment: boolean; status: boolean }>;
   record(input: UpdateRunInput): Promise<void>;
@@ -406,8 +411,24 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
     return { kind: 'verdict', verdict };
   }
 
-  /** Find or start the reviewer's thread for `sha` and see it through. */
+  /** A review of `sha` inside one of the factory's review slots. */
   async function run(sha: string, opts: ReviewOpts, state: ReviewState): Promise<ReviewEnd> {
+    // A full review stage makes this review start later; it never blocks the checks.
+    const release = await deps.acquireSlot?.(sha.slice(0, 12), deps.signal);
+    try {
+      if (state.discarded) return { kind: 'none', error: 'the commit is no longer the head' };
+      return await reviewInSlot(sha, opts, state);
+    } finally {
+      release?.();
+    }
+  }
+
+  /** Find or start the reviewer's thread for `sha` and see it through. */
+  async function reviewInSlot(
+    sha: string,
+    opts: ReviewOpts,
+    state: ReviewState,
+  ): Promise<ReviewEnd> {
     const adopted = await deps.findLaunched(titlePrefixOf(sha), deps.since);
     if (adopted) {
       state.threadId = adopted;

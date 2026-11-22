@@ -31,7 +31,12 @@
  * - the run was stopped, or the watcher shut down → nothing more is written.
  */
 
-import { nullReporter, runPipeline, type ConcurrencyGate } from '@funny/pipelines';
+import {
+  nullReporter,
+  runPipeline,
+  type ConcurrencyGate,
+  type MemoryGateOptions,
+} from '@funny/pipelines';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
@@ -57,7 +62,12 @@ import {
   type FactoryRunScope,
   type FactoryThreadMode,
 } from './factory-action-provider.js';
-import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
+import {
+  isMergeLane,
+  loadFactoryFlow,
+  type FactoryFlow,
+  type FactoryFlowError,
+} from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
 import {
   factoryRunBranch,
@@ -254,17 +264,40 @@ const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineConte
 });
 
 /** The given gate, or this server's lease gate with how to stop renewing its leases. */
-function flowGate(given?: ConcurrencyGate): { gate: ConcurrencyGate; stop: () => void } {
+function flowGate(
+  given: ConcurrencyGate | undefined,
+  rules: Pick<MemoryGateOptions, 'resolveLimit' | 'priority'>,
+): { gate: ConcurrencyGate; stop: () => void } {
   if (given) return { gate: given, stop: () => {} };
-  const leases = createLeaseGate();
+  const leases = createLeaseGate(rules);
   return { gate: leases, stop: () => leases.stop() };
+}
+
+/** Admission times are ordered as whole seconds from here (they fit a 32-bit column). */
+const PRIORITY_EPOCH_MS = Date.parse('2025-01-01T00:00:00.000Z');
+
+/**
+ * A run's place among the waiters of a group: the earlier it was admitted, the
+ * sooner it gets the slot. A run blocked by another issue is admitted only
+ * after its blocker finished, so admission order puts it behind.
+ */
+export function admissionPriority(run: Pick<FactoryRunView, 'admittedAt' | 'startedAt'>): number {
+  const admitted = Date.parse(run.admittedAt ?? run.startedAt);
+  if (!Number.isFinite(admitted)) return 0;
+  return Math.max(0, Math.floor((admitted - PRIORITY_EPOCH_MS) / 1000));
 }
 
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
   const waitThread = deps.waitThread ?? createThreadWaits();
   const journalRows = createWorkflowJournalRepository();
-  const { gate, stop: stopGate } = flowGate(deps.gate);
+  /** Each run's place in a group's queue, by its id (the holder is `<runId>/<node>/<visit>`). */
+  const priorities = new Map<string, number>();
+  const { gate, stop: stopGate } = flowGate(deps.gate, {
+    // The merge lane is one at a time, whatever a flow or a setting says.
+    resolveLimit: (group, declared) => (isMergeLane(group) ? 1 : declared),
+    priority: (holder) => priorities.get(holder.split('/')[0] ?? '') ?? 0,
+  });
 
   const loadFlow =
     deps.loadFlow ??
@@ -416,6 +449,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       return 'not-started';
     }
     logFlowWarnings(job, flow.value);
+    priorities.set(job.run.id, admissionPriority(job.run));
     const trace: FlowTrace = {
       agentsRan: job.run.threadIds.length > 0,
       prOpen: job.run.prUrl !== null,
@@ -527,6 +561,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       legacyReplay: journaled.value.length === 0,
     });
 
+    // The branch the pull request merges into names the merge lane. Unknown
+    // (GitHub could not be read): the lane is the repository's, which still
+    // merges one at a time.
+    const base = await deps.github.defaultBranch({
+      repo: scope.repo,
+      ownerId: scope.userId,
+      projectId: scope.projectId,
+    });
+    const baseBranch = base.isOk() ? base.value : '';
+
     const context: YamlPipelineContext = {
       provider,
       progress: nullReporter,
@@ -537,6 +581,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         issue_title: job.issue.title,
         issue_url: job.issue.url,
         branch: scope.branch,
+        // What the host's concurrency groups are named by (the merge lane, stage limits).
+        base_branch: baseBranch,
+        factory_id: job.factory.id,
       },
       outputs: {},
     };
@@ -582,6 +629,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         })
         .finally(() => {
           if (active.get(job.run.id) === controller) active.delete(job.run.id);
+          priorities.delete(job.run.id);
         });
       return started;
     },

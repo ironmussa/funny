@@ -683,4 +683,33 @@ describe('what merge checks on entry', () => {
     });
     expect(merges).toEqual([]);
   });
+
+  test('a merge GitHub refuses for a missing permission is a failed step with the reason, not a retry', async () => {
+    const followUps: string[] = [];
+    const { provider } = providerWith(
+      {
+        pullHead: () => okAsync({ sha: SHA_A, baseRef: 'main', autoMerge: false }),
+        merge: () =>
+          errAsync({
+            kind: 'no-access' as const,
+            message: "The factory's enabler can only read o/r; merging needs write access.",
+          }),
+      },
+      {
+        reviews: [pass(SHA_A)],
+        continuation: {
+          followUp: async (_threadId, content) => {
+            followUps.push(content);
+            return ok(undefined);
+          },
+          completedAt: async () => null,
+          followedUpSince: async () => false,
+        },
+      },
+    );
+    const result = await provider.merge({ requireRegressionProof: false });
+    expect(result).toMatchObject({ ok: false, metadata: { kind: 'no-access' } });
+    expect(result.error).toContain('merging needs write access');
+    expect(followUps).toEqual([]);
+  });
 });

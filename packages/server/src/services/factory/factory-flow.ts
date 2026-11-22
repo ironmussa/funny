@@ -133,6 +133,31 @@ function staleBranchWordingIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
   );
 }
 
+/**
+ * The merge lane (change factory-agent-roles, D8): the concurrency group every
+ * `merge` node of a factory flow runs in, one per repository and base branch,
+ * shared by every factory on that repository.
+ */
+export const MERGE_LANE_GROUP = 'merge:{{inputs.repo}}:{{inputs.base_branch}}';
+
+/** Whether a rendered concurrency group is a merge lane (its limit is always 1). */
+export const isMergeLane = (group: string) => group.startsWith('merge:');
+
+/**
+ * The flow with every `merge` node in the merge lane, whatever group or limit
+ * it declares (or none): a repository flow cannot merge two pull requests of
+ * one repository at once. A batch policy the node declares is kept.
+ */
+function withMergeLane(workflow: ParsedWorkflow): ParsedWorkflow {
+  const nodes = workflow.nodes.map((node) => {
+    if (!node.merge) return node;
+    const concurrency: NonNullable<FlowNode['concurrency']> = { group: MERGE_LANE_GROUP, limit: 1 };
+    if (node.concurrency?.batch) concurrency.batch = node.concurrency.batch;
+    return { ...node, concurrency };
+  });
+  return { ...workflow, nodes };
+}
+
 function proofConfigOf(workflow: ParsedWorkflow): RegressionProofOpts | undefined {
   const step = workflow.nodes.find((node) => node.regression_proof)?.regression_proof;
   return step ? regressionProofOpts(step) : undefined;
@@ -149,7 +174,7 @@ function compile(
     return ok({
       name: parsed.workflow.name,
       source,
-      pipeline: compileYamlPipeline(parsed.workflow),
+      pipeline: compileYamlPipeline(withMergeLane(parsed.workflow)),
       warnings:
         source === 'repository'
           ? [...parsed.warnings, ...staleBranchWordingIssues(parsed.workflow)]

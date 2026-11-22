@@ -7,7 +7,9 @@ import { describe, expect, test } from 'bun:test';
 
 import { ok } from 'neverthrow';
 
+import { admissionPriority } from '../../../services/factory/factory-flow-runs.js';
 import {
+  isMergeLane,
   loadFactoryFlow,
   readFactoryFlowDefinition,
 } from '../../../services/factory/factory-flow.js';
@@ -120,6 +122,42 @@ describe('factory flow host validation', () => {
     expect(flow.isOk()).toBe(true);
   });
 
+  // Change factory-agent-roles, D8: the merge lane.
+  describe('the merge lane', () => {
+    const laneOf = async (mergeNode: string) => {
+      const flow = await load(`  - id: implement
+    spawn_agent: { prompt: do it }
+  - id: land
+    depends_on: [implement]
+${mergeNode}
+`);
+      const node = flow._unsafeUnwrap().pipeline.nodes.find((n) => n.name === 'land');
+      const group = node?.concurrency?.group;
+      const inputs = { repo: 'o/r', base_branch: 'main' };
+      return {
+        // SAFETY: the group reads only the run's inputs.
+        group: typeof group === 'function' ? group({ inputs } as never) : group,
+        limit: node?.concurrency?.limit,
+      };
+    };
+
+    test('a merge without a concurrency group gets the lane of its repository and base branch', async () => {
+      expect(
+        await laneOf('    merge: { require_review: false, require_regression_proof: false }'),
+      ).toEqual({
+        group: 'merge:o/r:main',
+        limit: 1,
+      });
+    });
+
+    test("a merge's own group and limit are replaced: no flow merges two at once", async () => {
+      expect(
+        await laneOf(`    concurrency: { group: "mine-{{inputs.repo}}", limit: 5 }
+    merge: { require_review: false, require_regression_proof: false }`),
+      ).toEqual({ group: 'merge:o/r:main', limit: 1 });
+    });
+  });
+
   test('the built-in factory flows pass the rule', async () => {
     for (const name of ['issue-to-merge', 'issue-to-pr']) {
       const flow = await loadFactoryFlow(name, { readDefaultBranchFile: async () => ok(null) });
@@ -210,5 +248,28 @@ describe('reading a factory flow definition', () => {
       readDefaultBranchFile: async () => ok(null),
     });
     expect(read._unsafeUnwrapErr().kind).toBe('invalid');
+  });
+});
+
+describe('who gets a slot first', () => {
+  test('the lane is recognized by its group, so its limit can be pinned', () => {
+    expect(isMergeLane('merge:o/r:main')).toBe(true);
+    expect(isMergeLane('review:factory-1')).toBe(false);
+  });
+
+  test('a run admitted earlier goes first, and the number fits a 32-bit column', () => {
+    const earlier = admissionPriority({ admittedAt: '2026-11-22T10:00:00.000Z', startedAt: '' });
+    const later = admissionPriority({ admittedAt: '2026-11-22T10:00:05.000Z', startedAt: '' });
+    expect(earlier).toBeLessThan(later);
+    expect(later - earlier).toBe(5);
+    expect(
+      admissionPriority({ admittedAt: '2090-01-01T00:00:00.000Z', startedAt: '' }),
+    ).toBeLessThan(2 ** 31);
+  });
+
+  test('a run from before admissions were recorded uses when it started', () => {
+    expect(admissionPriority({ admittedAt: null, startedAt: '2026-11-22T10:00:00.000Z' })).toBe(
+      admissionPriority({ admittedAt: '2026-11-22T10:00:00.000Z', startedAt: '' }),
+    );
   });
 });

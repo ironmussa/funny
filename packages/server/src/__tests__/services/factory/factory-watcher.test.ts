@@ -760,6 +760,27 @@ describe('factory flow', () => {
     ]);
   });
 
+  // Change factory-agent-roles, D8: the server merges by rule and asks no agent
+  // about a failure that is not code.
+  test('a merge a branch rule refuses leaves the run for a person and starts no agent', async () => {
+    const { factoryId, github, followUps, launcher } = await runFlow(
+      {
+        merge: {
+          kind: 'not-mergeable',
+          reason: 'At least 1 approving review is required by reviewers with write access.',
+        },
+      },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.currentStep).toBe('merge');
+    expect(run.failureReason).toContain('At least 1 approving review is required');
+    expect(github.merges).toBe(1);
+    // Nobody was asked to fix it: no follow-up to the implementer, no new thread.
+    expect(followUps).toEqual([]);
+    expect(launcher.calls).toHaveLength(1);
+  });
+
   // Change factory-agent-roles: the review gate, through the real flow runner.
   test('a review that keeps failing sends its findings to the implementer, then leaves the run for a person', async () => {
     const failing = [
@@ -995,7 +1016,7 @@ describe('factory flow', () => {
       '    wait_ci: {}',
       '  - id: merge',
       '    depends_on: [ci]',
-      '    concurrency: { group: "merge-{{inputs.repo}}", limit: 1 }',
+      // No concurrency here: the factory puts every merge in the repository's lane.
       '    merge: { method: squash, require_regression_proof: false, require_review: false }',
     ].join('\n');
     const twoIssues = [
@@ -1059,9 +1080,10 @@ describe('factory flow', () => {
       await until(() => rows('workflow_concurrency_waiters').length === 1, 'a waiter');
       expect(github.merges).toBe(1);
       const [lease] = rows('workflow_concurrency_leases');
-      expect(lease?.group_key).toBe('merge-o/r');
+      // The lane of the repository and its base branch, though the flow declares none.
+      expect(lease?.group_key).toBe('merge:o/r:main');
       const [waiter] = rows('workflow_concurrency_waiters');
-      expect(waiter?.group_key).toBe('merge-o/r');
+      expect(waiter?.group_key).toBe('merge:o/r:main');
       // Holders are `<runId>/<node>/<visit>`: the lease and the waiter are the two runs.
       const runs = await allRuns(factoryId);
       const runOf = (holder?: string) => holder?.split('/')[0];

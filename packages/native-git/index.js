@@ -778,6 +778,7 @@ if (!nativeBinding) {
 }
 
 module.exports = nativeBinding;
+module.exports.addWorktree = nativeBinding.addWorktree;
 module.exports.blameFile = nativeBinding.blameFile;
 module.exports.checkIgnore = nativeBinding.checkIgnore;
 module.exports.getBranchSummary = nativeBinding.getBranchSummary;

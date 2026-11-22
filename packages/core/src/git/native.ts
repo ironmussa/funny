@@ -28,6 +28,19 @@ export interface NativeWorktreeEntry {
   branch?: string;
 }
 
+export interface NativeAddWorktreeOptions {
+  branch: string;
+  /** Create `branch` from `startPoint` (HEAD when absent); else it must exist. */
+  createBranch: boolean;
+  startPoint?: string;
+}
+
+export interface NativeAddWorktreeOutcome {
+  /** False when only the git CLI can do it (hooks, upstream); nothing was written. */
+  created: boolean;
+  unsupportedReason?: string;
+}
+
 export interface NativeGitLogEntry {
   hash: string;
   shortHash: string;
@@ -135,6 +148,12 @@ interface NativeGitModule {
   listUnmergedFiles(cwd: string): Promise<string[]>;
   getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
   listWorktrees(cwd: string): Promise<NativeWorktreeEntry[]>;
+  /** Absent in a binary built before it existed. */
+  addWorktree?(
+    cwd: string,
+    destination: string,
+    options: NativeAddWorktreeOptions,
+  ): Promise<NativeAddWorktreeOutcome>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -187,6 +206,12 @@ export interface PooledNativeGitModule {
   listUnmergedFiles(cwd: string): Promise<string[]>;
   getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
   listWorktrees(cwd: string): Promise<NativeWorktreeEntry[]>;
+  /** Absent in a binary built before it existed. */
+  addWorktree?(
+    cwd: string,
+    destination: string,
+    options: NativeAddWorktreeOptions,
+  ): Promise<NativeAddWorktreeOutcome>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -221,6 +246,8 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     listUnmergedFiles: (...args) => lightPool(() => mod.listUnmergedFiles(...args)),
     getRefFingerprint: (...args) => lightPool(() => mod.getRefFingerprint(...args)),
     listWorktrees: (...args) => lightPool(() => mod.listWorktrees(...args)),
+    // A write: callers run it through `nativeGitWrite`, not a read pool.
+    addWorktree: mod.addWorktree?.bind(mod),
     getBranchSummary: (...args) => heavyPool(() => mod.getBranchSummary(...args)),
     blameFile: (...args) => lightPool(() => mod.blameFile(...args)),
   };

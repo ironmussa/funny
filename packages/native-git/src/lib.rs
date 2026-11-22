@@ -17,6 +17,7 @@ mod stage_helpers;
 mod branch_summary;
 mod ref_fingerprint;
 mod worktree_list;
+mod worktree_add;
 
 pub use status_summary::*;
 pub use diff_summary::*;

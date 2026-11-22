@@ -18,6 +18,7 @@ gix = { version = "0.90", default-features = false, features = [
   "index",
   "attributes",
   "sha1",
+  "worktree-mutation",
 ] }
 gix-status = "0.37"
 lru = "0.18"

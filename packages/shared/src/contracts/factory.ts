@@ -336,11 +336,11 @@ export type FactoryReviewFinding = z.infer<typeof factoryReviewFindingSchema>;
 
 /** The reviewer's verdict on one commit of the run's pull request. */
 export const factoryReviewResultSchema = z.object({
-  /** The commit judged, in full: the verdict holds for no other one. */
-  sha: z
-    .string()
-    .trim()
-    .regex(/^[0-9a-f]{40}$/i, 'sha must be the full 40-character commit'),
+  /**
+   * The commit judged: the verdict holds for no other one. The reader refuses
+   * a result whose commit is not the one the server asked about.
+   */
+  sha: z.string().trim().min(1).max(64),
   verdict: z.enum(['pass', 'fail']),
   summary: z.string().max(4000).optional(),
   findings: z.array(factoryReviewFindingSchema).max(50).default([]),

@@ -304,6 +304,7 @@ async function dispatchGithubNode(
   if (yamlNode.regression_proof) {
     return githubOutput(yamlNode, 'regression_proof', await regressionProof(yamlNode, ctx, scope));
   }
+  if (yamlNode.review) return githubOutput(yamlNode, 'review', await review(yamlNode, ctx, scope));
   return null;
 }
 
@@ -336,9 +337,24 @@ function merge(
     auto: opts.auto,
     execution: ctx.execution,
     requireRegressionProof: opts.require_regression_proof ?? true,
+    requireReview: opts.require_review ?? true,
     regressionProof: proofNode
       ? regressionProofOpts(interpolateObject(proofNode.regression_proof!, scope))
       : undefined,
+  });
+}
+
+function review(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: TemplateScope) {
+  if (!ctx.provider.review) {
+    throw new Error(`review[${yamlNode.id}]: the provider does not support this action`);
+  }
+  const opts = interpolateObject(yamlNode.review!, scope);
+  return ctx.provider.review({
+    provider: opts.provider,
+    model: opts.model,
+    effort: opts.effort,
+    early: opts.early,
+    execution: ctx.execution,
   });
 }
 

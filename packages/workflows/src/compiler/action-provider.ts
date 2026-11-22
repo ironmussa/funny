@@ -179,6 +179,25 @@ export interface MergeOpts {
   requireRegressionProof?: boolean;
   /** The flow's `regression_proof` step configuration, when it has one. */
   regressionProof?: RegressionProofOpts;
+  /**
+   * Whether the merge needs a passing verdict of the flow's `review` step for
+   * the head it merges (the step's `require_review`, default true).
+   */
+  requireReview?: boolean;
+}
+
+/**
+ * A `review` step: an independent verdict on the run's pull request head. The
+ * provider owns the reviewer's thread, permissions, inputs and result format.
+ */
+export interface ReviewOpts {
+  provider?: string;
+  model?: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  /** Start when the commit's checks start (default true). */
+  early?: boolean;
+  /** The execution this review belongs to: adopt `resume.recorded` work, `checkpoint` new work. */
+  execution?: ActionExecution;
 }
 
 // ── Approval (human-in-the-loop) ────────────────────────────
@@ -269,6 +288,14 @@ export interface ActionProvider {
    * fail) and the head (must pass). The provider starts and polls the job.
    */
   regressionProof?(opts: RegressionProofOpts): Promise<ActionResult>;
+
+  /**
+   * Review the run's pull request head on an independent read-only agent.
+   * Resolves `ok: true` with the verdict in `metadata` (`verdict`,
+   * `allowsMerge`, `sha`, `feedback`) whether it passes or fails, so a loop
+   * can send the findings back; `ok: false` when no verdict could be had.
+   */
+  review?(opts: ReviewOpts): Promise<ActionResult>;
 
   /**
    * Request a human approval and block until decided (or timeout).

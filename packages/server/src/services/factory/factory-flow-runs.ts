@@ -62,6 +62,7 @@ import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
 import {
   factoryRunBranch,
   REOPENED_STEP,
+  threadsOf,
   type createFactoryRunsRepository,
   type FactoryRunView,
   type UpdateRunInput,
@@ -88,6 +89,8 @@ export interface FactoryFlowRunsDeps {
   github: FactoryGithubPort;
   launch(input: StartThreadInput): Promise<Result<StartedThread, StartThreadError>>;
   waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /** A thread's last assistant message (tests); defaults to the stored one. */
+  lastThreadMessage?: (threadId: string) => Promise<string | null>;
   /**
    * Send a follow-up to the enabler's thread, so later agent steps continue
    * the first one; without it each agent step starts a new thread.
@@ -202,6 +205,8 @@ async function findLaunchedThread(
   scope: { userId: string; projectId: string },
   titlePrefix: string,
   since: string,
+  /** The newest match instead of the oldest (a review thread: an older one may be a stopped attempt). */
+  newest = false,
 ): Promise<string | null> {
   const after = slackBefore(since);
   const [row] = await db
@@ -217,7 +222,7 @@ async function findLaunchedThread(
         gte(threads.createdAt, after),
       ),
     )
-    .orderBy(asc(threads.createdAt))
+    .orderBy(newest ? desc(threads.createdAt) : asc(threads.createdAt))
     .limit(1);
   return row?.id ?? null;
 }
@@ -355,8 +360,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     if (!deps.cleanupMerged) return;
     const cleanup = deps.cleanupMerged;
     void deps.runs.get(job.run.id).match(
-      (run) => cleanup(job.factory.userId, run?.threadIds ?? job.run.threadIds),
-      () => cleanup(job.factory.userId, job.run.threadIds),
+      (run) => cleanup(job.factory.userId, threadsOf(run ?? job.run)),
+      () => cleanup(job.factory.userId, threadsOf(job.run)),
     );
   }
 
@@ -452,6 +457,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       issueNumber: job.issue.number,
       issueTitle: job.issue.title,
       branch: factoryRunBranch(job.run),
+      issueUrl: job.issue.url,
     };
     const provider = createFactoryActionProvider({
       scope,
@@ -470,6 +476,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
               deps.followUp!(scope.userId, threadId, content, scope.branch),
             completedAt: threadCompletedAt,
             followedUpSince,
+            // A reviewer's thread is on its own branch: no branch guard.
+            followUpOffBranch: (threadId, content) =>
+              deps.followUp!(scope.userId, threadId, content),
           }
         : undefined,
       github: deps.github,
@@ -481,7 +490,22 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         }),
       issueLabels: job.issue.labels ?? [],
       sensitivePaths: job.factory.sensitivePaths,
-      lastThreadMessage,
+      reviews: job.run.reviews,
+      admittedAt: job.run.admittedAt ?? job.run.startedAt,
+      findReviewThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
+      otherPullRequests: async () => {
+        const others = await deps.runs.inFlight(job.factory.id);
+        if (others.isErr()) return [];
+        return others.value.flatMap((other) =>
+          other.id !== job.run.id && other.prUrl ? [other.prUrl] : [],
+        );
+      },
+      enterStage: async (stage) => {
+        const entered = await deps.runs.enterStage(job.run.id, stage);
+        // Stopped or parked elsewhere: stop driving it.
+        if (entered.isOk() && !entered.value) controller.abort();
+      },
+      lastThreadMessage: deps.lastThreadMessage ?? lastThreadMessage,
       removeUnchangedWorktrees: async () => {
         const run = await deps.runs.get(job.run.id);
         const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;

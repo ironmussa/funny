@@ -29,7 +29,7 @@ import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
-import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
+import { createFactoryRunsRepository, threadsOf, type FactoryRunView } from './factory-runs.js';
 import { stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
 import { factoryRunnerPorts, pokeFactory, stopFactoryFlow } from './factory-watcher.js';
@@ -118,7 +118,7 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             stopFactoryFlow(run.id);
             const ports = factoryRunnerPorts();
             const threadsStopped = ports
-              ? stopFactoryThreads(ports, userId, run.threadIds)
+              ? stopFactoryThreads(ports, userId, threadsOf(run))
               : Promise.resolve();
             return ResultAsync.fromSafePromise(threadsStopped).andThen(() => reread(run.id));
           }),

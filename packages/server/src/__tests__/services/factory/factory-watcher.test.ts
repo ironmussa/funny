@@ -43,6 +43,7 @@ import { createWorkflowJournalRepository } from '../../../services/workflow-engi
 import {
   launchedThread,
   passingProof,
+  passingReview,
   proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
@@ -62,7 +63,7 @@ const ports = unusedRunnerPorts();
 
 const _origStartWatcher = startFactoryWatcher;
 const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
-  _origStartWatcher({ proof: passingProof, ...d });
+  _origStartWatcher({ proof: passingProof, lastThreadMessage: passingReview, ...d });
 
 /** Fake poll: captures each factory's tick so the test can fire it. */
 function fakePoll() {
@@ -74,10 +75,35 @@ function fakePoll() {
   return { ticks, createPoll };
 }
 
+/** Reviewer threads the fake launchers started, across a test file (unique thread ids). */
+let reviewerThreads = 0;
+
+/**
+ * A reviewer's launch (change factory-agent-roles): a thread row that already
+ * completed, so the real thread wait sees it finished; `passingReview` is what
+ * it says. Kept out of `calls`, which count the implementing agent's launches.
+ */
+function launchReviewer(input: StartThreadInput): LaunchResult {
+  const id = `rev-${++reviewerThreads}`;
+  seedThread(testDb.db, {
+    id,
+    projectId: String(input.body.projectId),
+    userId: input.userId,
+    title: String(input.body.title),
+    status: 'completed',
+    source: 'factory',
+  });
+  return launchedThread(id);
+}
+
+const isReviewerLaunch = (input: StartThreadInput) =>
+  String(input.body.title).startsWith('[Factory review]');
+
 /** Fake launcher recording calls; succeeds with a thread id per call. */
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   const calls: StartThreadInput[] = [];
   const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
+    if (result === 'ok' && isReviewerLaunch(input)) return launchReviewer(input);
     calls.push(input);
     return result === 'ok' ? launchedThread(`t-${calls.length}`) : runnerOffline('offline');
   };
@@ -679,6 +705,8 @@ describe('factory flow', () => {
   async function runFlow(
     script: GithubScript,
     waitThread: (id: string, signal: AbortSignal) => Promise<any>,
+    /** What a thread's last message is (a reviewer's verdict); default: every review passes. */
+    lastThreadMessage: (threadId: string) => Promise<string | null> = passingReview,
   ) {
     const factoryId = await enableFactory();
     const poll = fakePoll();
@@ -694,6 +722,7 @@ describe('factory flow', () => {
       launch: launcher.launch,
       resolveRuntime,
       waitThread,
+      lastThreadMessage,
       cleanupMerged: async (userId, threadIds) => {
         cleanups.push({ userId, threadIds });
       },
@@ -724,7 +753,52 @@ describe('factory flow', () => {
     for (let i = 0; i < 100 && cleanups.length === 0; i++) {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
-    expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
+    // The implementing thread's worktree, and the reviewer's.
+    expect(cleanups).toEqual([
+      { userId: 'alice', threadIds: ['t-1', expect.stringMatching(/^rev-\d+$/)] },
+    ]);
+  });
+
+  // Change factory-agent-roles: the review gate, through the real flow runner.
+  test('a review that keeps failing sends its findings to the implementer, then leaves the run for a person', async () => {
+    const failing = [
+      '```json',
+      JSON.stringify({
+        sha: 'sha-head',
+        verdict: 'fail',
+        findings: [{ severity: 'high', title: 'Negative numbers are dropped', path: 'src/sum.ts' }],
+      }),
+      '```',
+    ].join('\n');
+    const { factoryId, github, followUps, launcher } = await runFlow(
+      {},
+      finishedThreads('completed'),
+      async () => failing,
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(github.merges).toBe(0);
+    expect(run.currentStep).toBe('review');
+    expect(run.failureReason).toContain('loop exhausted');
+    expect(run.reviews).toMatchObject([{ sha: 'sha-head', verdict: 'fail' }]);
+    // One implementing thread; the findings reached it as follow-ups, twice (three reviews).
+    expect(launcher.calls).toHaveLength(1);
+    expect(followUps).toHaveLength(2);
+    expect(followUps.every((f) => f.threadId === 't-1')).toBe(true);
+    expect(followUps[0]!.content).toContain('[high] src/sum.ts: Negative numbers are dropped');
+    // The reviewer is never a step of the implementing thread.
+    expect(run.threadIds.every((id) => id === 't-1')).toBe(true);
+  });
+
+  test('a reviewer that answers in prose leaves the run for a person: "review gave no verdict"', async () => {
+    const { factoryId, github } = await runFlow(
+      {},
+      finishedThreads('completed'),
+      async () => 'The change looks fine to me.',
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.failureReason).toBe('review gave no verdict');
+    expect(run.currentStep).toBe('review');
+    expect(github.merges).toBe(0);
   });
 
   const red: CiState = {
@@ -818,7 +892,15 @@ describe('factory flow', () => {
   test('a failed run records its flow steps, the step it failed at and why', async () => {
     const { factoryId } = await runFlow({ pr: false }, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'failed');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual([
+      'implement',
+      'pull-request',
+      'address',
+      'regression-proof',
+      'ci',
+      'review',
+      'merge',
+    ]);
     expect(run.currentStep).toBe('pull-request');
     expect(run.failureReason).toContain('No open pull request');
   });
@@ -873,7 +955,15 @@ describe('factory flow', () => {
   test('a merged run has its steps and no failure reason', async () => {
     const { factoryId } = await runFlow({}, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'merged');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual([
+      'implement',
+      'pull-request',
+      'address',
+      'regression-proof',
+      'ci',
+      'review',
+      'merge',
+    ]);
     expect(run.failureReason).toBeNull();
   });
 

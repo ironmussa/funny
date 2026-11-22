@@ -154,8 +154,38 @@ const mergeAction = z
     auto: z.boolean().optional(),
     /** When false, skip the regression proof gate on merge (default true). */
     require_regression_proof: z.boolean().optional(),
+    /**
+     * When false, merge without a passing verdict of the flow's `review` step
+     * for the head commit (default true: an unreviewed commit is not merged).
+     */
+    require_review: z.boolean().optional(),
   })
   .strict();
+
+// ── Review action ──────────────────────────────────────────
+
+/** What a `review` step accepts. Everything else about it is the host's. */
+export const REVIEW_FIELDS = ['provider', 'model', 'effort', 'early'] as const;
+
+/**
+ * An independent review of the run's pull request head (the issue factory's
+ * reviewer). The host fixes what makes it independent: a new thread, a
+ * read-only permission mode, write tools denied, its inputs and its result
+ * format. A flow chooses only who reviews and when it starts. Unknown fields
+ * are reported at the node, naming the step (`reviewFieldIssues`).
+ */
+const reviewAction = z
+  .object({
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    /**
+     * Start the review when the commit's checks start instead of after they
+     * pass (default true). The verdict still counts only with green checks.
+     */
+    early: z.boolean().optional(),
+  })
+  .catchall(z.unknown());
 
 // ── Regression proof action ────────────────────────────────
 
@@ -325,6 +355,7 @@ export const ACTION_KEYS = [
   'approval',
   'pipeline',
   'regression_proof',
+  'review',
 ] as const;
 
 export type WorkflowActionKey = (typeof ACTION_KEYS)[number];
@@ -387,10 +418,19 @@ const pipelineNodeFields = z
     approval: approvalAction.optional(),
     pipeline: pipelineCallAction.optional(),
     regression_proof: regressionProofAction.optional(),
+    review: reviewAction.optional(),
   })
   .strict();
 
 const pipelineNode = pipelineNodeFields.superRefine((val, ctx) => {
+  for (const field of Object.keys(val.review ?? {})) {
+    if ((REVIEW_FIELDS as readonly string[]).includes(field)) continue;
+    ctx.addIssue({
+      code: 'custom',
+      path: ['review', field],
+      message: `Review step "${val.id}" does not accept "${field}": a review always runs on a new read-only thread and accepts only ${REVIEW_FIELDS.join(', ')}.`,
+    });
+  }
   const present = ACTION_KEYS.filter((k) => (val as Record<string, unknown>)[k] !== undefined);
   if (present.length === 0) {
     ctx.addIssue({

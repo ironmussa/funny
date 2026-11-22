@@ -157,6 +157,20 @@ export function markerEvent(
   return { type, threadId, data } as any;
 }
 
+/**
+ * A reviewer that passes the fakes' head commit (`sha-head`): a reviewer's
+ * thread (the fake launchers name them `rev-N`) says pass; any other thread
+ * says what is stored for it.
+ */
+export async function passingReview(threadId: string): Promise<string | null> {
+  if (threadId.startsWith('rev-')) {
+    return ['```json', JSON.stringify({ sha: 'sha-head', verdict: 'pass' }), '```'].join('\n');
+  }
+  // Imported here: this module is loaded by tests that never open a database.
+  const { lastThreadMessage } = await import('../../services/factory/factory-thread-waits.js');
+  return lastThreadMessage(threadId);
+}
+
 /** A runner proof service whose every regression proof passes at once. */
 export const passingProof: NonNullable<FactoryFlowRunsDeps['proof']> = () => ({
   startProof: async () => ok({ proofId: 'proof-1', state: 'done' }),

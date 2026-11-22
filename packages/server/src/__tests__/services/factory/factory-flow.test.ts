@@ -95,6 +95,31 @@ describe('factory flow host validation', () => {
     expect(flow.isOk()).toBe(true);
   });
 
+  // Change factory-agent-roles: the reviewer cannot be given write access by a flow.
+  test('a review step with a write permission mode is refused, naming the step and the field', async () => {
+    const flow = await load(`  - id: implement
+    spawn_agent: { prompt: do it }
+  - id: second-opinion
+    depends_on: [implement]
+    review: { permission_mode: autoEdit }
+`);
+    expect(flow.isErr()).toBe(true);
+    const error = flow._unsafeUnwrapErr();
+    expect(error.kind).toBe('invalid');
+    expect(error.message).toContain('second-opinion');
+    expect(error.message).toContain('permission_mode');
+  });
+
+  test('a review step beside the implementing agent loads: it has its own thread', async () => {
+    const flow = await load(`  - id: implement
+    spawn_agent: { prompt: do it }
+  - id: second-opinion
+    depends_on: [implement]
+    review: { model: opus, early: false }
+`);
+    expect(flow.isOk()).toBe(true);
+  });
+
   test('the built-in factory flows pass the rule', async () => {
     for (const name of ['issue-to-merge', 'issue-to-pr']) {
       const flow = await loadFactoryFlow(name, { readDefaultBranchFile: async () => ok(null) });

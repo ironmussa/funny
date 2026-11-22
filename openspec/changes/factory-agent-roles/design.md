@@ -76,6 +76,12 @@ visit. `ci` keeps its own `retry.before_retry` fix. The two loop regions start a
 are nested. Because a repository flow can draw its own loops, `merge` never trusts the path
 that led to it: it re-verifies every precondition on entry (D8).
 
+`factory-flow-step-options` is not implemented yet, so this change does not use its generic
+`thread: new` for `spawn_agent`: the `review` step launches its own new read-only thread (the
+thread create body already takes `permissionMode`, `disallowedTools`, `provider`, `model` and
+`effort`). Until that change lands the reviewer's instructions are fixed on the server and the
+step accepts `provider` / `model` / `effort` / `early` only; `prompt_file` arrives with it.
+
 _Alternative:_ `spawn_agent` with `output_format` and conventions. Rejected: a repository flow
 could drop `plan` or feed the implementer's thread to the reviewer, and the gate would still
 look like a gate.

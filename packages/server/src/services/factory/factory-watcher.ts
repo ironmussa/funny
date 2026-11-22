@@ -72,6 +72,7 @@ import {
   createFactoryRunsRepository,
   factoryRunBranch,
   IN_FLIGHT_STATES,
+  threadsOf,
   type FactoryRunState,
   type FactoryRunView,
   type RegressionProofRecord,
@@ -127,6 +128,8 @@ export interface FactoryWatcherDeps {
   resolveRuntime?: (userId: string, projectId: string) => Promise<ThreadRuntimeMode>;
   /** Thread wait override for tests; defaults to the DB status plus the terminal signal. */
   waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /** Last assistant message override for tests; defaults to the stored one. */
+  lastThreadMessage?: (threadId: string) => Promise<string | null>;
   /** Follow-up override for tests; defaults to a message on the thread's runner, as the enabler. */
   followUp?: (
     userId: string,
@@ -212,6 +215,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     github: d.github,
     launch: launchFor(d),
     waitThread: d.waitThread,
+    lastThreadMessage: d.lastThreadMessage,
     loadFlow: d.loadFlow,
     notify: d.notify,
     gate: d.gate,
@@ -706,7 +710,7 @@ async function stopOpenRuns(factory: WatchedFactory): Promise<void> {
   await stopFactoryThreads(
     deps.ports,
     factory.userId,
-    open.flatMap((run) => run.threadIds),
+    open.flatMap((run) => threadsOf(run)),
   );
 }
 
@@ -1008,7 +1012,7 @@ async function reconcileRun(
     issue: run.issueNumber,
     pullRequest: pr.value,
   });
-  if (pr.value === 'merged') await cleanupMergedFor(deps, factory.userId, run.threadIds);
+  if (pr.value === 'merged') await cleanupMergedFor(deps, factory.userId, threadsOf(run));
 }
 
 /** Remove a merged run's worktrees: the test override, else on the enabler's runner. */

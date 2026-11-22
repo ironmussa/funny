@@ -218,6 +218,16 @@ export interface FactoryRunView {
 
 export type FactoryRunSource = 'manual' | 'label';
 
+/**
+ * Every thread a run started: its implementing agent's (`threadIds`, the
+ * steps a retry replays), then its reviewers' (kept with their verdicts).
+ * What stopping the run stops and what a merge cleans up.
+ */
+export function threadsOf(run: Pick<FactoryRunView, 'threadIds' | 'reviews'>): string[] {
+  const reviewers = run.reviews.flatMap((review) => (review.threadId ? [review.threadId] : []));
+  return [...new Set([...run.threadIds, ...reviewers])];
+}
+
 export type FactoryRunsError = { kind: 'storage'; message: string };
 
 type Row = typeof factoryRuns.$inferSelect;

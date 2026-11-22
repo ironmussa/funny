@@ -32,10 +32,8 @@ describe('factoryReviewResultSchema', () => {
     expect(factoryReviewResultSchema.safeParse({ verdict: 'pass' }).success).toBe(false);
   });
 
-  test('refuses an abbreviated commit', () => {
-    expect(factoryReviewResultSchema.safeParse({ sha: 'abc1234', verdict: 'pass' }).success).toBe(
-      false,
-    );
+  test('refuses an empty commit', () => {
+    expect(factoryReviewResultSchema.safeParse({ sha: ' ', verdict: 'pass' }).success).toBe(false);
   });
 
   test('refuses a result without a verdict', () => {

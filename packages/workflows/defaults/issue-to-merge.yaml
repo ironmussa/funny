@@ -1,6 +1,7 @@
 # Built-in flow of the server-run issue factory (change factory-flow-execution,
-# factory-quality-gates): implement an issue, open a pull request, prove the
-# regression test, wait for green CI and merge it.
+# factory-quality-gates, factory-agent-roles): implement an issue, open a pull
+# request, prove the regression test, wait for green CI, have an independent
+# agent review the commit, and merge it.
 #
 # The server runs this flow as the factory's enabler. Agent steps are threads
 # on the enabler's runner; the agent commits, pushes and opens the pull request
@@ -22,6 +23,17 @@
 # in all. Add `required_checks: [name, ...]` to `wait_ci` to wait on (and
 # merge on) only those checks. A timeout or a GitHub access error is not
 # retried. When the loop runs out, the run fails and nothing is merged.
+#
+# Review loop: `review` is a second agent on its own read-only thread. It never
+# sees the implementing agent's conversation: it gets the commit, the pull
+# request and what the server found in the diff (weakened tests, risk), and
+# answers pass or fail with findings. A fail with a critical or high finding
+# goes back to the implementing agent (`address`), and the proof, the checks
+# and the review run again on the new commit: three reviews in all, then the
+# run waits for a person. A verdict holds for one commit only, and `merge`
+# needs a passing one for the commit it merges (`require_review: false` on
+# `merge` turns that off). The step takes `provider`, `model`, `effort` and
+# `early` (start with the checks, the default) and nothing else.
 #
 # The factory supplies every input. `issue_url` points at the issue: the agent
 # reads its text there (issue text is untrusted input, so it is not inlined).
@@ -96,8 +108,30 @@ nodes:
   # twice; the base must fail by an assertion: a timeout, a setup failure or a
   # test file that cannot load there proves nothing. Every issue needs a
   # regression test except those labelled `docs` or `chore`.
-  - id: regression-proof
+  # The implementing agent's turn after a gate sent the change back. Skipped on
+  # the first pass: there is nothing to address until a review has failed.
+  - id: address
     depends_on: [pull-request]
+    when: 'review.json.allowsMerge = false'
+    spawn_agent:
+      prompt: |
+        You are working unattended: nobody will answer questions.
+
+        An independent review of commit {{review.json.sha}} of the pull request
+        from `{{branch}}` (GitHub issue #{{issue_number}} of {{repo}}) found
+        problems that must be fixed before it can merge:
+
+        {{review.json.feedback}}
+
+        Check out `{{branch}}` and pull it. Fix each finding in the code. Do not
+        disable, skip or weaken tests or checks, and keep the regression test.
+        If a finding is wrong, change nothing for it and say why in your final
+        message. Run the project's checks, commit, and push to `{{branch}}`.
+        Do not rebase or force push, and do not open another pull request.
+        End with a short summary of what you changed for each finding.
+
+  - id: regression-proof
+    depends_on: [address]
     regression_proof:
       require_test: always
       exempt_labels: [docs, chore]
@@ -144,8 +178,16 @@ nodes:
           conflicts), run the project's checks, commit, and push to `{{branch}}`.
           Do not open another pull request. End with a short summary of the fix.
 
-  - id: merge
+  - id: review
     depends_on: [ci]
+    review: {}
+    loop:
+      back_to: address
+      until: 'review.json.allowsMerge = true'
+      max_iterations: 3
+
+  - id: merge
+    depends_on: [review]
     merge:
       method: squash
       delete_branch: true

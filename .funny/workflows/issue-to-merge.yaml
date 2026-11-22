@@ -80,6 +80,27 @@ nodes:
     depends_on: [implement]
     create_pr:
       title: '{{issue_title}}'
+  # The implementing agent's turn after a gate sent the change back. Skipped on
+  # the first pass: there is nothing to address until a review has failed.
+  - id: address
+    depends_on: [pull-request]
+    when: 'review.json.allowsMerge = false'
+    spawn_agent:
+      prompt: |
+        You are working unattended: nobody will answer questions.
+
+        An independent review of commit {{review.json.sha}} of the pull request
+        from `{{branch}}` (GitHub issue #{{issue_number}} of {{repo}}) found
+        problems that must be fixed before it can merge:
+
+        {{review.json.feedback}}
+
+        Check out `{{branch}}` and pull it. Fix each finding in the code. Do not
+        disable, skip or weaken tests or checks, and keep the regression test.
+        If a finding is wrong, change nothing for it and say why in your final
+        message. Run the project's checks, commit, and push to `{{branch}}`.
+        Do not rebase or force push, and do not open another pull request.
+        End with a short summary of what you changed for each finding.
 
   # Regression proof: runs the changed test files against the base (must fail)
   # and the head (must pass). Configure rules per repository by copying this
@@ -102,7 +123,7 @@ nodes:
   # test file that cannot load there proves nothing. Every issue needs a
   # regression test except those labelled `docs` or `chore`.
   - id: regression-proof
-    depends_on: [pull-request]
+    depends_on: [address]
     regression_proof:
       # funny's own rules (first match wins). Packages with a bunfig.toml run
       # from their directory with their own flags; the rest from the root.
@@ -172,8 +193,16 @@ nodes:
           conflicts), run the project's checks, commit, and push to `{{branch}}`.
           Do not open another pull request. End with a short summary of the fix.
 
-  - id: merge
+  - id: review
     depends_on: [ci]
+    review: {}
+    loop:
+      back_to: address
+      until: 'review.json.allowsMerge = true'
+      max_iterations: 3
+
+  - id: merge
+    depends_on: [review]
     merge:
       method: squash
       delete_branch: true

@@ -29,12 +29,17 @@
  *   the agent opened from the run's branch.
  * - `wait_ci` / `merge` act on that pull request with the App token capped by
  *   the enabler (`factory-ci-actions.ts`).
+ * - `review` judges the pull request's head commit on a NEW read-only thread
+ *   (`factory-review.ts`), never a follow-up on the implementing thread. Review
+ *   threads are not recorded in `threadIds`, which stays the implementing
+ *   agent's steps; each verdict keeps its thread id.
  * - `run_command`, `set_status`, `set_stage` and approvals are refused: there
  *   is nowhere on the server to run them (checks belong in the repository's CI).
  */
 
 import {
   EMPTY_FACTORY_RUN_METRICS,
+  type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
 } from '@funny/shared/contracts/factory';
@@ -46,7 +51,7 @@ import type {
   RegressionProofOpts,
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
-import type { Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
@@ -64,8 +69,9 @@ import {
   type ProofResultBody,
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
+import { createFactoryReviewer } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
-import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -117,6 +123,8 @@ export interface FactoryRunScope {
   issueTitle: string;
   /** The branch the agent pushes and opens the pull request from. */
   branch: string;
+  /** The issue's page (the reviewer reads the issue there). */
+  issueUrl?: string;
 }
 
 export type { FactoryProofDeps } from './factory-proof-runner.js';
@@ -134,6 +142,20 @@ export interface FactoryActionProviderDeps {
   issueLabels?: string[];
   /** The factory's own sensitive path globs (they make a change high risk). */
   sensitivePaths?: readonly string[];
+  /** The review verdicts the run already has (a resumed run). */
+  reviews?: readonly FactoryReviewVerdict[];
+  /** When the run was admitted: review threads from before are not this run's. */
+  admittedAt?: string;
+  /** The newest review thread of this run by its title prefix, since `since`. */
+  findReviewThread?(titlePrefix: string, since: string): Promise<string | null>;
+  /** The URLs of the factory's other open pull requests (the reviewer is told about them). */
+  otherPullRequests?(): Promise<string[]>;
+  /**
+   * Move the run into its review or merge step: a compare-and-set on the
+   * stored state (`enterStage` of the runs repository). Absent (tests): the
+   * state is written like any other progress.
+   */
+  enterStage?(stage: FactoryRunStage): Promise<void>;
   /** Proof start/poll through the runner. */
   proof?: FactoryProofDeps;
   /** The implementing thread's last assistant message (the "no change" explanation). */
@@ -191,6 +213,11 @@ export interface FactoryContinuation {
   completedAt(threadId: string): Promise<string | null>;
   /** Whether a member/user message reached the thread since `since` (an interrupted follow-up). */
   followedUpSince(threadId: string, since: string): Promise<boolean>;
+  /**
+   * Follow up on a thread that is not on the run's branch (a reviewer's):
+   * `followUp` without the branch guard. Absent: such a thread cannot be asked again.
+   */
+  followUpOffBranch?(threadId: string, content: string): Promise<Result<void, string>>;
 }
 
 /** The thread an agent step waits on; `after` when a follow-up runs it again. */
@@ -657,6 +684,43 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return classified;
   }
 
+  const enterStage = async (stage: FactoryRunStage) =>
+    deps.enterStage
+      ? deps.enterStage(stage)
+      : deps.record({ state: stage === 'review' ? 'reviewing' : 'merging' });
+
+  const offBranch = deps.continuation?.followUpOffBranch;
+  const reviewer = createFactoryReviewer({
+    scope,
+    issueUrl: scope.issueUrl ?? null,
+    reviews: deps.reviews ?? [],
+    since: deps.admittedAt ?? new Date(0).toISOString(),
+    signal: deps.signal,
+    pullRequest,
+    prUrl: () => prUrl,
+    headSha: async () => {
+      const pr = pullRequest();
+      if (!pr) return err('The run has no pull request yet.');
+      const head = await deps.github.pullRequests.pullHead(pr);
+      return head.isOk() ? ok(head.value.sha) : err(head.error.message);
+    },
+    classify: classifyHead,
+    launch: deps.launch,
+    findLaunched: async (prefix, since) => (await deps.findReviewThread?.(prefix, since)) ?? null,
+    waitThread: deps.waitThread,
+    finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
+    followUp:
+      offBranch && deps.continuation
+        ? { send: offBranch, completedAt: deps.continuation.completedAt }
+        : undefined,
+    abandon: deps.abandon,
+    worktreeBase,
+    otherPullRequests: deps.otherPullRequests,
+    record: deps.record,
+    enterReview: () => enterStage('review'),
+    count: (event) => count(metrics, { event }),
+  });
+
   /** The enabler reads the repository: the App token capped by their access. */
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
 
@@ -808,6 +872,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     merge: (opts) => provedMerge(opts),
 
     regressionProof: (opts) => runRegressionProof(opts),
+
+    review: (opts) => reviewer.review(opts),
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

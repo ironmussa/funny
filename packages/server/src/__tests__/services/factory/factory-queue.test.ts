@@ -26,12 +26,13 @@ import type { StartThreadInput } from '../../../services/runner-thread-launcher.
 import {
   launchedThread,
   passingProof,
+  passingReview,
   proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
 } from '../../helpers/builders-services.js';
-import { createTestDb, seedProject } from '../../helpers/test-db.js';
+import { createTestDb, seedProject, seedThread } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
 
@@ -122,9 +123,34 @@ function fakePoll() {
   return { ticks, createPoll };
 }
 
+/** Reviewer threads the fake launchers started, across a test file (unique thread ids). */
+let reviewerThreads = 0;
+
+/**
+ * A reviewer's launch (change factory-agent-roles): a thread row that already
+ * completed, so the real thread wait sees it finished; `passingReview` is what
+ * it says. Kept out of `calls`, which count the implementing agent's launches.
+ */
+function launchReviewer(input: StartThreadInput): LaunchResult {
+  const id = `rev-${++reviewerThreads}`;
+  seedThread(testDb.db, {
+    id,
+    projectId: String(input.body.projectId),
+    userId: input.userId,
+    title: String(input.body.title),
+    status: 'completed',
+    source: 'factory',
+  });
+  return launchedThread(id);
+}
+
+const isReviewerLaunch = (input: StartThreadInput) =>
+  String(input.body.title).startsWith('[Factory review]');
+
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   const calls: StartThreadInput[] = [];
   const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
+    if (result === 'ok' && isReviewerLaunch(input)) return launchReviewer(input);
     calls.push(input);
     return result === 'ok' ? launchedThread(`t-${calls.length}`) : runnerOffline('offline');
   };
@@ -183,6 +209,7 @@ async function setUp(
     waitThread: opts.waitThread ?? pendingThreads,
     notify: async () => undefined,
     proof: passingProof,
+    lastThreadMessage: passingReview,
   });
   // The tests fire the tick themselves: a send does not poke the factory here.
   const queue = createFactoryQueue({ wake: async () => {} });

@@ -45,6 +45,7 @@ function ProjectThreadModeSettingRows({ projectId }: Props) {
 
   return (
     <SettingRow
+      settingId="project-general.thread-mode"
       title={t('settings.projectDefaultMode', 'Default Thread Mode')}
       description={description}
     >

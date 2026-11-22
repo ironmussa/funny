@@ -17,7 +17,11 @@ export function ProjectRedirectChecksSetting({
 }) {
   const { t } = useTranslation();
   return (
-    <SettingRow title={t('settings.redirectChecks')} description={t('settings.redirectChecksDesc')}>
+    <SettingRow
+      settingId="project-general.redirect-checks"
+      title={t('settings.redirectChecks')}
+      description={t('settings.redirectChecksDesc')}
+    >
       <SegmentedControl<string>
         value={project.redirectChecks === false ? 'off' : 'on'}
         onChange={(v) => onSave(project.id, { redirectChecks: v === 'on' })}

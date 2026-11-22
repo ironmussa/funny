@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { FolderPicker } from '@/components/FolderPicker';
+import { SettingAnchor } from '@/components/settings/SettingRow';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -87,7 +88,10 @@ export function ProjectPathSetting({ projectId, currentPath }: Props) {
 
   return (
     <>
-      <div className="border-border/50 flex flex-col gap-2 border-b px-4 py-3.5 last:border-b-0">
+      <SettingAnchor
+        settingId="project-general.path"
+        className="border-border/50 flex flex-col gap-2 border-b px-4 py-3.5 last:border-b-0"
+      >
         <div className="min-w-0">
           <p className="text-foreground text-sm font-medium">
             {t('settings.projectPath', 'Project Path')}
@@ -126,7 +130,7 @@ export function ProjectPathSetting({ projectId, currentPath }: Props) {
             {saving ? t('common.loading', 'Saving…') : t('common.save', 'Save')}
           </Button>
         </div>
-      </div>
+      </SettingAnchor>
       {pickerOpen && (
         <FolderPicker
           onSelect={(p) => {

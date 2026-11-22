@@ -717,7 +717,15 @@
     "projectFactoryConcurrency": "Máximo en curso",
     "projectFactoryConcurrencyDesc": "Cuántas issues se procesan a la vez",
     "projectFactoryStatus": "Estado",
-    "projectFactoryStatusDesc": "En marcha: toma las issues que envías desde la pestaña Issues. En pausa: no empieza nada nuevo; las issues en cola esperan"
+    "projectFactoryStatusDesc": "En marcha: toma las issues que envías desde la pestaña Issues. En pausa: no empieza nada nuevo; las issues en cola esperan",
+    "filter": {
+      "placeholder": "Buscar ajustes…",
+      "noResults": "Ningún ajuste coincide",
+      "inPreferences_one": "{{count}} resultado en Preferencias",
+      "inPreferences_other": "{{count}} resultados en Preferencias",
+      "inProject_one": "{{count}} resultado en Ajustes del proyecto",
+      "inProject_other": "{{count}} resultados en Ajustes del proyecto"
+    }
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

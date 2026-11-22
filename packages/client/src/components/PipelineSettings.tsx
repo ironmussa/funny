@@ -15,7 +15,7 @@ import { PROVIDER_MODELS, PROVIDERS } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
-import { SettingRow } from './settings/SettingRow';
+import { SettingAnchor, SettingRow } from './settings/SettingRow';
 
 /** Model selector matching the PromptInput pattern — grouped by provider */
 const ModelSelect = memo(function ModelSelect({
@@ -217,7 +217,10 @@ export function PipelineSettings() {
 
       {/* Pre-commit fixer section */}
       <div className="settings-card mb-0">
-        <div className="bg-muted/30 flex items-center justify-between px-3 py-2">
+        <SettingAnchor
+          settingId="pipelines.precommit"
+          className="bg-muted/30 flex items-center justify-between px-3 py-2"
+        >
           <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Pre-commit Auto-fix
           </p>
@@ -226,10 +229,14 @@ export function PipelineSettings() {
             onCheckedChange={(v) => saveField({ precommitFixEnabled: v })}
             data-testid="pipeline-precommit-toggle"
           />
-        </div>
+        </SettingAnchor>
         {!!pipeline.precommitFixEnabled && (
           <>
-            <SettingRow title="Fixer Model" description="Model for auto-fixing lint errors">
+            <SettingRow
+              settingId={null}
+              title="Fixer Model"
+              description="Model for auto-fixing lint errors"
+            >
               <ModelSelect
                 value={(pipeline.precommitFixModel as string) || 'sonnet'}
                 onChange={handlePrecommitFixModelChange}
@@ -237,6 +244,7 @@ export function PipelineSettings() {
               />
             </SettingRow>
             <SettingRow
+              settingId={null}
               title="Max Fix Attempts"
               description="Max retries before failing the commit"
             >
@@ -258,7 +266,10 @@ export function PipelineSettings() {
 
       {/* Post-commit review section */}
       <div className="settings-card mb-0">
-        <div className="bg-muted/30 flex items-center justify-between px-3 py-2">
+        <SettingAnchor
+          settingId="pipelines.review"
+          className="bg-muted/30 flex items-center justify-between px-3 py-2"
+        >
           <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Post-commit Review
           </p>
@@ -267,24 +278,36 @@ export function PipelineSettings() {
             onCheckedChange={(v) => saveField({ enabled: v })}
             data-testid="pipeline-review-toggle"
           />
-        </div>
+        </SettingAnchor>
         {!!pipeline.enabled && (
           <>
-            <SettingRow title="Reviewer Model" description="Model for analyzing code (read-only)">
+            <SettingRow
+              settingId={null}
+              title="Reviewer Model"
+              description="Model for analyzing code (read-only)"
+            >
               <ModelSelect
                 value={(pipeline.reviewModel as string) || 'sonnet'}
                 onChange={handleReviewModelChange}
                 testId="pipeline-review-model"
               />
             </SettingRow>
-            <SettingRow title="Corrector Model" description="Model for fixing issues (worktree)">
+            <SettingRow
+              settingId={null}
+              title="Corrector Model"
+              description="Model for fixing issues (worktree)"
+            >
               <ModelSelect
                 value={(pipeline.fixModel as string) || 'sonnet'}
                 onChange={handleFixModelChange}
                 testId="pipeline-fix-model"
               />
             </SettingRow>
-            <SettingRow title="Max Iterations" description="Max review-fix cycles before giving up">
+            <SettingRow
+              settingId={null}
+              title="Max Iterations"
+              description="Max review-fix cycles before giving up"
+            >
               <Input
                 type="number"
                 min={1}
@@ -301,7 +324,10 @@ export function PipelineSettings() {
 
       {/* Test Auto-Fix section */}
       <div className="settings-card mb-0">
-        <div className="bg-muted/30 flex items-center justify-between px-3 py-2">
+        <SettingAnchor
+          settingId="pipelines.tests"
+          className="bg-muted/30 flex items-center justify-between px-3 py-2"
+        >
           <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Test Auto-Fix
           </p>
@@ -310,10 +336,14 @@ export function PipelineSettings() {
             onCheckedChange={(v) => saveField({ testEnabled: v })}
             data-testid="pipeline-test-toggle"
           />
-        </div>
+        </SettingAnchor>
         {!!pipeline.testEnabled && (
           <>
-            <SettingRow title="Test Command" description="Command to run tests (e.g. bun test)">
+            <SettingRow
+              settingId={null}
+              title="Test Command"
+              description="Command to run tests (e.g. bun test)"
+            >
               <Input
                 type="text"
                 value={pipeline.testCommand ?? ''}
@@ -323,7 +353,11 @@ export function PipelineSettings() {
                 data-testid="pipeline-test-command"
               />
             </SettingRow>
-            <SettingRow title="Auto-fix Failures" description="Spawn an agent to fix failing tests">
+            <SettingRow
+              settingId={null}
+              title="Auto-fix Failures"
+              description="Spawn an agent to fix failing tests"
+            >
               <Switch
                 checked={!!pipeline.testFixEnabled}
                 onCheckedChange={(v) => saveField({ testFixEnabled: v })}
@@ -332,7 +366,11 @@ export function PipelineSettings() {
             </SettingRow>
             {!!pipeline.testFixEnabled && (
               <>
-                <SettingRow title="Fixer Model" description="Model for fixing test failures">
+                <SettingRow
+                  settingId={null}
+                  title="Fixer Model"
+                  description="Model for fixing test failures"
+                >
                   <ModelSelect
                     value={(pipeline.testFixModel as string) || 'sonnet'}
                     onChange={handleTestFixModelChange}
@@ -340,6 +378,7 @@ export function PipelineSettings() {
                   />
                 </SettingRow>
                 <SettingRow
+                  settingId={null}
                   title="Max Fix Attempts"
                   description="Max test-fix cycles before giving up"
                 >

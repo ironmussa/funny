@@ -50,6 +50,7 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
   if (!loading && connections.length === 0) {
     return (
       <SettingRow
+        settingId="project-general.sandbox"
         title={t('settings.projectSandbox', 'Sandbox')}
         description={t(
           'settings.projectSandboxNoConnections',
@@ -88,6 +89,7 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
   return (
     <>
       <SettingRow
+        settingId="project-general.sandbox"
         title={t('settings.projectSandbox', 'Sandbox')}
         description={t(
           'settings.projectSandboxDesc',
@@ -117,6 +119,7 @@ function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
       </SettingRow>
       {settings?.connectionId && (
         <SettingRow
+          settingId="project-general.sandbox-size"
           title={t('settings.projectSandboxSize', 'Sandbox size')}
           description={t('settings.projectSandboxSizeDesc', 'Machine size for new sandboxes')}
         >

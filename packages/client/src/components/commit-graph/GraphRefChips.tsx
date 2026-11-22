@@ -114,7 +114,8 @@ export function isThreadBranchRef(
 /**
  * Arrowhead in front of the chip of the branch the open thread lives on, so
  * clicking a thread shows where it sits in the history. Only the head is drawn:
- * the row's leader line is the shaft, so the two read as one arrow.
+ * the row's leader line is the shaft (for a chip below the first one, a branch
+ * of it drawn by the commit row), so the two read as one arrow.
  */
 function ThreadBranchMarker({ branch, color }: { branch: string; color: string }) {
   const { t } = useTranslation();

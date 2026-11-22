@@ -67,6 +67,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import {
   graphGutterViewportWidth,
   graphRefLeaderLineXRange,
+  threadBranchShaftPath,
   renderedGraphLaneCount,
 } from '@/lib/commit-graph-layout';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
@@ -1626,13 +1627,17 @@ function GraphCommitRow({
   // matches the rendered DOM exactly — otherwise line-height/padding rounding
   // leaves the leader line a couple px off the chip's true center.
   const hasRefs = foldedRefs.length > 0;
-  const hasThreadBranch = useMemo(
-    () => foldedRefs.some((ref) => isThreadBranchRef(ref, threadBranch)),
+  const threadBranchChipIndex = useMemo(
+    () => foldedRefs.findIndex((ref) => isThreadBranchRef(ref, threadBranch)),
     [foldedRefs, threadBranch],
   );
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const chipCenterY = nodeYForRow(entry, rowHeight);
+  // Chips stack with a 4px gap (see the chip column below), so the thread
+  // branch chip's center sits that many chip lines under the first one.
+  const threadChipY =
+    threadBranchChipIndex > 0 ? chipCenterY + threadBranchChipIndex * (chipLineH + 4) : null;
   const nodeYFrac = hasRefs ? chipCenterY / rowHeight : 0.5;
 
   return (
@@ -1694,9 +1699,29 @@ function GraphCommitRow({
                   x2={leaderLine.x2}
                   y2={chipCenterY}
                   stroke={lanePastel}
-                  strokeWidth={hasThreadBranch ? 3 : 1.6}
+                  strokeWidth={threadBranchChipIndex === 0 ? 3 : 1.6}
                   strokeLinecap="round"
                 />
+                {threadChipY !== null &&
+                  (() => {
+                    const shaft = threadBranchShaftPath({
+                      x1: leaderLine.x1,
+                      chipLeftX: leaderLine.x2,
+                      leaderY: chipCenterY,
+                      threadChipY,
+                    });
+                    return shaft ? (
+                      <path
+                        d={shaft}
+                        fill="none"
+                        stroke={lanePastel}
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        data-testid="graph-thread-branch-shaft"
+                      />
+                    ) : null;
+                  })()}
               </svg>
             );
           })()}

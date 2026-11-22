@@ -30,6 +30,7 @@ function scripted(
   const prs: FactoryPullRequests = {
     prState: () => okAsync('open'),
     changedFiles: () => okAsync({ files: [], truncated: false }),
+    publishReview: () => okAsync({ status: true }),
     pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
     publishProofCheck: () => okAsync(undefined),
     ciState: () => {
@@ -133,6 +134,7 @@ describe('wait_ci', () => {
     const prs: FactoryPullRequests = {
       prState: () => okAsync('open'),
       changedFiles: () => okAsync({ files: [], truncated: false }),
+      publishReview: () => okAsync({ status: true }),
       pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
       publishProofCheck: () => okAsync(undefined),
       ciState: (_pr, required) => {

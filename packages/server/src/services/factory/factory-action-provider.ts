@@ -71,7 +71,7 @@ import {
   type ProofResultBody,
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
-import { createFactoryReviewer } from './factory-review.js';
+import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
 import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
@@ -701,6 +701,33 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return classified;
   }
 
+  /**
+   * Put a verdict on the run's pull request. Best effort: a failure is logged
+   * and counted, and the verdict the run stored still decides the merge.
+   */
+  async function publishVerdict(verdict: FactoryReviewVerdict) {
+    const pr = pullRequest();
+    if (!pr) return { comment: false, status: false };
+    const published = await deps.github.pullRequests.publishReview(pr, {
+      sha: verdict.sha,
+      allowsMerge: reviewAllowsMerge(verdict),
+      body: reviewComment(verdict),
+      description: reviewHeadline(verdict),
+    });
+    if (published.isOk()) return { comment: true, status: published.value.status };
+    log.warn('Issue factory could not publish the review verdict', {
+      namespace: 'factory',
+      runId: scope.runId,
+      sha: verdict.sha,
+      error: published.error.message,
+    });
+    metric('factory.integration_event', 1, {
+      type: 'sum',
+      attributes: { event: 'review_unpublished', repo: scope.repo },
+    });
+    return { comment: false, status: false };
+  }
+
   const enterStage = async (stage: FactoryRunStage) =>
     deps.enterStage
       ? deps.enterStage(stage)
@@ -733,6 +760,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     abandon: deps.abandon,
     worktreeBase,
     otherPullRequests: deps.otherPullRequests,
+    publish: publishVerdict,
     record: deps.record,
     enterReview: () => enterStage('review'),
     count: (event) => count(metrics, { event }),

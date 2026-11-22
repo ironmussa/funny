@@ -233,6 +233,7 @@ export function createFactoryGithub(
       issue,
       ownerToken,
       issueCheckPublisher: (repo, token) => tokenIssuer.issueCheckPublisher(repo, token),
+      issueStatusPublisher: (repo, token) => tokenIssuer.issueStatusPublisher(repo, token),
       appId: () => tokenIssuer.appId(),
       fetch: fetchImpl,
     }),

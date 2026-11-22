@@ -59,6 +59,7 @@ function providerWith(pullRequests: Partial<PullRequestsPort>, over: Partial<Pro
       pullRequests: {
         prState: () => okAsync('open' as const),
         changedFiles: () => okAsync({ files: [], truncated: false }),
+        publishReview: () => okAsync({ status: true }),
         pullHead: () => okAsync({ sha: 'sha-1', baseRef: 'main', autoMerge: false }),
         publishProofCheck: () => okAsync(undefined),
         ciState: () => okAsync({ kind: 'green' as const }),
@@ -177,6 +178,8 @@ interface ReviewScript {
   reviews?: ProviderDeps['reviews'];
   files?: PullRequestFile[];
   followUpFails?: boolean;
+  /** How putting the verdict on the pull request goes (default: comment and status). */
+  publishes?: 'comment-only' | 'fails';
 }
 
 /** A provider whose reviewer threads answer from a script; records what the server did. */
@@ -186,6 +189,8 @@ function reviewing(script: ReviewScript) {
   const recorded: UpdateRunInput[] = [];
   const stages: string[] = [];
   const abandoned: string[] = [];
+  const published: Array<{ sha: string; allowsMerge: boolean; body: string; description: string }> =
+    [];
   const turn = new Map<string, number>();
   const indexOf = (threadId: string) =>
     threadId === script.launched ? 0 : Number(threadId.replace('rev-', '')) - 1;
@@ -193,6 +198,12 @@ function reviewing(script: ReviewScript) {
     {
       pullHead: () => okAsync({ sha: script.head?.() ?? SHA_A, baseRef: 'main', autoMerge: false }),
       changedFiles: () => okAsync({ files: script.files ?? [], truncated: false }),
+      publishReview: (_pr, review) => {
+        published.push(review);
+        return script.publishes === 'fails'
+          ? errAsync({ kind: 'github-error' as const, message: 'GitHub answered 502' })
+          : okAsync({ status: script.publishes !== 'comment-only' });
+      },
     },
     {
       reviews: script.reviews,
@@ -241,7 +252,7 @@ function reviewing(script: ReviewScript) {
     const writes = recorded.flatMap((input) => (input.reviews ? [input.reviews] : []));
     return writes.at(-1) ?? [];
   };
-  return { provider, bodies, followUps, recorded, stages, abandoned, stored };
+  return { provider, bodies, followUps, recorded, stages, abandoned, stored, published };
 }
 
 describe('the review step', () => {
@@ -406,6 +417,49 @@ describe('the review step', () => {
     expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
     expect(bodies).toHaveLength(1);
     expect(stored()).toMatchObject([{ threadId: 'rev-1' }]);
+  });
+});
+
+describe('a verdict on the pull request', () => {
+  test('a pass is posted as a comment and a success status, and the run remembers both', async () => {
+    const { provider, published, stored } = reviewing({ says: [[passOf(SHA_A)]] });
+    await provider.review!({});
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({ sha: SHA_A, allowsMerge: true, description: 'Passed' });
+    expect(published[0]?.body).toContain('does not approve the pull request');
+    expect(stored()).toMatchObject([{ published: true, statusPublished: true }]);
+  });
+
+  test('a fail lists its findings and sets a failing status', async () => {
+    const { provider, published } = reviewing({ says: [[failOf(SHA_A)]] });
+    await provider.review!({});
+    expect(published[0]).toMatchObject({
+      allowsMerge: false,
+      description: 'Failed: 1 finding(s) to fix',
+    });
+    expect(published[0]?.body).toContain('**high** `src/sum.ts:3`: Negative numbers are dropped');
+  });
+
+  test('an installation without the new permission gets the comment only', async () => {
+    const { provider, stored } = reviewing({ says: [[passOf(SHA_A)]], publishes: 'comment-only' });
+    await provider.review!({});
+    expect(stored()).toMatchObject([{ published: true, statusPublished: false }]);
+  });
+
+  test('publishing that fails changes nothing about the verdict', async () => {
+    const { provider, stored } = reviewing({ says: [[passOf(SHA_A)]], publishes: 'fails' });
+    expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
+    expect(stored()).toMatchObject([{ sha: SHA_A, verdict: 'pass' }]);
+    expect(stored()[0]?.published).toBeUndefined();
+  });
+
+  test("a mention in the reviewer's words notifies nobody", async () => {
+    const { provider, published } = reviewing({
+      says: [[json({ sha: SHA_A, verdict: 'pass', summary: 'Ask @octocat to approve this.' })]],
+    });
+    await provider.review!({});
+    expect(published[0]?.body).not.toContain('@octocat');
+    expect(published[0]?.body).toContain('octocat');
   });
 });
 

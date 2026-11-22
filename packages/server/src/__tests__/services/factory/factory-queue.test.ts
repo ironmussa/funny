@@ -102,6 +102,7 @@ function fakeGithub(script: Script = {}): FakeGithub {
     pullRequests: {
       prState: () => okAsync('open' as const),
       changedFiles: () => okAsync({ files: [], truncated: false }),
+      publishReview: () => okAsync({ status: true }),
       pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
       publishProofCheck: () => okAsync(undefined),
       ciState: () => okAsync({ kind: 'green' as const }),

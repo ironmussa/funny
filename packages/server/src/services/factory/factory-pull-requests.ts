@@ -14,11 +14,14 @@
  */
 
 import {
+  commentReview,
   createPullRequestCi,
   createRepoCheckOps,
   createRepoGithub,
   listPullRequestFiles,
   REGRESSION_PROOF_CHECK,
+  REVIEW_STATUS_CONTEXT,
+  setCommitStatus,
   type CiState,
   type GithubCallError,
   type MergeMethod,
@@ -86,6 +89,18 @@ export interface FactoryProofCheck {
   summary: string;
 }
 
+/** A review verdict as it is put on the pull request. */
+export interface FactoryReviewPublication {
+  /** The reviewed commit. */
+  sha: string;
+  /** Whether the verdict allows a merge (the status' state). */
+  allowsMerge: boolean;
+  /** The review comment (Markdown). */
+  body: string;
+  /** The status' one-line description. */
+  description: string;
+}
+
 export type FactoryMergeOutcome =
   /** Merged now (its requirements were met). */
   | { kind: 'merged'; method: MergeMethod; branchDeleted: boolean }
@@ -126,6 +141,17 @@ export interface FactoryPullRequests {
     pr: FactoryPullRequestRef,
     check: FactoryProofCheck,
   ): ResultAsync<void, FactoryPullRequestError>;
+  /**
+   * Put a review verdict on the pull request: a review comment that never
+   * approves, then the `funny/review` status on the reviewed commit with a
+   * server-only token. The comment failing is the error; `status` says whether
+   * the status was set (false while the installation has not accepted
+   * `statuses: write`).
+   */
+  publishReview(
+    pr: FactoryPullRequestRef,
+    review: FactoryReviewPublication,
+  ): ResultAsync<{ status: boolean }, FactoryPullRequestError>;
   /** Merges only when the checks are green; otherwise answers `not-green` without acting. */
   merge(
     pr: FactoryPullRequestRef,
@@ -143,6 +169,11 @@ export interface FactoryPullRequestsDeps {
   ownerToken(userId: string, projectId: string): Promise<string | null>;
   /** A token that may only write checks (`issueCheckPublisher`); absent: no check is published. */
   issueCheckPublisher?(repo: string, ownerToken: string | null): ResultAsync<RepoToken, IssueError>;
+  /** A token that may only write commit statuses (`issueStatusPublisher`); absent: no status is set. */
+  issueStatusPublisher?(
+    repo: string,
+    ownerToken: string | null,
+  ): ResultAsync<RepoToken, IssueError>;
   /** The connected App's id, to tell a check pinned to it; absent or null: nothing is held. */
   appId?(): ResultAsync<string | null, IssueError>;
   fetch?: typeof fetch;
@@ -204,6 +235,23 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
     });
   const pullRequestsFor = (pr: FactoryPullRequestRef, needs: AccessLevel) =>
     createPullRequestCi(repoGithubFor(pr, needs));
+
+  /** GitHub calls with a server-only token (`issuer`): one that writes checks or statuses only. */
+  const serverOnlyGithub = (
+    pr: FactoryPullRequestRef,
+    issuer: (repo: string, ownerToken: string | null) => ResultAsync<RepoToken, IssueError>,
+  ) =>
+    createRepoGithub({
+      tokenFor: (repo) =>
+        ResultAsync.fromSafePromise(deps.ownerToken(pr.userId, pr.projectId))
+          .andThen((ownerToken) =>
+            issuer(repo, ownerToken).mapErr((error) => accessError(error, repo)),
+          )
+          .map((token) => token.token),
+      fetch: deps.fetch,
+      api: deps.api,
+      userAgent: 'funny-issue-factory',
+    });
 
   /** Whether GitHub holds the proof's check on `baseRef`, pinned to this App. */
   const proofCheckHeld = (
@@ -300,18 +348,7 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
           message: 'No check publisher is configured.',
         });
       }
-      const github = createRepoGithub({
-        tokenFor: (repo) =>
-          ResultAsync.fromSafePromise(deps.ownerToken(pr.userId, pr.projectId))
-            .andThen((ownerToken) =>
-              issuer(repo, ownerToken).mapErr((error) => accessError(error, repo)),
-            )
-            .map((token) => token.token),
-        fetch: deps.fetch,
-        api: deps.api,
-        userAgent: 'funny-issue-factory',
-      });
-      return createRepoCheckOps(github)
+      return createRepoCheckOps(serverOnlyGithub(pr, issuer))
         .createCheckRun({
           repo: pr.repo,
           headSha: check.headSha,
@@ -322,6 +359,28 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
         })
         .map(() => undefined)
         .mapErr(callError);
+    },
+
+    publishReview(pr, review) {
+      const issuer = deps.issueStatusPublisher;
+      return commentReview(repoGithubFor(pr, 'write'), pr.repo, pr.number, {
+        commitId: review.sha,
+        body: review.body,
+      })
+        .mapErr(callError)
+        .andThen(() => {
+          if (!issuer) return okAsync({ status: false });
+          return (
+            setCommitStatus(serverOnlyGithub(pr, issuer), pr.repo, review.sha, {
+              context: REVIEW_STATUS_CONTEXT,
+              state: review.allowsMerge ? 'success' : 'failure',
+              description: review.description,
+            })
+              .map(() => ({ status: true }))
+              // The comment is on the pull request: a status GitHub refused is not an error.
+              .orElse(() => okAsync({ status: false }))
+          );
+        });
     },
 
     merge(pr, options = {}) {

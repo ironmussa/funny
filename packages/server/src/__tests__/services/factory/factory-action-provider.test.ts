@@ -64,6 +64,7 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
       pullRequests: {
         prState: () => okAsync('open' as const),
         changedFiles: () => okAsync({ files: [], truncated: false }),
+        publishReview: () => okAsync({ status: true }),
         pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
         publishProofCheck: () => okAsync(undefined),
         ciState: () => okAsync({ kind: 'green' as const }),
@@ -209,6 +210,7 @@ describe('factory action provider integration metrics', () => {
         pullRequests: {
           prState: () => okAsync('open' as const),
           changedFiles: () => okAsync({ files: [], truncated: false }),
+          publishReview: () => okAsync({ status: true }),
           pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
           publishProofCheck: () => okAsync(undefined),
           ciState: () => okAsync(looks.shift()!),
@@ -403,6 +405,7 @@ describe('factory action provider merge gate', () => {
         pullRequests: {
           prState: () => okAsync('open' as const),
           changedFiles: () => okAsync({ files: [], truncated: false }),
+          publishReview: () => okAsync({ status: true }),
           pullHead: () =>
             okAsync({ sha: opts.head ?? 'sha-head', baseRef: 'main', autoMerge: false }),
           publishProofCheck: () => okAsync(undefined),
@@ -514,6 +517,7 @@ describe('factory action provider "no change" outcome', () => {
         pullRequests: {
           prState: () => okAsync('open' as const),
           changedFiles: () => okAsync({ files: [], truncated: false }),
+          publishReview: () => okAsync({ status: true }),
           pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
           publishProofCheck: () => okAsync(undefined),
           ciState: () => okAsync({ kind: 'green' as const }),
@@ -698,6 +702,7 @@ describe('factory action provider proof counters (task 4.7)', () => {
         pullRequests: {
           prState: () => okAsync('open' as const),
           changedFiles: () => okAsync({ files: [], truncated: false }),
+          publishReview: () => okAsync({ status: true }),
           pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
           publishProofCheck: () => okAsync(undefined),
           ciState: () => okAsync({ kind: 'green' as const }),
@@ -733,6 +738,7 @@ describe('factory action provider: the proof check (task 4.4)', () => {
         pullRequests: {
           prState: () => okAsync('open' as const),
           changedFiles: () => okAsync({ files: [], truncated: false }),
+          publishReview: () => okAsync({ status: true }),
           pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
           publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {
             checks.push(check);

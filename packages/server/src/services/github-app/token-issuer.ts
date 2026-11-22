@@ -61,8 +61,26 @@ export const SANDBOX_PERMISSIONS: Record<AccessLevel, GithubPermissions> = {
  */
 export const CHECK_PUBLISH_PERMISSIONS: GithubPermissions = { checks: 'write', metadata: 'read' };
 
-/** What the App asks for when it is created: the sandbox set plus writing checks. */
-export const APP_PERMISSIONS: GithubPermissions = { ...SANDBOX_PERMISSIONS.write, checks: 'write' };
+/**
+ * The only token that may write commit statuses: the server's, to publish the
+ * factory's `funny/review` verdict (factory-agent-roles). Never given to a
+ * sandbox or an agent: anything there could then forge a passing review.
+ */
+export const STATUS_PUBLISH_PERMISSIONS: GithubPermissions = {
+  statuses: 'write',
+  metadata: 'read',
+};
+
+/**
+ * What the App asks for when it is created: the sandbox set plus what only the
+ * server writes (checks, commit statuses). Sandbox tokens stay on
+ * `SANDBOX_PERMISSIONS`, where both are read-only.
+ */
+export const APP_PERMISSIONS: GithubPermissions = {
+  ...SANDBOX_PERMISSIONS.write,
+  checks: 'write',
+  statuses: 'write',
+};
 
 export type IssueErrorKind = GithubAppErrorKind | 'no-access';
 export interface IssueError {
@@ -143,6 +161,32 @@ export function createGithubAppTokenIssuer(deps: TokenIssuerDeps) {
         app ? okAsync(app) : errAsync(fail('not-configured', 'No GitHub App is connected')),
       );
 
+  /**
+   * A token with `permissions` for the server's own use on `repo`: only for
+   * an owner with write access. `what` names the action in the refusal.
+   */
+  function issueServerOnly(
+    repo: string,
+    ownerToken: string | null,
+    permissions: GithubPermissions,
+    what: string,
+  ): ResultAsync<RepoToken, IssueError> {
+    const normalized = repo.toLowerCase();
+    if (!ownerToken) {
+      return errAsync(fail('no-access', 'The owner has no GitHub token to check access with'));
+    }
+    return connectedApp().andThen((app) =>
+      ownerLevel(normalized, ownerToken).andThen((level) => {
+        if (level !== 'write') {
+          return errAsync(fail('no-access', `${what} on ${normalized} needs write access`));
+        }
+        return installationTokens
+          .issue({ app, repo: normalized, permissions })
+          .map((token): RepoToken => ({ ...token, level }));
+      }),
+    );
+  }
+
   return {
     /**
      * A token for `repo` (`owner/name`) capped by the owner's access, reused
@@ -176,22 +220,19 @@ export function createGithubAppTokenIssuer(deps: TokenIssuerDeps) {
       repo: string,
       ownerToken: string | null,
     ): ResultAsync<RepoToken, IssueError> {
-      const normalized = repo.toLowerCase();
-      if (!ownerToken) {
-        return errAsync(fail('no-access', 'The owner has no GitHub token to check access with'));
-      }
-      return connectedApp().andThen((app) =>
-        ownerLevel(normalized, ownerToken).andThen((level) => {
-          if (level !== 'write') {
-            return errAsync(
-              fail('no-access', `Publishing a check on ${normalized} needs write access`),
-            );
-          }
-          return installationTokens
-            .issue({ app, repo: normalized, permissions: CHECK_PUBLISH_PERMISSIONS })
-            .map((token): RepoToken => ({ ...token, level }));
-        }),
-      );
+      return issueServerOnly(repo, ownerToken, CHECK_PUBLISH_PERMISSIONS, 'Publishing a check');
+    },
+
+    /**
+     * A token that can only write commit statuses on `repo`
+     * (`STATUS_PUBLISH_PERMISSIONS`), under the same rules. Fails while the
+     * installation has not accepted `statuses: write`.
+     */
+    issueStatusPublisher(
+      repo: string,
+      ownerToken: string | null,
+    ): ResultAsync<RepoToken, IssueError> {
+      return issueServerOnly(repo, ownerToken, STATUS_PUBLISH_PERMISSIONS, 'Publishing a status');
     },
 
     /** The connected App's id, for pinning a required check to it; null when none. */

@@ -19,7 +19,10 @@
  *   the server asked about. No result, or one for another commit, after one
  *   request to emit it again: the review fails closed and the run waits for a
  *   person.
- * - A verdict is stored per commit and holds for that commit only.
+ * - A verdict is stored per commit and holds for that commit only. It is put
+ *   on the pull request as a review comment that never approves and, when the
+ *   installation allows, as the `funny/review` commit status. Publishing is
+ *   best effort: the stored verdict is what `merge` reads.
  *
  * One review runs per commit: a second request for the same commit (the
  * `review` step after an early start, or a resumed run) joins it, and the
@@ -172,6 +175,41 @@ export function reviewFeedback(verdict: FactoryReviewVerdict): string {
   );
 }
 
+/** Text a model wrote, safe to post: an `@name` in it notifies nobody. */
+const withoutMentions = (text: string) => text.replace(/@(?=[\w-])/g, '@\u200b');
+
+/** How a verdict reads in one line (the commit status' description). */
+export function reviewHeadline(verdict: FactoryReviewVerdict): string {
+  const blocking = blockingReviewFindings(verdict).length;
+  if (!reviewAllowsMerge(verdict)) {
+    return blocking > 0 ? `Failed: ${blocking} finding(s) to fix` : 'Failed';
+  }
+  const comments = verdict.findings.length;
+  return comments > 0 ? `Passed with ${comments} comment(s)` : 'Passed';
+}
+
+/**
+ * The verdict as a pull request review comment (Markdown). The reviewer's
+ * words are model output about untrusted input: mentions are neutralized, and
+ * the comment says it is automated and approves nothing.
+ */
+export function reviewComment(verdict: FactoryReviewVerdict): string {
+  const findings = verdict.findings.map((finding) => {
+    const where = finding.path
+      ? ` \`${finding.path}${finding.line ? `:${finding.line}` : ''}\``
+      : '';
+    const detail = finding.detail ? `\n  ${finding.detail}` : '';
+    return `- **${finding.severity}**${where}: ${finding.title}${detail}`;
+  });
+  const parts = [
+    `**funny review of \`${verdict.sha.slice(0, 12)}\`: ${reviewHeadline(verdict)}**`,
+    verdict.summary,
+    findings.length > 0 ? findings.join('\n') : null,
+    "_Automated review by the issue factory's reviewer agent, for this commit only. It does not approve the pull request._",
+  ];
+  return withoutMentions(parts.filter(Boolean).join('\n\n'));
+}
+
 /** A stored verdict as the `review` step's result: ok either way, so the loop can act on a fail. */
 export function verdictResult(verdict: FactoryReviewVerdict): ActionResult {
   const allowsMerge = reviewAllowsMerge(verdict);
@@ -219,8 +257,8 @@ export interface FactoryReviewerDeps {
   worktreeBase(): Promise<{ baseBranch?: string; baseFromRemote?: boolean } | { error: string }>;
   /** The URLs of the factory's other open pull requests. */
   otherPullRequests?(): Promise<string[]>;
-  /** Put the verdict on the pull request; resolves whether it is there. */
-  publish?(verdict: FactoryReviewVerdict): Promise<boolean>;
+  /** Put the verdict on the pull request; resolves what got there (the comment, the status). */
+  publish?(verdict: FactoryReviewVerdict): Promise<{ comment: boolean; status: boolean }>;
   record(input: UpdateRunInput): Promise<void>;
   /** Move the run into its review step (a compare-and-set on the stored state). */
   enterReview(): Promise<void>;
@@ -317,9 +355,9 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
     reviews = withReviewVerdict(reviews, verdict);
     await deps.record({ reviews });
     await deps.count(reviewAllowsMerge(verdict) ? 'review_pass' : 'review_fail');
-    const published = (await deps.publish?.(verdict)) ?? false;
-    if (!published) return verdict;
-    const stored = { ...verdict, published: true };
+    const published = await deps.publish?.(verdict);
+    if (!published?.comment) return verdict;
+    const stored = { ...verdict, published: true, statusPublished: published.status };
     reviews = withReviewVerdict(reviews, stored);
     await deps.record({ reviews });
     return stored;

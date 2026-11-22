@@ -369,8 +369,13 @@ export const factoryReviewVerdictSchema = factoryReviewResultSchema.extend({
   /** The reviewer's thread. */
   threadId: z.string().optional(),
   reviewedAt: z.string(),
-  /** Whether the verdict is on the pull request (comment, and status when allowed). */
+  /** Whether the verdict is on the pull request as a review comment. */
   published: z.boolean().optional(),
+  /**
+   * Whether the `funny/review` status is on the commit. False while the App's
+   * installation has not accepted `statuses: write`.
+   */
+  statusPublished: z.boolean().optional(),
 });
 export type FactoryReviewVerdict = z.infer<typeof factoryReviewVerdictSchema>;
 

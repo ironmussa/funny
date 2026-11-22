@@ -1,5 +1,8 @@
 import { describe, test, expect, vi, beforeAll, afterEach, mock } from 'bun:test';
 
+import type { DomainError } from '@funny/shared/errors';
+import { okAsync } from 'neverthrow';
+
 import { clearGlobal, readGlobal } from '../helpers/builders.js';
 
 const lifecycleMock = (() => ({
@@ -11,8 +14,8 @@ const lifecycleMock = (() => ({
     lastActivityAt: new Map<string, number>(),
     lastOptions: new Map<string, unknown>(),
   })),
-  startAgent: vi.fn(async () => undefined),
-  stopAgent: vi.fn(async () => undefined),
+  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
+  stopAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
   isAgentRunning: vi.fn(() => false),
   cleanupThreadState: vi.fn(),
   getRunSpans: vi.fn(() => new Map()),

@@ -291,7 +291,7 @@ async function wakeAgentWithCompletion(job: Job, prompt: string): Promise<void> 
   const cwdResult = resolveThreadCwd(thread, project ? { path: project.path } : null);
   if (cwdResult.isErr()) throw new Error(cwdResult.error.message);
 
-  await startAgent(
+  const started = await startAgent(
     job.threadId,
     prompt,
     cwdResult.value,
@@ -304,6 +304,7 @@ async function wakeAgentWithCompletion(job: Job, prompt: string): Promise<void> 
     undefined,
     true,
   );
+  if (started.isErr()) throw new Error(started.error.message);
 }
 
 function tailLog(logPath: string, maxLines = 50): string {

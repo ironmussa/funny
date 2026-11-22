@@ -684,7 +684,7 @@ async function startAgentInNewWorktree(ctx: ProjectThreadContext, wtPath: string
       wtPath,
       params.allowedTools,
     );
-    await startAgent(
+    const started = await startAgent(
       threadId,
       augmentedPrompt,
       wtPath,
@@ -698,6 +698,7 @@ async function startAgentInNewWorktree(ctx: ProjectThreadContext, wtPath: string
       true, // skipMessageInsert — already inserted at thread creation
       params.effort,
     );
+    if (started.isErr()) throw new Error(started.error.message);
   } catch (err: any) {
     log.error('Failed to start agent after worktree setup', { threadId, error: err });
     await markThreadFailed(params.userId, threadId);
@@ -859,13 +860,13 @@ async function createLocalThread(baseCtx: ProjectThreadContext) {
     return thread;
   }
 
-  // Start agent (throws on failure — caller handles HTTP error response)
+  // Start agent (a failed start throws — caller handles HTTP error response)
   const allowedToolsForRun = await augmentAllowedToolsWithRules(
     params.userId,
     cwd,
     params.allowedTools,
   );
-  await startAgent(
+  const started = await startAgent(
     threadId,
     augmentedPrompt,
     cwd,
@@ -879,6 +880,7 @@ async function createLocalThread(baseCtx: ProjectThreadContext) {
     undefined,
     params.effort,
   );
+  if (started.isErr()) throw new Error(started.error.message);
 
   return thread;
 }
@@ -1117,7 +1119,7 @@ async function createAndStartScratchThread(rawParams: CreateAndStartThreadParams
   // startAgent will resolve the scratch cwd via resolveThreadCwd and
   // create the directory before spawning. The cwd we pass here is a
   // best-effort placeholder; agent-lifecycle overrides it.
-  await startAgent(
+  const started = await startAgent(
     threadId,
     augmentedPrompt,
     '',
@@ -1131,6 +1133,7 @@ async function createAndStartScratchThread(rawParams: CreateAndStartThreadParams
     true, // skipMessageInsert — we already inserted above
     params.effort,
   );
+  if (started.isErr()) throw new Error(started.error.message);
 
   return thread;
 }

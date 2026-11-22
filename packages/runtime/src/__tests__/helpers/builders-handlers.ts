@@ -11,6 +11,7 @@ import { vi } from 'bun:test';
 
 import { AgentOrchestrator, type CLIMessage } from '@funny/core/agents';
 import type { ThreadStatus } from '@funny/shared';
+import { okAsync } from 'neverthrow';
 
 import { AgentMessageHandler, type ProjectLookup } from '../../services/agent-message-handler.js';
 import type { AgentStateTracker } from '../../services/agent-state.js';
@@ -65,7 +66,7 @@ export function createHandlerContext(
     enqueueMessage: vi.fn(async () => ({})),
     queueCount: vi.fn(async () => 0),
     peekMessage: vi.fn(async () => null),
-    startAgent: vi.fn(async () => undefined),
+    startAgent: vi.fn(() => okAsync(undefined)),
     emitToUser: vi.fn(),
     broadcast: vi.fn(),
     log: vi.fn(),

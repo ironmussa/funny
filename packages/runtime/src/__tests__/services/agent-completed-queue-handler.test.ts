@@ -11,7 +11,9 @@
  */
 import { describe, test, expect, vi } from 'bun:test';
 
+import { internal } from '@funny/shared/errors';
 import { mocked } from '@funny/test-kit';
+import { errAsync, okAsync } from 'neverthrow';
 
 import { agentCompletedQueueHandler } from '../../services/handlers/agent-completed-queue-handler.js';
 import type { HandlerServiceContext } from '../../services/handlers/types.js';
@@ -71,7 +73,7 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
     enqueueMessage: vi.fn(async () => makeQueueEntry()),
     queueCount: vi.fn(async () => 0),
     peekMessage: vi.fn(async () => null),
-    startAgent: vi.fn(async () => {}),
+    startAgent: vi.fn(() => okAsync(undefined)),
     emitToUser: vi.fn(),
     broadcast: vi.fn(),
     log: vi.fn(),
@@ -349,9 +351,7 @@ describe('agentCompletedQueueHandler', () => {
     });
     const ctx = makeCtx({
       dequeueMessage: vi.fn(async () => entry),
-      startAgent: vi.fn(async () => {
-        throw new Error('Agent spawn failed');
-      }),
+      startAgent: vi.fn(() => errAsync(internal('Agent spawn failed'))),
     });
 
     await agentCompletedQueueHandler.action(makeEvent(), ctx);
@@ -372,9 +372,7 @@ describe('agentCompletedQueueHandler', () => {
     const entry = makeQueueEntry({ id: 'q-fail' });
     const ctx = makeCtx({
       dequeueMessage: vi.fn(async () => entry),
-      startAgent: vi.fn(async () => {
-        throw new Error('Agent spawn failed');
-      }),
+      startAgent: vi.fn(() => errAsync(internal('Agent spawn failed'))),
       enqueueMessage: vi.fn(async () => {
         throw new Error('DB write failed');
       }),

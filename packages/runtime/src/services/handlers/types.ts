@@ -89,7 +89,7 @@ export interface HandlerServiceContext {
     allowedTools?: string[],
     provider?: string,
     skipMessageInsert?: boolean,
-  ): Promise<void>;
+  ): ResultAsync<void, DomainError>;
 
   // Git
   getGitStatusSummary(

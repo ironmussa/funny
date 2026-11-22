@@ -1,5 +1,7 @@
 import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
+import { okAsync } from 'neverthrow';
+
 const mocks = (() => ({
   startWatching: vi.fn(),
   stopWatching: vi.fn(),
@@ -76,7 +78,7 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
     enqueueMessage: vi.fn(async () => ({})),
     queueCount: vi.fn(async () => 0),
     peekMessage: vi.fn(async () => null),
-    startAgent: vi.fn(async () => undefined),
+    startAgent: vi.fn(() => okAsync(undefined)),
     emitToUser: vi.fn(),
     broadcast: vi.fn(),
     log: vi.fn(),

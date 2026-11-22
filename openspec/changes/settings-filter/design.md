@@ -97,4 +97,5 @@ These points were settled while implementing, and they replace the matching part
 - **Highlight.** It is a CSS animation (`setting-focus-highlight` in `globals.css`), removed on `animationend`, so no timer outlives the effect.
 - **Pages without static elements** (Providers, Runners, API tokens, …) are found through `SETTINGS_PAGE_KEYWORDS`, page-level search terms in the same file.
 - **Preferences items** moved to `components/settings/preferences-items.ts`, so the two panels can each build the other surface's pages for the hint without importing each other. `PreferencesPanel.tsx` re-exports them.
+- **Two row primitives, two names.** The project pages' row (`general-settings-project/setting-primitives.tsx`) is now `ProjectSettingRow`, so `SettingRow` is exported from one module only (fallow flags duplicate export names). Both take the same `settingId`.
 - **Keyboard cursor.** While filtering, the highlighted sidebar row is the keyboard cursor (`isActive`), not the open page.

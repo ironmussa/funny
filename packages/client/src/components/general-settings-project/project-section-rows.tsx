@@ -14,7 +14,7 @@ import { ensureTemplatesLoaded } from '@/data/templates/loaders';
 import { projectsApi } from '@/lib/api/projects';
 import { cn } from '@/lib/utils';
 
-import { SettingRow } from './setting-primitives';
+import { ProjectSettingRow } from './setting-primitives';
 
 /* ── URL patterns for Chrome extension auto-detection ── */
 export function ProjectUrlPatterns({
@@ -190,7 +190,7 @@ export function LauncherUrlSetting({
   };
 
   return (
-    <SettingRow
+    <ProjectSettingRow
       settingId="project-general.launcher-url"
       title={t('settings.launcherUrl', 'Podman Launcher URL')}
       description={t(
@@ -210,7 +210,7 @@ export function LauncherUrlSetting({
         className="h-8 w-[240px] font-mono text-xs"
         data-testid="settings-launcher-url"
       />
-    </SettingRow>
+    </ProjectSettingRow>
   );
 }
 
@@ -231,7 +231,7 @@ export function DefaultTemplateSetting({
   }, []);
 
   return (
-    <SettingRow
+    <ProjectSettingRow
       settingId="project-general.default-template"
       title="Default Agent Template"
       description="Auto-select this template when creating new Deep Agent threads in this project."
@@ -253,7 +253,7 @@ export function DefaultTemplateSetting({
           </option>
         ))}
       </select>
-    </SettingRow>
+    </ProjectSettingRow>
   );
 }
 
@@ -292,7 +292,7 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
 
   if (loading) {
     return (
-      <SettingRow
+      <ProjectSettingRow
         settingId="project-general.weave"
         title={t('settings.weaveTitle', 'Semantic Merge (Weave)')}
         description={t(
@@ -301,13 +301,13 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
         )}
       >
         <div className="bg-muted h-8 w-[140px] rounded-md" />
-      </SettingRow>
+      </ProjectSettingRow>
     );
   }
 
   if (!status || status.status === 'not-installed') {
     return (
-      <SettingRow
+      <ProjectSettingRow
         settingId="project-general.weave"
         title={t('settings.weaveTitle', 'Semantic Merge (Weave)')}
         description={t(
@@ -329,12 +329,12 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
             {t('settings.weaveInstall', 'Install')}
           </a>
         </div>
-      </SettingRow>
+      </ProjectSettingRow>
     );
   }
 
   return (
-    <SettingRow
+    <ProjectSettingRow
       settingId="project-general.weave"
       title={t('settings.weaveTitle', 'Semantic Merge (Weave)')}
       description={t('settings.weaveDesc', 'Reduces false merge conflicts using semantic analysis')}
@@ -365,6 +365,6 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
               : t('settings.weaveConfigure', 'Configure')}
         </Button>
       </div>
-    </SettingRow>
+    </ProjectSettingRow>
   );
 }

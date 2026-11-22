@@ -6,7 +6,7 @@
 import type { Project } from '@funny/shared';
 import { useTranslation } from 'react-i18next';
 
-import { SegmentedControl, SettingRow } from './setting-primitives';
+import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
 export function ProjectRedirectChecksSetting({
   project,
@@ -17,7 +17,7 @@ export function ProjectRedirectChecksSetting({
 }) {
   const { t } = useTranslation();
   return (
-    <SettingRow
+    <ProjectSettingRow
       settingId="project-general.redirect-checks"
       title={t('settings.redirectChecks')}
       description={t('settings.redirectChecksDesc')}
@@ -34,6 +34,6 @@ export function ProjectRedirectChecksSetting({
           { value: 'on', label: t('settings.fastModeOn'), testId: 'settings-redirect-checks-on' },
         ]}
       />
-    </SettingRow>
+    </ProjectSettingRow>
   );
 }

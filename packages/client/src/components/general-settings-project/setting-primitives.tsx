@@ -13,7 +13,7 @@ interface RowProps {
 }
 
 /** Setting row: label/description on the left, control on the right. */
-export function SettingRow({ settingId, title, description, children }: RowProps) {
+export function ProjectSettingRow({ settingId, title, description, children }: RowProps) {
   const dimmed = useSettingDimmed(settingId);
   return (
     <div

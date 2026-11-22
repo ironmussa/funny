@@ -51,6 +51,158 @@ function flatten(results: readonly FilterPageResult<SettingsNavPage>[]): FlatRes
   ]);
 }
 
+/** Plain page list, shown while the filter is empty. */
+function PageList({
+  pages,
+  activePageId,
+  openPage,
+  testIdPrefix,
+}: Pick<Props, 'pages' | 'activePageId' | 'openPage' | 'testIdPrefix'>) {
+  return (
+    <SidebarMenu>
+      {pages.map((page) => {
+        const Icon = page.icon;
+        return (
+          <SidebarMenuItem key={page.id}>
+            <SidebarMenuButton
+              isActive={activePageId === page.id}
+              onClick={() => openPage(page.id)}
+              data-testid={`${testIdPrefix}-nav-${page.id}`}
+            >
+              <Icon className="icon-base" />
+              <span>{page.label}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
+
+/** Matching pages with their matching settings; the cursor row is highlighted. */
+function FilterResults({
+  results,
+  cursor,
+  openResult,
+  testIdPrefix,
+}: {
+  results: readonly FilterPageResult<SettingsNavPage>[];
+  cursor: FlatResult | undefined;
+  openResult: (result: FlatResult) => void;
+  testIdPrefix: string;
+}) {
+  const tr = useSettingsTranslators();
+  const isCursor = (pageId: string, elementId: SettingId | null) =>
+    cursor?.pageId === pageId && cursor.elementId === elementId;
+
+  return (
+    <SidebarMenu data-testid="settings-filter-results">
+      {results.map(({ page, elements }) => {
+        const Icon = page.icon;
+        return (
+          <SidebarMenuItem key={page.id}>
+            {/* While filtering, the highlighted row is the keyboard cursor. */}
+            <SidebarMenuButton
+              isActive={isCursor(page.id, null)}
+              onClick={() => openResult({ pageId: page.id, elementId: null })}
+              data-testid={`${testIdPrefix}-nav-${page.id}`}
+            >
+              <Icon className="icon-base" />
+              <span>{page.label}</span>
+            </SidebarMenuButton>
+            {elements.length > 0 && (
+              <SidebarMenuSub>
+                {elements.map((entry) => (
+                  <SidebarMenuSubItem key={entry.id}>
+                    <SidebarMenuSubButton asChild size="sm" isActive={isCursor(page.id, entry.id)}>
+                      <button
+                        type="button"
+                        onClick={() => openResult({ pageId: page.id, elementId: entry.id })}
+                        data-testid={`settings-filter-result-${entry.id}`}
+                      >
+                        <span>{tr.t(entry.title, entry.titleDefault ?? entry.title)}</span>
+                      </button>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                ))}
+              </SidebarMenuSub>
+            )}
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
+
+/** "N results in Preferences →": opens the other surface on its first match. */
+function CrossSurfaceHint({
+  scope,
+  count,
+  onOpen,
+}: {
+  scope: SettingsScope;
+  count: number;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation();
+  const label =
+    scope === 'preferences'
+      ? t('settings.filter.inPreferences', {
+          count,
+          defaultValue: '{{count}} results in Preferences',
+        })
+      : t('settings.filter.inProject', {
+          count,
+          defaultValue: '{{count}} results in Project Settings',
+        });
+  return (
+    <div className="mt-2">
+      <Button variant="ghost" size="sm" onClick={onOpen} data-testid="settings-filter-cross-hint">
+        <span>{label}</span>
+        <ArrowRight className="icon-xs" />
+      </Button>
+    </div>
+  );
+}
+
+/** The page list, the empty state or the results, depending on the filter. */
+function FilterList({
+  filtering,
+  results,
+  cursor,
+  openResult,
+  ...pageList
+}: Pick<Props, 'pages' | 'activePageId' | 'openPage' | 'testIdPrefix'> & {
+  filtering: boolean;
+  results: readonly FilterPageResult<SettingsNavPage>[];
+  cursor: FlatResult | undefined;
+  openResult: (result: FlatResult) => void;
+}) {
+  const { t } = useTranslation();
+  if (!filtering) return <PageList {...pageList} />;
+  if (results.length === 0) {
+    return (
+      <p className="text-muted-foreground px-3 py-2 text-sm" data-testid="settings-filter-empty">
+        {t('settings.filter.noResults', { defaultValue: 'No settings match' })}
+      </p>
+    );
+  }
+  return (
+    <FilterResults
+      results={results}
+      cursor={cursor}
+      openResult={openResult}
+      testIdPrefix={pageList.testIdPrefix}
+    />
+  );
+}
+
+/** Index of the cursor after an arrow key, wrapping at both ends. */
+function moveCursor(index: number, key: 'ArrowDown' | 'ArrowUp', length: number): number {
+  const delta = key === 'ArrowDown' ? 1 : -1;
+  return (index + delta + length) % length;
+}
+
 /**
  * Sidebar navigation of a settings surface with a filter input on top
  * (openspec `settings-filter`). With an empty filter it is the plain page
@@ -105,47 +257,24 @@ export function SettingsNavFilter({
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
-      if (query) {
-        e.preventDefault();
-        setQuery('');
-      }
-      return;
-    }
-    if (!normalized || flat.length === 0) {
-      if (e.key === 'Enter' && otherCount > 0) {
-        e.preventDefault();
-        openOther();
-      }
+      if (query) setQuery('');
       return;
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      const delta = e.key === 'ArrowDown' ? 1 : -1;
-      const next = (activeIndex + delta + flat.length) % flat.length;
-      setCursor({ query: normalized, index: next });
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const target = flat[activeIndex];
-      if (target) openResult(target);
+      if (flat.length > 0) {
+        setCursor({ query: normalized, index: moveCursor(activeIndex, e.key, flat.length) });
+      }
+      return;
     }
+    if (e.key !== 'Enter' || !normalized) return;
+    e.preventDefault();
+    const target = flat[activeIndex];
+    if (target) openResult(target);
+    else if (otherCount > 0) openOther();
   };
 
-  const otherLabel =
-    other?.scope === 'preferences'
-      ? t('settings.filter.inPreferences', {
-          count: otherCount,
-          defaultValue: '{{count}} results in Preferences',
-        })
-      : t('settings.filter.inProject', {
-          count: otherCount,
-          defaultValue: '{{count}} results in Project Settings',
-        });
-
-  const isCursor = (pageId: string, elementId: SettingId | null) => {
-    const r = flat[activeIndex];
-    return !!r && r.pageId === pageId && r.elementId === elementId;
-  };
-
+  const placeholder = t('settings.filter.placeholder', { defaultValue: 'Search settings…' });
   return (
     <>
       <div className="relative pb-2">
@@ -154,89 +283,24 @@ export function SettingsNavFilter({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={t('settings.filter.placeholder', { defaultValue: 'Search settings…' })}
-          aria-label={t('settings.filter.placeholder', { defaultValue: 'Search settings…' })}
+          placeholder={placeholder}
+          aria-label={placeholder}
           className="pl-8"
           data-testid="settings-filter-input"
         />
       </div>
-
-      {!normalized ? (
-        <SidebarMenu>
-          {pages.map((page) => {
-            const Icon = page.icon;
-            return (
-              <SidebarMenuItem key={page.id}>
-                <SidebarMenuButton
-                  isActive={activePageId === page.id}
-                  onClick={() => openPage(page.id)}
-                  data-testid={`${testIdPrefix}-nav-${page.id}`}
-                >
-                  <Icon className="icon-base" />
-                  <span>{page.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      ) : results.length === 0 ? (
-        <p className="text-muted-foreground px-3 py-2 text-sm" data-testid="settings-filter-empty">
-          {t('settings.filter.noResults', { defaultValue: 'No settings match' })}
-        </p>
-      ) : (
-        <SidebarMenu data-testid="settings-filter-results">
-          {results.map(({ page, elements }) => {
-            const Icon = page.icon;
-            return (
-              <SidebarMenuItem key={page.id}>
-                {/* While filtering, the highlighted row is the keyboard cursor. */}
-                <SidebarMenuButton
-                  isActive={isCursor(page.id, null)}
-                  onClick={() => openResult({ pageId: page.id, elementId: null })}
-                  data-testid={`${testIdPrefix}-nav-${page.id}`}
-                >
-                  <Icon className="icon-base" />
-                  <span>{page.label}</span>
-                </SidebarMenuButton>
-                {elements.length > 0 && (
-                  <SidebarMenuSub>
-                    {elements.map((entry) => (
-                      <SidebarMenuSubItem key={entry.id}>
-                        <SidebarMenuSubButton
-                          asChild
-                          size="sm"
-                          isActive={isCursor(page.id, entry.id)}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => openResult({ pageId: page.id, elementId: entry.id })}
-                            data-testid={`settings-filter-result-${entry.id}`}
-                          >
-                            <span>{tr.t(entry.title, entry.titleDefault ?? entry.title)}</span>
-                          </button>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    ))}
-                  </SidebarMenuSub>
-                )}
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      )}
-
+      <FilterList
+        filtering={!!normalized}
+        results={results}
+        cursor={flat[activeIndex]}
+        openResult={openResult}
+        pages={pages}
+        activePageId={activePageId}
+        openPage={openPage}
+        testIdPrefix={testIdPrefix}
+      />
       {other && otherCount > 0 && (
-        <div className="mt-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={openOther}
-            data-testid="settings-filter-cross-hint"
-          >
-            <span>{otherLabel}</span>
-            <ArrowRight className="icon-xs" />
-          </Button>
-        </div>
+        <CrossSurfaceHint scope={other.scope} count={otherCount} onOpen={openOther} />
       )}
     </>
   );

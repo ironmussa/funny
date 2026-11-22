@@ -15,7 +15,9 @@
 
 import {
   createPullRequestCi,
+  createRepoCheckOps,
   createRepoGithub,
+  REGRESSION_PROOF_CHECK,
   type CiState,
   type GithubCallError,
   type MergeMethod,
@@ -54,6 +56,33 @@ export interface FactoryMergeOptions {
   deleteBranch?: boolean;
   /** Only these checks must be green (the flow's `wait_ci.required_checks`); all when absent. */
   requiredChecks?: readonly string[];
+  /**
+   * Merge exactly this commit (the one the regression proof proved): a direct
+   * merge that GitHub refuses when the head moved.
+   */
+  sha?: string;
+  /**
+   * With `sha`: when GitHub refuses the direct merge for an unmet requirement
+   * (a review, checks still running), enable auto-merge, but only when GitHub
+   * holds the proof's check on the base branch, pinned to this App. Set only
+   * when the check was published for `sha`.
+   */
+  autoMergeWhenHeld?: boolean;
+}
+
+/** The pull request's head now, what it merges into, and whether auto-merge is on. */
+export interface FactoryPullHead {
+  sha: string;
+  baseRef: string;
+  autoMerge: boolean;
+}
+
+/** A regression proof's check run, published on its commit. */
+export interface FactoryProofCheck {
+  headSha: string;
+  conclusion: 'success' | 'failure';
+  title: string;
+  summary: string;
 }
 
 export type FactoryMergeOutcome =
@@ -84,6 +113,16 @@ export interface FactoryPullRequests {
   prState(
     pr: FactoryPullRequestRef,
   ): ResultAsync<'open' | 'merged' | 'closed', FactoryPullRequestError>;
+  /** The pull request's head commit now, its base branch, and whether auto-merge is on. */
+  pullHead(pr: FactoryPullRequestRef): ResultAsync<FactoryPullHead, FactoryPullRequestError>;
+  /**
+   * Publish the proof as the `funny/regression-proof` check run, with a
+   * server-only token that can write checks and nothing else.
+   */
+  publishProofCheck(
+    pr: FactoryPullRequestRef,
+    check: FactoryProofCheck,
+  ): ResultAsync<void, FactoryPullRequestError>;
   /** Merges only when the checks are green; otherwise answers `not-green` without acting. */
   merge(
     pr: FactoryPullRequestRef,
@@ -99,6 +138,10 @@ export interface FactoryPullRequestsDeps {
   issue(repo: string, ownerToken: string | null): ResultAsync<RepoToken, IssueError>;
   /** The personal token whose access caps the App token — in production `accessCapToken`. */
   ownerToken(userId: string, projectId: string): Promise<string | null>;
+  /** A token that may only write checks (`issueCheckPublisher`); absent: no check is published. */
+  issueCheckPublisher?(repo: string, ownerToken: string | null): ResultAsync<RepoToken, IssueError>;
+  /** The connected App's id, to tell a check pinned to it; absent or null: nothing is held. */
+  appId?(): ResultAsync<string | null, IssueError>;
   fetch?: typeof fetch;
   api?: string;
   /** Records each merge as a `factory.merge` activity of the enabler (default: the server's). */
@@ -185,15 +228,75 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
             : okAsync(token.token),
         );
 
+  const repoGithubFor = (pr: FactoryPullRequestRef, needs: AccessLevel) =>
+    createRepoGithub({
+      tokenFor: tokenFor(pr, needs),
+      fetch: deps.fetch,
+      api: deps.api,
+      userAgent: 'funny-issue-factory',
+    });
   const pullRequestsFor = (pr: FactoryPullRequestRef, needs: AccessLevel) =>
-    createPullRequestCi(
-      createRepoGithub({
-        tokenFor: tokenFor(pr, needs),
-        fetch: deps.fetch,
-        api: deps.api,
-        userAgent: 'funny-issue-factory',
-      }),
-    );
+    createPullRequestCi(repoGithubFor(pr, needs));
+
+  /** Whether GitHub holds the proof's check on `baseRef`, pinned to this App. */
+  const proofCheckHeld = (
+    pr: FactoryPullRequestRef,
+    baseRef: string,
+  ): ResultAsync<boolean, FactoryPullRequestError> => {
+    if (!deps.appId || !baseRef) return okAsync(false);
+    return deps
+      .appId()
+      .mapErr((error) => accessError(error, pr.repo))
+      .andThen((appId) =>
+        appId && /^\d+$/.test(appId)
+          ? createRepoCheckOps(repoGithubFor(pr, 'read'))
+              .isCheckHeldByApp(pr.repo, baseRef, REGRESSION_PROOF_CHECK, Number(appId))
+              .mapErr(callError)
+          : okAsync(false),
+      );
+  };
+
+  /**
+   * Merge `sha` directly. Refused because the head moved: not merged. Refused
+   * for an unmet requirement: auto-merge when allowed and GitHub holds the
+   * proof's check, else not merged with how to let the factory auto-merge.
+   */
+  const mergePinned = (
+    pr: FactoryPullRequestRef,
+    sha: string,
+    method: MergeMethod,
+    options: FactoryMergeOptions,
+  ): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> =>
+    createRepoCheckOps(repoGithubFor(pr, 'write'))
+      .pinnedMerge(pr.repo, pr.number, sha, method)
+      .mapErr(callError)
+      .andThen((result): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
+        if (result.kind === 'merged') {
+          return okAsync({ kind: 'merged', method: result.method, branchDeleted: false });
+        }
+        const refused = `GitHub refused to merge the proved commit ${sha}: ${result.reason}`;
+        if (result.headMoved || !options.autoMergeWhenHeld) {
+          return okAsync({ kind: 'not-mergeable', reason: refused });
+        }
+        return pullRequestsFor(pr, 'read')
+          .mergeState(pr.repo, pr.number)
+          .mapErr(callError)
+          .andThen((state) =>
+            state.headSha !== sha
+              ? okAsync<FactoryMergeOutcome, FactoryPullRequestError>({
+                  kind: 'not-mergeable',
+                  reason: `The pull request head moved from the proved commit ${sha}.`,
+                })
+              : proofCheckHeld(pr, state.baseRef).andThen((held) =>
+                  held
+                    ? autoMergeOrMerge(pullRequestsFor(pr, 'write'), pr, method, sha)
+                    : okAsync<FactoryMergeOutcome, FactoryPullRequestError>({
+                        kind: 'not-mergeable',
+                        reason: `${refused}. The factory enables auto-merge only where GitHub holds the proof: require the "${REGRESSION_PROOF_CHECK}" check from this GitHub App on ${state.baseRef || 'the base branch'} (a ruleset or branch protection).`,
+                      }),
+                ),
+          );
+      });
 
   return {
     ciState(pr, required) {
@@ -207,6 +310,49 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
         .mapErr(callError);
     },
 
+    pullHead(pr) {
+      return pullRequestsFor(pr, 'read')
+        .mergeState(pr.repo, pr.number)
+        .map((merge) => ({
+          sha: merge.headSha,
+          baseRef: merge.baseRef,
+          autoMerge: merge.autoMerge,
+        }))
+        .mapErr(callError);
+    },
+
+    publishProofCheck(pr, check) {
+      const issuer = deps.issueCheckPublisher;
+      if (!issuer) {
+        return errAsync<void, FactoryPullRequestError>({
+          kind: 'not-configured',
+          message: 'No check publisher is configured.',
+        });
+      }
+      const github = createRepoGithub({
+        tokenFor: (repo) =>
+          ResultAsync.fromSafePromise(deps.ownerToken(pr.userId, pr.projectId))
+            .andThen((ownerToken) =>
+              issuer(repo, ownerToken).mapErr((error) => accessError(error, repo)),
+            )
+            .map((token) => token.token),
+        fetch: deps.fetch,
+        api: deps.api,
+        userAgent: 'funny-issue-factory',
+      });
+      return createRepoCheckOps(github)
+        .createCheckRun({
+          repo: pr.repo,
+          headSha: check.headSha,
+          name: REGRESSION_PROOF_CHECK,
+          conclusion: check.conclusion,
+          title: check.title,
+          summary: check.summary,
+        })
+        .map(() => undefined)
+        .mapErr(callError);
+    },
+
     merge(pr, options = {}) {
       const github = pullRequestsFor(pr, 'write');
       return github
@@ -214,24 +360,14 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
         .mapErr(callError)
         .andThen((ci): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
           if (ci.kind !== 'green') return okAsync({ kind: 'not-green', ci });
-          return github
-            .enableAutoMerge(pr.repo, pr.number, options.method)
-            .mapErr(callError)
-            .andThen((result): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
-              if (result.kind === 'enabled') {
-                return okAsync({ kind: 'auto-merge-enabled', method: result.method });
-              }
-              if (result.kind !== 'merged') {
-                return okAsync({ kind: 'not-mergeable', reason: result.reason });
-              }
+          const merged = options.sha
+            ? mergePinned(pr, options.sha, options.method ?? 'squash', options)
+            : autoMergeOrMerge(github, pr, options.method);
+          return merged.andThen(
+            (outcome): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
+              if (outcome.kind !== 'merged') return okAsync(outcome);
               if (!options.deleteBranch || !pr.branch) {
-                return ResultAsync.fromSafePromise(recordMerge(pr, null, false)).map(
-                  (): FactoryMergeOutcome => ({
-                    kind: 'merged',
-                    method: result.method,
-                    branchDeleted: false,
-                  }),
-                );
+                return ResultAsync.fromSafePromise(recordMerge(pr, null, false)).map(() => outcome);
               }
               return github
                 .deleteBranch(pr.repo, pr.branch)
@@ -240,15 +376,30 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
                 .andThen((branchError) =>
                   // The merge stands; a branch left behind is not a failed merge.
                   ResultAsync.fromSafePromise(recordMerge(pr, branchError, !branchError)).map(
-                    (): FactoryMergeOutcome => ({
-                      kind: 'merged',
-                      method: result.method,
-                      branchDeleted: !branchError,
-                    }),
+                    (): FactoryMergeOutcome => ({ ...outcome, branchDeleted: !branchError }),
                   ),
                 );
-            });
+            },
+          );
         });
     },
   };
+}
+
+/** GitHub's auto-merge, or a merge now when the pull request already meets every requirement. */
+function autoMergeOrMerge(
+  github: ReturnType<typeof createPullRequestCi>,
+  pr: FactoryPullRequestRef,
+  method: MergeMethod | undefined,
+  /** Only this head: a push since it was proved enables nothing. */
+  expectedHeadSha?: string,
+): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> {
+  return github
+    .enableAutoMerge(pr.repo, pr.number, method, expectedHeadSha)
+    .mapErr(callError)
+    .map((result): FactoryMergeOutcome => {
+      if (result.kind === 'enabled') return { kind: 'auto-merge-enabled', method: result.method };
+      if (result.kind !== 'merged') return { kind: 'not-mergeable', reason: result.reason };
+      return { kind: 'merged', method: result.method, branchDeleted: false };
+    });
 }

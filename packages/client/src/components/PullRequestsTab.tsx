@@ -33,6 +33,7 @@ import { usePRDetail } from '@/data/pull-requests/hooks';
 import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { useGitHubProjectId } from '@/hooks/use-github-project-id';
 import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
+import { useStartThreadOnBranch } from '@/hooks/use-start-thread-on-branch';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { listRowClassName } from '@/lib/list-row-styles';
@@ -43,7 +44,6 @@ import {
   useThreadProjectId,
   useThreadWorktreePath,
 } from '@/stores/thread-context';
-import { useUIStore } from '@/stores/ui-store';
 
 import { PRDetailDialog } from './PRDetailDialog';
 
@@ -479,7 +479,7 @@ function PullRequestsProjectContent({ visible }: PullRequestsTabProps) {
   const { t } = useTranslation();
   const projectId = useGitHubProjectId();
   const currentUserLogin = useGitHubLogin();
-  const startNewThread = useUIStore((s) => s.startNewThread);
+  const startThreadOnBranch = useStartThreadOnBranch();
   const [selectedPR, setSelectedPR] = useState<GitHubPR | null>(null);
 
   const list = usePRList(visible, projectId);
@@ -489,9 +489,9 @@ function PullRequestsProjectContent({ visible }: PullRequestsTabProps) {
   const createThreadFromPRBranch = useCallback(
     (branch: string) => {
       if (!projectId) return;
-      startNewThread(projectId, false, branch);
+      startThreadOnBranch(projectId, branch);
     },
-    [projectId, startNewThread],
+    [projectId, startThreadOnBranch],
   );
 
   const renderPRRow = (pr: GitHubPR) => (

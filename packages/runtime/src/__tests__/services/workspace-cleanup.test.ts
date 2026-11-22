@@ -44,6 +44,7 @@ function setup(overrides: Partial<WorkspaceCleanupDeps> = {}) {
     invalidateSearchIndex: async () => {
       calls.push('invalidate');
     },
+    forgetSymbolIndex: () => {},
     removeWorktree: () => {
       calls.push('remove-worktree');
       return okAsync(undefined);

@@ -21,6 +21,8 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 import { Terminal as HeadlessTerminal } from '@xterm/headless';
 import type { Subprocess } from 'bun';
 
+import { NdjsonLineDecoder, SocketWriteQueue } from './pty-socket-framing.js';
+
 // ── Configuration ────────────────────────────────────────────────────
 
 const DATA_DIR = process.env.FUNNY_DATA_DIR
@@ -117,23 +119,35 @@ const sessions = new Map<string, DaemonSession>();
 const clients = new Set<import('bun').Socket>();
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-function broadcast(msg: Record<string, unknown>): void {
-  const line = JSON.stringify(msg) + '\n';
-  for (const client of clients) {
-    try {
-      client.write(line);
-    } catch {
-      // Client disconnected, will be cleaned up
+/** Per-client socket framing: NDJSON line reader + backpressure-aware writer. */
+interface ClientFraming {
+  reader: NdjsonLineDecoder;
+  writer: SocketWriteQueue;
+}
+const framing = new WeakMap<import('bun').Socket, ClientFraming>();
+
+function sendTo(socket: import('bun').Socket, msg: Record<string, unknown>): void {
+  writeLine(socket, JSON.stringify(msg) + '\n');
+}
+
+function writeLine(socket: import('bun').Socket, line: string): void {
+  const writer = framing.get(socket)?.writer;
+  if (!writer) return;
+  try {
+    if (!writer.write(line)) {
+      // The client stopped reading; drop it rather than buffer without bound.
+      // It reconnects and restores its terminals from a capture.
+      daemonLog(`[pty-daemon] Client write queue full (${writer.pendingBytes} bytes) — closing`);
+      socket.end();
     }
+  } catch {
+    // Client gone, will be cleaned up
   }
 }
 
-function sendTo(socket: import('bun').Socket, msg: Record<string, unknown>): void {
-  try {
-    socket.write(JSON.stringify(msg) + '\n');
-  } catch {
-    // Client gone
-  }
+function broadcast(msg: Record<string, unknown>): void {
+  const line = JSON.stringify(msg) + '\n';
+  for (const client of clients) writeLine(client, line);
 }
 
 // Defense-in-depth allowlist. The pty-manager (server) validates shellId
@@ -240,6 +254,8 @@ function spawnSession(cmd: SpawnCmd): void {
     }
 
     const id = cmd.id;
+    // PTY output chunks can end mid-character; decode as a stream.
+    const outputDecoder = new TextDecoder();
     const proc = Bun.spawn([shell, '-l'], {
       cwd,
       env: mergedEnv,
@@ -247,7 +263,8 @@ function spawnSession(cmd: SpawnCmd): void {
         cols,
         rows,
         data(_terminal, data) {
-          const str = data.toString();
+          const str = outputDecoder.decode(data, { stream: true });
+          if (str.length === 0) return;
           // Track state in headless terminal
           headless.write(str);
           // Broadcast to all connected servers
@@ -417,30 +434,23 @@ if (existsSync(SOCKET_PATH)) {
   }
 }
 
-// Per-client line buffer for NDJSON parsing
-const lineBuffers = new WeakMap<import('bun').Socket, string>();
-
 const server = Bun.listen({
   unix: SOCKET_PATH,
   socket: {
     open(socket) {
       clients.add(socket);
-      lineBuffers.set(socket, '');
+      framing.set(socket, {
+        reader: new NdjsonLineDecoder(),
+        writer: new SocketWriteQueue(socket),
+      });
       resetIdleTimer();
       daemonLog(`[pty-daemon] Client connected (total: ${clients.size})`);
     },
 
     data(socket, data) {
-      let buffer = (lineBuffers.get(socket) ?? '') + data.toString();
-
-      // Process complete NDJSON lines
-      let newlineIdx: number;
-      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, newlineIdx).trim();
-        buffer = buffer.slice(newlineIdx + 1);
-
-        if (line.length === 0) continue;
-
+      const reader = framing.get(socket)?.reader;
+      if (!reader) return;
+      for (const line of reader.push(data)) {
         try {
           const msg = JSON.parse(line) as DaemonCommand;
           handleCommand(socket, msg);
@@ -448,13 +458,15 @@ const server = Bun.listen({
           daemonLog(`[pty-daemon] Invalid message: ${line.slice(0, 200)}`);
         }
       }
+    },
 
-      lineBuffers.set(socket, buffer);
+    drain(socket) {
+      framing.get(socket)?.writer.drain();
     },
 
     close(socket) {
       clients.delete(socket);
-      lineBuffers.delete(socket);
+      framing.delete(socket);
       resetIdleTimer();
       daemonLog(`[pty-daemon] Client disconnected (total: ${clients.size})`);
     },

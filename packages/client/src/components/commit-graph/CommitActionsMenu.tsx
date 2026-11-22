@@ -9,6 +9,7 @@ import {
   Hash,
   History,
   MoreVertical,
+  Plus,
   RotateCcw,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -46,6 +47,10 @@ interface Props {
   localBranches?: string[];
   /** Local branches at this commit that can be used as merge/rebase targets. */
   targetBranches?: string[];
+  /** Branches at this commit a new thread can start from (see `threadBaseBranchesAt`). */
+  threadBranches?: string[];
+  /** Opens the new-thread composer on a branch. No "New thread" items without it. */
+  onCreateThreadFromBranch?: (branch: string) => void;
   rebaseEvents?: GitRebaseReflogEventDTO[];
   onSelectRebaseEvent?: (event: GitRebaseReflogEventDTO) => void;
   /** Reload the graph log after a mutating action. */
@@ -67,6 +72,7 @@ interface Props {
  * would be a fresh reference each render and churn referential equality. */
 const NO_BRANCHES: string[] = [];
 const NO_TARGET_BRANCHES: string[] = [];
+const NO_THREAD_BRANCHES: string[] = [];
 const NO_REBASE_EVENTS: GitRebaseReflogEventDTO[] = [];
 
 /**
@@ -87,6 +93,8 @@ export function CommitActionsMenu({
   projectModeId,
   localBranches = NO_BRANCHES,
   targetBranches = NO_TARGET_BRANCHES,
+  threadBranches = NO_THREAD_BRANCHES,
+  onCreateThreadFromBranch,
   rebaseEvents = NO_REBASE_EVENTS,
   onSelectRebaseEvent,
   onAfterAction,
@@ -118,16 +126,6 @@ export function CommitActionsMenu({
         ),
       () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
     );
-  const primaryRebaseEvent = rebaseEvents[0] ?? null;
-  const rebaseScopeLabel = primaryRebaseEvent ? rebaseEventScopeLabel(primaryRebaseEvent) : null;
-  const rebaseMenuLabel = primaryRebaseEvent
-    ? rebaseEvents.length > 1
-      ? t('graph.viewRebaseDetailsCount', {
-          count: rebaseEvents.length,
-          defaultValue: `View rebase details (${rebaseEvents.length})`,
-        })
-      : t('graph.viewRebaseDetails', 'View rebase details')
-    : null;
 
   return (
     <>
@@ -179,44 +177,23 @@ export function CommitActionsMenu({
               {t('history.viewOnGithub', 'View on GitHub')}
             </DropdownMenuItem>
           )}
-          {primaryRebaseEvent && onSelectRebaseEvent && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  onSelectRebaseEvent(primaryRebaseEvent);
-                  handleOpenChange(false);
-                }}
-                data-testid={`graph-commit-menu-rebase-details-${shortHash}`}
-              >
-                <GitBranch className="icon-sm" />
-                <span className="min-w-0 truncate">
-                  {rebaseScopeLabel ? `${rebaseMenuLabel}: ${rebaseScopeLabel}` : rebaseMenuLabel}
-                </span>
-              </DropdownMenuItem>
-            </>
+          {onSelectRebaseEvent && (
+            <RebaseDetailsItem
+              events={rebaseEvents}
+              shortHash={shortHash}
+              onSelect={(event) => {
+                onSelectRebaseEvent(event);
+                handleOpenChange(false);
+              }}
+            />
           )}
           {hasGitContext && (
             <>
-              {localBranches.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  {localBranches.map((branch) => (
-                    <DropdownMenuItem
-                      key={branch}
-                      onClick={() => void pushBranch(branch)}
-                      data-testid={`graph-commit-menu-push-${branch}`}
-                    >
-                      <CloudUpload className="icon-sm" />
-                      {t('graph.pushBranchToOrigin', {
-                        branch,
-                        defaultValue: `Push ${branch} to origin`,
-                      })}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
+              <PushBranchItems branches={localBranches} onPush={(b) => void pushBranch(b)} />
               <DropdownMenuSeparator />
+              {onCreateThreadFromBranch && (
+                <NewThreadItems branches={threadBranches} onCreate={onCreateThreadFromBranch} />
+              )}
               <DropdownMenuItem
                 onClick={() => setCreateBranchOpen(true)}
                 data-testid={`graph-commit-menu-create-branch-${shortHash}`}
@@ -293,4 +270,89 @@ export function CommitActionsMenu({
       />
     </>
   );
+}
+
+/** "View rebase details" for the commit's rebase events, or nothing when it has none. */
+function RebaseDetailsItem({
+  events,
+  shortHash,
+  onSelect,
+}: {
+  events: GitRebaseReflogEventDTO[];
+  shortHash: string;
+  onSelect: (event: GitRebaseReflogEventDTO) => void;
+}) {
+  const { t } = useTranslation();
+  const primary = events[0];
+  if (!primary) return null;
+  const label =
+    events.length > 1
+      ? t('graph.viewRebaseDetailsCount', {
+          count: events.length,
+          defaultValue: `View rebase details (${events.length})`,
+        })
+      : t('graph.viewRebaseDetails', 'View rebase details');
+  const scope = rebaseEventScopeLabel(primary);
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onClick={() => onSelect(primary)}
+        data-testid={`graph-commit-menu-rebase-details-${shortHash}`}
+      >
+        <GitBranch className="icon-sm" />
+        <span className="min-w-0 truncate">{scope ? `${label}: ${scope}` : label}</span>
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+/** One "Push <branch> to origin" item per local branch at the commit. */
+function PushBranchItems({
+  branches,
+  onPush,
+}: {
+  branches: string[];
+  onPush: (branch: string) => void;
+}) {
+  const { t } = useTranslation();
+  if (branches.length === 0) return null;
+  return (
+    <>
+      <DropdownMenuSeparator />
+      {branches.map((branch) => (
+        <DropdownMenuItem
+          key={branch}
+          onClick={() => onPush(branch)}
+          data-testid={`graph-commit-menu-push-${branch}`}
+        >
+          <CloudUpload className="icon-sm" />
+          {t('graph.pushBranchToOrigin', { branch, defaultValue: `Push ${branch} to origin` })}
+        </DropdownMenuItem>
+      ))}
+    </>
+  );
+}
+
+/** One "New thread from <branch>" item per branch a thread can start from. */
+function NewThreadItems({
+  branches,
+  onCreate,
+}: {
+  branches: string[];
+  onCreate: (branch: string) => void;
+}) {
+  const { t } = useTranslation();
+  return branches.map((branch) => (
+    <DropdownMenuItem
+      key={`new-thread:${branch}`}
+      onClick={() => onCreate(branch)}
+      data-testid={`graph-commit-menu-new-thread-${branch}`}
+    >
+      <Plus className="icon-sm" />
+      <span className="min-w-0 truncate">
+        {t('graph.newThreadFromBranch', { branch, defaultValue: `New thread from ${branch}` })}
+      </span>
+    </DropdownMenuItem>
+  ));
 }

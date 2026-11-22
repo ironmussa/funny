@@ -18,10 +18,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import type { RunnerPorts, StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { sandboxThreadLauncherFor } from '../thread-sandboxes/sandbox-thread-wiring.js';
-
-interface BrowserEventsPort {
-  toUser(userId: string, event: Record<string, unknown>): void;
-}
+import type { BrowserEventsPort } from './factory-thread-requests.js';
 
 export function factorySandboxLauncher(ports: RunnerPorts, browserEvents?: BrowserEventsPort) {
   return async (

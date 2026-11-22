@@ -2,6 +2,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -162,6 +163,7 @@ function ConnectedApp({
       <p className="text-muted-foreground text-xs">
         Install it on the repositories sandboxes will work on. Choose “Only select repositories”.
       </p>
+      <PermissionNotices status={status} />
       <div className="flex gap-2">
         {status.installUrl && (
           <Button asChild size="sm" data-testid="github-app-install">
@@ -188,6 +190,62 @@ function ConnectedApp({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * What keeps the issue factory from publishing its regression proof check: a
+ * permission the App lacks, or an installation that has not accepted it yet.
+ */
+function PermissionNotices({ status }: { status: GithubAppStatus }) {
+  const missing = status.missingPermissions ?? [];
+  const pending = status.pendingInstallations ?? [];
+  if (missing.length === 0 && pending.length === 0) return null;
+  const settingsLink = status.settingsUrl ? (
+    <a
+      href={status.settingsUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="ml-1 underline"
+      data-testid="github-app-missing-permissions-settings"
+    >
+      Open the App’s settings
+    </a>
+  ) : null;
+  return (
+    <>
+      {missing.length > 0 && (
+        <Alert data-testid="github-app-missing-permissions">
+          <AlertDescription className="space-y-1 text-xs">
+            <p>
+              The App lacks {missing.join(', ')}. The issue factory needs
+              <code className="mx-1">checks: write</code>to publish its regression proof check, and
+              never enables auto-merge without it.
+            </p>
+            <p>
+              Add it under Permissions in the App’s settings, then accept the new permission on each
+              installation.
+              {settingsLink}
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+      {missing.length === 0 && pending.length > 0 && (
+        <Alert data-testid="github-app-pending-installations">
+          <AlertDescription className="space-y-1 text-xs">
+            <p>
+              These installations have not accepted the App’s current permissions:{' '}
+              {pending.join(', ')}. Until their owner accepts them, the issue factory cannot publish
+              its regression proof check there and never enables auto-merge.
+            </p>
+            <p>
+              The owner accepts them from the installation’s page on GitHub (Settings &gt;
+              Applications &gt; Installed GitHub Apps).
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+    </>
   );
 }
 

@@ -560,15 +560,18 @@ function handleThreadStageChanged(threadId: string, data: any): void {
   });
 }
 
+/** A field that moves the thread; `null` counts (a removed worktree clears its path and branch). */
+const LOCATION_FIELDS = [
+  'branch',
+  'baseBranch',
+  'worktreePath',
+  'containerUrl',
+  'mergedAt',
+  'mode',
+];
+
 function hasLocationChange(data: any): boolean {
-  return !!(
-    data.branch ||
-    data.baseBranch ||
-    data.worktreePath ||
-    data.containerUrl ||
-    data.mergedAt ||
-    data.mode
-  );
+  return LOCATION_FIELDS.some((field) => data[field] !== undefined);
 }
 
 function patchPermissionMode(threadId: string, permissionMode: any): void {

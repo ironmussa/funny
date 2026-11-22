@@ -19,8 +19,10 @@
  * `--self-test` checks the allowed/forbidden fixtures.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+
+import { walkSources } from './walk-sources';
 
 const ROOT = join(import.meta.dir, '..', '..');
 const SERVER_SRC = 'packages/server/src';
@@ -88,15 +90,6 @@ export function classify(file: string, source: string): string[] {
     });
   }
   return violations;
-}
-
-function* walk(dir: string): Generator<string> {
-  for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === 'dist' || entry === '__tests__') continue;
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) yield* walk(full);
-    else if (/\.(ts|tsx)$/.test(entry)) yield full;
-  }
 }
 
 function runSelfTest(): void {
@@ -174,7 +167,7 @@ function main(): void {
   if (!existsSync(dir)) throw new Error(`missing ${SERVER_SRC}`);
   const violations: string[] = [];
   const allowlistHits = new Set<string>();
-  for (const abs of walk(dir)) {
+  for (const abs of walkSources(dir)) {
     const file = relative(ROOT, abs);
     const found = classify(file, readFileSync(abs, 'utf8'));
     if (!found.length) continue;

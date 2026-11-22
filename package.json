@@ -105,7 +105,7 @@
     "fitness:runner-request-sinks:test": "bun scripts/fitness/check-runner-request-sinks.ts --self-test",
     "fitness:status-writers": "bun scripts/fitness/check-status-writers.ts --self-test",
     "fitness:workspace-removal": "bun scripts/fitness/check-workspace-removal.ts --self-test",
-    "fitness:settings-index": "bun scripts/fitness/check-settings-index.ts --self-test",
+    "fitness:settings-index": "bun test scripts/fitness/check-settings-index.test.ts && bun scripts/fitness/check-settings-index.ts",
     "fitness:runner-transport": "bun scripts/fitness/check-runner-transport.ts",
     "fitness:agent-neutral-tools": "bun scripts/fitness/check-agent-neutral-tools.ts --self-test && bun scripts/fitness/check-agent-neutral-tools.ts",
     "fitness:runner-transport:test": "bun scripts/fitness/check-runner-transport.ts --self-test",

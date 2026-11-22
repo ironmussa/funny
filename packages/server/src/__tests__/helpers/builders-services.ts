@@ -2,12 +2,15 @@
  * Typed fixtures and test doubles for the server service tests
  * (`__tests__/services/**`), so the tests do not need type assertions.
  */
+import { readFileSync } from 'node:fs';
+
 import type { WSEvent } from '@funny/shared';
 import type { StartAgentPayload } from '@funny/shared/runner-protocol';
 import { SANDBOX_STATES, type SandboxState } from '@funny/shared/sandbox-machine';
 import { err, ok, type Result } from 'neverthrow';
 import type { Server as SocketIOServer } from 'socket.io';
 
+import type { FactoryFlowRunsDeps } from '../../services/factory/factory-flow-runs.js';
 import type {
   RunnerPorts,
   StartThreadError,
@@ -152,4 +155,38 @@ export function markerEvent(
   // SAFETY: the gRPC transport and the server's event relay pass `data` through
   // without reading it for these event types; the tests assert it arrives unchanged.
   return { type, threadId, data } as any;
+}
+
+/** A runner proof service whose every regression proof passes at once. */
+export const passingProof: NonNullable<FactoryFlowRunsDeps['proof']> = () => ({
+  startProof: async () => ok({ proofId: 'proof-1', state: 'done' }),
+  pollProof: async () =>
+    ok({
+      state: 'done',
+      result: {
+        verdict: 'pass',
+        headSha: 'sha-head',
+        files: [],
+        commands: [],
+        baseSha: 'abc',
+        outputTail: '',
+      },
+    }),
+});
+
+/**
+ * The built-in `issue-to-merge` flow as a repository copy with one proof rule,
+ * so it is proof-ready and its merge step may merge (the built-in has no rules).
+ */
+export function proofReadyFlowFiles(): Record<string, string> {
+  const builtIn = readFileSync(
+    new URL('../../../../workflows/defaults/issue-to-merge.yaml', import.meta.url),
+    'utf8',
+  );
+  const withRule = builtIn.replace(
+    '    regression_proof:\n',
+    "    regression_proof:\n      rules:\n        - globs: ['**/*.test.ts']\n          command: 'bun test {{files}}'\n",
+  );
+  if (withRule === builtIn) throw new Error('issue-to-merge.yaml has no regression_proof step');
+  return { '.funny/workflows/issue-to-merge.yaml': withRule };
 }

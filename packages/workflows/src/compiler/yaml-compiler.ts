@@ -37,7 +37,7 @@ import {
 import type { AgentDefinition } from '@funny/shared';
 
 import type { ParsedNode, ParsedWorkflow } from '../schema.js';
-import type { PipelineContext } from './action-provider.js';
+import type { ActionResult, PipelineContext, RegressionProofOpts } from './action-provider.js';
 import { approvalNode } from './approval.js';
 
 // ── Compile-time errors ─────────────────────────────────────
@@ -295,33 +295,74 @@ async function dispatchGithubNode(
   yamlNode: ParsedNode,
   ctx: YamlPipelineContext,
   scope: TemplateScope,
+  parsed: ParsedWorkflow,
 ): Promise<NodeOutput | null> {
-  const provider = ctx.provider;
-
-  if (yamlNode.wait_ci) {
-    const opts = interpolateObject(yamlNode.wait_ci, scope);
-    const result = await provider.waitCi({
-      timeoutMs: opts.timeout_ms,
-      intervalMs: opts.interval_ms,
-      requiredChecks: opts.required_checks,
-    });
-    if (!result.ok) throw new Error(`wait_ci[${yamlNode.id}] failed: ${result.error}`);
-    return { output: result.output ?? '', json: result.metadata };
+  if (yamlNode.wait_ci)
+    return githubOutput(yamlNode, 'wait_ci', await waitCi(yamlNode, ctx, scope));
+  if (yamlNode.merge)
+    return githubOutput(yamlNode, 'merge', await merge(yamlNode, ctx, scope, parsed));
+  if (yamlNode.regression_proof) {
+    return githubOutput(yamlNode, 'regression_proof', await regressionProof(yamlNode, ctx, scope));
   }
-
-  if (yamlNode.merge) {
-    const opts = interpolateObject(yamlNode.merge, scope);
-    const result = await provider.merge({
-      method: opts.method,
-      deleteBranch: opts.delete_branch,
-      auto: opts.auto,
-      execution: ctx.execution,
-    });
-    if (!result.ok) throw new Error(`merge[${yamlNode.id}] failed: ${result.error}`);
-    return { output: result.output ?? '', json: result.metadata };
-  }
-
   return null;
+}
+
+/** A GitHub action's result as the node's output; a failure is the step's error. */
+function githubOutput(yamlNode: ParsedNode, kind: string, result: ActionResult): NodeOutput {
+  if (!result.ok) throw new Error(`${kind}[${yamlNode.id}] failed: ${result.error}`);
+  return { output: result.output ?? '', json: result.metadata };
+}
+
+function waitCi(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: TemplateScope) {
+  const opts = interpolateObject(yamlNode.wait_ci!, scope);
+  return ctx.provider.waitCi({
+    timeoutMs: opts.timeout_ms,
+    intervalMs: opts.interval_ms,
+    requiredChecks: opts.required_checks,
+  });
+}
+
+function merge(
+  yamlNode: ParsedNode,
+  ctx: YamlPipelineContext,
+  scope: TemplateScope,
+  parsed: ParsedWorkflow,
+) {
+  const opts = interpolateObject(yamlNode.merge!, scope);
+  const proofNode = parsed.nodes.find((n) => n.regression_proof !== undefined);
+  return ctx.provider.merge({
+    method: opts.method,
+    deleteBranch: opts.delete_branch,
+    auto: opts.auto,
+    execution: ctx.execution,
+    requireRegressionProof: opts.require_regression_proof ?? true,
+    regressionProof: proofNode
+      ? regressionProofOpts(interpolateObject(proofNode.regression_proof!, scope))
+      : undefined,
+  });
+}
+
+function regressionProof(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: TemplateScope) {
+  if (!ctx.provider.regressionProof) {
+    throw new Error(`regression_proof[${yamlNode.id}]: the provider does not support this action`);
+  }
+  const opts = interpolateObject(yamlNode.regression_proof!, scope);
+  return ctx.provider.regressionProof(regressionProofOpts(opts));
+}
+
+/** A `regression_proof` step's YAML configuration as provider options. */
+export function regressionProofOpts(
+  opts: NonNullable<ParsedNode['regression_proof']>,
+): RegressionProofOpts {
+  return {
+    rules: opts.rules ?? [],
+    supportGlobs: opts.support_globs,
+    requireTest: opts.require_test,
+    labels: opts.labels,
+    exemptLabels: opts.exempt_labels,
+    setupCommand: opts.setup_command,
+    timeoutMs: opts.timeout_ms,
+  };
 }
 
 async function dispatch(
@@ -418,7 +459,7 @@ async function dispatch(
   const lifecycle = await dispatchThreadLifecycleNode(yamlNode, ctx, scope);
   if (lifecycle) return lifecycle;
 
-  const github = await dispatchGithubNode(yamlNode, ctx, scope);
+  const github = await dispatchGithubNode(yamlNode, ctx, scope, parsed);
   if (github) return github;
 
   if (yamlNode.pipeline) {

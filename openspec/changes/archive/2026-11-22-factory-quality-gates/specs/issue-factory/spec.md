@@ -7,22 +7,32 @@
 A flow SHALL be able to declare a `regression_proof` step, configured in the flow file with one
 or more rules (the globs that identify test files, a test command containing a `{{files}}`
 placeholder, and the directory the command runs in), the globs of test support files, and
-whether a changed test is required (`always`, for issues with a configured label, or never).
+whether a changed test is required (`always`, the default, for issues with a configured label,
+or never), and labels whose issues need no test whatever that setting says (the built-in flows
+require a test of every issue except those labelled `docs` or `chore`).
 The step SHALL run on the run's runner, outside any agent thread, against the run's pull
 request:
 
 1. It SHALL collect the test files the pull request changes relative to its base (added or
    modified files matching a rule's globs), each assigned to the first rule that matches it.
-2. It SHALL run each such rule's command on its files in a temporary checkout of the pull
+2. It SHALL run each such rule's command on its files in a temporary checkout of the head
+   commit, twice, and SHALL require every command to pass both times.
+3. It SHALL then run the same commands on the same files in a temporary checkout of the pull
    request's base commit into which only those test files and the changed test support files
-   were copied from the head commit, and SHALL require at least one command to fail.
-3. It SHALL run the same commands on the same files in a checkout of the head commit, and SHALL
-   require every command to pass.
+   were copied from the head commit, and SHALL require at least one command to fail by an
+   assertion. A base run that times out, or whose test file cannot load (a missing module, a
+   syntax error), SHALL NOT count as a failure of the test.
+
+Both checkouts SHALL be prepared the same way before their tests: the step's setup command, or
+else the head's project configuration setup (`postCreate`).
 
 The verdict SHALL be `pass` only when both runs behave as required. It SHALL be `fail` with one
 finding when a test is required and no test file changed, when the tests pass on the base
-("the tests do not catch the bug"), when they fail on the head, when the checkout's setup fails,
-or when the proof cannot be run or read. When no test file changed and none is required, the
+("the tests do not catch the bug"), when they fail on the head or pass there once and then fail
+("the tests are flaky"), when they fail on the base only by a timeout or a load error
+(inconclusive), when the checkout's setup fails, or when the proof cannot be run or read. A
+`fail` SHALL say whether the implementing agent can fix it (its test) or not (the environment:
+setup, git, time), and only the former SHALL be retried with the agent. When no test file changed and none is required, the
 verdict SHALL be `skipped`, recorded with that reason. Every temporary checkout SHALL be removed
 whatever the outcome, and the proof SHALL have a time limit; a proof that exceeds it SHALL have
 the verdict `fail` with a timeout finding.
@@ -38,6 +48,26 @@ the verdict `fail` with a timeout finding.
 - **WHEN** the changed test files pass on the base commit with the files copied in
 - **THEN** the verdict is `fail` with the finding that the tests do not catch the bug, and the
   run does not merge on this proof
+
+#### Scenario: A test that only times out or cannot load on the base proves nothing
+
+- **WHEN** the changed test passes twice on the head, and on the base it times out, or fails
+  because a module it imports does not exist there
+- **THEN** the verdict is `fail` with an inconclusive finding, and the run does not merge on
+  this proof
+
+#### Scenario: A flaky test proves nothing
+
+- **WHEN** the changed test passes on the head once and fails on the second run
+- **THEN** the verdict is `fail` with the finding that the tests are flaky
+
+#### Scenario: An unlabelled issue needs a test; a docs issue does not
+
+- **WHEN** a run of a built-in flow is for an issue without labels and its pull request changes
+  no test file
+- **THEN** the verdict is `fail` with the finding that no regression test was added
+- **WHEN** the issue is labelled `docs` or `chore` instead
+- **THEN** the verdict is `skipped` and the run continues
 
 #### Scenario: A changed fixture does not make the proof pass
 

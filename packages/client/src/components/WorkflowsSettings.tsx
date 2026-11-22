@@ -716,6 +716,7 @@ const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string,
   merge: {},
   approval: { message: '' },
   pipeline: { name: '' },
+  regression_proof: {},
 };
 
 function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]): Record<string, unknown> {

@@ -38,6 +38,7 @@ import {
 import { stopCommandsByCwd } from './command-runner.js';
 import { projectSearchRegistry } from './project-search-registry.js';
 import { killPtysUnderPath } from './pty-manager.js';
+import { forgetProjectIndex } from './symbol-index-service.js';
 
 export interface WorkspaceCleanupRequest {
   userId: string;
@@ -65,6 +66,8 @@ export interface WorkspaceCleanupDeps {
   stopCommandsByCwd: (cwd: string) => Promise<string[]>;
   killPtysUnderPath: (dir: string) => string[];
   invalidateSearchIndex: (cwd: string) => Promise<void>;
+  /** Evicts the cached symbol index of a removed directory (#408). */
+  forgetSymbolIndex: (dir: string) => void;
   removeDirectory: (dir: string) => Promise<void>;
   pathExists: (path: string) => boolean;
   trackActivity: typeof defaultTrackActivity;
@@ -96,6 +99,9 @@ const defaultDeps: WorkspaceCleanupDeps = {
         });
       },
     ),
+  forgetSymbolIndex: (dir) => {
+    forgetProjectIndex(dir);
+  },
   removeDirectory: (dir) => rm(dir, { recursive: true, force: true }),
   pathExists: existsSync,
   trackActivity: defaultTrackActivity,
@@ -145,6 +151,7 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
     for (const terminal of deps.killPtysUnderPath(dir)) {
       effects.push({ effect: 'terminal-closed', target: terminal });
     }
+    deps.forgetSymbolIndex(dir);
     await deps.invalidateSearchIndex(dir);
   }
 

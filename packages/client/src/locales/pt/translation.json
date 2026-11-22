@@ -26,6 +26,8 @@
     "reopenProject": "Reabrir projeto",
     "closedProjects": "Projetos fechados",
     "rename": "Renomear",
+    "threadActions": "Ações do thread",
+    "projectActions": "Ações do projeto",
     "openDirectory": "Abrir diretório",
     "openTerminal": "Abrir terminal",
     "openInEditor": "Abrir no {{editor}}",
@@ -1695,7 +1697,8 @@
       "failed": "Bloqueada por {{blockers}}, cuja run falhou ou foi parada",
       "otherRepo": "Bloqueada por {{blockers}} em outro repositório",
       "circular": "Dependência circular com {{blockers}}",
-      "unreadable": "Não foi possível ler as bloqueadoras no GitHub"
+      "unreadable": "Não foi possível ler as bloqueadoras no GitHub",
+      "proofNotConfigured": "Prova de regressão não configurada: o fluxo não tem regras de prova, então nunca faria merge"
     },
     "selectIssue": "Selecionar #{{number}} para o factory",
     "queuePosition": "{{label}} · #{{position}}",
@@ -1738,6 +1741,20 @@
       "redRate": "Rodadas de CI vermelhas",
       "conflictRate": "Runs com conflito",
       "agentFixes": "Correções do agente por run"
+    },
+    "proof": {
+      "title": "Prova de regressão",
+      "pass": "Aprovada",
+      "fail": "Falhou",
+      "skipped": "Ignorada",
+      "passSummary": "Os testes alterados passam neste commit e falham sem a correção.",
+      "files": "Testes",
+      "evidence": "Comandos e a falha sem a correção",
+      "details": "Comandos e saída"
+    },
+    "noChange": {
+      "title": "O agente não fez nenhuma alteração",
+      "body": "Não abriu um pull request nem fez commits. A explicação dele está publicada na issue #{{issue}}: feche a issue ou tente o run de novo."
     }
   },
   "projectSecrets": {

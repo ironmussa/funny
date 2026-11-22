@@ -255,23 +255,32 @@ export function SettingsNavFilter({
     other.openPage(first.page.id);
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') {
-      if (query) setQuery('');
-      return;
-    }
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (flat.length > 0) {
-        setCursor({ query: normalized, index: moveCursor(activeIndex, e.key, flat.length) });
-      }
-      return;
-    }
-    if (e.key !== 'Enter' || !normalized) return;
-    e.preventDefault();
+  const clearQuery = () => {
+    if (query) setQuery('');
+  };
+
+  const moveTo = (key: 'ArrowDown' | 'ArrowUp') => {
+    if (flat.length === 0) return;
+    setCursor({ query: normalized, index: moveCursor(activeIndex, key, flat.length) });
+  };
+
+  // Enter opens the result under the cursor, else the other scope's first match.
+  const openCursor = () => {
     const target = flat[activeIndex];
     if (target) openResult(target);
     else if (otherCount > 0) openOther();
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') return clearQuery();
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      return moveTo(e.key);
+    }
+    if (e.key === 'Enter' && normalized) {
+      e.preventDefault();
+      openCursor();
+    }
   };
 
   const placeholder = t('settings.filter.placeholder', { defaultValue: 'Search settings…' });

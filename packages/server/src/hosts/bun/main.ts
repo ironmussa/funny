@@ -393,5 +393,6 @@ async function startIssueFactory(
     ports,
     github: createFactoryGithub(ports),
     launchSandbox: factorySandboxLauncher(ports, browserEvents),
+    browserEvents,
   });
 }

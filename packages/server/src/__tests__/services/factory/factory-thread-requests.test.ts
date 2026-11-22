@@ -153,7 +153,10 @@ describe('factory thread requests', () => {
       runner('r-alice', 'alice');
       worktreeThread('t1');
 
-      await cleanupFactoryWorktrees(ports(), 'alice', ['t1', 't1']);
+      const events: Array<{ userId: string; event: Record<string, unknown> }> = [];
+      await cleanupFactoryWorktrees(ports(), 'alice', ['t1', 't1'], {
+        toUser: (userId, event) => events.push({ userId, event }),
+      });
 
       expect(requests.requests.map((r) => r.runnerId)).toEqual(['r-alice']);
       expect(requests.requests[0]!.request).toMatchObject({
@@ -169,6 +172,16 @@ describe('factory thread requests', () => {
         threadId: 't1',
       });
       expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
+      expect(events).toEqual([
+        {
+          userId: 'alice',
+          event: {
+            type: 'thread:updated',
+            threadId: 't1',
+            data: { worktreePath: null, branch: null },
+          },
+        },
+      ]);
     });
 
     test("leaves running, local, sandbox and other users' threads alone", async () => {
@@ -188,8 +201,13 @@ describe('factory thread requests', () => {
       runner('r-alice', 'alice');
       worktreeThread('t1');
       requests.response = { status: 500, headers: {}, body: '', bodyEncoding: 'utf8' };
+      const events: unknown[] = [];
 
-      await cleanupFactoryWorktrees(ports(), 'alice', ['t1']);
+      await cleanupFactoryWorktrees(ports(), 'alice', ['t1'], {
+        toUser: (_userId, event) => events.push(event),
+      });
+
+      expect(events).toEqual([]);
 
       expect(await row('t1')).toMatchObject({
         worktreePath: '/srv/wt/t1',

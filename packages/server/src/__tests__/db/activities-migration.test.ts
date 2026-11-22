@@ -30,7 +30,7 @@ describe('105_activities migration', () => {
   });
 });
 
-describe('106_activities_origin_effects migration', () => {
+describe('107_activities_origin_effects migration', () => {
   test('rows written before it read as user-started with no effects', async () => {
     const { initDatabase } = await import('../../db/index.js');
     await initDatabase({ sqlitePath: ':memory:' });
@@ -45,7 +45,7 @@ describe('106_activities_origin_effects migration', () => {
     run(
       sql`INSERT INTO activities (id, user_id, kind, title, started_at, updated_at) VALUES ('a', 'u', 'project.clone', 'Clone', '2026-01-01', '2026-01-01')`,
     );
-    run(sql`DELETE FROM _migrations WHERE name = '106_activities_origin_effects'`);
+    run(sql`DELETE FROM _migrations WHERE name = '107_activities_origin_effects'`);
     await autoMigrate();
 
     expect(

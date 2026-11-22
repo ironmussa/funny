@@ -22,12 +22,18 @@ import type { PipelineDefinition } from '@funny/pipelines';
 import type { FactoryFlowDefinition } from '@funny/shared/contracts/factory';
 import {
   formatParseError,
+  isProofReady,
   loadWorkflowCatalog,
   parseWorkflowYaml,
   type ParsedWorkflow,
   type WorkflowIssue,
 } from '@funny/workflows';
-import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
+import {
+  compileYamlPipeline,
+  regressionProofOpts,
+  type RegressionProofOpts,
+  type YamlPipelineContext,
+} from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
 
 export type FactoryFlowError =
@@ -52,6 +58,10 @@ export interface FactoryFlow {
   pipeline: PipelineDefinition<YamlPipelineContext>;
   /** Parse warnings of the flow: logged by the caller, they block nothing. */
   warnings: WorkflowIssue[];
+  /** Whether its merge may happen: a proof with rules, or the explicit opt-out (`isProofReady`). */
+  proofReady: boolean;
+  /** Its `regression_proof` step's configuration, when it has one (the watcher re-proves with it). */
+  regressionProof?: RegressionProofOpts;
 }
 
 type FlowNode = ParsedWorkflow['nodes'][number];
@@ -95,6 +105,39 @@ function agentStepIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
   return issues;
 }
 
+/** The prompts of the agents a node may run, with the path of each. */
+function agentPrompts(node: FlowNode, index: number): Array<{ path: string; prompt: string }> {
+  const prompts = [
+    { path: `nodes.${index}.spawn_agent.prompt`, prompt: node.spawn_agent?.prompt },
+    { path: `nodes.${index}.retry.before_retry.prompt`, prompt: node.retry?.before_retry?.prompt },
+    { path: `nodes.${index}.approval.on_reject.prompt`, prompt: node.approval?.on_reject?.prompt },
+  ];
+  return prompts.filter((p): p is { path: string; prompt: string } => !!p.prompt);
+}
+
+/**
+ * Repository copies made before a run got its own worktree branch tell the
+ * agent to create "a new branch named {{branch}}". The agent now starts on
+ * that branch, so the instruction is wrong (it still works: the agent finds
+ * the branch checked out). Warn so the copy gets the built-in's wording.
+ */
+function staleBranchWordingIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
+  return workflow.nodes.flatMap((node, index) =>
+    agentPrompts(node, index)
+      .filter(({ prompt }) => /\bnew branch\b/i.test(prompt))
+      .map(({ path }) => ({
+        path,
+        message:
+          'The prompt asks for a new branch, but a factory run already starts its agent on that branch. Use the wording of the built-in flow: "Work on the branch `{{branch}}`. You may already be on it".',
+      })),
+  );
+}
+
+function proofConfigOf(workflow: ParsedWorkflow): RegressionProofOpts | undefined {
+  const step = workflow.nodes.find((node) => node.regression_proof)?.regression_proof;
+  return step ? regressionProofOpts(step) : undefined;
+}
+
 function compile(
   yaml: string,
   origin: string,
@@ -107,7 +150,12 @@ function compile(
       name: parsed.workflow.name,
       source,
       pipeline: compileYamlPipeline(parsed.workflow),
-      warnings: parsed.warnings,
+      warnings:
+        source === 'repository'
+          ? [...parsed.warnings, ...staleBranchWordingIssues(parsed.workflow)]
+          : parsed.warnings,
+      proofReady: isProofReady(parsed.workflow),
+      regressionProof: proofConfigOf(parsed.workflow),
     });
   } catch (error) {
     return err({

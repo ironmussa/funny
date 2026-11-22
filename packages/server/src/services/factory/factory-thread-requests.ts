@@ -16,12 +16,15 @@
  * A follow-up to a sandbox stopped while idle wakes it first, as the proxy does.
  */
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
-import { err, type Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
+import { authorizedRunnerRequests, runnerActor, withRunnerFor } from '../runner-access/index.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { sendToThreadRunner, type ThreadRunnerError } from '../thread-runner-requests.js';
 import { sandboxWaker } from '../thread-sandboxes/sandbox-lifecycle.js';
@@ -32,6 +35,11 @@ import {
 
 const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 
+/** Where the cleanup announces a changed thread row to its owner's browsers. */
+export interface BrowserEventsPort {
+  toUser(userId: string, event: Record<string, unknown>): void;
+}
+
 /** POST `path` (a thread route) to the thread's runner, as `userId`. */
 function postToThread(
   ports: RunnerPorts,
@@ -40,6 +48,95 @@ function postToThread(
   body: unknown,
 ): Promise<Result<void, ThreadRunnerError>> {
   return sendToThreadRunner(ports, userId, { method: 'POST', path, body });
+}
+
+/** A runner's JSON error body (`resultToResponse`). */
+const runnerErrorBody = z.object({ error: z.string() });
+
+/** The `error` of a runner's JSON error body, so a refusal says why (a branch mismatch). */
+function runnerErrorText(body: string | null | undefined): string | null {
+  if (!body) return null;
+  const parsed = parseStoredJson(runnerErrorBody, body, 'runner error');
+  return parsed.ok ? parsed.value.error.slice(0, 500) : null;
+}
+
+/** Start a regression proof job on the thread's runner. Returns the proof id. */
+export async function startRegressionProofOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  threadId: string,
+  body: Record<string, unknown>,
+): Promise<Result<{ proofId: string; state: string }, string>> {
+  const sink = authorizedRunnerRequests(ports.requests);
+  const path = `/api/threads/${threadId}/regression-proof`;
+  try {
+    const sent = await withRunnerFor(
+      runnerActor({ userId }),
+      { kind: 'request', path, query: {} },
+      ports.presence,
+      (actor, runner, proof) =>
+        sink.send(actor, runner, proof, {
+          method: 'POST',
+          path,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+    );
+    if (sent.isErr()) return err(`runner unavailable: ${sent.error.reason}`);
+    if (sent.value.status >= 400) {
+      const reason = runnerErrorText(sent.value.body);
+      return err(`runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`);
+    }
+    const parsed = parseStoredJson(
+      z.object({ proofId: z.string(), state: z.string() }),
+      sent.value.body ?? '{}',
+      'proof start response',
+    );
+    if (!parsed.ok) return err('invalid proof start response');
+    return ok(parsed.value);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Poll a regression proof job on the thread's runner. */
+export async function pollRegressionProofOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  threadId: string,
+  proofId: string,
+): Promise<Result<{ state: string; result?: unknown }, string>> {
+  const sink = authorizedRunnerRequests(ports.requests);
+  const path = `/api/threads/${threadId}/regression-proof/${proofId}`;
+  try {
+    const sent = await withRunnerFor(
+      runnerActor({ userId }),
+      { kind: 'request', path, query: {} },
+      ports.presence,
+      (actor, runner, proof) =>
+        sink.send(actor, runner, proof, {
+          method: 'GET',
+          path,
+          headers: {},
+          body: null,
+        }),
+    );
+    if (sent.isErr()) return err(`runner unavailable: ${sent.error.reason}`);
+    if (sent.value.status === 404) return err('proof-not-found');
+    if (sent.value.status >= 400) {
+      const reason = runnerErrorText(sent.value.body);
+      return err(`runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`);
+    }
+    const parsed = parseStoredJson(
+      z.object({ state: z.string(), result: z.unknown().optional() }),
+      sent.value.body ?? '{}',
+      'proof poll response',
+    );
+    if (!parsed.ok) return err('invalid proof poll response');
+    return ok(parsed.value);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Stop the running agent threads among `threadIds` (a stopped run). */
@@ -113,11 +210,15 @@ export async function sendFactoryFollowUp(
  * following up) keeps its checkout. Best effort: a runner that is offline
  * leaves them in place (recorded as a failed cleanup), and the merge is not
  * affected.
+ *
+ * Each cleared thread is announced to its owner as `thread:updated`, so an
+ * open thread view stops pointing at the removed worktree without a reload.
  */
 export async function cleanupFactoryWorktrees(
   ports: RunnerPorts,
   userId: string,
   threadIds: string[],
+  browserEvents?: BrowserEventsPort,
 ): Promise<void> {
   if (threadIds.length === 0) return;
   const rows = await db
@@ -161,10 +262,50 @@ export async function cleanupFactoryWorktrees(
       continue;
     }
     await clearThreadWorkspace(thread.id);
+    browserEvents?.toUser(userId, {
+      type: 'thread:updated',
+      threadId: thread.id,
+      data: { worktreePath: null, branch: null },
+    });
     log.info('Removed a merged factory run worktree', {
       namespace: 'factory',
       threadId: thread.id,
       branch: thread.branch,
+    });
+  }
+}
+
+/** Stop a regression proof job on the thread's runner (best effort: a failure is logged). */
+export async function cancelRegressionProofOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  threadId: string,
+  proofId: string,
+): Promise<void> {
+  const sink = authorizedRunnerRequests(ports.requests);
+  const path = `/api/threads/${threadId}/regression-proof/${proofId}`;
+  try {
+    const sent = await withRunnerFor(
+      runnerActor({ userId }),
+      { kind: 'request', path, query: {} },
+      ports.presence,
+      (actor, runner, proof) =>
+        sink.send(actor, runner, proof, { method: 'DELETE', path, headers: {}, body: null }),
+    );
+    if (sent.isErr() || (sent.value.status >= 400 && sent.value.status !== 404)) {
+      log.warn('Issue factory could not stop a regression proof', {
+        namespace: 'factory',
+        threadId,
+        proofId,
+        error: sent.isErr() ? sent.error.reason : `runner answered ${sent.value.status}`,
+      });
+    }
+  } catch (error) {
+    log.warn('Issue factory could not stop a regression proof', {
+      namespace: 'factory',
+      threadId,
+      proofId,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 }

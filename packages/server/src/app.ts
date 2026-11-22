@@ -8,6 +8,7 @@
 
 import { createHash } from 'crypto';
 
+import { FRAME_SRC, frameAncestorsFor } from '@funny/shared/frame-policy';
 import { VISUALIZER_IMPORT_MAP_JSON } from '@funny/shared/visualizer-importmap';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -124,10 +125,12 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
         connectSrc: ["'self'"],
         fontSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
-        frameAncestors: ["'none'"],
+        // Only the raw-file response may be framed, and only by the app (#222).
+        frameAncestors: [(c) => frameAncestorsFor(c.req.path)],
         baseUri: ["'self'"],
         formAction: ["'self'"],
-        frameSrc: ["'none'"],
+        // Same-origin frames only: the PDF preview iframes `/api/files/raw` (#222).
+        frameSrc: FRAME_SRC,
       },
       // Satteri's WASM workers share memory, requiring cross-origin isolation.
       crossOriginOpenerPolicy: 'same-origin',

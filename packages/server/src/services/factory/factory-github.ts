@@ -29,6 +29,7 @@ import { createSandboxRunnerCalls } from '../thread-sandboxes/sandbox-runner-cal
 import { createFactoryPullRequests, type FactoryPullRequests } from './factory-pull-requests.js';
 import {
   createFactoryRepoReads,
+  labelNames,
   type FactoryPullRequestFound,
   type PullRequestLookup,
   type RepoIssue,
@@ -39,6 +40,8 @@ export interface FactoryIssue {
   number: number;
   title: string;
   url: string;
+  /** The issue's label names, when known (a flow's `require_test: labels` reads them). */
+  labels?: string[];
 }
 
 /** One issue as GitHub has it now: what a send and the queue check before admitting. */
@@ -95,6 +98,14 @@ export interface FactoryGithubPort {
     branch: string,
     state?: PullRequestLookup,
   ): ResultAsync<FactoryPullRequestFound | null, GithubCallError>;
+  /** Whether `branch` has commits the DEFAULT branch does not (none when it is absent). */
+  branchAhead(reader: FactoryRepoReader, branch: string): ResultAsync<boolean, GithubCallError>;
+  /** Comment on an issue, as the App. */
+  commentOnIssue(
+    reader: FactoryRepoReader,
+    issueNumber: number,
+    body: string,
+  ): ResultAsync<void, GithubCallError>;
   /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
   pullRequests: FactoryPullRequests;
 }
@@ -107,6 +118,7 @@ interface RawIssue {
   title: string;
   html_url: string;
   pull_request?: unknown;
+  labels?: Array<string | { name?: string }>;
 }
 
 /** Open, labelled issues from GitHub, oldest first, with PRs filtered out. */
@@ -146,7 +158,12 @@ function fetchIssues(
       // GitHub's issues endpoint also returns PRs; they carry `pull_request`.
       raw
         .filter((i) => !i.pull_request)
-        .map((i) => ({ number: i.number, title: i.title, url: i.html_url })),
+        .map((i) => ({
+          number: i.number,
+          title: i.title,
+          url: i.html_url,
+          labels: labelNames(i.labels),
+        })),
     );
   });
 }
@@ -206,7 +223,15 @@ export function createFactoryGithub(
     listDefaultBranchDir: (reader, path) => reads(reader).listDefaultBranchDir(path),
     readDefaultBranchFile: (reader, path) => reads(reader).readDefaultBranchFile(path),
     findPullRequest: (reader, branch, state) => reads(reader).findPullRequest(branch, state),
+    branchAhead: (reader, branch) => reads(reader).branchAhead(branch),
+    commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
 
-    pullRequests: createFactoryPullRequests({ issue, ownerToken, fetch: fetchImpl }),
+    pullRequests: createFactoryPullRequests({
+      issue,
+      ownerToken,
+      issueCheckPublisher: (repo, token) => tokenIssuer.issueCheckPublisher(repo, token),
+      appId: () => tokenIssuer.appId(),
+      fetch: fetchImpl,
+    }),
   };
 }

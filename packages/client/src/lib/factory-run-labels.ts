@@ -64,6 +64,11 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
       return t('factory.wait.circular', 'Circular dependency with {{blockers}}', { blockers });
     case 'blockers-unreadable':
       return t('factory.wait.unreadable', 'Its blockers could not be read from GitHub');
+    case 'proof-not-configured':
+      return t(
+        'factory.wait.proofNotConfigured',
+        'Regression proof not configured: its flow has no proof rules, so it would never merge',
+      );
   }
 }
 
@@ -82,6 +87,14 @@ const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
  * Whether the run's pipeline stopped on an error: it failed, or it waits for
  * the member after a failure (the flow's `on_failure` parked it).
  */
+/** The failure reason a run parks with when the agent made no change (no commit, no PR). */
+const NO_CHANGE_REASON = 'no change';
+
+/** The agent found nothing to change: the run waits for the member, explained on the issue. */
+export function isFactoryRunNoChange(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
+  return run.state === 'waiting_human' && run.failureReason === NO_CHANGE_REASON;
+}
+
 export function isFactoryRunFailed(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
   return run.state === 'failed' || (run.state === 'waiting_human' && run.failureReason !== null);
 }
@@ -132,7 +145,7 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   stopped: 'ended',
 };
 
-export const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [
+const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [
   'waiting',
   'active',
   'queue',
@@ -154,4 +167,33 @@ export function groupFactoryRuns<R extends FactoryRun>(
   for (const run of runs) groups[SECTION_OF[run.state]].push(run);
   groups.queue.sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0));
   return groups;
+}
+
+/** What the factory view filters its runs by. */
+export interface FactoryRunFilter {
+  /** Matches the issue number (a leading `#` is ignored), the project name or the current step. */
+  search: string;
+  caseSensitive: boolean;
+  /** The states to keep; empty keeps every state. */
+  states: ReadonlySet<string>;
+  projectNameById: ReadonlyMap<string, string>;
+}
+
+/** The runs the factory view shows, in its order (waiting, in progress, queue, failed, ended). */
+export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
+  runs: R[],
+  { search, caseSensitive, states, projectNameById }: FactoryRunFilter,
+): R[] {
+  const fold = (text: string) => (caseSensitive ? text : text.toLowerCase());
+  const needle = fold(search.trim().replace(/^#/, ''));
+  const matchesSearch = (run: R) =>
+    !needle ||
+    String(run.issueNumber).includes(needle) ||
+    fold(projectNameById.get(run.projectId) ?? '').includes(needle) ||
+    fold(run.currentStep ?? '').includes(needle);
+  const kept = runs.filter(
+    (run) => (states.size === 0 || states.has(run.state)) && matchesSearch(run),
+  );
+  const groups = groupFactoryRuns(kept);
+  return FACTORY_QUEUE_SECTIONS.flatMap((section) => groups[section]);
 }

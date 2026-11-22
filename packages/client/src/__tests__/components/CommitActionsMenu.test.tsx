@@ -122,4 +122,49 @@ describe('CommitActionsMenu', () => {
       'Rebase current branch onto master',
     );
   });
+
+  test('starts a new thread from a branch at the commit', () => {
+    const onCreateThreadFromBranch = vi.fn();
+    renderWithProviders(
+      <CommitActionsMenu
+        hash="1111111111111111111111111111111111111111"
+        shortHash="1111111"
+        githubUrl={null}
+        projectModeId="p1"
+        threadBranches={['feat/x']}
+        onCreateThreadFromBranch={onCreateThreadFromBranch}
+        onAfterAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    const item = screen.getByTestId('graph-commit-menu-new-thread-feat/x');
+    expect(item).toHaveTextContent('New thread from feat/x');
+    fireEvent.click(item);
+    expect(onCreateThreadFromBranch).toHaveBeenCalledWith('feat/x');
+  });
+
+  test('hides new-thread items without a handler', () => {
+    renderWithProviders(
+      <CommitActionsMenu
+        hash="1111111111111111111111111111111111111111"
+        shortHash="1111111"
+        githubUrl={null}
+        projectModeId="p1"
+        threadBranches={['feat/x']}
+        onAfterAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(screen.queryByTestId('graph-commit-menu-new-thread-feat/x')).not.toBeInTheDocument();
+  });
 });

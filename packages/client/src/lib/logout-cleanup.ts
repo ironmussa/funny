@@ -1,6 +1,7 @@
 import { PREFERENCE_KEYS } from '@funny/client-core';
 
 import { LOG_LEVEL_STORAGE_KEY, LOG_NAMESPACE_STORAGE_PREFIX } from '@/lib/log-level-keys';
+import { discardPendingPersistWrites } from '@/stores/throttled-json-storage';
 
 /**
  * What survives a logout: preferences of the device, not of the account.
@@ -27,6 +28,8 @@ function isKept(key: string): boolean {
 
 /** Remove every stored key except the device preferences above. */
 export function clearUserClientState(storage: Storage): void {
+  // A throttled store write still pending would put the user's state back.
+  discardPendingPersistWrites();
   const keys: string[] = [];
   for (let i = 0; i < storage.length; i++) {
     const key = storage.key(i);

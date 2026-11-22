@@ -14,8 +14,10 @@
  * Exits non-zero on violation. `--self-test` checks the allowed/forbidden fixtures.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+
+import { walkSources } from './walk-sources';
 
 const ROOT = join(import.meta.dir, '..', '..');
 const SERVER_SRC = 'packages/server/src';
@@ -64,15 +66,6 @@ export function classifyOuter(spec: string): string | null {
   const entry = match[2];
   if (entry === 'index' || entry === 'composition') return null;
   return `import modules/${match[1]} through index or composition, not ${entry}`;
-}
-
-function* walk(dir: string): Generator<string> {
-  for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === 'dist' || entry === '__tests__') continue;
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) yield* walk(full);
-    else if (/\.(ts|tsx)$/.test(entry)) yield full;
-  }
 }
 
 function importsOf(source: string): Array<{ spec: string; line: number }> {
@@ -138,7 +131,7 @@ if (import.meta.main) {
   const modulesAbs = join(ROOT, MODULES_DIR);
 
   if (existsSync(modulesAbs)) {
-    for (const file of walk(join(ROOT, SERVER_SRC))) {
+    for (const file of walkSources(join(ROOT, SERVER_SRC))) {
       const rel = relative(ROOT, file);
       const source = readFileSync(file, 'utf8');
       const insideModule = rel.startsWith(`${MODULES_DIR}/`)

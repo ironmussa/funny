@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import type { PromptAttachmentsHandle } from '@/components/prompt-input/use-prompt-attachments';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 
@@ -86,6 +87,7 @@ function usePromptInputHandlers({
 /** Draft persistence + submit/editor handlers for one composer editor. */
 export function usePromptEditorSession({
   editorRef,
+  attachmentsRef,
   effectiveThreadId,
   threadIdRef,
   stopRecordingRef,
@@ -96,6 +98,7 @@ export function usePromptEditorSession({
   onContentChange,
 }: {
   editorRef: RefObject<PromptEditorHandle | null>;
+  attachmentsRef: RefObject<PromptAttachmentsHandle | null>;
   effectiveThreadId: string | undefined;
   threadIdRef: MutableRefObject<string | undefined>;
   stopRecordingRef: MutableRefObject<() => void>;
@@ -107,6 +110,7 @@ export function usePromptEditorSession({
 }) {
   const { hasSubmittedRef, clearPromptDraft } = usePromptDraft({
     editorRef,
+    attachmentsRef,
     effectiveThreadId,
     threadIdRef,
     stopRecordingRef,

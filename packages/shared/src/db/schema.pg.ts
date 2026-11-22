@@ -353,6 +353,8 @@ export const factoryRuns = pgTable('factory_runs', {
   failureReason: text('failure_reason'),
   /** JSON counters of the run's integration (`FactoryRunMetrics`), or null before any. */
   metrics: text('metrics'),
+  /** JSON: the last regression proof of the run (`RegressionProofRecord`). */
+  regressionProof: text('regression_proof'),
 });
 
 /**

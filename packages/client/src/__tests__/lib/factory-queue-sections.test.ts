@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
-import { groupFactoryRuns } from '@/lib/factory-run-labels';
+import { filterFactoryRuns, groupFactoryRuns } from '@/lib/factory-run-labels';
 
 describe('groupFactoryRuns (the factory view)', () => {
   test('groups runs by what the member sees, the ended ones last', () => {
@@ -25,5 +25,42 @@ describe('groupFactoryRuns (the factory view)', () => {
     expect(ids('queue')).toEqual(['first', 'second']);
     expect(ids('failed')).toEqual(['broken']);
     expect(ids('ended')).toEqual(['done', 'cancelled']);
+  });
+});
+
+describe('filterFactoryRuns (the factory view)', () => {
+  const runs = [
+    { ...buildFactoryRun({ id: 'a', issueNumber: 12, state: 'merged' }), projectId: 'p1' },
+    {
+      ...buildFactoryRun({ id: 'b', issueNumber: 7, state: 'working', currentStep: 'Implement' }),
+      projectId: 'p2',
+    },
+    { ...buildFactoryRun({ id: 'c', issueNumber: 30, state: 'requested' }), projectId: 'p1' },
+  ];
+  const projectNameById = new Map([
+    ['p1', 'Funny'],
+    ['p2', 'Other'],
+  ]);
+  const ids = (search: string, opts: { caseSensitive?: boolean; states?: string[] } = {}) =>
+    filterFactoryRuns(runs, {
+      search,
+      caseSensitive: opts.caseSensitive ?? false,
+      states: new Set(opts.states ?? []),
+      projectNameById,
+    }).map((run) => run.id);
+
+  test('keeps every run in the view order without a filter', () => {
+    expect(ids('')).toEqual(['b', 'c', 'a']);
+  });
+
+  test('matches the issue number (with or without #), the project and the step', () => {
+    expect(ids('#12')).toEqual(['a']);
+    expect(ids('funny')).toEqual(['c', 'a']);
+    expect(ids('implement')).toEqual(['b']);
+    expect(ids('implement', { caseSensitive: true })).toEqual([]);
+  });
+
+  test('keeps only the chosen states', () => {
+    expect(ids('', { states: ['merged', 'requested'] })).toEqual(['c', 'a']);
   });
 });

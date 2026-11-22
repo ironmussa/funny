@@ -66,7 +66,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     const sessionId = c.req.param('sessionId');
     const { readExternalClaudeTranscript } =
       await import('../services/external-claude-sessions.js');
-    const transcript = readExternalClaudeTranscript(sessionId);
+    const transcript = await readExternalClaudeTranscript(sessionId);
     if (!transcript) return c.json({ error: 'External Claude Code session not found' }, 404);
     return c.json({ transcript });
   });

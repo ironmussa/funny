@@ -71,8 +71,13 @@ await cp(
 );
 
 // Copy pty-daemon.ts to dist/ — pty-daemon-launcher starts it as a separate Bun
-// process, so it cannot be bundled into the main runtime entry.
+// process, so it cannot be bundled into the main runtime entry. Its socket
+// framing module is imported relatively, so it is copied alongside.
 await cp(join(ROOT, 'src', 'services', 'pty-daemon.ts'), join(DIST, 'pty-daemon.ts'));
+await cp(
+  join(ROOT, 'src', 'services', 'pty-socket-framing.ts'),
+  join(DIST, 'pty-socket-framing.ts'),
+);
 
 // Copy deepagent-server.ts to dist/ — it's spawned as a subprocess by DeepAgentProcess
 // and resolved via __dirname (which points to dist/ in production)
@@ -98,5 +103,6 @@ for (const output of result.outputs) {
 }
 console.info(`  ${join(DIST, 'pty-helper.mjs')} (copied)`);
 console.info(`  ${join(DIST, 'pty-daemon.ts')} (copied)`);
+console.info(`  ${join(DIST, 'pty-socket-framing.ts')} (copied)`);
 console.info(`  ${join(DIST, 'deepagent-server.ts')} (copied)`);
 console.info(`  ${join(DIST, 'deepagent-skills/')} (copied)`);

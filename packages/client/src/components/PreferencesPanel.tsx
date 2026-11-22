@@ -12,6 +12,7 @@ import {
   SettingsNavFilter,
   type OtherSettingsSurface,
 } from '@/components/settings/SettingsNavFilter';
+import { useLeaveSettings } from '@/components/settings/use-leave-settings';
 import {
   usePreferencesNavPages,
   useProjectSettingsNavPages,
@@ -19,7 +20,6 @@ import {
 import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { buildPath } from '@/lib/url';
-import { useSettingsFilterStore } from '@/stores/settings-filter-store';
 import { useUIStore } from '@/stores/ui-store';
 
 export {
@@ -38,9 +38,7 @@ export function PreferencesPanelBody() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const activePreferencesPage = useUIStore((s) => s.activePreferencesPage) as GeneralPage;
-  const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
-  const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
-  const resetFilter = useSettingsFilterStore((s) => s.reset);
+  const leave = useLeaveSettings('/');
   const pages = usePreferencesNavPages();
   const project = useProjectSettingsNavPages();
 
@@ -63,16 +61,7 @@ export function PreferencesPanelBody() {
       <SidebarHeader className="px-4 py-3">
         <div className="flex items-center gap-2">
           <TooltipIconButton
-            onClick={() => {
-              // Don't close the overlay imperatively — let route-sync close it
-              // AFTER the URL becomes the thread route. Closing it here reveals
-              // ThreadView one render before the URL updates, flashing the empty
-              // new-thread compose input. See use-view-route-sync.ts.
-              const target = settingsReturnPath ?? '/';
-              setSettingsReturnPath(null);
-              resetFilter();
-              navigate(buildPath(target));
-            }}
+            onClick={leave}
             className="text-muted-foreground hover:text-foreground"
             data-testid="preferences-back"
             tooltip={t('common.back')}

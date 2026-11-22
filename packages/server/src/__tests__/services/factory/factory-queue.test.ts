@@ -5,6 +5,7 @@
  * launcher + fake poll, real test DB.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 import type { IssueBlocker } from '@funny/core/github-app';
 import { errAsync, okAsync } from 'neverthrow';
@@ -24,6 +25,8 @@ import {
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
 import {
   launchedThread,
+  passingProof,
+  proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
@@ -90,10 +93,14 @@ function fakeGithub(script: Script = {}): FakeGithub {
     readDefaultBranchFile: (_reader: unknown, path: string) =>
       script.repoUnreadable
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
-        : okAsync(script.repoFiles?.[path] ?? null),
+        : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
+    branchAhead: () => okAsync(true),
+    commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
       prState: () => okAsync('open' as const),
+      pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+      publishProofCheck: () => okAsync(undefined),
       ciState: () => okAsync({ kind: 'green' as const }),
       merge: () => {
         port.merges++;
@@ -173,6 +180,7 @@ async function setUp(
     resolveRuntime: async () => 'local' as const,
     waitThread: opts.waitThread ?? pendingThreads,
     notify: async () => undefined,
+    proof: passingProof,
   });
   // The tests fire the tick themselves: a send does not poke the factory here.
   const queue = createFactoryQueue({ wake: async () => {} });
@@ -564,6 +572,23 @@ describe('pause, clear and stop all', () => {
 });
 
 describe('blocked issues', () => {
+  test('a sent issue whose flow has no proof rules stays queued, and says why', async () => {
+    const builtIn = readFileSync(
+      new URL('../../../../../workflows/defaults/issue-to-merge.yaml', import.meta.url),
+      'utf8',
+    );
+    const { factoryId, queue, launcher, tick } = await setUp({
+      script: { repoFiles: { '.funny/workflows/issue-to-merge.yaml': builtIn } },
+    });
+    await queue.submit(factoryId, { issueNumbers: [1], flowName: 'issue-to-merge' });
+
+    await tick();
+    expect(launcher.issues()).toEqual([]);
+    const run = await runFor(factoryId, 1);
+    expect(run.state).toBe('requested');
+    expect(run.waitReason).toEqual({ kind: 'proof-not-configured', blockers: [] });
+  });
+
   test('a blocked issue waits and does not hold up the next one', async () => {
     const { factoryId, queue, launcher, tick } = await setUp({
       maxConcurrent: 1,

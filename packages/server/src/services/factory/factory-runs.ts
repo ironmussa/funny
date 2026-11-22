@@ -16,6 +16,8 @@
  */
 import {
   EMPTY_FACTORY_RUN_METRICS,
+  factoryRegressionProofSchema,
+  type FactoryRegressionProof,
   type FactoryRunMetrics,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
@@ -62,6 +64,7 @@ const WAIT_REASON_SCHEMA = z.object({
     'blocker-other-repo',
     'circular',
     'blockers-unreadable',
+    'proof-not-configured',
   ]),
   blockers: z.array(z.number().int()),
 });
@@ -182,6 +185,8 @@ export interface FactoryRunView {
   failureReason: string | null;
   /** How integrating its pull request went (CI rounds, conflicts, agent fixes). */
   metrics: FactoryRunMetrics;
+  /** The last regression proof of its pull request, or null. */
+  regressionProof: RegressionProofRecord | null;
 }
 
 export type FactoryRunSource = 'manual' | 'label';
@@ -214,6 +219,7 @@ const toView = (row: Row): FactoryRunView => ({
   flowSteps: parseStepNames(row.flowSteps ?? null),
   failureReason: row.failureReason ?? null,
   metrics: parseMetrics(row.metrics ?? null),
+  regressionProof: parseRegressionProof(row.regressionProof ?? null),
 });
 
 function parseWaitReason(raw: string | null): FactoryWaitReason | null {
@@ -234,6 +240,16 @@ function parseMetrics(raw: string | null): FactoryRunMetrics {
   return parsed.ok ? parsed.value : { ...EMPTY_FACTORY_RUN_METRICS };
 }
 
+function parseRegressionProof(raw: string | null): RegressionProofRecord | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(
+    factoryRegressionProofSchema,
+    raw,
+    'factory_runs.regression_proof',
+  );
+  return parsed.ok ? parsed.value : null;
+}
+
 function parseStepNames(raw: string | null): string[] {
   if (!raw) return [];
   const parsed = parseStoredJson(STEP_NAMES_SCHEMA, raw, 'factory_runs.flow_steps');
@@ -251,6 +267,9 @@ export interface StartRunInput {
   flowName?: string;
 }
 
+/** What the run stores of a regression proof (the contract's shape). */
+export type RegressionProofRecord = FactoryRegressionProof;
+
 export interface UpdateRunInput {
   state?: FactoryRunState;
   currentStep?: string | null;
@@ -260,11 +279,12 @@ export interface UpdateRunInput {
   flowSteps?: string[];
   failureReason?: string | null;
   metrics?: FactoryRunMetrics;
+  regressionProof?: RegressionProofRecord;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
 const PLAIN_FIELDS = ['currentStep', 'prUrl', 'launchStartedAt', 'failureReason'] as const;
-const JSON_FIELDS = ['threadIds', 'flowSteps', 'metrics'] as const;
+const JSON_FIELDS = ['threadIds', 'flowSteps', 'metrics', 'regressionProof'] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
   const changes: Partial<Row> = {};
@@ -371,6 +391,7 @@ function queueOperations(newId: () => string) {
             flowSteps: null,
             failureReason: null,
             metrics: null,
+            regressionProof: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -609,6 +630,7 @@ export function createFactoryRunsRepository(
         flowSteps: null,
         failureReason: null,
         metrics: null,
+        regressionProof: null,
       };
       return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
         toView(row),
@@ -704,6 +726,18 @@ export function createFactoryRunsRepository(
      */
     recordParkedPr(runId: string, prUrl: string): ResultAsync<boolean, FactoryRunsError> {
       return updateFromParked(runId, { prUrl });
+    },
+
+    /**
+     * The proof of a parked run's new head (re-proved while it waits on
+     * auto-merge), and why it cannot merge, or null. Only while it is parked.
+     */
+    recordParkedProof(
+      runId: string,
+      proof: RegressionProofRecord,
+      failureReason: string | null,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return updateFromParked(runId, { regressionProof: JSON.stringify(proof), failureReason });
     },
 
     /** One run by its id, or null. */

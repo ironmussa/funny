@@ -74,19 +74,33 @@ the repository (not generic, and no structured verdict); asking the agent to run
 
 ### 2. Base phase in a temporary worktree; head phase in the thread's worktree
 
+- **Setup:** both phases run in detached temporary worktrees under the project's worktree root,
+  prepared alike: the step's `setup_command` when set, else the head checkout's project
+  configuration setup (its `postCreate` commands, e.g. `bun install`, as a thread worktree). A
+  failing setup command fails the proof as an environment failure.
+- **Head first:** a temporary worktree at `headSha`; every command must pass, twice (a test that
+  passes once and fails once is flaky and proves nothing). When the head fails, the base says
+  nothing, so it is not run.
 - **Base:** `base = git merge-base origin/<defaultBranch> <headSha>` after a fetch, so commits
-  merged to the default branch since the run started do not change the result. A detached
-  temporary worktree is created at `base` under the project's worktree root, the changed test
-  files and changed test support files are copied in from `headSha`
-  (`git checkout <headSha> -- <files>`), the project's worktree setup runs there (its
-  `postCreate` commands, e.g. `bun install`), and then the commands.
-- **Head:** the thread's own worktree, which is already set up, provided it is clean and its
-  `HEAD` is `headSha`; otherwise a second temporary worktree at `headSha` with the same setup.
+  merged to the default branch since the run started do not change the result. A temporary
+  worktree at `base` gets the changed test files and changed test support files from `headSha`
+  (`git checkout <headSha> -- <files>`). At least one command must fail by an assertion: a run
+  that times out, or whose output says a test file could not load (missing module, syntax
+  error), is inconclusive and fails the proof.
+- **Budget:** `timeout_ms` bounds the whole proof on the runner (setup and every run of both
+  phases); the server waits that long plus a minute, and stops the runner's job when it gives up
+  or the run is stopped.
+- **Verdicts the agent can fix** (`failureKind: test`: fails on the head, flaky, passes on the
+  base, inconclusive on the base, no test when one is required) are retried with the
+  implementer; environment failures (setup, git, time, the runner) are not.
 - Both temporary worktrees are removed in a `finally`, including on timeout (the process group is
-  killed first). A sweep at runner start removes leftovers by their name prefix.
+  killed first). Before a runner process's first proof in a project, a sweep removes the leftovers
+  of a killed process by their name prefix.
 
-_Why not both phases in temporary worktrees?_ Correct but doubles the setup time (installs) on
-every proof; the thread's worktree is at the head already. _Why not the base phase in the
+_Why both phases in temporary worktrees?_ It doubles the setup time (installs) on every proof,
+but the thread's worktree is not prepared like a fresh base checkout (its dependencies, build
+output and untracked files differ), and such a difference can make the base fail for a reason
+that is not the bug. Two checkouts prepared alike leave the code as the only difference. _Why not the base phase in the
 thread's worktree (stash, checkout base)?_ It mutates the checkout the run's next step uses, and
 a crash halfway leaves it on the wrong commit; the branch guard would then refuse the run.
 
@@ -125,12 +139,13 @@ configured" at `merge` (decision 6).
       - globs: ['**/*.test.ts']
         command: 'bun test {{files}}'
     support_globs: ['**/__fixtures__/**', '**/testing/**']
-    require_test: labels # always | labels | never
-    labels: [bug]
+    require_test: always # always (default) | labels | never
+    exempt_labels: [docs, chore] # issues that need no test
+    setup_command: 'bun install --frozen-lockfile' # optional; default: the .funny.json postCreate
     timeout_ms: 600000
   retry:
     max_attempts: 3
-    should_retry: "$contains(error, 'Regression proof')"
+    should_retry: "$contains(error, 'Regression proof failed')"
     before_retry:
       prompt: |
         The regression proof of the pull request from `{{branch}}` failed:
@@ -274,11 +289,12 @@ still merge an unproven commit.
 ## Risks / Trade-offs
 
 - [The base phase fails for a reason other than the bug: the test imports a symbol the fix adds,
-  or setup fails] → Setup failures make the verdict `fail` with a setup finding, never `pass`.
-  Support files are copied so a missing fixture is not the reason. A module-load failure still
-  counts as failing on the base; the output tail is stored and shown so the reviewer and the
-  member can see what failed. A stricter rule (assertion failures only) is not generic across
-  test runners; revisit with data.
+  setup fails, or it hangs] → Setup failures make the verdict `fail` with a setup finding, never
+  `pass`. Support files are copied so a missing fixture is not the reason. A timeout or an
+  output that says a test file could not load is inconclusive, so the agent is asked for a test
+  that loads on the base and fails there by an assertion. The load-error detection reads the
+  output (`Cannot find module`, `SyntaxError`, …): it is a heuristic across test runners; an
+  unrecognised load error still counts as a failure, and the output tail is stored and shown.
 - [Every repository must write its rules before its factory works again, the built-in flows
   included] → Admission stops with a visible blocker instead of wasting runs; the guide gives
   rule examples for common runners; the opt-out is one line. This is the price of a gate that
@@ -293,11 +309,12 @@ still merge an unproven commit.
   proof for pull requests the factory did not open is future work.
 - [Repositories with a merge queue] → Not supported behind the gate (decision 9); they park or
   opt out.
-- [Proof time: an install plus two test runs per attempt] → Only the changed test files run; the
-  head phase reuses the thread's worktree; `timeout_ms` bounds it.
-- [Flaky tests] → A flaky test can pass on the base and fail the proof; the finding goes to the
-  implementer, who is asked to make the test deterministic. A retry of the base run is not added:
-  a test that sometimes passes on the buggy code does not prove the fix.
+- [Proof time: two installs plus three test runs per attempt] → Only the changed test files run;
+  `timeout_ms` bounds the whole proof.
+- [Flaky tests] → The head runs twice, so a test that fails on one of them fails the proof as
+  flaky; the finding goes to the implementer, who is asked to make the test deterministic. A
+  retry of the base run is not added: a test that sometimes passes on the buggy code does not
+  prove the fix.
 - [A runner restart loses the job] → The poll gets 404 and the server starts it once more; a
   second loss is a `fail` with a runner finding.
 - [Disk use from temporary worktrees] → Removed in `finally`, swept on runner start.
@@ -345,5 +362,6 @@ requests; and that the watcher's interval fits well inside the queue's check tim
 
 ## Open Questions
 
-- Default `require_test` for runs whose issue has no label: `never` in the built-ins for now;
-  revisit once triage (from `factory-agent-roles`) classifies issues as bug / feature.
+- Which labels exempt an issue from a regression test: `docs` and `chore` in the built-ins
+  (every other issue, labelled or not, needs one); revisit once triage (from
+  `factory-agent-roles`) classifies issues.

@@ -24,6 +24,7 @@ function isAnyRouteActive(parsed: ParsedRoute): boolean {
     parsed.workflowsProjectId ||
     parsed.liveColumns ||
     parsed.scheduler ||
+    parsed.factory ||
     parsed.addProject ||
     parsed.externalClaudeSessionId,
   );

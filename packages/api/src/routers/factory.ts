@@ -38,6 +38,11 @@ export const factoryRouter = router({
   activeRuns: protectedProcedure.query(async ({ ctx }) =>
     unwrap(await ctx.ports.factory.activeRuns(ctx.userId)),
   ),
+  // The factory view: the caller's own runs across projects, queued ones too.
+  // Scoped by factory owner, like `activeRuns`.
+  queueRuns: protectedProcedure.query(async ({ ctx }) =>
+    unwrap(await ctx.ports.factory.queueRuns(ctx.userId)),
+  ),
   // Stopping or retrying acts on the caller's own factory, which runs in their
   // name: the same `steer` as saving it.
   stopRun: projectProcedure('steer', CONTROL_FORBIDDEN)

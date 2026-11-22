@@ -515,6 +515,35 @@ export function createFactoryRunsRepository(
       ).map((rows) => rows.map(({ run }) => toView(run)));
     },
 
+    /**
+     * What the factory view lists: every run of `userId`'s factories that has
+     * not ended (queued, in flight, or waiting for the member), or failed within
+     * `FAILED_RUN_WINDOW_MS`, with the project its factory belongs to.
+     */
+    queueForOwner(
+      userId: string,
+      now: number = Date.now(),
+    ): ResultAsync<Array<FactoryRunView & { projectId: string }>, FactoryRunsError> {
+      const failedSince = new Date(now - FAILED_RUN_WINDOW_MS).toISOString();
+      return ResultAsync.fromPromise(
+        db
+          .select({ run: factoryRuns, projectId: factorySettings.projectId })
+          .from(factoryRuns)
+          .innerJoin(factorySettings, eq(factorySettings.id, factoryRuns.factoryId))
+          .where(
+            and(
+              eq(factorySettings.userId, userId),
+              or(
+                notInArray(factoryRuns.state, [...TERMINAL_STATES]),
+                and(eq(factoryRuns.state, 'failed'), gte(factoryRuns.completedAt, failedSince)),
+              ),
+            ),
+          )
+          .orderBy(desc(factoryRuns.startedAt)),
+        storage,
+      ).map((rows) => rows.map(({ run, projectId }) => ({ ...toView(run), projectId })));
+    },
+
     /** The non-terminal run for an issue, if any — the admission dedup check. */
     activeByIssue(
       factoryId: string,

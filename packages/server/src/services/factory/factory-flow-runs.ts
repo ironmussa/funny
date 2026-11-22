@@ -33,7 +33,7 @@
 
 import { nullReporter, runPipeline, type ConcurrencyGate } from '@funny/pipelines';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
-import { and, asc, eq, gte, like } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
@@ -125,6 +125,8 @@ interface FlowTrace {
   prOpen: boolean;
   /** The last step the flow entered. */
   step: string | null;
+  /** A step left the run for a person itself (e.g. `no change`): the end keeps that. */
+  parked: boolean;
 }
 
 /** Allowance for the runner's clock being behind the server's when matching a launch. */
@@ -139,6 +141,17 @@ async function threadCompletedAt(threadId: string): Promise<string | null> {
     .from(threads)
     .where(eq(threads.id, threadId));
   return row?.completedAt ?? null;
+}
+
+/** The thread's last assistant message, or null when it has none. */
+async function lastThreadMessage(threadId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ content: messages.content })
+    .from(messages)
+    .where(and(eq(messages.threadId, threadId), eq(messages.role, 'assistant')))
+    .orderBy(desc(messages.timestamp))
+    .limit(1);
+  return row?.content ?? null;
 }
 
 /** A user message on the thread since `since`: an interrupted follow-up reached it. */
@@ -336,6 +349,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const neverRan = !trace.agentsRan && !wasReopened(job);
     if (outcome === 'failed' && neverRan) {
       await dropUnstarted(job, error);
+    } else if (outcome === 'failed' && trace.parked) {
+      await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
+      await noticeWaiting(job, error ?? 'It waits for you.');
     } else if (outcome === 'failed' && !trace.prOpen) {
       await deps.runs.updateInFlight(run.id, {
         state: 'failed',
@@ -379,6 +395,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       agentsRan: job.run.threadIds.length > 0,
       prOpen: job.run.prUrl !== null,
       step: null,
+      parked: false,
     };
     if (trace.agentsRan) agentStarted();
 
@@ -390,6 +407,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       if (live.isOk() && !live.value) controller.abort();
       if (live.isOk() && live.value && input.state === 'merged') cleanUpMerged(job);
       if (input.prUrl) trace.prOpen = true;
+      if (input.state === 'waiting_human') trace.parked = true;
       if (input.threadIds) {
         trace.agentsRan = true;
         agentStarted();
@@ -441,6 +459,12 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         : undefined,
       github: deps.github,
       issueLabels: job.issue.labels ?? [],
+      lastThreadMessage,
+      removeWorktrees: async () => {
+        const run = await deps.runs.get(job.run.id);
+        const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;
+        await deps.cleanupMerged?.(scope.userId, ids);
+      },
       proof: deps.proof
         ? {
             startProof: (threadId, body) =>

@@ -54,6 +54,9 @@ import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.
 import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
+/** The fixed first line of the issue comment a "no change" run posts. */
+export const NO_CHANGE_LINE = 'The issue factory made no change for this issue. The agent said:';
+
 /** Where the run's agent threads run: the enabler's runtime for the project. */
 export type FactoryThreadMode = 'local' | 'worktree' | 'sandbox';
 
@@ -95,6 +98,10 @@ export interface FactoryActionProviderDeps {
   issueLabels?: string[];
   /** Proof start/poll through the runner. */
   proof?: FactoryProofDeps;
+  /** The implementing thread's last assistant message (the "no change" explanation). */
+  lastThreadMessage?: (threadId: string) => Promise<string | null>;
+  /** Remove the run's worktrees on the enabler's runner (a "no change" run keeps no checkout). */
+  removeWorktrees?: () => Promise<void>;
   /**
    * Set when the run was interrupted while starting its next agent thread:
    * that step first looks for the thread it may have started.
@@ -114,7 +121,10 @@ export interface FactoryActionProviderDeps {
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
   /** Continue the first thread for later agent steps; without it each step starts a thread. */
   continuation?: FactoryContinuation;
-  github: Pick<FactoryGithubPort, 'findPullRequest' | 'pullRequests'>;
+  github: Pick<
+    FactoryGithubPort,
+    'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
+  >;
   /** Write the run's progress; ignored once the run is terminal (e.g. stopped). */
   record(input: UpdateRunInput): Promise<void>;
   /**
@@ -563,6 +573,37 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return result;
   }
 
+  /** The enabler reads the repository: the App token capped by their access. */
+  const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
+
+  /**
+   * The agent made no commit and opened no pull request: say so on the issue
+   * with its explanation, remove the run's checkout, and leave the run for a
+   * person (`no change`). Not ok, so the flow stops here.
+   */
+  async function noChange(): Promise<ActionResult> {
+    const threadId = threadIds[0];
+    const explanation = threadId ? await deps.lastThreadMessage?.(threadId) : null;
+    const body = explanation ? `${NO_CHANGE_LINE}\n\n${explanation}` : NO_CHANGE_LINE;
+    const commented = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
+    if (commented.isErr()) {
+      log.warn('Issue factory could not comment a no-change outcome on the issue', {
+        namespace: 'factory',
+        runId: scope.runId,
+        issue: scope.issueNumber,
+        error: commented.error.message,
+      });
+    }
+    await deps.removeWorktrees?.();
+    await deps.record({ state: 'waiting_human', failureReason: 'no change' });
+    await count(metrics, { event: 'no_change' });
+    return {
+      ok: false,
+      error: `No change: the agent made no commit on ${scope.branch} and opened no pull request.`,
+      metadata: { outcome: 'no_change' },
+    };
+  }
+
   /**
    * The merge gate: merge only a pull request head with a passing proof of
    * that exact commit, pinned to it. Runs the flow's proof when none is held.
@@ -623,12 +664,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     },
 
     async createPr() {
-      const found = await deps.github.findPullRequest(
-        { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
-        scope.branch,
-      );
+      const found = await deps.github.findPullRequest(reader, scope.branch);
       if (found.isErr()) return { ok: false, error: found.error.message };
       if (!found.value) {
+        const ahead = await deps.github.branchAhead(reader, scope.branch);
+        if (ahead.isOk() && !ahead.value) return noChange();
         return {
           ok: false,
           error: `No open pull request from the branch ${scope.branch}: the agent did not open one.`,

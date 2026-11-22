@@ -12,6 +12,7 @@
  */
 
 import {
+  createRepoCheckOps,
   issueBlockers,
   type GithubCallError,
   type IssueBlocker,
@@ -70,6 +71,26 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
           createdAt: raw.created_at ?? '',
           labels: labelNames(raw.labels),
         }));
+    },
+
+    /**
+     * Whether `branch` has commits that the repository's DEFAULT branch does
+     * not; a branch that does not exist on GitHub has none.
+     */
+    branchAhead(branch: string): ResultAsync<boolean, GithubCallError> {
+      return github
+        .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
+        .andThen((meta) =>
+          createRepoCheckOps(github).isBranchAhead(repo, meta.default_branch, branch),
+        )
+        .map((compare) => compare.ahead);
+    },
+
+    /** Comment on the issue, as the App. */
+    commentOnIssue(issueNumber: number, body: string): ResultAsync<void, GithubCallError> {
+      return github
+        .json(repo, 'POST', `/repos/${repo}/issues/${issueNumber}/comments`, { body })
+        .map(() => undefined);
     },
 
     /** The issue's blockers (GitHub's "blocked by" relation), open or closed. */

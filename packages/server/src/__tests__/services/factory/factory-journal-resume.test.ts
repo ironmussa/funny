@@ -78,6 +78,8 @@ function journaledProvider(over: Partial<Parameters<typeof createFactoryActionPr
       followedUpSince: async () => false,
     },
     github: {
+      branchAhead: () => okAsync(true),
+      commentOnIssue: () => okAsync(undefined),
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),

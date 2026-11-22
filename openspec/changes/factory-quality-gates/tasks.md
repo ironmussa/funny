@@ -82,7 +82,7 @@
       tests: check published per verdict, a publish failure does not fail the run, a sandbox
       token's permissions unchanged, auto-merge enabled only when held (pinned to the App), a new
       head re-proved while waiting, and a failing re-proof leaving the finding on the run.
-- [ ] 4.5 Give `createPr` the "no change" outcome: with no open pull request and no commits ahead
+- [x] 4.5 Give `createPr` the "no change" outcome: with no open pull request and no commits ahead
       on the run's branch, post the implementing thread's final message on the issue, remove the
       run's worktree and park in `waiting_human` with reason `no change`; with commits ahead,
       today's error. Verify with provider tests for both cases and that a parked `no change` run

@@ -11,6 +11,7 @@ import type { IssueBlocker } from '@funny/core/github-app';
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../../lib/logger.js';
+import { NO_CHANGE_LINE } from '../../../services/factory/factory-action-provider.js';
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
 import type { FactoryMergeOutcome } from '../../../services/factory/factory-pull-requests.js';
@@ -100,6 +101,8 @@ interface GithubScript {
   prStates?: Record<number, 'open' | 'merged' | 'closed'>;
   /** The pull request on each branch in any state (lookups with `state: 'all'`). */
   branchPrs?: Record<string, { number: number; url: string }>;
+  /** Whether the run's branch has commits the default branch does not (default true). */
+  branchAhead?: boolean;
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
@@ -107,6 +110,7 @@ interface GithubScript {
 type FakeGithub = FactoryGithubPort & {
   fileReads: string[];
   merges: number;
+  comments: Array<{ issue: number; body: string }>;
   prLookups: Array<{ branch: string; state: string }>;
 };
 
@@ -120,6 +124,7 @@ function fakeGithub(
   const port: FakeGithub = {
     fileReads: [],
     merges: 0,
+    comments: [],
     prLookups: [],
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
@@ -143,6 +148,11 @@ function fakeGithub(
       port.fileReads.push(path);
       const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
       return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
+    },
+    branchAhead: () => okAsync(script.branchAhead ?? true),
+    commentOnIssue: (_reader: unknown, issue: number, body: string) => {
+      port.comments.push({ issue, body });
+      return okAsync(undefined);
     },
     findPullRequest: (_reader: unknown, branch: string, state: 'open' | 'all' = 'open') => {
       port.prLookups.push({ branch, state });
@@ -714,6 +724,24 @@ describe('factory flow', () => {
   test('an agent that opened no pull request fails the run', async () => {
     const { factoryId } = await runFlow({ pr: false }, finishedThreads('completed'));
     await eventually(factoryId, (r) => r.state === 'failed');
+  });
+
+  test('an agent that made no commit parks the run as "no change", says so on the issue and cleans up', async () => {
+    const { factoryId, github, cleanups, poll, launcher } = await runFlow(
+      { pr: false, branchAhead: false },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.failureReason).toBe('no change');
+    expect(run.currentStep).toBe('pull-request');
+    expect(github.comments).toHaveLength(1);
+    expect(github.comments[0]!.issue).toBe(7);
+    expect(github.comments[0]!.body).toStartWith(NO_CHANGE_LINE);
+    expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
+    expect(github.merges).toBe(0);
+    // Parked, it still holds its issue: a later tick does not admit it again.
+    await poll.ticks[0]!();
+    expect(launcher.calls).toHaveLength(1);
   });
 
   // Issue #343: the factory thread shows the run's step chain and why it

@@ -98,6 +98,14 @@ export interface FactoryGithubPort {
     branch: string,
     state?: PullRequestLookup,
   ): ResultAsync<FactoryPullRequestFound | null, GithubCallError>;
+  /** Whether `branch` has commits the DEFAULT branch does not (none when it is absent). */
+  branchAhead(reader: FactoryRepoReader, branch: string): ResultAsync<boolean, GithubCallError>;
+  /** Comment on an issue, as the App. */
+  commentOnIssue(
+    reader: FactoryRepoReader,
+    issueNumber: number,
+    body: string,
+  ): ResultAsync<void, GithubCallError>;
   /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
   pullRequests: FactoryPullRequests;
 }
@@ -215,6 +223,8 @@ export function createFactoryGithub(
     listDefaultBranchDir: (reader, path) => reads(reader).listDefaultBranchDir(path),
     readDefaultBranchFile: (reader, path) => reads(reader).readDefaultBranchFile(path),
     findPullRequest: (reader, branch, state) => reads(reader).findPullRequest(branch, state),
+    branchAhead: (reader, branch) => reads(reader).branchAhead(branch),
+    commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
 
     pullRequests: createFactoryPullRequests({ issue, ownerToken, fetch: fetchImpl }),
   };

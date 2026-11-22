@@ -4,12 +4,14 @@
  */
 import { describe, expect, test } from 'bun:test';
 
+import type { GithubCallError } from '@funny/core/github-app';
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
-import { err, ok, okAsync } from 'neverthrow';
+import { err, errAsync, ok, okAsync, type ResultAsync } from 'neverthrow';
 
 import {
   countCiResult,
   createFactoryActionProvider,
+  NO_CHANGE_LINE,
 } from '../../../services/factory/factory-action-provider.js';
 import type {
   FactoryMergeOptions,
@@ -41,6 +43,8 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
       return { status: 'completed' as const, output: 'done' };
     },
     github: {
+      branchAhead: () => okAsync(true),
+      commentOnIssue: () => okAsync(undefined),
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),
@@ -132,6 +136,8 @@ describe('factory action provider integration metrics', () => {
     const { provider } = providerWith({
       prUrl: PR,
       github: {
+        branchAhead: () => okAsync(true),
+        commentOnIssue: () => okAsync(undefined),
         findPullRequest: () => okAsync(null),
         pullRequests: {
           prState: () => okAsync('open' as const),
@@ -285,6 +291,8 @@ describe('factory action provider merge gate', () => {
           }),
       },
       github: {
+        branchAhead: () => okAsync(true),
+        commentOnIssue: () => okAsync(undefined),
         findPullRequest: () => okAsync(null),
         pullRequests: {
           prState: () => okAsync('open' as const),
@@ -365,5 +373,66 @@ describe('factory action provider merge gate', () => {
     const merged = await provider.merge({ regressionProof: proofConfig });
     expect(merged.ok).toBe(false);
     expect(merged.error).toContain('head moved');
+  });
+});
+
+describe('factory action provider "no change" outcome', () => {
+  function noPr(branchAhead: ResultAsync<boolean, GithubCallError>) {
+    const comments: string[] = [];
+    const records: Array<Record<string, unknown>> = [];
+    let removed = 0;
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      lastThreadMessage: async () => 'The bug is already fixed on main.',
+      removeWorktrees: async () => {
+        removed++;
+      },
+      github: {
+        findPullRequest: () => okAsync(null),
+        branchAhead: () => branchAhead,
+        commentOnIssue: (_reader: unknown, _issue: number, body: string) => {
+          comments.push(body);
+          return okAsync(undefined);
+        },
+        pullRequests: {
+          prState: () => okAsync('open' as const),
+          headSha: () => okAsync('sha-head'),
+          ciState: () => okAsync({ kind: 'green' as const }),
+          merge: () =>
+            okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
+        },
+      },
+      record: async (input) => {
+        records.push({ ...input });
+      },
+    });
+    return { provider, comments, records, removed: () => removed };
+  }
+
+  test('no pull request and no commits: comment, clean up, wait for a person, stop the flow', async () => {
+    const { provider, comments, records, removed } = noPr(okAsync<boolean, GithubCallError>(false));
+    const result = await provider.createPr({ cwd: '', title: 'Fix it' });
+    expect(result.ok).toBe(false);
+    expect(result.metadata).toMatchObject({ outcome: 'no_change' });
+    expect(comments).toEqual([`${NO_CHANGE_LINE}\n\nThe bug is already fixed on main.`]);
+    expect(removed()).toBe(1);
+    expect(records).toContainEqual({ state: 'waiting_human', failureReason: 'no change' });
+  });
+
+  test('no pull request but commits ahead: the agent did not open one (an error, no comment)', async () => {
+    const { provider, comments, records } = noPr(okAsync<boolean, GithubCallError>(true));
+    const result = await provider.createPr({ cwd: '', title: 'Fix it' });
+    expect(result.error).toContain('No open pull request');
+    expect(comments).toHaveLength(0);
+    expect(records).toHaveLength(0);
+  });
+
+  test('an unreadable branch is not taken for "no change"', async () => {
+    const { provider, comments } = noPr(
+      errAsync<boolean, GithubCallError>({ message: 'GitHub answered 500', status: 500 }),
+    );
+    const result = await provider.createPr({ cwd: '', title: 'Fix it' });
+    expect(result.error).toContain('No open pull request');
+    expect(comments).toHaveLength(0);
   });
 });

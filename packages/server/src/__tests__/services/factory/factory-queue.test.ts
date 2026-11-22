@@ -93,6 +93,8 @@ function fakeGithub(script: Script = {}): FakeGithub {
       script.repoUnreadable
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
         : okAsync(script.repoFiles?.[path] ?? null),
+    branchAhead: () => okAsync(true),
+    commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
       prState: () => okAsync('open' as const),

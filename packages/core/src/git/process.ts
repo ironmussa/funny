@@ -222,6 +222,23 @@ export async function gitWrite(
 }
 
 /**
+ * Run an in-process (gitoxide) write as if it were a `gitWrite`: it takes a
+ * write-pool slot and bumps the write generation of `cwd` on both sides, so
+ * the read caches never serve a result from before it. Like the CLI
+ * `worktree` commands, it is not serialized behind `cwd`'s other writes.
+ */
+export async function nativeGitWrite<T>(cwd: string, work: () => Promise<T>): Promise<T> {
+  return writePool(async () => {
+    bumpWriteGeneration(cwd);
+    try {
+      return await work();
+    } finally {
+      bumpWriteGeneration(cwd);
+    }
+  });
+}
+
+/**
  * Execute a network git command (push, pull, fetch) through its own pool.
  * Like gitWrite it bumps the write generation of `cwd` (push and pull move
  * refs or the working tree; fetch does not count), but it never competes with

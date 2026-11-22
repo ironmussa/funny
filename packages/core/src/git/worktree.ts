@@ -11,7 +11,7 @@ import type { SetupProgressFn } from '../ports/setup-progress.js';
 import { toDomainError } from './errors.js';
 import { getNativeGit } from './native.js';
 import { validatePath } from './path-validation.js';
-import { gitRead, gitWrite } from './process.js';
+import { gitRead, gitWrite, nativeGitWrite } from './process.js';
 
 /**
  * Security HI-4: pure predicate that decides whether a path is *safe* to
@@ -280,14 +280,8 @@ export function createWorktree(
       const reuse = reuseExistingBranch && branchExisted;
       const source = reuse ? branchName : (effectiveBase ?? 'HEAD');
       onProgress?.('worktree:create', `Creating worktree from ${source}`, 'running');
-      const args = reuse
-        ? ['worktree', 'add', worktreePath, branchName]
-        : ['worktree', 'add', '-b', branchName, worktreePath];
-      if (!reuse && effectiveBase) args.push(effectiveBase);
-      // No deadline: the checkout of a large repository and its post-checkout
-      // hook can take minutes, and killing git halfway leaves a broken worktree.
       const result = await validatePath(projectPath).andThen((cwd) =>
-        ResultAsync.fromPromise(gitWrite(args, { cwd, timeout: 0 }), toDomainError),
+        addWorktree(cwd, worktreePath, branchName, reuse ? null : (effectiveBase ?? 'HEAD')),
       );
       if (result.isErr()) {
         onProgress?.('worktree:create', `Creating worktree from ${source}`, 'failed');
@@ -302,6 +296,58 @@ export function createWorktree(
       return internal(String(error));
     },
   );
+}
+
+/**
+ * Runner setting: `1` makes worktree creation and removal always run
+ * `git worktree add` / `remove` instead of trying gitoxide first.
+ */
+export const DISABLE_NATIVE_WORKTREE_ENV = 'FUNNY_DISABLE_NATIVE_WORKTREE';
+
+/**
+ * `git worktree add` for `branchName` at `worktreePath`: a new branch from
+ * `startPoint`, or the existing branch when `startPoint` is null.
+ *
+ * Done in-process with gitoxide when the native module has it, which spares
+ * a git process and its checkout. A remote-tracking start point gets the
+ * upstream `git branch` would set. gitoxide runs no hooks, so the native side
+ * declines repositories with a post-checkout or reference-transaction hook,
+ * and also `branch.autoSetupMerge=always|inherit`, an ambiguous upstream and
+ * stale `branch.<name>` config; git does those. A native
+ * failure has already been rolled back (registration, files, the branch it
+ * created), so git gets a clean second try and reports its own error.
+ */
+function addWorktree(
+  cwd: string,
+  worktreePath: string,
+  branchName: string,
+  startPoint: string | null,
+): ResultAsync<void, DomainError> {
+  const cli = () => {
+    const args =
+      startPoint === null
+        ? ['worktree', 'add', worktreePath, branchName]
+        : ['worktree', 'add', '-b', branchName, worktreePath, startPoint];
+    // No deadline: the checkout of a large repository and its post-checkout
+    // hook can take minutes, and killing git halfway leaves a broken worktree.
+    return ResultAsync.fromPromise(gitWrite(args, { cwd, timeout: 0 }), toDomainError).map(
+      () => undefined,
+    );
+  };
+  const addNative = getNativeGit()?.addWorktree;
+  if (!addNative || process.env[DISABLE_NATIVE_WORKTREE_ENV] === '1') return cli();
+  const options =
+    startPoint === null
+      ? { branch: branchName, createBranch: false }
+      : { branch: branchName, createBranch: true, startPoint };
+  return ResultAsync.fromPromise(
+    nativeGitWrite(cwd, () => addNative(cwd, worktreePath, options)),
+    toDomainError,
+  )
+    .orElse(() => ResultAsync.fromSafePromise(Promise.resolve({ created: false })))
+    .andThen((outcome) =>
+      outcome.created ? ResultAsync.fromSafePromise(Promise.resolve()) : cli(),
+    );
 }
 
 /** A path in a form two spellings of one folder share (symlinks resolved when it exists). */
@@ -505,6 +551,22 @@ function assertWorktreeInProjectBase(
   return null;
 }
 
+/**
+ * `git worktree remove -f` in-process with gitoxide, which deletes the files
+ * on several threads (a worktree with `node_modules` holds a great many).
+ * False when the native module lacks it or it failed; the caller then runs
+ * git, whose own fallback force-deletes what is left. The native side only
+ * removes the worktree registered at exactly `worktreePath`.
+ */
+async function removeWorktreeNatively(projectPath: string, worktreePath: string): Promise<boolean> {
+  const removeNative = getNativeGit()?.removeWorktree;
+  if (!removeNative || process.env[DISABLE_NATIVE_WORKTREE_ENV] === '1') return false;
+  return nativeGitWrite(projectPath, () => removeNative(projectPath, worktreePath)).then(
+    () => true,
+    () => false,
+  );
+}
+
 export function removeWorktree(
   projectPath: string,
   worktreePath: string,
@@ -513,6 +575,11 @@ export function removeWorktree(
     (async () => {
       const containmentErr = assertWorktreeInProjectBase(projectPath, worktreePath);
       if (containmentErr) throw containmentErr;
+
+      if (await removeWorktreeNatively(projectPath, worktreePath)) {
+        await forgetSafeDirectory(worktreePath);
+        return;
+      }
 
       const result = await gitWrite(['worktree', 'remove', '-f', worktreePath], {
         cwd: projectPath,

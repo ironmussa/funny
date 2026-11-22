@@ -118,10 +118,13 @@ describe('factory flow warnings', () => {
     ]);
   });
 
-  test('the built-in factory flows have no warnings', async () => {
+  test('the built-in factory flows have only the proof-not-configured warning', async () => {
     for (const name of ['issue-to-merge', 'issue-to-pr']) {
       const flow = await loadFactoryFlow(name, { readDefaultBranchFile: async () => ok(null) });
-      expect(flow._unsafeUnwrap().warnings).toEqual([]);
+      const unexpected = flow
+        ._unsafeUnwrap()
+        .warnings.filter((w) => !w.message.includes('no rules'));
+      expect(unexpected).toEqual([]);
     }
   });
 });

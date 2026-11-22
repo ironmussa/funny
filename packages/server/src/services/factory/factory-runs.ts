@@ -251,6 +251,17 @@ export interface StartRunInput {
   flowName?: string;
 }
 
+export interface RegressionProofRecord {
+  headSha: string;
+  verdict: string;
+  finding?: string;
+  files?: string[];
+  commands?: string[];
+  baseSha?: string;
+  outputTail?: string;
+  ranAt: string;
+}
+
 export interface UpdateRunInput {
   state?: FactoryRunState;
   currentStep?: string | null;
@@ -260,11 +271,12 @@ export interface UpdateRunInput {
   flowSteps?: string[];
   failureReason?: string | null;
   metrics?: FactoryRunMetrics;
+  regressionProof?: RegressionProofRecord;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
 const PLAIN_FIELDS = ['currentStep', 'prUrl', 'launchStartedAt', 'failureReason'] as const;
-const JSON_FIELDS = ['threadIds', 'flowSteps', 'metrics'] as const;
+const JSON_FIELDS = ['threadIds', 'flowSteps', 'metrics', 'regressionProof'] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
   const changes: Partial<Row> = {};
@@ -371,6 +383,7 @@ function queueOperations(newId: () => string) {
             flowSteps: null,
             failureReason: null,
             metrics: null,
+            regressionProof: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -608,6 +621,7 @@ export function createFactoryRunsRepository(
         flowSteps: null,
         failureReason: null,
         metrics: null,
+        regressionProof: null,
       };
       return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
         toView(row),

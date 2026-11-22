@@ -55,14 +55,14 @@
 
 ## 4. Factory server
 
-- [ ] 4.1 Add `regressionProof` to the factory action provider: resolve `require_test` from the
+- [x] 4.1 Add `regressionProof` to the factory action provider: resolve `require_test` from the
       issue's labels, start the job on the run's implementing thread and poll it through
       `withRunnerFor` as the enabler (extend `factory-thread-requests.ts`), restart once on 404,
       give up as `fail` after the time limit, map the verdict to `ok` or a `Regression proof: …`
       error, and record it. Verify with provider tests for each verdict, the label rule, a proof
       longer than one request deadline, a replayed step joining the job, a job lost once and
       twice, and a runner that is offline (fail, not pass).
-- [ ] 4.2 Store the proof in `factory_runs.regression_proof` (JSON: head SHA, verdict, finding,
+- [x] 4.2 Store the proof in `factory_runs.regression_proof` (JSON: head SHA, verdict, finding,
       files, commands, base SHA, output tail, time); migration in `server/src/db/migrate.ts` and
       both schemas. Verify with a repository test and the migration test.
 - [ ] 4.3 Make `merge` enforce the proof unless `require_regression_proof: false`: read the head

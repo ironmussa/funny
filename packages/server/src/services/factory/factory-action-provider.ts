@@ -38,6 +38,7 @@ import type {
   ActionProvider,
   ActionResult,
   ApprovalDecision,
+  RegressionProofOpts,
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
 import type { Result } from 'neverthrow';
@@ -49,7 +50,7 @@ import type { StartedThread, StartThreadError } from '../runner-thread-launcher.
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
-import type { UpdateRunInput } from './factory-runs.js';
+import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /** Where the run's agent threads run: the enabler's runtime for the project. */
@@ -70,6 +71,17 @@ export interface FactoryRunScope {
   branch: string;
 }
 
+export interface FactoryProofDeps {
+  startProof(
+    threadId: string,
+    body: Record<string, unknown>,
+  ): Promise<Result<{ proofId: string; state: string }, string>>;
+  pollProof(
+    threadId: string,
+    proofId: string,
+  ): Promise<Result<{ state: string; result?: unknown }, string>>;
+}
+
 export interface FactoryActionProviderDeps {
   scope: FactoryRunScope;
   /** Thread ids the run's agent steps already started, in order (a resumed run). */
@@ -78,6 +90,10 @@ export interface FactoryActionProviderDeps {
   prUrl: string | null;
   /** The run's integration counters so far (a resumed or retried run keeps counting). */
   metrics?: FactoryRunMetrics;
+  /** The issue's labels (for require_test: labels). */
+  issueLabels?: string[];
+  /** Proof start/poll through the runner. */
+  proof?: FactoryProofDeps;
   /**
    * Set when the run was interrupted while starting its next agent thread:
    * that step first looks for the thread it may have started.
@@ -462,6 +478,127 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     },
 
     merge: (opts) => ci.merge(opts),
+
+    async regressionProof(opts: RegressionProofOpts): Promise<ActionResult> {
+      if (!deps.proof) {
+        return { ok: false, error: 'Regression proof: the proof service is not configured.' };
+      }
+      const threadId = threadIds[0];
+      if (!threadId) {
+        return { ok: false, error: 'Regression proof: no implementing thread.' };
+      }
+
+      const requireTest = opts.requireTest ?? 'never';
+      const issueLabels = deps.issueLabels ?? [];
+      const testRequired =
+        requireTest === 'always' ||
+        (requireTest === 'labels' && opts.labels?.some((l) => issueLabels.includes(l)));
+
+      const body = {
+        headSha: 'HEAD',
+        defaultBranch: 'main',
+        rules: opts.rules ?? [],
+        supportGlobs: opts.supportGlobs ?? [],
+        timeoutMs: opts.timeoutMs ?? 600_000,
+      };
+
+      // Start the proof job on the runner
+      const started = await deps.proof.startProof(threadId, body);
+      if (started.isErr()) {
+        return { ok: false, error: `Regression proof: could not start: ${started.error}` };
+      }
+
+      const { proofId } = started.value;
+      const pollInterval = 5_000;
+      const deadline = Date.now() + (opts.timeoutMs ?? 600_000) + 60_000;
+      let restartAttempts = 0;
+      let firstPoll = true;
+
+      // Poll until done (first poll is immediate, then every pollInterval)
+      while (Date.now() < deadline) {
+        if (deps.signal.aborted) return { ok: false, error: 'Regression proof: run was stopped.' };
+
+        if (firstPoll) {
+          firstPoll = false;
+        } else {
+          await new Promise((r) => setTimeout(r, pollInterval));
+        }
+
+        const polled = await deps.proof.pollProof(threadId, proofId);
+        if (polled.isErr()) {
+          if (polled.error === 'proof-not-found' && restartAttempts < 1) {
+            restartAttempts++;
+            const restarted = await deps.proof.startProof(threadId, body);
+            if (restarted.isErr()) {
+              return {
+                ok: false,
+                error: `Regression proof: could not restart: ${restarted.error}`,
+              };
+            }
+            continue;
+          }
+          return { ok: false, error: `Regression proof: poll failed: ${polled.error}` };
+        }
+
+        if (polled.value.state === 'done') {
+          const result = polled.value.result as
+            | {
+                verdict?: string;
+                finding?: string;
+                files?: string[];
+                commands?: string[];
+                baseSha?: string;
+                outputTail?: string;
+              }
+            | undefined;
+
+          if (!result) {
+            return { ok: false, error: 'Regression proof: no result from runner.' };
+          }
+
+          const proofRecord: RegressionProofRecord = {
+            headSha: body.headSha,
+            verdict: result.verdict ?? 'fail',
+            finding: result.finding,
+            files: result.files,
+            commands: result.commands,
+            baseSha: result.baseSha,
+            outputTail: result.outputTail,
+            ranAt: new Date().toISOString(),
+          };
+          await deps.record({ regressionProof: proofRecord });
+
+          // SAFETY: proofRecord is a plain object whose fields are JSON-serializable strings/arrays
+          const meta: Record<string, unknown> = { ...proofRecord };
+
+          if (result.verdict === 'pass') {
+            await count(metrics, { event: 'regression_proof_pass' });
+            return { ok: true, output: 'pass', metadata: meta };
+          }
+          if (result.verdict === 'skipped') {
+            if (testRequired) {
+              await count(metrics, { event: 'regression_proof_fail' });
+              return {
+                ok: false,
+                error: `Regression proof: no regression test was added, but one is required for this issue.`,
+                metadata: meta,
+              };
+            }
+            await count(metrics, { event: 'regression_proof_skipped' });
+            return { ok: true, output: 'skipped', metadata: meta };
+          }
+          // verdict === 'fail'
+          await count(metrics, { event: 'regression_proof_fail' });
+          return {
+            ok: false,
+            error: `Regression proof: ${result.finding ?? 'failed'}`,
+            metadata: meta,
+          };
+        }
+      }
+
+      return { ok: false, error: 'Regression proof: timed out waiting for the proof.' };
+    },
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

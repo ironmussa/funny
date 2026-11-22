@@ -54,6 +54,20 @@ let testDb: ReturnType<typeof createTestDb>;
 
 const ports = unusedRunnerPorts();
 
+/** Fake proof service that always returns a passing verdict immediately. */
+const fakeProof: NonNullable<Parameters<typeof startFactoryWatcher>[0]['proof']> = () => ({
+  startProof: async () => ok({ proofId: 'proof-1', state: 'done' }),
+  pollProof: async () =>
+    ok({
+      state: 'done',
+      result: { verdict: 'pass', files: [], commands: [], baseSha: 'abc', outputTail: '' },
+    }),
+});
+
+const _origStartWatcher = startFactoryWatcher;
+const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
+  _origStartWatcher({ proof: fakeProof, ...d });
+
 /** Fake poll: captures each factory's tick so the test can fire it. */
 function fakePoll() {
   const ticks: Array<() => Promise<void>> = [];
@@ -223,7 +237,7 @@ describe('factory watcher', () => {
     seedProject(testDb.db, { id: 'p2', userId: 'alice', path: '/repo2' });
     await createFactorySettingsService().save('alice', 'p2', { enabled: false });
 
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: fakePoll().createPoll,
@@ -237,7 +251,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory({ label: 'ready-for-agent' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -269,7 +283,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -288,7 +302,7 @@ describe('factory watcher', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const sandboxCalls: Array<{ userId: string; body: Record<string, unknown> }> = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -316,7 +330,7 @@ describe('factory watcher', () => {
   test('a sandbox launch refusal starts nothing and the issue waits for a later tick', async () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -346,7 +360,7 @@ describe('factory watcher', () => {
 
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -364,7 +378,7 @@ describe('factory watcher', () => {
     await enableFactory({ maxConcurrent: 1 });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [
         { number: 1, title: 'a', url: 'u/1' },
@@ -393,7 +407,7 @@ describe('factory watcher', () => {
       await gate;
       return launchedThread('t-1');
     };
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -420,7 +434,7 @@ describe('factory watcher', () => {
       )._unsafeUnwrap()?.state;
       return launchedThread('t-1');
     };
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -438,7 +452,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
     const offline = fakeLauncher('offline');
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -463,7 +477,7 @@ describe('factory watcher', () => {
     }
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -484,7 +498,7 @@ describe('factory watcher', () => {
     await runs.update(parked.id, { state: 'waiting_human' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [
         { number: 1, title: 'a', url: 'u/1' },
@@ -510,7 +524,7 @@ describe('factory watcher', () => {
     testDb.sqlite.query("UPDATE project_members SET role = 'viewer' WHERE user_id = 'alice'").run();
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -531,7 +545,7 @@ describe('factory watcher', () => {
     const poll = fakePoll();
     let repo: string | null = null;
     const github = { ...fakeGithub('acme/repo', []), resolveRepo: async () => repo };
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -553,7 +567,7 @@ describe('factory watcher', () => {
   test('an issue whose agent could not start is reported as the block', async () => {
     await enableFactory();
     const poll = fakePoll();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -573,7 +587,7 @@ describe('factory watcher', () => {
     await enableFactory();
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub(null, [{ number: 1, title: 'a', url: 'u/1' }]),
       createPoll: poll.createPoll,
@@ -602,7 +616,7 @@ describe('factory flow', () => {
     const notices: Array<{ title: string; body: string }> = [];
     const followUps: Array<{ threadId: string; content: string; expectedBranch?: string }> = [];
     const cleanups: Array<{ userId: string; threadIds: string[] }> = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -792,7 +806,7 @@ describe('factory flow', () => {
         mergeHold: hold.hold,
       });
       const start = () =>
-        startFactoryWatcher({
+        startWatcherWithProof({
           ports,
           github,
           createPoll: poll.createPoll,
@@ -925,7 +939,7 @@ describe('factory flow', () => {
     const factoryId = await enableFactory({ flowName: 'issue-to-pr' });
     const poll = fakePoll();
     const github = fakeGithub('o/r', issue7);
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -943,7 +957,7 @@ describe('factory flow', () => {
     const factoryId = await enableFactory({ flowName: 'factory-issue' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', issue7),
       createPoll: poll.createPoll,
@@ -983,7 +997,7 @@ describe('factory flow', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     // The real wait: it reads the thread's persisted status.
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1014,7 +1028,7 @@ describe('factory flow', () => {
     seedThread(testDb.db, { id: 't-impl', projectId: 'p1', userId: 'alice', status: 'completed' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1055,7 +1069,7 @@ describe('factory flow', () => {
     });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1077,7 +1091,7 @@ describe('factory flow', () => {
     await runs.update(seeded!.id, { launchStartedAt: new Date().toISOString() });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1107,7 +1121,7 @@ describe('factory flow', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const followUps: string[] = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', [], {
         ci: [
@@ -1144,7 +1158,7 @@ describe('factory flow', () => {
     const factoryId = await seedInFlightRun(['gone']);
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1183,7 +1197,7 @@ describe('factory operator controls', () => {
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', opts.issues ?? issue7, opts.github);
     const cleanups: Array<{ userId: string; threadIds: string[] }> = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -1488,7 +1502,7 @@ describe('factory operator controls', () => {
     // The real wait: the replayed step reads t-impl's persisted status.
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1523,7 +1537,7 @@ describe('factory operator controls', () => {
     seedThread(testDb.db, { id: 't-bad', projectId: 'p1', userId: 'alice', status: 'failed' });
     const run = await seedRun(factoryId, 'failed', ['t-bad']);
     const poll = fakePoll();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,

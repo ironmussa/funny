@@ -53,6 +53,7 @@ import {
 import { createLeaseGate } from '../workflow-engine/lease-gate.js';
 import {
   createFactoryActionProvider,
+  type FactoryProofDeps,
   type FactoryRunScope,
   type FactoryThreadMode,
 } from './factory-action-provider.js';
@@ -98,6 +99,8 @@ export interface FactoryFlowRunsDeps {
   /** Remove the worktree and local branch of a merged run's threads (best effort). */
   cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
+  /** Regression proof start/poll through the enabler's runner. */
+  proof?: (userId: string, threadId: string) => FactoryProofDeps;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /**
@@ -437,6 +440,14 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           }
         : undefined,
       github: deps.github,
+      proof: deps.proof
+        ? {
+            startProof: (threadId, body) =>
+              deps.proof!(scope.userId, threadId).startProof(threadId, body),
+            pollProof: (threadId, proofId) =>
+              deps.proof!(scope.userId, threadId).pollProof(threadId, proofId),
+          }
+        : undefined,
       record,
       signal: controller.signal,
       legacyReplay: journaled.value.length === 0,

@@ -2178,6 +2178,12 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    name: '106_factory_runs_regression_proof',
+    async up() {
+      await ctx().addColumn('factory_runs', 'regression_proof', 'TEXT');
+    },
+  },
 ];
 
 /**

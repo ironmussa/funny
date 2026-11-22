@@ -51,6 +51,7 @@ import {
 } from './factory-dependencies.js';
 import {
   createFactoryFlowRuns,
+  type FactoryFlowRunsDeps,
   type FactoryRunJob,
   type WaitingNotice,
 } from './factory-flow-runs.js';
@@ -73,7 +74,9 @@ import {
 } from './factory-settings.js';
 import {
   cleanupFactoryWorktrees,
+  pollRegressionProofOnRunner,
   sendFactoryFollowUp,
+  startRegressionProofOnRunner,
   stopFactoryThreads,
 } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -121,6 +124,8 @@ export interface FactoryWatcherDeps {
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
+  /** Proof service override for tests; defaults to runner thread requests. */
+  proof?: FactoryFlowRunsDeps['proof'];
   /** The flows' concurrency gate (tests); default: database leases. */
   gate?: ConcurrencyGate;
 }
@@ -179,6 +184,12 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     loadFlow: d.loadFlow,
     notify: d.notify,
     gate: d.gate,
+    proof:
+      d.proof ??
+      ((userId, _threadId) => ({
+        startProof: (tid, body) => startRegressionProofOnRunner(d.ports, userId, tid, body),
+        pollProof: (tid, proofId) => pollRegressionProofOnRunner(d.ports, userId, tid, proofId),
+      })),
     reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
     stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
     cleanupMerged: (userId, threadIds) => cleanupMergedFor(d, userId, threadIds),

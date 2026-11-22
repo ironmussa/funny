@@ -281,7 +281,9 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     // A blocker is in the factory while it has a run that has not failed or been stopped.
     const inFactory = new Set(
       all.value
-        .filter((run) => run.state !== 'failed' && run.state !== 'stopped')
+        .filter(
+          (run) => run.state !== 'failed' && run.state !== 'stopped' && run.state !== 'no_change',
+        )
         .map((run) => run.issueNumber),
     );
     const answers: FactoryIssueBlockers[] = [];

@@ -78,7 +78,7 @@ function reopenRefused(error: { message: string }): FactoryRunControlError {
  * (run #229 was retried four times this way). Its retry starts a new agent.
  */
 async function keptOnRetry(run: FactoryRunView): Promise<string[]> {
-  if (run.failureReason === NO_CHANGE_REASON) return [];
+  if (run.state === 'no_change' || run.failureReason === NO_CHANGE_REASON) return [];
   const first = run.threadIds[0];
   if (!first) return [];
   const [row] = await db

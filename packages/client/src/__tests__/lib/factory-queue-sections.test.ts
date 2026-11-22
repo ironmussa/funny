@@ -2,7 +2,14 @@ import { describe, expect, test } from 'bun:test';
 
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
-import { filterFactoryRuns, groupFactoryRuns } from '@/lib/factory-run-labels';
+import {
+  factoryRunSteps,
+  filterFactoryRuns,
+  groupFactoryRuns,
+  isFactoryRunFailed,
+  isFactoryRunNoChange,
+  isFactoryRunUnsavedWork,
+} from '@/lib/factory-run-labels';
 
 describe('groupFactoryRuns (the factory view)', () => {
   test('groups runs by what the member sees, the ended ones last', () => {
@@ -17,6 +24,7 @@ describe('groupFactoryRuns (the factory view)', () => {
       run('broken', 'failed'),
       run('done', 'merged'),
       run('cancelled', 'stopped'),
+      run('nothing-to-do', 'no_change'),
     ]);
     const ids = (key: keyof typeof groups) => groups[key].map((r) => r.id);
     expect(ids('waiting')).toEqual(['parked']);
@@ -24,7 +32,39 @@ describe('groupFactoryRuns (the factory view)', () => {
     // The queue follows its own order, not the list's.
     expect(ids('queue')).toEqual(['first', 'second']);
     expect(ids('failed')).toEqual(['broken']);
-    expect(ids('ended')).toEqual(['done', 'cancelled']);
+    expect(ids('ended')).toEqual(['done', 'cancelled', 'nothing-to-do']);
+  });
+});
+
+describe('a run that ended with no change', () => {
+  const steps = ['implement', 'pull-request', 'ci', 'merge'];
+
+  test('is over without a failure: the steps after the agent stay pending', () => {
+    const run = buildFactoryRun({
+      state: 'no_change',
+      currentStep: 'pull-request',
+      flowSteps: steps,
+      failureReason: null,
+    });
+    expect(isFactoryRunNoChange(run)).toBe(true);
+    expect(isFactoryRunFailed(run)).toBe(false);
+    expect(factoryRunSteps(run).map((step) => step.status)).toEqual([
+      'done',
+      'pending',
+      'pending',
+      'pending',
+    ]);
+  });
+
+  test('is told apart from a run parked with unsaved work in its checkout', () => {
+    const parked = buildFactoryRun({
+      state: 'waiting_human',
+      currentStep: 'pull-request',
+      flowSteps: steps,
+      failureReason: 'no change',
+    });
+    expect(isFactoryRunUnsavedWork(parked)).toBe(true);
+    expect(isFactoryRunNoChange(parked)).toBe(false);
   });
 });
 

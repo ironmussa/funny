@@ -705,7 +705,9 @@ async function stopOpenRuns(factory: WatchedFactory): Promise<void> {
   if (!runs || !deps) return;
   const all = await runs.list(factory.id);
   if (all.isErr()) return;
-  const open = all.value.filter((run) => !['merged', 'failed', 'stopped'].includes(run.state));
+  const open = all.value.filter(
+    (run) => !['merged', 'no_change', 'failed', 'stopped'].includes(run.state),
+  );
   for (const run of open) flows?.stop(run.id);
   await runs.stopMany(open.map((run) => run.id));
   await stopFactoryThreads(
@@ -740,13 +742,16 @@ async function admitIssues(
 
 /**
  * An issue may be admitted when it has no run in progress (or parked for a
- * person) and has failed fewer than `MAX_ATTEMPTS` times. A lookup that fails
- * skips the issue this tick rather than risk a second run.
+ * person), none that ended with no change, and has failed fewer than
+ * `MAX_ATTEMPTS` times. A lookup that fails skips the issue this tick rather
+ * than risk a second run.
  */
 async function isAdmissible(factoryId: string, issueNumber: number): Promise<boolean> {
   if (!runs) return false;
   const existing = await runs.activeByIssue(factoryId, issueNumber);
   if (existing.isErr() || existing.value) return false;
+  const unchanged = await runs.endedWithoutChange(factoryId, issueNumber);
+  if (unchanged.isErr() || unchanged.value) return false;
   const failures = await runs.failedCount(factoryId, issueNumber);
   return failures.isOk() && failures.value < MAX_ATTEMPTS;
 }

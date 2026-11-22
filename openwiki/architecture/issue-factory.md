@@ -96,11 +96,16 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    any agent ran → a label run is dropped, a sent one goes back to `requested` in its place, and
    the reason is shown as the factory's `blockedReason`.
    **No change**: when `create_pr` finds no PR and the branch has no commits ahead of the
-   default branch, the run comments the agent's last message on the issue, removes its
-   worktrees and parks `waiting_human` with reason `no change` (the flow stops there). A
-   worktree with uncommitted files or commits only its branch has is kept and named in the
-   comment: the runner checks and removes in one request (`POST /api/worktrees/remove-unchanged`),
-   and a runner that cannot answer leaves the worktree in place.
+   default branch, the run comments the agent's last message on the issue and removes its
+   worktrees (the flow stops there). With nothing left behind the run ends as `no_change`, a
+   terminal state that is not a failure: the issue is not closed ("nothing to change" is the
+   agent's opinion) but handed back to a person, its factory label swapped for `needs-triage`
+   (`relabelIssue`), nobody is notified, and the label does not admit the issue again
+   (`endedWithoutChange`); Retry starts a new agent. A worktree with uncommitted files or
+   commits only its branch has is kept and named in the comment, and the run parks
+   `waiting_human` with reason `no change` instead: the runner checks and removes in one
+   request (`POST /api/worktrees/remove-unchanged`), and a runner that cannot answer leaves the
+   worktree in place and counts as kept.
    **A finished turn is not a finished agent**: a `completed` thread with a background job
    still running or a watcher pending (or one that ended in the last 2 minutes, whose wake is
    starting) still counts as running (`awaitsWake` in `factory-thread-waits.ts`), so the flow
@@ -148,7 +153,7 @@ at the PR for teams that merge by hand).
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
-  branch and PR; a completed implement step is kept, later steps run again. A `no change` run
+  branch and PR; a completed implement step is kept, later steps run again. A `no_change` run (or one parked with reason `no change`)
   keeps nothing (replaying its thread would only reach `no change` again): a new agent starts.
   The threads the retry does not keep are archived (unless one is still running), so the list does
   not show the old failed thread next to the new one under the same title.

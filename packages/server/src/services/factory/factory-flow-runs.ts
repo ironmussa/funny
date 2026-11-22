@@ -56,6 +56,7 @@ import {
   type FactoryProofDeps,
   type FactoryRunScope,
   type FactoryThreadMode,
+  NO_CHANGE_TRIAGE_LABEL,
 } from './factory-action-provider.js';
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
@@ -138,12 +139,15 @@ interface FlowTrace {
   step: string | null;
   /** A step left the run for a person itself (e.g. `no change`): the end keeps that. */
   parked: boolean;
+  /** A step ended the run itself (`no_change`): nothing is left to settle. */
+  ended: boolean;
 }
 
 /** Note what a recorded update means for the flow's end; whether it recorded an agent thread. */
 function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
   if (input.prUrl) trace.prOpen = true;
   if (input.state === 'waiting_human') trace.parked = true;
+  if (input.state === 'no_change') trace.ended = true;
   if (!input.threadIds) return false;
   trace.agentsRan = true;
   return true;
@@ -363,6 +367,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   /** A flow that failed: dropped before any agent ran, left as a step parked it, failed, or parked. */
   async function settleFailed(job: FactoryRunJob, trace: FlowTrace, error?: string): Promise<void> {
     const { run } = job;
+    // The step wrote the run's end: not a failure, and nobody is waited for.
+    if (trace.ended) return;
     if (!trace.agentsRan && !wasReopened(job)) return dropUnstarted(job, error);
     if (trace.parked) {
       await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
@@ -395,7 +401,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       factoryId: job.factory.id,
       runId: run.id,
       issue: run.issueNumber,
-      outcome,
+      outcome: trace.ended ? 'no_change' : outcome,
       error,
     });
   }
@@ -416,6 +422,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       prOpen: job.run.prUrl !== null,
       step: null,
       parked: false,
+      ended: false,
     };
     if (trace.agentsRan) agentStarted();
 
@@ -480,6 +487,21 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           projectId: scope.projectId,
         }),
       issueLabels: job.issue.labels ?? [],
+      releaseIssue: async () => {
+        const relabelled = await deps.github.relabelIssue(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+          { remove: job.factory.label || undefined, add: NO_CHANGE_TRIAGE_LABEL },
+        );
+        if (relabelled.isErr()) {
+          log.warn('Issue factory could not relabel an issue that ended with no change', {
+            namespace: 'factory',
+            runId: job.run.id,
+            issue: scope.issueNumber,
+            error: relabelled.error.message,
+          });
+        }
+      },
       lastThreadMessage,
       removeUnchangedWorktrees: async () => {
         const run = await deps.runs.get(job.run.id);

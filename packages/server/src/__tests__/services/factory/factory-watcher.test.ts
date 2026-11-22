@@ -106,6 +106,8 @@ interface GithubScript {
   branchPrs?: Record<string, { number: number; url: string }>;
   /** Whether the run's branch has commits the default branch does not (default true). */
   branchAhead?: boolean;
+  /** A "no change" cleanup finds unsaved work in the run's worktree and keeps it. */
+  unsavedWork?: boolean;
   /** The pull request's head now (default `sha-head`, auto-merge off). */
   head?: { sha: string; autoMerge: boolean };
   /** GitHub does not answer for issues. */
@@ -120,6 +122,8 @@ type FakeGithub = FactoryGithubPort & {
   fileReads: string[];
   merges: number;
   comments: Array<{ issue: number; body: string }>;
+  /** Label swaps on issues (a run that ended with no change). */
+  relabels: Array<{ issue: number; remove?: string; add: string }>;
   checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
 };
@@ -136,6 +140,7 @@ function fakeGithub(
     fileReads: [],
     merges: 0,
     comments: [],
+    relabels: [],
     checks: [],
     prLookups: [],
     resolveRepo: async () => repo,
@@ -165,6 +170,10 @@ function fakeGithub(
     },
     branchAhead: () => okAsync(script.branchAhead ?? true),
     defaultBranch: () => okAsync('main'),
+    relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add: string }) => {
+      port.relabels.push({ issue, ...labels });
+      return okAsync(undefined);
+    },
     commentOnIssue: (_reader: unknown, issue: number, body: string) => {
       port.comments.push({ issue, body });
       return okAsync(undefined);
@@ -660,7 +669,16 @@ describe('factory flow', () => {
       },
       cleanupUnchanged: async (userId, threadIds) => {
         cleanups.push({ userId, threadIds });
-        return [];
+        return script.unsavedWork
+          ? [
+              {
+                threadId: 't-1',
+                worktreePath: '/wt/t-1',
+                dirtyFileCount: 3,
+                unpushedCommitCount: 0,
+              },
+            ]
+          : [];
       },
       notify: async (_userId, notice) => notices.push(notice),
       followUp: async (_userId, threadId, content, expectedBranch) => {
@@ -756,22 +774,59 @@ describe('factory flow', () => {
     await eventually(factoryId, (r) => r.state === 'failed');
   });
 
-  test('an agent that made no commit parks the run as "no change", says so on the issue and cleans up', async () => {
-    const { factoryId, github, cleanups, poll, launcher } = await runFlow(
+  // Issue #236: an index issue with nothing to change stayed "waiting for you"
+  // at the pull-request step, as if its run had failed.
+  test('an agent that rightly changed nothing ends the run as no_change and hands the issue back', async () => {
+    const { factoryId, github, cleanups, poll, launcher, notices } = await runFlow(
       { pr: false, branchAhead: false },
       finishedThreads('completed'),
     );
-    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
-    expect(run.failureReason).toBe('no change');
+    const run = await eventually(factoryId, (r) => r.state === 'no_change');
+    expect(run.failureReason).toBeNull();
     expect(run.currentStep).toBe('pull-request');
+    expect(run.completedAt).not.toBeNull();
     expect(github.comments).toHaveLength(1);
     expect(github.comments[0]!.issue).toBe(7);
     expect(github.comments[0]!.body).toStartWith(NO_CHANGE_LINE);
     expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
     expect(github.merges).toBe(0);
+    // Out of the label queue and marked for a person; nobody is told to act.
+    expect(github.relabels).toEqual([{ issue: 7, remove: 'ready-for-agent', add: 'needs-triage' }]);
+    expect(notices).toEqual([]);
+    // Even if the label stayed, a later tick does not admit the issue again.
+    await poll.ticks[0]!();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(launcher.calls).toHaveLength(1);
+    const all = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(all).toHaveLength(1);
+  });
+
+  test('a "no change" run that left unsaved work waits for a person and keeps its label', async () => {
+    const { factoryId, github, poll, launcher } = await runFlow(
+      { pr: false, branchAhead: false, unsavedWork: true },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.failureReason).toBe('no change');
+    expect(run.currentStep).toBe('pull-request');
+    expect(github.comments[0]!.body).toContain('/wt/t-1');
+    expect(github.relabels).toEqual([]);
     // Parked, it still holds its issue: a later tick does not admit it again.
     await poll.ticks[0]!();
     expect(launcher.calls).toHaveLength(1);
+  });
+
+  test('a run that ended as no_change can be retried with a new agent', async () => {
+    const { factoryId, launcher } = await runFlow(
+      { pr: false, branchAhead: false },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'no_change');
+
+    const retried = await createFactoryRunControl().retry(factoryId, run.id);
+
+    expect(retried._unsafeUnwrap()).toMatchObject({ state: 'queued', threadIds: [] });
+    await eventually(factoryId, () => launcher.calls.length === 2);
   });
 
   // Issue #343: the factory thread shows the run's step chain and why it

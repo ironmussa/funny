@@ -1687,6 +1687,7 @@
       "fixing": "Corrigindo CI",
       "waitingHuman": "Aguardando você",
       "merged": "Merged",
+      "noChange": "Sem alterações necessárias",
       "failed": "Falhou",
       "stopped": "Parada"
     },
@@ -1754,7 +1755,8 @@
     },
     "noChange": {
       "title": "O agente não fez nenhuma alteração",
-      "body": "Não abriu um pull request nem fez commits. A explicação dele está publicada na issue #{{issue}}: feche a issue ou tente o run de novo."
+      "body": "Não abriu nenhum pull request nem fez commits. A explicação está na issue #{{issue}}, agora marcada para triagem: feche a issue ou tente o run novamente.",
+      "unsavedBody": "Não abriu nenhum pull request nem fez commits, mas deixou trabalho não salvo no checkout, que foi mantido (o caminho está na issue #{{issue}}). Escreva nesta thread para que faça o commit e abra o pull request, ou tente o run novamente."
     }
   },
   "projectSecrets": {

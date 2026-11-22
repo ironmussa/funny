@@ -80,6 +80,12 @@ export type FactoryRunState =
   | 'fixing'
   | 'waiting_human'
   | 'merged'
+  /**
+   * Ended without a commit or a pull request because the agent found nothing
+   * to change (and left no unsaved work behind). Not a failure: the issue goes
+   * back to a person to close or reword. Retry starts a new agent.
+   */
+  | 'no_change'
   | 'failed'
   | 'stopped';
 

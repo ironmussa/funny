@@ -1,6 +1,6 @@
 # Tasks
 
-Prerequisites (both complete): `workflow-dag-engine` groups 1–3 (executor, loops, concurrency groups, journal) and `factory-flow-step-options` groups 1–3 (per-step options and `thread: new`).
+Prerequisites: `workflow-dag-engine` groups 1–3 (executor, loops, concurrency groups, journal), which is archived, and `factory-flow-step-options` groups 1–3 (per-step options and `thread: new`), which is **not implemented yet** (0 of its 23 tasks). Groups 1, 2 and 5 here do not need it. Group 6 does: the `review` step needs a read-only new-thread launch (`thread: new`, step-options 3.2) and `prompt_file` (step-options 1.3, 2.4).
 
 Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, closed by 9.5: the reviewer and the merge lane, deployable alone. **Phase 2** is groups 3, 4 and 8: triage and the contract, path reservation and the sentinel. Group numbers are the ones of the first version of this file, because `factory-integration` refers to groups 6–7; that is why the groups below are not in numeric order.
 
@@ -47,7 +47,7 @@ Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, 
 - [ ] 7.7 Stage limits: `factory_settings.stage_limits` through `resolveLimit` for agent nodes (`<node>:{{inputs.factory_id}}`), not for `merge`; settings table next to the step overrides; verify with tRPC tests (merge refused) and a `ProjectFactorySetting` test
 - [ ] 7.8 Show the slot a run waits for and the merge reason in the run row; verify with a `ProjectFactoryRuns` test
 - [ ] 7.9 A merge failure no code change can fix (missing App permission, branch rule, GitHub error after the provider's retries) parks the run in `waiting_human` with the reason and starts no agent; verify with merge-node tests for a branch-rule refusal and a permission error, asserting no follow-up was sent
-- [ ] 7.10 A run waiting for the merge slot counts toward `maxConcurrent`; verify with a watcher test where two runs of a `maxConcurrent: 2` factory wait for the slot and no issue is admitted
+- [x] 7.10 A run waiting for the merge slot counts toward `maxConcurrent`; verify with a watcher test where two runs of a `maxConcurrent: 2` factory wait for the slot and no issue is admitted
 - [ ] 7.11 Record per factory the review verdicts (pass / fail, rounds) and the reasons runs park in `waiting_human`, as metrics; verify with a test over a passed, a failed and a high-risk run
 
 ## Phase 1 exit

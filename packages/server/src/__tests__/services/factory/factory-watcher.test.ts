@@ -548,6 +548,44 @@ describe('factory watcher', () => {
     expect(launcher.calls.map((call) => call.body.title)).toEqual(['[Factory] #2 b']);
   });
 
+  // Change factory-agent-roles, D8: waiting for the repository's merge slot is in
+  // flight, so a full merge lane slows admissions instead of piling up pull requests.
+  test('runs waiting for the merge slot hold their slots: no issue is admitted', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 2 });
+    const runs = createFactoryRunsRepository();
+    for (const issueNumber of [1, 2]) {
+      const run = (await runs.start({ factoryId, issueNumber }))._unsafeUnwrap();
+      await runs.update(run.id, { state: 'merging' });
+    }
+    const issues = [
+      { number: 1, title: 'a', url: 'u/1' },
+      { number: 2, title: 'b', url: 'u/2' },
+      { number: 3, title: 'c', url: 'u/3' },
+    ];
+    const start = async () => {
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      await startWatcherWithProof({
+        ports,
+        github: fakeGithub('acme/repo', issues),
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+      });
+      await poll.ticks[0]!();
+      return launcher.calls.map((call) => call.body.title);
+    };
+
+    expect(await start()).not.toContain('[Factory] #3 c');
+
+    // One of them parks for a person: its slot is free and the next issue comes in.
+    stopFactoryWatcher();
+    const [first] = (await runs.inFlight(factoryId))._unsafeUnwrap();
+    await runs.update(first!.id, { state: 'waiting_human' });
+    expect(await start()).toContain('[Factory] #3 c');
+  });
+
   test('a factory whose enabler lost steer access is turned off and starts nothing', async () => {
     seedProject(testDb.db, { id: 'bob-project', userId: 'bob', path: '/tmp/bob' });
     seedProjectMember(testDb.db, { projectId: 'bob-project', userId: 'alice', role: 'member' });

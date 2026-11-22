@@ -2,6 +2,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -162,6 +163,32 @@ function ConnectedApp({
       <p className="text-muted-foreground text-xs">
         Install it on the repositories sandboxes will work on. Choose “Only select repositories”.
       </p>
+      {status.missingPermissions && status.missingPermissions.length > 0 && (
+        <Alert data-testid="github-app-missing-permissions">
+          <AlertDescription className="space-y-1 text-xs">
+            <p>
+              The App lacks {status.missingPermissions.join(', ')}. The issue factory needs
+              <code className="mx-1">checks: write</code>to publish its regression proof check, and
+              never enables auto-merge without it.
+            </p>
+            <p>
+              Add it under Permissions in the App’s settings, then accept the new permission on each
+              installation.
+              {status.settingsUrl && (
+                <a
+                  href={status.settingsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-1 underline"
+                  data-testid="github-app-missing-permissions-settings"
+                >
+                  Open the App’s settings
+                </a>
+              )}
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex gap-2">
         {status.installUrl && (
           <Button asChild size="sm" data-testid="github-app-install">

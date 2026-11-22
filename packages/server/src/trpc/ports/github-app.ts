@@ -18,7 +18,8 @@
 import { randomBytes } from 'node:crypto';
 
 import { failure, type GithubAppPort } from '@funny/api';
-import type { GithubAppAccount } from '@funny/shared/contracts/github-app';
+import { signAppJwt } from '@funny/core/github-app';
+import type { GithubAppAccount, GithubAppStatus } from '@funny/shared/contracts/github-app';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 
@@ -29,7 +30,7 @@ import {
   sqlSettingsStore,
   type SettingsStore,
 } from '../../services/github-app/app-config.js';
-import { SANDBOX_PERMISSIONS } from '../../services/github-app/token-issuer.js';
+import { APP_PERMISSIONS } from '../../services/github-app/token-issuer.js';
 import { getProviderKey } from '../../services/profile-service.js';
 
 export interface GithubAppDeps {
@@ -66,6 +67,46 @@ function originOf(header: string | undefined): string | null {
       ? url.origin
       : null;
   } catch {
+    return null;
+  }
+}
+
+const LEVEL_RANK = { read: 1, write: 2 } as const;
+
+/**
+ * The permissions of `APP_PERMISSIONS` the App lacks (`GET /app`, as the App),
+ * e.g. an App created before the issue factory needed `checks: write`. Null
+ * when GitHub could not be asked: the screen then says nothing.
+ */
+async function missingAppPermissions(
+  doFetch: typeof fetch,
+  api: string,
+  app: { appId: string; privateKey: string },
+): Promise<string[] | null> {
+  const jwt = signAppJwt(app.appId, app.privateKey);
+  if (jwt.isErr()) return null;
+  try {
+    const res = await doFetch(`${api}/app`, {
+      headers: {
+        accept: 'application/vnd.github+json',
+        authorization: `Bearer ${jwt.value}`,
+        'user-agent': 'funny',
+      },
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { permissions?: Record<string, string> };
+    const has = body.permissions ?? {};
+    return Object.entries(APP_PERMISSIONS)
+      .filter(([name, level]) => {
+        const held = has[name];
+        return !(held === 'read' || held === 'write') || LEVEL_RANK[held] < LEVEL_RANK[level];
+      })
+      .map(([name, level]) => `${name}: ${level}`);
+  } catch (error) {
+    log.warn('Could not read the GitHub App permissions', {
+      namespace: 'github-app',
+      error: String(error),
+    });
     return null;
   }
 }
@@ -131,7 +172,8 @@ export function createGithubAppPort(
       }
       const app = config.value;
       if (!app) return ok({ configured: false, source: 'none' as const });
-      return ok({
+      const missingPermissions = await missingAppPermissions(doFetch, api, app);
+      const status: GithubAppStatus = {
         configured: true,
         source: app.source,
         appId: app.appId,
@@ -139,7 +181,10 @@ export function createGithubAppPort(
         owner: app.owner,
         installUrl: app.slug ? `https://github.com/apps/${app.slug}/installations/new` : null,
         settingsUrl: app.slug ? `https://github.com/settings/apps/${app.slug}` : null,
-      });
+      };
+      // Absent when GitHub could not be asked: the screen then says nothing.
+      if (missingPermissions) status.missingPermissions = missingPermissions;
+      return ok(status);
     },
 
     async accounts(userId) {
@@ -169,13 +214,13 @@ export function createGithubAppPort(
         name: `funny-${new URL(origin).hostname.split('.')[0]}`.slice(0, 34),
         url: origin,
         description:
-          "Short-lived, single-repository tokens for funny sandbox threads (git and gh), so the owner's personal access token never enters a sandbox.",
+          "Short-lived, single-repository tokens for funny sandbox threads (git and gh), so the owner's personal access token never enters a sandbox; and the issue factory's regression proof check.",
         // No `hook_attributes`: the App needs no webhook, and GitHub validates the
         // hook URL even when inactive, refusing a localhost origin.
         redirect_url: `${origin}/api/settings/github-app/callback`,
         setup_url: `${origin}${RETURN_PAGE}?githubApp=installed`,
         public: false,
-        default_permissions: SANDBOX_PERMISSIONS.write,
+        default_permissions: APP_PERMISSIONS,
         default_events: [],
       };
       return ok({ action, manifest: JSON.stringify(manifest), state });

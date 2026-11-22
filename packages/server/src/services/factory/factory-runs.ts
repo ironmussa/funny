@@ -727,6 +727,18 @@ export function createFactoryRunsRepository(
       return updateFromParked(runId, { prUrl });
     },
 
+    /**
+     * The proof of a parked run's new head (re-proved while it waits on
+     * auto-merge), and why it cannot merge, or null. Only while it is parked.
+     */
+    recordParkedProof(
+      runId: string,
+      proof: RegressionProofRecord,
+      failureReason: string | null,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return updateFromParked(runId, { regressionProof: JSON.stringify(proof), failureReason });
+    },
+
     /** One run by its id, or null. */
     get(runId: string): ResultAsync<FactoryRunView | null, FactoryRunsError> {
       return ResultAsync.fromPromise(

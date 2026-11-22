@@ -16,8 +16,12 @@ afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
 const { loadGithubAppConfig, saveGithubApp, deleteGithubApp } =
   await import('../../../services/github-app/app-config.js');
 const { signAppJwt } = await import('@funny/core/github-app');
-const { createGithubAppTokenIssuer, SANDBOX_PERMISSIONS } =
-  await import('../../../services/github-app/token-issuer.js');
+const {
+  APP_PERMISSIONS,
+  CHECK_PUBLISH_PERMISSIONS,
+  createGithubAppTokenIssuer,
+  SANDBOX_PERMISSIONS,
+} = await import('../../../services/github-app/token-issuer.js');
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -189,6 +193,28 @@ describe('GitHub App token issuer', () => {
     }
     const { issuer } = setup();
     expect((await issuer.issue('acme/app', null))._unsafeUnwrapErr().kind).toBe('no-access');
+  });
+
+  test("sandbox tokens never write checks; only the server's check publisher does", async () => {
+    expect(SANDBOX_PERMISSIONS.write.checks).toBe('read');
+    expect(SANDBOX_PERMISSIONS.read.checks).toBe('read');
+    expect(CHECK_PUBLISH_PERMISSIONS).toEqual({ checks: 'write', metadata: 'read' });
+    // The App asks for everything a sandbox gets, plus writing checks.
+    expect(APP_PERMISSIONS).toEqual({ ...SANDBOX_PERMISSIONS.write, checks: 'write' });
+
+    const { issuer, calls } = setup();
+    const token = (await issuer.issueCheckPublisher('acme/app', OWNER_PAT))._unsafeUnwrap();
+    expect(token.repo).toBe('acme/app');
+    const mint = calls.find((c) => c.url.endsWith('/access_tokens'))!;
+    expect(mint.body).toEqual({ repositories: ['app'], permissions: CHECK_PUBLISH_PERMISSIONS });
+  });
+
+  test('the check publisher needs an owner with write access', async () => {
+    const { issuer, calls } = setup({ permissions: { pull: true } });
+    expect((await issuer.issueCheckPublisher('acme/app', OWNER_PAT))._unsafeUnwrapErr().kind).toBe(
+      'no-access',
+    );
+    expect(calls.some((c) => c.url.endsWith('/access_tokens'))).toBe(false);
   });
 
   test('a repository without the App installed', async () => {

@@ -85,9 +85,10 @@ warn when a custom flow still says "new branch".
 
 From `factory-quality-gates` (see [docs/guides/factory-regression-proof.md](../../docs/guides/factory-regression-proof.md)):
 
-- **No check run yet** (task 4.4): the proof is not published as `funny/regression-proof`, so a
-  repository cannot require it in a branch rule, and the factory never enables auto-merge behind
-  the gate; repositories that need reviews before a merge park at `merge`.
+- **Merge queues**: a required `funny/regression-proof` would stall a queue (its merge commit has
+  no check), so such repositories do not require it and their runs park at `merge`. Publishing
+  the check on the queue's merge commit is sketched under Future Work in the change's design.
+- **Pull requests from people** get no proof or check: requiring the check blocks them.
 - **The proof is held in memory**: `merge` reuses the proof the step ran in the same execution.
   After a server restart it proves the head again (slower, never weaker). Reading the stored
   `factory_runs.regression_proof` for the head SHA would skip that.

@@ -2,7 +2,7 @@
  * GitHub check runs and branch protection queries for the regression proof gate.
  *
  * - Creating a check run on a commit (requires `checks: write` on the token).
- * - Querying whether a named check is required on a branch, and from which App.
+ * - Querying whether a branch's rules require a named check from one App ("held").
  * - Querying whether a branch has commits ahead of the default branch.
  * - Merging a pull request at an exact SHA, never enabling auto-merge.
  */
@@ -11,6 +11,9 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import type { MergeMethod } from './pull-requests.js';
 import type { GithubCallError, RepoGithub } from './repo-github.js';
+
+/** The check the issue factory publishes for every regression proof (factory-quality-gates). */
+export const REGRESSION_PROOF_CHECK = 'funny/regression-proof';
 
 export type CheckRunConclusion = 'success' | 'failure' | 'neutral' | 'cancelled' | 'timed_out';
 
@@ -30,12 +33,8 @@ export interface CheckRunResult {
 
 export type PinnedMergeResult =
   | { kind: 'merged'; method: MergeMethod }
-  | { kind: 'not-mergeable'; reason: string };
-
-export interface RequiredCheckInfo {
-  required: boolean;
-  fromAppId?: number;
-}
+  /** `headMoved`: GitHub answered 409, the head is no longer `sha`; else a requirement is unmet. */
+  | { kind: 'not-mergeable'; reason: string; headMoved: boolean };
 
 export interface BranchCompareResult {
   ahead: boolean;
@@ -58,38 +57,35 @@ export interface RepoCheckOps {
     head: string,
   ): ResultAsync<BranchCompareResult, GithubCallError>;
 
-  isCheckRequiredOnBranch(
+  /**
+   * Whether GitHub itself holds `checkName` on `branch`: a rule that applies to
+   * the branch requires it **from the App `appId`** (rulesets, or classic
+   * branch protection). Required from any source, or from another App, is not
+   * held: a workflow job of the same name would satisfy such a rule.
+   */
+  isCheckHeldByApp(
     repo: string,
     branch: string,
     checkName: string,
-    appId?: number,
-  ): ResultAsync<RequiredCheckInfo, GithubCallError>;
+    appId: number,
+  ): ResultAsync<boolean, GithubCallError>;
 }
 
-interface RestBranchProtection {
-  required_status_checks?: {
-    contexts?: string[];
-    checks?: Array<{ context: string; app_id?: number | null }>;
+/** `GET /repos/{repo}/rules/branches/{branch}`: the active rules that apply to the branch. */
+interface RestBranchRule {
+  type: string;
+  parameters?: {
+    required_status_checks?: Array<{ context: string; integration_id?: number | null }>;
   } | null;
 }
 
-interface RestRuleset {
-  id: number;
-  enforcement: string;
-  rules?: Array<{
-    type: string;
-    parameters?: {
-      required_status_checks?: Array<{
-        context: string;
-        integration_id?: number | null;
-      }>;
+/** `GET /repos/{repo}/branches/{branch}`: its classic protection, readable without admin. */
+interface RestBranch {
+  protection?: {
+    required_status_checks?: {
+      checks?: Array<{ context: string; app_id?: number | null }>;
     } | null;
-  }>;
-  conditions?: {
-    ref_name?: {
-      include?: string[];
-    };
-  };
+  } | null;
 }
 
 interface RestCompare {
@@ -132,6 +128,7 @@ export function createRepoCheckOps(github: RepoGithub): RepoCheckOps {
             ? okAsync<PinnedMergeResult, GithubCallError>({
                 kind: 'not-mergeable',
                 reason: e.message,
+                headMoved: e.status === 409,
               })
             : errAsync(e),
         );
@@ -151,120 +148,32 @@ export function createRepoCheckOps(github: RepoGithub): RepoCheckOps {
         );
     },
 
-    isCheckRequiredOnBranch(repo, branch, checkName, appId) {
-      return checkFromRulesets(github, repo, branch, checkName, appId).andThen((rulesetResult) => {
-        if (rulesetResult.required) return okAsync(rulesetResult);
-        return checkFromClassicProtection(github, repo, branch, checkName, appId);
-      });
+    isCheckHeldByApp(repo, branch, checkName, appId) {
+      const ref = encodeURIComponent(branch);
+      // A missing branch or rule set (404) holds nothing.
+      const none = <T>(e: GithubCallError) =>
+        e.status === 404 ? okAsync<T | null, GithubCallError>(null) : errAsync(e);
+      return github
+        .json<RestBranchRule[]>(repo, 'GET', `/repos/${repo}/rules/branches/${ref}?per_page=100`)
+        .orElse((e) => none<RestBranchRule[]>(e))
+        .andThen((rules) => {
+          const byRule = (rules ?? []).some(
+            (rule) =>
+              rule.type === 'required_status_checks' &&
+              (rule.parameters?.required_status_checks ?? []).some(
+                (check) => check.context === checkName && check.integration_id === appId,
+              ),
+          );
+          if (byRule) return okAsync<boolean, GithubCallError>(true);
+          return github
+            .json<RestBranch>(repo, 'GET', `/repos/${repo}/branches/${ref}`)
+            .orElse((e) => none<RestBranch>(e))
+            .map((info) =>
+              (info?.protection?.required_status_checks?.checks ?? []).some(
+                (check) => check.context === checkName && check.app_id === appId,
+              ),
+            );
+        });
     },
   };
-}
-
-function checkFromRulesets(
-  github: RepoGithub,
-  repo: string,
-  branch: string,
-  checkName: string,
-  appId?: number,
-): ResultAsync<RequiredCheckInfo, GithubCallError> {
-  return github
-    .json<RestRuleset[]>(repo, 'GET', `/repos/${repo}/rulesets?per_page=100`)
-    .andThen((rulesets) => {
-      for (const ruleset of rulesets) {
-        if (ruleset.enforcement !== 'active') continue;
-        const matchesBranch = rulesetMatchesBranch(ruleset, branch);
-        if (!matchesBranch) continue;
-
-        for (const rule of ruleset.rules ?? []) {
-          if (rule.type !== 'required_status_checks') continue;
-          const checks = rule.parameters?.required_status_checks ?? [];
-          for (const check of checks) {
-            if (check.context !== checkName) continue;
-            const fromApp = check.integration_id ?? undefined;
-            if (appId !== undefined && fromApp !== undefined && fromApp === appId) {
-              return okAsync<RequiredCheckInfo, GithubCallError>({
-                required: true,
-                fromAppId: fromApp,
-              });
-            }
-            if (appId === undefined) {
-              return okAsync<RequiredCheckInfo, GithubCallError>({
-                required: true,
-                fromAppId: fromApp,
-              });
-            }
-            return okAsync<RequiredCheckInfo, GithubCallError>({
-              required: true,
-              fromAppId: fromApp,
-            });
-          }
-        }
-      }
-      return okAsync<RequiredCheckInfo, GithubCallError>({ required: false });
-    })
-    .orElse((e) =>
-      e.status === 404
-        ? okAsync<RequiredCheckInfo, GithubCallError>({ required: false })
-        : errAsync(e),
-    );
-}
-
-function rulesetMatchesBranch(ruleset: RestRuleset, branch: string): boolean {
-  const includes = ruleset.conditions?.ref_name?.include ?? [];
-  if (includes.length === 0) return true;
-  for (const pattern of includes) {
-    if (pattern === `refs/heads/${branch}`) return true;
-    if (pattern === `~DEFAULT_BRANCH`) return true;
-    const glob = pattern.replace('refs/heads/', '');
-    if (simpleGlobMatch(glob, branch)) return true;
-  }
-  return false;
-}
-
-function simpleGlobMatch(pattern: string, value: string): boolean {
-  if (pattern === '*' || pattern === '**') return true;
-  if (!pattern.includes('*')) return pattern === value;
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-  return new RegExp(`^${escaped}$`).test(value);
-}
-
-function checkFromClassicProtection(
-  github: RepoGithub,
-  repo: string,
-  branch: string,
-  checkName: string,
-  appId?: number,
-): ResultAsync<RequiredCheckInfo, GithubCallError> {
-  return github
-    .json<RestBranchProtection>(
-      repo,
-      'GET',
-      `/repos/${repo}/branches/${encodeURIComponent(branch)}/protection`,
-    )
-    .andThen((protection) => {
-      const checks = protection.required_status_checks?.checks ?? [];
-      const contexts = protection.required_status_checks?.contexts ?? [];
-
-      for (const check of checks) {
-        if (check.context !== checkName) continue;
-        const fromApp = check.app_id ?? undefined;
-        return okAsync<RequiredCheckInfo, GithubCallError>({
-          required: true,
-          fromAppId: fromApp,
-        });
-      }
-
-      if (contexts.includes(checkName)) {
-        return okAsync<RequiredCheckInfo, GithubCallError>({
-          required: true,
-        });
-      }
-
-      return okAsync<RequiredCheckInfo, GithubCallError>({ required: false });
-    })
-    .orElse((e) =>
-      e.status === 404
-        ? okAsync<RequiredCheckInfo, GithubCallError>({ required: false })
-        : errAsync(e),
-    );
 }

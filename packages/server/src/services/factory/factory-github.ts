@@ -226,6 +226,12 @@ export function createFactoryGithub(
     branchAhead: (reader, branch) => reads(reader).branchAhead(branch),
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
 
-    pullRequests: createFactoryPullRequests({ issue, ownerToken, fetch: fetchImpl }),
+    pullRequests: createFactoryPullRequests({
+      issue,
+      ownerToken,
+      issueCheckPublisher: (repo, token) => tokenIssuer.issueCheckPublisher(repo, token),
+      appId: () => tokenIssuer.appId(),
+      fetch: fetchImpl,
+    }),
   };
 }

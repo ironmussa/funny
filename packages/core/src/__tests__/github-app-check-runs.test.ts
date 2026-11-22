@@ -50,7 +50,7 @@ describe('pinnedMerge', () => {
       'PUT /repos/o/r/pulls/7/merge': 409,
     });
     const result = (await ops.pinnedMerge('o/r', 7, 'abc123', 'squash'))._unsafeUnwrap();
-    expect(result.kind).toBe('not-mergeable');
+    expect(result).toMatchObject({ kind: 'not-mergeable', headMoved: true });
   });
 
   test('returns not-mergeable when merge method not allowed (405)', async () => {
@@ -58,7 +58,7 @@ describe('pinnedMerge', () => {
       'PUT /repos/o/r/pulls/7/merge': 405,
     });
     const result = (await ops.pinnedMerge('o/r', 7, 'abc123', 'squash'))._unsafeUnwrap();
-    expect(result.kind).toBe('not-mergeable');
+    expect(result).toMatchObject({ kind: 'not-mergeable', headMoved: false });
   });
 });
 
@@ -125,83 +125,50 @@ describe('createCheckRun', () => {
   });
 });
 
-describe('isCheckRequiredOnBranch', () => {
-  test('required from the App via rulesets', async () => {
-    const { ops } = opsFor({
-      'GET /repos/o/r/rulesets?per_page=100': [
-        {
-          id: 1,
-          enforcement: 'active',
-          rules: [
-            {
-              type: 'required_status_checks',
-              parameters: {
-                required_status_checks: [
-                  { context: 'funny/regression-proof', integration_id: 999 },
-                ],
-              },
-            },
-          ],
-          conditions: { ref_name: { include: ['refs/heads/main'] } },
-        },
-      ],
+describe('isCheckHeldByApp', () => {
+  const name = 'funny/regression-proof';
+  const rules = (checks: Array<{ context: string; integration_id?: number }>) => [
+    { type: 'pull_request', parameters: {} },
+    { type: 'required_status_checks', parameters: { required_status_checks: checks } },
+  ];
+
+  test('held: a rule on the branch requires the check from this App', async () => {
+    const { ops, calls } = opsFor({
+      'GET /repos/o/r/rules/branches/main?per_page=100': rules([
+        { context: name, integration_id: 999 },
+      ]),
     });
-    const result = (
-      await ops.isCheckRequiredOnBranch('o/r', 'main', 'funny/regression-proof', 999)
-    )._unsafeUnwrap();
-    expect(result).toEqual({ required: true, fromAppId: 999 });
+    expect((await ops.isCheckHeldByApp('o/r', 'main', name, 999))._unsafeUnwrap()).toBe(true);
+    expect(calls.map((c) => c.path)).toEqual(['/repos/o/r/rules/branches/main?per_page=100']);
   });
 
-  test('required from any source (no specific App)', async () => {
-    const { ops } = opsFor({
-      'GET /repos/o/r/rulesets?per_page=100': [
-        {
-          id: 1,
-          enforcement: 'active',
-          rules: [
-            {
-              type: 'required_status_checks',
-              parameters: {
-                required_status_checks: [
-                  { context: 'funny/regression-proof', integration_id: null },
-                ],
-              },
-            },
-          ],
-          conditions: { ref_name: { include: ['refs/heads/main'] } },
-        },
-      ],
-    });
-    const result = (
-      await ops.isCheckRequiredOnBranch('o/r', 'main', 'funny/regression-proof', 999)
-    )._unsafeUnwrap();
-    expect(result.required).toBe(true);
-    expect(result.fromAppId).toBeUndefined();
+  test('not held: required from any source, or from another App', async () => {
+    for (const check of [{ context: name }, { context: name, integration_id: 15368 }]) {
+      const { ops } = opsFor({
+        'GET /repos/o/r/rules/branches/main?per_page=100': rules([check]),
+        'GET /repos/o/r/branches/main': { protection: { required_status_checks: { checks: [] } } },
+      });
+      expect((await ops.isCheckHeldByApp('o/r', 'main', name, 999))._unsafeUnwrap()).toBe(false);
+    }
   });
 
-  test('not required when no matching ruleset or protection', async () => {
+  test('held by classic branch protection pinned to this App', async () => {
     const { ops } = opsFor({
-      'GET /repos/o/r/rulesets?per_page=100': [],
-      // classic protection also returns 404
-    });
-    const result = (
-      await ops.isCheckRequiredOnBranch('o/r', 'main', 'funny/regression-proof')
-    )._unsafeUnwrap();
-    expect(result).toEqual({ required: false });
-  });
-
-  test('falls back to classic protection when no rulesets match', async () => {
-    const { ops } = opsFor({
-      'GET /repos/o/r/rulesets?per_page=100': [],
-      'GET /repos/o/r/branches/main/protection': {
-        required_status_checks: {
-          checks: [{ context: 'funny/regression-proof', app_id: 999 }],
-        },
+      'GET /repos/o/r/rules/branches/main?per_page=100': [],
+      'GET /repos/o/r/branches/main': {
+        protection: { required_status_checks: { checks: [{ context: name, app_id: 999 }] } },
       },
     });
-    const result = (
-      await ops.isCheckRequiredOnBranch('o/r', 'main', 'funny/regression-proof', 999)
-    )._unsafeUnwrap();
-    expect(result).toEqual({ required: true, fromAppId: 999 });
+    expect((await ops.isCheckHeldByApp('o/r', 'main', name, 999))._unsafeUnwrap()).toBe(true);
+  });
+
+  test('not held when nothing protects the branch (404s)', async () => {
+    const { ops } = opsFor({});
+    expect((await ops.isCheckHeldByApp('o/r', 'main', name, 999))._unsafeUnwrap()).toBe(false);
+  });
+
+  test('a GitHub error is an error, not "not held"', async () => {
+    const { ops } = opsFor({ 'GET /repos/o/r/rules/branches/main?per_page=100': 500 });
+    expect((await ops.isCheckHeldByApp('o/r', 'main', name, 999)).isErr()).toBe(true);
   });
 });

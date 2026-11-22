@@ -30,6 +30,12 @@ export interface GithubAppStatus {
   owner?: string | null;
   installUrl?: string | null;
   settingsUrl?: string | null;
+  /**
+   * Permissions funny asks for that the App does not have, as `name: level`
+   * (e.g. `checks: write`, which the issue factory needs to publish its
+   * regression proof check). Absent when they could not be read.
+   */
+  missingPermissions?: string[];
   error?: string;
 }
 

@@ -58,6 +58,13 @@ import {
 } from './factory-flow-runs.js';
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './factory-github.js';
+import {
+  proofAllowsMerge,
+  proofCheckOf,
+  proofRecordOf,
+  proveOnRunner,
+  regressionTestRequired,
+} from './factory-proof-runner.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import {
   createFactoryRunsRepository,
@@ -154,6 +161,10 @@ const busy = new Set<string>();
 let deps: FactoryWatcherDeps | null = null;
 let runs: ReturnType<typeof createFactoryRunsRepository> | null = null;
 let flows: ReturnType<typeof createFactoryFlowRuns> | null = null;
+/** The proof service of a thread, as the enabler (the watcher's, or the test's). */
+let proofs: NonNullable<FactoryWatcherDeps['proof']> | null = null;
+/** Parked runs whose new head is being proved now, by run id. */
+const reproving = new Map<string, AbortController>();
 
 /** The enabler's configured runtime for the project, or local when none is set. */
 async function defaultResolveRuntime(
@@ -178,6 +189,13 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
   stopFactoryWatcher();
   deps = d;
   runs = d.runs ?? createFactoryRunsRepository();
+  proofs =
+    d.proof ??
+    ((userId, _threadId) => ({
+      startProof: (tid, body) => startRegressionProofOnRunner(d.ports, userId, tid, body),
+      pollProof: (tid, proofId) => pollRegressionProofOnRunner(d.ports, userId, tid, proofId),
+      cancelProof: (tid, proofId) => cancelRegressionProofOnRunner(d.ports, userId, tid, proofId),
+    }));
   flows = createFactoryFlowRuns({
     runs,
     github: d.github,
@@ -186,13 +204,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     loadFlow: d.loadFlow,
     notify: d.notify,
     gate: d.gate,
-    proof:
-      d.proof ??
-      ((userId, _threadId) => ({
-        startProof: (tid, body) => startRegressionProofOnRunner(d.ports, userId, tid, body),
-        pollProof: (tid, proofId) => pollRegressionProofOnRunner(d.ports, userId, tid, proofId),
-        cancelProof: (tid, proofId) => cancelRegressionProofOnRunner(d.ports, userId, tid, proofId),
-      })),
+    proof: proofs,
     reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
     stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
     cleanupMerged: (userId, threadIds) => cleanupMergedFor(d, userId, threadIds),
@@ -210,6 +222,9 @@ export function stopFactoryWatcher(): void {
   jobs.clear();
   busy.clear();
   blockedReasons.clear();
+  for (const controller of reproving.values()) controller.abort();
+  reproving.clear();
+  proofs = null;
   flows?.stopAll();
   flows = null;
   deps = null;
@@ -715,6 +730,82 @@ async function reconcileParked(factory: WatchedFactory, repo: string): Promise<v
   for (const run of parked.value) await reconcileRun(factory, repo, run);
 }
 
+/**
+ * A run waiting on GitHub's auto-merge whose pull request head is no longer
+ * the proved commit: prove the new head and publish its check, in the
+ * background (one at a time per run). GitHub does not merge before that check
+ * passes; a failing proof leaves a failing check and the finding on the run.
+ */
+async function reproveMovedHead(
+  factory: WatchedFactory,
+  repo: string,
+  run: FactoryRunView,
+  number: number,
+): Promise<void> {
+  const threadId = run.threadIds[0];
+  const proved = run.regressionProof;
+  if (!deps || !runs || !proofs || !threadId || !proved || reproving.has(run.id)) return;
+  const github = deps.github;
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const pr = { repo, number, userId: factory.userId, projectId: factory.projectId };
+  const head = await github.pullRequests.pullHead(pr);
+  if (head.isErr() || !head.value.autoMerge || head.value.sha === proved.headSha) return;
+  const flowName = run.flowName ?? factory.flowName;
+  const flow = await loadFactoryFlow(flowName, {
+    readDefaultBranchFile: (path) => github.readDefaultBranchFile(reader, path),
+  });
+  const config = flow.isOk() ? flow.value.regressionProof : undefined;
+  if (!config || config.rules.length === 0) return;
+
+  const controller = new AbortController();
+  reproving.set(run.id, controller);
+  const sha = head.value.sha;
+  const proofDeps = proofs(factory.userId, threadId);
+  const repository = runs;
+  void (async () => {
+    try {
+      const proof = await proveOnRunner(proofDeps, threadId, config, controller.signal, sha);
+      if (proof.kind === 'unavailable') {
+        log.warn("Issue factory could not prove a parked run's new head", {
+          namespace: 'factory',
+          runId: run.id,
+          headSha: sha,
+          error: proof.why,
+        });
+        return;
+      }
+      const issue = await github.getIssue(reader, run.issueNumber);
+      const testRequired = regressionTestRequired(
+        config,
+        issue.isOk() ? (issue.value.labels ?? []) : [],
+      );
+      const record = proofRecordOf(proof.result);
+      const allows = proofAllowsMerge(proof.result, testRequired);
+      await repository.recordParkedProof(
+        run.id,
+        record,
+        allows
+          ? null
+          : `Regression proof failed on the new head ${sha}: ${proof.result.finding ?? 'no regression test'}`,
+      );
+      const published = await github.pullRequests.publishProofCheck(
+        pr,
+        proofCheckOf(record, testRequired),
+      );
+      if (published.isErr()) {
+        log.warn('Issue factory could not publish the regression proof check', {
+          namespace: 'factory',
+          runId: run.id,
+          headSha: sha,
+          error: published.error.message,
+        });
+      }
+    } finally {
+      reproving.delete(run.id);
+    }
+  })();
+}
+
 /** The run's pull request number: the recorded one, else the one on its branch (then recorded). */
 async function pullRequestOf(
   factory: WatchedFactory,
@@ -747,7 +838,11 @@ async function reconcileRun(
     userId: factory.userId,
     projectId: factory.projectId,
   });
-  if (pr.isErr() || pr.value === 'open') return;
+  if (pr.isErr()) return;
+  if (pr.value === 'open') {
+    await reproveMovedHead(factory, repo, run, number);
+    return;
+  }
   const closed = await runs.closeParked(run.id, pr.value);
   if (closed.isErr() || !closed.value) return;
   log.info('Issue factory run closed: its pull request was finished outside the factory', {

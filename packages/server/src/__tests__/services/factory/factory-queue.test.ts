@@ -99,7 +99,8 @@ function fakeGithub(script: Script = {}): FakeGithub {
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
       prState: () => okAsync('open' as const),
-      headSha: () => okAsync('sha-head'),
+      pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+      publishProofCheck: () => okAsync(undefined),
       ciState: () => okAsync({ kind: 'green' as const }),
       merge: () => {
         port.merges++;

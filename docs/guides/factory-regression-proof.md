@@ -105,8 +105,10 @@ the stored output when a proof looks too easy.
 Unless the merge step opts out, `merge` reads the pull request's head and merges only a head with
 a passing proof of **that exact commit**: the one the `regression-proof` step proved, or a new
 proof it runs itself (for example when a CI fix pushed a new commit). The merge is a direct merge
-pinned to that commit, so GitHub refuses it if someone pushes in between; it never turns on
-auto-merge behind the gate.
+pinned to that commit, so GitHub refuses it if someone pushes in between. When GitHub refuses it
+for an unmet requirement (a required review, checks still running), the factory turns on
+auto-merge only where GitHub itself holds the proof (see below); otherwise the run waits for you
+with GitHub's reason and how to require the check.
 
 To opt out, one line on the merge step (the server logs a warning each time a run loads such a
 flow):
@@ -118,12 +120,31 @@ flow):
     require_regression_proof: false
 ```
 
-Not yet available (task 4.4 of the change): publishing the proof as a `funny/regression-proof`
-check run, and auto-merge behind a branch rule that requires that check. Until then a repository
-whose rules require reviews or other checks before a merge gets its runs parked at `merge`. When
-the check run ships, require it only where every pull request comes from the factory, and not on
-repositories that use a merge queue: a pull request from a person would have no check and could
-not merge.
+## The `funny/regression-proof` check
+
+Every proof is published on its commit as the check run `funny/regression-proof`: `success` when it
+lets the run merge (a pass, or a skip when no test is required), `failure` otherwise, with the
+finding, the tests, the commands and the output (on a pass, the failure without the fix). Only
+the server can publish it, with a token that may write checks and nothing else; sandbox and agent
+tokens keep `checks: read`, so an agent cannot forge it.
+
+The App needs the `checks: write` permission for this. An App created before the factory had it
+lacks it: **Preferences > GitHub App** says so; add the permission in the App's settings, then
+accept it on each installation. Until then no check is published (the proof still gates the
+factory's own direct merges) and the factory never turns on auto-merge.
+
+**Auto-merge behind the gate.** To let the factory merge in a repository that requires reviews,
+require the check on the base branch, **pinned to this App**: in a ruleset (or branch protection),
+add the required status check `funny/regression-proof` with this GitHub App as its source.
+Without the pin, a workflow job named `funny/regression-proof` would satisfy the rule, so the
+factory treats an unpinned rule as not held. When the rule holds and the published check is for
+the head, `merge` turns on auto-merge and the run waits for GitHub. If the head moves while it
+waits, the watcher proves the new head and publishes its check before GitHub can merge it; a
+failing re-proof leaves a failing check and its finding on the run.
+
+Require the check only where every pull request comes from the factory: a pull request from a
+person has no such check and could not merge. Do not require it on a repository with a merge
+queue: the queue checks its own merge commit, which has no check, so the queue would stall.
 
 ## "No change"
 

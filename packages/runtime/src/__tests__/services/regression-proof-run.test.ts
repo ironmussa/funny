@@ -150,6 +150,21 @@ describe('regression proof run', () => {
     expect(result.failureKind).toBe('environment');
   });
 
+  test('a head pushed from elsewhere is fetched by its SHA before it is proved', async () => {
+    const fixed = repoWithFix({ 'lib.test.sh': ASSERTS_FIX });
+    const origin = git(fixed.path, 'remote', 'get-url', 'origin');
+    git(fixed.path, 'push', '-q', 'origin', 'fix');
+    // GitHub serves any reachable commit by its SHA; a bare repository must be told to.
+    git(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
+    // A checkout that has only main: the fix commit is not here.
+    const other = tempDir('funny-proof-other-');
+    git(other, 'clone', '-q', '--single-branch', '-b', 'main', origin, '.');
+    expect(git(other, 'log', '--all', '--format=%H')).not.toContain(fixed.headSha);
+
+    const result = await prove({ path: other, headSha: fixed.headSha });
+    expect(result.verdict).toBe('pass');
+  });
+
   test('no changed test file is skipped', async () => {
     const result = await prove(repoWithFix({ 'notes.md': 'x\n' }));
     expect(result.verdict).toBe('skipped');

@@ -124,3 +124,164 @@ describe('factory pull requests', () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe('factory pull requests: the proof gate (task 4.4)', () => {
+  /** A route answering a status instead of a 200 body. */
+  interface StatusRoute {
+    status: number;
+    body?: Record<string, string>;
+  }
+  const isStatus = (v: unknown): v is StatusRoute =>
+    typeof v === 'object' && v !== null && 'status' in v;
+
+  /** A GitHub that answers `routes`; `{ status }` routes answer that status. */
+  function gated(routes: Record<string, unknown>, opts: { appId?: string | null } = {}) {
+    const calls: Array<{ key: string; body?: unknown; auth?: string }> = [];
+    const fetchImpl = fakeFetch(async (url, init) => {
+      const key = `${init?.method ?? 'GET'} ${url.replace('https://api.github.com', '')}`;
+      const headers = new Headers(init?.headers);
+      calls.push({
+        key,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        auth: headers.get('authorization') ?? undefined,
+      });
+      if (!(key in routes)) return new Response('not found', { status: 404 });
+      const route = routes[key];
+      if (isStatus(route)) {
+        return new Response(JSON.stringify(route.body ?? { message: 'refused' }), {
+          status: route.status,
+        });
+      }
+      return new Response(JSON.stringify(route), { status: 200 });
+    });
+    const prs = createFactoryPullRequests({
+      issue: () => okAsync({ token: 'tok-repo', expiresAt: '', repo: 'o/r', level: 'write' }),
+      ownerToken: async () => 'pat_alice',
+      issueCheckPublisher: () =>
+        okAsync({ token: 'tok-checks', expiresAt: '', repo: 'o/r', level: 'write' }),
+      appId: () => okAsync(opts.appId === undefined ? '999' : opts.appId),
+      fetch: fetchImpl,
+    });
+    return { prs, calls };
+  }
+
+  const openPull = { ...pull, state: 'open', base: { ref: 'main' }, auto_merge: null };
+  const green = {
+    'GET /repos/o/r/pulls/7': openPull,
+    'GET /repos/o/r/commits/abc/check-runs?per_page=100': {
+      check_runs: [{ id: 1, name: 'build', status: 'completed', conclusion: 'success' }],
+    },
+    'GET /repos/o/r/commits/abc/status': { statuses: [] },
+  };
+  const heldBy = (integrationId: number) => ({
+    'GET /repos/o/r/rules/branches/main?per_page=100': [
+      {
+        type: 'required_status_checks',
+        parameters: {
+          required_status_checks: [
+            { context: 'funny/regression-proof', integration_id: integrationId },
+          ],
+        },
+      },
+    ],
+  });
+  const autoMerge = {
+    'GET /repos/o/r': { allow_squash_merge: true, allow_auto_merge: true },
+    'POST /graphql': { data: { enablePullRequestAutoMerge: { clientMutationId: null } } },
+  };
+
+  test('the pull head carries its base branch and auto-merge state', async () => {
+    const { prs } = gated({ 'GET /repos/o/r/pulls/7': { ...openPull, auto_merge: {} } });
+    expect((await prs.pullHead(pr))._unsafeUnwrap()).toEqual({
+      sha: 'abc',
+      baseRef: 'main',
+      autoMerge: true,
+    });
+  });
+
+  test('a pinned merge merges the proved commit directly', async () => {
+    const { prs, calls } = gated({ ...green, 'PUT /repos/o/r/pulls/7/merge': { merged: true } });
+    const merged = (
+      await prs.merge(pr, { sha: 'abc', method: 'squash', autoMergeWhenHeld: true })
+    )._unsafeUnwrap();
+    expect(merged.kind).toBe('merged');
+    expect(calls.find((c) => c.key === 'PUT /repos/o/r/pulls/7/merge')?.body).toMatchObject({
+      sha: 'abc',
+    });
+    expect(calls.some((c) => c.key === 'POST /graphql')).toBe(false);
+  });
+
+  test('refused for a requirement and held by GitHub (pinned to this App): auto-merge', async () => {
+    const { prs, calls } = gated({
+      ...green,
+      ...heldBy(999),
+      ...autoMerge,
+      'PUT /repos/o/r/pulls/7/merge': { status: 405 },
+    });
+    const merged = (
+      await prs.merge(pr, { sha: 'abc', method: 'squash', autoMergeWhenHeld: true })
+    )._unsafeUnwrap();
+    expect(merged.kind).toBe('auto-merge-enabled');
+    expect(calls.some((c) => c.key === 'POST /graphql')).toBe(true);
+  });
+
+  test('not held (required from another App, or not published): no auto-merge, says how', async () => {
+    const other = gated({
+      ...green,
+      ...heldBy(15368),
+      ...autoMerge,
+      'PUT /repos/o/r/pulls/7/merge': { status: 405 },
+    });
+    const merged = (
+      await other.prs.merge(pr, { sha: 'abc', method: 'squash', autoMergeWhenHeld: true })
+    )._unsafeUnwrap();
+    expect(merged).toMatchObject({ kind: 'not-mergeable' });
+    expect(merged.kind === 'not-mergeable' && merged.reason).toContain(
+      'require the "funny/regression-proof" check from this GitHub App on main',
+    );
+    expect(other.calls.some((c) => c.key === 'POST /graphql')).toBe(false);
+
+    const unpublished = gated({
+      ...green,
+      ...heldBy(999),
+      ...autoMerge,
+      'PUT /repos/o/r/pulls/7/merge': { status: 405 },
+    });
+    await unpublished.prs.merge(pr, { sha: 'abc', method: 'squash', autoMergeWhenHeld: false });
+    expect(unpublished.calls.some((c) => c.key === 'POST /graphql')).toBe(false);
+  });
+
+  test('a head that moved is never auto-merged', async () => {
+    const { prs, calls } = gated({
+      ...green,
+      ...heldBy(999),
+      ...autoMerge,
+      'PUT /repos/o/r/pulls/7/merge': { status: 409 },
+    });
+    const merged = (
+      await prs.merge(pr, { sha: 'abc', method: 'squash', autoMergeWhenHeld: true })
+    )._unsafeUnwrap();
+    expect(merged.kind).toBe('not-mergeable');
+    expect(calls.some((c) => c.key === 'POST /graphql')).toBe(false);
+  });
+
+  test('the check is published with the check-only token, on the proved commit', async () => {
+    const { prs, calls } = gated({
+      'POST /repos/o/r/check-runs': { id: 1, html_url: 'https://github.com/o/r/runs/1' },
+    });
+    const published = await prs.publishProofCheck(pr, {
+      headSha: 'abc',
+      conclusion: 'success',
+      title: 'The changed tests catch the bug',
+      summary: 'ok',
+    });
+    expect(published.isOk()).toBe(true);
+    const call = calls.find((c) => c.key === 'POST /repos/o/r/check-runs');
+    expect(call?.auth).toBe('token tok-checks');
+    expect(call?.body).toMatchObject({
+      name: 'funny/regression-proof',
+      head_sha: 'abc',
+      conclusion: 'success',
+    });
+  });
+});

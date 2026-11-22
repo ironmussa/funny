@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import type { GithubCallError } from '@funny/core/github-app';
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
+import type { RegressionProofOpts } from '@funny/workflows/compiler';
 import { err, errAsync, ok, okAsync, type ResultAsync } from 'neverthrow';
 
 import * as telemetry from '../../../lib/telemetry.js';
@@ -18,6 +19,7 @@ import {
 import type {
   FactoryMergeOptions,
   FactoryMergeOutcome,
+  FactoryProofCheck,
 } from '../../../services/factory/factory-pull-requests.js';
 
 const scope = {
@@ -50,7 +52,8 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),
-        headSha: () => okAsync('sha-head'),
+        pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+        publishProofCheck: () => okAsync(undefined),
         ciState: () => okAsync({ kind: 'green' as const }),
         merge: () =>
           okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
@@ -143,7 +146,8 @@ describe('factory action provider integration metrics', () => {
         findPullRequest: () => okAsync(null),
         pullRequests: {
           prState: () => okAsync('open' as const),
-          headSha: () => okAsync('sha-head'),
+          pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+          publishProofCheck: () => okAsync(undefined),
           ciState: () => okAsync(looks.shift()!),
           merge: () =>
             okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
@@ -298,7 +302,9 @@ describe('factory action provider merge gate', () => {
         findPullRequest: () => okAsync(null),
         pullRequests: {
           prState: () => okAsync('open' as const),
-          headSha: () => okAsync(opts.head ?? 'sha-head'),
+          pullHead: () =>
+            okAsync({ sha: opts.head ?? 'sha-head', baseRef: 'main', autoMerge: false }),
+          publishProofCheck: () => okAsync(undefined),
           ciState: () => okAsync({ kind: 'green' as const }),
           merge: (_pr: unknown, options?: FactoryMergeOptions) => {
             merges.push(options);
@@ -398,7 +404,8 @@ describe('factory action provider "no change" outcome', () => {
         },
         pullRequests: {
           prState: () => okAsync('open' as const),
-          headSha: () => okAsync('sha-head'),
+          pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+          publishProofCheck: () => okAsync(undefined),
           ciState: () => okAsync({ kind: 'green' as const }),
           merge: () =>
             okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
@@ -565,7 +572,8 @@ describe('factory action provider proof counters (task 4.7)', () => {
         commentOnIssue: () => okAsync(undefined),
         pullRequests: {
           prState: () => okAsync('open' as const),
-          headSha: () => okAsync('sha-head'),
+          pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+          publishProofCheck: () => okAsync(undefined),
           ciState: () => okAsync({ kind: 'green' as const }),
           merge: () =>
             okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
@@ -574,5 +582,79 @@ describe('factory action provider proof counters (task 4.7)', () => {
     });
     await provider.createPr({ cwd: '', title: 'Fix it' });
     expect(events()).toEqual(['no_change']);
+  });
+});
+
+describe('factory action provider: the proof check (task 4.4)', () => {
+  const rules = [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }];
+
+  function publishing(result: Record<string, unknown>, publishFails = false) {
+    const checks: FactoryProofCheck[] = [];
+    const merges: Array<FactoryMergeOptions | undefined> = [];
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      prUrl: 'https://github.com/o/r/pull/9',
+      proof: {
+        startProof: async () => ok({ proofId: 'p1', state: 'running' }),
+        pollProof: async () => ok({ state: 'done', result: { headSha: 'sha-head', ...result } }),
+      },
+      github: {
+        findPullRequest: () => okAsync(null),
+        branchAhead: () => okAsync(true),
+        commentOnIssue: () => okAsync(undefined),
+        pullRequests: {
+          prState: () => okAsync('open' as const),
+          pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+          publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {
+            checks.push(check);
+            return publishFails
+              ? errAsync({ kind: 'not-installed' as const, message: 'checks: write not accepted' })
+              : okAsync(undefined);
+          },
+          ciState: () => okAsync({ kind: 'green' as const }),
+          merge: (_pr: unknown, options?: FactoryMergeOptions) => {
+            merges.push(options);
+            return okAsync({
+              kind: 'merged' as const,
+              method: 'squash' as const,
+              branchDeleted: false,
+            });
+          },
+        },
+      },
+    });
+    return { provider, checks, merges };
+  }
+
+  test('every verdict is published on its commit: success only when it allows a merge', async () => {
+    const cases: Array<[Record<string, unknown>, Partial<RegressionProofOpts>, string]> = [
+      [{ verdict: 'pass', outputTail: '(fail) catches it' }, {}, 'success'],
+      [{ verdict: 'fail', failureKind: 'test', finding: 'pass on the base' }, {}, 'failure'],
+      [{ verdict: 'skipped' }, { requireTest: 'never' }, 'success'],
+      [{ verdict: 'skipped' }, {}, 'failure'],
+    ];
+    for (const [result, opts, conclusion] of cases) {
+      const { provider, checks } = publishing(result);
+      await provider.regressionProof!({ rules, ...opts });
+      expect(checks).toHaveLength(1);
+      expect(checks[0]).toMatchObject({ headSha: 'sha-head', conclusion });
+    }
+    const { provider, checks } = publishing({ verdict: 'pass', outputTail: '(fail) catches it' });
+    await provider.regressionProof!({ rules });
+    expect(checks[0]!.summary).toContain('(fail) catches it');
+  });
+
+  test('a check that cannot be published does not fail the proof, but rules out auto-merge', async () => {
+    const { provider, merges } = publishing({ verdict: 'pass' }, true);
+    expect((await provider.regressionProof!({ rules })).ok).toBe(true);
+    expect((await provider.merge({ regressionProof: { rules } })).ok).toBe(true);
+    expect(merges[0]).toMatchObject({ sha: 'sha-head', autoMergeWhenHeld: false });
+  });
+
+  test('a published check lets the merge auto-merge where GitHub holds it', async () => {
+    const { provider, merges } = publishing({ verdict: 'pass' });
+    await provider.regressionProof!({ rules });
+    await provider.merge({ regressionProof: { rules } });
+    expect(merges[0]).toMatchObject({ sha: 'sha-head', autoMergeWhenHeld: true });
   });
 });

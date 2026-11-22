@@ -21,6 +21,7 @@ import {
   createTempWorktree,
   execute,
   gitNetwork,
+  gitRead,
   mergeBase,
   removeTempWorktree,
   sweepTempWorktrees,
@@ -328,6 +329,19 @@ async function proveCommit(run: ProofRun): Promise<Omit<ProofResult, 'headSha'>>
     reject: false,
     timeout: 60_000,
   });
+  // A head named by the server (the pull request's, pushed from elsewhere) may
+  // not be here yet: fetch that commit (GitHub serves reachable SHAs).
+  const present = await gitRead(['cat-file', '-e', `${headSha}^{commit}`], {
+    cwd: projectPath,
+    reject: false,
+  });
+  if (present.exitCode !== 0) {
+    await gitNetwork(['fetch', 'origin', headSha], {
+      cwd: projectPath,
+      reject: false,
+      timeout: 60_000,
+    });
+  }
 
   const baseResult = await mergeBase(projectPath, `origin/${defaultBranch}`, headSha);
   if (baseResult.isErr()) {

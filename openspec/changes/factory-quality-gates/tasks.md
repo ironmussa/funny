@@ -73,7 +73,7 @@
       passes again, one that fails, no proof, a flow without the step, the opt-out (today's
       behaviour, auto-merge included), GitHub refusing a direct merge, and a head that moves
       before the merge.
-- [ ] 4.4 Publish every proof as the `funny/regression-proof` check run with a server-only token
+- [x] 4.4 Publish every proof as the `funny/regression-proof` check run with a server-only token
       that asks for `checks: write` (add it to the App manifest; `SANDBOX_PERMISSIONS` keeps
       `checks: read`), and show a missing permission in the GitHub App settings. In `merge`, when
       a direct merge is refused, enable auto-merge only when the check is required on the base
@@ -82,6 +82,10 @@
       tests: check published per verdict, a publish failure does not fail the run, a sandbox
       token's permissions unchanged, auto-merge enabled only when held (pinned to the App), a new
       head re-proved while waiting, and a failing re-proof leaving the finding on the run.
+      Also fixed on the way: the 1.2 helper read `/rulesets` (a list without its rules) and
+      classic protection (admin only), so it never saw a required check; `isCheckHeldByApp`
+      reads `/rules/branches/{branch}` and `/branches/{branch}` instead. The re-proof names the
+      pull request's head SHA, and the runner fetches it when its checkout does not have it.
 - [x] 4.5 Give `createPr` the "no change" outcome: with no open pull request and no commits ahead
       on the run's branch, post the implementing thread's final message on the issue, remove the
       run's worktree and park in `waiting_human` with reason `no change`; with commits ahead,

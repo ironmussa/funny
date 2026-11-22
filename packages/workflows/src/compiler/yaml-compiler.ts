@@ -343,7 +343,7 @@ async function dispatchGithubNode(
 }
 
 /** A `regression_proof` step's YAML configuration as provider options. */
-function regressionProofOpts(
+export function regressionProofOpts(
   opts: NonNullable<ParsedNode['regression_proof']>,
 ): RegressionProofOpts {
   return {

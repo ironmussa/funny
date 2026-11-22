@@ -14,7 +14,10 @@ import { log } from '../../../lib/logger.js';
 import { NO_CHANGE_LINE } from '../../../services/factory/factory-action-provider.js';
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
-import type { FactoryMergeOutcome } from '../../../services/factory/factory-pull-requests.js';
+import type {
+  FactoryMergeOutcome,
+  FactoryProofCheck,
+} from '../../../services/factory/factory-pull-requests.js';
 import {
   createFactoryRunControl,
   onFactoryThreadTerminal,
@@ -103,6 +106,8 @@ interface GithubScript {
   branchPrs?: Record<string, { number: number; url: string }>;
   /** Whether the run's branch has commits the default branch does not (default true). */
   branchAhead?: boolean;
+  /** The pull request's head now (default `sha-head`, auto-merge off). */
+  head?: { sha: string; autoMerge: boolean };
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
@@ -111,6 +116,7 @@ type FakeGithub = FactoryGithubPort & {
   fileReads: string[];
   merges: number;
   comments: Array<{ issue: number; body: string }>;
+  checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
 };
 
@@ -125,6 +131,7 @@ function fakeGithub(
     fileReads: [],
     merges: 0,
     comments: [],
+    checks: [],
     prLookups: [],
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
@@ -163,7 +170,12 @@ function fakeGithub(
     },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
-      headSha: () => okAsync('sha-head'),
+      pullHead: () =>
+        okAsync({ sha: 'sha-head', autoMerge: false, ...script.head, baseRef: 'main' }),
+      publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {
+        port.checks.push(check);
+        return okAsync(undefined);
+      },
       ciState: () => okAsync(answers[Math.min(looks++, answers.length - 1)]!),
       merge: () => {
         port.merges++;
@@ -1263,6 +1275,7 @@ describe('factory operator controls', () => {
       waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
       checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
       github?: GithubScript;
+      proof?: Parameters<typeof startFactoryWatcher>[0]['proof'];
     } = {},
   ) {
     const poll = fakePoll();
@@ -1281,6 +1294,7 @@ describe('factory operator controls', () => {
         cleanups.push({ userId, threadIds });
       },
       notify: async () => undefined,
+      proof: opts.proof ?? passingProof,
     });
     return { poll, launcher, github, cleanups };
   }
@@ -1318,6 +1332,101 @@ describe('factory operator controls', () => {
 
   // Run 5e77aded (issue #195): it waited at a CI check that could not run, a
   // person merged its PR #349, and the run stayed "waiting for you".
+  describe('a run waiting on auto-merge whose head moved (task 4.4)', () => {
+    /** A run that enabled auto-merge after proving `sha-old`. */
+    async function seedAutoMergeRun(factoryId: string) {
+      const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
+      await createFactoryRunsRepository().update(run.id, {
+        prUrl: 'https://github.com/o/r/pull/9',
+        currentStep: null,
+        regressionProof: { headSha: 'sha-old', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+      });
+      return run;
+    }
+
+    /** A runner that proves the commit it is asked for, with `verdict`. */
+    const provingAs = (verdict: 'pass' | 'fail', asked: string[]) => () => ({
+      startProof: async (_threadId: string, body: Record<string, unknown>) => {
+        asked.push(String(body.headSha));
+        return ok({ proofId: 'p1', state: 'running' });
+      },
+      pollProof: async () =>
+        ok({
+          state: 'done',
+          result: {
+            verdict,
+            failureKind: 'test',
+            headSha: asked.at(-1),
+            finding: verdict === 'fail' ? 'The tests pass on the base commit' : undefined,
+          },
+        }),
+    });
+
+    async function eventuallyRun(runId: string, done: (run: FactoryRunView) => boolean) {
+      for (let i = 0; i < 200; i++) {
+        const run = await runById(runId);
+        if (done(run)) return run;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      throw new Error('the run never reached the expected state');
+    }
+
+    test('the new head is proved and its check published; the run keeps waiting', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true } },
+        proof: provingAs('pass', asked),
+      });
+
+      await poll.ticks[0]!();
+      const reproved = await eventuallyRun(run.id, (r) => r.regressionProof?.headSha === 'sha-new');
+
+      expect(asked).toEqual(['sha-new']);
+      expect(reproved).toMatchObject({ state: 'waiting_human', failureReason: null });
+      expect(github.checks).toMatchObject([{ headSha: 'sha-new', conclusion: 'success' }]);
+    });
+
+    test('a failing re-proof leaves a failing check and its finding on the run', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true } },
+        proof: provingAs('fail', []),
+      });
+
+      await poll.ticks[0]!();
+      const failed = await eventuallyRun(run.id, (r) => r.regressionProof?.headSha === 'sha-new');
+
+      expect(failed.failureReason).toContain('Regression proof failed on the new head sha-new');
+      expect(failed.failureReason).toContain('The tests pass on the base commit');
+      expect(github.checks).toMatchObject([{ headSha: 'sha-new', conclusion: 'failure' }]);
+    });
+
+    for (const [why, head] of [
+      ['auto-merge is off', { sha: 'sha-new', autoMerge: false }],
+      ['the head is still the proved commit', { sha: 'sha-old', autoMerge: true }],
+    ] as const) {
+      test(`nothing is proved again when ${why}`, async () => {
+        const factoryId = await enableFactory();
+        await seedAutoMergeRun(factoryId);
+        const asked: string[] = [];
+        const { poll, github } = await watch({
+          issues: [],
+          github: { head },
+          proof: provingAs('pass', asked),
+        });
+        await poll.ticks[0]!();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(asked).toEqual([]);
+        expect(github.checks).toEqual([]);
+      });
+    }
+  });
+
   test('a parked run whose pull request a person merged is closed as merged', async () => {
     const factoryId = await enableFactory();
     const run = await seedParkedWithPr(factoryId);

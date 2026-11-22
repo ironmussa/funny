@@ -45,6 +45,8 @@ export interface MergeState {
   autoMerge: boolean;
   /** The commit at the head of the pull request now. */
   headSha: string;
+  /** The branch it merges into. */
+  baseRef: string;
 }
 
 export type MergeMethod = 'squash' | 'merge' | 'rebase';
@@ -104,6 +106,7 @@ interface RestPull {
   mergeable: boolean | null;
   mergeable_state?: string;
   head: { sha: string };
+  base?: { ref: string };
 }
 
 interface RestRepo {
@@ -309,6 +312,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
         state: pr.merged ? 'merged' : pr.state === 'closed' ? 'closed' : 'open',
         autoMerge: !!pr.auto_merge,
         headSha: pr.head.sha,
+        baseRef: pr.base?.ref ?? '',
       }));
     },
 

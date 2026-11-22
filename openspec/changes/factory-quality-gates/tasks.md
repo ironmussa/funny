@@ -19,7 +19,7 @@
 
 ## 2. Runner proof job
 
-- [ ] 2.1 Implement the proof service: fetch, merge-base, changed files assigned to the first
+- [x] 2.1 Implement the proof service: fetch, merge-base, changed files assigned to the first
       matching rule, base phase in a temporary worktree with the project's worktree setup and the
       test and support files copied in (at least one command must fail), head phase in the
       thread's worktree when clean at `headSha` or else a temporary one (every command must
@@ -29,14 +29,14 @@
       repo: pass, passes-on-base, passes-on-base with a changed fixture copied, fails-on-head,
       two rules with different `cwd`, no test changed, setup failure, timeout, and no worktree
       left behind in every case.
-- [ ] 2.2 Add the job registry (in memory, one job per thread, idempotent start per head SHA, a
+- [x] 2.2 Add the job registry (in memory, one job per thread, idempotent start per head SHA, a
       new head stops and replaces the old job) and the routes
       `POST /api/threads/:id/regression-proof` (answers `running` at once) and
       `GET /api/threads/:id/regression-proof/:proofId` (`running` / `done` / 404), with body
       schemas in `validation/schemas.ts`: owner only (no steer delegation), refuses scratch
       threads and threads without a checkout. Verify with route tests for each refusal, a
       repeated start joining the job, a new head replacing it, and an unknown job answering 404.
-- [ ] 2.3 Sweep leftover proof worktrees (by prefix) at runner start. Verify with a test that
+- [x] 2.3 Sweep leftover proof worktrees (by prefix) at runner start. Verify with a test that
       plants one and starts the sweep.
 
 ## 3. Flow schema

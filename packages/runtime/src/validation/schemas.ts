@@ -609,6 +609,26 @@ export const respondPermissionRequestSchema = z.object({
   decision: z.enum(['allow_once', 'allow_always', 'deny']),
 });
 
+// ── Regression proof schemas ────────────────────────────────────
+
+export const startRegressionProofSchema = z.object({
+  headSha: gitRefSchema,
+  defaultBranch: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine((s) => !s.startsWith('-'), 'branch must not start with "-"'),
+  rules: z.array(
+    z.object({
+      globs: z.array(z.string()).min(1),
+      command: z.string(),
+      cwd: z.string().optional(),
+    }),
+  ),
+  supportGlobs: z.array(z.string()).default([]),
+  timeoutMs: z.number().int().positive().default(600_000),
+});
+
 // ── Helper ───────────────────────────────────────────────────────
 
 /** Validate request body; returns Result<T, DomainError> */

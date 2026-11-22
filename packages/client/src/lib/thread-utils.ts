@@ -31,22 +31,60 @@ import type { RunnerStatus } from '@/stores/runner-status-store';
  */
 export type DisplayThreadStatus = ThreadStatus | 'runner_offline';
 
-export const statusConfig: Record<DisplayThreadStatus, { icon: typeof Clock; className: string }> =
-  {
-    setting_up: { icon: Loader2, className: 'text-thread-icon-running animate-spin' },
-    idle: { icon: CircleDot, className: 'text-gray-400' },
-    // A pending thread is always about to start (between worktree setup and the
-    // agent's first `running` status), so it shares the running spinner instead
-    // of flashing a different icon mid-launch.
-    pending: { icon: Loader2, className: 'text-thread-icon-running animate-spin' },
-    running: { icon: Loader2, className: 'text-thread-icon-running animate-spin' },
-    waiting: { icon: Clock, className: 'text-yellow-400' },
-    completed: { icon: CheckCircle2, className: 'text-thread-icon-completed' },
-    failed: { icon: XCircle, className: 'text-red-400' },
-    stopped: { icon: CircleStop, className: 'text-red-400' },
-    interrupted: { icon: AlertTriangle, className: 'text-orange-400' },
-    runner_offline: { icon: WifiOff, className: 'text-orange-400' },
-  };
+/**
+ * A thread status glyph. `dotClassName` is the fill of the dot a theme may show
+ * instead of the icon (Minimal does in the sidebar, see `.status-glyph-dots` in
+ * globals.css); statuses without one always show their icon.
+ */
+export interface StatusGlyphConfig {
+  icon: typeof Clock;
+  className: string;
+  dotClassName?: string;
+}
+
+export const statusConfig: Record<DisplayThreadStatus, StatusGlyphConfig> = {
+  setting_up: {
+    icon: Loader2,
+    className: 'text-thread-icon-running animate-spin',
+    dotClassName: 'bg-thread-dot-running status-glyph-blink',
+  },
+  idle: { icon: CircleDot, className: 'text-gray-400' },
+  // A pending thread is always about to start (between worktree setup and the
+  // agent's first `running` status), so it shares the running spinner instead
+  // of flashing a different icon mid-launch.
+  pending: {
+    icon: Loader2,
+    className: 'text-thread-icon-running animate-spin',
+    dotClassName: 'bg-thread-dot-running status-glyph-blink',
+  },
+  running: {
+    icon: Loader2,
+    className: 'text-thread-icon-running animate-spin',
+    dotClassName: 'bg-thread-dot-running status-glyph-blink',
+  },
+  waiting: { icon: Clock, className: 'text-thread-icon-waiting' },
+  completed: {
+    icon: CheckCircle2,
+    className: 'text-thread-icon-completed',
+    dotClassName: 'bg-thread-dot-completed',
+  },
+  failed: {
+    icon: XCircle,
+    className: 'text-thread-icon-failed',
+    dotClassName: 'bg-thread-dot-failed',
+  },
+  stopped: { icon: CircleStop, className: 'text-thread-icon-failed' },
+  interrupted: {
+    icon: AlertTriangle,
+    className: 'text-thread-icon-interrupted',
+    dotClassName: 'bg-thread-dot-interrupted',
+  },
+  runner_offline: {
+    icon: WifiOff,
+    className: 'text-thread-icon-interrupted',
+    dotClassName: 'bg-thread-dot-interrupted',
+  },
+};
 
 /**
  * Compute the displayed status given the DB status + current runner liveness.
@@ -108,15 +146,15 @@ export const gitSyncStateConfig: Record<
   dirty: { icon: FileDiff, className: 'text-muted-foreground', labelKey: 'gitStatus.dirty' },
   unpushed: {
     icon: GitCommitVertical,
-    className: 'text-blue-400',
+    className: 'text-git-icon-unpushed',
     labelKey: 'gitStatus.unpushed',
   },
   pushed: {
     icon: GitPullRequestArrow,
-    className: 'text-green-500',
+    className: 'text-git-icon-pushed',
     labelKey: 'gitStatus.pushed',
   },
-  merged: { icon: GitMerge, className: 'text-purple-400', labelKey: 'gitStatus.merged' },
+  merged: { icon: GitMerge, className: 'text-git-icon-merged', labelKey: 'gitStatus.merged' },
   clean: { icon: CheckCircle2, className: 'text-muted-foreground', labelKey: 'gitStatus.clean' },
 };
 

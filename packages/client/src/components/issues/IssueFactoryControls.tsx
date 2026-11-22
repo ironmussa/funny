@@ -226,14 +226,14 @@ export function IssueFactoryStatus({
       )}
       {run.state === 'requested' && (
         <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground"
+          variant="outline"
+          size="xs"
+          className="text-muted-foreground hover:text-foreground ml-1"
           onClick={cancel}
-          aria-label={t('factory.cancelQueued', 'Remove from the queue')}
           data-testid={`issue-factory-cancel-${run.issueNumber}`}
         >
           <X className="icon-xs" />
+          {t('factory.cancelQueued', 'Remove from the queue')}
         </Button>
       )}
     </span>

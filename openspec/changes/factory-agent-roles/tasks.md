@@ -8,9 +8,9 @@ Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, 
 
 ## 1. Structured role results
 
-- [ ] 1.1 Add the review result schema (zod) to `@funny/shared/contracts/factory`, carrying `sha` and findings with severity (the triage schema is 3.6, the sentinel's 8.4); verify with schema tests for valid, missing-field and wrong-severity results
-- [ ] 1.2 Add a server reader that takes a thread's final message, extracts the last fenced `json` block and validates it against a role schema, with one re-emit follow-up on failure; verify with unit tests for no block, two blocks (last wins), invalid then valid, invalid twice
-- [ ] 1.3 Document the result contract in `openwiki/architecture/issue-factory.md`; verify the doc's file references exist
+- [x] 1.1 Add the review result schema (zod) to `@funny/shared/contracts/factory`, carrying `sha` and findings with severity (the triage schema is 3.6, the sentinel's 8.4); verify with schema tests for valid, missing-field and wrong-severity results
+- [x] 1.2 Add a server reader that takes a thread's final message, extracts the last fenced `json` block and validates it against a role schema, with one re-emit follow-up on failure; verify with unit tests for no block, two blocks (last wins), invalid then valid, invalid twice
+- [x] 1.3 Document the result contract in `openwiki/architecture/issue-factory.md`; verify the doc's file references exist
 
 ## 2. Run states and storage
 

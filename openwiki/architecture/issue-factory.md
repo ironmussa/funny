@@ -33,6 +33,7 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
 | `factory-flow-runs.ts`                              | Runs the compiled flow with `@funny/pipelines` and writes progress to `factory_runs`; decides how a run ends.                                                                                                                                                                                                                                                                                   |
 | `factory-action-provider.ts`                        | The server `ActionProvider`: agent steps are threads; `create_pr` finds the agent's PR by branch; `wait_ci` / `merge` via `factory-ci-actions.ts`; `run_command` and approvals refused.                                                                                                                                                                                                         |
 | `factory-thread-waits.ts`                           | An agent step waits on the thread's persisted status, woken by `notifyTerminalStatusPersisted` and a 30 s DB poll; missing or > 24 h thread fails the step.                                                                                                                                                                                                                                     |
+| `factory-role-results.ts`                           | Reads a read-only role's structured result (see Role results): the last fenced `json` block of the thread's final message, validated against the role's schema, with one request to emit it again.                                                                                                                                                                                              |
 | `factory-run-control.ts`, `factory-follow-ups.ts`   | Stop, retry, take-over.                                                                                                                                                                                                                                                                                                                                                                         |
 | `factory-thread-requests.ts`                        | Stop / follow-up to a run's threads, routed by the thread's path (`withRunnerFor` `request` target), waking a sleeping sandbox.                                                                                                                                                                                                                                                                 |
 | `factory-sandbox-launch.ts`                         | Starts a thread in the enabler's sandbox (the `thread-sandboxes` launcher, `source: 'factory'`).                                                                                                                                                                                                                                                                                                |
@@ -124,6 +125,23 @@ queue fall back to the factory's flow.
 
 Built-in flows (`packages/workflows/defaults/`): `issue-to-merge` (default) and `issue-to-pr` (stops
 at the PR for teams that merge by hand).
+
+## Role results
+
+A read-only factory role (the reviewer; later triage and the sentinel, change
+`factory-agent-roles`) ends its final message with one fenced `json` block. The server never
+reads the role's prose as a decision:
+
+- `readRoleResult` (`factory-role-results.ts`) takes the **last** `json` block of the thread's
+  final message and validates it with the role's zod schema in `@funny/shared/contracts/factory`
+  (`factoryReviewResultSchema`: `sha`, `verdict` `pass` / `fail`, `findings` with a `severity`).
+  Unknown fields are dropped.
+- A missing or invalid result gets **one** follow-up on the same thread asking to emit it again.
+  The request names the problem and never repeats the invalid text.
+- Still invalid: the caller applies the role's failure rule. A review fails closed (no merge,
+  the run waits for a person).
+- A review holds for the commit it names (`sha`, in full). `reviewAllowsMerge` decides what a
+  verdict allows: a `pass`, or a `fail` whose findings are all below `high`.
 
 ## Restarts and races
 

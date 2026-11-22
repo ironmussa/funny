@@ -279,3 +279,52 @@ export interface FactoryQueueClearResult {
   /** Runs in progress that were stopped (`stopAll` only). */
   stopped: number;
 }
+
+/**
+ * Role results (change factory-agent-roles, D2): what a read-only factory
+ * agent ends with, as one fenced `json` block the server validates. Unknown
+ * fields are dropped; the bounds keep a verdict small enough to store and post.
+ */
+export const factoryFindingSeverity = z.enum(['critical', 'high', 'medium', 'low']);
+export type FactoryFindingSeverity = z.infer<typeof factoryFindingSeverity>;
+
+export const factoryReviewFindingSchema = z.object({
+  severity: factoryFindingSeverity,
+  /** One line saying what is wrong. */
+  title: z.string().trim().min(1).max(300),
+  detail: z.string().max(4000).optional(),
+  /** The file the finding is about, relative to the repository root. */
+  path: z.string().max(500).optional(),
+  line: z.number().int().positive().optional(),
+});
+export type FactoryReviewFinding = z.infer<typeof factoryReviewFindingSchema>;
+
+/** The reviewer's verdict on one commit of the run's pull request. */
+export const factoryReviewResultSchema = z.object({
+  /** The commit judged, in full: the verdict holds for no other one. */
+  sha: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-f]{40}$/i, 'sha must be the full 40-character commit'),
+  verdict: z.enum(['pass', 'fail']),
+  summary: z.string().max(4000).optional(),
+  findings: z.array(factoryReviewFindingSchema).max(50).default([]),
+});
+export type FactoryReviewResult = z.infer<typeof factoryReviewResultSchema>;
+
+/** The findings that send a change back to the implementer. */
+export function blockingReviewFindings(result: FactoryReviewResult): FactoryReviewFinding[] {
+  return result.findings.filter(
+    (finding) => finding.severity === 'critical' || finding.severity === 'high',
+  );
+}
+
+/**
+ * Whether a review lets the change go on: a `pass`, or a `fail` whose findings
+ * are all below `high` (a pass with comments). A `fail` that lists no finding
+ * blocks: the reviewer said no without saying why.
+ */
+export function reviewAllowsMerge(result: FactoryReviewResult): boolean {
+  if (result.verdict === 'pass') return true;
+  return result.findings.length > 0 && blockingReviewFindings(result).length === 0;
+}

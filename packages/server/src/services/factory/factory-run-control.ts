@@ -11,7 +11,7 @@
  * - **Retry** a failed or parked run: it goes back in flight on the same
  *   branch and pull request. A completed implement step is kept (its thread
  *   replays); every later step runs again, so a CI fix loop gets its fixes
- *   back.
+ *   back. A "no change" run keeps nothing: a new agent implements the issue.
  * - **Take over** a run: a member follows up on the run's last agent thread;
  *   when that thread completes again, a failed or parked run goes back in
  *   flight with all its steps replayed, so the flow continues from that step
@@ -27,6 +27,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
+import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
 import { stopFactoryThreads } from './factory-thread-requests.js';
@@ -62,9 +63,16 @@ function reopenRefused(error: { message: string }): FactoryRunControlError {
     : storage(error);
 }
 
-/** The implement step's thread, kept by a retry when it completed. */
-async function keptOnRetry(threadIds: string[]): Promise<string[]> {
-  const first = threadIds[0];
+/**
+ * The implement step's thread, kept by a retry when it completed.
+ *
+ * Not for a "no change" run: its implement step ended without a commit, so
+ * replaying that thread reaches "no change" again without running anything
+ * (run #229 was retried four times this way). Its retry starts a new agent.
+ */
+async function keptOnRetry(run: FactoryRunView): Promise<string[]> {
+  if (run.failureReason === NO_CHANGE_REASON) return [];
+  const first = run.threadIds[0];
   if (!first) return [];
   const [row] = await db
     .select({ id: threads.id })
@@ -120,7 +128,7 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     retry(factoryId: string, runId: string): ResultAsync<FactoryRunView, FactoryRunControlError> {
       return runOf(factoryId, runId)
         .andThen((run) =>
-          ResultAsync.fromSafePromise(keptOnRetry(run.threadIds)).andThen((kept) =>
+          ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
             runs.reopen(run.id, kept).mapErr(reopenRefused),
           ),
         )

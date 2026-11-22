@@ -148,7 +148,8 @@ at the PR for teams that merge by hand).
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
-  branch and PR; a completed implement step is kept, later steps run again.
+  branch and PR; a completed implement step is kept, later steps run again. A `no change` run
+  keeps nothing (replaying its thread would only reach `no change` again): a new agent starts.
 - **Take over**: when the thread's **owner** follows up on a parked run's last thread after it
   parked (noted by `POST /api/threads/:id/message`), the run resumes from that step when the thread
   completes. A steer sharee's follow-up never does: it would otherwise move the flow toward a merge

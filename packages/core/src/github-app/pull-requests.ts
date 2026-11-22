@@ -43,6 +43,10 @@ export interface MergeState {
   state: 'open' | 'merged' | 'closed';
   /** Whether GitHub's auto-merge is enabled on it (a push or a person may turn it off). */
   autoMerge: boolean;
+  /** The commit at the head of the pull request now. */
+  headSha: string;
+  /** The branch it merges into. */
+  baseRef: string;
 }
 
 export type MergeMethod = 'squash' | 'merge' | 'rebase';
@@ -84,6 +88,8 @@ export interface PullRequestCi {
     repo: string,
     number: number,
     preferred?: MergeMethod,
+    /** Only when this is still the head: a push since the caller looked enables nothing. */
+    expectedHeadSha?: string,
   ): ResultAsync<AutoMergeResult, GithubCallError>;
   mergeState(repo: string, number: number): ResultAsync<MergeState, GithubCallError>;
   /** The URL of the open pull request from `branch`, or null when there is none. */
@@ -102,6 +108,7 @@ interface RestPull {
   mergeable: boolean | null;
   mergeable_state?: string;
   head: { sha: string };
+  base?: { ref: string };
 }
 
 interface RestRepo {
@@ -281,7 +288,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
         );
     },
 
-    enableAutoMerge(repo, number, preferred) {
+    enableAutoMerge(repo, number, preferred, expectedHeadSha) {
       return github.json<RestRepo>(repo, 'GET', `/repos/${repo}`).andThen((settings) => {
         // The settings GitHub shows say which methods are allowed; when it shows
         // none, every method is tried in order and GitHub decides.
@@ -294,11 +301,12 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
         );
         if (methods.length === 0)
           return okAsync(unavailable('the repository allows no merge method'));
-        return pull(repo, number).andThen((pr) =>
-          settings.allow_auto_merge === false
+        return pull(repo, number).andThen((pr) => {
+          if (expectedHeadSha && pr.head.sha !== expectedHeadSha) return okAsync(headMoved());
+          return settings.allow_auto_merge === false
             ? mergeWhenClean(repo, number, pr, methods[0])
-            : tryMethods(repo, number, pr, methods),
-        );
+            : tryMethods(repo, number, pr, methods);
+        });
       });
     },
 
@@ -306,6 +314,8 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
       return pull(repo, number).map((pr): MergeState => ({
         state: pr.merged ? 'merged' : pr.state === 'closed' ? 'closed' : 'open',
         autoMerge: !!pr.auto_merge,
+        headSha: pr.head.sha,
+        baseRef: pr.base?.ref ?? '',
       }));
     },
 
@@ -345,7 +355,12 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     methods: MergeMethod[],
   ): ResultAsync<AutoMergeResult, GithubCallError> {
     const [method, ...rest] = methods;
-    return graphql(repo, ENABLE_AUTO_MERGE, { id: pr.node_id, method: method.toUpperCase() })
+    // Pinned to the head just read: a push in between enables nothing.
+    return graphql(repo, ENABLE_AUTO_MERGE, {
+      id: pr.node_id,
+      method: method.toUpperCase(),
+      head: pr.head.sha,
+    })
       .andThen((answer) => afterEnable(repo, number, pr, method, answer.errors?.[0]?.message))
       .andThen((result) =>
         result.kind === 'method-refused' && rest.length > 0
@@ -373,6 +388,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
   ): ResultAsync<AutoMergeResult | { kind: 'method-refused' }, GithubCallError> {
     if (!error) return okAsync({ kind: 'enabled', method });
     if (/clean status/i.test(error)) return mergeNow(repo, number, pr.head.sha, method);
+    if (/head (sha|oid)|expected head/i.test(error)) return okAsync(headMoved());
     if (/auto.?merge is not allowed/i.test(error)) return mergeWhenClean(repo, number, pr, method);
     if (/merge method|not allowed/i.test(error)) return okAsync({ kind: 'method-refused' });
     return errAsync({ message: `GitHub refused to enable auto-merge: ${error}` });
@@ -422,6 +438,13 @@ const AUTO_MERGE_NOT_ALLOWED = 'the repository does not allow auto-merge';
 const MERGEABLE_STATES = new Set(['clean', 'has_hooks']);
 
 const ENABLE_AUTO_MERGE =
-  'mutation($id: ID!, $method: PullRequestMergeMethod!) { enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method }) { pullRequest { number } } }';
+  'mutation($id: ID!, $method: PullRequestMergeMethod!, $head: GitObjectID!) { enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method, expectedHeadOid: $head }) { pullRequest { number } } }';
+
+/** The head is no longer the commit the caller read (or asked for): look again. */
+const headMoved = (): AutoMergeResult => ({
+  kind: 'not-mergeable',
+  reason: 'the pull request head moved',
+  refused: true,
+});
 
 const unavailable = (reason: string): AutoMergeResult => ({ kind: 'unavailable', reason });

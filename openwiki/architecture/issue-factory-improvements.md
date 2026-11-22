@@ -80,3 +80,18 @@ works (the agent finds the branch already checked out), but the text is misleadi
 **Proposal.** Document the new wording in the factory guide
 ([docs/guides/issue-factory.md](../../docs/guides/issue-factory.md)), or have the flow loader
 warn when a custom flow still says "new branch".
+
+## 7. Regression proof: what is still open
+
+From `factory-quality-gates` (see [docs/guides/factory-regression-proof.md](../../docs/guides/factory-regression-proof.md)):
+
+- **Merge queues**: a required `funny/regression-proof` would stall a queue (its merge commit has
+  no check), so such repositories do not require it and their runs park at `merge`. Publishing
+  the check on the queue's merge commit is sketched under Future Work in the change's design.
+- **Pull requests from people** get no proof or check: requiring the check blocks them.
+- **The proof is held in memory**: `merge` reuses the proof the step ran in the same execution.
+  After a server restart it proves the head again (slower, never weaker). Reading the stored
+  `factory_runs.regression_proof` for the head SHA would skip that.
+- **Load errors are recognised by their output** (`Cannot find module`, `SyntaxError`, …): an
+  unrecognised one still counts as a base failure. Collect real inconclusive and false-pass cases
+  before widening the patterns or adding a per-runner rule.

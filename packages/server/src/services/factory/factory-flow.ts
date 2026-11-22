@@ -22,12 +22,18 @@ import type { PipelineDefinition } from '@funny/pipelines';
 import type { FactoryFlowDefinition } from '@funny/shared/contracts/factory';
 import {
   formatParseError,
+  isProofReady,
   loadWorkflowCatalog,
   parseWorkflowYaml,
   type ParsedWorkflow,
   type WorkflowIssue,
 } from '@funny/workflows';
-import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
+import {
+  compileYamlPipeline,
+  regressionProofOpts,
+  type RegressionProofOpts,
+  type YamlPipelineContext,
+} from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
 
 export type FactoryFlowError =
@@ -52,6 +58,10 @@ export interface FactoryFlow {
   pipeline: PipelineDefinition<YamlPipelineContext>;
   /** Parse warnings of the flow: logged by the caller, they block nothing. */
   warnings: WorkflowIssue[];
+  /** Whether its merge may happen: a proof with rules, or the explicit opt-out (`isProofReady`). */
+  proofReady: boolean;
+  /** Its `regression_proof` step's configuration, when it has one (the watcher re-proves with it). */
+  regressionProof?: RegressionProofOpts;
 }
 
 type FlowNode = ParsedWorkflow['nodes'][number];
@@ -95,6 +105,11 @@ function agentStepIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
   return issues;
 }
 
+function proofConfigOf(workflow: ParsedWorkflow): RegressionProofOpts | undefined {
+  const step = workflow.nodes.find((node) => node.regression_proof)?.regression_proof;
+  return step ? regressionProofOpts(step) : undefined;
+}
+
 function compile(
   yaml: string,
   origin: string,
@@ -108,6 +123,8 @@ function compile(
       source,
       pipeline: compileYamlPipeline(parsed.workflow),
       warnings: parsed.warnings,
+      proofReady: isProofReady(parsed.workflow),
+      regressionProof: proofConfigOf(parsed.workflow),
     });
   } catch (error) {
     return err({

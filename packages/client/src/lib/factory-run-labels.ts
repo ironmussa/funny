@@ -64,6 +64,11 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
       return t('factory.wait.circular', 'Circular dependency with {{blockers}}', { blockers });
     case 'blockers-unreadable':
       return t('factory.wait.unreadable', 'Its blockers could not be read from GitHub');
+    case 'proof-not-configured':
+      return t(
+        'factory.wait.proofNotConfigured',
+        'Regression proof not configured: its flow has no proof rules, so it would never merge',
+      );
   }
 }
 
@@ -82,6 +87,14 @@ const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
  * Whether the run's pipeline stopped on an error: it failed, or it waits for
  * the member after a failure (the flow's `on_failure` parked it).
  */
+/** The failure reason a run parks with when the agent made no change (no commit, no PR). */
+const NO_CHANGE_REASON = 'no change';
+
+/** The agent found nothing to change: the run waits for the member, explained on the issue. */
+export function isFactoryRunNoChange(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
+  return run.state === 'waiting_human' && run.failureReason === NO_CHANGE_REASON;
+}
+
 export function isFactoryRunFailed(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
   return run.state === 'failed' || (run.state === 'waiting_human' && run.failureReason !== null);
 }

@@ -12,12 +12,52 @@ interface WarnedWorkflow {
     depends_on: string[];
     trigger_rule?: string;
     on_error?: string;
+    merge?: { require_regression_proof?: boolean };
+    regression_proof?: { rules?: unknown[] };
   }>;
 }
 
 /** Every warning of the workflow, in node order. */
 export function workflowWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {
-  return continuedFailureSkips(workflow);
+  return [...continuedFailureSkips(workflow), ...regressionProofWarnings(workflow)];
+}
+
+function regressionProofWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {
+  return [...proofOptOuts(workflow), ...proofWithoutRules(workflow)];
+}
+
+/** A `merge` that opts out of the regression proof gate. */
+function proofOptOuts(workflow: WarnedWorkflow): WorkflowIssue[] {
+  return workflow.nodes.flatMap((n, index) =>
+    n.merge?.require_regression_proof === false
+      ? [
+          {
+            path: `nodes.${index}.merge.require_regression_proof`,
+            message:
+              `"${n.id}" opts out of the regression proof gate. ` +
+              'Runs of this flow can merge without proving their tests catch the bug.',
+          },
+        ]
+      : [],
+  );
+}
+
+/** A gated `merge` whose flow has a `regression_proof` step with no rules. */
+function proofWithoutRules(workflow: WarnedWorkflow): WorkflowIssue[] {
+  const gated = workflow.nodes.some((n) => n.merge && n.merge.require_regression_proof !== false);
+  if (!gated) return [];
+  const index = workflow.nodes.findIndex((n) => n.regression_proof !== undefined);
+  const rules = workflow.nodes[index]?.regression_proof?.rules ?? [];
+  if (index < 0 || rules.length > 0) return [];
+  return [
+    {
+      path: `nodes.${index}.regression_proof`,
+      message:
+        'This flow has a regression_proof step with no rules. ' +
+        'Its factory will not admit issues until rules are added or ' +
+        'merge sets require_regression_proof: false.',
+    },
+  ];
 }
 
 /**

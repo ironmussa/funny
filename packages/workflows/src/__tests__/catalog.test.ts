@@ -111,7 +111,9 @@ nodes:
     expect(result.workflows.get('review')?.warnings).toEqual([
       expect.objectContaining({ path: 'nodes.1.trigger_rule' }),
     ]);
-    expect(result.warnings).toEqual([expect.stringContaining('Warning in user workflow review')]);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('Warning in user workflow review')]),
+    );
   });
 
   test('legacy .funny/pipelines files are ignored', async () => {

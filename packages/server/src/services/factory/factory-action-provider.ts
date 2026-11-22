@@ -38,6 +38,8 @@ import type {
   ActionProvider,
   ActionResult,
   ApprovalDecision,
+  MergeOpts,
+  RegressionProofOpts,
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
 import type { Result } from 'neverthrow';
@@ -48,9 +50,36 @@ import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
+import {
+  proofAllowsMerge,
+  proofCheckOf,
+  proofRecordOf,
+  proveOnRunner,
+  regressionTestRequired,
+  type FactoryProofDeps,
+  type ProofResultBody,
+} from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
-import type { UpdateRunInput } from './factory-runs.js';
+import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
+
+/**
+ * A proof the agent can fix (its test): the flows retry it with the agent.
+ * Matched by `should_retry: "$contains(error, 'Regression proof failed')"`.
+ */
+const proofFailed = (why: string): ActionResult => ({
+  ok: false,
+  error: `Regression proof failed: ${why}`,
+});
+
+/** A proof that could not run or decide (runner, setup, time): no agent fix is tried. */
+const proofUnavailable = (why: string): ActionResult => ({
+  ok: false,
+  error: `Regression proof unavailable: ${why}`,
+});
+
+/** The fixed first line of the issue comment a "no change" run posts. */
+export const NO_CHANGE_LINE = 'The issue factory made no change for this issue. The agent said:';
 
 /** Where the run's agent threads run: the enabler's runtime for the project. */
 export type FactoryThreadMode = 'local' | 'worktree' | 'sandbox';
@@ -70,6 +99,9 @@ export interface FactoryRunScope {
   branch: string;
 }
 
+export type { FactoryProofDeps } from './factory-proof-runner.js';
+export { regressionTestRequired } from './factory-proof-runner.js';
+
 export interface FactoryActionProviderDeps {
   scope: FactoryRunScope;
   /** Thread ids the run's agent steps already started, in order (a resumed run). */
@@ -78,6 +110,14 @@ export interface FactoryActionProviderDeps {
   prUrl: string | null;
   /** The run's integration counters so far (a resumed or retried run keeps counting). */
   metrics?: FactoryRunMetrics;
+  /** The issue's labels (for require_test: labels). */
+  issueLabels?: string[];
+  /** Proof start/poll through the runner. */
+  proof?: FactoryProofDeps;
+  /** The implementing thread's last assistant message (the "no change" explanation). */
+  lastThreadMessage?: (threadId: string) => Promise<string | null>;
+  /** Remove the run's worktrees on the enabler's runner (a "no change" run keeps no checkout). */
+  removeWorktrees?: () => Promise<void>;
   /**
    * Set when the run was interrupted while starting its next agent thread:
    * that step first looks for the thread it may have started.
@@ -97,7 +137,10 @@ export interface FactoryActionProviderDeps {
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
   /** Continue the first thread for later agent steps; without it each step starts a thread. */
   continuation?: FactoryContinuation;
-  github: Pick<FactoryGithubPort, 'findPullRequest' | 'pullRequests'>;
+  github: Pick<
+    FactoryGithubPort,
+    'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
+  >;
   /** Write the run's progress; ignored once the run is terminal (e.g. stopped). */
   record(input: UpdateRunInput): Promise<void>;
   /**
@@ -179,6 +222,23 @@ const VERDICT_COUNTERS = {
   blocked: 'ciBlocked',
   timeout: 'ciTimeouts',
 } satisfies Record<z.infer<typeof CI_VERDICT>, keyof FactoryRunMetrics | null>;
+
+/** A proof the merge gate holds: its record, and what publishing it needs. */
+interface HeldProof {
+  record: RegressionProofRecord;
+  /** Whether this issue needs a regression test (decides the check's conclusion). */
+  testRequired: boolean;
+  /** Its verdict allows a merge. */
+  ok: boolean;
+  /** Its check is on GitHub. */
+  checkPublished: boolean;
+}
+
+const PROOF_NOT_CONFIGURED: ActionResult = {
+  ok: false,
+  error:
+    'Regression proof not configured: the flow has no regression_proof rules, so the factory does not merge.',
+};
 
 /**
  * The counters after one `wait_ci` result. A stop or a GitHub access error is
@@ -410,6 +470,180 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return adopted ? { threadId: await recordThread(adopted) } : launchNew(opts);
   }
 
+  /**
+   * The last proof this execution ran: its record (which commit), whether its
+   * verdict allows a merge, and whether its check is on GitHub (auto-merge
+   * needs it).
+   */
+  let lastProof: HeldProof | null = null;
+
+  /** Run the proof on the runner, record and publish it, and map its verdict to the step's result. */
+  async function runRegressionProof(opts: RegressionProofOpts): Promise<ActionResult> {
+    if (!deps.proof) return proofUnavailable('the proof service is not configured.');
+    const threadId = threadIds[0];
+    if (!threadId) return proofUnavailable('no implementing thread.');
+    const testRequired = regressionTestRequired(opts, deps.issueLabels ?? []);
+    const run = await proveOnRunner(deps.proof, threadId, opts, deps.signal);
+    if (run.kind === 'unavailable') return proofUnavailable(run.why);
+    return proofVerdict(run.result, testRequired);
+  }
+
+  /**
+   * Publish the proof as the `funny/regression-proof` check on its commit.
+   * Best effort: a failure is logged and counted, and only means the factory
+   * will not enable auto-merge on this commit.
+   */
+  async function publishCheck(proof: RegressionProofRecord, testRequired: boolean) {
+    const pr = pullRequest();
+    if (!pr || !proof.headSha) return false;
+    const published = await deps.github.pullRequests.publishProofCheck(
+      pr,
+      proofCheckOf(proof, testRequired),
+    );
+    if (published.isOk()) return true;
+    log.warn('Issue factory could not publish the regression proof check', {
+      namespace: 'factory',
+      runId: scope.runId,
+      headSha: proof.headSha,
+      error: published.error.message,
+    });
+    metric('factory.integration_event', 1, {
+      type: 'sum',
+      attributes: { event: 'regression_proof_check_unpublished', repo: scope.repo },
+    });
+    return false;
+  }
+
+  /** Publish the runner's verdict, record it on the run, and map it to the step's result. */
+  async function proofVerdict(
+    result: ProofResultBody,
+    testRequired: boolean,
+  ): Promise<ActionResult> {
+    const proved = proofRecordOf(result);
+    const checkPublished = await publishCheck(proved, testRequired);
+    const proofRecord = { ...proved, checkPublished };
+    await deps.record({ regressionProof: proofRecord });
+    const meta: Record<string, unknown> = { ...proofRecord };
+    // What the merge gate holds: only a proof that names its commit.
+    if (proofRecord.headSha) {
+      lastProof = {
+        record: proofRecord,
+        testRequired,
+        ok: proofAllowsMerge(result, testRequired),
+        checkPublished,
+      };
+    }
+
+    if (proofAllowsMerge(result, testRequired)) {
+      const event =
+        result.verdict === 'pass' ? 'regression_proof_pass' : 'regression_proof_skipped';
+      await count(metrics, { event });
+      return { ok: true, output: result.verdict, metadata: meta };
+    }
+    await count(metrics, { event: 'regression_proof_fail' });
+    if (result.verdict === 'skipped') {
+      return {
+        ...proofFailed('no regression test was added, but this issue needs one.'),
+        metadata: meta,
+      };
+    }
+    const finding = result.finding ?? 'failed';
+    // Only a test the agent can fix is its to retry; an environment failure is not.
+    return result.failureKind === 'test'
+      ? { ...proofFailed(finding), metadata: meta }
+      : { ...proofUnavailable(finding), metadata: meta };
+  }
+
+  /** The enabler reads the repository: the App token capped by their access. */
+  const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
+
+  /**
+   * The agent made no commit and opened no pull request: say so on the issue
+   * with its explanation, remove the run's checkout, and leave the run for a
+   * person (`no change`). Not ok, so the flow stops here.
+   */
+  async function noChange(): Promise<ActionResult> {
+    const threadId = threadIds[0];
+    const explanation = threadId ? await deps.lastThreadMessage?.(threadId) : null;
+    const body = explanation ? `${NO_CHANGE_LINE}\n\n${explanation}` : NO_CHANGE_LINE;
+    const commented = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
+    if (commented.isErr()) {
+      log.warn('Issue factory could not comment a no-change outcome on the issue', {
+        namespace: 'factory',
+        runId: scope.runId,
+        issue: scope.issueNumber,
+        error: commented.error.message,
+      });
+    }
+    await deps.removeWorktrees?.();
+    await deps.record({ state: 'waiting_human', failureReason: 'no change' });
+    await count(metrics, { event: 'no_change' });
+    return {
+      ok: false,
+      error: `No change: the agent made no commit on ${scope.branch} and opened no pull request.`,
+      metadata: { outcome: 'no_change' },
+    };
+  }
+
+  /**
+   * The passing proof of `sha`: the last one when it is of that commit and
+   * passed, else a proof run now. Otherwise the result the merge step ends with.
+   */
+  async function proofOfHead(
+    config: RegressionProofOpts,
+    sha: string,
+  ): Promise<{ held: HeldProof } | { refused: ActionResult }> {
+    if (lastProof?.record.headSha !== sha || !lastProof.ok) {
+      const proved = await runRegressionProof(config);
+      if (!proved.ok) return { refused: proved };
+    }
+    if (lastProof?.record.headSha !== sha) {
+      return {
+        refused: {
+          ok: false,
+          error: `Regression proof unavailable: the pull request head ${sha} is not the proved commit ${lastProof?.record.headSha ?? '(none)'}.`,
+        },
+      };
+    }
+    return { held: lastProof };
+  }
+
+  /** Whether the proof's check is on GitHub, publishing it now when an earlier try failed. */
+  async function checkOnGithub(proof: HeldProof): Promise<boolean> {
+    if (proof.checkPublished) return true;
+    const published = await publishCheck(proof.record, proof.testRequired);
+    if (!published) return false;
+    proof.checkPublished = true;
+    proof.record = { ...proof.record, checkPublished: true };
+    await deps.record({ regressionProof: proof.record });
+    return true;
+  }
+
+  /**
+   * The merge gate: merge only a pull request head with a passing proof of
+   * that exact commit, pinned to it. Runs the flow's proof when none is held.
+   */
+  async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
+    if (opts.requireRegressionProof === false) return ci.merge(opts);
+    // A proof without rules proves nothing: no merge, whatever it answered.
+    const config = opts.regressionProof;
+    if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
+    const pr = pullRequest();
+    if (!pr) return ci.merge(opts);
+    const head = await deps.github.pullRequests.pullHead(pr);
+    if (head.isErr()) {
+      return { ok: false, error: head.error.message, metadata: { kind: head.error.kind } };
+    }
+    const proof = await proofOfHead(config, head.value.sha);
+    if ('refused' in proof) return proof.refused;
+    // Auto-merge only on the proved commit whose check GitHub can hold.
+    return ci.merge({
+      ...opts,
+      sha: head.value.sha,
+      autoMergeWhenHeld: await checkOnGithub(proof.held),
+    });
+  }
+
   return {
     async spawnAgent(opts) {
       const index = agentSteps++;
@@ -437,12 +671,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     },
 
     async createPr() {
-      const found = await deps.github.findPullRequest(
-        { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
-        scope.branch,
-      );
+      const found = await deps.github.findPullRequest(reader, scope.branch);
       if (found.isErr()) return { ok: false, error: found.error.message };
       if (!found.value) {
+        const ahead = await deps.github.branchAhead(reader, scope.branch);
+        if (ahead.isOk() && !ahead.value) return noChange();
         return {
           ok: false,
           error: `No open pull request from the branch ${scope.branch}: the agent did not open one.`,
@@ -461,7 +694,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       return result;
     },
 
-    merge: (opts) => ci.merge(opts),
+    merge: (opts) => provedMerge(opts),
+
+    regressionProof: (opts) => runRegressionProof(opts),
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

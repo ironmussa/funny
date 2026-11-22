@@ -11,9 +11,13 @@ import type { IssueBlocker } from '@funny/core/github-app';
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../../lib/logger.js';
+import { NO_CHANGE_LINE } from '../../../services/factory/factory-action-provider.js';
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
-import type { FactoryMergeOutcome } from '../../../services/factory/factory-pull-requests.js';
+import type {
+  FactoryMergeOutcome,
+  FactoryProofCheck,
+} from '../../../services/factory/factory-pull-requests.js';
 import {
   createFactoryRunControl,
   onFactoryThreadTerminal,
@@ -38,6 +42,8 @@ import type { StartThreadInput } from '../../../services/runner-thread-launcher.
 import { createWorkflowJournalRepository } from '../../../services/workflow-engine/journal-repository.js';
 import {
   launchedThread,
+  passingProof,
+  proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
@@ -53,6 +59,10 @@ import {
 let testDb: ReturnType<typeof createTestDb>;
 
 const ports = unusedRunnerPorts();
+
+const _origStartWatcher = startFactoryWatcher;
+const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
+  _origStartWatcher({ proof: passingProof, ...d });
 
 /** Fake poll: captures each factory's tick so the test can fire it. */
 function fakePoll() {
@@ -77,6 +87,8 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
 interface GithubScript {
   /** The default branch's `.funny/workflows/*` files, by path. */
   files?: Record<string, string>;
+  /** No repository copy of `issue-to-merge`: the built-in flow, which has no proof rules. */
+  builtInFlow?: boolean;
   /** Whether the agent opened its pull request. */
   pr?: boolean;
   /** CI answers in order; the last one repeats. */
@@ -92,6 +104,14 @@ interface GithubScript {
   prStates?: Record<number, 'open' | 'merged' | 'closed'>;
   /** The pull request on each branch in any state (lookups with `state: 'all'`). */
   branchPrs?: Record<string, { number: number; url: string }>;
+  /** Whether the run's branch has commits the default branch does not (default true). */
+  branchAhead?: boolean;
+  /** The pull request's head now (default `sha-head`, auto-merge off). */
+  head?: { sha: string; autoMerge: boolean };
+  /** GitHub does not answer for issues. */
+  issuesUnreadable?: boolean;
+  /** How many times publishing the proof check fails before it works. */
+  publishFailures?: number;
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
@@ -99,6 +119,8 @@ interface GithubScript {
 type FakeGithub = FactoryGithubPort & {
   fileReads: string[];
   merges: number;
+  comments: Array<{ issue: number; body: string }>;
+  checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
 };
 
@@ -109,21 +131,26 @@ function fakeGithub(
 ): FakeGithub {
   const answers: CiState[] = [script.ci ?? { kind: 'green' }].flat();
   let looks = 0;
+  let publishFailures = script.publishFailures ?? 0;
   const port: FakeGithub = {
     fileReads: [],
     merges: 0,
+    comments: [],
+    checks: [],
     prLookups: [],
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
     getIssue: (_reader: unknown, number: number) =>
-      okAsync({
-        number,
-        title: `Issue ${number}`,
-        url: `u/${number}`,
-        state: script.closed?.includes(number) ? ('closed' as const) : ('open' as const),
-        pullRequest: false,
-        createdAt: '2026-01-01T00:00:00Z',
-      }),
+      script.issuesUnreadable
+        ? errAsync({ message: 'GitHub answered 500', status: 500 })
+        : okAsync({
+            number,
+            title: `Issue ${number}`,
+            url: `u/${number}`,
+            state: script.closed?.includes(number) ? ('closed' as const) : ('open' as const),
+            pullRequest: false,
+            createdAt: '2026-01-01T00:00:00Z',
+          }),
     issueBlockers: (_reader: unknown, number: number) => {
       const blockers = script.blockers?.[number] ?? [];
       return blockers === 'unreadable'
@@ -133,7 +160,13 @@ function fakeGithub(
     listDefaultBranchDir: () => okAsync([]),
     readDefaultBranchFile: (_reader: unknown, path: string) => {
       port.fileReads.push(path);
-      return okAsync(script.files?.[path] ?? null);
+      const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
+      return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
+    },
+    branchAhead: () => okAsync(script.branchAhead ?? true),
+    commentOnIssue: (_reader: unknown, issue: number, body: string) => {
+      port.comments.push({ issue, body });
+      return okAsync(undefined);
     },
     findPullRequest: (_reader: unknown, branch: string, state: 'open' | 'all' = 'open') => {
       port.prLookups.push({ branch, state });
@@ -144,6 +177,15 @@ function fakeGithub(
     },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
+      pullHead: () =>
+        okAsync({ sha: 'sha-head', autoMerge: false, ...script.head, baseRef: 'main' }),
+      publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {
+        if (publishFailures-- > 0) {
+          return errAsync({ kind: 'not-installed' as const, message: 'GitHub answered 502' });
+        }
+        port.checks.push(check);
+        return okAsync(undefined);
+      },
       ciState: () => okAsync(answers[Math.min(looks++, answers.length - 1)]!),
       merge: () => {
         port.merges++;
@@ -223,7 +265,7 @@ describe('factory watcher', () => {
     seedProject(testDb.db, { id: 'p2', userId: 'alice', path: '/repo2' });
     await createFactorySettingsService().save('alice', 'p2', { enabled: false });
 
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: fakePoll().createPoll,
@@ -237,7 +279,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory({ label: 'ready-for-agent' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -269,7 +311,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -288,7 +330,7 @@ describe('factory watcher', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const sandboxCalls: Array<{ userId: string; body: Record<string, unknown> }> = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -316,7 +358,7 @@ describe('factory watcher', () => {
   test('a sandbox launch refusal starts nothing and the issue waits for a later tick', async () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -346,7 +388,7 @@ describe('factory watcher', () => {
 
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -364,7 +406,7 @@ describe('factory watcher', () => {
     await enableFactory({ maxConcurrent: 1 });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [
         { number: 1, title: 'a', url: 'u/1' },
@@ -393,7 +435,7 @@ describe('factory watcher', () => {
       await gate;
       return launchedThread('t-1');
     };
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -420,7 +462,7 @@ describe('factory watcher', () => {
       )._unsafeUnwrap()?.state;
       return launchedThread('t-1');
     };
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -438,7 +480,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
     const offline = fakeLauncher('offline');
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -463,7 +505,7 @@ describe('factory watcher', () => {
     }
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -484,7 +526,7 @@ describe('factory watcher', () => {
     await runs.update(parked.id, { state: 'waiting_human' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [
         { number: 1, title: 'a', url: 'u/1' },
@@ -510,7 +552,7 @@ describe('factory watcher', () => {
     testDb.sqlite.query("UPDATE project_members SET role = 'viewer' WHERE user_id = 'alice'").run();
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -531,7 +573,7 @@ describe('factory watcher', () => {
     const poll = fakePoll();
     let repo: string | null = null;
     const github = { ...fakeGithub('acme/repo', []), resolveRepo: async () => repo };
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -553,7 +595,7 @@ describe('factory watcher', () => {
   test('an issue whose agent could not start is reported as the block', async () => {
     await enableFactory();
     const poll = fakePoll();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
@@ -573,7 +615,7 @@ describe('factory watcher', () => {
     await enableFactory();
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub(null, [{ number: 1, title: 'a', url: 'u/1' }]),
       createPoll: poll.createPoll,
@@ -602,7 +644,7 @@ describe('factory flow', () => {
     const notices: Array<{ title: string; body: string }> = [];
     const followUps: Array<{ threadId: string; content: string; expectedBranch?: string }> = [];
     const cleanups: Array<{ userId: string; threadIds: string[] }> = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -706,20 +748,85 @@ describe('factory flow', () => {
     await eventually(factoryId, (r) => r.state === 'failed');
   });
 
+  test('an agent that made no commit parks the run as "no change", says so on the issue and cleans up', async () => {
+    const { factoryId, github, cleanups, poll, launcher } = await runFlow(
+      { pr: false, branchAhead: false },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.failureReason).toBe('no change');
+    expect(run.currentStep).toBe('pull-request');
+    expect(github.comments).toHaveLength(1);
+    expect(github.comments[0]!.issue).toBe(7);
+    expect(github.comments[0]!.body).toStartWith(NO_CHANGE_LINE);
+    expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
+    expect(github.merges).toBe(0);
+    // Parked, it still holds its issue: a later tick does not admit it again.
+    await poll.ticks[0]!();
+    expect(launcher.calls).toHaveLength(1);
+  });
+
   // Issue #343: the factory thread shows the run's step chain and why it
   // failed, which were only in the server log.
   test('a failed run records its flow steps, the step it failed at and why', async () => {
     const { factoryId } = await runFlow({ pr: false }, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'failed');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
     expect(run.currentStep).toBe('pull-request');
     expect(run.failureReason).toContain('No open pull request');
+  });
+
+  describe('admission needs a proof-ready flow (task 4.6)', () => {
+    const blocked = async () =>
+      (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap()!.blockedReason;
+    const runsOf = async (factoryId: string) =>
+      (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+
+    test('the built-in flow, with no proof rules, admits nothing and says why', async () => {
+      const { factoryId, launcher } = await runFlow({ builtInFlow: true }, pendingThreads);
+      expect(await runsOf(factoryId)).toEqual([]);
+      expect(launcher.calls).toHaveLength(0);
+      expect(await blocked()).toContain('Regression proof not configured');
+    });
+
+    test('once rules are added the issue is admitted and the blocker clears', async () => {
+      const script: GithubScript = { builtInFlow: true };
+      const { factoryId, poll } = await runFlow(script, pendingThreads);
+      expect(await runsOf(factoryId)).toEqual([]);
+      script.builtInFlow = false;
+      await poll.ticks[0]!();
+      expect(await runsOf(factoryId)).toHaveLength(1);
+      expect(await blocked()).toBeNull();
+    });
+
+    test('a merge that opts out of the proof is admitted without rules', async () => {
+      const optOut = proofReadyFlowFiles()
+        ['.funny/workflows/issue-to-merge.yaml']!.replace(/      rules:\n.*\n.*\n/, '')
+        .replace('    merge:', '    merge:\n      require_regression_proof: false');
+      expect(optOut).not.toContain('    regression_proof:\n      rules:');
+      const { factoryId } = await runFlow(
+        { files: { '.funny/workflows/issue-to-merge.yaml': optOut } },
+        pendingThreads,
+      );
+      expect(await runsOf(factoryId)).toHaveLength(1);
+    });
+
+    test('a run in flight goes on when its flow stops being proof-ready', async () => {
+      const script: GithubScript = {};
+      const { factoryId, poll } = await runFlow(script, pendingThreads);
+      const [admitted] = await runsOf(factoryId);
+      script.builtInFlow = true;
+      await poll.ticks[0]!();
+      const [still] = await runsOf(factoryId);
+      expect(still!.id).toBe(admitted!.id);
+      expect(still!.state).toBe(admitted!.state);
+    });
   });
 
   test('a merged run has its steps and no failure reason', async () => {
     const { factoryId } = await runFlow({}, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'merged');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
     expect(run.failureReason).toBeNull();
   });
 
@@ -751,7 +858,7 @@ describe('factory flow', () => {
       '  - id: merge',
       '    depends_on: [ci]',
       '    concurrency: { group: "merge-{{inputs.repo}}", limit: 1 }',
-      '    merge: { method: squash }',
+      '    merge: { method: squash, require_regression_proof: false }',
     ].join('\n');
     const twoIssues = [
       { number: 1, title: 'a', url: 'u/1' },
@@ -792,7 +899,7 @@ describe('factory flow', () => {
         mergeHold: hold.hold,
       });
       const start = () =>
-        startFactoryWatcher({
+        startWatcherWithProof({
           ports,
           github,
           createPoll: poll.createPoll,
@@ -879,7 +986,8 @@ describe('factory flow', () => {
     );
     await eventually(factoryId, (r) => r.state === 'waiting_human');
     expect(launcher.calls[0]!.body.prompt).toBe('CUSTOM 7');
-    expect(github.fileReads).toEqual(['.funny/workflows/issue-to-merge.yaml']);
+    // Read for the admission check and for the run: only ever the default branch's copy.
+    expect([...new Set(github.fileReads)]).toEqual(['.funny/workflows/issue-to-merge.yaml']);
   });
 
   test('a flow with a parse warning is logged and still runs', async () => {
@@ -925,7 +1033,7 @@ describe('factory flow', () => {
     const factoryId = await enableFactory({ flowName: 'issue-to-pr' });
     const poll = fakePoll();
     const github = fakeGithub('o/r', issue7);
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -943,7 +1051,7 @@ describe('factory flow', () => {
     const factoryId = await enableFactory({ flowName: 'factory-issue' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', issue7),
       createPoll: poll.createPoll,
@@ -983,7 +1091,7 @@ describe('factory flow', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     // The real wait: it reads the thread's persisted status.
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1014,7 +1122,7 @@ describe('factory flow', () => {
     seedThread(testDb.db, { id: 't-impl', projectId: 'p1', userId: 'alice', status: 'completed' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1055,7 +1163,7 @@ describe('factory flow', () => {
     });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1077,7 +1185,7 @@ describe('factory flow', () => {
     await runs.update(seeded!.id, { launchStartedAt: new Date().toISOString() });
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1107,7 +1215,7 @@ describe('factory flow', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const followUps: string[] = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', [], {
         ci: [
@@ -1144,7 +1252,7 @@ describe('factory flow', () => {
     const factoryId = await seedInFlightRun(['gone']);
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1177,13 +1285,15 @@ describe('factory operator controls', () => {
       waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
       checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
       github?: GithubScript;
+      proof?: Parameters<typeof startFactoryWatcher>[0]['proof'];
+      runsPushedCommits?: (threadId: string) => Promise<boolean>;
     } = {},
   ) {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', opts.issues ?? issue7, opts.github);
     const cleanups: Array<{ userId: string; threadIds: string[] }> = [];
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github,
       createPoll: poll.createPoll,
@@ -1195,6 +1305,8 @@ describe('factory operator controls', () => {
         cleanups.push({ userId, threadIds });
       },
       notify: async () => undefined,
+      proof: opts.proof ?? passingProof,
+      runsPushedCommits: opts.runsPushedCommits,
     });
     return { poll, launcher, github, cleanups };
   }
@@ -1232,6 +1344,218 @@ describe('factory operator controls', () => {
 
   // Run 5e77aded (issue #195): it waited at a CI check that could not run, a
   // person merged its PR #349, and the run stayed "waiting for you".
+  describe('a run waiting on auto-merge whose head moved (task 4.4)', () => {
+    /** A run that enabled auto-merge after proving `sha-old`. */
+    async function seedAutoMergeRun(factoryId: string) {
+      const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
+      await createFactoryRunsRepository().update(run.id, {
+        prUrl: 'https://github.com/o/r/pull/9',
+        currentStep: null,
+        regressionProof: { headSha: 'sha-old', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+      });
+      return run;
+    }
+
+    /** A runner that proves the commit it is asked for, with `verdict`. */
+    const provingAs = (verdict: 'pass' | 'fail', asked: string[]) => () => ({
+      startProof: async (_threadId: string, body: Record<string, unknown>) => {
+        asked.push(String(body.headSha));
+        return ok({ proofId: 'p1', state: 'running' });
+      },
+      pollProof: async () =>
+        ok({
+          state: 'done',
+          result: {
+            verdict,
+            failureKind: 'test',
+            headSha: asked.at(-1),
+            finding: verdict === 'fail' ? 'The tests pass on the base commit' : undefined,
+          },
+        }),
+    });
+
+    async function eventuallyRun(runId: string, done: (run: FactoryRunView) => boolean) {
+      for (let i = 0; i < 200; i++) {
+        const run = await runById(runId);
+        if (done(run)) return run;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      throw new Error('the run never reached the expected state');
+    }
+
+    test('the new head is proved and its check published; the run keeps waiting', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true } },
+        proof: provingAs('pass', asked),
+      });
+
+      await poll.ticks[0]!();
+      const reproved = await eventuallyRun(
+        run.id,
+        (r) =>
+          r.regressionProof?.headSha === 'sha-new' && r.regressionProof.checkPublished === true,
+      );
+
+      expect(asked).toEqual(['sha-new']);
+      expect(reproved).toMatchObject({ state: 'waiting_human', failureReason: null });
+      expect(github.checks).toMatchObject([{ headSha: 'sha-new', conclusion: 'success' }]);
+    });
+
+    test('a failing re-proof leaves a failing check and its finding on the run', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true } },
+        proof: provingAs('fail', []),
+      });
+
+      await poll.ticks[0]!();
+      const failed = await eventuallyRun(run.id, (r) => r.regressionProof?.checkPublished === true);
+
+      expect(failed.failureReason).toContain('Regression proof failed on the new head sha-new');
+      expect(failed.failureReason).toContain('The tests pass on the base commit');
+      expect(github.checks).toMatchObject([{ headSha: 'sha-new', conclusion: 'failure' }]);
+    });
+
+    for (const [why, head] of [
+      ['auto-merge is off', { sha: 'sha-new', autoMerge: false }],
+      ['the head is still the proved commit', { sha: 'sha-old', autoMerge: true }],
+    ] as const) {
+      test(`nothing is proved again when ${why}`, async () => {
+        const factoryId = await enableFactory();
+        await seedAutoMergeRun(factoryId);
+        const asked: string[] = [];
+        const { poll, github } = await watch({
+          issues: [],
+          github: { head },
+          proof: provingAs('pass', asked),
+        });
+        await poll.ticks[0]!();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(asked).toEqual([]);
+        expect(github.checks).toEqual([]);
+      });
+    }
+  });
+
+  describe('a re-proof that cannot be trusted or published (review of task 4.4)', () => {
+    async function seedAutoMergeRun(factoryId: string) {
+      const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
+      await createFactoryRunsRepository().update(run.id, {
+        prUrl: 'https://github.com/o/r/pull/9',
+        currentStep: null,
+        regressionProof: { headSha: 'sha-old', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+      });
+      return run;
+    }
+
+    /** A runner whose verdict names `answered`, whatever it was asked for. */
+    const proving = (asked: string[], answered?: string) => () => ({
+      startProof: async (_threadId: string, body: Record<string, unknown>) => {
+        asked.push(String(body.headSha));
+        return ok({ proofId: 'p1', state: 'running' });
+      },
+      pollProof: async () =>
+        ok({ state: 'done', result: { verdict: 'skipped', headSha: answered ?? asked.at(-1) } }),
+    });
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+    test('an issue that cannot be read publishes nothing: its labels must not exempt the test', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true }, issuesUnreadable: true },
+        proof: proving(asked),
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+
+      expect(asked).toEqual([]);
+      expect(github.checks).toEqual([]);
+      expect((await runById(run.id)).regressionProof?.headSha).toBe('sha-old');
+    });
+
+    test('a verdict of another commit than the one asked for is not recorded or published', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true } },
+        proof: proving(asked, 'sha-other'),
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+
+      expect(asked).toEqual(['sha-new']);
+      expect(github.checks).toEqual([]);
+      expect((await runById(run.id)).regressionProof?.headSha).toBe('sha-old');
+    });
+
+    for (const [where, inSandbox, fetchHead] of [
+      ['on a host runner is not fetched', undefined, false],
+      ['in a sandbox is fetched', async () => true, true],
+    ] as const) {
+      test(`a head pushed from elsewhere ${where}`, async () => {
+        const factoryId = await enableFactory();
+        await seedAutoMergeRun(factoryId);
+        const bodies: Array<Record<string, unknown>> = [];
+        const { poll } = await watch({
+          issues: [],
+          github: { head: { sha: 'sha-new', autoMerge: true } },
+          runsPushedCommits: inSandbox,
+          proof: () => ({
+            startProof: async (_threadId: string, body: Record<string, unknown>) => {
+              bodies.push(body);
+              return ok({ proofId: 'p1', state: 'running' });
+            },
+            pollProof: async () =>
+              ok({ state: 'done', result: { verdict: 'skipped', headSha: 'sha-new' } }),
+          }),
+        });
+
+        await poll.ticks[0]!();
+        await settle();
+        expect(bodies).toMatchObject([{ headSha: 'sha-new', fetchHead }]);
+      });
+    }
+
+    test('a check that could not be published is published on a later tick, without proving again', async () => {
+      const factoryId = await enableFactory();
+      const run = await seedAutoMergeRun(factoryId);
+      const asked: string[] = [];
+      const { poll, github } = await watch({
+        issues: [],
+        github: { head: { sha: 'sha-new', autoMerge: true }, publishFailures: 1 },
+        proof: proving(asked),
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+      expect(github.checks).toEqual([]);
+      expect((await runById(run.id)).regressionProof).toMatchObject({
+        headSha: 'sha-new',
+        checkPublished: false,
+      });
+
+      await poll.ticks[0]!();
+      await settle();
+      expect(asked).toEqual(['sha-new']);
+      expect(github.checks).toMatchObject([{ headSha: 'sha-new' }]);
+      expect((await runById(run.id)).regressionProof?.checkPublished).toBe(true);
+    });
+  });
+
   test('a parked run whose pull request a person merged is closed as merged', async () => {
     const factoryId = await enableFactory();
     const run = await seedParkedWithPr(factoryId);
@@ -1488,7 +1812,7 @@ describe('factory operator controls', () => {
     // The real wait: the replayed step reads t-impl's persisted status.
     const poll = fakePoll();
     const launcher = fakeLauncher();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,
@@ -1523,7 +1847,7 @@ describe('factory operator controls', () => {
     seedThread(testDb.db, { id: 't-bad', projectId: 'p1', userId: 'alice', status: 'failed' });
     const run = await seedRun(factoryId, 'failed', ['t-bad']);
     const poll = fakePoll();
-    await startFactoryWatcher({
+    await startWatcherWithProof({
       ports,
       github: fakeGithub('o/r', []),
       createPoll: poll.createPoll,

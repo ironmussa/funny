@@ -131,6 +131,64 @@ describe('GithubAppSettings', () => {
     await waitFor(() => expect(mocks.disconnectGithubApp).toHaveBeenCalled());
   });
 
+  test('an App without checks: write says what the factory needs and links its settings', async () => {
+    mocks.getGithubAppStatus.mockReturnValue(
+      okAsync({
+        configured: true,
+        source: 'database',
+        appId: '42',
+        slug: 'funny-acme',
+        settingsUrl: 'https://github.com/settings/apps/funny-acme',
+        missingPermissions: ['checks: write'],
+      }),
+    );
+    render(<GithubAppSettings />);
+
+    const notice = await screen.findByTestId('github-app-missing-permissions');
+    expect(notice).toHaveTextContent('The App lacks checks: write');
+    expect(notice).toHaveTextContent('regression proof check');
+    expect(screen.getByTestId('github-app-missing-permissions-settings')).toHaveAttribute(
+      'href',
+      'https://github.com/settings/apps/funny-acme',
+    );
+  });
+
+  test('an installation that has not accepted the permissions is named', async () => {
+    mocks.getGithubAppStatus.mockReturnValue(
+      okAsync({
+        configured: true,
+        source: 'database',
+        appId: '42',
+        slug: 'funny-acme',
+        missingPermissions: [],
+        pendingInstallations: ['acme', 'alice'],
+      }),
+    );
+    render(<GithubAppSettings />);
+
+    const notice = await screen.findByTestId('github-app-pending-installations');
+    expect(notice).toHaveTextContent('acme, alice');
+    expect(notice).toHaveTextContent('regression proof check');
+    expect(screen.queryByTestId('github-app-missing-permissions')).toBeNull();
+  });
+
+  test('an App with every permission shows no notice', async () => {
+    mocks.getGithubAppStatus.mockReturnValue(
+      okAsync({
+        configured: true,
+        source: 'database',
+        appId: '42',
+        slug: 'funny-acme',
+        missingPermissions: [],
+        pendingInstallations: [],
+      }),
+    );
+    render(<GithubAppSettings />);
+    await screen.findByTestId('github-app-connected');
+    expect(screen.queryByTestId('github-app-missing-permissions')).toBeNull();
+    expect(screen.queryByTestId('github-app-pending-installations')).toBeNull();
+  });
+
   test('configured through server variables: no Connect and no Disconnect', async () => {
     mocks.getGithubAppStatus.mockReturnValue(
       okAsync({

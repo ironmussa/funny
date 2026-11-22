@@ -96,14 +96,38 @@ renews the token every 45 minutes.
 Setup, once per deployment:
 
 1. **Preferences > GitHub App** (admin) → choose an organization or the personal
-   account → _Connect GitHub_. GitHub shows a pre-filled App (permissions:
-   contents, pull requests, issues, workflows read/write; Actions, checks,
-   commit statuses read; no webhook); confirm it and you are sent back. The
+   account → _Connect GitHub_. GitHub shows a pre-filled App with the
+   permissions below and no webhook; confirm it and you are sent back. The
    private key is stored encrypted; nobody copies it.
 2. _Install on repositories_ → **Only select repositories**.
 
-Alternatively set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PEM; one-line
-`\n` escapes accepted) on the server; they take precedence. Without an App, or
+Alternatively create the App by hand on GitHub (**Settings > Developer settings >
+GitHub Apps > New GitHub App**, webhook unchecked, installable only on your account)
+and set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PEM; one-line `\n` escapes
+accepted) on the server; they take precedence.
+
+The App needs exactly these **repository permissions** (`APP_PERMISSIONS` in
+`packages/server/src/services/github-app/token-issuer.ts`), and no organization
+or account permissions:
+
+| Permission      | Access         | Used for                                                                                       |
+| --------------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| Contents        | Read and write | cloning, pushing a thread's branch, deleting it after a factory merge                          |
+| Pull requests   | Read and write | opening pull requests, marking them ready, enabling auto-merge or merging                      |
+| Issues          | Read and write | the issue factory: reading labelled issues, claiming them, labels and comments                 |
+| Workflows       | Read and write | pushing changes under `.github/workflows/` (every write token asks for it)                     |
+| Actions         | Read-only      | the end of a failed job's log, given to the fix step                                           |
+| Checks          | Read and write | reading a pull request's check runs; writing only the factory's `funny/regression-proof` check |
+| Commit statuses | Read-only      | a pull request's commit statuses                                                               |
+| Metadata        | Read-only      | (mandatory)                                                                                    |
+
+A token is never given all of them: a sandbox token is capped by the owner's own
+access and keeps `checks: read`, so an agent cannot write the regression-proof
+check; only the server's check-publishing token has `checks: write` (with
+`metadata: read` and nothing else). An App created before the factory published
+that check lacks `checks: write`: add it in the App's settings, and have every
+installation accept the new permission (GitHub asks each installation's admin);
+Preferences > GitHub App lists the installations that have not. Without an App, or
 when it is not installed on the thread's repository, sandboxes get no GitHub
 access and the thread shows why. A steer sharee can act on the repository
 through the agent without the owner's approval; protect important branches with

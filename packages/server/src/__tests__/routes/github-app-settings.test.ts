@@ -181,6 +181,62 @@ describe('GitHub App settings', () => {
     expect((await status(admin)).body).toMatchObject({ configured: false });
   });
 
+  test('the status names the permissions the App lacks, read as the App', async () => {
+    const sandboxSet = {
+      contents: 'write',
+      pull_requests: 'write',
+      issues: 'write',
+      workflows: 'write',
+      actions: 'read',
+      checks: 'read',
+      statuses: 'read',
+      metadata: 'read',
+    };
+    const auths: Array<string | null> = [];
+    const statusWith = async (permissions: Record<string, string> | null) => {
+      const { admin, anonymous } = setup({
+        github: (path, auth) => {
+          if (path !== '/app') return undefined;
+          auths.push(auth);
+          return permissions
+            ? new Response(JSON.stringify({ permissions }), { status: 200 })
+            : new Response('{}', { status: 500 });
+        },
+      });
+      const { state } = (await start(admin)).body;
+      await callback(anonymous, state);
+      return (await status(admin)).body;
+    };
+
+    // An App created before the factory needed to publish its check.
+    expect((await statusWith(sandboxSet)).missingPermissions).toEqual(['checks: write']);
+    expect((await statusWith({ ...sandboxSet, checks: 'write' })).missingPermissions).toEqual([]);
+    // GitHub could not be asked: the screen says nothing.
+    expect((await statusWith(null)).missingPermissions).toBeUndefined();
+
+    // The App has the permission, but one installation has not accepted it yet.
+    const full = { ...sandboxSet, checks: 'write' };
+    const { admin, anonymous } = setup({
+      github: (path) => {
+        if (path === '/app') return new Response(JSON.stringify({ permissions: full }));
+        if (path !== '/app/installations?per_page=100') return undefined;
+        return new Response(
+          JSON.stringify([
+            { account: { login: 'acme' }, permissions: sandboxSet },
+            { account: { login: 'alice' }, permissions: full },
+          ]),
+        );
+      },
+    });
+    await callback(anonymous, (await start(admin)).body.state);
+    expect((await status(admin)).body).toMatchObject({
+      missingPermissions: [],
+      pendingInstallations: ['acme'],
+    });
+    // Asked as the App (its JWT), never with a user's token.
+    expect(auths.every((auth) => auth?.startsWith('Bearer ey'))).toBe(true);
+  });
+
   test('an unknown, reused or expired state, or a demoted admin, stores nothing and calls GitHub never', async () => {
     const { admin, admins, anonymous, conversions, data, advance } = setup();
     expect((await callback(anonymous, 'u'.repeat(32))).status).toBe(400);

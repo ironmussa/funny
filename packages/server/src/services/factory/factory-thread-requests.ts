@@ -16,7 +16,7 @@
  * A follow-up to a sandbox stopped while idle wakes it first, as the proxy does.
  */
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
@@ -30,22 +30,39 @@ const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 
 type PostError = { message: string; sandboxAsleep: boolean };
 
+interface ThreadRequest {
+  method: 'POST' | 'DELETE';
+  path: string;
+  /** Routing context: a `threadId` here sends a non-thread route to that thread's runner. */
+  query?: Record<string, string>;
+  body: unknown;
+}
+
 /** POST `path` (a thread route) to the thread's runner, as `userId`. */
-async function postToThread(
+function postToThread(
   ports: RunnerPorts,
   userId: string,
   path: string,
   body: unknown,
 ): Promise<Result<void, PostError>> {
+  return sendToThreadRunner(ports, userId, { method: 'POST', path, body });
+}
+
+/** Send a request to the runner a thread runs on, as `userId`. */
+async function sendToThreadRunner(
+  ports: RunnerPorts,
+  userId: string,
+  { method, path, query = {}, body }: ThreadRequest,
+): Promise<Result<void, PostError>> {
   const sink = authorizedRunnerRequests(ports.requests);
   try {
     const sent = await withRunnerFor(
       runnerActor({ userId }),
-      { kind: 'request', path, query: {} },
+      { kind: 'request', path, query },
       ports.presence,
       (actor, runner, proof) =>
         sink.send(actor, runner, proof, {
-          method: 'POST',
+          method,
           path,
           headers: { 'Content-Type': 'application/json' },
           body: body === null ? null : JSON.stringify(body),
@@ -119,4 +136,73 @@ export async function sendFactoryFollowUp(
   const woken = await waker.wake(threadId, userId);
   if (woken.isErr()) return err(`the sandbox could not be woken: ${woken.error.message}`);
   return (await postToThread(ports, userId, path, { content })).mapErr((e) => e.message);
+}
+
+/**
+ * Remove the worktree and local branch of a merged run's threads on the
+ * enabler's runner (`DELETE /api/worktrees`, the route the client's worktree
+ * cleanup uses), then clear them on the thread rows, as archiving does. The
+ * pull request is merged, so the work lives on the default branch now; left
+ * alone, every run would keep a worktree and a branch forever.
+ *
+ * Only idle worktree threads of the enabler on a local runner: a sandbox is
+ * torn down with its own lifecycle, and a thread still running (a member
+ * following up) keeps its checkout. Best effort: a runner that is offline
+ * leaves them in place, and the merge is not affected.
+ */
+export async function cleanupFactoryWorktrees(
+  ports: RunnerPorts,
+  userId: string,
+  threadIds: string[],
+): Promise<void> {
+  if (threadIds.length === 0) return;
+  const rows = await db
+    .select({
+      id: threads.id,
+      projectId: threads.projectId,
+      worktreePath: threads.worktreePath,
+      branch: threads.branch,
+    })
+    .from(threads)
+    .where(
+      and(
+        inArray(threads.id, [...new Set(threadIds)]),
+        eq(threads.userId, userId),
+        eq(threads.mode, 'worktree'),
+        ne(threads.runtime, 'sandbox'),
+        isNotNull(threads.worktreePath),
+        notInArray(threads.status, ACTIVE_STATUSES),
+      ),
+    );
+  for (const thread of rows) {
+    if (!thread.projectId || !thread.worktreePath) continue;
+    const removed = await sendToThreadRunner(ports, userId, {
+      method: 'DELETE',
+      path: '/api/worktrees',
+      query: { threadId: thread.id, projectId: thread.projectId },
+      body: {
+        projectId: thread.projectId,
+        worktreePath: thread.worktreePath,
+        branchName: thread.branch ?? undefined,
+        deleteBranch: !!thread.branch,
+      },
+    });
+    if (removed.isErr()) {
+      log.warn('Failed to remove a merged factory run worktree', {
+        namespace: 'factory',
+        threadId: thread.id,
+        error: removed.error.message,
+      });
+      continue;
+    }
+    await db
+      .update(threads)
+      .set({ worktreePath: null, branch: null })
+      .where(eq(threads.id, thread.id));
+    log.info('Removed a merged factory run worktree', {
+      namespace: 'factory',
+      threadId: thread.id,
+      branch: thread.branch,
+    });
+  }
 }

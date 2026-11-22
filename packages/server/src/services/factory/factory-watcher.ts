@@ -71,7 +71,11 @@ import {
   listWatchedFactories,
   type WatchedFactory,
 } from './factory-settings.js';
-import { sendFactoryFollowUp, stopFactoryThreads } from './factory-thread-requests.js';
+import {
+  cleanupFactoryWorktrees,
+  sendFactoryFollowUp,
+  stopFactoryThreads,
+} from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
@@ -106,6 +110,8 @@ export interface FactoryWatcherDeps {
   waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
   /** Follow-up override for tests; defaults to a message on the thread's runner, as the enabler. */
   followUp?: (userId: string, threadId: string, content: string) => Promise<Result<void, string>>;
+  /** Merged-run cleanup override for tests; defaults to `cleanupFactoryWorktrees`. */
+  cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
   /** Notification override for tests; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
@@ -170,6 +176,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     gate: d.gate,
     reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
     stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
+    cleanupMerged: (userId, threadIds) => cleanupMergedFor(d, userId, threadIds),
     followUp:
       d.followUp ??
       ((userId, threadId, content) => sendFactoryFollowUp(d.ports, userId, threadId, content)),
@@ -694,6 +701,18 @@ async function reconcileRun(
     issue: run.issueNumber,
     pullRequest: pr.value,
   });
+  if (pr.value === 'merged') await cleanupMergedFor(deps, factory.userId, run.threadIds);
+}
+
+/** Remove a merged run's worktrees: the test override, else on the enabler's runner. */
+function cleanupMergedFor(
+  d: FactoryWatcherDeps,
+  userId: string,
+  threadIds: string[],
+): Promise<void> {
+  return d.cleanupMerged
+    ? d.cleanupMerged(userId, threadIds)
+    : cleanupFactoryWorktrees(d.ports, userId, threadIds);
 }
 
 /**

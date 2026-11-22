@@ -99,13 +99,13 @@
 
 ## 5. Built-in flows and prompts
 
-- [ ] 5.1 Add the `regression-proof` step (no rules; rule examples for common test runners in
+- [x] 5.1 Add the `regression-proof` step (no rules; rule examples for common test runners in
       comments, its retry and inline fix prompt) between `pull-request` and `ci` in
       `issue-to-merge.yaml` and `issue-to-pr.yaml`, with `require_test: labels` and
       `labels: [bug]`. Verify with the built-in flow tests and a watcher test that runs the
       built-in flow end to end with a fake proof, including a CI fix round followed by the
       re-proof in `merge`.
-- [ ] 5.2 Rewrite the implement prompt of both built-ins as the spec requires (root cause, every
+- [x] 5.2 Rewrite the implement prompt of both built-ins as the spec requires (root cause, every
       case or a reason, concurrency and edge cases, verify or measure first and push nothing when
       the claim does not hold, full test suite of touched packages, how the test was shown to
       fail). Verify with a test on the prompt's required instructions.

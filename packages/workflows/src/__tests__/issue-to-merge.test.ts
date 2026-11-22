@@ -33,6 +33,7 @@ function provider(ci: ActionResult[]) {
     notify: async () => ok,
     setStatus: async () => ok,
     setStage: async () => ok,
+    regressionProof: async () => ok,
     waitCi: async () => ci[Math.min(looks++, ci.length - 1)]!,
     merge: async () => {
       merges++;
@@ -70,7 +71,10 @@ async function run(ci: ActionResult[], flow = 'issue-to-merge') {
 describe('issue-to-merge workflow', () => {
   test('is a built-in beside factory-issue, and both compile', async () => {
     const { workflows, warnings } = await loadWorkflowCatalog();
-    expect(warnings).toEqual([]);
+    // The only catalog warnings are the proof-not-configured ones from built-in flows
+    // (they ship without rules as templates).
+    const unexpected = warnings.filter((w) => !w.includes('no rules'));
+    expect(unexpected).toEqual([]);
     for (const name of ['issue-to-merge', 'issue-to-pr', 'factory-issue']) {
       expect(workflows.get(name)?.source).toBe('built-in');
       expect(() => compileYamlPipeline(workflows.get(name)!.workflow)).not.toThrow();

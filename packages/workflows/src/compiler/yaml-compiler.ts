@@ -321,6 +321,24 @@ async function dispatchGithubNode(
     return { output: result.output ?? '', json: result.metadata };
   }
 
+  if (yamlNode.regression_proof) {
+    if (!provider.regressionProof) {
+      throw new Error(
+        `regression_proof[${yamlNode.id}]: the provider does not support this action`,
+      );
+    }
+    const opts = interpolateObject(yamlNode.regression_proof, scope);
+    const result = await provider.regressionProof({
+      rules: opts.rules ?? [],
+      supportGlobs: opts.support_globs,
+      requireTest: opts.require_test,
+      labels: opts.labels,
+      timeoutMs: opts.timeout_ms,
+    });
+    if (!result.ok) throw new Error(`regression_proof[${yamlNode.id}] failed: ${result.error}`);
+    return { output: result.output ?? '', json: result.metadata };
+  }
+
   return null;
 }
 

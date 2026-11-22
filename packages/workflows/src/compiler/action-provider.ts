@@ -142,6 +142,14 @@ export interface SetStageOpts {
 // pull request, so the options carry only the knobs. The factory's
 // server-side provider does the GitHub work under a repo-scoped token.
 
+export interface RegressionProofOpts {
+  rules: Array<{ globs: string[]; command: string; cwd?: string }>;
+  supportGlobs?: string[];
+  requireTest?: 'always' | 'labels' | 'never';
+  labels?: string[];
+  timeoutMs?: number;
+}
+
 export interface WaitCiOpts {
   /** Overall budget before the step returns a timeout verdict. */
   timeoutMs?: number;
@@ -244,6 +252,12 @@ export interface ActionProvider {
    * PR's required checks are green; otherwise resolves `ok: false`.
    */
   merge(opts: MergeOpts): Promise<ActionResult>;
+
+  /**
+   * Run a regression proof: test the changed files against the base (must
+   * fail) and the head (must pass). The provider starts and polls the job.
+   */
+  regressionProof?(opts: RegressionProofOpts): Promise<ActionResult>;
 
   /**
    * Request a human approval and block until decided (or timeout).

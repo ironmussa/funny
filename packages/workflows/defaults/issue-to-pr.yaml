@@ -1,22 +1,22 @@
 # Built-in flow of the server-run issue factory for repositories that merge by
-# hand (change factory-flow-execution): implement an issue and open a pull
-# request, then stop. The run ends `waiting_human` with the pull request for a
-# person to review and merge. `issue-to-merge` is the same flow plus the CI fix
-# loop and the merge.
+# hand (change factory-flow-execution, factory-quality-gates): implement an
+# issue, open a pull request, prove the regression test, then stop. The run
+# ends `waiting_human` with the pull request and the proof for a person to
+# review and merge. `issue-to-merge` is the same flow plus the CI fix loop
+# and the merge.
 #
 # The server runs this flow as the factory's enabler: the agent step is a
-# thread on the enabler's runner, the agent commits, pushes and opens the pull
-# request, and the `pull-request` step finds it on GitHub by its branch.
-#
-# (`factory-issue` is the orchestrator's flow: it runs inside a workspace and
-# tells the agent not to push, so it does not work as a server factory flow.)
+# thread on the enabler's runner, the agent commits, pushes and opens the
+# pull request, and the `pull-request` step finds it on GitHub by its branch.
+# The `regression-proof` step runs the changed test files against the base
+# and the head to prove the fix.
 #
 # To customize per repository, copy this file to
 # `.funny/workflows/issue-to-pr.yaml` on the DEFAULT branch and edit it, keeping
 # the inputs. A copy on any other branch is ignored.
 
 name: issue-to-pr
-description: Implement a GitHub issue and open a pull request for a person to merge
+description: Implement a GitHub issue, open a pull request and prove the regression test for a person to merge
 
 inputs:
   repo: { type: string, required: true }
@@ -40,8 +40,16 @@ nodes:
           `git branch --show-current`); otherwise create it from the default branch.
         - Read the code around the change before editing, follow the conventions
           you find, and keep the change to what the issue asks.
-        - Add or update tests when the change affects behavior, and run the
-          project's checks before you finish.
+        - **Find the root cause** before making changes. Do not fix symptoms.
+        - **Cover every case the issue names** or state in the pull request why
+          one is left out. Consider concurrency and edge cases.
+        - **If the issue asks you to verify or measure first**, do it and report
+          the result. If the issue's claim does not hold, push nothing, explain
+          why in your final message, and stop.
+        - Add or update a **regression test** that fails without the fix and
+          passes with it. Run the **full test suite** of each package you change.
+          State in the pull request body how the test was shown to fail without
+          the fix.
         - Commit, push the branch `{{branch}}` to `origin`, and open a pull
           request from it against the default branch whose body contains
           `Closes #{{issue_number}}`.
@@ -51,3 +59,29 @@ nodes:
     depends_on: [implement]
     create_pr:
       title: '{{issue_title}}'
+
+  # Regression proof: see issue-to-merge.yaml for configuration examples.
+  - id: regression-proof
+    depends_on: [pull-request]
+    regression_proof:
+      require_test: labels
+      labels: [bug]
+      timeout_ms: 600000
+    retry:
+      max_attempts: 3
+      should_retry: "$contains(error, 'Regression proof')"
+      before_retry:
+        prompt: |
+          You are working unattended: nobody will answer questions.
+
+          The regression proof of the pull request from `{{branch}}`
+          (GitHub issue #{{issue_number}} of {{repo}}) failed:
+
+          ```
+          {{LAST_ERROR}}
+          ```
+
+          The test must fail without your fix and pass with it.
+          Check out `{{branch}}` and pull it, fix the test, commit and
+          push to `{{branch}}`. Do not open another pull request.
+          End with a short summary of the fix.

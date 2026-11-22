@@ -97,14 +97,15 @@ nodes:
 });
 
 describe('bundled workflows', () => {
-  test('parse with no warnings', async () => {
+  test('parse with only the expected proof-not-configured warning', async () => {
     const dir = builtInWorkflowsDir();
     const files = (await readdir(dir)).filter((f) => f.endsWith('.yaml'));
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const result = parseWorkflowYaml(await readFile(path.join(dir, file), 'utf8'), file);
       if (!result.ok) throw new Error(`${file}: ${result.error.message}`);
-      expect({ file, warnings: result.warnings }).toEqual({ file, warnings: [] });
+      const unexpected = result.warnings.filter((w) => !w.message.includes('no rules'));
+      expect({ file, warnings: unexpected }).toEqual({ file, warnings: [] });
     }
   });
 });

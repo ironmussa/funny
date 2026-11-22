@@ -23,6 +23,17 @@ import { githubBranchUrl } from '@/lib/github-url';
 import type { FoldedRef, GraphBranchSummary } from '@/lib/graph-refs';
 import { cn } from '@/lib/utils';
 
+/**
+ * Height of one ref chip and the gap between stacked chips, in px (not rem).
+ * The commit graph places the node and its leader line at the first chip's
+ * center with px arithmetic (`CommitGraphTab`'s row heights and `nodeYForRow`),
+ * so the chips must have exactly these sizes. Rem sizes shrink with the root
+ * font size and the vertically centered stack drifts below the node, by more
+ * with every extra chip.
+ */
+export const GRAPH_REF_CHIP_HEIGHT_PX = 15;
+export const GRAPH_REF_CHIP_GAP_PX = 4;
+
 function branchStateLabel(t: ReturnType<typeof useTranslation>['t'], branch: GraphBranchSummary) {
   switch (branch.state) {
     case 'synced':
@@ -505,10 +516,11 @@ function GraphRefChip({
   return (
     <div
       className={cn(
-        'inline-flex h-[0.9375rem] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
+        'inline-flex max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
         isMergedRef(ref) && 'opacity-60',
       )}
       style={{
+        height: GRAPH_REF_CHIP_HEIGHT_PX,
         backgroundColor: color,
         color: textColor,
         // The thread's chip is outlined in a darker shade of its own color.
@@ -593,7 +605,8 @@ export function GraphRefChips({
 
   return (
     <div
-      className="inline-flex min-w-0 shrink flex-col items-start gap-1"
+      className="inline-flex min-w-0 shrink flex-col items-start"
+      style={{ gap: GRAPH_REF_CHIP_GAP_PX }}
       data-testid="graph-ref-chips"
     >
       {refs.map((ref) => {

@@ -30,7 +30,12 @@ import {
   initialsOf,
   LANE_WIDTH,
 } from '@/components/commit-graph/GraphGutter';
-import { GraphRefChips, isThreadBranchRef } from '@/components/commit-graph/GraphRefChips';
+import {
+  GRAPH_REF_CHIP_GAP_PX,
+  GRAPH_REF_CHIP_HEIGHT_PX,
+  GraphRefChips,
+  isThreadBranchRef,
+} from '@/components/commit-graph/GraphRefChips';
 import {
   DEFAULT_GRAPH_BRANCH_SCOPE,
   HistoryFilters,
@@ -155,11 +160,10 @@ function hasDistinctCommitterIdentity(entry: GraphEntry): boolean {
 const PAGE_SIZE = 80;
 // The title/meta text is rendered with the SAME Tailwind classes as the History
 // list (`text-xs` + `text-2xs`) so the font is identical across every
-// Review-pane tab. These px values are only used to *estimate* row heights for
-// the virtualizer — `text-xs` resolves to ~10.5px at the app's 14px rem base,
-// and `text-2xs` is an absolute 10px.
+// Review-pane tab. This px value is only used to *estimate* row heights for
+// the virtualizer — `text-xs` resolves to ~10.5px at the app's 14px rem base.
+// Ref chip lines use GRAPH_REF_CHIP_HEIGHT_PX, which the chips render at.
 const TITLE_PX = 10.5;
-const META_PX = 10;
 const REBASE_LINK_RAIL_WIDTH = LANE_WIDTH;
 const PARENT_BRANCH_LABEL_MAX_CHARS = 40;
 // Upper bound on how many commits the active-filter background pager will pull
@@ -187,9 +191,8 @@ function rebaseLinkNodeEdgeX(lane: number): number {
  */
 export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const { t } = useTranslation();
-  // Typography is fixed so the font is identical across every Review-pane tab (see TITLE_PX / META_PX above).
+  // Typography is fixed so the font is identical across every Review-pane tab (see TITLE_PX above).
   const titlePx = TITLE_PX;
-  const metaPx = META_PX;
   // Variable row heights: the title sits on one line, so ref-less rows are a
   // single tight line; each branch/tag chip gets its own line above. Computed
   // from the font sizes — no magic numbers — so ref-less rows (the majority) stay
@@ -197,13 +200,15 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const baseRowH = Math.round(titlePx * 1.5) + 6;
   // Rows with ref chips get an extra line for the powerline plus a little more
   // breathing room so the chips don't crowd the commit title below them.
-  const refsRowH = baseRowH + (metaPx + 5) + 6;
+  const refsRowH = baseRowH + GRAPH_REF_CHIP_HEIGHT_PX + 6;
   const rowHeightFor = useCallback(
     (e: GraphEntry) => {
       const count = foldGraphRefs(e.refs, e.headBranch).length;
-      return count > 0 ? refsRowH + (count - 1) * (metaPx + 5 + 4) : baseRowH;
+      return count > 0
+        ? refsRowH + (count - 1) * (GRAPH_REF_CHIP_HEIGHT_PX + GRAPH_REF_CHIP_GAP_PX)
+        : baseRowH;
     },
-    [baseRowH, refsRowH, metaPx],
+    [baseRowH, refsRowH],
   );
   const selectedProjectId = useRightPaneProjectId();
   const effectiveThreadId = useRightPaneThreadId() || undefined;
@@ -954,15 +959,14 @@ function useScrollToThreadBranch({
 }
 
 function refsContentHeight(entry: Pick<GraphEntry, 'refs' | 'headBranch'>): number {
-  const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const count = foldGraphRefs(entry.refs, entry.headBranch).length;
-  return count * chipLineH + (count - 1) * 4 + 6 + titleLineH;
+  return count * GRAPH_REF_CHIP_HEIGHT_PX + (count - 1) * GRAPH_REF_CHIP_GAP_PX + 6 + titleLineH;
 }
 
 function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: number): number {
   if (entry.refs.length === 0) return rowHeight / 2;
-  return (rowHeight - refsContentHeight(entry)) / 2 + (META_PX + 5) / 2;
+  return (rowHeight - refsContentHeight(entry)) / 2 + GRAPH_REF_CHIP_HEIGHT_PX / 2;
 }
 
 /**
@@ -1670,7 +1674,7 @@ function GraphCommitRow({
   // When the row carries a branch/tag powerline, raise the node to the chip's
   // vertical center so the leader line is a straight horizontal that exits the
   // side of the avatar (instead of an L from the row-centered node). The chip
-  // sits in a (META_PX + 5) line above a 6px gap and the title; since the info
+  // sits in a GRAPH_REF_CHIP_HEIGHT_PX line above a 6px gap and the title; since the info
   // column is centered, derive its center from the same constants the row-height
   // math uses, so it scales with the font-size setting.
   // The chip line and title line get EXPLICIT heights below so this arithmetic
@@ -1678,7 +1682,6 @@ function GraphCommitRow({
   // leaves the leader line a couple px off the chip's true center.
   const hasRefs = foldedRefs.length > 0;
   const threadBranchOnLeader = !!foldedRefs[0] && isThreadBranchRef(foldedRefs[0], threadBranch);
-  const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const chipCenterY = nodeYForRow(entry, rowHeight);
   const nodeYFrac = hasRefs ? chipCenterY / rowHeight : 0.5;
@@ -1874,7 +1877,11 @@ function GraphCommitRow({
           {foldedRefs.length > 0 && (
             <div
               className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
-              style={{ height: foldedRefs.length * chipLineH + (foldedRefs.length - 1) * 4 }}
+              style={{
+                height:
+                  foldedRefs.length * GRAPH_REF_CHIP_HEIGHT_PX +
+                  (foldedRefs.length - 1) * GRAPH_REF_CHIP_GAP_PX,
+              }}
             >
               {/* Branches on a commit are siblings, not a hierarchy — render
                   them as separate pills (`chips`) rather than connected powerline

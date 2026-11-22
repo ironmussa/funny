@@ -6,7 +6,7 @@ import { getWorktreeBasePaths } from '@funny/core/git';
 import { log } from '../lib/logger.js';
 import * as ptyManager from '../services/pty-manager.js';
 import { getServices } from '../services/service-registry.js';
-import { scratchPathFor } from '../services/thread-context.js';
+import { isScratchThread, scratchPathFor } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import { requireWorkingDirectory } from '../utils/working-directory.js';
 
@@ -100,7 +100,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
     void (async () => {
       try {
         const thread = await tm.getThread(scratchThreadId);
-        if (!thread || thread.userId !== userId || !thread.isScratch) {
+        if (!thread || thread.userId !== userId || !isScratchThread(thread)) {
           log.warn('PTY spawn denied: scratch thread not owned by user', {
             namespace: 'ws',
             scratchThreadId,

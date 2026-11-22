@@ -2,7 +2,12 @@ import { describe, test, expect } from 'bun:test';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { resolveThreadCwd, canDoGitOps, scratchPathFor } from '../../services/thread-context.js';
+import {
+  resolveThreadCwd,
+  canDoGitOps,
+  isScratchThread,
+  scratchPathFor,
+} from '../../services/thread-context.js';
 
 describe('resolveThreadCwd', () => {
   test('returns ~/.funny/scratch/<userId>/<threadId> for scratch threads', () => {
@@ -106,5 +111,14 @@ describe('scratchPathFor', () => {
 
   test('rejects empty userId', () => {
     expect(() => scratchPathFor('', 't-y')).toThrow(/userId failed shape check/);
+  });
+});
+
+describe('isScratchThread', () => {
+  test('is true only for a scratch row', () => {
+    expect(isScratchThread({ isScratch: true })).toBe(true);
+    expect(isScratchThread({ isScratch: false })).toBe(false);
+    expect(isScratchThread({ isScratch: null })).toBe(false);
+    expect(isScratchThread({})).toBe(false);
   });
 });

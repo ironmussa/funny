@@ -7,6 +7,7 @@ import { readProject } from '@/data/projects/read';
 import { listedProjectThreadIds, readThreadIndex, readThreadRow } from '@/data/threads/read';
 import { getTerminalScope } from '@/hooks/use-terminal-scope';
 import { createClientLogger } from '@/lib/client-logger';
+import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import {
@@ -19,8 +20,11 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 function routeForHistoryEntry(entry: ThreadHistoryEntry): string {
-  if (entry.isScratch) return `/scratch/${entry.threadId}`;
-  return `/projects/${entry.projectId}/threads/${entry.threadId}`;
+  return getThreadRoute({
+    id: entry.threadId,
+    projectId: entry.projectId,
+    isScratch: entry.isScratch,
+  });
 }
 
 const log = createClientLogger('hooks:global-shortcuts');

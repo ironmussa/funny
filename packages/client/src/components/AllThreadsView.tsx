@@ -16,6 +16,7 @@ import { readThreadRow } from '@/data/threads/read';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsByProject } from '@/lib/thread-selectors';
+import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { useThreadStore } from '@/stores/thread-store';
@@ -334,7 +335,7 @@ export function AllThreadsView() {
 
     // Type filter (scratch vs normal)
     if (typeFilter.size > 0) {
-      result = result.filter((t) => typeFilter.has(t.isScratch ? 'scratch' : 'normal'));
+      result = result.filter((t) => typeFilter.has(isScratch(t) ? 'scratch' : 'normal'));
     }
 
     // Sort by selected field and direction
@@ -420,7 +421,7 @@ export function AllThreadsView() {
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = { scratch: 0, normal: 0 };
     for (const t of allThreads) {
-      counts[t.isScratch ? 'scratch' : 'normal']++;
+      counts[isScratch(t) ? 'scratch' : 'normal']++;
     }
     return counts;
   }, [allThreads]);

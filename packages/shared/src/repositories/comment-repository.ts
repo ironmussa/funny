@@ -8,7 +8,7 @@
  * DB-agnostic comment repository. Accepts db + schema via dependency injection.
  */
 
-import { and, eq, asc, inArray, count as drizzleCount } from 'drizzle-orm';
+import { and, eq, desc, inArray, count as drizzleCount } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import type { RepoDeps } from './deps.js';
@@ -18,15 +18,23 @@ export type CommentRepositoryDeps = Pick<RepoDeps, 'db' | 'schema' | 'dbAll' | '
 export function createCommentRepository(deps: CommentRepositoryDeps) {
   const { db, schema, dbAll, dbRun } = deps;
 
-  /** List comments for a thread, ordered by creation time */
-  async function listComments(threadId: string) {
-    return dbAll(
+  /**
+   * One page of a thread's comments, oldest first. Pages count back from the
+   * newest comment: `offset` 0 is the latest `limit` comments, so a long
+   * discussion never loads whole. Ties on `createdAt` are broken by id so
+   * consecutive pages neither repeat nor skip a row.
+   */
+  async function listComments(threadId: string, page: { limit: number; offset?: number }) {
+    const rows = await dbAll(
       db
         .select()
         .from(schema.threadComments)
         .where(eq(schema.threadComments.threadId, threadId))
-        .orderBy(asc(schema.threadComments.createdAt)),
+        .orderBy(desc(schema.threadComments.createdAt), desc(schema.threadComments.id))
+        .limit(page.limit)
+        .offset(page.offset ?? 0),
     );
+    return rows.reverse();
   }
 
   /** Insert a comment, returns the created record */

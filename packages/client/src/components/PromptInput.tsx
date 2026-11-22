@@ -141,6 +141,7 @@ export const PromptInput = memo(function PromptInput({
         messageHistory={state.messageHistory}
         initialPrompt={initialPromptProp}
         initialImages={initialImagesProp}
+        attachmentsRef={state.attachmentsRef}
         onEditorChange={state.handleEditorChange}
         onEditorPaste={state.handleEditorPaste}
         onCheckoutPreflight={state.handleCheckoutPreflight}

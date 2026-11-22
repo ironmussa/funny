@@ -27,7 +27,7 @@ import {
 import type { AttachmentLimits } from '@funny/shared/models';
 import { getAttachmentLimits } from '@funny/shared/models';
 import type { TFunction } from 'i18next';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { toast } from 'sonner';
 
 import { threadsApi } from '@/lib/api/threads';
@@ -190,6 +190,17 @@ const ATTACHMENT_HANDLERS: Record<AttachmentKind, AttachmentHandler> = {
     uploadLargeFile(file, { threadId, projectId, provider, setFiles, t }),
 };
 
+/**
+ * Lets the composer's draft persistence (which lives in PromptInput, above
+ * this hook) read and swap the attachments when the thread changes.
+ */
+export interface PromptAttachmentsHandle {
+  /** Images attached right now. */
+  getImages: () => ImageAttachment[];
+  /** Load a thread's saved images and drop the text files (they are not kept in drafts). */
+  reset: (images: ImageAttachment[]) => void;
+}
+
 interface UsePromptAttachmentsParams {
   initialImages?: ImageAttachment[];
   provider: string;
@@ -197,6 +208,32 @@ interface UsePromptAttachmentsParams {
   /** Project of the thread being created — routes staged uploads to its runner. */
   projectId?: string;
   t: TFunction;
+  /** Filled with a handle the draft persistence uses on thread switch. */
+  handleRef?: RefObject<PromptAttachmentsHandle | null>;
+}
+
+/** Publishes the attachment handle; `getImages` reads the last committed images. */
+function useAttachmentsHandle(
+  handleRef: RefObject<PromptAttachmentsHandle | null> | undefined,
+  images: ImageAttachment[],
+  setImages: React.Dispatch<React.SetStateAction<ImageAttachment[]>>,
+  setFiles: SetTextFiles,
+) {
+  const imagesRef = useRef(images);
+  useLayoutEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+  useLayoutEffect(() => {
+    if (!handleRef) return;
+    handleRef.current = {
+      getImages: () => imagesRef.current,
+      reset: (next) => {
+        setImages(next);
+        setFiles([]);
+      },
+    };
+    // Not cleared on unmount: the parent saves the draft in its own unmount cleanup.
+  }, [handleRef, setImages, setFiles]);
 }
 
 export function usePromptAttachments({
@@ -205,9 +242,11 @@ export function usePromptAttachments({
   threadId,
   projectId,
   t,
+  handleRef,
 }: UsePromptAttachmentsParams) {
   const [images, setImages] = useState<ImageAttachment[]>(initialImages ?? []);
   const [attachedTextFiles, setAttachedTextFiles] = useState<AttachedTextFile[]>([]);
+  useAttachmentsHandle(handleRef, images, setImages, setAttachedTextFiles);
 
   const attachmentLimits = useMemo(
     () => getAttachmentLimits(provider as Parameters<typeof getAttachmentLimits>[0]),

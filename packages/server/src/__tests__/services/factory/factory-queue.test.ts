@@ -24,6 +24,7 @@ import {
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
 import {
   launchedThread,
+  passingProof,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
@@ -173,6 +174,7 @@ async function setUp(
     resolveRuntime: async () => 'local' as const,
     waitThread: opts.waitThread ?? pendingThreads,
     notify: async () => undefined,
+    proof: passingProof,
   });
   // The tests fire the tick themselves: a send does not poke the factory here.
   const queue = createFactoryQueue({ wake: async () => {} });

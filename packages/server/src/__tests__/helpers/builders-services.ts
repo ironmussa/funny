@@ -8,6 +8,7 @@ import { SANDBOX_STATES, type SandboxState } from '@funny/shared/sandbox-machine
 import { err, ok, type Result } from 'neverthrow';
 import type { Server as SocketIOServer } from 'socket.io';
 
+import type { FactoryFlowRunsDeps } from '../../services/factory/factory-flow-runs.js';
 import type {
   RunnerPorts,
   StartThreadError,
@@ -153,3 +154,20 @@ export function markerEvent(
   // without reading it for these event types; the tests assert it arrives unchanged.
   return { type, threadId, data } as any;
 }
+
+/** A runner proof service whose every regression proof passes at once. */
+export const passingProof: NonNullable<FactoryFlowRunsDeps['proof']> = () => ({
+  startProof: async () => ok({ proofId: 'proof-1', state: 'done' }),
+  pollProof: async () =>
+    ok({
+      state: 'done',
+      result: {
+        verdict: 'pass',
+        headSha: 'sha-head',
+        files: [],
+        commands: [],
+        baseSha: 'abc',
+        outputTail: '',
+      },
+    }),
+});

@@ -38,6 +38,7 @@ import type { StartThreadInput } from '../../../services/runner-thread-launcher.
 import { createWorkflowJournalRepository } from '../../../services/workflow-engine/journal-repository.js';
 import {
   launchedThread,
+  passingProof,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
@@ -54,19 +55,9 @@ let testDb: ReturnType<typeof createTestDb>;
 
 const ports = unusedRunnerPorts();
 
-/** Fake proof service that always returns a passing verdict immediately. */
-const fakeProof: NonNullable<Parameters<typeof startFactoryWatcher>[0]['proof']> = () => ({
-  startProof: async () => ok({ proofId: 'proof-1', state: 'done' }),
-  pollProof: async () =>
-    ok({
-      state: 'done',
-      result: { verdict: 'pass', files: [], commands: [], baseSha: 'abc', outputTail: '' },
-    }),
-});
-
 const _origStartWatcher = startFactoryWatcher;
 const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
-  _origStartWatcher({ proof: fakeProof, ...d });
+  _origStartWatcher({ proof: passingProof, ...d });
 
 /** Fake poll: captures each factory's tick so the test can fire it. */
 function fakePoll() {
@@ -725,7 +716,7 @@ describe('factory flow', () => {
   test('a failed run records its flow steps, the step it failed at and why', async () => {
     const { factoryId } = await runFlow({ pr: false }, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'failed');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
     expect(run.currentStep).toBe('pull-request');
     expect(run.failureReason).toContain('No open pull request');
   });
@@ -733,7 +724,7 @@ describe('factory flow', () => {
   test('a merged run has its steps and no failure reason', async () => {
     const { factoryId } = await runFlow({}, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'merged');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
     expect(run.failureReason).toBeNull();
   });
 

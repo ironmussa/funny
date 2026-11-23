@@ -3,7 +3,11 @@ import type { FactoryRun } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 
 import { useActiveFactoryRunForThread } from '@/data/factory/hooks';
-import { factoryRunFailedStep, factoryRunStateLabel } from '@/lib/factory-run-labels';
+import {
+  factoryRunFailedStep,
+  factoryRunStateLabel,
+  factoryRunBanner,
+} from '@/lib/factory-run-labels';
 import { threadActivity, type ThreadActivity } from '@/lib/thread-activity';
 
 export interface ThreadActivityView {
@@ -31,18 +35,15 @@ export function threadActivityShortLabel(t: TFunction, view: ThreadActivityView)
   return view.run.currentStep ?? factoryRunStateLabel(t, view.run.state);
 }
 
-/** The tooltip of a row's activity: "Factory · #225 · Waiting for CI". */
+/** The tooltip of a row's activity (a run without an issue shows its schedule's name): "Factory · #225 · Waiting for CI". */
 export function threadActivityTooltip(t: TFunction, view: ThreadActivityView): string | null {
   if (!view.run) return null;
   const failedStep = view.activity === 'factory-failed' ? factoryRunFailedStep(view.run) : null;
   if (failedStep) {
-    return t('factory.activity.failedTooltip', 'Factory · #{{issue}} · Failed at {{step}}', {
-      issue: view.run.issueNumber,
+    return t('factory.activity.failedAt', '{{run}} · Failed at {{step}}', {
+      run: factoryRunBanner(t, view.run),
       step: failedStep,
     });
   }
-  return t('factory.activity.tooltip', 'Factory · #{{issue}} · {{state}}', {
-    issue: view.run.issueNumber,
-    state: factoryRunStateLabel(t, view.run.state),
-  });
+  return `${factoryRunBanner(t, view.run)} · ${factoryRunStateLabel(t, view.run.state)}`;
 }

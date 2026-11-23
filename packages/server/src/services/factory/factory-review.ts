@@ -45,7 +45,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
-import type { FactoryRunScope } from './factory-action-provider.js';
+import type { IssueRunScope } from './factory-action-provider.js';
 import type { IntegrationScope } from './factory-integrate.js';
 import { issueInputs, issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import type { FactoryPullRequestRef } from './factory-pull-requests.js';
@@ -331,7 +331,7 @@ function verdictResult(verdict: FactoryReviewVerdict): ActionResult {
 }
 
 export interface FactoryReviewerDeps {
-  scope: FactoryRunScope;
+  scope: IssueRunScope;
   /** The issue's page, named in the prompt. */
   issueUrl: string | null;
   /** The issue's text, for a review without a contract (the reviewer has no network). */

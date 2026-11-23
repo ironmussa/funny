@@ -7,6 +7,7 @@ import {
   type FactoryRun,
   type FactorySettings,
   type FactorySubmitResult,
+  type FactoryTrigger,
   type SaveFactorySettingsInput,
 } from '@/lib/api/factory';
 
@@ -15,6 +16,7 @@ import { getDataLayer } from '../runtime';
 import {
   refetchFactorySettings,
   refreshFactoryRuns,
+  refreshFactoryTriggers,
   writeFactoryRun,
   writeFactorySettings,
 } from './queries';
@@ -106,5 +108,60 @@ export function closeFactoryIncident(
   return factoryApi.closeIncident(projectId).map((settings) => {
     writeFactorySettings(settings, layer);
     return settings;
+  });
+}
+
+/** What a schedule trigger's form sends: `id` when it changes an existing one. */
+export interface FactoryTriggerDraft {
+  id?: string;
+  name: string;
+  schedule: string;
+  flowName: string;
+  inputs: Record<string, string>;
+  enabled: boolean;
+}
+
+/**
+ * Create or change a schedule trigger of the caller's factory (change
+ * flow-triggers). Not optimistic: the server checks the schedule and that the
+ * flow can run without an issue. The caller shows the error.
+ */
+export function saveFactoryTrigger(
+  projectId: string,
+  draft: FactoryTriggerDraft,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryTrigger, DomainError> {
+  return factoryApi.saveTrigger({ projectId, ...draft }).map((trigger) => {
+    refreshFactoryTriggers(projectId, layer);
+    return trigger;
+  });
+}
+
+/** Remove a schedule trigger of the caller's factory. */
+export function removeFactoryTrigger(
+  projectId: string,
+  triggerId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<{ ok: true }, DomainError> {
+  return factoryApi.removeTrigger(projectId, triggerId).map((result) => {
+    refreshFactoryTriggers(projectId, layer);
+    return result;
+  });
+}
+
+/**
+ * Start one run of a flow now, without an issue. Not optimistic: the server
+ * checks the factory can work and the inputs; the runs are re-read so the new
+ * one shows at once.
+ */
+export function runFactoryFlow(
+  projectId: string,
+  flowName: string,
+  inputs: Record<string, string>,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.runFlow({ projectId, flowName, inputs }).map((run) => {
+    refreshFactoryRuns(projectId, layer);
+    return run;
   });
 }

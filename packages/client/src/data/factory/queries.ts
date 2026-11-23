@@ -3,11 +3,13 @@ import type {
   FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
+  FactoryIssuelessFlow,
   FactoryQueueRun,
   FactoryReadiness,
   FactoryRun,
   FactorySettings,
   FactoryStepOverrides,
+  FactoryTrigger,
 } from '@funny/shared/contracts/factory';
 
 import { factoryApi } from '@/lib/api/factory';
@@ -194,6 +196,40 @@ export function factoryBlockersQuery(projectId: string, issueNumbers: number[]) 
       unwrapResult(factoryApi.blockers(projectId, sorted)),
     staleTime: 30_000,
     enabled: sorted.length > 0,
+  };
+}
+
+const factoryTriggersKey = (projectId: string) => ['factory', 'triggers', projectId] as const;
+
+/**
+ * The schedule triggers of the caller's factory (change flow-triggers). They
+ * change only through this session's own saves, which re-read them.
+ */
+export function factoryTriggersQuery(projectId: string) {
+  return {
+    queryKey: factoryTriggersKey(projectId),
+    queryFn: (): Promise<FactoryTrigger[]> => unwrapResult(factoryApi.listTriggers(projectId)),
+    staleTime: 30_000,
+  };
+}
+
+/** Read the triggers again after a save or a removal. */
+export function refreshFactoryTriggers(projectId: string, layer: DataLayer = getDataLayer()): void {
+  if (layer.disposed) return;
+  void layer.queryClient.invalidateQueries({ queryKey: factoryTriggersKey(projectId) });
+}
+
+/**
+ * Whether `flowName` can run without an issue, and the inputs to type to start
+ * it. Asked again each time: the flow on the default branch may have changed.
+ */
+export function factoryIssuelessFlowQuery(projectId: string, flowName: string) {
+  return {
+    queryKey: ['factory', 'issueless-flow', projectId, flowName] as const,
+    queryFn: (): Promise<FactoryIssuelessFlow> =>
+      unwrapResult(factoryApi.getIssuelessFlow(projectId, flowName)),
+    staleTime: 0,
+    enabled: !!flowName,
   };
 }
 

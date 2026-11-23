@@ -25,6 +25,7 @@ import {
 } from '../../services/factory/factory-run-control.js';
 import {
   createFactoryRunsRepository,
+  factoryRunLabel,
   type FactoryRunView,
 } from '../../services/factory/factory-runs.js';
 import {
@@ -61,6 +62,7 @@ function queueFailure(error: FactoryQueueError): ApiFailure {
     case 'not-found':
       return failure(404, error.message);
     case 'invalid-flow':
+    case 'invalid':
       return failure(400, error.message);
     default:
       // paused / cannot-work: the factory exists but cannot take a send now.
@@ -125,7 +127,13 @@ function createFactoryPort(
   /** Audit a queue action and pass its result on. */
   const audited =
     <T>(
-      action: 'factory.issues_sent' | 'factory.queue_cleared' | 'factory.stopped_all',
+      action:
+        | 'factory.issues_sent'
+        | 'factory.queue_cleared'
+        | 'factory.stopped_all'
+        | 'factory.trigger_saved'
+        | 'factory.trigger_removed'
+        | 'factory.flow_started',
       userId: string,
       detail: (result: T) => string,
       meta: (result: T) => Record<string, unknown>,
@@ -147,7 +155,7 @@ function createFactoryPort(
         audit({
           action: action === 'stop' ? 'factory.run_stopped' : 'factory.run_retried',
           actorId: userId,
-          detail: `Factory run for issue #${run.issueNumber} ${action === 'stop' ? 'stopped' : 'retried'}`,
+          detail: `Factory run ${factoryRunLabel(run)} ${action === 'stop' ? 'stopped' : 'retried'}`,
           meta: { projectId, runId, issueNumber: run.issueNumber },
         });
         return run;
@@ -295,6 +303,72 @@ function createFactoryPort(
         .andThen((factoryId) =>
           factoryId ? queue.blockers(factoryId, issueNumbers).mapErr(queueFailure) : okAsync([]),
         );
+    },
+
+    async triggers(userId, projectId) {
+      return settings
+        .factoryId(userId, projectId)
+        .mapErr(settingsFailure)
+        .andThen((factoryId) =>
+          factoryId ? queue.triggers(factoryId).mapErr(queueFailure) : okAsync([]),
+        );
+    },
+
+    async saveTrigger(userId, projectId, data) {
+      return configured(userId, projectId).andThen((factoryId) =>
+        queue
+          .saveTrigger(factoryId, data)
+          .mapErr(queueFailure)
+          .map(
+            audited(
+              'factory.trigger_saved',
+              userId,
+              (t) => `Saved the schedule "${t.name}" of the factory of project ${projectId}`,
+              (t) => ({ projectId, triggerId: t.id, flowName: t.flowName, schedule: t.schedule }),
+            ),
+          ),
+      );
+    },
+
+    async removeTrigger(userId, projectId, triggerId) {
+      return configured(userId, projectId).andThen((factoryId) =>
+        queue
+          .removeTrigger(factoryId, triggerId)
+          .mapErr(queueFailure)
+          .map(() => ({ ok: true as const }))
+          .map(
+            audited(
+              'factory.trigger_removed',
+              userId,
+              () => `Removed a schedule of the factory of project ${projectId}`,
+              () => ({ projectId, triggerId }),
+            ),
+          ),
+      );
+    },
+
+    async issuelessFlow(userId, projectId, flowName) {
+      return settings
+        .factoryId(userId, projectId)
+        .mapErr(settingsFailure)
+        .andThen((factoryId) => queue.issuelessFlow(factoryId, flowName).mapErr(queueFailure));
+    },
+
+    async runFlow(userId, projectId, input) {
+      return configured(userId, projectId).andThen((factoryId) =>
+        queue
+          .runFlow(factoryId, input)
+          .mapErr(queueFailure)
+          .map(
+            audited(
+              'factory.flow_started',
+              userId,
+              (run) =>
+                `Started the flow "${input.flowName}" in the factory of project ${projectId}`,
+              (run) => ({ projectId, runId: run.id, flowName: input.flowName }),
+            ),
+          ),
+      );
     },
 
     async clearQueue(userId, projectId) {

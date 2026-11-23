@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import type { FactoryQueueRun } from '@/lib/api/factory';
+import { factoryRunFallbackTitle, factoryRunRef } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 
@@ -21,6 +22,7 @@ import { FactoryRunTimeInStep } from './StepTimeBadges';
 
 /** The issue's page, when the run's pull request tells the repository. */
 function factoryIssueUrl(run: Pick<FactoryQueueRun, 'prUrl' | 'issueNumber'>): string | null {
+  if (run.issueNumber === null) return null;
   const repo = run.prUrl?.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+/)?.[1];
   return repo ? `https://github.com/${repo}/issues/${run.issueNumber}` : null;
 }
@@ -49,8 +51,8 @@ export const FactoryRunCard = memo(function FactoryRunCard({
   const { t } = useTranslation();
   const threadId = factoryRunCardThread(run);
   const thread = useThreadById(threadId);
-  const title =
-    thread?.title || t('factoryView.issueTitle', 'Issue #{{number}}', { number: run.issueNumber });
+  const title = thread?.title || factoryRunFallbackTitle(t, run);
+  const ref = factoryRunRef(t, run);
   const waiting = factoryRunWaitingText(t, run);
   const issueUrl = factoryIssueUrl(run);
 
@@ -78,10 +80,12 @@ export const FactoryRunCard = memo(function FactoryRunCard({
             className="hover:text-foreground shrink-0 underline-offset-2 hover:underline"
             data-testid={`factory-board-issue-${run.id}`}
           >
-            #{run.issueNumber}
+            {ref}
           </a>
         ) : (
-          <span className="shrink-0">#{run.issueNumber}</span>
+          <span className="truncate" data-testid={`factory-board-ref-${run.id}`}>
+            {ref}
+          </span>
         )}
         <span className="ml-auto shrink-0">{timeAgo(factoryRunActivityAt(run), t, now)}</span>
       </div>

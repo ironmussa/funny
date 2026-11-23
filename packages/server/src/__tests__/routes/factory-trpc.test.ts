@@ -643,4 +643,101 @@ describe('factory over tRPC', () => {
       stopped: 0,
     });
   });
+
+  describe('triggers and runs without an issue (change flow-triggers)', () => {
+    const nightly = {
+      projectId: 'p1',
+      name: 'Nightly audit',
+      schedule: '0 3 * * *',
+      flowName: 'issue-to-pr',
+    };
+
+    test('a trigger needs a factory, a valid schedule and a flow that needs no issue', async () => {
+      expect((await mutate('alice', 'saveTrigger', nightly)).status).toBe(404);
+      expect((await query('alice', 'triggers', { projectId: 'p1' })).body).toEqual([]);
+
+      await save('alice', { projectId: 'p1', enabled: true });
+      const badSchedule = await mutate('alice', 'saveTrigger', { ...nightly, schedule: 'nightly' });
+      expect(badSchedule.status).toBe(400);
+      expect(badSchedule.message).toContain('Invalid schedule');
+
+      const issueFlow = await mutate('alice', 'saveTrigger', nightly);
+      expect(issueFlow.status).toBe(400);
+      expect(issueFlow.message).toContain('issue_number');
+
+      const badInput = await mutate('alice', 'saveTrigger', {
+        ...nightly,
+        inputs: { 'Bad-Name': 'x' },
+      });
+      expect(badInput.status).toBe(400);
+      expect((await query('alice', 'triggers', { projectId: 'p1' })).body).toEqual([]);
+    });
+
+    test("a viewer reads triggers and a flow's inputs but cannot save, remove or start", async () => {
+      seedProjectMember(t.db, { projectId: 'bob-project', userId: 'vic', role: 'viewer' });
+      const at = { projectId: 'bob-project' };
+
+      expect((await query('vic', 'triggers', at)).status).toBe(200);
+      const flow = await query('vic', 'issuelessFlow', { ...at, flowName: 'issue-to-pr' });
+      expect(flow.status).toBe(200);
+      expect(flow.body.inputs.map((input: { name: string }) => input.name)).toContain(
+        'issue_number',
+      );
+
+      expect((await mutate('vic', 'saveTrigger', { ...nightly, ...at })).status).toBe(403);
+      expect((await mutate('vic', 'removeTrigger', { ...at, triggerId: 'x' })).status).toBe(403);
+      expect((await mutate('vic', 'runFlow', { ...at, flowName: 'issue-to-pr' })).status).toBe(403);
+      expect((await query('eve', 'triggers', at)).status).toBe(404);
+    });
+
+    test('starting a flow needs a running factory; removing an unknown trigger is 404', async () => {
+      const start = { projectId: 'p1', flowName: 'issue-to-pr', inputs: {} };
+      expect((await mutate('alice', 'runFlow', start)).status).toBe(404);
+
+      await save('alice', { projectId: 'p1', enabled: false });
+      const paused = await mutate('alice', 'runFlow', start);
+      expect(paused.status).toBe(409);
+      expect(paused.message).toContain('paused');
+      expect(
+        (await mutate('alice', 'removeTrigger', { projectId: 'p1', triggerId: 'x' })).status,
+      ).toBe(404);
+    });
+
+    test('a run without an issue is listed with its trigger name and inputs', async () => {
+      await save('alice', { projectId: 'p1', enabled: false });
+      const { createFactorySettingsService } =
+        await import('../../services/factory/factory-settings.js');
+      const { createFactoryRunsRepository, factoryRunBranch } =
+        await import('../../services/factory/factory-runs.js');
+      const factoryId = (
+        await createFactorySettingsService().factoryId('alice', 'p1')
+      )._unsafeUnwrap()!;
+      const run = (
+        await createFactoryRunsRepository().start({
+          factoryId,
+          issueNumber: null,
+          state: 'working',
+          source: 'schedule',
+          flowName: 'audit',
+          trigger: { id: 't1', name: 'Nightly audit' },
+          inputs: { scope: 'auth' },
+        })
+      )._unsafeUnwrap();
+
+      expect(factoryRunBranch(run)).toBe(`factory/run-${run.id.slice(0, 8)}`);
+      expect(factoryRunBranch({ id: run.id, issueNumber: 7 })).toBe(
+        `factory/issue-7-${run.id.slice(0, 8)}`,
+      );
+      const listed = (await query('alice', 'runs', { projectId: 'p1' })).body;
+      expect(listed).toEqual([
+        expect.objectContaining({
+          id: run.id,
+          issueNumber: null,
+          source: 'schedule',
+          triggerName: 'Nightly audit',
+          inputs: { scope: 'auth' },
+        }),
+      ]);
+    });
+  });
 });

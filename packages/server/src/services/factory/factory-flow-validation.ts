@@ -272,6 +272,62 @@ export function validateFactoryFlow(
   ];
 }
 
+/** The steps that judge a change against the run's issue: a run without one cannot run them. */
+const ISSUE_ONLY_STEPS: ReadonlySet<string> = new Set([
+  'triage',
+  'review',
+  'regression_proof',
+  'merge',
+]);
+
+/** The inputs the factory itself supplies to every flow; a trigger cannot replace them. */
+export const FACTORY_FLOW_INPUTS: ReadonlySet<string> = new Set([
+  'repo',
+  'branch',
+  'base_branch',
+  'factory_id',
+  'stack_branch',
+]);
+
+/** The flow's inputs a run must be given a value for: required, and without a default. */
+export function requiredFlowInputs(parsed: ParsedWorkflow): string[] {
+  return Object.entries(parsed.inputs ?? {}).flatMap(([name, def]) =>
+    def.required === true && def.default === undefined ? [name] : [],
+  );
+}
+
+/**
+ * Every reason the flow cannot run for a run WITHOUT an issue (change
+ * flow-triggers), given the input names its trigger supplies: a step that
+ * judges a change against an issue, or a required input nobody supplies. An
+ * issue flow asks for `issue_number`, so it is refused by the second rule too.
+ */
+export function validateFlowForIssuelessRun(
+  parsed: ParsedWorkflow,
+  supplied: readonly string[],
+): FactoryFlowProblem[] {
+  const issueSteps = parsed.nodes.flatMap((node): FactoryFlowProblem[] => {
+    const { type } = getWorkflowNodeAction(node);
+    if (!ISSUE_ONLY_STEPS.has(type)) return [];
+    return [
+      {
+        step: node.id,
+        field: type,
+        message: `a ${type} step judges a change against an issue, and this run has none`,
+      },
+    ];
+  });
+  const have = new Set(supplied);
+  const missing = requiredFlowInputs(parsed)
+    .filter((name) => !FACTORY_FLOW_INPUTS.has(name) && !have.has(name))
+    .map((name): FactoryFlowProblem => ({
+      step: 'flow',
+      field: `inputs.${name}`,
+      message: `the flow requires the input "${name}", and nothing supplies it`,
+    }));
+  return [...issueSteps, ...missing];
+}
+
 /** The problems as one message, one line each, for a run's failure reason. */
 export function formatFactoryFlowProblems(origin: string, problems: FactoryFlowProblem[]): string {
   const lines = problems.map(({ step, field, message }) => `- step ${step}, ${field}: ${message}`);

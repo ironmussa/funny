@@ -34,6 +34,10 @@ type AuditAction =
   | 'factory.issues_sent'
   | 'factory.queue_cleared'
   | 'factory.stopped_all'
+  /** A schedule trigger of a factory was saved or removed, or a flow started without an issue. */
+  | 'factory.trigger_saved'
+  | 'factory.trigger_removed'
+  | 'factory.flow_started'
   | 'factory.incident_closed'
   | 'infra.project_sandbox_cleared'
   | 'runner.remove'

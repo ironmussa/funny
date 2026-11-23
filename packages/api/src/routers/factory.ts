@@ -3,7 +3,10 @@ import {
   factoryFlowInput,
   factoryProjectInput,
   factoryRunInput,
+  factoryTriggerInput,
+  runFactoryFlowInput,
   saveFactorySettingsInput,
+  saveFactoryTriggerInput,
   submitFactoryIssuesInput,
 } from '@funny/shared/contracts/factory';
 
@@ -13,6 +16,8 @@ import { projectProcedure, protectedProcedure, router } from '../trpc.js';
 const SAVE_FORBIDDEN = 'Running an issue factory needs contributor access to the project';
 const CONTROL_FORBIDDEN = 'Controlling factory runs needs contributor access to the project';
 const SEND_FORBIDDEN = 'Sending issues to a factory needs contributor access to the project';
+const TRIGGER_FORBIDDEN = 'Changing a factory trigger needs contributor access to the project';
+const RUN_FORBIDDEN = 'Starting a factory flow needs contributor access to the project';
 
 // The caller's own issue factory for a project (change issue-factory). Saving
 // needs `steer`, the capability of starting threads: the factory starts them
@@ -98,6 +103,33 @@ export const factoryRouter = router({
     .input(factoryProjectInput)
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.stopAll(ctx.userId, input.projectId)),
+    ),
+  // Triggers (change flow-triggers). A trigger starts threads in the caller's
+  // name at each occurrence, like sending an issue: `steer`.
+  triggers: projectProcedure('view')
+    .input(factoryProjectInput)
+    .query(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.triggers(ctx.userId, input.projectId)),
+    ),
+  saveTrigger: projectProcedure('steer', TRIGGER_FORBIDDEN)
+    .input(saveFactoryTriggerInput)
+    .mutation(async ({ ctx, input: { projectId, ...data } }) =>
+      unwrap(await ctx.ports.factory.saveTrigger(ctx.userId, projectId, data)),
+    ),
+  removeTrigger: projectProcedure('steer', TRIGGER_FORBIDDEN)
+    .input(factoryTriggerInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.removeTrigger(ctx.userId, input.projectId, input.triggerId)),
+    ),
+  issuelessFlow: projectProcedure('view')
+    .input(factoryFlowInput)
+    .query(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.issuelessFlow(ctx.userId, input.projectId, input.flowName)),
+    ),
+  runFlow: projectProcedure('steer', RUN_FORBIDDEN)
+    .input(runFactoryFlowInput)
+    .mutation(async ({ ctx, input: { projectId, ...data } }) =>
+      unwrap(await ctx.ports.factory.runFlow(ctx.userId, projectId, data)),
     ),
   /** Close the incident pausing the caller's factory; its admissions resume. */
   closeIncident: projectProcedure('steer', CONTROL_FORBIDDEN)

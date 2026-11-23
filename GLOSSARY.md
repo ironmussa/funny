@@ -20,6 +20,12 @@ in an inbox for its owner. It needs no GitHub repository and no issue factory. F
 work that changes code or has several steps, use a factory schedule instead.
 _Avoid_: Scheduled flow, cron job, trigger
 
+**Trigger**:
+What starts a factory run and with which input values: an issue sent to the factory, a
+labelled issue, a schedule, or a member starting a flow without an issue. A trigger never
+says what the run does; the flow does.
+_Avoid_: Automation (that is a scheduled read-only thread), cron job
+
 **Triage**:
 The first step of a factory run: a read-only agent decides whether the issue can be worked
 unattended, and either writes the run's contract or asks on the issue.

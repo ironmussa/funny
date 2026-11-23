@@ -10,9 +10,15 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { parseWorkflowYaml } from '@funny/workflows';
 import { ok } from 'neverthrow';
 
-import { TOOL_POLICY_PROVIDERS } from '../../../services/factory/factory-flow-validation.js';
+import { flowInputsOf } from '../../../services/factory/factory-flow-runs.js';
+import {
+  requiredFlowInputs,
+  TOOL_POLICY_PROVIDERS,
+  validateFlowForIssuelessRun,
+} from '../../../services/factory/factory-flow-validation.js';
 import { loadFactoryFlow, type FactoryFlowError } from '../../../services/factory/factory-flow.js';
 
 const HEADER = `name: custom
@@ -275,5 +281,86 @@ describe('reading a repository flow at one commit', () => {
         ),
     });
     expect(flow._unsafeUnwrap().commit).toBeNull();
+  });
+});
+
+describe('a flow for a run without an issue (change flow-triggers)', () => {
+  const parse = (yaml: string) => {
+    const parsed = parseWorkflowYaml(yaml);
+    if (!parsed.ok) throw new Error('the test flow does not parse');
+    return parsed.workflow;
+  };
+
+  const AUDIT = `name: audit
+inputs:
+  scope: { type: string, required: true }
+  depth: { type: string, required: true, default: shallow }
+  note: { type: string }
+  repo: { type: string, required: true }
+nodes:
+  - id: look
+    spawn_agent:
+      prompt: 'Audit {{scope}}'
+`;
+
+  test('only inputs that are required and have no default must be supplied', () => {
+    expect(requiredFlowInputs(parse(AUDIT))).toEqual(['scope', 'repo']);
+  });
+
+  test('a flow whose required inputs are supplied has no problem; the factory supplies its own', () => {
+    expect(validateFlowForIssuelessRun(parse(AUDIT), ['scope'])).toEqual([]);
+  });
+
+  test('a required input nobody supplies is named', () => {
+    const problems = validateFlowForIssuelessRun(parse(AUDIT), []);
+    expect(problems).toEqual([expect.objectContaining({ step: 'flow', field: 'inputs.scope' })]);
+  });
+
+  test('every step that judges a change against an issue is named', () => {
+    const builtIn = parse(
+      readFileSync(
+        join(import.meta.dir, '../../../../../workflows/defaults/issue-to-merge.yaml'),
+        'utf8',
+      ),
+    );
+    const fields = validateFlowForIssuelessRun(builtIn, []).map((problem) => problem.field);
+    expect(fields).toEqual(
+      expect.arrayContaining([
+        'triage',
+        'review',
+        'regression_proof',
+        'merge',
+        'inputs.issue_number',
+      ]),
+    );
+  });
+
+  const at = { branch: 'factory/run-1', baseBranch: 'main' };
+  const factory = { id: 'f1' };
+
+  test('an issue run gets its issue as inputs', () => {
+    const issue = { number: 12, title: 'Fix login', url: 'u/12' };
+    expect(flowInputsOf({ repo: 'o/r', issue, factory, run: { inputs: {} } }, at)).toEqual({
+      issue_number: '12',
+      issue_title: 'Fix login',
+      issue_url: 'u/12',
+      repo: 'o/r',
+      branch: 'factory/run-1',
+      base_branch: 'main',
+      factory_id: 'f1',
+      stack_branch: '',
+    });
+  });
+
+  test('a run without an issue gets what its trigger recorded; the factory inputs win', () => {
+    const run = { inputs: { scope: 'auth', repo: 'evil/repo', branch: 'main' } };
+    expect(flowInputsOf({ repo: 'o/r', issue: null, factory, run }, at)).toEqual({
+      scope: 'auth',
+      repo: 'o/r',
+      branch: 'factory/run-1',
+      base_branch: 'main',
+      factory_id: 'f1',
+      stack_branch: '',
+    });
   });
 });

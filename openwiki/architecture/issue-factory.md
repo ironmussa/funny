@@ -228,6 +228,44 @@ queue fall back to the factory's flow.
 Built-in flows (`packages/workflows/defaults/`): `issue-to-merge` (default) and `issue-to-pr` (stops
 at the PR for teams that merge by hand).
 
+## Triggers and runs without an issue
+
+A run records the **trigger** that started it in `factory_runs.source`: `manual` (an issue
+sent to the queue), `label` (a labelled issue, automatic mode), `schedule` or `run_now`. The
+last two have no issue (openspec `flow-triggers`): `issue_number` is `0` in the database and
+`issueNumber: null` everywhere else (`factory-runs.ts` is the only reader of the column), the
+branch is `factory/run-<id>`, and the flow's inputs are the values the trigger recorded in
+`factory_runs.inputs` instead of the issue's.
+
+- **Which flows may run without an issue.** `validateFlowForIssuelessRun`
+  (`factory-flow-validation.ts`) refuses a flow that has a `triage`, `review`,
+  `regression_proof` or `merge` step, or that requires an input nobody supplies (the
+  factory supplies `repo`, `branch`, `base_branch` and `factory_id`, and they always win
+  over a recorded input of the same name). It runs when a schedule is saved, on "Run a
+  flow", and again at the start of every run (`factory-flow-runs.ts`), since the flow is
+  read from the default branch each time. The action provider refuses those four steps
+  again for a run without an issue. So such a run can open a pull request and never merges
+  one by itself.
+- **Schedule triggers** (`factory-triggers.ts`, table `factory_triggers`): a name, a cron
+  pattern, a flow, input values and an enabled flag, saved with `steer` through
+  `factory.saveTrigger`. On each tick of an enabled factory, `queueDueTriggers`
+  (`factory-watcher.ts`) takes every due occurrence with a compare-and-set on `next_run_at`
+  (one server instance wins), then queues a run in `requested`; `admitWork` admits it under
+  the factory's cap like a sent issue. An occurrence more than five minutes late (the
+  server was down, the factory paused) is dropped, not run late.
+- **One working run per trigger.** The partial unique index
+  `factory_runs_one_active_per_trigger` refuses a second run while one is queued or in
+  flight; the watcher then records a `factory.trigger_skipped` activity. A run parked for a
+  person (its pull request is open) does not hold its trigger.
+- **How it ends.** With a pull request it parks in `waiting_human` like an `issue-to-pr`
+  run and closes when a person merges or closes the pull request. Without one it ends in
+  the terminal state `done` (an issue run still ends `no_change`).
+- **Run a flow** (`factory.runFlow`) queues one such run now; it is refused, like a sent
+  issue, while the factory is paused or cannot work.
+- Input values are written by a member with `steer`, are shown to every member who sees
+  the factory, and are interpolated into prompts: they must not hold secrets. A name the
+  factory supplies, or one `validateSecretName` reserves, is refused.
+
 ## Agent step options
 
 Each agent step of a factory flow (a `spawn_agent` node, a retry's `before_retry` fix step)

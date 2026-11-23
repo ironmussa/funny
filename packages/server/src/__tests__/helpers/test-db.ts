@@ -423,7 +423,25 @@ export function createTestDb() {
       step_options TEXT,
       regenerate_node TEXT,
       integration_pending_at TEXT,
-      stacked_on TEXT
+      stacked_on TEXT,
+      trigger_id TEXT,
+      trigger_name TEXT,
+      inputs TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_triggers (
+      id TEXT PRIMARY KEY,
+      factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'schedule',
+      schedule TEXT NOT NULL,
+      flow_name TEXT NOT NULL,
+      inputs TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      next_run_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )
   `);
   testDb.run(sql`
@@ -488,7 +506,13 @@ export function createTestDb() {
   testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
-    WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')
+    WHERE issue_number > 0 AND state NOT IN ('merged', 'no_change', 'failed', 'stopped')
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_trigger
+    ON factory_runs (factory_id, trigger_id)
+    WHERE trigger_id IS NOT NULL
+      AND state IN ('requested', 'queued', 'triaging', 'working', 'pr_open', 'waiting_ci', 'fixing', 'reviewing', 'merging')
   `);
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS workflow_node_executions (

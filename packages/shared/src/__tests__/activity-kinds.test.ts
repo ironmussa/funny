@@ -99,6 +99,11 @@ describe('parseActivityInput for the new kinds', () => {
     'sandbox.destroy': { reason: 'thread-deleted' },
     'factory.merge': { issueNumber: 3, prNumber: 9 },
     'factory.disabled': { reason: 'access-lost' },
+    'factory.trigger_skipped': {
+      triggerId: 't1',
+      flowName: 'audit',
+      due: '2026-11-23T02:05:00.000Z',
+    },
     'agents.stopped': { reason: 'runner-binding-changed' },
     'automation.unscheduled': { automationId: 'a1', schedule: 'every morning' },
     'automation.skipped': { automationId: 'a1', runningSince: '2026-11-22T10:00:00.000Z' },

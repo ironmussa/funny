@@ -25,7 +25,11 @@
 import type { IssueBlocker } from '@funny/core/github-app';
 import type { ConcurrencyGate } from '@funny/pipelines';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
-import type { FactoryStackedOn, FactoryWaitReason } from '@funny/shared/contracts/factory';
+import type {
+  FactoryStackedOn,
+  FactoryTrigger,
+  FactoryWaitReason,
+} from '@funny/shared/contracts/factory';
 import { contractOf } from '@funny/shared/contracts/factory';
 import type { RegressionProofOpts } from '@funny/workflows/compiler';
 import { and, eq } from 'drizzle-orm';
@@ -120,6 +124,11 @@ import {
   type WaitAfter,
 } from './factory-thread-waits.js';
 import { busyPathsOf, issueChangedSince, overlappingIssues } from './factory-triage.js';
+import {
+  createFactoryTriggersRepository,
+  MISSED_OCCURRENCE_MS,
+  type FactoryTriggersRepository,
+} from './factory-triggers.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
 export interface FactoryPoll {
@@ -184,6 +193,10 @@ export interface FactoryWatcherDeps {
   steps?: FactoryFlowRunsDeps['steps'];
   /** The flows' concurrency gate (tests); default: database leases. */
   gate?: ConcurrencyGate;
+  /** Schedule triggers repository override for tests; defaults to the database's. */
+  triggers?: FactoryTriggersRepository;
+  /** Clock override for tests (schedule triggers). */
+  now?: () => Date;
 }
 
 /** How often each factory polls GitHub while the server is up. */
@@ -394,8 +407,94 @@ async function fire(id: string): Promise<void> {
   await resumeRuns(factory, target.repo, target.mode);
   await watchEarlyIntegration(factory, target.repo);
   if (incident) return;
-  // A paused factory finishes its runs but admits nothing new; its queue waits.
-  if (factory.enabled) await admitWork(factory, target.repo, target.mode);
+  // A paused factory finishes its runs but admits nothing new; its queue waits,
+  // and its schedules start nothing.
+  if (!factory.enabled) return;
+  await queueDueTriggers(factory);
+  await admitWork(factory, target.repo, target.mode);
+}
+
+/**
+ * Queue one run for each schedule trigger whose occurrence has come (change
+ * flow-triggers). The occurrence is taken first, as a compare-and-set, so only
+ * one server instance queues it. An occurrence that is late by more than
+ * `MISSED_OCCURRENCE_MS` (the server was down, or the factory paused) is
+ * dropped; one whose trigger still has a run working is skipped and recorded.
+ * The queued run is admitted by `admitWork`, under the factory's cap.
+ */
+async function queueDueTriggers(factory: WatchedFactory): Promise<void> {
+  if (!runs || !deps) return;
+  const triggers = deps.triggers ?? createFactoryTriggersRepository();
+  const now = (deps.now ?? (() => new Date()))();
+  const due = await triggers.due(factory.id, now);
+  if (due.isErr()) {
+    log.warn('Issue factory could not read its schedule triggers', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      error: due.error.message,
+    });
+    return;
+  }
+  for (const trigger of due.value) await queueOccurrence(factory, trigger, triggers, now);
+}
+
+/** One due occurrence of a schedule trigger: taken, then queued, dropped or skipped. */
+async function queueOccurrence(
+  factory: WatchedFactory,
+  trigger: FactoryTrigger,
+  triggers: FactoryTriggersRepository,
+  now: Date,
+): Promise<void> {
+  const at = trigger.nextRunAt;
+  if (!at || !runs || !deps) return;
+  const taken = await triggers.take(trigger, at, now);
+  if (taken.isErr() || !taken.value) return;
+  if (now.getTime() - Date.parse(at) > MISSED_OCCURRENCE_MS) {
+    log.info('Issue factory dropped a missed schedule occurrence', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      triggerId: trigger.id,
+      due: at,
+    });
+    return;
+  }
+  const queued = await runs.enqueueIssueless({
+    factoryId: factory.id,
+    flowName: trigger.flowName,
+    source: 'schedule',
+    trigger: { id: trigger.id, name: trigger.name },
+    inputs: trigger.inputs,
+  });
+  if (queued.isErr()) {
+    log.error('Issue factory could not queue a scheduled run', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      triggerId: trigger.id,
+      error: queued.error.message,
+    });
+    return;
+  }
+  // Refused by the one-run-per-trigger index: its previous run is still working.
+  if (!queued.value) await recordSkippedTrigger(factory, trigger, at);
+}
+
+/** Tell the enabler an occurrence started no run (track-funny-actions). */
+async function recordSkippedTrigger(
+  factory: WatchedFactory,
+  trigger: FactoryTrigger,
+  due: string,
+): Promise<void> {
+  await (deps?.activities ?? serverActivities).recordServerActivity(
+    {
+      kind: 'factory.trigger_skipped',
+      userId: factory.userId,
+      projectId: factory.projectId,
+      title: `Skipped the schedule "${trigger.name}": its previous run is still working`,
+      input: { triggerId: trigger.id, flowName: trigger.flowName, due },
+      origin: 'system',
+    },
+    { ok: true, effects: [] },
+  );
 }
 
 /** Each factory's last look at its repository's base head (early integration, D8). */
@@ -487,7 +586,7 @@ async function superviseBase(
         const merged = await repository.mergedSince(ofRepo, since);
         if (merged.isErr()) return [];
         return merged.value.flatMap((run) =>
-          run.prUrl
+          run.prUrl && run.issueNumber !== null
             ? [
                 {
                   issueNumber: run.issueNumber,
@@ -567,6 +666,7 @@ async function retriageAnswered(factory: WatchedFactory, repo: string): Promise<
   if (waiting.isErr()) return;
   const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
   for (const run of waiting.value) {
+    if (run.issueNumber === null) continue;
     const issue = await deps.github.getIssue(reader, run.issueNumber);
     if (issue.isErr()) continue;
     const answered =
@@ -694,12 +794,18 @@ function admissionContext(
 ): AdmissionContext {
   // `list` is newest first: the first run seen for an issue is its latest.
   const latestRuns = new Map<number, FactoryRunState>();
-  for (const run of all)
-    if (!latestRuns.has(run.issueNumber)) latestRuns.set(run.issueNumber, run.state);
+  for (const run of all) {
+    if (run.issueNumber === null || latestRuns.has(run.issueNumber)) continue;
+    latestRuns.set(run.issueNumber, run.state);
+  }
   return {
     reader: { repo, ownerId: factory.userId, projectId: factory.projectId },
     latestRuns,
-    queued: new Set(all.flatMap((run) => (run.state === 'requested' ? [run.issueNumber] : []))),
+    queued: new Set(
+      all.flatMap((run) =>
+        run.state === 'requested' && run.issueNumber !== null ? [run.issueNumber] : [],
+      ),
+    ),
     proofReady: new Map(),
     blockers: new Map(),
     runs: all,
@@ -834,18 +940,37 @@ async function admitQueued(
   ctx: AdmissionContext,
 ): Promise<boolean | typeof NO_FREE_SLOT> {
   if (!runs || !deps) return false;
+  if (run.issueNumber === null) return admitAndStart(factory, repo, mode, null, run);
   if (await heldWithoutProofRules(factory, run, ctx)) return false;
   // The issue first: one closed since it was sent leaves the queue even while
   // something still blocks it.
   const issue = await openQueuedIssue(factory, run, ctx);
   if (!issue) return false;
 
-  const blocked = await blockedReason(ctx, run.issueNumber);
+  const blocked = await blockedReason(ctx, issue.number);
   const stackedOn = stackTarget(factory, ctx, blocked);
   const reason = (stackedOn ? null : blocked) ?? pathsHeld(ctx, run);
   await noteWaitReason(run, reason);
   if (reason) return false;
 
+  return admitAndStart(factory, repo, mode, issue, run, stackedOn);
+}
+
+/**
+ * Take the run out of the queue and start its flow; whether an agent started,
+ * or `NO_FREE_SLOT`. A run without an issue (change flow-triggers) comes
+ * straight here: nothing to read from GitHub and no blockers.
+ */
+async function admitAndStart(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+  issue: FactoryIssue | null,
+  run: FactoryRunView,
+  /** The run it starts on top of instead of waiting for (D10), or null. */
+  stackedOn: FactoryStackedOn | null = null,
+): Promise<boolean | typeof NO_FREE_SLOT> {
+  if (!runs) return false;
   // The capacity check is part of the write: the slots counted at the start of
   // the pass may have been taken during the GitHub reads above.
   const admitted = await runs.admit(factory.id, run.id);
@@ -933,6 +1058,7 @@ async function openQueuedIssue(
   run: FactoryRunView,
   ctx: AdmissionContext,
 ): Promise<FactoryIssue | null> {
+  if (run.issueNumber === null) return null;
   const issue = await deps!.github.getIssue(ctx.reader, run.issueNumber);
   if (issue.isErr()) {
     log.warn('Issue factory could not read a queued issue', {
@@ -1022,7 +1148,7 @@ async function stopOpenRuns(factory: WatchedFactory): Promise<void> {
   const all = await runs.list(factory.id);
   if (all.isErr()) return;
   const open = all.value.filter(
-    (run) => !['merged', 'no_change', 'failed', 'stopped'].includes(run.state),
+    (run) => !['merged', 'no_change', 'done', 'failed', 'stopped'].includes(run.state),
   );
   for (const run of open) flows?.stop(run.id);
   await runs.stopMany(open.map((run) => run.id));
@@ -1153,7 +1279,7 @@ async function parkedTestRequired(
   run: FactoryRunView,
   config: RegressionProofOpts,
 ): Promise<boolean | null> {
-  if (!deps) return null;
+  if (!deps || run.issueNumber === null) return null;
   const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
   const issue = await deps.github.getIssue(reader, run.issueNumber);
   if (issue.isOk()) return regressionTestRequired(config, issue.value.labels ?? []);
@@ -1361,6 +1487,10 @@ async function resumeRuns(factory: WatchedFactory, repo: string, mode: LaunchMod
   if (inFlight.isErr()) return;
   for (const run of inFlight.value) {
     if (flows.isActive(run.id)) continue;
+    if (run.issueNumber === null) {
+      void flows.start({ factory, repo, mode, issue: null, run });
+      continue;
+    }
     const issue = await deps.github.getIssue(
       { repo, ownerId: factory.userId, projectId: factory.projectId },
       run.issueNumber,
@@ -1421,7 +1551,7 @@ async function startFlow(
   factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
-  issue: FactoryIssue,
+  issue: FactoryIssue | null,
   run: FactoryRunView,
 ): Promise<boolean> {
   if (!flows) return false;
@@ -1440,7 +1570,7 @@ async function startFlow(
     namespace: 'factory',
     factoryId: factory.id,
     runId: run.id,
-    issue: issue.number,
+    issue: issue?.number ?? null,
     source: run.source,
     mode,
     started,

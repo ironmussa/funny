@@ -3,7 +3,9 @@
  * runs and the queue of issues sent to it (change factory-manual-queue), over tRPC.
  */
 import type {
+  RunFactoryFlowInput,
   SaveFactorySettingsInput,
+  SaveFactoryTriggerInput,
   SubmitFactoryIssuesInput,
 } from '@funny/shared/contracts/factory';
 
@@ -13,6 +15,7 @@ export type {
   FactoryFlowAgentStep,
   FactoryFlowProblem,
   FactoryFlowValidation,
+  FactoryIssuelessFlow,
   FactoryMode,
   FactoryQueueClearResult,
   FactoryQueueRun,
@@ -23,6 +26,7 @@ export type {
   FactoryStepOverride,
   FactoryStepOverrides,
   FactorySubmitResult,
+  FactoryTrigger,
   FactoryWaitReason,
   SaveFactorySettingsInput,
 } from '@funny/shared/contracts/factory';
@@ -53,4 +57,13 @@ export const factoryApi = {
   stopAll: (projectId: string) => trpcCall(() => procedures.stopAll.mutate({ projectId })),
   closeIncident: (projectId: string) =>
     trpcCall(() => procedures.closeIncident.mutate({ projectId })),
+  // Triggers and runs without an issue (change flow-triggers).
+  listTriggers: (projectId: string) => trpcCall(() => procedures.triggers.query({ projectId })),
+  saveTrigger: (input: SaveFactoryTriggerInput) =>
+    trpcCall(() => procedures.saveTrigger.mutate(input)),
+  removeTrigger: (projectId: string, triggerId: string) =>
+    trpcCall(() => procedures.removeTrigger.mutate({ projectId, triggerId })),
+  getIssuelessFlow: (projectId: string, flowName: string) =>
+    trpcCall(() => procedures.issuelessFlow.query({ projectId, flowName })),
+  runFlow: (input: RunFactoryFlowInput) => trpcCall(() => procedures.runFlow.mutate(input)),
 };

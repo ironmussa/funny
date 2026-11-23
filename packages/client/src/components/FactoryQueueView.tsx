@@ -72,7 +72,8 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: Row
       className="group/row text-muted-foreground hover:bg-accent/50 hover:text-foreground flex items-center gap-1.5 rounded-md py-1.5 pr-3 pl-2"
       data-testid={`factory-view-run-${run.id}`}
     >
-      <span className="flex w-4 shrink-0 justify-center self-start pt-0.5">
+      {/* `status-glyph-dots`: like a sidebar thread row, a dot theme (Minimal) shows dots here. */}
+      <span className="status-glyph-dots flex w-4 shrink-0 justify-center self-start pt-0.5">
         {thread ? (
           <ThreadStatusPin thread={thread} hoverGroup="row" showStatusTooltip />
         ) : (

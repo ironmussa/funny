@@ -991,13 +991,16 @@ mark.md-search-match[data-active='true'] {
     --destructive-foreground: 0 0% 98%;
 
     /* Status colors are the pastels of the chip palette (`PALETTE` in
-       components/ui/project-chip.tsx), so icons match the chips. */
-    --status-success: 113 38% 74%; /* #A8D5A2 */
-    --status-error: 0 78% 80%; /* #F4A4A4 */
+       components/ui/project-chip.tsx), so icons match the chips; success, error
+       and interrupted are the sidebar's thread dots instead, so a passed / failed check
+       reads in the same green, red and amber as a completed / failed /
+       interrupted thread. */
+    --status-success: 138 62% 56%;
+    --status-error: 0 88% 66%;
     --status-warning: 42 90% 76%; /* #F9D98C */
     --status-info: 206 70% 70%; /* #7CB9E8 */
     --status-pending: 48 90% 76%;
-    --status-interrupted: 29 91% 73%; /* #F9B97C */
+    --status-interrupted: 30 95% 58%; /* the sidebar's interrupted dot */
     --status-neutral: 0 0% 50%;
     --status-violet: 270 48% 76%; /* #C3A6E0 */
 
@@ -1012,9 +1015,9 @@ mark.md-search-match[data-active='true'] {
     --git-icon-pushed: hsl(var(--status-success));
     --git-icon-merged: hsl(var(--status-violet));
     --thread-dot-running: hsl(0 0% 62%);
-    --thread-dot-completed: hsl(138 62% 56%);
-    --thread-dot-failed: hsl(0 88% 66%);
-    --thread-dot-interrupted: hsl(30 95% 58%);
+    --thread-dot-completed: hsl(var(--status-success));
+    --thread-dot-failed: hsl(var(--status-error));
+    --thread-dot-interrupted: hsl(var(--status-interrupted));
 
     --powerline-variant: plain;
   }

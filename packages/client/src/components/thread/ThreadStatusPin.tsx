@@ -225,9 +225,15 @@ function StatusGlyph({
  * How a thread's factory activity reads: a spinner in the info tone while the
  * run works (apart from the agent's own), a clock while it waits for the
  * member, and the thread's own error icon once its pipeline stopped on an error.
+ * A theme that shows dots (Minimal) shows the working run as the running dot,
+ * like any other thread in progress.
  */
 const ACTIVITY_GLYPH: Record<Exclude<ThreadActivityView['activity'], 'none'>, StatusGlyphConfig> = {
-  factory: { icon: Loader2, className: 'text-status-info animate-spin' },
+  factory: {
+    icon: Loader2,
+    className: 'text-status-info animate-spin',
+    dotClassName: statusConfig.running.dotClassName,
+  },
   'factory-attention': { icon: Clock, className: 'text-status-warning' },
   'factory-failed': statusConfig.failed,
 };

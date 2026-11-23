@@ -41,5 +41,5 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run `bun run lint`, `bun run typecheck` and the server, workflows and client test suites; all pass
+- [x] 7.1 Run `bun run lint`, `bun run typecheck` and the server, workflows and client test suites; all pass
 - [ ] 7.2 End-to-end on a test repository whose `.funny/workflows/` flow adds an advisory `thread: new` step in `plan` mode: send an issue with it and an override `ci.before_retry → model: haiku`; confirm the run row shows each step's options and the new-thread step ran in plan mode on its own thread

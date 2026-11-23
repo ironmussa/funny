@@ -284,6 +284,33 @@ describe('review and merge settings', () => {
     expect(screen.queryByTestId('settings-factory-limit-merge')).toBeNull();
   });
 
+  // openspec factory-integration 4.6: the merge queue's batches.
+  test('the batch size and wait are saved together; out of range or unchanged, nothing is saved', () => {
+    mocks.settings = configured({ batch: { size: 5, waitSeconds: 60 } });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-batch-size')).toHaveValue(5);
+    expect(screen.getByTestId('settings-factory-batch-wait')).toHaveValue(60);
+    blur('settings-factory-batch-size', '3');
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      batch: { size: 3, waitSeconds: 60 },
+    });
+    mocks.save.mockClear();
+    blur('settings-factory-batch-wait', '0');
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      batch: { size: 5, waitSeconds: 0 },
+    });
+    mocks.save.mockClear();
+    blur('settings-factory-batch-size', '0');
+    blur('settings-factory-batch-size', '11');
+    blur('settings-factory-batch-wait', '601');
+    blur('settings-factory-batch-wait', '60');
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+
   test('a reviewer on the same model as the implementer is called out; a different one is not', () => {
     mocks.settings = configured();
     mocks.sameReviewer = true;

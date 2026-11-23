@@ -37,13 +37,14 @@ const DEFAULT_FORM = {
   sensitivePaths: [] as string[],
   stageLimits: {} as Record<string, number>,
   stepOverrides: {} as FactorySettings['stepOverrides'],
+  batch: { size: 5, waitSeconds: 60 } as FactorySettings['batch'],
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
 function formValues(settings: FactorySettings | null | undefined) {
   if (!settings) return DEFAULT_FORM;
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
-  const { autoMerge, sensitivePaths, stageLimits, stepOverrides } = settings;
+  const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch } = settings;
   return {
     enabled,
     mode,
@@ -54,6 +55,7 @@ function formValues(settings: FactorySettings | null | undefined) {
     sensitivePaths,
     stageLimits,
     stepOverrides,
+    batch,
   };
 }
 

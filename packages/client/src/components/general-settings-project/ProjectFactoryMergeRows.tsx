@@ -1,8 +1,9 @@
 /**
  * How the caller's issue factory reviews and merges (change
  * factory-agent-roles): which reviewed changes it merges by itself, the paths
- * that always need a person, and how many runs may be in a stage at once. The
- * merge itself is always one at a time per repository; that is not a setting.
+ * that always need a person, how many runs may be in a stage at once, and the
+ * merge queue's batches (openspec factory-integration). One batch merges at a
+ * time per repository; that is not a setting.
  */
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +15,64 @@ import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factor
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
 type AutoMerge = FactorySettings['autoMerge'];
-type MergeSettings = Pick<FactorySettings, 'autoMerge' | 'sensitivePaths' | 'stageLimits'>;
+type MergeSettings = Pick<
+  FactorySettings,
+  'autoMerge' | 'sensitivePaths' | 'stageLimits' | 'batch'
+>;
+type BatchSettings = FactorySettings['batch'];
+
+/** The input's whole number within `min`–`max`, or null when it is not one. */
+function wholeNumber(text: string, min: number, max: number): number | null {
+  const value = Number(text);
+  return Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+
+/** The merge queue's batch size and wait (openspec factory-integration D2). */
+function BatchInputs({
+  batch,
+  inputKey,
+  onSave,
+}: {
+  batch: BatchSettings;
+  inputKey: string;
+  onSave: (batch: BatchSettings) => void;
+}) {
+  const { t } = useTranslation();
+  const save = (field: keyof BatchSettings, text: string, max: number) => {
+    const value = wholeNumber(text, field === 'size' ? 1 : 0, max);
+    if (value !== null && value !== batch[field]) onSave({ ...batch, [field]: value });
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <label className="text-muted-foreground flex items-center gap-2 text-xs">
+        {t('settings.projectFactoryBatchSize', 'Pull requests')}
+        <Input
+          key={`size-${inputKey}`}
+          type="number"
+          min={1}
+          max={10}
+          defaultValue={batch.size}
+          className="w-[72px]"
+          data-testid="settings-factory-batch-size"
+          onBlur={(e) => save('size', e.target.value, 10)}
+        />
+      </label>
+      <label className="text-muted-foreground flex items-center gap-2 text-xs">
+        {t('settings.projectFactoryBatchWait', 'Wait (s)')}
+        <Input
+          key={`wait-${inputKey}`}
+          type="number"
+          min={0}
+          max={600}
+          defaultValue={batch.waitSeconds}
+          className="w-[80px]"
+          data-testid="settings-factory-batch-wait"
+          onBlur={(e) => save('waitSeconds', e.target.value, 600)}
+        />
+      </label>
+    </div>
+  );
+}
 
 /** The stages a factory can limit. `merge` is absent on purpose: it is always one at a time. */
 const LIMITED_STAGES = ['implement', 'review'] as const;
@@ -99,7 +157,7 @@ export function ProjectFactoryMergeRows({
 }) {
   const { t } = useTranslation();
   const { definition } = useFactoryFlowDefinition(projectId, flowName);
-  const { autoMerge, sensitivePaths, stageLimits } = settings;
+  const { autoMerge, sensitivePaths, stageLimits, batch } = settings;
 
   return (
     <>
@@ -173,7 +231,7 @@ export function ProjectFactoryMergeRows({
         title={t('settings.projectFactoryStageLimits', 'Runs per step')}
         description={t(
           'settings.projectFactoryStageLimitsDesc',
-          'How many runs may be implementing or in review at once. Merges are always one at a time per repository',
+          'How many runs may be implementing or in review at once. Merges are always one batch at a time per repository',
         )}
       >
         <div className="flex items-center gap-3">
@@ -187,6 +245,17 @@ export function ProjectFactoryMergeRows({
             />
           ))}
         </div>
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.batch"
+        title={t('settings.projectFactoryBatch', 'Merge queue')}
+        description={t(
+          'settings.projectFactoryBatchDesc',
+          'Ready pull requests are tested together on the current base and merged as tested, in about one CI run. How many in one batch (1: one at a time), and how long to wait to gather them',
+        )}
+      >
+        <BatchInputs batch={batch} inputKey={rowKey} onSave={(next) => onSave({ batch: next })} />
       </ProjectSettingRow>
     </>
   );

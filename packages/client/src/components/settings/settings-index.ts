@@ -531,6 +531,15 @@ const ENTRIES = [
     keywords: ['limit', 'implement', 'review', 'concurrency'],
   },
   {
+    id: 'factory.batch',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryBatch',
+    description: 'settings.projectFactoryBatchDesc',
+    keywords: ['merge queue', 'batch', 'bisect', 'wait'],
+  },
+  {
     id: 'factory.stepOptions',
     scope: 'project',
     page: 'factory',

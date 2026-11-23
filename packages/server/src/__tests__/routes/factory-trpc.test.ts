@@ -402,6 +402,30 @@ describe('factory over tRPC', () => {
     expect(refused.status).toBe(403);
   });
 
+  // openspec factory-integration 4.6: the merge queue's batches.
+  test('the batch size and wait default to 5 and 60 s, are saved, and are bounded', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      batch: { size: 5, waitSeconds: 60 },
+    });
+    const saved = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      batch: { size: 1, waitSeconds: 0 },
+    });
+    expect(saved.body).toMatchObject({ batch: { size: 1, waitSeconds: 0 } });
+    // Omitted, it keeps its value.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      batch: { size: 1, waitSeconds: 0 },
+    });
+    for (const batch of [
+      { size: 0, waitSeconds: 60 },
+      { size: 11, waitSeconds: 60 },
+      { size: 5, waitSeconds: 601 },
+    ]) {
+      expect((await save('alice', { projectId: 'p1', enabled: true, batch })).status).toBe(400);
+    }
+  });
+
   test('the merge limit cannot be raised', async () => {
     await save('alice', { projectId: 'p1', enabled: true, stageLimits: { review: 2 } });
     const refused = await save('alice', {

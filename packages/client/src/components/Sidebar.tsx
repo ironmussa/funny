@@ -228,10 +228,9 @@ function CollapsedSidebarRail() {
         <TooltipTrigger asChild>
           <Button
             data-testid="sidebar-expand"
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             onClick={toggleSidebar}
-            className="text-muted-foreground hover:text-foreground"
           >
             <PanelLeftOpen className="icon-base" />
           </Button>

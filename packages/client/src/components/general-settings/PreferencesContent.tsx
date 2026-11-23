@@ -272,27 +272,53 @@ function ProviderKeyRow({
         placeholder={keyPresence[id] ? t('profile.tokenSaved') : `Enter your ${label}`}
         className="text-sm"
       />
+      <KeySaveButtons
+        {...{ id, keyInputs, keyPresence, keySaving, handleSave, handleClear, t }}
+        saveTestId={`preferences-save-${id}-key`}
+        clearTestId={`preferences-clear-${id}-key`}
+      />
+    </div>
+  );
+}
+
+/** Save (and, once a key is stored, clear) for one API key field. */
+function KeySaveButtons({
+  id,
+  keyInputs,
+  keyPresence,
+  keySaving,
+  handleSave,
+  handleClear,
+  t,
+  saveTestId,
+  clearTestId,
+}: Pick<
+  KeyRowProps,
+  'id' | 'keyInputs' | 'keyPresence' | 'keySaving' | 'handleSave' | 'handleClear' | 't'
+> & { saveTestId: string; clearTestId: string }) {
+  return (
+    <>
       <Button
         size="sm"
         onClick={() => handleSave(id)}
         disabled={!keyInputs[id] || !!keySaving[id]}
-        data-testid={`preferences-save-${id}-key`}
+        data-testid={saveTestId}
       >
         {keySaving[id] ? t('common.saving') : t('common.save')}
       </Button>
       {keyPresence[id] && (
         <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive shrink-0 text-xs"
+          variant="ghost-destructive"
+          size="xs"
+          className="shrink-0"
           onClick={() => handleClear(id)}
           disabled={!!keySaving[id]}
-          data-testid={`preferences-clear-${id}-key`}
+          data-testid={clearTestId}
         >
           {t('profile.clearToken')}
         </Button>
       )}
-    </div>
+    </>
   );
 }
 
@@ -334,26 +360,11 @@ function ProviderKeyPanel({
               }
               className="text-sm"
             />
-            <Button
-              size="sm"
-              onClick={() => handleSave(id)}
-              disabled={!keyInputs[id] || !!keySaving[id]}
-              data-testid={saveTestId}
-            >
-              {keySaving[id] ? t('common.saving') : t('common.save')}
-            </Button>
-            {keyPresence[id] && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive shrink-0 text-xs"
-                onClick={() => handleClear(id)}
-                disabled={!!keySaving[id]}
-                data-testid={clearTestId}
-              >
-                {t('profile.clearToken')}
-              </Button>
-            )}
+            <KeySaveButtons
+              {...{ id, keyInputs, keyPresence, keySaving, handleSave, handleClear, t }}
+              saveTestId={saveTestId}
+              clearTestId={clearTestId}
+            />
           </div>
         </SettingAnchor>
       </div>

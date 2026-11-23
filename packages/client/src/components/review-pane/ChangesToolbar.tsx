@@ -76,6 +76,20 @@ interface ChangesToolbarProps {
  * Extracted from ReviewPane.tsx as part of the god-file split — see
  * .claude/plans/reviewpane-split.md.
  */
+function RefreshButton({ onRefresh, loading }: { onRefresh: () => void; loading: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="muted" size="icon-sm" onClick={onRefresh} data-testid="review-refresh">
+          <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function ChangesToolbar({
   refresh,
   loading,
@@ -114,20 +128,7 @@ export function ChangesToolbar({
   if (readOnly) {
     return (
       <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={refresh}
-              className="text-muted-foreground"
-              data-testid="review-refresh"
-            >
-              <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
-        </Tooltip>
+        <RefreshButton onRefresh={refresh} loading={loading} />
         <ToolbarCount
           label={t('review.toolbarCount.files', { count: summaries.length })}
           testId="review-count"
@@ -138,20 +139,7 @@ export function ChangesToolbar({
 
   return (
     <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={refresh}
-            className="text-muted-foreground"
-            data-testid="review-refresh"
-          >
-            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
-      </Tooltip>
+      <RefreshButton onRefresh={refresh} loading={loading} />
       <PullFetchButtons
         onPull={handlePull}
         onFetch={handleFetchOrigin}
@@ -164,10 +152,10 @@ export function ChangesToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={() => setPublishDialogOpen(true)}
-              className="text-muted-foreground relative"
+              className="relative"
               data-testid="review-publish-toolbar"
             >
               <Upload className="icon-base" />
@@ -195,11 +183,10 @@ export function ChangesToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={openMergeDialog}
               disabled={mergeInProgress || summaries.length > 0}
-              className="text-muted-foreground"
               data-testid="review-merge-toolbar"
             >
               <GitMerge className={cn('icon-base', mergeInProgress && 'animate-pulse')} />
@@ -237,10 +224,9 @@ export function ChangesToolbar({
                       : 'text-status-success';
                 return (
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-sm"
                     onClick={() => window.open(gitStatus.prUrl, '_blank', 'noopener,noreferrer')}
-                    className="text-muted-foreground"
                     data-testid="review-view-pr-toolbar"
                   >
                     <PrIcon className={`icon-base ${prIconColor}`} />
@@ -249,11 +235,10 @@ export function ChangesToolbar({
               })()
             ) : (
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
                 disabled={!!isAgentRunning}
-                className="text-muted-foreground"
                 data-testid="review-create-pr-toolbar"
               >
                 <GitPullRequest className="icon-base" />
@@ -279,11 +264,10 @@ export function ChangesToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleStageSelected}
               disabled={!!actionInProgress || !!isAgentRunning}
-              className="text-muted-foreground"
               data-testid="review-stage-selected"
             >
               <Plus className="icon-base" />
@@ -302,11 +286,10 @@ export function ChangesToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleUnstageAll}
               disabled={!!actionInProgress || !!isAgentRunning}
-              className="text-muted-foreground"
               data-testid="review-unstage-selected"
             >
               <Minus className="icon-base" />
@@ -325,11 +308,10 @@ export function ChangesToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleStashSelected}
               disabled={!!actionInProgress || !!isAgentRunning || stashInProgress}
-              className="text-muted-foreground"
               data-testid="review-stash-selected"
             >
               <Archive className={cn('icon-base', stashInProgress && 'animate-pulse')} />
@@ -348,11 +330,10 @@ export function ChangesToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleDiscardAll}
               disabled={!!actionInProgress || !!isAgentRunning}
-              className="text-muted-foreground"
               data-testid="review-discard-all"
             >
               <Undo2 className="icon-base" />
@@ -367,11 +348,10 @@ export function ChangesToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleIgnoreFiles}
               disabled={!!actionInProgress}
-              className="text-muted-foreground"
               data-testid="review-ignore-files"
             >
               <EyeOff className="icon-base" />

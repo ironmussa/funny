@@ -35,23 +35,11 @@ const log = createClientLogger('project-collaborators');
 function RoleBadge({ role }: { role: string }) {
   switch (role) {
     case 'owner':
-      return (
-        <Badge variant="secondary" className="bg-status-violet/15 text-status-violet">
-          {role}
-        </Badge>
-      );
+      return <Badge variant="violet">{role}</Badge>;
     case 'admin':
-      return (
-        <Badge variant="secondary" className="bg-status-info/15 text-status-info">
-          {role}
-        </Badge>
-      );
+      return <Badge variant="info">{role}</Badge>;
     case 'member':
-      return (
-        <Badge variant="secondary" className="bg-status-success/15 text-status-success">
-          {role}
-        </Badge>
-      );
+      return <Badge variant="success">{role}</Badge>;
     default:
       return (
         <Badge variant="secondary" className="bg-muted text-muted-foreground">
@@ -230,9 +218,9 @@ export function ProjectCollaborators() {
                       </p>
                     </div>
                     <Button
-                      size="sm"
+                      size="xs"
                       variant="outline"
-                      className="h-7 shrink-0 text-xs"
+                      className="shrink-0"
                       disabled={already}
                       onClick={() => handleAdd(u)}
                       data-testid={`collaborators-add-${u.id}`}
@@ -251,7 +239,7 @@ export function ProjectCollaborators() {
       {/* Member list */}
       <div className="settings-card divide-border/50 divide-y">
         {members.length === 0 ? (
-          <EmptyState fill={false} className="px-4 py-6" title="No collaborators yet." />
+          <EmptyState padding="md" fill={false} title="No collaborators yet." />
         ) : (
           members.map((m) => {
             const isOwner = m.userId === ownerId;
@@ -295,14 +283,7 @@ export function ProjectCollaborators() {
                         </SelectContent>
                       </Select>
                     )}
-                    {!m.localPath && !isOwner && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-status-warning/15 text-status-warning"
-                      >
-                        needs setup
-                      </Badge>
-                    )}
+                    {!m.localPath && !isOwner && <Badge variant="warning">needs setup</Badge>}
                   </div>
                   {m.user?.username && (
                     <p className="text-muted-foreground truncate text-xs">@{m.user.username}</p>
@@ -312,9 +293,9 @@ export function ProjectCollaborators() {
                     to strip their row. Members can't remove themselves here. */}
                 {!isOwner && !isSelf && (
                   <Button
-                    variant="ghost"
+                    variant="muted-destructive"
                     size="icon"
-                    className="text-muted-foreground hover:text-destructive size-7 shrink-0"
+                    className="size-7 shrink-0"
                     onClick={() => handleRemove(m)}
                     data-testid={`collaborators-remove-${m.userId}`}
                     aria-label="Remove collaborator"

@@ -32,7 +32,7 @@ const fail = (c: Context<HonoEnv>, error: string, status: 400 | 404): ListContex
 });
 
 export async function readGithubListContext(c: Context<HonoEnv>): Promise<ListContextResult> {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const projectId = c.req.query('projectId');
   if (!projectId) return fail(c, 'projectId is required', 400);
 

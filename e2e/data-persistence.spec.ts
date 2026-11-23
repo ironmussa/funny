@@ -89,10 +89,6 @@ test.describe('H. Data Persistence & State', () => {
     await page.waitForTimeout(500);
 
     // Check if review_pane_width is stored in localStorage
-    const _getStoredWidth = async () => {
-      return page.evaluate(() => localStorage.getItem('review_pane_width'));
-    };
-
     // Wait for it to be stored
     await page.waitForTimeout(500);
 

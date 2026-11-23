@@ -24,8 +24,5 @@ export const uploadRoutes = new Hono<HonoEnv>();
 uploadRoutes.post('/staging', async (c) => {
   const parsed = await parseJsonBody(c, uploadFileSchema);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  return resultToResponse(
-    c,
-    await stageUpload({ userId: c.get('userId') as string, ...parsed.value }),
-  );
+  return resultToResponse(c, await stageUpload({ userId: c.get('userId'), ...parsed.value }));
 });

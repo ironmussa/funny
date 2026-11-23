@@ -86,12 +86,12 @@ export function SidebarFooter() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               data-testid="sidebar-settings"
               aria-label={t('settings.title')}
               onClick={openSettings}
-              className={cn('size-7 shrink-0 text-muted-foreground', !authUser && 'ml-auto')}
+              className={cn('size-7 shrink-0', !authUser && 'ml-auto')}
             >
               <Settings className="icon-base" />
             </Button>

@@ -1,3 +1,4 @@
+import { errorMessage } from '@funny/shared/errors';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
@@ -66,7 +67,7 @@ export class RunnerControlDispatcher {
             correlationId,
             failure: {
               code: cancelled ? FailureCode.CANCELLED : FailureCode.INTERNAL,
-              message: cancelled ? 'runner command cancelled' : String((error as Error).message),
+              message: cancelled ? 'runner command cancelled' : errorMessage(error),
               retryable: false,
             },
           },

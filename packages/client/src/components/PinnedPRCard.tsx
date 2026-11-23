@@ -49,6 +49,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 const log = createClientLogger('pinned-pr-card');
 
@@ -161,9 +162,8 @@ function ReactionBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
-              className="text-muted-foreground"
               disabled={disabled}
               onClick={() => setPickerOpen((v) => !v)}
               data-testid={`${testIdBase}-react-open`}
@@ -274,9 +274,8 @@ export function PinnedPRCard({
   const [resolvingNodeId, setResolvingNodeId] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+    return whilePending(setLoading, async () => {
+      setError(null);
       const [threadsRes, convRes] = await Promise.all([
         api.githubPRThreads(projectId, pr.number),
         api.githubPRConversation(projectId, pr.number),
@@ -292,9 +291,7 @@ export function PinnedPRCard({
               : 'Failed to load PR data',
         );
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectId, pr.number]);
 
   useEffect(() => {
@@ -323,8 +320,7 @@ export function PinnedPRCard({
   const handleNewComment = async () => {
     const body = newComment.trim();
     if (!body) return;
-    setPosting(true);
-    try {
+    await whilePending(setPosting, async () => {
       const res = await api.githubPRCommentCreate(projectId, pr.number, body);
       if (res.isOk()) {
         setConversation((prev) =>
@@ -337,9 +333,7 @@ export function PinnedPRCard({
         log.error('pr_comment_create_failed', { error: res.error.message, prNumber: pr.number });
         setError(res.error.message);
       }
-    } finally {
-      setPosting(false);
-    }
+    });
   };
 
   const handleReply = async (thread: PRReviewThread) => {
@@ -484,16 +478,21 @@ export function PinnedPRCard({
   const isOwnComment = (author: string) =>
     !!currentUserLogin && author.toLowerCase() === currentUserLogin.toLowerCase();
 
-  const renderThreadComment = (thread: PRReviewThread, c: PRThreadComment, isRoot: boolean) => {
-    const editKey = `review-${c.id}`;
+  /** A comment's header (author, age, association, own-comment actions) and its body or edit form. */
+  const renderEditableComment = (
+    kind: 'review' | 'issue',
+    c: PRThreadComment | PRIssueComment,
+    testPrefix: string,
+  ) => {
+    const editKey = `${kind}-${c.id}`;
     const isEditing = editingId === editKey;
     return (
-      <div key={c.id} className={cn('flex flex-col gap-1', !isRoot && 'pl-3')}>
+      <>
         <div className="flex items-center gap-1.5 text-xs">
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="text-3xs h-3.5 px-1">
+            <Badge size="xxs" variant="outline">
               {c.author_association}
             </Badge>
           )}
@@ -506,7 +505,7 @@ export function PinnedPRCard({
                     variant="ghost"
                     size="icon-xs"
                     onClick={() => setEditingId(editKey)}
-                    data-testid={`pinned-pr-review-edit-${c.id}`}
+                    data-testid={`${testPrefix}-edit-${c.id}`}
                   >
                     <Pencil className="icon-xs" />
                   </Button>
@@ -519,8 +518,8 @@ export function PinnedPRCard({
                     variant="ghost"
                     size="icon-xs"
                     disabled={deletingId === editKey}
-                    onClick={() => handleDelete('review', c.id, editKey)}
-                    data-testid={`pinned-pr-review-delete-${c.id}`}
+                    onClick={() => handleDelete(kind, c.id, editKey)}
+                    data-testid={`${testPrefix}-delete-${c.id}`}
                   >
                     {deletingId === editKey ? (
                       <Loader2 className="icon-xs animate-spin" />
@@ -539,81 +538,32 @@ export function PinnedPRCard({
             initial={c.body}
             saving={savingEditId === editKey}
             onCancel={() => setEditingId(null)}
-            onSave={(body) => handleEditSave('review', c.id, body, editKey)}
-            testId={`pinned-pr-review-edit-form-${c.id}`}
+            onSave={(body) => handleEditSave(kind, c.id, body, editKey)}
+            testId={`${testPrefix}-edit-form-${c.id}`}
           />
         ) : (
           <MarkdownBody body={c.body} />
         )}
+      </>
+    );
+  };
+
+  const renderThreadComment = (thread: PRReviewThread, c: PRThreadComment, isRoot: boolean) => {
+    return (
+      <div key={c.id} className={cn('flex flex-col gap-1', !isRoot && 'pl-3')}>
+        {renderEditableComment('review', c, 'pinned-pr-review')}
       </div>
     );
   };
 
   const renderIssueComment = (c: PRIssueComment) => {
-    const editKey = `issue-${c.id}`;
-    const isEditing = editingId === editKey;
     return (
       <div
         key={c.id}
         className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2"
         data-testid={`pinned-pr-comment-${c.id}`}
       >
-        <div className="flex items-center gap-1.5 text-xs">
-          <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
-          <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
-          {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="text-3xs h-3.5 px-1">
-              {c.author_association}
-            </Badge>
-          )}
-          <div className="flex-1" />
-          {isOwnComment(c.author) && !isEditing && (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => setEditingId(editKey)}
-                    data-testid={`pinned-pr-comment-edit-${c.id}`}
-                  >
-                    <Pencil className="icon-xs" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Edit</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={deletingId === editKey}
-                    onClick={() => handleDelete('issue', c.id, editKey)}
-                    data-testid={`pinned-pr-comment-delete-${c.id}`}
-                  >
-                    {deletingId === editKey ? (
-                      <Loader2 className="icon-xs animate-spin" />
-                    ) : (
-                      <Trash2 className="icon-xs" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Delete</TooltipContent>
-              </Tooltip>
-            </>
-          )}
-        </div>
-        {isEditing ? (
-          <EditForm
-            initial={c.body}
-            saving={savingEditId === editKey}
-            onCancel={() => setEditingId(null)}
-            onSave={(body) => handleEditSave('issue', c.id, body, editKey)}
-            testId={`pinned-pr-comment-edit-form-${c.id}`}
-          />
-        ) : (
-          <MarkdownBody body={c.body} />
-        )}
+        {renderEditableComment('issue', c, 'pinned-pr-comment')}
         <ReactionBar
           reactions={c.reactions}
           onReact={(k) => handleReact('issue', c.id, k)}
@@ -624,15 +574,15 @@ export function PinnedPRCard({
   };
 
   const renderReview = (rv: PRReview) => {
-    const stateBadge: Record<PRReview['state'], { label: string; cls: string }> = {
-      APPROVED: { label: 'Approved', cls: 'text-status-success border-status-success/40' },
-      CHANGES_REQUESTED: {
-        label: 'Changes requested',
-        cls: 'text-status-error border-status-error/40',
-      },
-      COMMENTED: { label: 'Commented', cls: 'text-muted-foreground' },
-      DISMISSED: { label: 'Dismissed', cls: 'text-muted-foreground' },
-      PENDING: { label: 'Pending', cls: 'text-muted-foreground' },
+    const stateBadge: Record<
+      PRReview['state'],
+      { label: string; variant: 'success' | 'error' | 'secondary' }
+    > = {
+      APPROVED: { label: 'Approved', variant: 'success' },
+      CHANGES_REQUESTED: { label: 'Changes requested', variant: 'error' },
+      COMMENTED: { label: 'Commented', variant: 'secondary' },
+      DISMISSED: { label: 'Dismissed', variant: 'secondary' },
+      PENDING: { label: 'Pending', variant: 'secondary' },
     };
     const s = stateBadge[rv.state];
     return (
@@ -643,16 +593,7 @@ export function PinnedPRCard({
       >
         <div className="flex items-center gap-1.5 text-xs">
           <AuthorBadge name={rv.author} avatarUrl={rv.author_avatar_url} size="xs" />
-          <Badge
-            variant="outline"
-            className={cn(
-              'h-3.5 px-1 text-3xs',
-              rv.state === 'APPROVED' && 'text-status-success border-status-success/40',
-              rv.state === 'CHANGES_REQUESTED' && 'text-status-error border-status-error/40',
-              (rv.state === 'COMMENTED' || rv.state === 'DISMISSED' || rv.state === 'PENDING') &&
-                'text-muted-foreground',
-            )}
-          >
+          <Badge variant={s.variant} size="xxs">
             {s.label}
           </Badge>
           <span className="text-muted-foreground">{timeAgo(rv.submitted_at, now)}</span>
@@ -740,7 +681,7 @@ export function PinnedPRCard({
                 {pr.draft ? (
                   <>
                     <span>&middot;</span>
-                    <Badge variant="outline" className="text-3xs h-3.5 px-1 py-0 leading-none">
+                    <Badge size="xxs" variant="outline">
                       {t('review.pullRequests.draft', 'Draft')}
                     </Badge>
                   </>
@@ -794,10 +735,10 @@ export function PinnedPRCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   asChild
-                  className="text-muted-foreground shrink-0"
+                  className="shrink-0"
                   data-testid={`pinned-pr-open-github-${pr.number}`}
                 >
                   <a

@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useProjects } from '@/data/projects/hooks';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { threadsApi } from '@/lib/api/threads';
 import {
@@ -28,6 +29,7 @@ import {
 } from '@/lib/browser-panel-markdown';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric, startSpan } from '@/lib/telemetry';
+import { whilePending } from '@/lib/while-pending';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -91,13 +93,8 @@ function SendDialog({
     [projects, projectId],
   );
 
-  const [model, setModel] = useState<string>(persistedModel);
+  const [model, setModel] = useResettableState<string>(persistedModel, [open, persistedModel]);
   const [sending, setSending] = useState(false);
-
-  // Re-sync defaults when the dialog opens or persisted model changes.
-  useEffect(() => {
-    if (open) setModel(persistedModel);
-  }, [open, persistedModel]);
 
   const noProject = !projectId || !activeProject;
 
@@ -125,60 +122,59 @@ function SendDialog({
     const images = extractImageAttachments(annotations);
     const annotationCount = annotations.length;
 
-    setSending(true);
-    const span = startSpan('browser_panel.create_thread', {
-      attributes: { annotation_count: annotationCount },
-    });
-
-    try {
-      const result = await threadsApi.createThread({
-        projectId,
-        title,
-        mode: 'local',
-        model,
-        prompt,
-        images: images.length > 0 ? images : undefined,
+    return whilePending(setSending, async () => {
+      const span = startSpan('browser_panel.create_thread', {
+        attributes: { annotation_count: annotationCount },
       });
 
-      if (result.isErr()) {
-        log.error('createThread failed', {
-          type: result.error.type,
-          message: result.error.message,
+      try {
+        const result = await threadsApi.createThread({
+          projectId,
+          title,
+          mode: 'local',
+          model,
+          prompt,
+          images: images.length > 0 ? images : undefined,
         });
-        toast.error(result.error.message);
-        span.end('ERROR', result.error.message);
-        setSending(false);
-        return;
+
+        if (result.isErr()) {
+          log.error('createThread failed', {
+            type: result.error.type,
+            message: result.error.message,
+          });
+          toast.error(result.error.message);
+          span.end('ERROR', result.error.message);
+          setSending(false);
+          return;
+        }
+
+        metric('browser_panel.sent', 1, {
+          type: 'sum',
+          attributes: { annotation_count: String(annotationCount) },
+        });
+        span.end('OK');
+
+        const newId = result.value.id;
+        // Remember the user's last model choice so it becomes the default next time.
+        setDefaultModel(model);
+        recordSent({
+          threadId: newId,
+          title,
+          projectId,
+          annotationCount,
+          sentAt: Date.now(),
+        });
+        useBrowserPanelStore.getState().reset();
+        closePanel();
+        onOpenChange(false);
+        navigate(`/threads/${newId}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.error('createThread threw', { error: message });
+        toast.error(message);
+        span.end('ERROR', message);
       }
-
-      metric('browser_panel.sent', 1, {
-        type: 'sum',
-        attributes: { annotation_count: String(annotationCount) },
-      });
-      span.end('OK');
-
-      const newId = result.value.id;
-      // Remember the user's last model choice so it becomes the default next time.
-      setDefaultModel(model);
-      recordSent({
-        threadId: newId,
-        title,
-        projectId,
-        annotationCount,
-        sentAt: Date.now(),
-      });
-      useBrowserPanelStore.getState().reset();
-      closePanel();
-      onOpenChange(false);
-      navigate(`/threads/${newId}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.error('createThread threw', { error: message });
-      toast.error(message);
-      span.end('ERROR', message);
-    } finally {
-      setSending(false);
-    }
+    });
   };
 
   return (

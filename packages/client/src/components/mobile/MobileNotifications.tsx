@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useNotifications } from '@/hooks/use-notifications';
 import { disableWebPush, enableWebPush, supportsWebPush, testWebPush } from '@/lib/web-push';
+import { whilePending } from '@/lib/while-pending';
 import { useSettingsStore } from '@/stores/settings-store';
 
 export function MobileNotifications() {
@@ -16,33 +17,31 @@ export function MobileNotifications() {
   const [busy, setBusy] = useState(false);
 
   async function toggle(checked: boolean) {
-    setBusy(true);
-    try {
-      if (checked && (await requestPermission()) !== 'granted') {
-        toast.error(t('settings.notificationsDenied'));
-        setEnabled(false);
-        return;
+    await whilePending(setBusy, async () => {
+      try {
+        if (checked && (await requestPermission()) !== 'granted') {
+          toast.error(t('settings.notificationsDenied'));
+          setEnabled(false);
+          return;
+        }
+        if (checked) await enableWebPush();
+        else await disableWebPush();
+        setEnabled(checked);
+      } catch (error) {
+        toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
       }
-      if (checked) await enableWebPush();
-      else await disableWebPush();
-      setEnabled(checked);
-    } catch (error) {
-      toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function testNotification() {
-    setBusy(true);
-    try {
-      await testWebPush();
-      toast.success(t('settings.notificationsTestSent'));
-    } catch (error) {
-      toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
-    } finally {
-      setBusy(false);
-    }
+    await whilePending(setBusy, async () => {
+      try {
+        await testWebPush();
+        toast.success(t('settings.notificationsTestSent'));
+      } catch (error) {
+        toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
+      }
+    });
   }
 
   return (

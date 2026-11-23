@@ -6,7 +6,7 @@ export type CircuitState = 'closed' | 'open' | 'half-open';
 export interface CircuitBreakerState<TTimer = unknown> {
   state: CircuitState;
   failureCount: number;
-  _cooldownTimer: TTimer | null;
+  cooldownTimer: TTimer | null;
   recordFailure(): void;
   recordSuccess(): void;
   retryNow(): Promise<void>;
@@ -35,7 +35,7 @@ export function createCircuitBreakerStore<TTimer>(
   const clearCooldown = (): void => {
     if (cooldownTimer !== undefined) options.clearTimer(cooldownTimer);
     cooldownTimer = undefined;
-    store?.setState({ _cooldownTimer: null });
+    store?.setState({ cooldownTimer: null });
   };
   let store: StoreApi<CircuitBreakerState<TTimer>> | undefined;
   store = createStore<CircuitBreakerState<TTimer>>((set, get) => {
@@ -44,12 +44,12 @@ export function createCircuitBreakerStore<TTimer>(
       cooldownTimer = options.setTimer(() => {
         if (!disposed) void get().retryNow();
       }, cooldownMs);
-      set({ _cooldownTimer: cooldownTimer });
+      set({ cooldownTimer: cooldownTimer });
     };
     return {
       state: 'closed',
       failureCount: 0,
-      _cooldownTimer: null,
+      cooldownTimer: null,
       recordFailure() {
         const current = get();
         if (current.state === 'half-open') {

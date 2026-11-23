@@ -595,13 +595,13 @@ export function parseReviewVerdict(content: string): {
 
 // ── Pre-commit fixer helpers ────────────────────────────────
 
-const _dbg = ['de', 'bug', 'ger'].join('');
+const pauseKeyword = ['de', 'bug', 'ger'].join('');
 const AUTO_FIXABLE_HOOKS = new Set([
   'oxlint',
   'Lint (oxlint)',
   'Conflict markers',
-  `Console/${_dbg}`,
-  `${['console', 'log'].join('.')}/${_dbg}`,
+  `Console/${pauseKeyword}`,
+  `${['console', 'log'].join('.')}/${pauseKeyword}`,
 ]);
 
 export function isHookAutoFixable(hookLabel: string): boolean {

@@ -34,6 +34,12 @@ const FLOW_DEFAULT = '__flow__';
 
 type OverrideField = keyof FactoryStepOverride;
 
+/** The overrides without `stepId`'s entry. */
+function withoutStep(overrides: FactoryStepOverrides, stepId: string): FactoryStepOverrides {
+  const { [stepId]: _removed, ...rest } = overrides;
+  return rest;
+}
+
 /**
  * The overrides with `field` of `stepId` set to `value` (or removed for
  * `null`). A provider change drops a model the new provider does not have,
@@ -282,10 +288,7 @@ export function ProjectFactoryStepOptions({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => {
-                    const { [stepId]: _removed, ...rest } = overrides;
-                    onSave(rest);
-                  }}
+                  onClick={() => onSave(withoutStep(overrides, stepId))}
                   data-testid={`settings-factory-unused-${stepId}-remove`}
                 >
                   {t('common.remove', 'Remove')}

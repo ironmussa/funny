@@ -8,14 +8,14 @@ import { handleDataMessageWithAck } from '../../services/data-handler.js';
  * a dedicated runner can only read/write its own project's data, even when
  * every project belongs to the same user.
  */
-import { __resetDataOwnershipCache } from '../../services/data-ownership.js';
+import { resetDataOwnershipCache } from '../../services/data-ownership.js';
 import {
   DATA_SCOPE_RULES,
-  __resetDataScopeCache,
+  resetDataScopeCache,
   canRunnerActOnThread,
 } from '../../services/data-scope.js';
 import {
-  __resetRunnerScopeCache,
+  resetRunnerScopeCache,
   grantProjectRunner,
   setProjectDedicatedRunner,
   setProjectGithubToken,
@@ -64,9 +64,9 @@ describe('dedicated runner data scope', () => {
     ]) {
       db.run(`DELETE FROM ${table}`);
     }
-    __resetRunnerScopeCache();
-    __resetDataScopeCache();
-    __resetDataOwnershipCache();
+    resetRunnerScopeCache();
+    resetDataScopeCache();
+    resetDataOwnershipCache();
     seedProject(db, { id: 'px', userId: 'alice', path: '/x' });
     seedProject(db, { id: 'py', userId: 'alice', path: '/y' });
     seedThread(db, { id: 'tx', projectId: 'px', userId: 'alice' });

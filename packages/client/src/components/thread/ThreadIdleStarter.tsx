@@ -8,7 +8,8 @@ import { PromptInput } from '@/components/PromptInput';
 import { FileChip } from '@/components/ui/chip';
 import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
-import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
+import { startWorkflowInvocation } from '@/lib/start-workflow-invocation';
+import { parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -83,21 +84,9 @@ export function ThreadIdleStarter({ activeThread }: Props) {
       const invocation = workflowParse.invocation;
       if (invocation) {
         setSending(true);
-        return (async () => {
-          const result = await api.runWorkflow(invocation.workflowName, {
-            threadId: activeThread.id,
-            ...buildWorkflowRunBody(invocation, {
-              fileReferences: opts.fileReferences,
-              symbolReferences: opts.symbolReferences,
-            }),
-          });
-          if (result.isErr()) {
-            toast.error(result.error.message);
-            return false;
-          }
-          toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
-          return true;
-        })().finally(() => setSending(false));
+        return startWorkflowInvocation(activeThread.id, invocation, opts, t).finally(() =>
+          setSending(false),
+        );
       }
 
       const fullPrompt = addReferencedEntries(prompt, stored.entries);

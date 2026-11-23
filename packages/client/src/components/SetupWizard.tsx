@@ -107,9 +107,9 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
       <div className="border-border bg-muted/30 space-y-3 rounded-lg border p-4">
         {checking ? (
           <LoadingState
+            padding="sm"
             fill={false}
             layout="inline"
-            className="py-2"
             testId="setup-wizard-checking"
             label="Checking…"
           />

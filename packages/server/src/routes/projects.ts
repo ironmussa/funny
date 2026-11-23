@@ -53,7 +53,7 @@ projectRoutes.get('/', async (c) => {
   return answerJson(
     c,
     portFor(c).list(
-      { userId: c.get('userId') as string, organizationId: c.get('organizationId') ?? null },
+      { userId: c.get('userId'), organizationId: c.get('organizationId') ?? null },
       query.value,
     ),
   );
@@ -66,13 +66,13 @@ projectRoutes.get('/resolve', async (c) => {
   if (!url) {
     return c.json({ error: 'Missing required query parameter: url' }, 400);
   }
-  return answerJson(c, portFor(c).resolve(c.get('userId') as string, url));
+  return answerJson(c, portFor(c).resolve(c.get('userId'), url));
 });
 
 /** POST /api/projects — create a new project */
 // Kept on REST: proxied to the user's runner when one is connected, so it is not on tRPC.
 projectRoutes.post('/', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
 
   const parsed = await parseJsonBody(c, createProjectBodySchema);

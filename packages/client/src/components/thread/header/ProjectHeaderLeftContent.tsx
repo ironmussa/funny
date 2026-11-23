@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectById } from '@/data/projects/hooks';
 import { useAgentTemplate } from '@/data/templates/hooks';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
@@ -36,7 +37,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
   const renameThread = useThreadStore((s) => s.renameThread);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useResettableState(false, [activeThreadId]);
   const [titleDraft, setTitleDraft] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,7 +45,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
     if (!activeThreadId) return;
     setTitleDraft(activeThreadTitle ?? '');
     setIsEditingTitle(true);
-  }, [activeThreadId, activeThreadTitle]);
+  }, [activeThreadId, activeThreadTitle, setIsEditingTitle]);
 
   const commitTitleEdit = useCallback(() => {
     if (!activeThreadId || !activeThreadProjectId) {
@@ -57,11 +58,19 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
       toast.success(t('toast.threadRenamed', { title: next }));
     }
     setIsEditingTitle(false);
-  }, [activeThreadId, activeThreadProjectId, activeThreadTitle, renameThread, t, titleDraft]);
+  }, [
+    activeThreadId,
+    activeThreadProjectId,
+    activeThreadTitle,
+    renameThread,
+    setIsEditingTitle,
+    t,
+    titleDraft,
+  ]);
 
   const cancelTitleEdit = useCallback(() => {
     setIsEditingTitle(false);
-  }, []);
+  }, [setIsEditingTitle]);
 
   useEffect(() => {
     if (isEditingTitle) {
@@ -69,10 +78,6 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
       titleInputRef.current?.select();
     }
   }, [isEditingTitle]);
-
-  useEffect(() => {
-    setIsEditingTitle(false);
-  }, [activeThreadId]);
 
   const handleBackToKanban = useCallback(() => {
     if (!kanbanContext) return;
@@ -103,10 +108,10 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
           <TooltipTrigger asChild>
             <Button
               data-testid="header-back-kanban"
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleBackToKanban}
-              className="text-muted-foreground hover:text-foreground shrink-0"
+              className="shrink-0"
             >
               <ArrowLeft className="icon-base" />
             </Button>
@@ -123,14 +128,14 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
           <TooltipTrigger asChild>
             <Button
               data-testid="header-back-parent"
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={() =>
                 navigate(
                   buildPath(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`),
                 )
               }
-              className="text-muted-foreground hover:text-foreground shrink-0"
+              className="shrink-0"
             >
               <ArrowLeft className="icon-base" />
             </Button>

@@ -34,12 +34,11 @@ export function BrowserSessionMenu() {
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             tabIndex={-1}
             aria-label="Browser session actions"
             data-testid="browser-panel-session-menu"
-            className="text-muted-foreground"
           >
             <MoreHorizontal className="icon-base" />
           </Button>
@@ -54,9 +53,9 @@ export function BrowserSessionMenu() {
             Close browser session
           </DropdownMenuItem>
           <DropdownMenuItem
+            variant="destructive"
             onSelect={() => setConfirmClear(true)}
             data-testid="browser-panel-clear-profile"
-            className="text-destructive"
           >
             <Trash2 className="icon-base" />
             Clear browser profile…

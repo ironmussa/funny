@@ -307,7 +307,7 @@ projectGitRoutes.post('/:id/checkout', async (c) => {
   }
 
   const checkoutError = await checkoutRecordingStash(project.path, {
-    userId: c.get('userId') as string,
+    userId: c.get('userId'),
     projectId: project.id,
     threadId: threadId ?? null,
     fromBranch: currentBranch,

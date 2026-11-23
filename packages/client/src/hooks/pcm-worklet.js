@@ -11,10 +11,13 @@
 const BUFFER_SIZE = 2048;
 
 class PCMProcessor extends AudioWorkletProcessor {
+  #buf;
+  #off;
+
   constructor() {
     super();
-    this._buf = new Int16Array(BUFFER_SIZE);
-    this._off = 0;
+    this.#buf = new Int16Array(BUFFER_SIZE);
+    this.#off = 0;
   }
 
   process(inputs) {
@@ -24,12 +27,12 @@ class PCMProcessor extends AudioWorkletProcessor {
 
     for (let i = 0; i < channel.length; i++) {
       const s = Math.max(-1, Math.min(1, channel[i]));
-      this._buf[this._off++] = s < 0 ? s * 0x8000 : s * 0x7fff;
-      if (this._off === this._buf.length) {
-        // Transfer a copy so this._buf can keep filling.
-        const out = this._buf.slice(0);
+      this.#buf[this.#off++] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      if (this.#off === this.#buf.length) {
+        // Transfer a copy so this.#buf can keep filling.
+        const out = this.#buf.slice(0);
         this.port.postMessage(out.buffer, [out.buffer]);
-        this._off = 0;
+        this.#off = 0;
       }
     }
 

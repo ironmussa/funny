@@ -46,7 +46,6 @@ export async function tracingMiddleware(c: Context, next: Next) {
   const incoming = parseTraceparent(c.req.header('traceparent') ?? null);
 
   // Start the span early with a placeholder name — we'll update it after routing
-  const _startTime = Date.now();
   const span = startSpan(`${method} ${c.req.path}`, {
     traceId: incoming?.traceId,
     parentSpanId: incoming?.parentSpanId,

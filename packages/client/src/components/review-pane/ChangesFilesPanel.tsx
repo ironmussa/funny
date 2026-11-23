@@ -169,12 +169,11 @@ function SelectAllHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={handleCollapseAllFolders}
                 disabled={allFoldersCollapsed}
                 data-testid="review-collapse-all"
-                className="text-muted-foreground"
               >
                 <FolderMinus className="icon-xs" />
               </Button>
@@ -186,12 +185,11 @@ function SelectAllHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={handleExpandAllFolders}
                 disabled={collapsedFolders.size === 0}
                 data-testid="review-expand-all"
-                className="text-muted-foreground"
               >
                 <FolderOpen className="icon-xs" />
               </Button>

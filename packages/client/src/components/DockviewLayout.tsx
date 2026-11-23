@@ -24,8 +24,10 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import { isLightTheme } from '@/lib/theme';
+import { PANEL_RIGHT, closeRightPanels, isRightPanelId } from '@/lib/dockview-right-panels';
 import 'dockview-react/dist/styles/dockview.css';
+
+import { isLightTheme } from '@/lib/theme';
 
 import { useAnimatedPanelToggle } from './dockview/use-animated-panel-toggle';
 import { useLeftPaneSync } from './dockview/use-left-pane-sync';
@@ -127,7 +129,6 @@ type DockviewLayoutProps = {
 
 const PANEL_LEFT = 'left';
 const PANEL_CENTER = 'center';
-const PANEL_RIGHT = 'right';
 const PANEL_BROWSER = 'browser';
 const PANEL_TOP = 'top';
 /** Id of the LEFT-edge group container. The left sidebar panel lives INSIDE
@@ -146,7 +147,6 @@ const LEFT_EDGE_ID = 'left-edge';
 const TOP_EDGE_ID = 'top-edge';
 const rightPanelId = (tabId: string) => `right:${tabId}`;
 const bottomPanelId = (tabId: string) => `bottom:${tabId}`;
-const isRightPanelId = (id: string) => id.startsWith('right:') || id === PANEL_RIGHT;
 const isBottomPanelId = (id: string) => id.startsWith('bottom:');
 
 const STORAGE_KEY_LEFT_WIDTH = 'dockview.left_width';
@@ -265,14 +265,16 @@ export function DockviewLayout({
   const apiRef = useRef<DockviewApi | null>(null);
 
   // ── Persistence: load stored sizes once on mount ──
-  const storedLeftWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_LEFT_WIDTH));
-  const storedRightWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_RIGHT_WIDTH));
-  const storedBottomHeight = useRef<number | null>(readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT));
-  const storedBrowserWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_BROWSER_WIDTH));
-  const initialRightWidthRef = useRef(storedRightWidth.current ?? initialRightWidth);
-  const initialBottomHeightRef = useRef(storedBottomHeight.current ?? initialBottomHeight);
-  const initialBrowserWidthRef = useRef(storedBrowserWidth.current ?? initialBrowserWidth);
-  const initialLeftWidthResolved = storedLeftWidth.current ?? initialLeftWidth;
+  const [stored] = useState(() => ({
+    leftWidth: readStoredSize(STORAGE_KEY_LEFT_WIDTH),
+    rightWidth: readStoredSize(STORAGE_KEY_RIGHT_WIDTH),
+    bottomHeight: readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT),
+    browserWidth: readStoredSize(STORAGE_KEY_BROWSER_WIDTH),
+  }));
+  const initialRightWidthRef = useRef(stored.rightWidth ?? initialRightWidth);
+  const initialBottomHeightRef = useRef(stored.bottomHeight ?? initialBottomHeight);
+  const initialBrowserWidthRef = useRef(stored.browserWidth ?? initialBrowserWidth);
+  const initialLeftWidthResolved = stored.leftWidth ?? initialLeftWidth;
 
   // ── Latest-prop refs so callbacks/effects don't need to re-create ──
   const isTabbedRight = !!(rightTabs && rightTabs.length > 0);
@@ -296,9 +298,9 @@ export function DockviewLayout({
   const bottomLeftActionsRef = useRef(bottomLeftActions);
   const bottomRightActionsRef = useRef(bottomRightActions);
   useLayoutEffect(() => {
-    initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
-    initialBottomHeightRef.current = storedBottomHeight.current ?? initialBottomHeight;
-    initialBrowserWidthRef.current = storedBrowserWidth.current ?? initialBrowserWidth;
+    initialRightWidthRef.current = stored.rightWidth ?? initialRightWidth;
+    initialBottomHeightRef.current = stored.bottomHeight ?? initialBottomHeight;
+    initialBrowserWidthRef.current = stored.browserWidth ?? initialBrowserWidth;
     rightTabsRef.current = rightTabs;
     onActiveRightTabChangeRef.current = onActiveRightTabChange;
     activeRightTabRef.current = activeRightTab;
@@ -331,6 +333,9 @@ export function DockviewLayout({
     onBottomTabsReorder,
     onBrowserClose,
     rightTabs,
+    stored.bottomHeight,
+    stored.browserWidth,
+    stored.rightWidth,
   ]);
   const bottomHeaderActions = useMemo(
     () => ({
@@ -444,12 +449,7 @@ export function DockviewLayout({
     return Number.isFinite(w) && w > 0 ? w : null;
   }, []);
 
-  const removeRightPanels = useCallback((api: DockviewApi) => {
-    const ids = api.panels.filter((p) => isRightPanelId(p.id)).map((p) => p.id);
-    for (const id of ids) {
-      api.getPanel(id)?.api.close();
-    }
-  }, []);
+  const removeRightPanels = useCallback((api: DockviewApi) => closeRightPanels(api), []);
 
   // ── Browser-panel management ──
   /** Add the browser panel to the right of center (between center and right). */

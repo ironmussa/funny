@@ -84,7 +84,7 @@ export function forgetThreadOwnership(threadId: string): void {
 }
 
 /** Test-only: drop every cached ownership fact. */
-export function __resetDataOwnershipCache(): void {
+export function resetDataOwnershipCache(): void {
   threadOwners.clear();
   messageThreads.clear();
   toolCallMessages.clear();

@@ -141,7 +141,7 @@ export function responseFromEntry(entry: CacheEntry): Response {
 }
 
 /** Test/diagnostic hook — drop all cached state. */
-export function _resetGithubCache(): void {
+export function resetGithubCache(): void {
   store.clear();
   cooldownUntil.clear();
 }

@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 const log = createClientLogger('publish-repo-dialog');
 
@@ -130,9 +131,8 @@ export function PublishRepoDialog({
       setRemoteError('URL must start with https://, ssh://, git:// or use the git@host:path form.');
       return;
     }
-    setSavingRemote(true);
-    setRemoteError(null);
-    try {
+    return whilePending(setSavingRemote, async () => {
+      setRemoteError(null);
       const result = await api.projectSetRemoteUrl(projectId, trimmed);
       if (result.isErr()) {
         const msg = String((result.error as { message?: string })?.message ?? result.error);
@@ -143,9 +143,7 @@ export function PublishRepoDialog({
 
       log.info('publish.remote.success', { projectId });
       onSuccess(trimmed);
-    } finally {
-      setSavingRemote(false);
-    }
+    });
   }, [projectId, remoteUrl, onSuccess]);
 
   const remoteValid = REMOTE_URL_PATTERN.test(remoteUrl.trim());

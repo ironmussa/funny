@@ -70,12 +70,11 @@ export function ProjectActionsMenu({
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               aria-label={t('sidebar.projectActions', 'Project actions')}
               data-testid={`project-more-actions-${project.id}`}
               onClick={(event) => event.stopPropagation()}
-              className="text-muted-foreground hover:text-foreground"
             >
               <MoreVertical className="icon-sm" />
             </Button>
@@ -198,13 +197,13 @@ export function ProjectActionsMenu({
               )
             )}
             <DropdownMenuItem
+              variant="destructive"
               data-testid="project-menu-delete"
               onClick={(event) => {
                 event.stopPropagation();
                 setOpen(false);
                 onDeleteProject(project.id, project.name);
               }}
-              className="text-status-error focus:text-status-error"
             >
               <Trash2 className="icon-sm" />
               {t('sidebar.deleteProject')}

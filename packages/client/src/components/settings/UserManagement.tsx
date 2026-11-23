@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { authClient } from '@/lib/auth-client';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface UserEntry {
@@ -30,26 +31,31 @@ export function UserManagement() {
   const [error, setError] = useState('');
 
   const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await authClient.admin.listUsers({ query: { limit: 100 } });
-      if (res.data?.users) {
-        setUsers(
-          res.data.users.map((u: any) => ({
-            id: u.id,
-            name: u.name || '',
-            username: u.username || '',
-            email: u.email || '',
-            role: u.role || 'user',
-            createdAt: u.createdAt || '',
-          })),
-        );
-      }
-    } catch (err) {
-      console.error('[UserManagement] Failed to list users:', err);
-    } finally {
-      setLoading(false);
-    }
+    return withCleanup(
+      async () => {
+        try {
+          setLoading(true);
+          const res = await authClient.admin.listUsers({ query: { limit: 100 } });
+          if (res.data?.users) {
+            setUsers(
+              res.data.users.map((u: any) => ({
+                id: u.id,
+                name: u.name || '',
+                username: u.username || '',
+                email: u.email || '',
+                role: u.role || 'user',
+                createdAt: u.createdAt || '',
+              })),
+            );
+          }
+        } catch (err) {
+          console.error('[UserManagement] Failed to list users:', err);
+        }
+      },
+      () => {
+        setLoading(false);
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -59,29 +65,27 @@ export function UserManagement() {
   const handleCreate = async () => {
     if (!newUsername.trim() || !newPassword.trim()) return;
     setError('');
-    setCreating(true);
-
-    try {
-      await authClient.admin.createUser({
-        email: `${newUsername.trim()}@local.host`,
-        password: newPassword,
-        name: newDisplayName.trim() || newUsername.trim(),
-        role: newRole,
-        data: {
-          username: newUsername.trim(),
-        },
-      });
-      setShowCreate(false);
-      setNewUsername('');
-      setNewDisplayName('');
-      setNewPassword('');
-      setNewRole('user');
-      await fetchUsers();
-    } catch (err: any) {
-      setError(err.message || t('users.createFailed'));
-    } finally {
-      setCreating(false);
-    }
+    return whilePending(setCreating, async () => {
+      try {
+        await authClient.admin.createUser({
+          email: `${newUsername.trim()}@local.host`,
+          password: newPassword,
+          name: newDisplayName.trim() || newUsername.trim(),
+          role: newRole,
+          data: {
+            username: newUsername.trim(),
+          },
+        });
+        setShowCreate(false);
+        setNewUsername('');
+        setNewDisplayName('');
+        setNewPassword('');
+        setNewRole('user');
+        await fetchUsers();
+      } catch (err: any) {
+        setError(err.message || t('users.createFailed'));
+      }
+    });
   };
 
   const handleRemove = async (userId: string) => {
@@ -200,12 +204,7 @@ export function UserManagement() {
               <p className="text-muted-foreground text-xs">@{user.username}</p>
             </div>
             {user.id !== currentUser?.id && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive text-xs"
-                onClick={() => handleRemove(user.id)}
-              >
+              <Button variant="ghost-destructive" size="xs" onClick={() => handleRemove(user.id)}>
                 {t('common.delete')}
               </Button>
             )}

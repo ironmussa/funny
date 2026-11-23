@@ -364,10 +364,9 @@ export function IssuesFactoryBar({
           {t('factory.selectedCount', '{{count}} selected', { count: selected.length })}
         </span>
         <Button
-          variant="ghost"
+          variant="muted"
           size="xs"
           onClick={onClear}
-          className="text-muted-foreground"
           data-testid="issues-factory-clear-selection"
         >
           {t('common.clear', 'Clear')}

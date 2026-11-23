@@ -41,6 +41,7 @@ mock.module('@/components/ui/dropdown-menu', () => {
         <div
           data-mock={name}
           data-testid={props['data-testid']}
+          data-variant={props.variant}
           className={props.className}
           onClick={props.onClick}
         >

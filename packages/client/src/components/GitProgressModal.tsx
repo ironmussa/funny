@@ -196,7 +196,7 @@ export function GitProgressModal({
         }}
       >
         <DialogHeader className="shrink-0">
-          <DialogTitle className="text-sm">{title}</DialogTitle>
+          <DialogTitle size="sm">{title}</DialogTitle>
           <DialogDescription className="sr-only">
             {t('review.progress.description', 'Git operation progress')}
           </DialogDescription>

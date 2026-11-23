@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { render, cleanup } from '@testing-library/react';
 import { createElement } from 'react';
 
-import { __resetVisualizerRegistry, getVisualizerForFileExt } from '@/lib/visualizer-registry';
+import { resetVisualizerRegistry, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
 
 import { getByTestIdOfType } from '../helpers/builders-lib';
 
 beforeEach(() => {
-  __resetVisualizerRegistry();
+  resetVisualizerRegistry();
   registerBuiltinVisualizers();
 });
 

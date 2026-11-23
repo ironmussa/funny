@@ -13,6 +13,7 @@ import type {
   PermissionMode,
   ImageAttachment,
 } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import {
   DEFAULT_MODEL,
@@ -694,7 +695,7 @@ async function resolvePendingInteractiveToolCall(
     log.warn('sendMessage: failed to resolve pending interactive tool call (continuing)', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
   }
   return effectivePermission;

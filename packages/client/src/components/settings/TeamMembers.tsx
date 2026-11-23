@@ -22,6 +22,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface Member {
@@ -96,17 +97,22 @@ export function TeamMembers() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadMembers = useCallback(async () => {
-    try {
-      const res = await authClient.organization.listMembers();
-      if (res.data) {
-        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-        setMembers(res.data as unknown as Member[]);
-      }
-    } catch (err) {
-      console.error('[TeamMembers] Failed to load members:', err);
-    } finally {
-      setLoading(false);
-    }
+    return withCleanup(
+      async () => {
+        try {
+          const res = await authClient.organization.listMembers();
+          if (res.data) {
+            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+            setMembers(res.data as unknown as Member[]);
+          }
+        } catch (err) {
+          console.error('[TeamMembers] Failed to load members:', err);
+        }
+      },
+      () => {
+        setLoading(false);
+      },
+    );
   }, []);
 
   const loadInvitations = useCallback(async () => {
@@ -175,37 +181,35 @@ export function TeamMembers() {
 
   const handleInvite = useCallback(async () => {
     if (!inviteEmail.trim()) return;
-    setSending(true);
-    try {
-      await authClient.organization.inviteMember({
-        email: inviteEmail.trim(),
-        role: inviteRole,
-      });
-      toast.success(`Invitation sent to ${inviteEmail.trim()}`);
-      setInviteEmail('');
-      await loadInvitations();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to send invitation');
-    } finally {
-      setSending(false);
-    }
+    await whilePending(setSending, async () => {
+      try {
+        await authClient.organization.inviteMember({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+        });
+        toast.success(`Invitation sent to ${inviteEmail.trim()}`);
+        setInviteEmail('');
+        await loadInvitations();
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to send invitation');
+      }
+    });
   }, [inviteEmail, inviteRole, loadInvitations]);
 
   const handleCreateLink = useCallback(async () => {
-    setCreatingLink(true);
-    try {
-      const result = await api.createInviteLink({ role: linkRole, expiresInDays: 7 });
-      if (result.isOk()) {
-        setInviteLinks((prev) => [result.value, ...prev]);
-        toast.success('Invite link created');
-      } else {
+    await whilePending(setCreatingLink, async () => {
+      try {
+        const result = await api.createInviteLink({ role: linkRole, expiresInDays: 7 });
+        if (result.isOk()) {
+          setInviteLinks((prev) => [result.value, ...prev]);
+          toast.success('Invite link created');
+        } else {
+          toast.error('Failed to create invite link');
+        }
+      } catch {
         toast.error('Failed to create invite link');
       }
-    } catch {
-      toast.error('Failed to create invite link');
-    } finally {
-      setCreatingLink(false);
-    }
+    });
   }, [linkRole]);
 
   const handleRevokeLink = useCallback(async (linkId: string) => {
@@ -239,7 +243,7 @@ export function TeamMembers() {
   const ownerCount = members.filter((m) => m.role === 'owner').length;
 
   if (loading) {
-    return <LoadingState fill={false} className="py-12" label="Loading members…" />;
+    return <LoadingState padding="lg" fill={false} label="Loading members…" />;
   }
 
   return (
@@ -353,14 +357,7 @@ export function TeamMembers() {
                         <code className="text-muted-foreground truncate text-xs">
                           {window.location.origin}/invite/{link.token}
                         </code>
-                        <Badge
-                          variant="secondary"
-                          className={
-                            isActive
-                              ? 'bg-status-success/15 text-status-success'
-                              : 'bg-status-error/15 text-status-error'
-                          }
-                        >
+                        <Badge variant={isActive ? 'success' : 'error'}>
                           {isExpired ? 'expired' : isMaxed ? 'maxed' : link.role}
                         </Badge>
                       </div>
@@ -385,8 +382,9 @@ export function TeamMembers() {
                       )}
                     </TooltipIconButton>
                     <TooltipIconButton
+                      variant="muted-destructive"
                       size="icon"
-                      className="text-muted-foreground hover:text-destructive size-7 shrink-0"
+                      className="size-7 shrink-0"
                       onClick={() => handleRevokeLink(link.id)}
                       data-testid={`team-link-revoke-${link.id}`}
                       tooltip={t('common.revoke')}
@@ -456,9 +454,9 @@ export function TeamMembers() {
                   </SelectContent>
                 </Select>
                 <Button
-                  variant="ghost"
+                  variant="muted-destructive"
                   size="icon"
-                  className="text-muted-foreground hover:text-destructive size-8"
+                  className="size-8"
                   onClick={() => setRemoveConfirm(member)}
                   disabled={isLastOwner}
                   data-testid={`team-member-remove-${member.userId}`}
@@ -489,9 +487,9 @@ export function TeamMembers() {
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">{inv.role}</Badge>
                   <Button
-                    variant="ghost"
+                    variant="muted-destructive"
                     size="icon"
-                    className="text-muted-foreground hover:text-destructive size-7"
+                    className="size-7"
                     onClick={() => handleCancelInvitation(inv.id)}
                     data-testid={`team-invitation-cancel-${inv.id}`}
                   >

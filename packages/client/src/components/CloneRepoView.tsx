@@ -11,7 +11,7 @@ import {
   LogOut,
   Settings,
 } from 'lucide-react';
-import { useState, useEffect, useEffectEvent, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -25,11 +25,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useResettableState } from '@/hooks/use-resettable-state';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { withCleanup } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -110,7 +113,8 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [loadingRepos, setLoadingRepos] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  // Highlight resets when the debounced query changes (new result set).
+  const [highlightedIndex, setHighlightedIndex] = useResettableState(-1, [debouncedSearch]);
   const listRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -141,7 +145,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
 
   // The runner answers as soon as the clone starts; its last `clone:progress`
   // event says whether the project was created.
-  const finishClone = useEffectEvent(async (data: WSCloneProgressData) => {
+  const finishClone = useStableCallback(async (data: WSCloneProgressData) => {
     activeCloneIdRef.current = null;
     setIsCloning(false);
     if (data.status === 'failed') {
@@ -179,14 +183,14 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     };
     window.addEventListener('clone:progress', handler);
     return () => window.removeEventListener('clone:progress', handler);
-  }, []);
+  }, [finishClone]);
 
-  const loadGhUser = async () => {
+  const loadGhUser = useCallback(async () => {
     const result = await api.githubUser();
     if (result.isOk()) {
       setGhUser(result.value);
     }
-  };
+  }, []);
 
   const checkConnection = useCallback(async () => {
     const result = await api.githubStatus();
@@ -205,7 +209,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
       // API call itself failed (network error, server down, etc.)
       setView('error');
     }
-  }, []);
+  }, [loadGhUser]);
 
   // Check initial connection status
   useEffect(() => {
@@ -226,24 +230,27 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     loadingRef.current = true;
     setLoadingRepos(true);
     log.debug('github repo search', { page: pageNum, query: searchQuery, append });
-    try {
-      const result = await api.githubRepos({
-        page: pageNum,
-        per_page: 30,
-        sort: 'updated',
-        search: searchQuery || undefined,
-      });
-      if (fetchId !== fetchIdRef.current) return;
-      if (result.isOk()) {
-        setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
-        setHasMore(result.value.hasMore);
-      }
-    } finally {
-      if (fetchId === fetchIdRef.current) {
-        loadingRef.current = false;
-        setLoadingRepos(false);
-      }
-    }
+    return withCleanup(
+      async () => {
+        const result = await api.githubRepos({
+          page: pageNum,
+          per_page: 30,
+          sort: 'updated',
+          search: searchQuery || undefined,
+        });
+        if (fetchId !== fetchIdRef.current) return;
+        if (result.isOk()) {
+          setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
+          setHasMore(result.value.hasMore);
+        }
+      },
+      () => {
+        if (fetchId === fetchIdRef.current) {
+          loadingRef.current = false;
+          setLoadingRepos(false);
+        }
+      },
+    );
   }, []);
 
   // Debounce the search input to avoid firing a GitHub search on every keystroke.
@@ -256,11 +263,6 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [search]);
-
-  // Reset highlight when the debounced query changes (new result set).
-  useEffect(() => {
-    setHighlightedIndex(-1);
-  }, [debouncedSearch]);
 
   // Keyboard navigation for repo list
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
@@ -439,7 +441,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
 
   // Loading / Checking state
   if (view === 'checking') {
-    return <LoadingState fill={false} className="py-12" testId="clone-repo-checking" />;
+    return <LoadingState padding="lg" fill={false} testId="clone-repo-checking" />;
   }
 
   // Error state — API call failed (network error, server down, etc.)
@@ -564,9 +566,8 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
         />
 
         <Button
-          variant="ghost"
+          variant="muted"
           size="sm"
-          className="text-muted-foreground"
           onClick={() => {
             if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             setView('connect');
@@ -593,9 +594,9 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
               </span>
             ) : (
               <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground ml-auto h-7 text-xs"
+                variant="muted"
+                size="xs"
+                className="ml-auto"
                 onClick={disconnect}
                 data-testid="clone-repo-disconnect"
               >
@@ -667,7 +668,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
           )}
 
           {!loadingRepos && repos.length === 0 && (
-            <EmptyState fill={false} className="py-8" title={t('github.repos.noRepos')} />
+            <EmptyState padding="md" fill={false} title={t('github.repos.noRepos')} />
           )}
 
           <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
@@ -680,12 +681,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   if (view === 'clone-config' && selectedRepo) {
     return (
       <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground -ml-2"
-          onClick={() => setView('repos')}
-        >
+        <Button variant="muted" size="sm" className="-ml-2" onClick={() => setView('repos')}>
           <ArrowLeft className="icon-sm mr-1" />
           {t('github.repos.title')}
         </Button>

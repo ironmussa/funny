@@ -283,16 +283,16 @@ function SearchablePickerContent({
         style={{ maxHeight: mobile ? '60dvh' : 'min(60vh, 440px)' }}
       >
         {loading && items.length === 0 && loadingText && (
-          <LoadingState fill={false} className="py-3" label={loadingText} />
+          <LoadingState padding="sm" fill={false} label={loadingText} />
         )}
         {!loading && items.length === 0 && emptyText && (
-          <EmptyState fill={false} className="py-3" title={emptyText} />
+          <EmptyState padding="sm" fill={false} title={emptyText} />
         )}
         {!loading &&
           items.length > 0 &&
           (filtered.length === 0 ||
             (mobile && search && filtered.every((item) => item.alwaysVisibleOnMobile))) && (
-            <EmptyState fill={false} className="py-3" title={noMatchText} />
+            <EmptyState padding="sm" fill={false} title={noMatchText} />
           )}
         {filtered.length > 0 && (
           <div

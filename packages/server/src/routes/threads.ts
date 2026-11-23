@@ -180,7 +180,7 @@ threadRoutes.get('/:id/comments', requireThreadView, async (c) => {
 // POST /api/threads/:id/comments
 threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   // Posting a comment needs the `comment` capability (commenter+): a plain
   // viewer can read the thread and its comments but not post. They already see
@@ -238,7 +238,7 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
 // client listeners work unchanged.
 threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const parsed = await parseJsonBody(c, threadWorkflowEventBodySchema);
   if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
@@ -317,7 +317,7 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
   const createThread = composeCreateThread(c.env);
   const result = await createThread({
     actor: {
-      userId: authenticatedUserId(c.get('userId') as string),
+      userId: authenticatedUserId(c.get('userId')),
       organizationId: c.get('organizationId') as string | undefined,
       role: c.get('userRole') as string | undefined,
       organizationName: c.get('organizationName') as string | undefined,
@@ -362,7 +362,7 @@ function creationFailureResponse(
 
 /** `runtime: 'sandbox'`: the server creates the thread and starts it in its own sandbox. */
 async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<string, unknown>) {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
   return sandboxLaunchResponse(c, result, 201);
 }
@@ -417,7 +417,7 @@ threadRoutes.post('/:id/message', requireThreadSteer, noteFactoryOwnerFollowUp, 
 // A follow-up on a sandbox thread whose setup failed: provision a new sandbox
 // for it and start the agent there (thread-sandboxes). Owner only.
 threadRoutes.post('/:id/sandbox-retry', requireThreadOwner, async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const parsed = await parseJsonBody(c, retrySandboxThreadSchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const result = await sandboxThreadLauncherFor(c.env ?? {}).retry(
@@ -492,7 +492,7 @@ async function handleForkThread(c: Context<ServerEnv>, variant: ForkVariant) {
   const forkThread = composeForkThread(c.env);
   return withForkInputs(
     {
-      userId: authenticatedUserId(c.get('userId') as string),
+      userId: authenticatedUserId(c.get('userId')),
       organizationId: c.get('organizationId') as string | undefined,
       role: c.get('userRole') as string | undefined,
       organizationName: c.get('organizationName') as string | undefined,
@@ -536,7 +536,7 @@ threadRoutes.patch('/:id/tool-calls/:toolCallId', requireThreadOwner, proxyToRun
 // GET /api/threads/:id/events — served from server DB
 threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const span = startSpan('GET /api/threads/:id/events', {
     attributes: { 'thread.id': id },

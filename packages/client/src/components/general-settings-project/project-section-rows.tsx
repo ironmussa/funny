@@ -11,8 +11,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useAgentTemplates } from '@/data/templates/hooks';
 import { ensureTemplatesLoaded } from '@/data/templates/loaders';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { projectsApi } from '@/lib/api/projects';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 import { ProjectSettingRow } from './setting-primitives';
 
@@ -67,6 +69,7 @@ export function ProjectUrlPatterns({
         {urlRows.map((row, i) => (
           <div key={row.id} className="flex items-center gap-2">
             <Input
+              mono
               value={row.value}
               onChange={(e) => {
                 const next = [...urlRows];
@@ -79,7 +82,7 @@ export function ProjectUrlPatterns({
                 if (e.key === 'Enter') save(urlRows);
               }}
               placeholder="https://example.com"
-              className="h-8 flex-1 font-mono text-xs"
+              className="flex-1 text-xs"
             />
             <TooltipIconButton
               size="icon-sm"
@@ -121,12 +124,8 @@ export function ProjectSystemPrompt({
   currentPrompt?: string;
   onSave: (projectId: string, data: { systemPrompt: string | null }) => void;
 }) {
-  const [value, setValue] = useState(currentPrompt || '');
+  const [value, setValue] = useResettableState(currentPrompt || '', [currentPrompt]);
   const { t } = useTranslation();
-
-  useEffect(() => {
-    setValue(currentPrompt || '');
-  }, [currentPrompt]);
 
   const save = () => {
     const trimmed = value.trim();
@@ -177,12 +176,8 @@ export function LauncherUrlSetting({
   currentUrl?: string;
   onSave: (projectId: string, data: { launcherUrl: string | null }) => void;
 }) {
-  const [value, setValue] = useState(currentUrl || '');
+  const [value, setValue] = useResettableState(currentUrl || '', [currentUrl]);
   const { t } = useTranslation();
-
-  useEffect(() => {
-    setValue(currentUrl || '');
-  }, [currentUrl]);
 
   const save = () => {
     const trimmed = value.trim();
@@ -199,6 +194,8 @@ export function LauncherUrlSetting({
       )}
     >
       <Input
+        mono
+        size="xs"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={save}
@@ -207,7 +204,7 @@ export function LauncherUrlSetting({
           if (e.key === 'Enter') save();
         }}
         placeholder="http://localhost:4040"
-        className="h-8 w-[240px] font-mono text-xs"
+        className="h-8 w-[240px]"
         data-testid="settings-launcher-url"
       />
     </ProjectSettingRow>
@@ -265,13 +262,10 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
 
   const fetchStatus = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await projectsApi.getWeaveStatus(projectId);
       setStatus(result.isOk() ? result.value : null);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectId]);
 
   useEffect(() => {

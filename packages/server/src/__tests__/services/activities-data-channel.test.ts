@@ -9,10 +9,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { repos } from '../../db/repos.js';
 import { setIO } from '../../services/browser-events.js';
 import { handleDataMessageWithAck } from '../../services/data-handler.js';
-import { __resetDataOwnershipCache } from '../../services/data-ownership.js';
-import { __resetDataScopeCache } from '../../services/data-scope.js';
+import { resetDataOwnershipCache } from '../../services/data-ownership.js';
+import { resetDataScopeCache } from '../../services/data-scope.js';
 import { removeRunner } from '../../services/runner-manager.js';
-import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
 import { createMockIo } from '../helpers/socketio-test-mocks.js';
 import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
@@ -43,9 +43,9 @@ describe('activity data channel', () => {
     ]) {
       db.run(`DELETE FROM ${table}`);
     }
-    __resetRunnerScopeCache();
-    __resetDataScopeCache();
-    __resetDataOwnershipCache();
+    resetRunnerScopeCache();
+    resetDataScopeCache();
+    resetDataOwnershipCache();
     seedProject(db, { id: 'pa', userId: 'alice', path: '/a' });
     seedProject(db, { id: 'pd', userId: 'alice', path: '/d' });
     seedProject(db, { id: 'pb', userId: 'bob', path: '/b' });

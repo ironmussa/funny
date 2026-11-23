@@ -63,38 +63,54 @@ const existing = {
     'oxc/no-accumulating-spread': 'error',
     ...severity('anti-slop', ANTI_SLOP_ERROR, 'error'),
     ...severity('anti-slop', ANTI_SLOP_WARN, 'warn'),
+    // A `typeof` inside a `value is T` guard is the decoder the rule asks for.
+    'anti-slop/no-runtime-typeof': ['warn', { allowInTypeGuards: true }],
     ...severity('anti-slop', ANTI_SLOP_OFF, 'off'),
     ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_ERROR, 'error'),
     ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_WARN, 'warn'),
     'react/react-in-jsx-scope': 'off',
     'react/capitalized-calls': 'error',
     'react/error-boundaries': 'error',
-    'react/exhaustive-effect-dependencies': 'warn',
+    // Off: it reports every dependency an effect does not read, and this
+    // codebase lists values on purpose so an effect re-runs when they change
+    // (a nonce, a thread id, the content). The rule takes no option to report
+    // only missing dependencies; react-hooks/exhaustive-deps covers those,
+    // except a missing plain function, which only this rule reported.
+    'react/exhaustive-effect-dependencies': 'off',
     'react/globals': 'error',
     'react/hooks': 'error',
-    'react/immutability': 'warn',
-    'react/incompatible-library': 'warn',
-    'react/invariant': 'warn',
-    'react/memo-dependencies': 'warn',
+    'react/immutability': 'error',
+    // Only reports that React Compiler skips a component using TanStack
+    // Virtual's useVirtualizer; nothing to fix without changing the library.
+    'react/incompatible-library': 'off',
+    'react/invariant': 'error',
+    'react/memo-dependencies': 'error',
     'react/no-deriving-state-in-effects': 'error',
-    'react/preserve-manual-memoization': 'warn',
+    'react/preserve-manual-memoization': 'error',
     'react/purity': 'error',
     'react/refs': 'warn',
-    'react/rule-suppression': 'warn',
+    'react/rule-suppression': 'error',
     'react/set-state-in-effect': 'warn',
     'react/set-state-in-render': 'error',
     'react/static-components': 'error',
     'react/syntax': 'error',
-    'react/todo': 'warn',
+    'react/todo': 'error',
     'react/unsupported-syntax': 'error',
     'react/use-memo': 'error',
     'react/void-use-memo': 'error',
-    'no-unused-vars': 'warn',
+    'no-unused-vars': 'error',
     'no-shadow': 'off',
     'no-await-in-loop': 'off',
     'no-constant-condition': 'warn',
     'no-constant-binary-expression': 'warn',
-    'react-hooks/exhaustive-deps': 'warn',
+    'react-hooks/exhaustive-deps': 'error',
+    // Written for Express, whose router drops a rejected promise. Hono awaits
+    // its handlers and middleware (a middleware must be async to await next()).
+    'oxc/no-async-endpoint-handlers': 'off',
+    // 'suspicious' rules the repo is clean of, so a new finding fails.
+    'no-unexpected-multiline': 'error',
+    'typescript/no-extraneous-class': 'error',
+    'react/no-object-type-as-default-prop': 'error',
     // Bun 1.4.6 hoists vi.mock above imports and top-level variables (1.4.4 does
     // not), so the same test would mean two things. mock.module is never hoisted.
     'no-restricted-properties': [
@@ -109,7 +125,7 @@ const existing = {
     // Only names we do not choose are allowed; our own private members use `#x`
     // or a plain name instead of a leading underscore.
     'no-underscore-dangle': [
-      'warn',
+      'error',
       {
         allow: [
           // neverthrow's test-only unwrappers.
@@ -165,6 +181,15 @@ const existing = {
           '__FUNNY_REACT_JSX_RUNTIME__',
           '__FUNNY_MARKDOWN_WASM_BENCHMARK__',
           '__playwright_ws_instances',
+          '__testKitProbe',
+          // Names set by others: Vue 2's component options, tRPC's router
+          // definition, the tool name some ACP agents send, and the wire field
+          // a Socket.IO client without acks uses to get its reply.
+          '_componentTag',
+          '_def',
+          '_toolName',
+          '_TOOLNAME',
+          '_requestId',
         ],
       },
     ],
@@ -211,9 +236,32 @@ const existing = {
         // Marker classes with no styles of their own: dockview's right-pane
         // tabs and the PR detail conversation, which an inline <style> targets.
         // An empty `@utility` would declare them, but it breaks the Tailwind build.
+        // Layout classes (flex-1, shrink-0, w-full, margins) place a component in its
+        // parent and do not restyle it, which is the baseline @shadcn/lint documents.
+        'shadcn/no-restyle': [
+          'warn',
+          {
+            allow: ['layout'],
+            contracts: [
+              // A text helper that only marks the matches: the text it wraps takes
+              // the size, weight and color of wherever it is shown.
+              { pattern: '^HighlightText$', allow: ['layout', 'typography', 'color'] },
+            ],
+          },
+        ],
         'shadcn/no-unknown-classes': [
           'error',
           { allow: ['dv-funny-right-tab', 'pr-detail-conversation'] },
+        ],
+        // React 19.2.7 does not update an effect event inside a memo() or
+        // forwardRef component, so it reads the previous render there.
+        'no-restricted-syntax': [
+          'error',
+          {
+            selector:
+              "ImportSpecifier[imported.name='useEffectEvent'], MemberExpression[property.name='useEffectEvent']",
+            message: 'Use useStableCallback from @/hooks/use-stable-callback instead.',
+          },
         ],
       },
     },
@@ -223,12 +271,20 @@ const existing = {
       rules: severity('shadcn', [...SHADCN_ERROR, ...SHADCN_WARN, ...SHADCN_OFF], 'off'),
     },
     {
-      files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*'],
+      files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*', 'packages/test-kit/**'],
       rules: {
         // Tests cast fixtures and mocks to the type under test on purpose; a
         // `SAFETY:` note on each cast says nothing the test does not already show.
         // Production code keeps the rule.
         'anti-slop/require-safety-comment-for-type-assertion': 'off',
+        // These rules ask for external input to be parsed at its I/O boundary. A
+        // test has none: it builds loose fixtures and mocks and asserts on values
+        // directly (`typeof` in an expect, `Record<string, unknown>` payloads).
+        'anti-slop/no-unsafe-dictionary-type': 'off',
+        'anti-slop/no-runtime-typeof': 'off',
+        'anti-slop/no-unknown-parameters': 'off',
+        'anti-slop/no-unknown-returns': 'off',
+        'anti-slop/no-known-value-widening': 'off',
         'no-constant-condition': 'off',
         'no-constant-binary-expression': 'off',
         'max-lines': 'off',

@@ -26,6 +26,7 @@
  * re-derive the rule at a call site.
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import { and, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
@@ -133,7 +134,7 @@ function clearLocal(change: { runnerId?: string; projectId?: string }) {
     } catch (e) {
       log.warn('Runner scope listener failed', {
         namespace: 'runner-scope',
-        error: (e as Error).message,
+        error: errorMessage(e),
       });
     }
   }
@@ -196,7 +197,7 @@ async function readRunnerPolicyVersion(): Promise<number> {
   } catch (error) {
     log.warn('Runner policy version unavailable — routing caches bypassed', {
       namespace: 'runner-scope',
-      error: (error as Error).message,
+      error: errorMessage(error),
     });
     clearLocal({});
     knownVersion = -1;
@@ -240,7 +241,7 @@ async function invalidateRunnerScope(change: { runnerId?: string; projectId?: st
     // Other instances keep their caches until the TTL: make that loud.
     log.error('Runner policy version bump failed — other instances may serve stale routing', {
       namespace: 'runner-scope',
-      error: (error as Error).message,
+      error: errorMessage(error),
     });
   }
 }
@@ -254,7 +255,7 @@ export async function runnersDeleted(runnerIds: string[]): Promise<void> {
 }
 
 /** Test helper. */
-export function __resetRunnerScopeCache() {
+export function resetRunnerScopeCache() {
   runnerCache.clear();
   policyCache.clear();
   sandboxByThreadCache.clear();
@@ -265,7 +266,7 @@ export function __resetRunnerScopeCache() {
 }
 
 /** Test helper: how long a version read is reused (0 = query on every read). */
-export function __setRunnerPolicyVersionSyncWindowMs(ms: number) {
+export function setRunnerPolicyVersionSyncWindowMs(ms: number) {
   versionSyncWindowMs = ms;
   lastVersionSync = null;
 }

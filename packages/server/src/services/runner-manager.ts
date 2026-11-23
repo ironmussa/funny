@@ -4,6 +4,7 @@
  */
 
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
+import { errorMessage } from '@funny/shared/errors';
 import type {
   AdvertisedProvider,
   RunnerInfo,
@@ -44,7 +45,7 @@ async function onRunnersDeleted(runnerIds: string[]): Promise<void> {
       log.warn('Failed to interrupt the activities of a deleted runner', {
         namespace: 'activities',
         runnerId,
-        error: (error as Error).message,
+        error: errorMessage(error),
       }),
     );
   }

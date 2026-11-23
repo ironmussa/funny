@@ -19,16 +19,16 @@ export interface TelemetryConfig {
   serverServiceName: string;
 }
 
-let _config: TelemetryConfig | null = null;
+let telemetryConfig: TelemetryConfig | null = null;
 
 export function getTelemetryConfig(): TelemetryConfig {
-  if (!_config) {
+  if (!telemetryConfig) {
     const endpoint = process.env.OTLP_ENDPOINT || 'http://localhost:4000';
-    _config = {
+    telemetryConfig = {
       endpoint,
       enabled: isTelemetryExportEnabled(),
       serverServiceName: 'funny-runtime',
     };
   }
-  return _config;
+  return telemetryConfig;
 }

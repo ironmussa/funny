@@ -35,11 +35,12 @@ export function TemplateVariableInputs({
               <TooltipContent>{v.description || v.name}</TooltipContent>
             </Tooltip>
             <Input
+              size="xs"
               id={`template-variable-${v.name}`}
               value={values[v.name] ?? v.defaultValue ?? ''}
               onChange={(e) => onChange(v.name, e.target.value)}
               placeholder={v.description || v.name}
-              className="h-6 w-40 text-xs"
+              className="h-6 w-40"
               data-testid={`prompt-template-var-${v.name}`}
             />
           </div>

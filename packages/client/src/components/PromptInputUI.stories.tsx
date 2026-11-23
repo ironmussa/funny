@@ -322,13 +322,7 @@ function MinimalStory() {
         <div className="border-border/20 flex items-center justify-end gap-1 border-t px-1.5 py-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                data-testid="minimal-dictate"
-                variant="ghost"
-                size="icon-sm"
-                tabIndex={-1}
-                className="text-muted-foreground hover:text-foreground"
-              >
+              <Button data-testid="minimal-dictate" variant="muted" size="icon-sm" tabIndex={-1}>
                 <Mic className="icon-xs" />
               </Button>
             </TooltipTrigger>
@@ -339,14 +333,11 @@ function MinimalStory() {
               <Button
                 data-testid="minimal-send"
                 onClick={handleSubmit}
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 tabIndex={-1}
                 disabled={!hasContent}
-                className={cn(
-                  'text-muted-foreground hover:text-foreground',
-                  hasContent && 'text-primary hover:text-primary',
-                )}
+                className={cn(hasContent && 'text-primary hover:text-primary')}
               >
                 <Send className="icon-xs" />
               </Button>

@@ -363,8 +363,7 @@ function createFactoryPort(
             audited(
               'factory.flow_started',
               userId,
-              (run) =>
-                `Started the flow "${input.flowName}" in the factory of project ${projectId}`,
+              () => `Started the flow "${input.flowName}" in the factory of project ${projectId}`,
               (run) => ({ projectId, runId: run.id, flowName: input.flowName }),
             ),
           ),

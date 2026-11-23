@@ -99,7 +99,7 @@ runnerRoutes.post('/register', async (c) => {
     }
 
     // Runner MUST be associated with a user for tenant isolation
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     log.warn('Runner registration: userId from context', {
       namespace: 'runner',
       userId: userId ?? '(undefined)',
@@ -186,7 +186,7 @@ runnerRoutes.post('/enroll/approve', (c) => refuseUser(c));
 
 // Kept on REST: called by the runner with its own credential (packages/runtime).
 runnerRoutes.post('/heartbeat', async (c) => {
-  const runnerId = c.get('runnerId') as string | undefined;
+  const runnerId = c.get('runnerId');
   if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
 
   const body = await c.req.json<RunnerHeartbeatRequest>();
@@ -210,7 +210,7 @@ runnerRoutes.post('/heartbeat', async (c) => {
 
 // Kept on REST: called by the runner with its own credential (packages/runtime).
 runnerRoutes.get('/tasks', async (c) => {
-  const runnerId = c.get('runnerId') as string | undefined;
+  const runnerId = c.get('runnerId');
   if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
 
   const tasks = await rm.getPendingTasks(runnerId);
@@ -243,8 +243,8 @@ runnerRoutes.get('/', async (c) => {
 // Kept on REST: a runner reads its own record (the owner or an admin may read it too).
 runnerRoutes.get('/:runnerId', async (c) => {
   const runnerId = c.req.param('runnerId');
-  const userId = c.get('userId') as string | undefined;
-  const isRunner = c.get('isRunner') as boolean | undefined;
+  const userId = c.get('userId');
+  const isRunner = c.get('isRunner');
   const userRole = c.get('userRole') as string | undefined;
 
   const runner = await rm.getRunner(runnerId);
@@ -284,7 +284,7 @@ runnerRoutes.delete('/:runnerId', (c) => refuseUser(c));
  * secret has NO runner identity and therefore gets no cross-runner access.
  */
 function runnerSelfId(c: Context<ServerEnv>): string | null {
-  const id = c.get('runnerId') as string | undefined;
+  const id = c.get('runnerId');
   return typeof id === 'string' && id.length > 0 ? id : null;
 }
 

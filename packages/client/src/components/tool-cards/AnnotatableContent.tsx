@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useEffectEvent, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { cn } from '@/lib/utils';
 
 import {
@@ -16,7 +17,6 @@ import {
  *
  * Used by both the inline ExitPlanModeCard and the PlanReviewDialog.
  */
-const EMPTY_DEPS: unknown[] = [];
 
 export function AnnotatableContent({
   children,
@@ -26,8 +26,8 @@ export function AnnotatableContent({
   onRemoveComment,
   className,
   active = true,
-  /** Extra deps that should trigger re-highlighting (e.g. dialog `open` state) */
-  highlightDeps = EMPTY_DEPS,
+  /** A value whose change triggers re-highlighting (e.g. dialog `open` state) */
+  highlightKey,
   /** Delay before applying highlights (useful for dialog mount) */
   highlightDelay = 0,
 }: {
@@ -38,7 +38,7 @@ export function AnnotatableContent({
   onRemoveComment: (index: number) => void;
   className?: string;
   active?: boolean;
-  highlightDeps?: unknown[];
+  highlightKey?: unknown;
   highlightDelay?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,7 +68,7 @@ export function AnnotatableContent({
     window.getSelection()?.removeAllRanges();
   }, []);
 
-  const onOutsideMouseDown = useEffectEvent((e: MouseEvent) => {
+  const onOutsideMouseDown = useStableCallback((e: MouseEvent) => {
     const popover = document.querySelector('[data-testid="plan-selection-popover"]');
     if (popover && popover.contains(e.target as Node)) return;
     clearSelection();
@@ -85,7 +85,7 @@ export function AnnotatableContent({
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
     };
-  }, [selection]);
+  }, [selection, onOutsideMouseDown]);
 
   // ── Highlight annotations + track positions ──
   const [annotationPositions, setAnnotationPositions] = useState<AnnotationPosition[]>([]);
@@ -140,8 +140,7 @@ export function AnnotatableContent({
       return () => clearTimeout(timer);
     }
     apply();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, planComments, ...highlightDeps]);
+  }, [active, planComments, highlightKey, highlightDelay]);
 
   return (
     // Mouse-up observes text selection inside children; this wrapper has no standalone action.

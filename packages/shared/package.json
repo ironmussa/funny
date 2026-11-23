@@ -64,6 +64,7 @@
     "./lib/text-search": "./src/lib/text-search.ts",
     "./lib/sliding-window-hits": "./src/lib/sliding-window-hits.ts",
     "./async": "./src/async.ts",
+    "./while-pending": "./src/while-pending.ts",
     "./stale-while-revalidate": "./src/stale-while-revalidate.ts",
     "./github-app-token": "./src/github-app-token.ts",
     "./project-secrets": "./src/project-secrets.ts",

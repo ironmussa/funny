@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { SearchBar } from '@/components/ui/search-bar';
 import { api } from '@/lib/api';
+import { withCleanup } from '@/lib/while-pending';
 import { useUIStore } from '@/stores/ui-store';
 
 interface SearchResult {
@@ -156,36 +157,41 @@ export function ThreadSearchBar({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      try {
-        const result = await api.searchThreadMessages(threadId, q.trim(), 100, cs);
-        if (controller.signal.aborted) return;
-        if (result.isOk()) {
-          const { results: items } = result.value;
-          setResults(items);
-          setMarkCounts(new Map());
-          if (items.length > 0) {
-            setCurrent({ messageId: items[0].messageId, withinIdx: 0 });
-            runNavigate(items[0].messageId, q.trim(), 0);
-          } else {
-            setCurrent(null);
-            onClearHighlights();
+      return withCleanup(
+        async () => {
+          try {
+            const result = await api.searchThreadMessages(threadId, q.trim(), 100, cs);
+            if (controller.signal.aborted) return;
+            if (result.isOk()) {
+              const { results: items } = result.value;
+              setResults(items);
+              setMarkCounts(new Map());
+              if (items.length > 0) {
+                setCurrent({ messageId: items[0].messageId, withinIdx: 0 });
+                runNavigate(items[0].messageId, q.trim(), 0);
+              } else {
+                setCurrent(null);
+                onClearHighlights();
+              }
+            } else {
+              setResults([]);
+              setCurrent(null);
+              onClearHighlights();
+            }
+          } catch {
+            if (!controller.signal.aborted) {
+              setResults([]);
+              setCurrent(null);
+              onClearHighlights();
+            }
           }
-        } else {
-          setResults([]);
-          setCurrent(null);
-          onClearHighlights();
-        }
-      } catch {
-        if (!controller.signal.aborted) {
-          setResults([]);
-          setCurrent(null);
-          onClearHighlights();
-        }
-      } finally {
-        // Aborted searches no longer own loading; the live request clears it in finally.
-        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
-        if (!controller.signal.aborted) setLoading(false);
-      }
+        },
+        () => {
+          // Aborted searches no longer own loading; the live request clears it in finally.
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
+          if (!controller.signal.aborted) setLoading(false);
+        },
+      );
     },
     [threadId, runNavigate, onClearHighlights],
   );

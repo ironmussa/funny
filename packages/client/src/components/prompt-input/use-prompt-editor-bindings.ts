@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useLayoutEffect } from 'react';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -32,11 +32,12 @@ export function usePromptEditorBindings({
   const [editorEmpty, setEditorEmpty] = useState(true);
 
   // ── Expose setPrompt to parent ──
-  if (setPromptRef) {
+  useLayoutEffect(() => {
+    if (!setPromptRef) return;
     setPromptRef.current = (text: string) => {
       editorRef.current?.setContent(text);
     };
-  }
+  }, [setPromptRef, editorRef]);
 
   const handleEditorChange = useCallback(() => {
     setEditorEmpty(editorRef.current?.isEmpty() ?? true);

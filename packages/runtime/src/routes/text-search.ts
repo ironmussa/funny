@@ -54,7 +54,7 @@ const fileSelectionBodySchema = z.object({
 
 /** Content-free diagnostics for the resident search backend. */
 app.get('/health', (c) => {
-  const userId = c.get('userId') as string | undefined;
+  const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
   return c.json(projectSearchRegistry.diagnostics());
 });
@@ -67,7 +67,7 @@ app.get('/health', (c) => {
  * project, worktree, or scratch cwd.
  */
 app.get('/files', async (c) => {
-  const userId = c.get('userId') as string | undefined;
+  const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
   const parsedQuery = parseQuery(c, fileSearchQuerySchema);
@@ -113,7 +113,7 @@ app.get('/files', async (c) => {
 
 /** Record a confirmed file-search selection for search providers. */
 app.post('/files/selection', async (c) => {
-  const userId = c.get('userId') as string | undefined;
+  const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
   const parsedBody = await parseJsonBody(c, fileSelectionBodySchema);
@@ -168,7 +168,7 @@ app.post('/files/selection', async (c) => {
  * requireProjectPath.
  */
 app.get('/text', async (c) => {
-  const userId = c.get('userId') as string | undefined;
+  const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
   const parsedQuery = parseQuery(c, textSearchQuerySchema);

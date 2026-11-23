@@ -7,10 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { errAsync, okAsync } from 'neverthrow';
 
-import {
-  createMergeLane,
-  type MergeLaneDeps,
-} from '../../../services/factory/factory-merge-lane.js';
+import { createMergeLane } from '../../../services/factory/factory-merge-lane.js';
 import type { FactoryPullRequestError } from '../../../services/factory/factory-pull-requests.js';
 
 type Read = 'merged' | 'queued' | 'not-queued' | 'closed' | FactoryPullRequestError;

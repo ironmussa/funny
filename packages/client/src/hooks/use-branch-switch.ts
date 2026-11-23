@@ -6,6 +6,7 @@ import { SwitchBranchDialog } from '@/components/SwitchBranchDialog';
 import { fetchProjectStatus } from '@/data/git-status/actions';
 import { readProjectCurrentBranch } from '@/data/projects/branches';
 import { api } from '@/lib/api';
+import { whilePending } from '@/lib/while-pending';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -90,8 +91,7 @@ export function useBranchSwitch() {
   const handleSwitch = useCallback(
     async (strategy: 'stash' | 'carry') => {
       if (!dialogState) return;
-      setLoading(true);
-      try {
+      await whilePending(setLoading, async () => {
         const result = await api.checkout(
           dialogState.projectId,
           dialogState.targetBranch,
@@ -109,9 +109,7 @@ export function useBranchSwitch() {
         } else {
           toast.error(result.error.message || t('switchBranch.failed', 'Failed to switch branch'));
         }
-      } finally {
-        setLoading(false);
-      }
+      });
     },
     [dialogState, t],
   );

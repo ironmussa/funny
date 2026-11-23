@@ -170,11 +170,11 @@ export function ChangedFilesSummary({
           tooltips={false}
         />
         <Button
-          variant="ghost"
+          variant="muted"
           size="xs"
           onClick={handleUndoAll}
           disabled={reverting || running}
-          className="text-muted-foreground hover:text-foreground ml-auto gap-1"
+          className="ml-auto gap-1"
           data-testid="changed-files-undo"
         >
           <RotateCcw className={cn('icon-xs', reverting && 'animate-spin')} />

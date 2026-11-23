@@ -19,6 +19,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 const GENERAL_VALUE = '__general__';
@@ -57,8 +58,7 @@ export function ProjectRunnerSettings() {
       action: () => ReturnType<typeof api.getProjectRunnerSettings>,
       successMessage: string,
     ) => {
-      setSaving(true);
-      try {
+      await whilePending(setSaving, async () => {
         const result = await action();
         if (result.isErr()) {
           toast.error(t('projectRunner.saveError', 'Failed to save runner settings'), {
@@ -68,9 +68,7 @@ export function ProjectRunnerSettings() {
         }
         setSettings((current) => ({ ...current, ...result.value }));
         toast.success(successMessage);
-      } finally {
-        setSaving(false);
-      }
+      });
     },
     [t],
   );
@@ -103,8 +101,7 @@ export function ProjectRunnerSettings() {
     );
 
   const changeGeneral = async (value: string) => {
-    setSaving(true);
-    try {
+    await whilePending(setSaving, async () => {
       const result = await api.setGeneralRunner(value === NONE_VALUE ? null : value);
       if (result.isErr()) {
         toast.error(t('projectRunner.saveError', 'Failed to save runner settings'), {
@@ -116,9 +113,7 @@ export function ProjectRunnerSettings() {
         current ? { ...current, generalRunnerId: result.value.generalRunnerId } : current,
       );
       toast.success(t('projectRunner.saved', 'Runner settings saved'));
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const saveToken = (token: string | null) =>

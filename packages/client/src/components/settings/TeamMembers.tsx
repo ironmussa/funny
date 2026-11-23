@@ -22,6 +22,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface Member {
@@ -175,37 +176,35 @@ export function TeamMembers() {
 
   const handleInvite = useCallback(async () => {
     if (!inviteEmail.trim()) return;
-    setSending(true);
-    try {
-      await authClient.organization.inviteMember({
-        email: inviteEmail.trim(),
-        role: inviteRole,
-      });
-      toast.success(`Invitation sent to ${inviteEmail.trim()}`);
-      setInviteEmail('');
-      await loadInvitations();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to send invitation');
-    } finally {
-      setSending(false);
-    }
+    await whilePending(setSending, async () => {
+      try {
+        await authClient.organization.inviteMember({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+        });
+        toast.success(`Invitation sent to ${inviteEmail.trim()}`);
+        setInviteEmail('');
+        await loadInvitations();
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to send invitation');
+      }
+    });
   }, [inviteEmail, inviteRole, loadInvitations]);
 
   const handleCreateLink = useCallback(async () => {
-    setCreatingLink(true);
-    try {
-      const result = await api.createInviteLink({ role: linkRole, expiresInDays: 7 });
-      if (result.isOk()) {
-        setInviteLinks((prev) => [result.value, ...prev]);
-        toast.success('Invite link created');
-      } else {
+    await whilePending(setCreatingLink, async () => {
+      try {
+        const result = await api.createInviteLink({ role: linkRole, expiresInDays: 7 });
+        if (result.isOk()) {
+          setInviteLinks((prev) => [result.value, ...prev]);
+          toast.success('Invite link created');
+        } else {
+          toast.error('Failed to create invite link');
+        }
+      } catch {
         toast.error('Failed to create invite link');
       }
-    } catch {
-      toast.error('Failed to create invite link');
-    } finally {
-      setCreatingLink(false);
-    }
+    });
   }, [linkRole]);
 
   const handleRevokeLink = useCallback(async (linkId: string) => {

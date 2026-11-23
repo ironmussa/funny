@@ -21,6 +21,7 @@ import { useProjectById } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 const NO_PROFILE_VALUE = '__default__';
@@ -74,8 +75,7 @@ export function AgentExecutionProfilesSettings() {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const profilesResult = await api.listAgentExecutionProfiles();
       if (profilesResult.isErr()) {
         toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
@@ -86,9 +86,7 @@ export function AgentExecutionProfilesSettings() {
 
       setProfiles(profilesResult.value.profiles);
       setDrafts(profilesToDrafts(profilesResult.value.profiles));
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [t]);
 
   useEffect(() => {
@@ -250,8 +248,7 @@ export function ProjectAgentExecutionProfileSettings() {
   const [bindingSaving, setBindingSaving] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const profilesResult = await api.listAgentExecutionProfiles();
       if (profilesResult.isErr()) {
         toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
@@ -272,9 +269,7 @@ export function ProjectAgentExecutionProfileSettings() {
           setBindingProfileId(null);
         }
       } else setBindingProfileId(null);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [selectedProjectId, t]);
 
   useEffect(() => {
@@ -286,8 +281,7 @@ export function ProjectAgentExecutionProfileSettings() {
       if (!selectedProjectId) return;
       const nextProfileId = value === NO_PROFILE_VALUE ? null : value;
       setBindingProfileId(nextProfileId);
-      setBindingSaving(true);
-      try {
+      await whilePending(setBindingSaving, async () => {
         const result = await api.updateProjectAgentProfileBinding(selectedProjectId, {
           profileId: nextProfileId,
         });
@@ -302,9 +296,7 @@ export function ProjectAgentExecutionProfileSettings() {
         setBindingProfileId(result.value.profile?.id ?? null);
         refreshProjectAgentProfiles();
         toast.success(t('agentProfiles.bindingSaved', 'Project profile saved'));
-      } finally {
-        setBindingSaving(false);
-      }
+      });
     },
     [load, selectedProjectId, t],
   );

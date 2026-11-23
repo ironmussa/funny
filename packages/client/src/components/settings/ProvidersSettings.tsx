@@ -20,6 +20,7 @@ import { useRunnerProviders } from '@/data/runner/hooks';
 import { refreshRunnerProviders, setActiveBuiltins } from '@/data/runner/queries';
 import { systemApi, type AdvertisedProvider } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
+import { whilePending } from '@/lib/while-pending';
 
 const log = createClientLogger('providers-settings');
 
@@ -42,17 +43,14 @@ export function ProvidersSettings() {
   const { activeBuiltins } = useRunnerProviders();
 
   const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await systemApi.getProviders();
       if (result.isOk()) setProviders(result.value.providers);
       else {
         log.error('failed to list providers', { error: result.error.message });
         toast.error('Failed to load providers', { description: result.error.message });
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, []);
 
   useEffect(() => {

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface OrgEntry {
@@ -97,22 +98,21 @@ export function OrganizationManagement() {
     const trimmedSlug = slug.trim() || slugify(trimmedName);
     if (!trimmedName || !trimmedSlug) return;
 
-    setCreating(true);
-    try {
-      await authClient.organization.create({
-        name: trimmedName,
-        slug: trimmedSlug,
-      });
-      toast.success(`Organization "${trimmedName}" created`);
-      setName('');
-      setSlug('');
-      slugManuallyEditedRef.current = false;
-      await loadOrgs();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create organization');
-    } finally {
-      setCreating(false);
-    }
+    await whilePending(setCreating, async () => {
+      try {
+        await authClient.organization.create({
+          name: trimmedName,
+          slug: trimmedSlug,
+        });
+        toast.success(`Organization "${trimmedName}" created`);
+        setName('');
+        setSlug('');
+        slugManuallyEditedRef.current = false;
+        await loadOrgs();
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to create organization');
+      }
+    });
   }, [name, slug, loadOrgs]);
 
   const handleSetActive = useCallback(
@@ -131,19 +131,18 @@ export function OrganizationManagement() {
 
   const handleDelete = useCallback(async () => {
     if (!deleteConfirm) return;
-    setDeleting(true);
-    try {
-      await authClient.organization.delete({
-        organizationId: deleteConfirm.id,
-      });
-      toast.success(`Organization "${deleteConfirm.name}" deleted`);
-      setDeleteConfirm(null);
-      await loadOrgs();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete organization');
-    } finally {
-      setDeleting(false);
-    }
+    await whilePending(setDeleting, async () => {
+      try {
+        await authClient.organization.delete({
+          organizationId: deleteConfirm.id,
+        });
+        toast.success(`Organization "${deleteConfirm.name}" deleted`);
+        setDeleteConfirm(null);
+        await loadOrgs();
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to delete organization');
+      }
+    });
   }, [deleteConfirm, loadOrgs]);
 
   if (loading) {

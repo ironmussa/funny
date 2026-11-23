@@ -17,6 +17,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 // Bundled providers, in display order. Mirrors the shared descriptor map; kept
@@ -105,8 +106,7 @@ export function AgentResourcesSettings() {
   const projectId = selectedProject?.id;
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await api.listAgentResources({
         projectPath,
         projectId,
@@ -121,9 +121,7 @@ export function AgentResourcesSettings() {
         setResources([]);
         setHidden([]);
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectPath, projectId, provider]);
 
   useEffect(() => {

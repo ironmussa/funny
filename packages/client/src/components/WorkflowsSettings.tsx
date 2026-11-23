@@ -46,6 +46,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 import { useActiveThreadView } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -102,23 +103,19 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
 
   const loadList = useCallback(async () => {
     if (!selectedProjectId) return;
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await api.listWorkflows(selectedProjectId);
       if (result.isOk()) {
         setSummaries(result.value.workflows);
         setSelectedName((current) => current ?? result.value.workflows[0]?.name ?? null);
       } else toast.error(result.error.message);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [selectedProjectId]);
 
   const loadWorkflow = useCallback(
     async (name: string) => {
       if (!selectedProjectId) return;
-      setLoading(true);
-      try {
+      await whilePending(setLoading, async () => {
         const result = await api.getWorkflow(selectedProjectId, name);
         if (result.isOk()) {
           applyDefinition(result.value, {
@@ -133,9 +130,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
           });
           setSelectedNodeId(null);
         } else toast.error(result.error.message);
-      } finally {
-        setLoading(false);
-      }
+      });
     },
     [filter, runStates, selectedProjectId, setEdges, setNodes],
   );

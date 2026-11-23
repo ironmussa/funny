@@ -18,6 +18,7 @@ import {
 import { isOneSidedDiff } from '@/lib/diff-math';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { getChangeableIndices, parseRawDiff } from '@/lib/patch-builder';
+import { whilePending } from '@/lib/while-pending';
 
 import type { DiffViewMode } from '../VirtualDiff';
 
@@ -152,15 +153,12 @@ function useFullDiffCache(filePath: string, onRequestFullDiff: RequestFullDiff |
     if (cached) return cached;
     if (!onRequestFullDiff) return null;
 
-    setLoadingFullDiff(true);
-    try {
+    return whilePending(setLoadingFullDiff, async () => {
       const result = await onRequestFullDiff(filePath);
       if (!result) return null;
       setFullDiffCache((prev) => new Map(prev).set(filePath, result));
       return result;
-    } finally {
-      setLoadingFullDiff(false);
-    }
+    });
   }, [filePath, fullDiffCache, onRequestFullDiff]);
 
   return { fullDiff: fullDiffCache.get(filePath), loadingFullDiff, requestFullFile };

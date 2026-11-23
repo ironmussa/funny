@@ -17,6 +17,7 @@ import { applyQueueCount, readQueuedCount } from '@/data/queue/store';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildSendMessagePayload, type SendMessageOpts } from '@/lib/send-message-payload';
+import { whilePending } from '@/lib/while-pending';
 import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { ThreadCore } from '@/stores/thread-context';
@@ -68,12 +69,12 @@ export function useThreadHandlers(refs: Refs) {
         toast.error(workflowParse.error);
         return false;
       }
-      if (workflowParse.invocation) {
-        setSendingSafely(true);
-        try {
-          const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
+      const invocation = workflowParse.invocation;
+      if (invocation) {
+        return whilePending(setSendingSafely, async () => {
+          const result = await api.runWorkflow(invocation.workflowName, {
             threadId: thread.id,
-            ...buildWorkflowRunBody(workflowParse.invocation, {
+            ...buildWorkflowRunBody(invocation, {
               fileReferences: opts.fileReferences,
               symbolReferences: opts.symbolReferences,
             }),
@@ -84,9 +85,7 @@ export function useThreadHandlers(refs: Refs) {
           }
           toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
           return true;
-        } finally {
-          setSendingSafely(false);
-        }
+        });
       }
       const queuedCount = readQueuedCount(thread.id);
       const threadIsRunning = thread.status === 'running' || queuedCount > 0;

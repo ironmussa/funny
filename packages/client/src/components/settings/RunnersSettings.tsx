@@ -43,6 +43,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 function statusLabel(status: RunnerInfo['status']) {
   if (status === 'online') return 'Online';
@@ -79,8 +80,7 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
 
   const handleAssign = async () => {
     if (!projectId || !localPath.trim()) return;
-    setSaving(true);
-    try {
+    await whilePending(setSaving, async () => {
       const result = await api.assignRunnerProject(runnerId, projectId, localPath.trim());
       if (result.isOk()) {
         toast.success('Project assigned');
@@ -88,9 +88,7 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
         setLocalPath('');
         onAssigned();
       } else toast.error('Failed to assign project');
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   return (
@@ -164,17 +162,14 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   }, [runner.runnerId]);
 
   const handleDelete = async () => {
-    setDeleting(true);
-    try {
+    await whilePending(setDeleting, async () => {
       const result = await api.deleteRunner(runner.runnerId);
       if (result.isOk()) {
         setConfirmDelete(false);
         toast.success('Runner removed');
         onDeleted();
       } else toast.error('Failed to remove runner');
-    } finally {
-      setDeleting(false);
-    }
+    });
   };
 
   const handleUnassign = async (projectId: string) => {
@@ -426,13 +421,10 @@ export function RunnersSettings() {
   const [loadingRunners, setLoadingRunners] = useState(true);
 
   const loadRunners = async () => {
-    setLoadingRunners(true);
-    try {
+    await whilePending(setLoadingRunners, async () => {
       const result = await api.getMyRunners();
       if (result.isOk()) setRunners(result.value.runners);
-    } finally {
-      setLoadingRunners(false);
-    }
+    });
   };
 
   useEffect(() => {

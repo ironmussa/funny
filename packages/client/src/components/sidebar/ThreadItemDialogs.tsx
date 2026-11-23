@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
+import { whilePending } from '@/lib/while-pending';
 
 // ── Rename ───────────────────────────────────────────────────────────
 
@@ -100,8 +101,7 @@ export function useCreateBranchDialog(threadId: string, projectId: Thread['proje
   const commit = useCallback(async () => {
     const name = sanitizeBranchName(branchName);
     if (!name || !projectId) return;
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await api.checkout(projectId, name, 'carry', true, threadId);
       if (result.isErr()) {
         toastError(result.error);
@@ -109,9 +109,7 @@ export function useCreateBranchDialog(threadId: string, projectId: Thread['proje
         setOpen(false);
         setBranchName('');
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [branchName, projectId, threadId]);
 
   const openDialog = useCallback(() => setOpen(true), []);

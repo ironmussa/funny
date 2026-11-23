@@ -25,12 +25,16 @@ export interface SettingsNavPage extends FilterPage {
 export function useSettingsTranslators(): { t: Translate; tEn: Translate } {
   const { t, i18n } = useTranslation();
   return useMemo(() => {
-    // getFixedT only binds a language; it loads nothing, so making it for
-    // every indexed row is cheap even when no filter needs the English text.
-    const en = i18n.getFixedT('en');
+    // Created on first use: every indexed row calls this hook, and with an
+    // empty filter nothing needs the English text. Held in an object rather
+    // than a reassigned variable, which React Compiler cannot compile.
+    const english: { t?: ReturnType<typeof i18n.getFixedT> } = {};
     return {
       t: (key, defaultValue) => String(t(key, { defaultValue })),
-      tEn: (key, defaultValue) => String(en(key, { defaultValue })),
+      tEn: (key, defaultValue) => {
+        if (!english.t) english.t = i18n.getFixedT('en');
+        return String(english.t(key, { defaultValue }));
+      },
     };
   }, [t, i18n]);
 }

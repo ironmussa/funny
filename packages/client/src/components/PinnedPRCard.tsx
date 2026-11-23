@@ -49,6 +49,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 const log = createClientLogger('pinned-pr-card');
 
@@ -323,8 +324,7 @@ export function PinnedPRCard({
   const handleNewComment = async () => {
     const body = newComment.trim();
     if (!body) return;
-    setPosting(true);
-    try {
+    await whilePending(setPosting, async () => {
       const res = await api.githubPRCommentCreate(projectId, pr.number, body);
       if (res.isOk()) {
         setConversation((prev) =>
@@ -337,9 +337,7 @@ export function PinnedPRCard({
         log.error('pr_comment_create_failed', { error: res.error.message, prNumber: pr.number });
         setError(res.error.message);
       }
-    } finally {
-      setPosting(false);
-    }
+    });
   };
 
   const handleReply = async (thread: PRReviewThread) => {

@@ -37,6 +37,7 @@ import { useProjectSecrets } from '@/data/project-secrets/hooks';
 import { useCanManageProject, useCanSteerProject } from '@/data/projects/hooks';
 import type { ProjectSecretSummary } from '@/lib/api/project-secrets';
 import { toastError } from '@/lib/toast-error';
+import { whilePending } from '@/lib/while-pending';
 
 type Scope = ProjectSecretSummary['scope'];
 
@@ -533,8 +534,7 @@ export function ProjectSecretsSetting({ projectId }: { projectId: string }) {
   const deleteDescription = useDeleteDescription(deleting, overridden);
 
   const setSandbox = async (secret: ProjectSecretSummary, allowInSandbox: boolean) => {
-    setBusy(true);
-    try {
+    await whilePending(setBusy, async () => {
       // No value: the stored one is kept.
       const result = await setProjectSecret({
         projectId,
@@ -543,9 +543,7 @@ export function ProjectSecretsSetting({ projectId }: { projectId: string }) {
         allowInSandbox,
       });
       if (result.isErr()) toastError(result.error, 'projectSecrets');
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const confirmDelete = async () => {

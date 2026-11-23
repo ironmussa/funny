@@ -13,6 +13,7 @@ import { useAgentTemplates } from '@/data/templates/hooks';
 import { ensureTemplatesLoaded } from '@/data/templates/loaders';
 import { projectsApi } from '@/lib/api/projects';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 import { ProjectSettingRow } from './setting-primitives';
 
@@ -265,13 +266,10 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
 
   const fetchStatus = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await projectsApi.getWeaveStatus(projectId);
       setStatus(result.isOk() ? result.value : null);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectId]);
 
   useEffect(() => {

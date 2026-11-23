@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { whilePending } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 
 export function LoginPage() {
@@ -18,14 +19,13 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
-    try {
-      await login(username, password);
-    } catch (err: any) {
-      setError(err.message || t('auth.loginFailed'));
-    } finally {
-      setLoading(false);
-    }
+    await whilePending(setLoading, async () => {
+      try {
+        await login(username, password);
+      } catch (err: any) {
+        setError(err.message || t('auth.loginFailed'));
+      }
+    });
   };
 
   return (

@@ -25,6 +25,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface RecommendedSkill {
@@ -242,25 +243,19 @@ export function SkillsSettings() {
     : (projects[0]?.path ?? null);
 
   const loadSkills = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await api.listSkills(projectPath || undefined);
       if (result.isOk()) setSkills(result.value.skills);
       else toastError(result.error);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectPath]);
 
   const loadPlugins = useCallback(async () => {
-    setLoadingPlugins(true);
-    try {
+    await whilePending(setLoadingPlugins, async () => {
       const result = await api.listPlugins();
       if (result.isOk()) setPlugins(result.value.plugins);
       // Silently fail — plugins are optional
-    } finally {
-      setLoadingPlugins(false);
-    }
+    });
   }, []);
 
   const loadRecommended = useCallback(async () => {

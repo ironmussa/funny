@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { PROVIDER_MODELS, PROVIDERS } from '@/lib/providers';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 import { SettingAnchor, SettingRow } from './settings/SettingRow';
@@ -102,8 +103,7 @@ export function PipelineSettings() {
 
   const loadPipeline = useCallback(async () => {
     if (!selectedProjectId) return;
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await api.listPipelines(selectedProjectId);
       if (result.isOk()) {
         if (result.value.length > 0) {
@@ -116,9 +116,7 @@ export function PipelineSettings() {
           if (createResult.isOk()) setPipeline(createResult.value);
         }
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [selectedProjectId]);
 
   useEffect(() => {

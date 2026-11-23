@@ -239,7 +239,7 @@ export function OrganizationManagement() {
                   <div className="flex items-center gap-2">
                     <Building2 className="icon-base text-muted-foreground shrink-0" />
                     <p className="text-foreground truncate text-sm font-medium">{org.name}</p>
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge size="xs" variant="secondary">
                       {role}
                     </Badge>
                     {isActive && <Badge variant="success">Active</Badge>}

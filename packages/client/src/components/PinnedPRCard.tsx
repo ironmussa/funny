@@ -487,7 +487,7 @@ export function PinnedPRCard({
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="text-3xs h-3.5 px-1">
+            <Badge size="xxs" variant="outline">
               {c.author_association}
             </Badge>
           )}
@@ -556,7 +556,7 @@ export function PinnedPRCard({
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="text-3xs h-3.5 px-1">
+            <Badge size="xxs" variant="outline">
               {c.author_association}
             </Badge>
           )}
@@ -618,15 +618,15 @@ export function PinnedPRCard({
   };
 
   const renderReview = (rv: PRReview) => {
-    const stateBadge: Record<PRReview['state'], { label: string; cls: string }> = {
-      APPROVED: { label: 'Approved', cls: 'text-status-success border-status-success/40' },
-      CHANGES_REQUESTED: {
-        label: 'Changes requested',
-        cls: 'text-status-error border-status-error/40',
-      },
-      COMMENTED: { label: 'Commented', cls: 'text-muted-foreground' },
-      DISMISSED: { label: 'Dismissed', cls: 'text-muted-foreground' },
-      PENDING: { label: 'Pending', cls: 'text-muted-foreground' },
+    const stateBadge: Record<
+      PRReview['state'],
+      { label: string; variant: 'success' | 'error' | 'secondary' }
+    > = {
+      APPROVED: { label: 'Approved', variant: 'success' },
+      CHANGES_REQUESTED: { label: 'Changes requested', variant: 'error' },
+      COMMENTED: { label: 'Commented', variant: 'secondary' },
+      DISMISSED: { label: 'Dismissed', variant: 'secondary' },
+      PENDING: { label: 'Pending', variant: 'secondary' },
     };
     const s = stateBadge[rv.state];
     return (
@@ -637,16 +637,7 @@ export function PinnedPRCard({
       >
         <div className="flex items-center gap-1.5 text-xs">
           <AuthorBadge name={rv.author} avatarUrl={rv.author_avatar_url} size="xs" />
-          <Badge
-            variant="outline"
-            className={cn(
-              'h-3.5 px-1 text-3xs',
-              rv.state === 'APPROVED' && 'text-status-success border-status-success/40',
-              rv.state === 'CHANGES_REQUESTED' && 'text-status-error border-status-error/40',
-              (rv.state === 'COMMENTED' || rv.state === 'DISMISSED' || rv.state === 'PENDING') &&
-                'text-muted-foreground',
-            )}
-          >
+          <Badge variant={s.variant} size="xxs">
             {s.label}
           </Badge>
           <span className="text-muted-foreground">{timeAgo(rv.submitted_at, now)}</span>
@@ -734,7 +725,7 @@ export function PinnedPRCard({
                 {pr.draft ? (
                   <>
                     <span>&middot;</span>
-                    <Badge variant="outline" className="text-3xs h-3.5 px-1 py-0 leading-none">
+                    <Badge size="xxs" variant="outline">
                       {t('review.pullRequests.draft', 'Draft')}
                     </Badge>
                   </>

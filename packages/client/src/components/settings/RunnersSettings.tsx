@@ -51,6 +51,12 @@ function statusLabel(status: RunnerInfo['status']) {
   return 'Offline';
 }
 
+function runnerBadgeVariant(status: RunnerInfo['status']): 'success' | 'warning' | 'secondary' {
+  if (status === 'online') return 'success';
+  if (status === 'busy') return 'warning';
+  return 'secondary';
+}
+
 function osEmoji(os: string) {
   if (os === 'darwin') return '🍎';
   if (os === 'win32') return '🪟';
@@ -214,15 +220,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{runner.name}</span>
             <span className="text-xs">{osEmoji(runner.os)}</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                'h-4 px-1.5 text-2xs',
-                runner.status === 'online' && 'text-status-success',
-                runner.status === 'busy' && 'text-status-warning',
-                runner.status !== 'online' && runner.status !== 'busy' && 'text-muted-foreground',
-              )}
-            >
+            <Badge variant={runnerBadgeVariant(runner.status)} size="xxs">
               {statusLabel(runner.status)}
             </Badge>
           </div>

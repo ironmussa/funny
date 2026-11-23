@@ -243,8 +243,9 @@ function ActivityRow({
           <span className="truncate text-sm font-medium">{activity.title}</span>
           {activity.origin !== 'user' ? (
             <Badge
+              size="xs"
               variant="outline"
-              className="shrink-0 px-1 py-0 text-xs font-normal"
+              className="shrink-0 font-normal"
               data-testid={`activity-item-automatic-${activity.id}`}
             >
               {t('activity.automatic')}

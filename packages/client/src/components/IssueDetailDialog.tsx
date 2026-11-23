@@ -95,7 +95,7 @@ export function IssueDetailDialog({
             </DialogTitle>
             <DialogDescription asChild>
               <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
-                <Badge variant="outline" className="h-4 px-1.5 text-xs">
+                <Badge size="xs" variant="outline">
                   {issue.state === 'open' ? t('issues.open', 'Open') : t('issues.closed', 'Closed')}
                 </Badge>
                 {issue.user && (
@@ -214,7 +214,7 @@ function IssueComments({ state, now }: { state: CommentsState; now: number }) {
             <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
             <span className="text-muted-foreground">{timeAgo(c.created_at, t, now)}</span>
             {c.author_association && c.author_association !== 'NONE' && (
-              <Badge variant="outline" className="h-4 px-1 text-xs">
+              <Badge size="xs" variant="outline">
                 {c.author_association}
               </Badge>
             )}

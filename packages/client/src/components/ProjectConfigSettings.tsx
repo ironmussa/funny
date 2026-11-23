@@ -284,9 +284,10 @@ export function ProjectConfigSettings() {
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {group.envVars.map((v, vi) => (
                   <Badge
+                    size="xs"
                     key={vi}
                     variant="outline"
-                    className="hover:bg-destructive/10 hover:text-status-error cursor-pointer gap-1 font-mono text-xs"
+                    className="hover:bg-destructive/10 hover:text-status-error cursor-pointer font-mono"
                     onClick={() => removeEnvVarFromGroup(gi, vi)}
                     data-testid={`port-group-${gi}-var-${vi}`}
                   >

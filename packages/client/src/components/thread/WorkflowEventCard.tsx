@@ -123,9 +123,9 @@ const HooksEventCard = memo(function HooksEventCard({
           Pre-commit hooks
         </span>
         <Badge
+          size="xxs"
           data-testid={`workflow-hooks-verdict-${hasFailed ? 'fail' : 'pass'}`}
           variant={hasFailed ? 'destructive' : 'default'}
-          className="text-2xs h-4 px-1.5 py-0 leading-none"
         >
           {hasFailed ? 'FAILED' : 'PASSED'}
         </Badge>
@@ -222,9 +222,9 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       detail = (
         <>
           <Badge
+            size="xxs"
             data-testid={`workflow-review-verdict-${isPassing ? 'pass' : 'fail'}`}
             variant={isPassing ? 'default' : 'destructive'}
-            className="text-2xs h-4 px-1.5 py-0 leading-none"
           >
             {isPassing ? 'PASS' : 'FAIL'}
           </Badge>

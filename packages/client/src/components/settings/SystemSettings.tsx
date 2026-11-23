@@ -31,6 +31,15 @@ const ansiConverter = createAnsiConverter({
   newline: true,
 });
 
+function nativeGitBadgeVariant(
+  isActive: boolean | undefined,
+  disabled: boolean | undefined,
+): 'success' | 'warning' | 'secondary' {
+  if (isActive) return 'success';
+  if (disabled) return 'warning';
+  return 'secondary';
+}
+
 export function SystemSettings() {
   const [nativeGit, setNativeGit] = useState<NativeGitInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,15 +110,8 @@ export function SystemSettings() {
               <p className="settings-row-title">Native Git (gitoxide)</p>
               {nativeGit && (
                 <Badge
-                  variant="outline"
-                  className={cn(
-                    'h-5 px-2 text-2xs',
-                    isActive
-                      ? 'border-status-success/30 text-status-success'
-                      : nativeGit.disabled
-                        ? 'border-status-warning/30 text-status-warning'
-                        : 'border-muted-foreground/30 text-muted-foreground',
-                  )}
+                  variant={nativeGitBadgeVariant(isActive, nativeGit.disabled)}
+                  size="xxs"
                   data-testid="system-native-git-status"
                 >
                   {isActive ? 'Active' : nativeGit.disabled ? 'Disabled' : 'Inactive'}
@@ -280,8 +282,9 @@ function BuildIdentityCard() {
           <div className="flex items-center gap-2">
             <p className="settings-row-title">Build</p>
             <Badge
+              size="xxs"
               variant="outline"
-              className="text-2xs h-5 px-2 font-mono"
+              className="font-mono"
               data-testid="system-build-number"
             >
               {/* Canonical identity = short commit SHA. Identical in local and
@@ -289,10 +292,7 @@ function BuildIdentityCard() {
               {BUILD_INFO.commit}
             </Badge>
             {BUILD_INFO.dirty && (
-              <Badge
-                variant="outline"
-                className="border-status-warning/30 text-status-warning text-2xs h-5 px-2"
-              >
+              <Badge variant="warning" size="xxs">
                 dirty
               </Badge>
             )}

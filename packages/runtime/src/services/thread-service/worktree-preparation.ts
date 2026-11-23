@@ -69,7 +69,7 @@ export async function prepareWorktree(
       userId: params.userId,
       projectId: params.projectId,
       threadId: params.threadId,
-      title: `Set up worktree ${params.branchName}`,
+      title: activityTitle(params.flow, params.branchName),
       input: { branch: params.branchName, baseBranch: params.baseBranch },
     },
     (activity) =>
@@ -83,6 +83,13 @@ export async function prepareWorktree(
         setupErrors.length > 0 ? `Setup failed: ${setupErrors.join('; ').slice(0, 2000)}` : null,
     },
   );
+}
+
+/** A conversion is its own action in the activity panel, not a plain setup. */
+export function activityTitle(flow: WorktreeFlow, branchName: string): string {
+  return flow === 'convert'
+    ? `Convert thread to worktree ${branchName}`
+    : `Set up worktree ${branchName}`;
 }
 
 async function runPreparation(

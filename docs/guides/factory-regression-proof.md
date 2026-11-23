@@ -6,9 +6,6 @@ fixes: the changed test files must **pass on the pull request's head** and **fai
 the pull request branched from**. A test that passes on both proves nothing, and the factory does
 not merge on it.
 
-This guide is for the server factory. The standalone orchestrator (`packages/orchestrator`,
-[its guide](./issue-factory.md)) has no regression proof.
-
 Rules: [`openspec/specs/issue-factory/spec.md`](../../openspec/specs/issue-factory/spec.md).
 Design: [`openspec/changes/archive/2026-11-22-factory-quality-gates/design.md`](../../openspec/changes/archive/2026-11-22-factory-quality-gates/design.md). Architecture: [openwiki/architecture/issue-factory.md](../../openwiki/architecture/issue-factory.md).
 

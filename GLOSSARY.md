@@ -8,13 +8,7 @@ its own thread.
 **Issue factory**:
 The product that turns an issue ready for an agent into a merged or reviewable pull
 request without a person in the loop. Each user runs their own.
-_Avoid_: Orchestrator (for the product), software factory pipeline
-
-**Orchestrator**:
-The separate process that runs one user's issue factory: it decides which issues to
-admit and when each factory run starts and ends. It starts on its own, apart from the
-funny server.
-_Avoid_: Agent, factory service
+_Avoid_: Orchestrator, software factory pipeline
 
 **Factory run**:
 One attempt by the issue factory to take one issue to a pull request.

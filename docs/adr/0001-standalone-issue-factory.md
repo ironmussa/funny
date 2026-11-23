@@ -1,5 +1,10 @@
 # The issue factory is a standalone process per user, acting through a GitHub App
 
+> **Status: superseded by [ADR 0002](./0002-factory-triggers-flows-threads.md).** The
+> standalone orchestrator (`packages/orchestrator`) was removed; the issue factory runs
+> inside the funny server (`packages/server/src/services/factory/`). What follows is the
+> original decision, kept for history.
+
 The issue factory (see `GLOSSARY.md`) runs as its own process, the orchestrator, one per
 user, and does not talk to the funny server yet. It is configured from a file, runs its
 agents in a sandbox by default (or a worktree), and reaches GitHub only through its own

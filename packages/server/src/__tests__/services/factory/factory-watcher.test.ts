@@ -1627,8 +1627,8 @@ describe('factory flow', () => {
     expect(github.merges).toBe(0);
   });
 
-  test('the workspace-only factory-issue flow is refused before any agent starts', async () => {
-    const factoryId = await enableFactory({ flowName: 'factory-issue' });
+  test('an unknown flow is refused before any agent starts', async () => {
+    const factoryId = await enableFactory({ flowName: 'no-such-flow' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
     await startWatcherWithProof({

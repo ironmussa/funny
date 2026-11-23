@@ -42,7 +42,6 @@ describe('loadPipelines', () => {
       'code-quality',
       'code-review',
       'commit',
-      'factory-issue',
       'fusion',
       'issue-to-merge',
       'issue-to-pr',

@@ -45,7 +45,6 @@ const PROJECTS = [
   'packages/shared/tsconfig.json',
   'packages/api/tsconfig.json',
   'packages/harness/tsconfig.json',
-  'packages/orchestrator/tsconfig.json',
   'packages/sdk/tsconfig.json',
   'packages/scheduler/tsconfig.json',
   'packages/sandbox/tsconfig.json',

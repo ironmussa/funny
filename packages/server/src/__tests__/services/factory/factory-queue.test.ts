@@ -363,19 +363,17 @@ describe('sending issues', () => {
     expect(await runsOf(factoryId)).toHaveLength(0);
   });
 
-  test('a workspace-only or unknown flow is refused', async () => {
+  test('an unknown flow is refused', async () => {
     const { factoryId, queue } = await setUp();
 
-    for (const flowName of ['factory-issue', 'no-such-flow']) {
-      const sent = await queue.submit(factoryId, { issueNumbers: [7], flowName });
-      expect(sent._unsafeUnwrapErr()).toMatchObject({ kind: 'invalid-flow' });
-    }
+    const sent = await queue.submit(factoryId, { issueNumbers: [7], flowName: 'no-such-flow' });
+    expect(sent._unsafeUnwrapErr()).toMatchObject({ kind: 'invalid-flow' });
     expect(await runsOf(factoryId)).toHaveLength(0);
   });
 
-  test('the flows a send may pick: built-ins plus the repository flows, never factory-issue', async () => {
+  test('the flows a send may pick: built-ins plus the repository flows', async () => {
     const { factoryId, queue } = await setUp({
-      script: { repoFlows: ['custom.yaml', 'factory-issue.yaml', 'issue-to-pr.yml', 'README.md'] },
+      script: { repoFlows: ['custom.yaml', 'issue-to-pr.yml', 'README.md'] },
     });
 
     const flows = (await queue.flows(factoryId))._unsafeUnwrap();

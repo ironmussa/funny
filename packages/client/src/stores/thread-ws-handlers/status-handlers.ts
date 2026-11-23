@@ -16,6 +16,8 @@ import {
   wsEventToMachineEvent,
 } from '../thread-machine-bridge';
 import * as mutations from '../thread-mutations';
+import { useThreadReadStore } from '../thread-read-store';
+import { getUrlThreadId } from '../thread-store-internals';
 import {
   isHydrated,
   maybeBuffer,
@@ -69,9 +71,11 @@ export function handleWSStatus(
   // Apply the status transition to whichever sidebar bucket holds the thread
   // (project or scratch). `patchSidebarThread` walks both and returns a
   // single partial state update for atomic application below.
+  // `completedAt` this event wrote, so the open thread can be marked read at it.
+  let endedAt: string | undefined;
   const foundInSidebar = patchSidebarThread(threadId, (t) => {
     const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, t.cost);
-    const statusTimestamps = terminalTimestamps(newStatus);
+    const statusTimestamps = newStatus === t.status ? {} : terminalTimestamps(newStatus);
     wsLog.debug('status transition', {
       threadId,
       from: t.status,
@@ -85,6 +89,7 @@ export function handleWSStatus(
     ) {
       return t;
     }
+    endedAt = statusTimestamps.completedAt;
     return {
       ...t,
       status: newStatus,
@@ -167,6 +172,13 @@ export function handleWSStatus(
   });
 
   if (Object.keys(payloadPatch).length > 0) set(payloadPatch as any);
+
+  // A run that ends by status alone (a stop emits `agent:status: stopped` with
+  // no `agent:result`) bumps `completedAt`. If the user is looking at the
+  // thread, it is read: otherwise the unread blue dot hides the stopped dot.
+  if (endedAt && (getUrlThreadId() ?? state.selectedThreadId) === threadId) {
+    useThreadReadStore.getState().markRead(threadId, endedAt);
+  }
 
   if (!foundInSidebar) {
     const pid = state.threadDataById[threadId]?.projectId;

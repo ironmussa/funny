@@ -2421,10 +2421,19 @@ const migrations: Migration[] = [
     },
   },
   {
+    // The last of the thread scheduler (#430): the per-thread opt-in flag. Its
+    // own migration, one deploy after the code stopped declaring the column, so
+    // no running server still selects it.
+    name: '121_drop_threads_scheduler_managed',
+    async up() {
+      await ctx().dropColumn('threads', 'scheduler_managed');
+    },
+  },
+  {
     // Change thread-recap, D4: the user's utility model for helper generations
     // (JSON `UtilityModelSetting`, null = the default) and whether recaps are
     // shown. Existing users start with recaps on.
-    name: '121_user_profiles_utility_model',
+    name: '122_user_profiles_utility_model',
     async up() {
       await ctx().addColumn('user_profiles', 'utility_model', 'TEXT');
       await ctx().addColumn('user_profiles', 'thread_recap_enabled', 'INTEGER NOT NULL', '1');

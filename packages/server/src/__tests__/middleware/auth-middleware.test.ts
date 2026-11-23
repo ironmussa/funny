@@ -1,6 +1,6 @@
 /**
  * Integration tests for authMiddleware — public paths, sessions, runner invite
- * tokens, scheduler auth, and requirePermission.
+ * tokens, and requirePermission.
  */
 import { afterAll, mock } from 'bun:test';
 
@@ -86,12 +86,6 @@ function protectedApp() {
     });
   });
   app.route('/api/invite-links', inviteLinkPublicRoutes);
-  app.get('/api/scheduler/system/ping', (c) =>
-    c.json({
-      isSchedulerSystem: c.get('isSchedulerSystem') ?? false,
-      userId: c.get('userId') ?? null,
-    }),
-  );
   app.put('/api/permission-gated', requirePermission('member', 'update'), (c) =>
     c.json({ ok: true }),
   );
@@ -310,18 +304,15 @@ describe('authMiddleware (integration)', () => {
     expect(res.status).toBe(401);
   });
 
-  test('scheduler auth with X-Forwarded-User impersonates that user', async () => {
+  test('the removed scheduler secret no longer authenticates or impersonates a user', async () => {
+    // SCHEDULER_AUTH_SECRET is still set in this process: the header must be ignored.
     const res = await app.request('/api/protected', {
       headers: {
         'X-Scheduler-Auth': 'orch-mw-secret',
         'X-Forwarded-User': 'user-impersonated',
       },
     });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
-      userId: 'user-impersonated',
-      isRunner: false,
-    });
+    expect(res.status).toBe(401);
   });
 
   test('requirePermission returns 403 when permission check throws', async () => {
@@ -337,21 +328,5 @@ describe('authMiddleware (integration)', () => {
     });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'Forbidden: permission check failed' });
-  });
-
-  test('scheduler system auth sets isSchedulerSystem without forwarded user', async () => {
-    const res = await app.request('/api/scheduler/system/ping', {
-      headers: { 'X-Scheduler-Auth': 'orch-mw-secret' },
-    });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ isSchedulerSystem: true, userId: null });
-  });
-
-  test('scheduler auth without forwarded user is rejected on non-system paths', async () => {
-    const res = await app.request('/api/protected', {
-      headers: { 'X-Scheduler-Auth': 'orch-mw-secret' },
-    });
-    expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'X-Forwarded-User required with scheduler auth' });
   });
 });

@@ -33,9 +33,9 @@ export async function startBunServer(opts: BunHostOptions) {
     process.exit(1);
   }
 
-  // Security CR-1: the three shared secrets cross independent trust boundaries
-  // (runner↔server, scheduler↔server, external webhook→runner). Reusing one
-  // value across them means compromise of any single path leaks all three.
+  // Security CR-1: the shared secrets cross independent trust boundaries
+  // (runner↔server, external webhook→runner). Reusing one value across them
+  // means compromise of either path leaks both.
   // Refuse to boot when any two are set to the same value.
   {
     const { findDuplicateSecretPairs, findWeakSecrets, MIN_SECRET_LENGTH } =
@@ -43,7 +43,6 @@ export async function startBunServer(opts: BunHostOptions) {
     const presentSecrets = {
       RUNNER_AUTH_SECRET: process.env.RUNNER_AUTH_SECRET,
       INGEST_WEBHOOK_SECRET: process.env.INGEST_WEBHOOK_SECRET,
-      SCHEDULER_AUTH_SECRET: process.env.SCHEDULER_AUTH_SECRET,
     };
     const duplicates = findDuplicateSecretPairs(presentSecrets);
     if (duplicates.length > 0) {
@@ -142,11 +141,6 @@ export async function startBunServer(opts: BunHostOptions) {
     getProjectOwnerId: async (projectId) =>
       (await browserProjectRepository.getProject(projectId))?.userId ?? null,
   });
-
-  // Scheduler runs as a separate process (`@funny/thread-scheduler` binary)
-  // that talks to the server via /api/scheduler/system/*. The server no
-  // longer hosts the brain in-process — see README "Running the scheduler
-  // standalone" for the migration path.
 
   // Runners outside the private network reach the gRPC listener through a
   // WebSocket carrier on this public origin (see services/grpc/websocket-carrier.ts).

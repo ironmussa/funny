@@ -156,38 +156,6 @@ async function runnerBearerStep(c: Context<ServerEnv>, path: string): Promise<Au
   return PROCEED;
 }
 
-// ── Scheduler auth via shared secret + impersonated user ────
-// Co-located scheduler binary calling server-native pipeline endpoints.
-// Trust boundary: same-host process. The secret + X-Forwarded-User pair
-// grants the scheduler the ability to act as `userId` for the duration
-// of the request — per-tenant guards downstream still apply.
-//
-// System mode: when the path is under `/api/scheduler/system/*`, the
-// X-Forwarded-User header is OPTIONAL — those endpoints are explicitly
-// cross-tenant (the brain reads/writes runs and dependencies for ALL users).
-function schedulerStep(c: Context<ServerEnv>, path: string): AuthStepResult {
-  const ORCH_AUTH_SECRET = process.env.SCHEDULER_AUTH_SECRET;
-  if (!ORCH_AUTH_SECRET) return null;
-  if (!secretMatches(c.req.header('X-Scheduler-Auth'), ORCH_AUTH_SECRET)) return null;
-
-  const isSystemPath = path.startsWith('/api/scheduler/system/');
-  const forwardedUser = c.req.header('X-Forwarded-User');
-  if (!forwardedUser && !isSystemPath) {
-    audit({
-      action: 'auth.scheduler_rejected',
-      actorId: null,
-      detail: 'X-Scheduler-Auth without X-Forwarded-User',
-      meta: { path, method: c.req.method },
-    });
-    return c.json({ error: 'X-Forwarded-User required with scheduler auth' }, 401);
-  }
-  if (forwardedUser) c.set('userId', forwardedUser);
-  c.set('isScheduler', true);
-  c.set('isSchedulerSystem', isSystemPath && !forwardedUser);
-  c.set('isRunner', false);
-  return PROCEED;
-}
-
 // ── Runner auth via the ROOT shared secret ─────────────────────
 // Only the deployment root `RUNNER_AUTH_SECRET` matches here — held by the
 // server and operator-provisioned runners. A device-link / invite-token
@@ -485,7 +453,6 @@ const AUTH_STEPS: readonly AuthStep[] = [
   provisionTokenStep,
   inviteTokenStep,
   runnerBearerStep,
-  schedulerStep,
   runnerSecretStep,
   sessionStep,
 ];

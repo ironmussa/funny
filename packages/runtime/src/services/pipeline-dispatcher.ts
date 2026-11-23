@@ -5,7 +5,7 @@
  * @domain layer: application
  * @domain depends: @funny/pipelines
  *
- * Pipeline-driven dispatcher for the scheduler.
+ * Runs one YAML pipeline for one thread (the runtime's workflow runs).
  *
  * Transport-agnostic. Each dispatch:
  *   1. Resolves a compiled pipeline definition by name via the injected
@@ -13,7 +13,7 @@
  *   2. Builds a per-thread `ActionProvider` from the injected factory.
  *   3. Runs the pipeline with an `AbortController` (cancellation) and a
  *      `ProgressReporter` that bumps `lastEventAt` on every step
- *      transition — the scheduler's stall detector reads this value.
+ *      transition.
  *   4. Returns a `DispatchHandle` whose `finished` Promise resolves to
  *      a `DispatchOutcome`.
  *
@@ -54,8 +54,8 @@ export interface DispatchInput {
   cwd: string;
   /** Bound to the pipeline's `inputs.prompt` slot. */
   prompt: string;
-  /** Pipeline name to load. Defaults to `scheduler-thread`. */
-  pipelineName?: string;
+  /** Pipeline name to load. */
+  pipelineName: string;
   /** Values supplied to the YAML pipeline's declared `inputs` contract. */
   inputs?: Record<string, unknown>;
 }
@@ -105,7 +105,7 @@ export interface DispatcherLogger {
   error: (msg: string, meta?: Record<string, unknown>) => void;
 }
 
-export interface SchedulerPipelineDispatcherDeps<C> {
+export interface PipelineDispatcherDeps<C> {
   pipelines: PipelineLoader<C>;
   contextBuilder: ContextBuilder<C>;
   log?: DispatcherLogger;
@@ -117,8 +117,7 @@ export interface SchedulerPipelineDispatcherDeps<C> {
 
 // ── Constants ─────────────────────────────────────────────────
 
-const NS = 'scheduler-pipeline-dispatcher';
-const DEFAULT_PIPELINE = 'scheduler-thread';
+const NS = 'pipeline-dispatcher';
 
 const NOOP_LOG: DispatcherLogger = {
   info: () => {},
@@ -130,7 +129,7 @@ const SYSTEM_INPUT_KEYS = new Set(['threadId', 'projectId', 'userId', 'cwd', 'pr
 
 // ── Service ───────────────────────────────────────────────────
 
-export class SchedulerPipelineDispatcher<C> {
+export class PipelineDispatcher<C> {
   private readonly pipelines: PipelineLoader<C>;
   private readonly contextBuilder: ContextBuilder<C>;
   private readonly log: DispatcherLogger;
@@ -138,7 +137,7 @@ export class SchedulerPipelineDispatcher<C> {
   private readonly now: () => number;
   private readonly active = new Map<string, DispatchHandle>();
 
-  constructor(deps: SchedulerPipelineDispatcherDeps<C>) {
+  constructor(deps: PipelineDispatcherDeps<C>) {
     this.pipelines = deps.pipelines;
     this.contextBuilder = deps.contextBuilder;
     this.log = deps.log ?? NOOP_LOG;
@@ -147,7 +146,7 @@ export class SchedulerPipelineDispatcher<C> {
   }
 
   async dispatch(input: DispatchInput): Promise<DispatchResult> {
-    const pipelineName = input.pipelineName ?? DEFAULT_PIPELINE;
+    const { pipelineName } = input;
 
     const loaded = await this.pipelines.load(pipelineName, {
       projectId: input.projectId,

@@ -1,7 +1,7 @@
 /**
  * Pipeline CRUD and run history on the server's DB, for both `/api/pipelines`
  * (REST) and the `pipelines` tRPC router. Pipeline execution (review/fix runs)
- * stays on the runner; approval gates and scheduler callbacks stay REST.
+ * stays on the runner; approval gates stay REST.
  */
 
 import { failure, type PipelinesPort } from '@funny/api';

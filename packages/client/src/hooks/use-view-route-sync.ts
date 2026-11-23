@@ -28,7 +28,6 @@ export function useViewRouteSync(
       ui.generalSettingsOpen ||
       ui.analyticsOpen ||
       ui.liveColumnsOpen ||
-      ui.schedulerOpen ||
       ui.testRunnerOpen ||
       ui.automationInboxOpen ||
       ui.addProjectOpen ||
@@ -41,7 +40,6 @@ export function useViewRouteSync(
         activePreferencesPage: null,
         analyticsOpen: false,
         liveColumnsOpen: false,
-        schedulerOpen: false,
         testRunnerOpen: false,
         automationInboxOpen: false,
         addProjectOpen: false,
@@ -115,17 +113,6 @@ export function useViewRouteSync(
       ui.setLiveColumnsOpen(false);
     }
   }, [initialized, parsed.liveColumns]);
-
-  useEffect(() => {
-    if (!initialized) return;
-    const ui = useUIStore.getState();
-    if (parsed.scheduler) {
-      if (!ui.schedulerOpen) ui.setSchedulerOpen(true);
-      if (ui.allThreadsProjectId) ui.closeAllThreads();
-    } else if (ui.schedulerOpen) {
-      ui.setSchedulerOpen(false);
-    }
-  }, [initialized, parsed.scheduler]);
 
   useEffect(() => {
     if (!initialized) return;

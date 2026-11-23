@@ -108,12 +108,10 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { threadRoutes } = await import('../../routes/threads.js');
   const { shareRoutes } = await import('../../routes/thread-shares.js');
   const { profileRoutes } = await import('../../routes/profile.js');
-  const { schedulerRoutes } = await import('../../routes/scheduler.js');
   const { teamProjectRoutes } = await import('../../routes/team-projects.js');
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
   const { refuseRetiredRestRoutes } = await import('../../routes/retired-rest.js');
   const { pipelineRoutes } = await import('../../routes/pipelines.js');
-  const { schedulerSystemRoutes } = await import('../../routes/scheduler-system.js');
   const { userRoutes } = await import('../../routes/users.js');
 
   app.route('/api/projects', projectRoutes);
@@ -122,8 +120,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/threads', shareRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/profile', profileRoutes);
-  app.route('/api/scheduler', schedulerRoutes);
-  app.route('/api/scheduler/system', schedulerSystemRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
   // Retired REST groups answer 404 here, as in app.ts, instead of reaching a runner.
   refuseRetiredRestRoutes(app);

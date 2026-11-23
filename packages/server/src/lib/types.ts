@@ -26,8 +26,6 @@ export type ServerEnv = {
     userId: string;
     userRole: UserRole;
     isRunner: boolean;
-    isScheduler: boolean;
-    isSchedulerSystem: boolean;
     runnerId: string;
     organizationId: string | null;
     organizationName: string | null;

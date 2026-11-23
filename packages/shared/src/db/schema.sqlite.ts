@@ -763,7 +763,9 @@ export const pipelineRuns = sqliteTable('pipeline_runs', {
 });
 
 /**
- * Scheduler-managed run state.
+ * Scheduler-managed run state. No code reads these tables or
+ * `threads.scheduler_managed` since the standalone thread scheduler was
+ * removed; they stay declared so the schema matches existing databases.
  *
  * One row per actively claimed thread. Removed (released) when the
  * underlying pipeline reaches a terminal outcome (completed, failed,

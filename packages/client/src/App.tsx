@@ -147,9 +147,6 @@ const WorkflowsView = lazy(() =>
 const LiveColumnsView = lazy(() =>
   import('@/components/LiveColumnsView').then((m) => ({ default: m.LiveColumnsView })),
 );
-const SchedulerView = lazy(() =>
-  import('@/components/SchedulerView').then((m) => ({ default: m.SchedulerView })),
-);
 const ExternalClaudeSessionView = lazy(() =>
   import('@/components/ExternalClaudeSessionView').then((m) => ({
     default: m.ExternalClaudeSessionView,
@@ -233,7 +230,6 @@ export function App() {
   const addProjectOpen = useUIStore((s) => s.addProjectOpen);
   const analyticsOpen = useUIStore((s) => s.analyticsOpen);
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
-  const schedulerOpen = useUIStore((s) => s.schedulerOpen);
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
   // App-wide thread context is anchored to the URL (route-driven). The chat
   // pane uses the deferred displayThreadId below for INP; everything else
@@ -262,7 +258,6 @@ export function App() {
     !!workflowsProjectId ||
     factoryViewOpen ||
     liveColumnsOpen ||
-    schedulerOpen ||
     !!externalClaudeSessionId ||
     testRunnerOpen ||
     automationInboxOpen ||
@@ -406,8 +401,6 @@ export function App() {
                   <AnalyticsView />
                 ) : liveColumnsOpen ? (
                   <LiveColumnsView />
-                ) : schedulerOpen ? (
-                  <SchedulerView />
                 ) : externalClaudeSessionId ? (
                   <ExternalClaudeSessionView sessionId={externalClaudeSessionId} />
                 ) : testRunnerOpen ? (
@@ -449,7 +442,6 @@ export function App() {
       isFullScreenView,
       liveColumnsOpen,
       markPrimaryViewReady,
-      schedulerOpen,
       settingsOpen,
       testRunnerOpen,
       workflowsProjectId,

@@ -1,15 +1,7 @@
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element';
 import { draggable, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStage, GitStatusInfo } from '@funny/shared';
-import {
-  Trash2,
-  Terminal,
-  FolderOpenDot,
-  MoreVertical,
-  Square,
-  Archive,
-  Workflow,
-} from 'lucide-react';
+import { Trash2, Terminal, FolderOpenDot, MoreVertical, Square, Archive } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -276,22 +268,6 @@ export const KanbanCard = memo(function KanbanCard({
                     {t('sidebar.archive')}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem
-                  data-testid={`kanban-card-toggle-scheduler-${thread.id}`}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const next = !thread.schedulerManaged;
-                    const result = await api.setSchedulerManaged(thread.id, next);
-                    if (result.isErr()) {
-                      toastError(result.error);
-                    }
-                  }}
-                >
-                  <Workflow className="icon-sm" />
-                  {thread.schedulerManaged
-                    ? t('sidebar.disableScheduler', 'Disable scheduler')
-                    : t('sidebar.enableScheduler', 'Enable scheduler')}
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   data-testid={`kanban-card-delete-${thread.id}`}

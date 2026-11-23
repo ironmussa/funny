@@ -33,6 +33,8 @@ const RETIRED_PREFIXES = [
   // Removed outright (#196): the org had no columns for its fields and Better
   // Auth refused `updateOrganization` for every role. Per-user keys live in the profile.
   '/api/team-settings',
+  // Removed with the standalone thread scheduler: its queue and system routes.
+  '/api/scheduler',
 ] as const;
 
 /** The answer of every retired REST path (also used by routes that retire some of their sub-paths). */

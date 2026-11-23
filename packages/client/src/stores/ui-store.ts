@@ -77,7 +77,6 @@ interface UIState {
    * placed in the grid. Null when the grid is empty / nothing selected.
    */
   gridSelectedThreadId: string | null;
-  schedulerOpen: boolean;
   testRunnerOpen: boolean;
   designViewProjectId: string | null;
   designViewDesignId: string | null;
@@ -163,7 +162,6 @@ interface UIState {
   showGlobalSearch: () => void;
   setAnalyticsOpen: (open: boolean) => void;
   setLiveColumnsOpen: (open: boolean) => void;
-  setSchedulerOpen: (open: boolean) => void;
   setDesignView: (projectId: string, designId: string) => void;
   closeDesignView: () => void;
   setActiveDesignId: (designId: string | null) => void;
@@ -243,7 +241,6 @@ export const useUIStore = create<UIState>((set) => ({
       return null;
     }
   })(),
-  schedulerOpen: false,
   testRunnerOpen: false,
   designViewProjectId: null,
   designViewDesignId: null,
@@ -408,7 +405,6 @@ export const useUIStore = create<UIState>((set) => ({
             automationInboxOpen: false,
             analyticsOpen: false,
             liveColumnsOpen: false,
-            schedulerOpen: false,
             generalSettingsOpen: false,
           }
         : { testRunnerOpen: false },
@@ -481,7 +477,6 @@ export const useUIStore = create<UIState>((set) => ({
             allThreadsProjectId: null,
             analyticsOpen: false,
             liveColumnsOpen: false,
-            schedulerOpen: false,
             testRunnerOpen: false,
           }
         : { generalSettingsOpen: false, activePreferencesPage: null, settingsReturnPath: null },
@@ -596,7 +591,6 @@ export const useUIStore = create<UIState>((set) => ({
       settingsOpen: false,
       analyticsOpen: false,
       liveColumnsOpen: false,
-      schedulerOpen: false,
       reviewPaneOpen: false,
       testRunnerOpen: false,
     });
@@ -618,7 +612,6 @@ export const useUIStore = create<UIState>((set) => ({
             addProjectOpen: false,
             automationInboxOpen: false,
             liveColumnsOpen: false,
-            schedulerOpen: false,
             testRunnerOpen: false,
           }
         : { analyticsOpen: false },
@@ -641,33 +634,9 @@ export const useUIStore = create<UIState>((set) => ({
             addProjectOpen: false,
             automationInboxOpen: false,
             analyticsOpen: false,
-            schedulerOpen: false,
             testRunnerOpen: false,
           }
         : { liveColumnsOpen: false },
-    );
-  },
-
-  setSchedulerOpen: (open) => {
-    if (open) {
-      clearSelectedThread();
-      persistRightPane(false);
-    }
-    set(
-      open
-        ? {
-            schedulerOpen: true,
-            reviewPaneOpen: false,
-            settingsOpen: false,
-            activeSettingsPage: null,
-            allThreadsProjectId: null,
-            addProjectOpen: false,
-            automationInboxOpen: false,
-            analyticsOpen: false,
-            liveColumnsOpen: false,
-            testRunnerOpen: false,
-          }
-        : { schedulerOpen: false },
     );
   },
 
@@ -685,7 +654,6 @@ export const useUIStore = create<UIState>((set) => ({
       automationInboxOpen: false,
       analyticsOpen: false,
       liveColumnsOpen: false,
-      schedulerOpen: false,
       testRunnerOpen: false,
     });
   },
@@ -714,7 +682,6 @@ export const useUIStore = create<UIState>((set) => ({
       automationInboxOpen: false,
       analyticsOpen: false,
       liveColumnsOpen: false,
-      schedulerOpen: false,
       testRunnerOpen: false,
     });
   },

@@ -1,15 +1,15 @@
 /**
- * Unit tests for SchedulerPipelineDispatcher (from @funny/scheduler).
+ * Unit tests for PipelineDispatcher.
  *
  * These exercise the dispatcher with a hand-crafted PipelineDefinition
  * (skipping YAML compilation, which is covered by the smoke + yaml-compiler
- * test suites). Focus is on the behaviors the scheduler-service relies on:
+ * test suites). Focus is on the behaviors the workflow routes rely on:
  *
  *   - happy path: handle.finished resolves to { kind: 'completed' }
  *   - missing pipeline: dispatch returns { ok: false }
  *   - abort: handle.finished resolves to { kind: 'cancelled' }
  *   - pipeline failure: handle.finished resolves to { kind: 'failed', error }
- *   - lastEventAt: bumps on every step transition (stall detector input)
+ *   - lastEventAt: bumps on every step transition (a run's last activity)
  *   - active map: handles are tracked and cleaned up on settle
  */
 
@@ -17,16 +17,17 @@ import { describe, expect, test, vi } from 'bun:test';
 
 import { node, type PipelineDefinition, type ProgressReporter } from '@funny/pipelines';
 import { waitFor } from '@funny/test-kit';
+import type { ActionProvider } from '@funny/workflows/compiler';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
+
 import {
-  SchedulerPipelineDispatcher,
+  PipelineDispatcher,
   type ContextBuilder,
   type DispatchInput,
   type DispatcherLogger,
   type PipelineInputDefinition,
   type PipelineLoader,
-} from '@funny/thread-scheduler';
-import type { ActionProvider } from '@funny/workflows/compiler';
-import type { YamlPipelineContext } from '@funny/workflows/compiler';
+} from '../../services/pipeline-dispatcher.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ const baseInput = (over: Partial<DispatchInput> = {}): DispatchInput => ({
   userId: 'u1',
   cwd: '/repo',
   prompt: 'go',
+  pipelineName: 'test-pipeline',
   ...over,
 });
 
@@ -117,10 +119,10 @@ function twoStepPipeline(delayMs: number): PipelineDefinition<YamlPipelineContex
 
 // ── Tests ────────────────────────────────────────────────────
 
-describe('SchedulerPipelineDispatcher', () => {
+describe('PipelineDispatcher', () => {
   test('happy path: dispatch returns ok and finished resolves completed', async () => {
     const provider = fakeProvider();
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(singleSpawnPipeline()),
       contextBuilder: makeContextBuilder(provider),
       log: silentLog(),
@@ -138,7 +140,7 @@ describe('SchedulerPipelineDispatcher', () => {
   });
 
   test('returns { ok: false } when the pipeline name does not resolve', async () => {
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(null),
       contextBuilder: makeContextBuilder(fakeProvider()),
       log: silentLog(),
@@ -152,7 +154,7 @@ describe('SchedulerPipelineDispatcher', () => {
 
   test('passes declared supplied inputs plus system inputs into the pipeline context', async () => {
     const provider = fakeProvider();
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(
         {
           name: 'linear-fix',
@@ -193,7 +195,7 @@ describe('SchedulerPipelineDispatcher', () => {
 
   test('rejects missing required YAML inputs before building context', async () => {
     const contextBuilder = makeContextBuilder(fakeProvider());
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(singleSpawnPipeline(), {
         issue_id: { type: 'string', required: true },
       }),
@@ -210,7 +212,7 @@ describe('SchedulerPipelineDispatcher', () => {
 
   test('rejects supplied inputs that are not declared by YAML', async () => {
     const contextBuilder = makeContextBuilder(fakeProvider());
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(singleSpawnPipeline()),
       contextBuilder,
       log: silentLog(),
@@ -225,7 +227,7 @@ describe('SchedulerPipelineDispatcher', () => {
 
   test('rejects supplied inputs that do not match the declared YAML type', async () => {
     const contextBuilder = makeContextBuilder(fakeProvider());
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(singleSpawnPipeline(), {
         retry_count: { type: 'number' },
       }),
@@ -241,7 +243,7 @@ describe('SchedulerPipelineDispatcher', () => {
   });
 
   test('handle.abort() causes finished to resolve cancelled', async () => {
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(twoStepPipeline(20)),
       contextBuilder: makeContextBuilder(fakeProvider()),
       log: silentLog(),
@@ -263,7 +265,7 @@ describe('SchedulerPipelineDispatcher', () => {
     const provider = fakeProvider({
       spawnAgent: vi.fn().mockResolvedValue({ ok: false, error: 'boom' }),
     });
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(singleSpawnPipeline()),
       contextBuilder: makeContextBuilder(provider),
       log: silentLog(),
@@ -283,7 +285,7 @@ describe('SchedulerPipelineDispatcher', () => {
     let i = 0;
     const now = () => ticks[Math.min(i++, ticks.length - 1)];
 
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(singleSpawnPipeline()),
       contextBuilder: makeContextBuilder(fakeProvider()),
       log: silentLog(),
@@ -331,7 +333,7 @@ describe('SchedulerPipelineDispatcher', () => {
       onPipelineEvent: () => {},
     };
     const builder = makeContextBuilder(fakeProvider());
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(pipeline),
       contextBuilder: { build: builder.build, progressOf: () => contextReporter },
       log: silentLog(),
@@ -354,7 +356,7 @@ describe('SchedulerPipelineDispatcher', () => {
   });
 
   test('active map tracks runs and cleans up on settle', async () => {
-    const dispatcher = new SchedulerPipelineDispatcher<YamlPipelineContext>({
+    const dispatcher = new PipelineDispatcher<YamlPipelineContext>({
       pipelines: makeLoader(singleSpawnPipeline()),
       contextBuilder: makeContextBuilder(fakeProvider()),
       log: silentLog(),

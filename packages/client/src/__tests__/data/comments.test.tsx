@@ -12,8 +12,6 @@ import {
   getCommentsData,
   postComment,
 } from '@/data/comments/store';
-import { useSchedulerQueue } from '@/data/scheduler/hooks';
-import { applyRunClaimed } from '@/data/scheduler/store';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
@@ -23,8 +21,6 @@ const threadsApi = (() => ({
   deleteThreadComment: vi.fn(),
 }))();
 mock.module('@/lib/api/threads', () => ({ threadsApi }));
-const schedulerApi = (() => ({ listSchedulerRuns: vi.fn(), refreshScheduler: vi.fn() }))();
-mock.module('@/lib/api', () => ({ api: schedulerApi }));
 const effects = (() => ({ emit: vi.fn() }))();
 mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
@@ -79,23 +75,5 @@ describe('comments', () => {
     expect((await deleteComment('t1', 'a')).isErr()).toBe(true);
     expect(getCommentsData().read('a')).toBeDefined();
     expect(effects.emit).toHaveBeenCalledWith(expect.objectContaining({ level: 'error' }));
-  });
-});
-
-describe('scheduler queue', () => {
-  test('loads on mount and follows events, most recent first', async () => {
-    schedulerApi.listSchedulerRuns.mockReturnValue(
-      okAsync({ runs: [{ threadId: 't1', lastEventAtMs: 1 }] }),
-    );
-    const { result } = renderHook(() => useSchedulerQueue());
-    await waitFor(() => expect(result.current.runs).toHaveLength(1));
-    act(() => applyRunClaimed('t2', { userId: 'u1' }));
-    await waitFor(() => expect(result.current.runs.map((r) => r.threadId)).toEqual(['t2', 't1']));
-  });
-
-  test('a failed load surfaces its error', async () => {
-    schedulerApi.listSchedulerRuns.mockReturnValue(errAsync(failure));
-    const { result } = renderHook(() => useSchedulerQueue());
-    await waitFor(() => expect(result.current.error).toBe('boom'));
   });
 });

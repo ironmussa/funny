@@ -1,9 +1,7 @@
 /**
- * Phase 0 smoke test for the scheduler integration.
- *
- * Goal: prove that the foundational primitives the scheduler will
- * lean on (`runPipeline`, state-change events, abort propagation) work
- * standalone without going through the runtime's `pipeline-manager`.
+ * Smoke test of the pipeline engine on its own: `runPipeline`, state-change
+ * events and abort propagation work without going through the runtime's
+ * `pipeline-manager`.
  *
  * Scope is intentionally narrow — no DB, no WS broker, no
  * ActionProvider. Those layers are exercised in later phases.
@@ -18,7 +16,7 @@ interface SmokeCtx {
   trail: string[];
 }
 
-describe('scheduler smoke — runPipeline standalone', () => {
+describe('engine smoke — runPipeline standalone', () => {
   test('runs nodes sequentially and emits ordered state changes', async () => {
     const events: PipelineStateChange<SmokeCtx>[] = [];
 

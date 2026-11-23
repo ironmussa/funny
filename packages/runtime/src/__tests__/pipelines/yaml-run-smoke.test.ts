@@ -1,12 +1,11 @@
 /**
- * Phase 1 smoke test for pipeline-driven dispatch.
+ * Smoke test for pipeline-driven dispatch.
  *
- * Proves the three behaviors the scheduler dispatcher will rely on
- * when it swaps `POST /api/threads/:id/message` for `runPipeline()`:
+ * Proves the three behaviors the pipeline dispatcher relies on:
  *   1. A YAML pipeline compiles and runs end-to-end against a fake
  *      ActionProvider — the API is usable outside `pipeline-manager`.
  *   2. AbortSignal cancels an in-flight `spawn_agent` action — needed so
- *      the scheduler can interrupt a stalled run.
+ *      a run can be cancelled.
  *   3. ProgressReporter callbacks fire on every step transition — the
  *      dispatcher will wire these to `touchLastEvent` for stall detection.
  */
@@ -18,8 +17,8 @@ import { parseWorkflowYaml } from '@funny/workflows';
 import type { ActionProvider } from '@funny/workflows/compiler';
 import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
 
-const SCHEDULER_THREAD_YAML = `
-name: scheduler-thread-smoke
+const AGENT_RUN_YAML = `
+name: agent-run-smoke
 inputs:
   prompt:
     type: string
@@ -67,10 +66,10 @@ function compile(yaml: string) {
   return compileYamlPipeline(parsed.workflow);
 }
 
-describe('scheduler pipeline smoke — runPipeline + YAML standalone', () => {
-  test('compiles scheduler-thread YAML and runs the spawn_agent dispatch', async () => {
+describe('pipeline smoke — runPipeline + YAML standalone', () => {
+  test('compiles an agent-run YAML and runs the spawn_agent dispatch', async () => {
     const provider = fakeProvider();
-    const pipeline = compile(SCHEDULER_THREAD_YAML);
+    const pipeline = compile(AGENT_RUN_YAML);
 
     const result = await runPipeline<YamlPipelineContext>(pipeline, {
       provider,
@@ -87,7 +86,7 @@ describe('scheduler pipeline smoke — runPipeline + YAML standalone', () => {
     expect(result.ctx.outputs.dispatch?.output).toBe('agent-done');
   });
 
-  test('AbortSignal cancels mid-flight spawn_agent — scheduler stall path', async () => {
+  test('AbortSignal cancels mid-flight spawn_agent', async () => {
     let aborted = false;
     const ctrl = new AbortController();
 
@@ -100,7 +99,7 @@ describe('scheduler pipeline smoke — runPipeline + YAML standalone', () => {
     });
 
     const pipeline = compile(`
-name: scheduler-cancel-smoke
+name: cancel-smoke
 nodes:
   - id: first
     spawn_agent:
@@ -137,7 +136,7 @@ nodes:
     const { reporter, steps } = recordingReporter();
 
     const pipeline = compile(`
-name: scheduler-progress-smoke
+name: progress-smoke
 nodes:
   - id: review
     spawn_agent:

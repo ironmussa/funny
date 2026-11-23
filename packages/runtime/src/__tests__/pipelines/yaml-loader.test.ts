@@ -46,7 +46,6 @@ describe('loadPipelines', () => {
       'issue-to-merge',
       'issue-to-pr',
       'pre-push',
-      'scheduler-thread',
     ]);
 
     for (const p of result.pipelines.values()) {

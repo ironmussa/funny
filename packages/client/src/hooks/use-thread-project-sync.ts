@@ -17,7 +17,6 @@ function isOverlayActive(parsed: ParsedRoute): boolean {
     parsed.analytics ||
     parsed.workflowsProjectId ||
     parsed.liveColumns ||
-    parsed.scheduler ||
     parsed.addProject ||
     parsed.scratchNew ||
     parsed.globalSearch ||

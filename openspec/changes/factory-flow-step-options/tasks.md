@@ -19,7 +19,7 @@
 - [x] 3.2 Implement `thread: new` launches (step title, recorded in `threadIds`, `followUp` still targets the first thread, adoption matches the full title); verify with tests for launch, resume replay without a second launch, and stop stopping the review thread
 - [x] 3.3 Migration: `factory_runs.flow_source`, `flow_commit`, `step_options` and `factory_settings.step_overrides` in `server/src/db/migrate.ts` and both schemas; verify `bun run db:push` on a scratch DB and the migrate test
 - [x] 3.4 Record source, commit and per-step options in `factory-flow-runs.ts` (append on step start, keep on resume, update commit on retry); verify with flow-run tests reading the row back
-- [ ] 3.5 Update `openwiki/architecture/issue-factory.md` (accepted fields, precedence, `thread: new`, prompt files, recording) and verify the doc's file references exist
+- [x] 3.5 Update `openwiki/architecture/issue-factory.md` (accepted fields, precedence, `thread: new`, prompt files, recording) and verify the doc's file references exist
 
 ## 4. Step overrides and Validate flow API
 

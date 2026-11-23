@@ -276,11 +276,12 @@ export function ProjectRunnerSettings() {
           data-testid="project-runner-github-token-form"
         >
           <Input
+            mono
             type="password"
             value={tokenDraft}
             onChange={(e) => setTokenDraft(e.target.value)}
             placeholder={t('projectRunner.tokenPlaceholder', 'github_pat_…')}
-            className={cn('max-w-md flex-1 font-mono')}
+            className={cn('max-w-md flex-1')}
             autoComplete="off"
             data-testid="project-runner-github-token"
           />

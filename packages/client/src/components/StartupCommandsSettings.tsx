@@ -206,8 +206,9 @@ export function StartupCommandsSettings() {
                     {t('startup.command')}
                   </label>
                   <Input
+                    mono
                     id={`startup-command-${cmd.id}`}
-                    className="settings-form-input font-mono"
+                    className="settings-form-input"
                     placeholder={t('startup.command')}
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
@@ -326,8 +327,9 @@ export function StartupCommandsSettings() {
                 {t('startup.command')}
               </label>
               <Input
+                mono
                 id="startup-new-command"
-                className="h-auto py-1.5 font-mono"
+                className="h-auto py-1.5"
                 placeholder={t('startup.commandPlaceholder')}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}

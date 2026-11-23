@@ -69,6 +69,7 @@ export function ProjectUrlPatterns({
         {urlRows.map((row, i) => (
           <div key={row.id} className="flex items-center gap-2">
             <Input
+              mono
               value={row.value}
               onChange={(e) => {
                 const next = [...urlRows];
@@ -81,7 +82,7 @@ export function ProjectUrlPatterns({
                 if (e.key === 'Enter') save(urlRows);
               }}
               placeholder="https://example.com"
-              className="h-8 flex-1 font-mono text-xs"
+              className="flex-1 text-xs"
             />
             <TooltipIconButton
               size="icon-sm"
@@ -193,6 +194,7 @@ export function LauncherUrlSetting({
       )}
     >
       <Input
+        mono
         size="xs"
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -202,7 +204,7 @@ export function LauncherUrlSetting({
           if (e.key === 'Enter') save();
         }}
         placeholder="http://localhost:4040"
-        className="h-8 w-[240px] font-mono"
+        className="h-8 w-[240px]"
         data-testid="settings-launcher-url"
       />
     </ProjectSettingRow>

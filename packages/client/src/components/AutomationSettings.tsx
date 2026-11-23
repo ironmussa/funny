@@ -414,8 +414,9 @@ export function AutomationSettings() {
                 </Select>
                 {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (
                   <Input
+                    mono
                     size="xs"
-                    className="settings-form-input mt-1.5 font-mono"
+                    className="settings-form-input mt-1.5"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}

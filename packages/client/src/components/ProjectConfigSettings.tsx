@@ -182,7 +182,8 @@ export function ProjectConfigSettings() {
           {(config.envFiles ?? []).map((file, i) => (
             <div key={file} className="group flex items-center gap-2" data-testid={`env-file-${i}`}>
               <Input
-                className="h-8 flex-1 font-mono text-sm"
+                mono
+                className="flex-1"
                 defaultValue={file}
                 onBlur={(e) => updateEnvFile(i, e.target.value)}
                 onKeyDown={(e) => {
@@ -205,7 +206,8 @@ export function ProjectConfigSettings() {
 
         <div className="mt-2 flex items-center gap-2">
           <Input
-            className="h-8 flex-1 font-mono text-sm"
+            mono
+            className="flex-1"
             placeholder={t('projectConfig.envFilePlaceholder')}
             value={newEnvFile}
             onChange={(e) => setNewEnvFile(e.target.value)}
@@ -257,8 +259,9 @@ export function ProjectConfigSettings() {
                     data-testid={`port-group-${gi}-name`}
                   />
                   <Input
+                    mono
                     size="xs"
-                    className="w-20 font-mono"
+                    className="w-20"
                     type="number"
                     defaultValue={group.basePort}
                     onBlur={(e) => updatePortGroup(gi, 'basePort', e.target.value)}
@@ -293,8 +296,9 @@ export function ProjectConfigSettings() {
                 ))}
                 <div className="flex items-center gap-1">
                   <Input
+                    mono
                     size="xs"
-                    className="h-6 w-32 font-mono"
+                    className="h-6 w-32"
                     placeholder={t('projectConfig.envVarPlaceholder')}
                     value={groupEnvVar}
                     onChange={(e) => setGroupEnvVar(e.target.value)}
@@ -328,7 +332,8 @@ export function ProjectConfigSettings() {
               autoFocus
             />
             <Input
-              className="h-8 w-24 font-mono text-sm"
+              mono
+              className="w-24"
               type="number"
               placeholder={t('projectConfig.portPlaceholder')}
               value={groupPort}
@@ -393,7 +398,8 @@ export function ProjectConfigSettings() {
               data-testid={`post-create-${i}`}
             >
               <Input
-                className="h-8 flex-1 font-mono text-sm"
+                mono
+                className="flex-1"
                 defaultValue={cmd}
                 onBlur={(e) => updatePostCreate(i, e.target.value)}
                 onKeyDown={(e) => {
@@ -417,7 +423,8 @@ export function ProjectConfigSettings() {
 
         <div className="mt-2 flex items-center gap-2">
           <Input
-            className="h-8 flex-1 font-mono text-sm"
+            mono
+            className="flex-1"
             placeholder={t('projectConfig.postCreatePlaceholder')}
             value={newPostCreate}
             onChange={(e) => setNewPostCreate(e.target.value)}

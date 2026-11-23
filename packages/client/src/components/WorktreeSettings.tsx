@@ -313,13 +313,14 @@ function WorktreeCreateForm({
           {t('worktreeSettings.branchName')}
         </label>
         <Input
+          mono
           size="xs"
           id="worktree-branch-name"
           type="text"
           value={branchName}
           onChange={(e) => onBranchNameChange(e.target.value)}
           placeholder="feature/my-new-branch"
-          className="h-8 font-mono"
+          className="h-8"
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter') onCreate();

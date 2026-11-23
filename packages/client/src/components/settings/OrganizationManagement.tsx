@@ -193,6 +193,7 @@ export function OrganizationManagement() {
                 Slug
               </label>
               <Input
+                mono
                 id="organization-slug"
                 value={slug}
                 onChange={(e) => {
@@ -200,7 +201,6 @@ export function OrganizationManagement() {
                   slugManuallyEditedRef.current = true;
                 }}
                 placeholder="my-organization"
-                className="font-mono text-sm"
                 data-testid="org-create-slug"
               />
             </div>

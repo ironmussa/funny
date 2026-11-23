@@ -1085,13 +1085,13 @@ function VariablesSection({
             >
               <div className="flex-1 space-y-1">
                 <Input
+                  mono
                   size="xs"
                   id={`agent-template-variable-name-${idx}`}
                   aria-label={`Variable ${idx + 1} name`}
                   value={v.name}
                   onChange={(e) => updateVariable(idx, 'name', e.target.value)}
                   placeholder="VARIABLE_NAME"
-                  className="font-mono"
                   data-testid={`agent-template-variable-name-${idx}`}
                 />
                 <Input

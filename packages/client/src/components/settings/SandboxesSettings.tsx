@@ -126,13 +126,13 @@ function AddConnectionForm({
           data-testid="sandbox-connection-label"
         />
         <Input
+          mono
           size="xs"
           type="password"
           autoComplete="off"
           value={credential}
           onChange={(e) => setCredential(e.target.value)}
           placeholder="API key"
-          className="font-mono"
           data-testid="sandbox-connection-credential"
         />
         <Button

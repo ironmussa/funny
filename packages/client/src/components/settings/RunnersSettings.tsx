@@ -109,11 +109,11 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
         </SelectContent>
       </Select>
       <Input
+        mono
         size="xs"
         value={localPath}
         onChange={(e) => setLocalPath(e.target.value)}
         placeholder="/home/user/my-project"
-        className="font-mono"
         data-testid={`runner-assign-localpath-${runnerId}`}
       />
       <Button
@@ -376,6 +376,7 @@ function LinkRunnerForm({ onLinked }: { onLinked: () => void }) {
   return (
     <div className="flex items-center gap-2">
       <Input
+        mono
         value={code}
         onChange={(e) => setCode(e.target.value)}
         onKeyDown={(e) => {
@@ -384,7 +385,7 @@ function LinkRunnerForm({ onLinked }: { onLinked: () => void }) {
         }}
         placeholder="Enter runner code, e.g. WXYZ-1234"
         size="xs"
-        className="flex-1 font-mono uppercase"
+        className="flex-1 uppercase"
         data-testid="link-runner-code"
       />
       <Button

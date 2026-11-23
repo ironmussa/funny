@@ -2409,6 +2409,26 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // The standalone thread scheduler was removed (#430): nothing reads its
+    // run state or its thread dependency edges. The tables go first; the
+    // `threads.scheduler_managed` column follows in its own migration, once no
+    // deployed server still selects it (`PENDING_DROP` in schema-drift.test.ts).
+    name: '120_drop_thread_scheduler_tables',
+    async up() {
+      await ctx().exec(sql`DROP TABLE IF EXISTS scheduler_runs`);
+      await ctx().exec(sql`DROP TABLE IF EXISTS thread_dependencies`);
+    },
+  },
+  {
+    // The last of the thread scheduler (#430): the per-thread opt-in flag. Its
+    // own migration, one deploy after the code stopped declaring the column, so
+    // no running server still selects it.
+    name: '121_drop_threads_scheduler_managed',
+    async up() {
+      await ctx().dropColumn('threads', 'scheduler_managed');
+    },
+  },
 ];
 
 /**

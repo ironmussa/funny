@@ -173,8 +173,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
       'project_members',
       'projects',
       'runners',
-      'scheduler_runs',
-      'thread_dependencies',
       'user_profiles',
       'instance_settings',
       'invite_links',

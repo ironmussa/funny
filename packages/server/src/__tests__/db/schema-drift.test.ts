@@ -29,6 +29,14 @@ import type { AppDatabase } from '../../db/index.js';
  */
 const DIALECT_SPECIFIC_TYPES = new Set(['user.banned', 'user.email_verified']);
 
+/**
+ * Columns a migrated database still has and the definitions no longer declare:
+ * the first half of a two-deploy removal. The code stops reading the column in
+ * one deploy and a migration drops it in the next, so a server from before the
+ * drop never selects a column that is gone. Remove the entry with that migration.
+ */
+const PENDING_DROP = new Set<string>();
+
 interface ColumnInfo {
   /** Drizzle's JS value type: 'string' | 'number' | 'boolean' | 'json' | … */
   dataType: string;
@@ -101,7 +109,7 @@ function liveDrift(definition: ColumnLayout, live: Record<string, Set<string>>):
     }
     for (const column of liveColumns) {
       const key = `${table}.${column}`;
-      if (!columns[column]) {
+      if (!columns[column] && !PENDING_DROP.has(key)) {
         problems.push(`${key} exists in migrated DB but not in the definition`);
       }
     }

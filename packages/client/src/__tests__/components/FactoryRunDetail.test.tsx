@@ -152,6 +152,62 @@ describe('the panel content', () => {
   });
 });
 
+describe('the step timeline', () => {
+  test('a retried step with both attempts, and a 15 min wait before merge', () => {
+    const minAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
+    renderBody(
+      queueRun({
+        state: 'merging',
+        currentStep: 'merge',
+        stepTimings: [
+          {
+            step: 'ci',
+            visit: '1',
+            attempt: 1,
+            status: 'failed',
+            startedAt: minAgo(100),
+            finishedAt: minAgo(90),
+          },
+          {
+            step: 'ci',
+            visit: '1',
+            attempt: 2,
+            status: 'succeeded',
+            startedAt: minAgo(90),
+            finishedAt: minAgo(80),
+          },
+          {
+            step: 'review',
+            visit: '1',
+            attempt: 1,
+            status: 'succeeded',
+            startedAt: minAgo(80),
+            finishedAt: minAgo(60),
+          },
+          {
+            step: 'merge',
+            visit: '1',
+            attempt: 1,
+            status: 'running',
+            startedAt: minAgo(45),
+            finishedAt: null,
+          },
+        ],
+      }),
+    );
+    expect(screen.getByTestId('factory-run-detail-timing-0')).toHaveTextContent('failed');
+    expect(screen.getByTestId('factory-run-detail-timing-1')).toHaveTextContent('attempt 2');
+    expect(screen.getByTestId('factory-run-detail-timing-1')).toHaveTextContent('10m');
+    expect(screen.getByTestId('factory-run-detail-wait-3')).toHaveTextContent('waited 15m');
+    expect(screen.queryByTestId('factory-run-detail-wait-1')).toBeNull();
+  });
+
+  test('no timeline without timings', () => {
+    renderBody(queueRun({ state: 'working' }));
+    expect(screen.queryByTestId('factory-run-detail-timeline')).toBeNull();
+  });
+});
+
 describe('the run search parameter', () => {
   test('a link to a listed run opens its panel; closing removes the parameter', async () => {
     mocks.queue = [queueRun({ id: 'r1', state: 'working' })];

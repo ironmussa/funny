@@ -18,6 +18,8 @@ import {
   layoutFactoryBoard,
 } from './board-columns';
 import { FactoryRunCard } from './FactoryRunCard';
+import { stageMedians } from './step-timings';
+import { StageMedian } from './StepTimeBadges';
 
 /** Cards a column shows before "Show more". */
 const PAGE = 50;
@@ -141,9 +143,32 @@ interface ColumnProps {
   now: number;
   singleProjectId: string | null;
   hiddenDone: number;
+  /** The median time in this stage over the last week, when measured. */
+  medianMs: number | undefined;
   /** Opens the run's detail panel. */
   onSelect: (run: FactoryQueueRun) => void;
   onShowOlderDone: () => void;
+}
+
+/** What a column header shows after its count: the stage's median, its limit, and Done's hidden runs. */
+function StageHeaderExtra({
+  id,
+  count,
+  medianMs,
+  singleProjectId,
+  hiddenDone,
+  onShowOlderDone,
+}: Pick<ColumnProps, 'id' | 'medianMs' | 'singleProjectId' | 'hiddenDone' | 'onShowOlderDone'> & {
+  count: number;
+}) {
+  const limitProject = id === 'merge' || id in LIMIT_NODE ? singleProjectId : null;
+  return (
+    <>
+      <StageMedian column={id} medianMs={medianMs} />
+      {limitProject && <StageLimit projectId={limitProject} column={id} count={count} />}
+      {id === 'done' && <HiddenDone count={hiddenDone} onShow={onShowOlderDone} />}
+    </>
+  );
 }
 
 /** One stage column: its cards a page at a time, its limit, and for Done the fold and hidden count. */
@@ -155,6 +180,7 @@ function FactoryBoardStage({
   now,
   singleProjectId,
   hiddenDone,
+  medianMs,
   onSelect,
   onShowOlderDone,
 }: ColumnProps) {
@@ -163,7 +189,6 @@ function FactoryBoardStage({
   const [doneCollapsed, setDoneCollapsed] = useState(false);
   const isDone = id === 'done';
   const collapsed = isDone && doneCollapsed;
-  const limitProject = id === 'merge' || id in LIMIT_NODE ? singleProjectId : null;
   const doneTitle = (
     <DoneTitle
       title={title}
@@ -180,10 +205,14 @@ function FactoryBoardStage({
       className={collapsed ? 'w-auto min-w-0 self-start' : undefined}
       emptyTitle={t('factoryBoard.emptyColumn', 'No runs here')}
       headerExtra={
-        <>
-          {limitProject && <StageLimit projectId={limitProject} column={id} count={cards.length} />}
-          {isDone && <HiddenDone count={hiddenDone} onShow={onShowOlderDone} />}
-        </>
+        <StageHeaderExtra
+          id={id}
+          count={cards.length}
+          medianMs={medianMs}
+          singleProjectId={singleProjectId}
+          hiddenDone={hiddenDone}
+          onShowOlderDone={onShowOlderDone}
+        />
       }
     >
       {cards.slice(0, limit).map((run) => (
@@ -219,6 +248,7 @@ interface Props {
 export function FactoryBoard({ runs, now, ...rest }: Props) {
   const { t } = useTranslation();
   const { columns, hiddenDone } = layoutFactoryBoard(runs, now);
+  const medians = stageMedians(runs, now);
   const titles: Record<FactoryBoardColumnId, string> = {
     queue: t('factoryBoard.column.queue', 'Queue'),
     triage: t('factoryBoard.column.triage', 'Triage'),
@@ -239,6 +269,7 @@ export function FactoryBoard({ runs, now, ...rest }: Props) {
           cards={columns[id]}
           now={now}
           hiddenDone={hiddenDone}
+          medianMs={medians[id]}
           {...rest}
         />
       ))}

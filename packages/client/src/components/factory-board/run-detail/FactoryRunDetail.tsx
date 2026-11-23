@@ -22,6 +22,7 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { factoryRunCardThread } from '../FactoryRunCard';
 import { FactoryRunProgress } from '../FactoryRunProgress';
 import { factoryRunWaitingText } from '../run-waiting';
+import { RunTimeline } from './RunTimeline';
 import {
   DetailSection,
   RunReviews,
@@ -115,6 +116,7 @@ function FactoryRunDetailBody({
       <RunHeader run={run} projectName={projectName} />
       <RunOutcome run={run} />
       <RunFlow run={run} />
+      <RunTimeline run={run} />
       <RunTriage run={run} />
       {run.regressionProof && <RegressionProofDetails proof={run.regressionProof} />}
       <RunReviews run={run} />

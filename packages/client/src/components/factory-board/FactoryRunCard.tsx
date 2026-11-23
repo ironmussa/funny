@@ -17,6 +17,7 @@ import { factoryRunActivityAt } from './board-columns';
 import { FactoryRunGateChips } from './FactoryRunGateChips';
 import { FactoryRunProgress } from './FactoryRunProgress';
 import { factoryRunWaitingText } from './run-waiting';
+import { FactoryRunTimeInStep } from './StepTimeBadges';
 
 /** The issue's page, when the run's pull request tells the repository. */
 function factoryIssueUrl(run: Pick<FactoryQueueRun, 'prUrl' | 'issueNumber'>): string | null {
@@ -86,6 +87,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       </div>
       <FactoryRunProgress run={run} />
       <FactoryRunGateChips run={run} />
+      <FactoryRunTimeInStep run={run} now={now} />
       {waiting && (
         <p
           className="text-muted-foreground line-clamp-2 text-xs"

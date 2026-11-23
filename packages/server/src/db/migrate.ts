@@ -2420,6 +2420,16 @@ const migrations: Migration[] = [
       await ctx().exec(sql`DROP TABLE IF EXISTS thread_dependencies`);
     },
   },
+  {
+    // Change thread-recap, D4: the user's utility model for helper generations
+    // (JSON `UtilityModelSetting`, null = the default) and whether recaps are
+    // shown. Existing users start with recaps on.
+    name: '121_user_profiles_utility_model',
+    async up() {
+      await ctx().addColumn('user_profiles', 'utility_model', 'TEXT');
+      await ctx().addColumn('user_profiles', 'thread_recap_enabled', 'INTEGER NOT NULL', '1');
+    },
+  },
 ];
 
 /**

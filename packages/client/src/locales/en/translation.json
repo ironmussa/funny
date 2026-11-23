@@ -1808,7 +1808,10 @@
       "ciRounds": "CI rounds per run",
       "redRate": "Red CI rounds",
       "conflictRate": "Runs with a conflict",
-      "agentFixes": "Agent fixes per run"
+      "agentFixes": "Agent fixes per run",
+      "settledWithoutAgent": "Conflicts settled with no agent",
+      "batchSize": "Pull requests per batch",
+      "batchWait": "Median time in the merge queue"
     },
     "proof": {
       "title": "Regression proof",

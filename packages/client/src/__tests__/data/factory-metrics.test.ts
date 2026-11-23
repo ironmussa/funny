@@ -94,6 +94,31 @@ describe('summarizeFactoryRuns', () => {
     expect(summary.avgAgentFixes).toBe(1);
   });
 
+  // openspec factory-integration 6.2: integration without an agent, and the merge queue.
+  test('conflicts settled with no agent, and the merge queue batches', () => {
+    const metrics = EMPTY_FACTORY_RUN_METRICS;
+    const summary = summarizeFactoryRuns(
+      [
+        run({
+          metrics: {
+            ...metrics,
+            conflictsResolvedWithoutLlm: 3,
+            conflictsSentToAgent: 1,
+            batchSize: 4,
+            queueWaitMs: 60_000,
+          },
+        }),
+        run({ metrics: { ...metrics, batchSize: 2, queueWaitMs: 120_000 } }),
+        // Never batched: out of the batch figures.
+        run({ metrics: { ...metrics } }),
+      ],
+      { now: NOW },
+    );
+    expect(summary.settledWithoutAgentRate).toBe(0.75);
+    expect(summary.avgBatchSize).toBe(3);
+    expect(summary.medianBatchWaitMs).toBe(90_000);
+  });
+
   test('leaves out runs started before the window, and answers null without data', () => {
     const old = run({ startedAt: new Date(NOW - 40 * 24 * 60 * MIN).toISOString() });
     const summary = summarizeFactoryRuns([old], { now: NOW, windowDays: 30 });

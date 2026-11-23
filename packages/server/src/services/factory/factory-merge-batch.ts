@@ -15,7 +15,7 @@
 
 import type { Batch } from '@funny/pipelines';
 
-import type { MemberVerdict, QueueMember } from './factory-merge-queue.js';
+import type { BatchStats, MemberVerdict, QueueMember } from './factory-merge-queue.js';
 import type { FactoryQueuePort, QueueGates } from './factory-queue-port.js';
 
 /** The run id of a gate holder (`<runId>/<node>/<visit>`). */
@@ -78,6 +78,8 @@ export async function mergeAsBatch(input: {
   /** The leader: its own run, at its pull request's head now. */
   self: QueueMember;
   gates: QueueGates;
+  /** What the batch cost, for the leader's own counters (its provider keeps them). */
+  onStats?(stats: BatchStats, flake: boolean): Promise<void>;
 }): Promise<MemberVerdict | null> {
   const { queue, batch, self } = input;
   const requeueAll = () => {
@@ -103,8 +105,10 @@ export async function mergeAsBatch(input: {
     batch.members.find((m) => m.holder === member.holder)?.state === 'cancelled';
   const outcome = await queue.lead([self, ...disjoint], input.gates, left);
   for (const member of disjoint) {
+    await queue.recordStats(member, outcome.stats, outcome.result.flake);
     await settleMember(queue, batch, member, outcome.verdicts.get(member.runId));
   }
+  await input.onStats?.(outcome.stats, outcome.result.flake);
   return (
     outcome.verdicts.get(self.runId) ?? { kind: 'requeued', why: 'the batch did not decide it' }
   );

@@ -356,6 +356,16 @@ export type MergeQueue = ReturnType<typeof createMergeQueue>;
 export interface BatchOutcome {
   verdicts: Map<string, MemberVerdict>;
   result: FactoryBatchResult;
+  /** What the batch cost, for every member's counters (D13). */
+  stats: BatchStats;
+}
+
+export interface BatchStats {
+  /** Members it started with, the leader included. */
+  size: number;
+  /** Halves tested apart while bisecting. */
+  attempts: number;
+  durationMs: number;
 }
 
 export { MAX_REBUILDS };

@@ -76,6 +76,21 @@ export function ProjectFactoryMetrics({ projectId }: { projectId: string }) {
           label={t('factory.metrics.agentFixes', 'Agent fixes per run')}
           value={decimal(summary.avgAgentFixes)}
         />
+        <Stat
+          id="settled-without-agent"
+          label={t('factory.metrics.settledWithoutAgent', 'Conflicts settled with no agent')}
+          value={percent(summary.settledWithoutAgentRate)}
+        />
+        <Stat
+          id="batch-size"
+          label={t('factory.metrics.batchSize', 'Pull requests per batch')}
+          value={decimal(summary.avgBatchSize)}
+        />
+        <Stat
+          id="batch-wait"
+          label={t('factory.metrics.batchWait', 'Median time in the merge queue')}
+          value={duration(summary.medianBatchWaitMs)}
+        />
       </div>
     </div>
   );

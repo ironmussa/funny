@@ -74,6 +74,10 @@ const METRICS_SCHEMA = z.object({
   conflictsResolvedWithoutLlm: z.number().int().nonnegative().default(0),
   conflictsSentToAgent: z.number().int().nonnegative().default(0),
   mergeRoundsToAgent: z.number().int().nonnegative().default(0),
+  queueWaitMs: z.number().int().nonnegative().default(0),
+  batchSize: z.number().int().nonnegative().default(0),
+  bisectionRounds: z.number().int().nonnegative().default(0),
+  ciFlakes: z.number().int().nonnegative().default(0),
 });
 
 const WAIT_REASON_SCHEMA = z.object({

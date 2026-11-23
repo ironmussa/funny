@@ -1801,7 +1801,10 @@
       "ciRounds": "Rondas de CI por run",
       "redRate": "Rondas de CI en rojo",
       "conflictRate": "Runs con conflicto",
-      "agentFixes": "Fixes del agente por run"
+      "agentFixes": "Fixes del agente por run",
+      "settledWithoutAgent": "Conflictos resueltos sin agente",
+      "batchSize": "Pull requests por lote",
+      "batchWait": "Mediana de tiempo en la cola de merge"
     },
     "proof": {
       "title": "Prueba de regresión",

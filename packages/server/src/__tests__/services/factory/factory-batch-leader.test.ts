@@ -7,6 +7,8 @@
  */
 import { beforeEach, describe, expect, test } from 'bun:test';
 
+import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
+
 import { createBatchLeader } from '../../../services/factory/factory-batch-leader.js';
 import { createFactoryBatchesRepository } from '../../../services/factory/factory-batches.js';
 import {
@@ -15,6 +17,7 @@ import {
   type MergeQueueDeps,
   type QueueMember,
 } from '../../../services/factory/factory-merge-queue.js';
+import { withBatchStats } from '../../../services/factory/factory-queue-port.js';
 import {
   createFakeHost,
   type FakeHost,
@@ -215,6 +218,34 @@ describe('a green batch', () => {
     });
     expect(kinds(outcome.verdicts)).toEqual({ r1: 'requeued', r2: 'requeued' });
     expect(host.merged).toEqual([]);
+  });
+});
+
+describe('what a batch costs (6.2)', () => {
+  test('a green batch: its size, and no halves tested apart', async () => {
+    const { outcome } = await lead(3);
+    expect(outcome.stats).toMatchObject({ size: 3, attempts: 0 });
+    expect(outcome.stats.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test('a bisected batch counts the halves it tested apart', async () => {
+    const { outcome } = await lead(4, {
+      ci: (content) => (content.includes('h3') ? 'red' : 'green'),
+    });
+    // Two halves, then the red half split again: four attempts.
+    expect(outcome.stats).toMatchObject({ size: 4, attempts: 4 });
+  });
+
+  test("a run's counters add the batch up", () => {
+    const metrics = { ...EMPTY_FACTORY_RUN_METRICS, queueWaitMs: 500, bisectionRounds: 1 };
+    expect(withBatchStats(metrics, { size: 4, attempts: 4, durationMs: 1500 }, true)).toMatchObject(
+      {
+        queueWaitMs: 2000,
+        batchSize: 4,
+        bisectionRounds: 5,
+        ciFlakes: 1,
+      },
+    );
   });
 });
 

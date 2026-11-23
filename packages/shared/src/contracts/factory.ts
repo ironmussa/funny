@@ -333,6 +333,14 @@ export interface FactoryRunMetrics {
    * or checks failing on the current base); the run waits for a person after two.
    */
   mergeRoundsToAgent: number;
+  /** Time spent in merge queue batches, in ms (openspec factory-integration D13). */
+  queueWaitMs: number;
+  /** The size of the last batch the run was merged or tested in (0: never batched). */
+  batchSize: number;
+  /** Halves its batches tested apart while bisecting. */
+  bisectionRounds: number;
+  /** Red batches it was in that turned green on the same tree. */
+  ciFlakes: number;
 }
 
 export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
@@ -350,6 +358,10 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
   conflictsResolvedWithoutLlm: 0,
   conflictsSentToAgent: 0,
   mergeRoundsToAgent: 0,
+  queueWaitMs: 0,
+  batchSize: 0,
+  bisectionRounds: 0,
+  ciFlakes: 0,
 };
 
 export type FactoryRunSource = 'manual' | 'label';

@@ -83,7 +83,7 @@ import {
   type ProofResultBody,
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
-import type { FactoryQueuePort } from './factory-queue-port.js';
+import { withBatchStats, type FactoryQueuePort } from './factory-queue-port.js';
 import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
 import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
@@ -1317,6 +1317,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         requireReview: opts.requireReview !== false,
         requireRegressionProof: opts.requireRegressionProof !== false,
       },
+      onStats: (stats, flake) =>
+        count(withBatchStats(metrics, stats, flake), { event: 'batch_ended' }),
     });
     if (!verdict || verdict.kind === 'requeued') return null;
     if (verdict.kind === 'sent_back') return sentBack(verdict.why, verdict.feedback);

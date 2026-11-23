@@ -13,12 +13,17 @@
  */
 
 import type { IntegrationProvider } from '@funny/core/github-app';
-import { reviewAllowsMerge } from '@funny/shared/contracts/factory';
+import { reviewAllowsMerge, type FactoryRunMetrics } from '@funny/shared/contracts/factory';
 
 import { log } from '../../lib/logger.js';
 import { createBatchLeader } from './factory-batch-leader.js';
 import type { FactoryBatchesRepository } from './factory-batches.js';
-import { createMergeQueue, type BatchOutcome, type QueueMember } from './factory-merge-queue.js';
+import {
+  createMergeQueue,
+  type BatchOutcome,
+  type BatchStats,
+  type QueueMember,
+} from './factory-merge-queue.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import { ciRunsOnQueueBranches } from './factory-readiness.js';
 import { factoryRunBranch, type FactoryRunView, type UpdateRunInput } from './factory-runs.js';
@@ -59,6 +64,21 @@ const noQueueCi = new Set<string>();
 /** Whether a repository's workflows run on queue branches, read at most every few minutes. */
 const queueCiRead = new Map<string, { runs: boolean; at: number }>();
 const QUEUE_CI_TTL_MS = 5 * 60_000;
+
+/** A run's counters after a batch it was in (D13). */
+export function withBatchStats(
+  metrics: FactoryRunMetrics,
+  stats: BatchStats,
+  flake: boolean,
+): FactoryRunMetrics {
+  return {
+    ...metrics,
+    queueWaitMs: metrics.queueWaitMs + stats.durationMs,
+    batchSize: stats.size,
+    bisectionRounds: metrics.bisectionRounds + stats.attempts,
+    ciFlakes: metrics.ciFlakes + (flake ? 1 : 0),
+  };
+}
 
 export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
   /**
@@ -205,6 +225,13 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
           error: deleted.error.message,
         });
       }
+    },
+
+    /** Add what a batch cost to a member's counters (D13). */
+    async recordStats(member: QueueMember, stats: BatchStats, flake: boolean): Promise<void> {
+      const run = await deps.run(member.runId);
+      if (!run) return;
+      await deps.record(member.runId, { metrics: withBatchStats(run.metrics, stats, flake) });
     },
 
     /** A member may not merge now: its run waits for a person, with the reason. */

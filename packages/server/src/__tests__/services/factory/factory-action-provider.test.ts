@@ -260,6 +260,10 @@ describe('factory action provider integration metrics', () => {
         conflictsResolvedWithoutLlm: 0,
         conflictsSentToAgent: 0,
         mergeRoundsToAgent: 0,
+        queueWaitMs: 0,
+        batchSize: 0,
+        bisectionRounds: 0,
+        ciFlakes: 0,
       },
       record: async (input) => {
         if (input.metrics) recorded.push(input.metrics);

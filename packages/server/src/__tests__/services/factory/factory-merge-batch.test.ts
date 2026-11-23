@@ -65,11 +65,15 @@ function fakeQueue(verdicts: Record<string, MemberVerdict>, batchable = true) {
         flake: false,
         partialLanding: false,
       },
+      stats: { size: 5, attempts: 2, durationMs: 1000 },
     }),
     recordMerged: async (m) => {
       written.push(`merged ${m.runId}`);
     },
     deleteMergedBranch: async () => undefined,
+    recordStats: async (m) => {
+      written.push(`stats ${m.runId}`);
+    },
     recordHeld: async (m, reason) => {
       written.push(`held ${m.runId}: ${reason}`);
     },
@@ -108,7 +112,14 @@ describe('mergeAsBatch', () => {
       error: 'Not merged: no review.',
     });
     expect(settled.get('r5/merge/1')).toEqual({ status: 'requeued' });
-    expect(written).toEqual(['merged r2', 'held r4: no review']);
+    expect(written).toEqual([
+      'stats r2',
+      'merged r2',
+      'stats r3',
+      'stats r4',
+      'held r4: no review',
+      'stats r5',
+    ]);
   });
 
   test('a branch that does not allow batches: every member waits again, the leader goes serial', async () => {

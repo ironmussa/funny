@@ -27,6 +27,12 @@ export interface FactoryMetricsSummary {
   conflictRate: number | null;
   /** Average agent fixes (follow-ups after the PR opened) per run that reached CI. */
   avgAgentFixes: number | null;
+  /** Share of integration conflicts settled without an agent (merge driver, rerere, regenerator). */
+  settledWithoutAgentRate: number | null;
+  /** Average size of the merge queue batch a run was last in, over the runs batched. */
+  avgBatchSize: number | null;
+  /** Median time a batched run spent in merge queue batches. */
+  medianBatchWaitMs: number | null;
 }
 
 export const DEFAULT_METRICS_WINDOW_DAYS = 30;
@@ -80,6 +86,11 @@ export function summarizeFactoryRuns(
   const fixes = reachedCi.reduce((sum, run) => sum + run.metrics.agentFixes, 0);
   const withConflict = reachedCi.filter((run) => run.metrics.conflicts > 0).length;
 
+  const settled = inWindow.reduce((sum, run) => sum + run.metrics.conflictsResolvedWithoutLlm, 0);
+  const toAgent = inWindow.reduce((sum, run) => sum + run.metrics.conflictsSentToAgent, 0);
+  const batched = inWindow.filter((run) => run.metrics.batchSize > 0);
+  const batchSizes = batched.reduce((sum, run) => sum + run.metrics.batchSize, 0);
+
   return {
     runs: inWindow.length,
     merged,
@@ -93,5 +104,8 @@ export function summarizeFactoryRuns(
     redRate: ratio(ciRed, ciRounds),
     conflictRate: ratio(withConflict, reachedCi.length),
     avgAgentFixes: ratio(fixes, reachedCi.length),
+    settledWithoutAgentRate: ratio(settled, settled + toAgent),
+    avgBatchSize: ratio(batchSizes, batched.length),
+    medianBatchWaitMs: median(batched.map((run) => run.metrics.queueWaitMs)),
   };
 }

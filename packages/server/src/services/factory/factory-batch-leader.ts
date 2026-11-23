@@ -322,10 +322,23 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
   return {
     /** Lead the batch of `members` (the leader first, then the queue order). */
     async lead(members: QueueMember[]): Promise<BatchOutcome> {
+      const started = Date.now();
+      const statsOf = async (batchId: string | null) => ({
+        size: members.length,
+        attempts: batchId
+          ? (await deps.batches.attemptsOf(batchId)).map((a) => a.length).unwrapOr(0)
+          : 0,
+        durationMs: Date.now() - started,
+      });
       const progress: Progress = { verdicts: new Map(), flake: false, partialLanding: false };
       let remaining = await eligible(members, progress);
-      if (remaining.length === 0)
-        return { verdicts: progress.verdicts, result: resultOf(progress, 'No member may merge.') };
+      if (remaining.length === 0) {
+        return {
+          verdicts: progress.verdicts,
+          result: resultOf(progress, 'No member may merge.'),
+          stats: await statsOf(null),
+        };
+      }
       const batch = await startRow(remaining);
       if (!batch) {
         for (const member of remaining)
@@ -333,6 +346,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
         return {
           verdicts: progress.verdicts,
           result: resultOf(progress, 'Another batch is active.'),
+          stats: await statsOf(null),
         };
       }
       const host = deps.providerFor(members[0]!);
@@ -352,6 +366,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
         return {
           verdicts: progress.verdicts,
           result: resultOf(progress, 'No check to test with.'),
+          stats: await statsOf(batch.id),
         };
       }
       for (let attempt = 1; attempt <= MAX_REBUILDS && remaining.length > 0; attempt++) {
@@ -378,7 +393,11 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
         members: members.length,
         landed: [...progress.verdicts.values()].filter((v) => v.kind === 'merged').length,
       });
-      return { verdicts: progress.verdicts, result: resultOf(progress, 'Batch ended.') };
+      return {
+        verdicts: progress.verdicts,
+        result: resultOf(progress, 'Batch ended.'),
+        stats: await statsOf(batch.id),
+      };
     },
   };
 }

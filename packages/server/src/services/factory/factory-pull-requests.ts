@@ -145,6 +145,8 @@ export interface FactoryPullRequests {
    * Absent (tests): no batch queue; `merge` takes the serial path.
    */
   integrationFor?(owner: { userId: string; projectId: string }): IntegrationProvider;
+  /** Point the pull request at another base branch (a stacked run, once its blocker landed: D10). */
+  retarget?(pr: FactoryPullRequestRef, base: string): ResultAsync<void, FactoryPullRequestError>;
   /** With `required`, only those checks count (see `PullRequestCi.ciState`). */
   ciState(
     pr: FactoryPullRequestRef,
@@ -414,6 +416,11 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
       });
 
   return {
+    retarget: (pr, base) =>
+      repoGithubFor(pr, 'write')
+        .json(pr.repo, 'PATCH', `/repos/${pr.repo}/pulls/${pr.number}`, { base })
+        .map(() => undefined)
+        .mapErr((e): FactoryPullRequestError => ({ kind: 'github-error', message: e.message })),
     integrationFor: (owner) =>
       createGithubIntegration(repoGithubFor({ ...owner, repo: '', number: 0 }, 'write')),
     ciState(pr, required) {

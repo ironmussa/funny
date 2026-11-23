@@ -141,6 +141,8 @@ interface ReviewPromptInput {
   otherPullRequests: readonly string[];
   /** Set when `sha` is an integration merge of a commit that passed review: judge only what it settled. */
   integration?: IntegrationScope | null;
+  /** The branch the change is read against: a stacked run's blocker (D10); else the default branch. */
+  diffBase?: string | null;
 }
 
 /** How to read the change: the whole pull request, or only what an integration merge settled. */
@@ -148,7 +150,7 @@ function howToRead(input: ReviewPromptInput): string[] {
   const scope = input.integration;
   if (!scope) {
     return [
-      `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read the change with \`git diff $(git merge-base origin/HEAD ${input.sha}) ${input.sha}\` and the files around it with \`git show ${input.sha}:<path>\`.`,
+      `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read the change with \`git diff $(git merge-base ${input.diffBase ? `origin/${input.diffBase}` : 'origin/HEAD'} ${input.sha}) ${input.sha}\` and the files around it with \`git show ${input.sha}:<path>\`.`,
     ];
   }
   return [
@@ -381,6 +383,8 @@ export interface FactoryReviewerDeps {
    * review then judges only those paths (the rest was reviewed before it).
    */
   integrationOf?(sha: string): IntegrationScope | null;
+  /** The branch a stacked run's change is read against (its blocker's, D10); null otherwise. */
+  diffBase?(): string | null;
 }
 
 type ReviewEnd =
@@ -437,6 +441,7 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
       change: change?.sha === sha ? change : null,
       otherPullRequests: (await deps.otherPullRequests?.()) ?? [],
       integration: reviewedIntegration(sha),
+      diffBase: deps.diffBase?.() ?? null,
     });
     const title = `${titlePrefixOf(sha)}${scope.issueTitle}`;
     const body = readOnlyRoleLaunch({ scope, title, base, opts, issue, prompt });

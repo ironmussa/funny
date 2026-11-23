@@ -156,6 +156,21 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    blocker first, then a much smaller change (powers of four of its changed lines, recorded with
    the risk), then admission order. **Settings > Factory** shows the merge queue's batch setting
    and how the repository merges now, with what to change (`factory.readiness`).
+   4d. **Early integration and stacking** (change `factory-integration`, D8, D10): each tick
+   that finds the base moved asks, for every run whose changed paths (its risk record's, or its
+   contract's likely paths) overlap what merged, whether its pull request still merges, and runs
+   `integrate` on the ones that do not (`factory-early-watch.ts`, at most every ten minutes per
+   run). Steps that work in a run's checkout (agent steps, commands, `integrate`) hold its
+   workspace lock (`factory-early-integration.ts`): asked while one does, the integration is
+   pending (`integration_pending_at`) and runs before the next step; a run at merge is left to
+   the queue; a conflict goes to the implementer at once. With `dependencies: stack` (factory
+   setting, default `wait`), an issue whose one blocker is in flight with a pull request starts on
+   the blocker's branch and opens its pull request against it (`stacked_on`, the prompts'
+   `{{stack_branch}}`; its merge group stays the base's). It waits for the blocker at the end of
+   `ci` (never inside `merge`, whose slot is the blocker's way in), parks when the blocker ends
+   without merging, and at `merge` is retargeted to the default branch and sent round to
+   `integrate` first (`factory-stacking.ts`). Each push to the blocker's branch integrates the runs
+   stacked on it, so a squash merge of the blocker does not conflict with them.
 5. **Merge**: one at a time per repository and base branch (the lane, `factory-merge-lane.ts`).
    On entry, whatever path led to it, `merge` checks: the head commit has a verdict of the
    flow's own `review` step that allows a merge (unless `require_review: false`; an external

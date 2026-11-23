@@ -15,7 +15,9 @@ How to work:
 - Read the repository's agent instructions first (`AGENTS.md`, `CLAUDE.md`
   or the like, at the root and next to the code you change) and follow them.
 - Work on the branch `{{branch}}`. You may already be on it (check with
-  `git branch --show-current`); otherwise create it from the default branch.
+  `git branch --show-current`); otherwise create it from
+  {{#stack_branch}}`origin/{{stack_branch}}`: this issue builds on the pull request
+  from that branch, which has not merged yet{{/stack_branch}}{{^stack_branch}}the default branch{{/stack_branch}}.
 - Read the code around the change before editing, follow the conventions
   you find, and keep the change to what the issue asks.
 - **If the issue is ambiguous or large**, do its smallest useful part that
@@ -29,7 +31,7 @@ How to work:
 - Add or update a **regression test** that fails without the fix and
   passes with it. Run the **full test suite** of each package you change.
 - Commit, push the branch `{{branch}}` to `origin`, and open a pull
-  request from it against the default branch. Its body contains
+  request from it against {{#stack_branch}}`{{stack_branch}}`{{/stack_branch}}{{^stack_branch}}the default branch{{/stack_branch}}. Its body contains
   `Closes #{{issue_number}}` and says:
   - **What changed**, and why that fixes the issue.
   - **How it was tested**, including how the regression test was shown to

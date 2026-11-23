@@ -56,3 +56,39 @@ export async function integrateEarly(
   }
   return asked;
 }
+
+/** A run stacked on another one's branch (D10), with its blocker's pull request. */
+export interface StackedCandidate {
+  runId: string;
+  blockerPr: number;
+}
+
+export interface StackedWatchDeps {
+  /** Each stacked run's blocker head when it was last looked at, by run id. */
+  lastBlockerHead: Map<string, string>;
+  candidates(): Promise<StackedCandidate[]>;
+  /** The head commit of the blocker's pull request; null when it cannot be read. */
+  blockerHead(prNumber: number): Promise<string | null>;
+  integrate(runId: string): Promise<EarlyOutcome | 'not-running'>;
+}
+
+/**
+ * Each push to a blocker's branch integrates the runs stacked on it (D10):
+ * merging the blocker's branch in now keeps both sides of the later merge
+ * with the base carrying the same change, even with squash merges.
+ */
+export async function integrateStacked(
+  deps: StackedWatchDeps,
+): Promise<Array<{ runId: string; outcome: EarlyOutcome | 'not-running' }>> {
+  const asked: Array<{ runId: string; outcome: EarlyOutcome | 'not-running' }> = [];
+  for (const run of await deps.candidates()) {
+    const head = await deps.blockerHead(run.blockerPr);
+    if (!head) continue;
+    const before = deps.lastBlockerHead.get(run.runId);
+    deps.lastBlockerHead.set(run.runId, head);
+    if (before && before !== head) {
+      asked.push({ runId: run.runId, outcome: await deps.integrate(run.runId) });
+    }
+  }
+  return asked;
+}

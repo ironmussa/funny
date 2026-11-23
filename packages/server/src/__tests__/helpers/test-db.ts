@@ -368,6 +368,7 @@ export function createTestDb() {
       stage_limits TEXT,
       batch_size INTEGER,
       batch_wait_ms INTEGER,
+      dependencies TEXT,
       step_overrides TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -421,7 +422,8 @@ export function createTestDb() {
       flow_commit TEXT,
       step_options TEXT,
       regenerate_node TEXT,
-      integration_pending_at TEXT
+      integration_pending_at TEXT,
+      stacked_on TEXT
     )
   `);
   testDb.run(sql`

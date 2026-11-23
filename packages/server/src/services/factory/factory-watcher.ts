@@ -25,7 +25,7 @@
 import type { IssueBlocker } from '@funny/core/github-app';
 import type { ConcurrencyGate } from '@funny/pipelines';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
-import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
+import type { FactoryStackedOn, FactoryWaitReason } from '@funny/shared/contracts/factory';
 import { contractOf } from '@funny/shared/contracts/factory';
 import type { RegressionProofOpts } from '@funny/workflows/compiler';
 import { and, eq } from 'drizzle-orm';
@@ -54,7 +54,7 @@ import {
   waitReasonFor,
   type LatestRunState,
 } from './factory-dependencies.js';
-import { integrateEarly } from './factory-early-watch.js';
+import { integrateEarly, integrateStacked } from './factory-early-watch.js';
 import {
   createFactoryFlowRuns,
   type FactoryFlowRunsDeps,
@@ -400,6 +400,8 @@ async function fire(id: string): Promise<void> {
 
 /** Each factory's last look at its repository's base head (early integration, D8). */
 const baseHeads = new Map<string, string>();
+/** Each stacked run's last look at its blocker's head (D10). */
+const blockerHeads = new Map<string, string>();
 
 /**
  * Early integration (openspec factory-integration D8): when the base moved
@@ -437,7 +439,25 @@ async function watchEarlyIntegration(factory: WatchedFactory, repo: string): Pro
       (await host.pullRequestMergeability(repo, prNumber)).map((pr) => pr.mergeable).unwrapOr(null),
     integrate: (runId) => driver.earlyIntegrate(runId),
   });
-  for (const { runId, outcome } of asked) {
+  const stacked = await integrateStacked({
+    lastBlockerHead: blockerHeads,
+    candidates: async () => {
+      const listed = await repository.list(factory.id);
+      if (listed.isErr()) return [];
+      return listed.value.flatMap((run) => {
+        const on = run.stackedOn;
+        const inFlight = (IN_FLIGHT_STATES as readonly string[]).includes(run.state);
+        if (!on || on.retargeted || !inFlight) return [];
+        const blocker = listed.value.find((other) => other.id === on.runId);
+        const blockerPr = prNumberOf(blocker?.prUrl ?? null);
+        return blockerPr === null ? [] : [{ runId: run.id, blockerPr }];
+      });
+    },
+    blockerHead: async (prNumber) =>
+      (await host.pullRequestMergeability(repo, prNumber)).map((pr) => pr.headSha).unwrapOr(null),
+    integrate: (runId) => driver.earlyIntegrate(runId),
+  });
+  for (const { runId, outcome } of [...asked, ...stacked]) {
     log.info('Issue factory early integration', {
       namespace: 'factory',
       factoryId: factory.id,
@@ -820,7 +840,9 @@ async function admitQueued(
   const issue = await openQueuedIssue(factory, run, ctx);
   if (!issue) return false;
 
-  const reason = (await blockedReason(ctx, run.issueNumber)) ?? pathsHeld(ctx, run);
+  const blocked = await blockedReason(ctx, run.issueNumber);
+  const stackedOn = stackTarget(factory, ctx, blocked);
+  const reason = (stackedOn ? null : blocked) ?? pathsHeld(ctx, run);
   await noteWaitReason(run, reason);
   if (reason) return false;
 
@@ -830,8 +852,46 @@ async function admitQueued(
   if (admitted.isOk() && admitted.value === NO_FREE_SLOT) return NO_FREE_SLOT;
   // Cancelled meanwhile (or another pass took it): not ours to start.
   if (admitted.isErr() || admitted.value !== 'admitted') return false;
-  return startFlow(factory, repo, mode, issue, { ...run, state: 'queued', waitReason: null });
+  if (stackedOn) await runs.update(run.id, { stackedOn });
+  return startFlow(factory, repo, mode, issue, {
+    ...run,
+    state: 'queued',
+    waitReason: null,
+    stackedOn,
+  });
 }
+
+/**
+ * The run an issue stacks on instead of waiting (openspec factory-integration
+ * D10): only with `dependencies: stack`, only when what holds it is one
+ * blocker of this repository whose run is in flight with a pull request (its
+ * branch exists to build on). Anything else waits as before.
+ */
+export function stackTarget(
+  factory: Pick<WatchedFactory, 'dependencies'>,
+  ctx: { runs: ReadonlyArray<Pick<FactoryRunView, 'id' | 'issueNumber' | 'state' | 'prUrl'>> },
+  reason: FactoryWaitReason | null,
+): FactoryStackedOn | null {
+  if (factory.dependencies !== 'stack' || !reason) return null;
+  const stackable =
+    reason.kind === 'blocker-in-progress' || reason.kind === 'blocker-waiting-merge';
+  if (!stackable || reason.blockers.length !== 1) return null;
+  const issueNumber = reason.blockers[0]!;
+  // `runs` is newest first: the blocker's latest run.
+  const blocker = ctx.runs.find((run) => run.issueNumber === issueNumber);
+  if (!blocker?.prUrl || !STACKABLE_STATES.has(blocker.state)) return null;
+  return { runId: blocker.id, issueNumber, branch: factoryRunBranch(blocker), retargeted: false };
+}
+
+/** A blocker's run a later issue may stack on: its pull request is open and still worked on. */
+const STACKABLE_STATES: ReadonlySet<FactoryRunState> = new Set([
+  'pr_open',
+  'waiting_ci',
+  'fixing',
+  'reviewing',
+  'merging',
+  'waiting_human',
+]);
 
 /**
  * Why a queued run that already has a contract still waits: its likely paths
@@ -990,8 +1050,10 @@ async function admitIssues(
   for (const issue of issues) {
     if (free <= 0) break;
     if (!(await isAdmissible(factory.id, issue.number))) continue;
-    if (await blockedReason(ctx, issue.number)) continue;
-    const started = await startImplement(factory, repo, mode, issue);
+    const blocked = await blockedReason(ctx, issue.number);
+    const stackedOn = stackTarget(factory, ctx, blocked);
+    if (blocked && !stackedOn) continue;
+    const started = await startImplement(factory, repo, mode, issue, stackedOn);
     // Another writer (a Retry, a take-over) took the last slot meanwhile.
     if (started === NO_FREE_SLOT) return;
     if (started) free--;
@@ -1327,6 +1389,7 @@ async function startImplement(
   repo: string,
   mode: LaunchMode,
   issue: FactoryIssue,
+  stackedOn: FactoryStackedOn | null = null,
 ): Promise<boolean | typeof NO_FREE_SLOT> {
   if (!runs || !flows) return false;
 
@@ -1349,7 +1412,8 @@ async function startImplement(
     return false;
   }
   if (run.value === NO_FREE_SLOT) return NO_FREE_SLOT;
-  return startFlow(factory, repo, mode, issue, run.value);
+  if (stackedOn) await runs.update(run.value.id, { stackedOn });
+  return startFlow(factory, repo, mode, issue, { ...run.value, stackedOn });
 }
 
 /** Start an admitted run's flow; whether its first agent started. */

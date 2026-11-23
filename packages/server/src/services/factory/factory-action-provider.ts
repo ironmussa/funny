@@ -49,6 +49,7 @@ import {
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
+  type FactoryStackedOn,
   type FactoryTriage,
 } from '@funny/shared/contracts/factory';
 import { EMPTY_INTEGRATE_CONFIG, type IntegrateConfig } from '@funny/workflows';
@@ -61,7 +62,7 @@ import type {
   RunCommandOpts,
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
-import { err, ok, type Result } from 'neverthrow';
+import { err, errAsync, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
@@ -92,6 +93,7 @@ import { withBatchStats, type FactoryQueuePort } from './factory-queue-port.js';
 import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
 import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import { createStacking, type BlockerState } from './factory-stacking.js';
 import {
   resolveStepOptions,
   type ProjectAgentDefaults,
@@ -144,6 +146,8 @@ export const MERGE_HOLD_REASONS = {
   highRisk: 'high risk',
   /** Its merge rounds that reached the implementing agent are spent. */
   mergeRounds: 'merge rounds spent',
+  /** A stacked run whose blocker has not landed, or whose pull request could not be retargeted. */
+  stacked: 'stacked',
   /** The merge queue found it may not merge the commit its batch tested, or could not test it. */
   queue: 'merge queue',
 } as const;
@@ -238,6 +242,12 @@ export interface FactoryActionProviderDeps {
    * Absent: every merge takes the serial path.
    */
   queue?: FactoryQueuePort;
+  /** The run this one is stacked on (openspec factory-integration D10), or null. */
+  stackedOn?: FactoryStackedOn | null;
+  /** Where the blocker of a stacked run stands. */
+  blockerState?: () => Promise<BlockerState>;
+  /** Point the run's pull request at another base branch (a stacked run, once its blocker landed). */
+  retarget?: (base: string) => Promise<Result<void, string>>;
   /** Receives the run's early integration (D8), for the watcher to ask when the base moves. */
   registerEarly?(early: EarlyIntegration): void;
   /** The pull request's size in changed lines, once read: the merge queue's order (D11). */
@@ -495,6 +505,15 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   let prUrl = deps.prUrl;
   let pendingLaunch = deps.launchStartedAt;
   let metrics: FactoryRunMetrics = { ...EMPTY_FACTORY_RUN_METRICS, ...deps.metrics };
+  /** A run stacked on its blocker's branch (D10): its base until the blocker lands. */
+  const stacking = createStacking({
+    stackedOn: deps.stackedOn ?? null,
+    defaultBranch: deps.defaultBranch,
+    blockerState: deps.blockerState,
+    retarget: deps.retarget,
+    record: (input) => deps.record(input),
+    signal: deps.signal,
+  });
   /** The node a regenerable merge (D9) sends a conflict back to, once `merge` named one. */
   let regenerating: string | undefined;
 
@@ -623,8 +642,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   async function worktreeBase(): Promise<
     { baseBranch?: string; baseFromRemote?: boolean } | { error: string }
   > {
-    if (scope.mode !== 'worktree' || !deps.defaultBranch) return {};
-    const branch = await deps.defaultBranch();
+    const base = stacking.base();
+    if (scope.mode !== 'worktree' || !base) return {};
+    const branch = await base;
     if (branch.isErr()) {
       return {
         error: `The agent could not start: the repository's default branch could not be read (${branch.error.message}).`,
@@ -997,6 +1017,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     enterReview: () => enterStage('review'),
     count: (event) => count(reviewCounted(metrics, event), { event }),
     integrationOf: (sha) => integration.integrationOf(sha),
+    diffBase: () => stacking.diffBase(),
   });
 
   /** The run's checkout: one step at a time, an early integration included (D8). */
@@ -1034,7 +1055,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     steps: deps.steps,
     threadId: () => threadIds[0],
     branch: scope.branch,
-    defaultBranch: deps.defaultBranch,
+    // A stacked run integrates its blocker's branch until the blocker landed.
+    defaultBranch: () => stacking.base() ?? errAsync({ message: 'the base branch is unknown' }),
     config: deps.integrateConfig ?? EMPTY_INTEGRATE_CONFIG,
     signal: deps.signal,
     metrics: () => metrics,
@@ -1375,6 +1397,15 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
     atMerge = true;
     await enterStage('merge');
+    // A stacked run whose blocker landed: retarget, then integrate the base first (D10).
+    const retarget = await stacking.retargetIfLanded();
+    if (retarget === 'retargeted') {
+      return sentBack(
+        'conflict',
+        'The pull request it was stacked on merged: this pull request now targets the default branch, and the base is merged in before it merges.',
+      );
+    }
+    if (typeof retarget === 'object') return holdMerge(MERGE_HOLD_REASONS.stacked, retarget.error);
     if (opts.regenerate && regenerating !== opts.regenerate) {
       regenerating = opts.regenerate;
       // The merge queue reads it: such a run is merged alone (D11).
@@ -1517,7 +1548,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       const result = await ci.waitCi(opts);
       const verdict = result.metadata?.verdict;
       await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });
-      return result;
+      if (!result.ok) return result;
+      // A stacked run waits here for its blocker (D10), holding no merge slot.
+      const stuck = await stacking.waitForBlocker();
+      return stuck ? { ok: false, error: stuck, metadata: { outcome: 'blocker-gone' } } : result;
     },
 
     merge: (opts) => provedMerge(opts),

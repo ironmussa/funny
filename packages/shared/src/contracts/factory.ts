@@ -69,6 +69,18 @@ export const factoryBatchSchema = z
 export type FactoryBatchSettings = z.infer<typeof factoryBatchSchema>;
 export const DEFAULT_FACTORY_BATCH: FactoryBatchSettings = { size: 5, waitSeconds: 60 };
 
+export type FactoryDependencies = 'wait' | 'stack';
+
+/** A stacked run's blocker (D10): its run, its issue, its branch, and whether this run's PR was retargeted. */
+export const factoryStackedOnSchema = z.object({
+  runId: z.string(),
+  issueNumber: z.number().int().positive(),
+  branch: z.string(),
+  /** The pull request now targets the default branch: the blocker landed. */
+  retargeted: z.boolean().default(false),
+});
+export type FactoryStackedOn = z.infer<typeof factoryStackedOnSchema>;
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,
@@ -89,6 +101,8 @@ export const saveFactorySettingsInput = z
     /** Provider / model / effort per agent step id; never a permission mode or tool list. */
     stepOverrides: z.lazy(() => factoryStepOverridesSchema).optional(),
     batch: factoryBatchSchema.optional(),
+    /** An issue whose blocker is in flight: wait for it, or start on its branch (D10). */
+    dependencies: z.enum(['wait', 'stack']).optional(),
   })
   .strict();
 
@@ -113,6 +127,8 @@ export interface FactorySettings {
   stepOverrides: FactoryStepOverrides;
   /** The merge queue's batch size and wait. */
   batch: FactoryBatchSettings;
+  /** An issue whose blocker is in flight waits for it, or starts on its branch (openspec factory-integration D10). */
+  dependencies: FactoryDependencies;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**

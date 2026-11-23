@@ -297,6 +297,8 @@ export const factorySettings = sqliteTable(
     /** The merge queue's batch size (null: 5) and wait in ms (null: 60 000). */
     batchSize: integer('batch_size'),
     batchWaitMs: integer('batch_wait_ms'),
+    /** `stack` (an issue starts on its blocker's branch) or `wait` (null): D10. */
+    dependencies: text('dependencies'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),
@@ -364,6 +366,8 @@ export const factoryRuns = sqliteTable('factory_runs', {
   regenerateNode: text('regenerate_node'),
   /** An early integration waiting for the step that holds the checkout (D8), or null. */
   integrationPendingAt: text('integration_pending_at'),
+  /** JSON: the run this one is stacked on (D10: run id, issue, branch, retargeted), or null. */
+  stackedOn: text('stacked_on'),
 });
 
 /**

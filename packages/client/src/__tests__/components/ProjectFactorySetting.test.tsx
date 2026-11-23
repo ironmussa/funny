@@ -96,6 +96,7 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   stageLimits: {},
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
+  dependencies: 'wait',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,
@@ -291,6 +292,18 @@ describe('review and merge settings', () => {
     blur('settings-factory-limit-review', '2');
     expect(mocks.save).not.toHaveBeenCalled();
     expect(screen.queryByTestId('settings-factory-limit-merge')).toBeNull();
+  });
+
+  // openspec factory-integration 5.2: stacked pull requests.
+  test('choosing to stack on blockers in progress saves it', () => {
+    mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    fireEvent.click(screen.getByTestId('settings-factory-dependencies-stack'));
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      dependencies: 'stack',
+    });
   });
 
   // openspec factory-integration 6.1: how the repository merges, and why.

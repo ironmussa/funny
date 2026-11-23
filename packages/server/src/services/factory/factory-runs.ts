@@ -19,6 +19,7 @@ import {
   factoryRegressionProofSchema,
   factoryReviewVerdictSchema,
   factoryRiskSchema,
+  factoryStackedOnSchema,
   factoryStepOptionsRecordSchema,
   factoryTriageSchema,
   MAX_STORED_REVIEWS,
@@ -27,6 +28,7 @@ import {
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
+  type FactoryStackedOn,
   type FactoryStepOptionsRecord,
   type FactoryTriage,
   type FactoryWaitReason,
@@ -267,6 +269,8 @@ export interface FactoryRunView {
   flowCommit: string | null;
   /** The node its `merge` regenerates the change with (D9): such a run is merged alone. */
   regenerateNode: string | null;
+  /** The run this one is stacked on (D10), or null. */
+  stackedOn: FactoryStackedOn | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
 }
@@ -318,7 +322,15 @@ const queueAndFlowOf = (row: Row) => ({
   flowSource: flowSourceOf(row.flowSource ?? null),
   flowCommit: row.flowCommit ?? null,
   regenerateNode: row.regenerateNode ?? null,
+  stackedOn: parseStackedOn(row.stackedOn ?? null),
 });
+
+/** The stored blocker of a stacked run, or null (none, or no longer readable). */
+function parseStackedOn(raw: string | null): FactoryStackedOn | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryStackedOnSchema, raw, 'factory_runs.stacked_on');
+  return parsed.ok ? parsed.value : null;
+}
 
 /** The columns stored as JSON, parsed (a value that no longer parses reads as empty). */
 const jsonFieldsOf = (row: Row) => ({
@@ -450,6 +462,8 @@ export interface UpdateRunInput {
   regenerateNode?: string | null;
   /** When an early integration started waiting for the step holding the checkout (D8), or null. */
   integrationPendingAt?: string | null;
+  /** The run this one is stacked on (D10). */
+  stackedOn?: FactoryStackedOn | null;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
@@ -472,6 +486,7 @@ const JSON_FIELDS = [
   'risk',
   'triage',
   'stepOptions',
+  'stackedOn',
 ] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
@@ -647,6 +662,7 @@ function queueOperations(newId: () => string) {
             stepOptions: null,
             regenerateNode: null,
             integrationPendingAt: null,
+            stackedOn: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -844,6 +860,7 @@ export function createFactoryRunsRepository(
       stepOptions: null,
       regenerateNode: null,
       integrationPendingAt: null,
+      stackedOn: null,
     };
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
       toView(row),

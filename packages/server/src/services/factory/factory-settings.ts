@@ -19,6 +19,7 @@ import {
   MERGE_STAGE,
   type FactoryAutoMerge,
   type FactoryBatchSettings,
+  type FactoryDependencies,
   type FactoryMode,
   type FactoryStepOverrides,
 } from '@funny/shared/contracts/factory';
@@ -52,6 +53,8 @@ export interface FactorySettingsView {
   stepOverrides: FactoryStepOverrides;
   /** The merge queue's batch size and wait. */
   batch: FactoryBatchSettings;
+  /** Wait for an in-flight blocker, or stack on its branch (D10). */
+  dependencies: FactoryDependencies;
   /** Why the factory cannot make progress now, or null. */
   blockedReason: string | null;
   updatedAt: string;
@@ -75,9 +78,14 @@ export interface SaveFactorySettingsInput {
   stageLimits?: Record<string, number>;
   stepOverrides?: FactoryStepOverrides;
   batch?: FactoryBatchSettings;
+  dependencies?: FactoryDependencies;
 }
 
 type Row = typeof factorySettings.$inferSelect;
+
+/** How the factory treats an in-flight blocker: `wait` unless it stacks. */
+const dependenciesOf = (row: Row): FactoryDependencies =>
+  row.dependencies === 'stack' ? 'stack' : 'wait';
 
 /** The stored batch settings, or the defaults where a column is null. */
 function batchOf(row: Row): FactoryBatchSettings {
@@ -159,6 +167,7 @@ const toView = (row: Row): FactorySettingsView => ({
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
+  dependencies: dependenciesOf(row),
   blockedReason: row.blockedReason ?? null,
   updatedAt: row.updatedAt,
 });
@@ -234,6 +243,7 @@ const DEFAULTS = {
   stageLimits: {} as Record<string, number>,
   stepOverrides: {} as FactoryStepOverrides,
   batch: DEFAULT_FACTORY_BATCH,
+  dependencies: 'wait' as FactoryDependencies,
 };
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */
@@ -261,6 +271,7 @@ function buildRow(
     stepOverrides: JSON.stringify(input.stepOverrides ?? base.stepOverrides),
     batchSize: (input.batch ?? base.batch).size,
     batchWaitMs: (input.batch ?? base.batch).waitSeconds * 1000,
+    dependencies: input.dependencies ?? base.dependencies,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -290,6 +301,8 @@ export interface WatchedFactory {
   stepOverrides: FactoryStepOverrides;
   /** The merge queue's batch size and wait. */
   batch: FactoryBatchSettings;
+  /** Wait for an in-flight blocker, or stack on its branch (D10). */
+  dependencies: FactoryDependencies;
 }
 
 const toEnabled = (row: Row): WatchedFactory => ({
@@ -306,6 +319,7 @@ const toEnabled = (row: Row): WatchedFactory => ({
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
+  dependencies: dependenciesOf(row),
 });
 
 /**
@@ -405,6 +419,7 @@ export function createFactorySettingsService(
       ...(input.stageLimits !== undefined && { stageLimits: row.stageLimits }),
       ...(input.stepOverrides !== undefined && { stepOverrides: row.stepOverrides }),
       ...(input.batch !== undefined && { batchSize: row.batchSize, batchWaitMs: row.batchWaitMs }),
+      ...(input.dependencies !== undefined && { dependencies: row.dependencies }),
     };
     return ResultAsync.fromPromise(
       db

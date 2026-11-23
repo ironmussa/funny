@@ -39,7 +39,7 @@ import {
 } from '@funny/pipelines';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
-import type { Result } from 'neverthrow';
+import { err, type Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { messages, threads } from '../../db/schema.js';
@@ -78,6 +78,7 @@ import {
 } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
 import type { QueueMember } from './factory-merge-queue.js';
+import { prNumberOf } from './factory-pull-requests.js';
 import { createFactoryQueuePort, type FactoryQueuePort } from './factory-queue-port.js';
 import { readWorkflowFiles } from './factory-readiness.js';
 import {
@@ -93,6 +94,7 @@ import {
   projectAgentDefaults,
   type WatchedFactory,
 } from './factory-settings.js';
+import type { BlockerState } from './factory-stacking.js';
 import type { FactoryStepDeps } from './factory-step-runner.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import {
@@ -329,6 +331,9 @@ export function admissionPriority(run: Pick<FactoryRunView, 'admittedAt' | 'star
   return Math.max(0, Math.floor((admitted - PRIORITY_EPOCH_MS) / 1000));
 }
 
+/** A blocker that ended in one of these will not merge: the runs stacked on it park (D10). */
+const GONE_STATES: ReadonlySet<string> = new Set(['failed', 'stopped', 'no_change']);
+
 /** A bucket's weight in a merge priority: above any admission order (seconds since 2026). */
 const MERGE_BUCKET = 10_000_000_000;
 
@@ -529,6 +534,15 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       projectId: leader.projectId,
     });
 
+  /** Where a stacked run's blocker stands (D10): merged, still worked on, or gone without merging. */
+  async function blockerStateOf(stackedOn: FactoryRunView['stackedOn']): Promise<BlockerState> {
+    if (!stackedOn) return 'merged';
+    const blocker = (await deps.runs.get(stackedOn.runId)).unwrapOr(null);
+    if (!blocker) return 'gone';
+    if (blocker.state === 'merged') return 'merged';
+    return GONE_STATES.has(blocker.state) ? 'gone' : 'in-flight';
+  }
+
   /** Whether another queued run of the factory waits for this run's issue (it is a blocker). */
   async function blocksOthers(job: FactoryRunJob): Promise<boolean> {
     const queued = await deps.runs.queue(job.factory.id);
@@ -669,6 +683,20 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         : undefined,
       github: deps.github,
       queue: queueFor(controller.signal),
+      stackedOn: job.run.stackedOn,
+      blockerState: () => blockerStateOf(job.run.stackedOn),
+      retarget: async (base) => {
+        // The pull request was opened during the flow: read where it is now.
+        const live = (await deps.runs.get(job.run.id)).unwrapOr(null);
+        const pr = prNumberOf(live?.prUrl ?? null);
+        const retarget = deps.github.pullRequests.retarget;
+        if (pr === null || !retarget) return err('the run has no pull request to retarget');
+        const done = await retarget(
+          { repo: scope.repo, number: pr, userId: scope.userId, projectId: scope.projectId },
+          base,
+        );
+        return done.mapErr((e) => e.message);
+      },
       registerEarly: (early) => earlyOf.set(job.run.id, early),
       onChangeSize: (lines) => {
         const order = mergeOrder.get(job.run.id) ?? { blocker: false };
@@ -796,6 +824,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         // What the host's concurrency groups are named by (the merge lane, stage limits).
         base_branch: baseBranch,
         factory_id: job.factory.id,
+        // A stacked run's blocker branch, for its prompts (D10); its merge group stays the base's.
+        stack_branch: job.run.stackedOn?.retargeted ? '' : (job.run.stackedOn?.branch ?? ''),
       },
       outputs: {},
     };

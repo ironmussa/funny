@@ -226,6 +226,38 @@ describe('integrate', () => {
     expect(git(work, 'status', '--porcelain')).toBe('');
   });
 
+  // openspec factory-integration 5.2 (D10): a run stacked on a blocker that is
+  // squash-merged after a late fix still merges the base without a conflict.
+  test("a stacked branch follows its blocker's late fix, then merges the squashed base cleanly", async () => {
+    const { seed, work } = repos();
+    // The blocker's branch, pushed.
+    git(seed, 'checkout', '-q', '-b', 'blocker');
+    write(seed, 'b.txt', 'one\ntwo\n');
+    commit(seed, 'blocker work');
+    git(seed, 'push', '-q', 'origin', 'blocker');
+    // The stacked run starts on it.
+    git(work, 'fetch', '-q', 'origin', 'blocker');
+    git(work, 'checkout', '-q', '-B', 'feature', 'origin/blocker');
+    write(work, 'c.txt', 'stacked\n');
+    commit(work, 'stacked work');
+    // A late fix on the blocker, then early integration of the stacked run.
+    write(seed, 'b.txt', 'one\nTWO\n');
+    commit(seed, 'blocker late fix');
+    git(seed, 'push', '-q', 'origin', 'blocker');
+    expect(await run(work, request({ baseBranch: 'blocker' }))).toMatchObject({
+      outcome: 'merged',
+    });
+    // The blocker lands as one squashed commit.
+    git(seed, 'checkout', '-q', 'main');
+    git(seed, 'merge', '-q', '--squash', 'blocker');
+    git(seed, '-c', 'user.name=T', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'blocker (#7)');
+    git(seed, 'push', '-q', 'origin', 'main');
+    // Retargeted to main, the stacked branch merges the base without a conflict.
+    const result = await run(work, request({ baseBranch: 'main' }));
+    expect(result).toMatchObject({ outcome: 'merged', conflictedPaths: [] });
+    expect(readFileSync(join(work, 'b.txt'), 'utf8')).toBe('one\nTWO\n');
+  });
+
   test('a failing integration check leaves the branch as it was and pushes nothing', async () => {
     const { seed, work } = repos();
     write(work, 'b.txt', 'mine\n');

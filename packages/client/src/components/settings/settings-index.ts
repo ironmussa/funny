@@ -540,6 +540,15 @@ const ENTRIES = [
     keywords: ['merge queue', 'batch', 'bisect', 'wait'],
   },
   {
+    id: 'factory.dependencies',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryDependencies',
+    description: 'settings.projectFactoryDependenciesWaitDesc',
+    keywords: ['blocker', 'stack', 'stacked', 'depends'],
+  },
+  {
     id: 'factory.stepOptions',
     scope: 'project',
     page: 'factory',

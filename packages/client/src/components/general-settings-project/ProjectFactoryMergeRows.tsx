@@ -17,9 +17,10 @@ import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 type AutoMerge = FactorySettings['autoMerge'];
 type MergeSettings = Pick<
   FactorySettings,
-  'autoMerge' | 'sensitivePaths' | 'stageLimits' | 'batch'
+  'autoMerge' | 'sensitivePaths' | 'stageLimits' | 'batch' | 'dependencies'
 >;
 type BatchSettings = FactorySettings['batch'];
+type Dependencies = FactorySettings['dependencies'];
 
 /** The input's whole number within `min`–`max`, or null when it is not one. */
 function wholeNumber(text: string, min: number, max: number): number | null {
@@ -186,7 +187,7 @@ export function ProjectFactoryMergeRows({
 }) {
   const { t } = useTranslation();
   const { definition } = useFactoryFlowDefinition(projectId, flowName);
-  const { autoMerge, sensitivePaths, stageLimits, batch } = settings;
+  const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
 
   return (
     <>
@@ -287,6 +288,39 @@ export function ProjectFactoryMergeRows({
         <BatchInputs batch={batch} inputKey={rowKey} onSave={(next) => onSave({ batch: next })} />
       </ProjectSettingRow>
       <QueueReadiness projectId={projectId} />
+
+      <ProjectSettingRow
+        settingId="factory.dependencies"
+        title={t('settings.projectFactoryDependencies', 'Blockers in progress')}
+        description={
+          dependencies === 'stack'
+            ? t(
+                'settings.projectFactoryDependenciesStackDesc',
+                "An issue whose blocker has a pull request open starts on the blocker's branch, and merges after it",
+              )
+            : t(
+                'settings.projectFactoryDependenciesWaitDesc',
+                'An issue waits until its blockers have merged',
+              )
+        }
+      >
+        <SegmentedControl<Dependencies>
+          value={dependencies}
+          onChange={(value) => onSave({ dependencies: value })}
+          options={[
+            {
+              value: 'wait',
+              label: t('settings.projectFactoryDependenciesWait', 'Wait'),
+              testId: 'settings-factory-dependencies-wait',
+            },
+            {
+              value: 'stack',
+              label: t('settings.projectFactoryDependenciesStack', 'Stack'),
+              testId: 'settings-factory-dependencies-stack',
+            },
+          ]}
+        />
+      </ProjectSettingRow>
     </>
   );
 }

@@ -2355,6 +2355,16 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'integration_pending_at', 'TEXT');
     },
   },
+  {
+    // Change factory-integration, D10: whether a factory stacks an issue on
+    // its blocker's branch (`stack`) or waits for it (`wait`, null), and the
+    // run a stacked run is on (JSON: run id, issue, branch, retargeted).
+    name: '118_factory_stacking',
+    async up() {
+      await ctx().addColumn('factory_settings', 'dependencies', 'TEXT');
+      await ctx().addColumn('factory_runs', 'stacked_on', 'TEXT');
+    },
+  },
 ];
 
 /**

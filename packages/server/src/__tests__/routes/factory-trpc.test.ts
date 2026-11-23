@@ -402,6 +402,18 @@ describe('factory over tRPC', () => {
     expect(refused.status).toBe(403);
   });
 
+  // openspec factory-integration 5.2: stacked pull requests.
+  test('an in-flight blocker is waited for unless the factory stacks', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      dependencies: 'wait',
+    });
+    const saved = await save('alice', { projectId: 'p1', enabled: true, dependencies: 'stack' });
+    expect(saved.body).toMatchObject({ dependencies: 'stack' });
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: true, dependencies: 'merge' })).status,
+    ).toBe(400);
+  });
+
   // openspec factory-integration 6.1: how the repository merges, and why.
   test('readiness says how the repository merges; without a running factory, one at a time', async () => {
     await save('alice', { projectId: 'p1', enabled: true });

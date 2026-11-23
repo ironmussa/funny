@@ -300,6 +300,7 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   stageLimits: {},
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
+  dependencies: 'wait',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

@@ -134,7 +134,6 @@ function WorktreeCard({
   return (
     <div className={listRowClassName}>
       <div className="flex min-w-0 flex-1 items-start gap-2">
-        <GitFork className="icon-sm text-status-info mt-0.5 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <BranchBadge

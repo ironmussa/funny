@@ -330,7 +330,6 @@ function StashRow({
       }}
       data-testid={`stash-entry-${idx}`}
     >
-      <Archive className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className={cn(listRowTitleClassName, 'line-clamp-2 break-words')}>
           {stashTitle(entry.message)}

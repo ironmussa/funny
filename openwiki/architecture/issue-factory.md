@@ -144,7 +144,9 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    the batch; a refusal after a landing is a partial landing (the rest wait again, and a branch
    whose up-to-date rule could not be read gets batches of one from then on). Red: the same tree
    once more (a flake), then halves from B in parallel, every red half split again; culprits go
-   back to their loop with the failing checks, the rest are requeued; no red half: one at a time,
+   back to their loop with the failing checks (a culprit back at the same commit, its agent having
+   changed nothing, waits for a person instead of entering another batch: `culpritAt` in
+   `factory-batches.ts`), the rest are requeued; no red half: one at a time,
    in order. A member is settled with the output its own `merge` would have had
    (`merge.json.outcome`), and a landed one is recorded `merged` on its own run. Every write about
    a member uses its enabler's capped token (`integrationFor`, `@funny/core/github-app`

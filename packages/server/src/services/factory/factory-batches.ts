@@ -397,6 +397,34 @@ export function createFactoryBatchesRepository(
     },
 
     /**
+     * Whether run `runId` was isolated as the cause of a red batch at commit
+     * `sha` (a batch it was tested in at that head named it a culprit).
+     */
+    culpritAt(repo: string, runId: string, sha: string): ResultAsync<boolean, FactoryBatchesError> {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryBatches)
+          .where(
+            and(
+              eq(factoryBatches.repo, repo),
+              isNotNull(factoryBatches.result),
+              sql`${factoryBatches.result} like ${`%${runId}%`}`,
+            ),
+          ),
+        storage,
+      ).map((rows) =>
+        rows
+          .map(toBatch)
+          .some(
+            (batch) =>
+              (batch.result?.culprits.includes(runId) ?? false) &&
+              batch.members.some((member) => member.runId === runId && member.headSha === sha),
+          ),
+      );
+    },
+
+    /**
      * How long CI took on the repository's queue branches: the last `limit`
      * attempts that reached a verdict (green or red), newest first, in ms.
      */

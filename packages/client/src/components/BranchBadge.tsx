@@ -45,7 +45,12 @@ export function BranchBadge({
           className={cn(
             'inline-flex min-w-0 items-center gap-1 font-mono',
             s.text,
-            variant === 'badge' && ['rounded-full font-medium', s.chip],
+            // `will-change-transform` gives the chip its own layer, which the
+            // browser places on a whole pixel. The 14px root makes most row
+            // offsets fractional (leading-5 = 17.5px), and without the layer the
+            // background and the text round differently: the name sits up to
+            // 1px off-center depending on where the row lands.
+            variant === 'badge' && ['rounded-full font-medium will-change-transform', s.chip],
             className,
           )}
           style={bg ? { backgroundColor: bg, color: contrastText(bg) } : undefined}

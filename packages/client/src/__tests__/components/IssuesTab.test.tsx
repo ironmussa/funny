@@ -9,7 +9,7 @@ import {
   mock,
 } from 'bun:test';
 
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { buildFactoryRun } from '@/data/factory/testing';
@@ -234,6 +234,47 @@ describe('IssuesTab remote checks', () => {
     // The first dialog open loads MarkdownBody cold, which can pass 5 s when the
     // pre-push runs many test files in parallel.
   }, 15_000);
+
+  test('puts the linked branch and PR on one line and the GitHub labels, tagged, on another', async () => {
+    apiMock.projectGetRemoteUrl.mockReturnValue(
+      okAsync({ remoteUrl: 'https://github.com/acme/repo' }),
+    );
+    apiMock.githubIssuesEnriched.mockReturnValue(
+      okAsync({
+        owner: 'acme',
+        repo: 'repo',
+        hasMore: false,
+        issues: [
+          {
+            number: 8,
+            title: 'Trim names',
+            body: '',
+            state: 'open',
+            html_url: 'https://github.com/acme/repo/issues/8',
+            labels: [{ name: 'ready-for-agent', color: '0e8a16' }],
+            comments: 0,
+            created_at: '2026-01-01T00:00:00Z',
+            user: { login: 'octo', avatar_url: '' },
+            linkedBranch: 'factory/issue-8',
+            linkedPR: { number: 33, state: 'open', url: 'https://github.com/acme/repo/pull/33' },
+            suggestedBranchName: 'issue-8-trim-names',
+          },
+        ],
+      }),
+    );
+    renderWithProviders(<IssuesTab visible />);
+
+    const links = await screen.findByTestId('issue-links-8');
+    const tags = screen.getByTestId('issue-tags-8');
+    const branch = within(links).getByTestId('issue-linked-branch-8');
+    // A branch name is a literal identifier: monospace, like every branch chip.
+    expect(branch).toHaveClass('font-mono');
+    expect(links).toHaveTextContent('#33');
+    expect(within(links).queryByTestId('issue-label-8-ready-for-agent')).toBeNull();
+    const label = within(tags).getByTestId('issue-label-8-ready-for-agent');
+    expect(label.querySelector('svg')).not.toBeNull();
+    expect(within(tags).queryByTestId('issue-linked-branch-8')).toBeNull();
+  });
 });
 
 const issue = (number: number, state: 'open' | 'closed' = 'open') => ({
@@ -348,7 +389,16 @@ describe('IssuesTab and the issue factory', () => {
     ];
     showIssues([issue(1), issue(2)]);
 
-    expect(await screen.findByTestId('issue-factory-status-1')).toHaveTextContent('Waiting for CI');
+    const status = await screen.findByTestId('issue-factory-status-1');
+    expect(status).toHaveTextContent('Waiting for CI');
+    // The factory state has its own line and icon, apart from the GitHub labels.
+    expect(
+      within(screen.getByTestId('issue-factory-line-1')).getByTestId('issue-factory-status-1'),
+    ).toBe(status);
+    expect(status.querySelector('svg')).not.toBeNull();
+    expect(
+      within(screen.getByTestId('issue-tags-1')).queryByTestId('issue-factory-status-1'),
+    ).toBeNull();
     expect(screen.queryByTestId('issue-select-1')).toBeNull();
     expect(screen.getByTestId('issue-factory-thread-1')).toHaveAttribute(
       'href',

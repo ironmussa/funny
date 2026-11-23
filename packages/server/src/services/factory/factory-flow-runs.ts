@@ -42,7 +42,7 @@ import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { messages, threads } from '../../db/schema.js';
+import { messages, projects, threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import type {
   StartedThread,
@@ -67,6 +67,7 @@ import {
   isMergeLane,
   flowReadsOf,
   loadFactoryFlow,
+  type FactoryFlowContext,
   type FactoryFlow,
   type FactoryFlowError,
 } from './factory-flow.js';
@@ -80,6 +81,7 @@ import {
   type UpdateRunInput,
 } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
+import type { ProjectAgentDefaults } from './factory-step-options.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import {
   createThreadWaits,
@@ -113,6 +115,8 @@ export interface FactoryFlowRunsDeps {
     threadId: string,
     content: string,
     expectedBranch?: string,
+    /** The step's agent options, carried on the message body. */
+    options?: Record<string, unknown>,
   ) => Promise<Result<void, string>>;
   /** Record why the factory cannot make progress (a run that could not start). */
   reportBlocked?: (factoryId: string, reason: string) => Promise<void>;
@@ -125,7 +129,10 @@ export interface FactoryFlowRunsDeps {
    * returning) the worktrees with uncommitted files or unpushed commits.
    */
   cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
-  loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
+  loadFlow?: (
+    job: FactoryRunJob,
+    context: FactoryFlowContext,
+  ) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Regression proof start/poll through the enabler's runner. */
   proof?: (userId: string, threadId: string) => FactoryProofDeps;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
@@ -250,6 +257,22 @@ async function findLaunchedThread(
   return row?.id ?? null;
 }
 
+/**
+ * The project's agent defaults, under a flow's own (`resolveStepOptions`): what
+ * a thread the factory starts without options would get from the runtime.
+ */
+async function projectAgentDefaults(projectId: string): Promise<ProjectAgentDefaults> {
+  const [row] = await db
+    .select({
+      provider: projects.defaultProvider,
+      model: projects.defaultModel,
+      effort: projects.defaultEffort,
+    })
+    .from(projects)
+    .where(eq(projects.id, projectId));
+  return row ?? {};
+}
+
 /** Whether a started run has an agent working (or is done), or never started one. */
 export type FactoryRunStart = 'started' | 'not-started';
 
@@ -327,7 +350,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
   const loadFlow =
     deps.loadFlow ??
-    ((job: FactoryRunJob) =>
+    ((job: FactoryRunJob, context: FactoryFlowContext) =>
       loadFactoryFlow(
         flowOf(job),
         flowReadsOf(deps.github, {
@@ -335,6 +358,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           ownerId: job.factory.userId,
           projectId: job.factory.projectId,
         }),
+        context,
       ));
 
   /** A run whose flow could not be loaded: dropped when it never ran, failed when invalid. */
@@ -474,7 +498,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     controller: AbortController,
     agentStarted: () => void,
   ): Promise<FactoryRunStart> {
-    const flow = await loadFlow(job);
+    const projectDefaults = await projectAgentDefaults(job.factory.projectId);
+    const flow = await loadFlow(job, { project: projectDefaults });
     if (flow.isErr()) {
       await flowUnavailable(job, flow.error);
       return 'not-started';
@@ -531,6 +556,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       issueUrl: job.issue.url,
     };
     const provider = createFactoryActionProvider({
+      projectDefaults,
       scope,
       threadIds: job.run.threadIds,
       prUrl: job.run.prUrl,
@@ -543,8 +569,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       continuation: deps.followUp
         ? {
             // The run's branch: a worktree switched away refuses the step.
-            followUp: (threadId, content) =>
-              deps.followUp!(scope.userId, threadId, content, scope.branch),
+            followUp: (threadId, content, options) =>
+              deps.followUp!(scope.userId, threadId, content, scope.branch, { ...options }),
             completedAt: threadCompletedAt,
             followedUpSince,
             // A reviewer's thread is on its own branch: no branch guard.

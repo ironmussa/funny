@@ -509,8 +509,12 @@ export const factorySentinelResultSchema = z.discriminatedUnion('decision', [
     reason: z.string().trim().min(1).max(2000),
   }),
   z.object({
-    /** `escalate`: a person must look; `unknown`: no merge can be named. */
-    decision: z.enum(['escalate', 'unknown']),
+    /**
+     * `escalate`: a person must look; `unknown`: no merge can be named;
+     * `unrelated`: the failure comes from a change that is none of the
+     * factory's merges, so the incident closes and the factory goes on.
+     */
+    decision: z.enum(['escalate', 'unknown', 'unrelated']),
     reason: z.string().trim().min(1).max(2000),
   }),
 ]);
@@ -523,12 +527,14 @@ export const factoryIncidentCandidateSchema = z.object({
   mergedAt: z.string(),
   /** The run's enabler: who is told. */
   userId: z.string(),
+  /** The commit the merge made on the base branch, when GitHub said (absent on older incidents). */
+  mergeSha: z.string().optional(),
 });
 export type FactoryIncidentCandidate = z.infer<typeof factoryIncidentCandidateSchema>;
 
 /** What an incident ended up with. */
 export const factoryIncidentResultSchema = z.object({
-  decision: z.enum(['revert', 'escalate', 'unknown']),
+  decision: z.enum(['revert', 'escalate', 'unknown', 'unrelated']),
   reason: z.string(),
   /** The pull request named as the cause (`revert`). */
   culpritPrUrl: z.string().optional(),

@@ -14,7 +14,8 @@
  * - `investigating`: the sentinel's thread runs.
  * - `reported`: the sentinel answered and the enablers were told (a revert
  *   pull request was opened when it named a merge).
- * - `closed`: the base branch is green again, or a member closed it.
+ * - `closed`: the base branch is green again, the sentinel found that no
+ *   factory merge broke it (`closedBy = 'unrelated'`), or a member closed it.
  *
  * At most one incident that is not closed exists per repository and base
  * branch (the partial unique index of migration 111), so opening one is an
@@ -31,7 +32,7 @@ import {
   type FactoryIncidentState,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { and, eq, inArray, like, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, like, ne } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
@@ -163,6 +164,33 @@ export function createFactoryIncidentsRepository(
       ).map((rows) => (rows[0] ? toRecord(rows[0]) : null));
     },
 
+    /** The newest closed incident of a repository's base branch, or null. */
+    lastClosed(
+      repo: string,
+      baseBranch: string,
+    ): ResultAsync<
+      (FactoryIncidentRecord & { closedBy: string | null }) | null,
+      FactoryIncidentsError
+    > {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryIncidents)
+          .where(
+            and(
+              eq(factoryIncidents.repo, repo),
+              eq(factoryIncidents.baseBranch, baseBranch),
+              eq(factoryIncidents.state, 'closed'),
+            ),
+          )
+          .orderBy(desc(factoryIncidents.openedAt))
+          .limit(1),
+        storage,
+      ).map((rows) =>
+        rows[0] ? { ...toRecord(rows[0]), closedBy: rows[0].closedBy ?? null } : null,
+      );
+    },
+
     /** The not-closed incident that paused `factoryId`, or null. */
     activeForFactory(
       factoryId: string,
@@ -245,7 +273,10 @@ export function createFactoryIncidentsRepository(
     report: (id: string, result: FactoryIncidentResult) =>
       move(id, 'report', { result: JSON.stringify(result) }),
 
-    /** Close it: `by` is a user id, or `green` when the base branch recovered. */
+    /**
+     * Close it: `by` is a user id, `green` when the base branch recovered, or
+     * `unrelated` when the sentinel found no factory merge behind it.
+     */
     close: (id: string, by: string) =>
       move(id, 'close', { closedAt: deps.now().toISOString(), closedBy: by }),
 

@@ -119,6 +119,14 @@ export interface FactoryGithubPort {
     reader: FactoryRepoReader,
     branch: string,
   ): ResultAsync<{ sha: string; ci: CiState }, GithubCallError>;
+  /**
+   * The commit merged pull request `number` made on its base branch and the
+   * verdict of that commit's checks, or null when it is not merged.
+   */
+  mergeCommitState(
+    reader: FactoryRepoReader,
+    number: number,
+  ): ResultAsync<{ sha: string; ci: CiState } | null, GithubCallError>;
   /** Open a pull request that reverts a merged one. Never merged by the factory. */
   revertPullRequest(
     reader: FactoryRepoReader,
@@ -253,6 +261,7 @@ export function createFactoryGithub(
     relabelIssue: (reader, issueNumber, labels) => reads(reader).relabelIssue(issueNumber, labels),
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
     branchState: (reader, branch) => reads(reader).branchState(branch),
+    mergeCommitState: (reader, number) => reads(reader).mergeCommitState(number),
     revertPullRequest: (reader, number, text) => reads(reader).revertPullRequest(number, text),
 
     pullRequests: createFactoryPullRequests({

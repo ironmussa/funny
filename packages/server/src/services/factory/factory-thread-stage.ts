@@ -87,7 +87,7 @@ interface StageMoved {
 /** Move one thread (compare-and-set on its stored stage) and record the move. */
 async function moveThreadStage(
   threadId: string,
-  state: FactoryRunState,
+  pick: (from: string) => { from: ThreadStage; to: RunThreadStage } | null,
 ): Promise<StageMoved | null> {
   return withDatabaseTransaction(async () => {
     const [thread] = await db
@@ -100,7 +100,7 @@ async function moveThreadStage(
       .from(threads)
       .where(eq(threads.id, threadId));
     if (!thread || thread.archived) return null;
-    const move = threadStageMove(state, thread.stage);
+    const move = pick(thread.stage);
     if (!move) return null;
     const moved = await db
       .update(threads)
@@ -142,7 +142,7 @@ export function syncRunThreadStages(runId: string): ResultAsync<StageMoved[], ne
     const threadIds = parseIds(run.threadIds);
     const moves: StageMoved[] = [];
     for (const threadId of threadIds) {
-      const moved = await moveThreadStage(threadId, state);
+      const moved = await moveThreadStage(threadId, (from) => threadStageMove(state, from));
       if (moved) moves.push(moved);
     }
     for (const move of moves) {
@@ -174,6 +174,39 @@ export function syncRunThreadStages(runId: string): ResultAsync<StageMoved[], ne
       error: error instanceof Error ? error.message : String(error),
     });
     return ResultAsync.fromSafePromise(Promise.resolve([] as StageMoved[]));
+  });
+}
+
+/**
+ * A role thread that belongs to no run (the sentinel's) is done once its
+ * answer was read: to `done`, from the stages `STAGE_FROM` allows, and the
+ * owner's browser is told. Never fails the caller.
+ */
+export function finishRoleThreadStage(threadId: string, reason: string): ResultAsync<void, never> {
+  const allowed: readonly string[] = STAGE_FROM.done;
+  const finish = async () => {
+    const move = await moveThreadStage(threadId, (from) =>
+      allowed.includes(from) ? { from: from as ThreadStage, to: 'done' } : null,
+    );
+    if (!move) return;
+    relayToUser(move.userId, {
+      type: 'thread:stage-changed',
+      threadId,
+      data: {
+        fromStage: move.fromStage,
+        toStage: move.toStage,
+        projectId: move.projectId,
+        reason,
+      },
+    });
+  };
+  return ResultAsync.fromPromise(finish(), (error) => error).orElse((error) => {
+    log.warn('Factory role thread could not move to done', {
+      namespace: 'factory',
+      threadId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return ResultAsync.fromSafePromise(Promise.resolve(undefined));
   });
 }
 

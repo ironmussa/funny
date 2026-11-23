@@ -103,6 +103,7 @@ import {
   startRegressionProofOnRunner,
   stopFactoryThreads,
 } from './factory-thread-requests.js';
+import { finishRoleThreadStage } from './factory-thread-stage.js';
 import {
   lastThreadMessage,
   runsPushedCommits,
@@ -412,6 +413,11 @@ async function superviseBase(
         const state = await d.github.branchState(reader, branch);
         return state.isOk() ? state.value : null;
       },
+      mergeState: async (prNumber) => {
+        const state = await d.github.mergeCommitState(reader, prNumber);
+        return state.isOk() ? state.value : null;
+      },
+      cleared: clearedRedCommits,
       launch: (body) => launchFor(d)({ userId: factory.userId, body }),
       threadStatus: sentinelThreadStatus,
       finalMessage: d.lastThreadMessage ?? lastThreadMessage,
@@ -420,6 +426,13 @@ async function superviseBase(
         return reverted.isOk() ? ok({ url: reverted.value.url }) : err(reverted.error);
       },
       notify: d.notify ?? sendPush,
+      retire: async (threadId) => {
+        await finishRoleThreadStage(threadId, 'factory sentinel answered');
+        // Read-only, but its checkout goes only when nothing in it would be lost.
+        await cleanupFactoryWorktrees(d.ports, factory.userId, [threadId], d.browserEvents, {
+          keepUnsaved: true,
+        });
+      },
       mode,
     },
     factory,
@@ -427,6 +440,17 @@ async function superviseBase(
   );
   return sentinel.superviseBase();
 }
+
+/**
+ * Red base commits the sentinel found were no factory merge's, kept so a tick
+ * does not read the same merge commits again. Bounded: the oldest go first.
+ */
+const clearedRedCommits = new (class extends Set<string> {
+  override add(key: string): this {
+    if (this.size >= 500) this.delete(this.values().next().value as string);
+    return super.add(key);
+  }
+})();
 
 /** A thread's stored status, or null when it is gone. */
 async function sentinelThreadStatus(threadId: string): Promise<string | null> {

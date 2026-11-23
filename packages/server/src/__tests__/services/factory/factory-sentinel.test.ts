@@ -57,6 +57,10 @@ interface World {
   threadStatus: string | null;
   launchFails?: boolean;
   revertFails?: boolean;
+  /** The checks of each merged pull request's merge commit; unread (null) when absent. */
+  mergeCi?: Record<number, CiState>;
+  /** Shared across the world's sentinels, as the watcher shares it across ticks. */
+  cleared?: Set<string>;
   now: number;
 }
 
@@ -64,7 +68,9 @@ function sentinelFor(world: World, factory = { id: 'f-alice', userId: 'alice', p
   const launches: Record<string, unknown>[] = [];
   const reverts: Array<{ pr: number; title: string; body: string }> = [];
   const notices: Array<{ userId: string; body: string }> = [];
+  const retired: string[] = [];
   let branchReads = 0;
+  const mergeReads: number[] = [];
   const deps: SentinelDeps = {
     // The incidents share the test's clock, so "how long it has been open" is the test's.
     incidents: createFactoryIncidentsRepository({
@@ -78,6 +84,12 @@ function sentinelFor(world: World, factory = { id: 'f-alice', userId: 'alice', p
       branchReads += 1;
       return world.ci ? { sha: 'red-sha-0123456789', ci: world.ci } : null;
     },
+    mergeState: async (pr) => {
+      mergeReads.push(pr);
+      const ci = world.mergeCi?.[pr];
+      return ci ? { sha: `merge-sha-${pr}`, ci } : null;
+    },
+    cleared: world.cleared,
     launch: async (body) => {
       if (world.launchFails) {
         return err({ kind: 'runner-unavailable' as const, status: 502, message: 'runner offline' });
@@ -96,11 +108,22 @@ function sentinelFor(world: World, factory = { id: 'f-alice', userId: 'alice', p
     notify: async (userId, notice) => {
       notices.push({ userId, body: notice.body });
     },
+    retire: async (threadId) => {
+      retired.push(threadId);
+    },
     mode: 'worktree',
     now: () => world.now,
   };
   const sentinel = createFactorySentinel(deps, factory, 'o/r');
-  return { sentinel, launches, reverts, notices, branchReads: () => branchReads };
+  return {
+    sentinel,
+    launches,
+    reverts,
+    notices,
+    mergeReads,
+    retired,
+    branchReads: () => branchReads,
+  };
 }
 
 const world = (over: Partial<World> = {}): World => ({
@@ -149,6 +172,43 @@ describe('a base branch red after a factory merge', () => {
     expect(await sentinel.superviseBase()).toBeNull();
     expect(incidents()).toEqual([]);
     expect(branchReads()).toBe(0);
+  });
+
+  test('green after the last factory merge opens nothing, and is not read again', async () => {
+    const shared = world({ mergeCi: { 112: GREEN }, cleared: new Set() });
+    const first = sentinelFor(shared);
+    expect(await first.sentinel.superviseBase()).toBeNull();
+    expect(incidents()).toEqual([]);
+    expect(first.launches).toEqual([]);
+    // The next tick, same red commit and same merges: the merge commit is not read again.
+    const next = sentinelFor(shared);
+    expect(await next.sentinel.superviseBase()).toBeNull();
+    expect(next.mergeReads).toEqual([]);
+  });
+
+  test('only the merges after the newest green merge commit are suspects, with their merge commits', async () => {
+    const newest = { ...merge(14), mergedAt: '2026-11-22T11:30:00.000Z' };
+    const middle = { ...merge(13), mergedAt: '2026-11-22T11:20:00.000Z' };
+    const { sentinel, launches, mergeReads } = sentinelFor(
+      world({
+        merges: [newest, middle, merge(12)],
+        mergeCi: { 114: RED, 113: GREEN, 112: RED },
+      }),
+    );
+    await sentinel.superviseBase();
+    // Read back to the green one, and no further.
+    expect(mergeReads).toEqual([114, 113]);
+    const prompt = String(launches[0]?.prompt);
+    expect(prompt).toContain('https://github.com/o/r/pull/114');
+    expect(prompt).toContain('merge commit merge-sha-114');
+    expect(prompt).not.toContain('https://github.com/o/r/pull/113');
+    expect(prompt).not.toContain('https://github.com/o/r/pull/112');
+  });
+
+  test('a merge commit whose checks cannot be read stays a suspect', async () => {
+    const { sentinel, launches } = sentinelFor(world());
+    await sentinel.superviseBase();
+    expect(String(launches[0]?.prompt)).toContain('https://github.com/o/r/pull/112 (merged');
   });
 
   test('a branch that is not red opens nothing', async () => {
@@ -245,6 +305,42 @@ describe("the sentinel's answer", () => {
     expect(notices.map((notice) => notice.userId).sort()).toEqual(['alice', 'bob']);
   });
 
+  test('it finds no factory merge broke it: the incident closes, quietly, and admissions resume', async () => {
+    const { notices, incident, result, reason } = await answered(
+      json({ decision: 'unrelated', reason: 'ca4df7e19, a direct merge, broke the mock.' }),
+    );
+    expect(incident).toMatchObject({ state: 'closed', closed_by: 'unrelated' });
+    expect(result).toEqual({
+      decision: 'unrelated',
+      reason: 'ca4df7e19, a direct merge, broke the mock.',
+    });
+    expect(reason).toBeNull();
+    expect(notices).toEqual([]);
+  });
+
+  test('after an unrelated answer only a later factory merge opens a new incident', async () => {
+    const shared = world({ merges: [merge(12)] });
+    const run = sentinelFor(shared);
+    await run.sentinel.superviseBase();
+    shared.says = json({ decision: 'unrelated', reason: 'A direct push broke it.' });
+    shared.threadStatus = 'completed';
+    await run.sentinel.superviseBase();
+    // Still red, same merges: nothing reopens.
+    expect(await run.sentinel.superviseBase()).toBeNull();
+    expect(incidents()).toHaveLength(1);
+    // A factory merge after it: a new incident, about that merge only.
+    shared.now = NOW + 60 * 60 * 1000;
+    shared.merges = [
+      { ...merge(20), mergedAt: new Date(NOW + 30 * 60 * 1000).toISOString() },
+      merge(12),
+    ];
+    expect(await run.sentinel.superviseBase()).toContain('Incident');
+    expect(incidents()).toHaveLength(2);
+    const prompt = String(run.launches[1]?.prompt);
+    expect(prompt).toContain('https://github.com/o/r/pull/120');
+    expect(prompt).not.toContain('https://github.com/o/r/pull/112');
+  });
+
   test('an invalid result escalates to a person', async () => {
     const { reverts, result, notices } = await answered('I think it is the second one.');
     expect(reverts).toEqual([]);
@@ -277,8 +373,14 @@ describe("the sentinel's answer", () => {
   });
 
   test('a sentinel thread that failed escalates', async () => {
-    const { result } = await answered(null, { threadStatus: 'failed' });
+    const { result, retired } = await answered(null, { threadStatus: 'failed' });
     expect(result.decision).toBe('escalate');
+    expect(retired).toEqual(['sen-1']);
+  });
+
+  test('its thread is retired once its answer is read, and only then', async () => {
+    const { retired } = await answered(json({ decision: 'unknown', reason: 'Flaky.' }));
+    expect(retired).toEqual(['sen-1']);
   });
 
   test('a sentinel still running is waited for, then given up on', async () => {
@@ -291,6 +393,8 @@ describe("the sentinel's answer", () => {
     await run.sentinel.superviseBase();
     expect(incidents()).toMatchObject([{ state: 'reported' }]);
     expect(run.notices).toHaveLength(1);
+    // Still running: its checkout stays.
+    expect(run.retired).toEqual([]);
   });
 
   test('a sentinel that cannot start escalates at once', async () => {

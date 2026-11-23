@@ -53,7 +53,7 @@ export interface MergeOptions {
   autoMergeWhenHeld?: boolean;
 }
 
-/** The tail of each failing check's log kept in the error (where the failure usually is). */
+/** How much of each failing check's excerpt the error keeps (its start: the failures; see `excerptOfJobLog`). */
 const EXCERPT_CHARS = 4000;
 const DEFAULT_CI_TIMEOUT_MS = 60 * 60 * 1000;
 const DEFAULT_CI_INTERVAL_MS = 30 * 1000;
@@ -92,7 +92,7 @@ function redResult(ci: Extract<CiState, { kind: 'failing' | 'conflict' }>): CiAc
   // The error is what a fix step reads (`LAST_ERROR`): the names, then each excerpt.
   const excerpts = ci.checks
     .filter((check) => check.excerpt)
-    .map((check) => `--- ${check.name} ---\n${check.excerpt.slice(-EXCERPT_CHARS)}`);
+    .map((check) => `--- ${check.name} ---\n${check.excerpt.slice(0, EXCERPT_CHARS)}`);
   return {
     ok: false,
     error: [`Failing checks: ${names}`, ...excerpts].join('\n\n'),

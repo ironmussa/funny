@@ -106,6 +106,23 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
       return createPullRequestCi(github).refState(repo, branch);
     },
 
+    /** The commit merged pull request `number` made, and its checks; null when not merged. */
+    mergeCommitState(
+      number: number,
+    ): ResultAsync<{ sha: string; ci: CiState } | null, GithubCallError> {
+      return github
+        .json<{ merged?: boolean; merge_commit_sha?: string | null }>(
+          repo,
+          'GET',
+          `/repos/${repo}/pulls/${number}`,
+        )
+        .andThen((pull) =>
+          pull.merged && pull.merge_commit_sha
+            ? createPullRequestCi(github).refState(repo, pull.merge_commit_sha)
+            : okAsync(null),
+        );
+    },
+
     /** Open a pull request that reverts merged pull request `number` (it is not merged here). */
     revertPullRequest(
       number: number,

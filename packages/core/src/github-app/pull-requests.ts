@@ -167,12 +167,71 @@ function checkSummary(run: RestCheckRun): string {
   return [out?.title, out?.summary, out?.text].filter(Boolean).join('\n\n') || '(no details)';
 }
 
-/** The end of a GitHub Actions job's log, else what the check reported. */
+/** Lines of a job's log kept after its last `##[error]` line (what failed, not the cleanup after). */
+const LINES_AFTER_ERROR = 3;
+/** Around each failure marker: a few lines before it, and its message and stack after. */
+const MARKER_BEFORE = 3;
+const MARKER_AFTER = 30;
+const MAX_MARKERS = 3;
+/** Lines kept from the end of the failing step (the runner's summary). */
+const END_LINES = 15;
+// eslint-disable-next-line no-control-regex -- ANSI color codes in CI logs
+const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z /;
+/** A test that passed or was skipped: the bulk of a test log, and never why it failed. */
+const PASSED_LINE = /^\s*(\((pass|skip|todo)\)|✓ )/;
+/** Where a test runner says what failed (bun, jest / vitest, mocha, pytest, go). */
+const FAILURE_MARKER =
+  /^\s*(\(fail\)|# Unhandled error|FAIL\b|✗|✖|×|\d+\) |_{3,} .* _{3,}$|--- FAIL:|panic:)/;
+
+/**
+ * The part of a GitHub Actions job's log that says why it failed. The steps
+ * after a failure (post-job cleanup) and the list of passing tests push the
+ * error out of a plain tail, so: the log up to a few lines after its last
+ * `##[error]` line, without passing and skipped tests, timestamps or color
+ * codes; then the first failure markers with their message, and the end of
+ * the failing step. A log without markers keeps its end.
+ */
+export function excerptOfJobLog(log: string): string {
+  const all = log
+    .split(/\r?\n/)
+    .map((line) => line.replace(TIMESTAMP, '').replace(ANSI, ''))
+    .filter((line) => !PASSED_LINE.test(line));
+  let lastError = all.length - 1;
+  while (lastError >= 0 && !all[lastError]!.includes('##[error]')) lastError -= 1;
+  const lines = lastError === -1 ? all : all.slice(0, lastError + 1 + LINES_AFTER_ERROR);
+  const markers = lines.flatMap((line, index) => (FAILURE_MARKER.test(line) ? [index] : []));
+  const endFrom = Math.max(0, lines.length - END_LINES);
+  if (markers.length === 0 || markers[0]! >= endFrom - MARKER_BEFORE) {
+    return tail(lines.join('\n').trimEnd());
+  }
+  // The windows around the first markers, merged where they overlap.
+  const windows: Array<[number, number]> = [];
+  for (const at of markers.slice(0, MAX_MARKERS)) {
+    const from = Math.max(0, at - MARKER_BEFORE);
+    const to = Math.min(endFrom, at + MARKER_AFTER);
+    const last = windows.at(-1);
+    if (last && from <= last[1]) last[1] = Math.max(last[1], to);
+    else if (from < to) windows.push([from, to]);
+  }
+  const failures = windows.map(([from, to]) => lines.slice(from, to).join('\n')).join('\n…\n');
+  // The end gets at most a third of the room; the failures, what is left.
+  const ending = lines
+    .slice(endFrom)
+    .join('\n')
+    .trimEnd()
+    .slice(-Math.floor(MAX_EXCERPT / 3));
+  const room = MAX_EXCERPT - ending.length;
+  const head = failures.length > room ? `${failures.slice(0, room)}…` : failures;
+  return `${head}\n…\n${ending}`;
+}
+
+/** Why a GitHub Actions job failed, from its log; else what the check reported. */
 function excerptOf(github: RepoGithub, repo: string, run: RestCheckRun) {
   if (run.app?.slug !== 'github-actions') return okAsync(tail(checkSummary(run)));
   return github
     .text(repo, `/repos/${repo}/actions/jobs/${run.id}/logs`)
-    .map(tail)
+    .map(excerptOfJobLog)
     .orElse(() => okAsync(tail(checkSummary(run))));
 }
 

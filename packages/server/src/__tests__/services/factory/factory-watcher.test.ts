@@ -209,6 +209,8 @@ function fakeGithub(
     defaultBranch: () => okAsync('main'),
     branchState: () =>
       okAsync({ sha: 'base-sha', ci: script.baseCi ?? { kind: 'green' as const } }),
+    // Merge commits whose checks are unknown: every recent merge stays a suspect.
+    mergeCommitState: () => okAsync(null),
     revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
     relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add: string }) => {
       port.relabels.push({ issue, ...labels });

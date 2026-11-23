@@ -55,6 +55,7 @@ import type {
   ApprovalDecision,
   MergeOpts,
   RegressionProofOpts,
+  RunCommandOpts,
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
@@ -86,6 +87,7 @@ import {
   type ResolvedStepOptions,
   type StepOverrides,
 } from './factory-step-options.js';
+import { runStepOnRunner, type FactoryStepDeps } from './factory-step-runner.js';
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -210,6 +212,8 @@ export interface FactoryActionProviderDeps {
   enterStage?(stage: FactoryRunStage): Promise<void>;
   /** Proof start/poll through the runner. */
   proof?: FactoryProofDeps;
+  /** Factory steps (a flow's command, integrate) start/poll through the runner. */
+  steps?: FactoryStepDeps;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
   /**
@@ -358,6 +362,9 @@ const noCheckpoint: Checkpoint = async () => {};
 
 /** Allowance for the runner's clock when comparing its timestamps with the server's. */
 const CLOCK_SLACK_MS = 60 * 1000;
+
+/** A factory step's timeout when the flow sets none: 10 minutes. */
+const DEFAULT_STEP_TIMEOUT_MS = 10 * 60_000;
 
 const refused = (step: string, why: string): ActionResult => ({
   ok: false,
@@ -1222,6 +1229,42 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     });
   }
 
+  /**
+   * A flow's `run_command`, run by the runner in the run's own checkout (the
+   * implementing thread's), never on the server. The exit code decides: a
+   * non-zero exit, a timeout or a stop fails the step with the end of its output.
+   */
+  async function runCommandStep(opts: RunCommandOpts): Promise<ActionResult> {
+    if (!deps.steps) {
+      return refused('run_command', 'this server cannot run factory steps on a runner.');
+    }
+    const threadId = threadIds[0];
+    if (!threadId) {
+      return {
+        ok: false,
+        error: 'run_command needs the run checkout: an agent step has to start it first.',
+      };
+    }
+    const timeoutMs = opts.timeout ?? DEFAULT_STEP_TIMEOUT_MS;
+    const run = await runStepOnRunner(
+      deps.steps,
+      threadId,
+      { kind: 'command', command: opts.command, timeoutMs },
+      deps.signal,
+    );
+    if (run.kind === 'unavailable') {
+      return { ok: false, error: `run_command could not run: ${run.why}` };
+    }
+    if (run.result.kind !== 'command')
+      return { ok: false, error: 'run_command: unexpected result.' };
+    const { outcome, exitCode, stdout, stderr, durationMs } = run.result;
+    const metadata = { outcome, exitCode, stdout, stderr, durationMs };
+    if (outcome === 'passed') return { ok: true, output: stdout, metadata };
+    const tail = (stderr.trim() || stdout.trim()).slice(-4000);
+    const how = outcome === 'failed' ? `exited ${exitCode}` : outcome;
+    return { ok: false, error: `The command ${how}:\n${tail}`, metadata };
+  }
+
   return {
     async spawnAgent(opts) {
       const index = agentSteps++;
@@ -1304,8 +1347,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       return { ok: true };
     },
 
-    async runCommand() {
-      return refused('run_command', 'the server has no checkout; run checks in CI (wait_ci).');
+    async runCommand(opts) {
+      return runCommandStep(opts);
     },
 
     async setStatus() {

@@ -112,9 +112,18 @@ export interface FactoryFlow {
 
 type FlowNode = ParsedWorkflow['nodes'][number];
 
-/** Whether the node runs an agent on the run's thread (its action or a fixer it may spawn). */
+/**
+ * Whether the node works in the run's checkout: an agent on the run's thread
+ * (its action or a fixer it may spawn), or a command the runner runs there.
+ */
 function runsAgent(node: FlowNode): boolean {
-  return !!(node.spawn_agent || node.retry?.before_retry || node.approval?.on_reject);
+  return !!(
+    node.spawn_agent ||
+    node.retry?.before_retry ||
+    node.approval?.on_reject ||
+    node.run_command ||
+    node.bash
+  );
 }
 
 /** Every node `id` depends on, directly or not. */
@@ -144,7 +153,7 @@ function agentStepIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
       if (a.ancestors.has(b.node.id) || b.ancestors.has(a.node.id)) continue;
       issues.push({
         path: `nodes.${b.index}`,
-        message: `Agent steps "${a.node.id}" and "${b.node.id}" are in parallel branches, but a factory run has one agent thread that runs one turn at a time. Make one depend on the other.`,
+        message: `Agent steps "${a.node.id}" and "${b.node.id}" are in parallel branches, but a factory run has one checkout, used by one agent turn or command at a time. Make one depend on the other.`,
       });
     }
   }

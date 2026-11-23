@@ -72,6 +72,8 @@ export const saveFactorySettingsInput = z
         'The merge limit cannot be changed: merges are one at a time per repository',
       )
       .optional(),
+    /** Provider / model / effort per agent step id; never a permission mode or tool list. */
+    stepOverrides: z.lazy(() => factoryStepOverridesSchema).optional(),
   })
   .strict();
 
@@ -92,6 +94,8 @@ export interface FactorySettings {
   sensitivePaths: string[];
   /** Runs inside a flow node at once, per node id; replaces the flow's own limit. */
   stageLimits: Record<string, number>;
+  /** Provider / model / effort per agent step id, over the flow's own (openspec factory-flow-step-options). */
+  stepOverrides: FactoryStepOverrides;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**
@@ -165,7 +169,57 @@ export interface FactoryRun {
   reviews: FactoryReviewVerdict[];
   /** The risk class of the pull request's last classified commit, or null before one. */
   risk: FactoryRisk | null;
+  /** Where the run's flow came from; null on runs from before runs recorded it. */
+  flowSource: FactoryFlowSource | null;
+  /** The default-branch commit a repository flow was read at; null for a built-in. */
+  flowCommit: string | null;
+  /** The options each agent step ran with, in the order the steps started. */
+  stepOptions: FactoryStepOptionsRecord[];
 }
+
+/** Where a run's flow came from (openspec factory-flow-step-options). */
+export type FactoryFlowSource = 'repository' | 'built-in';
+
+const effortLevel = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+
+/** The options one agent step of a run ran with, as the run stores them. */
+export const factoryStepOptionsRecordSchema = z.object({
+  /** `<node>`, or `<node>.before_retry` for a retry's fix step. */
+  stepId: z.string(),
+  threadId: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  /** Null: the provider's own default effort. */
+  effort: effortLevel.nullable(),
+  permissionMode: z.string(),
+  allowedTools: z.array(z.string()).nullable(),
+  disallowedTools: z.array(z.string()).nullable(),
+  /** `new`: the step ran on a thread of its own instead of the implementing one. */
+  thread: z.enum(['continue', 'new']),
+});
+
+export type FactoryStepOptionsRecord = z.infer<typeof factoryStepOptionsRecordSchema>;
+
+/**
+ * What a member may set for one agent step of their factory's flow: the
+ * provider, model and effort, never the permission mode or tool lists (those
+ * stay in the reviewed flow file). Strict, so a client cannot slip one in.
+ */
+export const factoryStepOverrideSchema = z
+  .object({
+    provider: z.string().trim().min(1).max(64).optional(),
+    model: z.string().trim().min(1).max(200).optional(),
+    effort: effortLevel.optional(),
+  })
+  .strict();
+
+/** Overrides by step id (`<node>`, `<node>.before_retry`). */
+export const factoryStepOverridesSchema = z
+  .record(z.string().trim().min(1).max(128), factoryStepOverrideSchema)
+  .refine((overrides) => Object.keys(overrides).length <= 50, 'At most 50 step overrides');
+
+export type FactoryStepOverride = z.infer<typeof factoryStepOverrideSchema>;
+export type FactoryStepOverrides = z.infer<typeof factoryStepOverridesSchema>;
 
 /**
  * A regression proof as the run stores it (change factory-quality-gates): the

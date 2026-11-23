@@ -80,7 +80,7 @@ import {
   type FactoryRunView,
   type UpdateRunInput,
 } from './factory-runs.js';
-import type { WatchedFactory } from './factory-settings.js';
+import { getWatchedFactory, type WatchedFactory } from './factory-settings.js';
 import type { ProjectAgentDefaults } from './factory-step-options.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import {
@@ -499,7 +499,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     agentStarted: () => void,
   ): Promise<FactoryRunStart> {
     const projectDefaults = await projectAgentDefaults(job.factory.projectId);
-    const flow = await loadFlow(job, { project: projectDefaults });
+    const flow = await loadFlow(job, {
+      project: projectDefaults,
+      overrides: job.factory.stepOverrides,
+    });
     if (flow.isErr()) {
       await flowUnavailable(job, flow.error);
       return 'not-started';
@@ -532,6 +535,13 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
     // The thread view draws the run's step chain from these.
     await record({ flowSteps: flow.value.pipeline.nodes.map((node) => node.name) });
+    // Where the flow came from: written when the run first starts and on a
+    // retry (it runs the flow as read now); a resumed run keeps what it had.
+    if (job.run.flowSource === null || wasReopened(job)) {
+      await record({ flowSource: flow.value.source, flowCommit: flow.value.commit });
+    }
+    // What each agent step ran with, after the steps an earlier attempt recorded.
+    const stepOptions = [...job.run.stepOptions];
 
     // A run with journal rows resumes through them; one without replays `threadIds`.
     const journaled = await journalRows.load(job.run.id);
@@ -557,6 +567,13 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     };
     const provider = createFactoryActionProvider({
       projectDefaults,
+      // Read at every agent step: a change saved mid-run reaches the steps not started yet.
+      stepOverrides: async () =>
+        (await getWatchedFactory(job.factory.id))?.stepOverrides ?? job.factory.stepOverrides,
+      recordStepOptions: async (entry) => {
+        stepOptions.push(entry);
+        await record({ stepOptions: [...stepOptions] });
+      },
       scope,
       threadIds: job.run.threadIds,
       prUrl: job.run.prUrl,

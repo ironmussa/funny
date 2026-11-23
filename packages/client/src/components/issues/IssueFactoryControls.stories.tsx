@@ -35,6 +35,9 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   reviews: [],
   risk: null,
   triage: null,
+  flowSource: null,
+  flowCommit: null,
+  stepOptions: [],
   ...over,
 });
 
@@ -48,6 +51,7 @@ const settings = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   autoMerge: 'low_risk',
   sensitivePaths: [],
   stageLimits: {},
+  stepOverrides: {},
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

@@ -13,12 +13,15 @@
  * theirs. Runs are stored separately (`factory-runs`).
  */
 import {
+  factoryStepOverridesSchema,
   MAX_SENSITIVE_PATHS,
   MERGE_STAGE,
   type FactoryAutoMerge,
   type FactoryMode,
+  type FactoryStepOverrides,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
+import { KNOWN_PROVIDER_IDS, providerModelProblem } from '@funny/shared/models';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
@@ -42,6 +45,8 @@ export interface FactorySettingsView {
   sensitivePaths: string[];
   /** Runs inside a flow node at once, per node id. */
   stageLimits: Record<string, number>;
+  /** Provider / model / effort per agent step id, over the flow's own. */
+  stepOverrides: FactoryStepOverrides;
   /** Why the factory cannot make progress now, or null. */
   blockedReason: string | null;
   updatedAt: string;
@@ -63,6 +68,7 @@ export interface SaveFactorySettingsInput {
   autoMerge?: FactoryAutoMerge;
   sensitivePaths?: string[];
   stageLimits?: Record<string, number>;
+  stepOverrides?: FactoryStepOverrides;
 }
 
 type Row = typeof factorySettings.$inferSelect;
@@ -113,6 +119,17 @@ function stageLimitsOf(row: Row): Record<string, number> {
   return limits;
 }
 
+/** The stored step overrides; a value that no longer parses reads as none. */
+function stepOverridesOf(row: Row): FactoryStepOverrides {
+  if (!row.stepOverrides) return {};
+  const parsed = parseStoredJson(
+    factoryStepOverridesSchema,
+    row.stepOverrides,
+    'factory_settings.step_overrides',
+  );
+  return parsed.ok ? parsed.value : {};
+}
+
 const toView = (row: Row): FactorySettingsView => ({
   projectId: row.projectId,
   enabled: row.enabled === 1,
@@ -123,6 +140,7 @@ const toView = (row: Row): FactorySettingsView => ({
   autoMerge: autoMergeOf(row),
   sensitivePaths: sensitivePathsOf(row),
   stageLimits: stageLimitsOf(row),
+  stepOverrides: stepOverridesOf(row),
   blockedReason: row.blockedReason ?? null,
   updatedAt: row.updatedAt,
 });
@@ -150,7 +168,25 @@ function validate(input: SaveFactorySettingsInput): FactorySettingsError | null 
   if (input.sensitivePaths !== undefined && input.sensitivePaths.length > MAX_SENSITIVE_PATHS) {
     return { kind: 'invalid', message: `At most ${MAX_SENSITIVE_PATHS} sensitive paths` };
   }
-  return validateStageLimits(input.stageLimits);
+  return validateStageLimits(input.stageLimits) ?? validateStepOverrides(input.stepOverrides);
+}
+
+/** Each override's provider is known and its model runs on it (the runtime's rule). */
+function validateStepOverrides(
+  overrides: FactoryStepOverrides | undefined,
+): FactorySettingsError | null {
+  if (overrides === undefined) return null;
+  for (const [stepId, override] of Object.entries(overrides)) {
+    if (override.provider && !KNOWN_PROVIDER_IDS.includes(override.provider)) {
+      return {
+        kind: 'invalid',
+        message: `Step ${stepId}: unknown provider "${override.provider}"`,
+      };
+    }
+    const problem = providerModelProblem(override.provider ?? 'claude', override.model);
+    if (problem) return { kind: 'invalid', message: `Step ${stepId}: ${problem}` };
+  }
+  return null;
 }
 
 function validateStageLimits(
@@ -178,6 +214,7 @@ const DEFAULTS = {
   autoMerge: 'low_risk' as FactoryAutoMerge,
   sensitivePaths: [] as string[],
   stageLimits: {} as Record<string, number>,
+  stepOverrides: {} as FactoryStepOverrides,
 };
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */
@@ -202,6 +239,7 @@ function buildRow(
     autoMerge: input.autoMerge ?? base.autoMerge,
     sensitivePaths: JSON.stringify(input.sensitivePaths ?? base.sensitivePaths),
     stageLimits: JSON.stringify(input.stageLimits ?? base.stageLimits),
+    stepOverrides: JSON.stringify(input.stepOverrides ?? base.stepOverrides),
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -227,6 +265,8 @@ export interface WatchedFactory {
   autoMerge: FactoryAutoMerge;
   sensitivePaths: string[];
   stageLimits: Record<string, number>;
+  /** Provider / model / effort per agent step id (read again at every agent step). */
+  stepOverrides: FactoryStepOverrides;
 }
 
 const toEnabled = (row: Row): WatchedFactory => ({
@@ -241,6 +281,7 @@ const toEnabled = (row: Row): WatchedFactory => ({
   autoMerge: autoMergeOf(row),
   sensitivePaths: sensitivePathsOf(row),
   stageLimits: stageLimitsOf(row),
+  stepOverrides: stepOverridesOf(row),
 });
 
 /**
@@ -338,6 +379,7 @@ export function createFactorySettingsService(
       ...(input.autoMerge !== undefined && { autoMerge: row.autoMerge }),
       ...(input.sensitivePaths !== undefined && { sensitivePaths: row.sensitivePaths }),
       ...(input.stageLimits !== undefined && { stageLimits: row.stageLimits }),
+      ...(input.stepOverrides !== undefined && { stepOverrides: row.stepOverrides }),
     };
     return ResultAsync.fromPromise(
       db

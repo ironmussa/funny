@@ -33,6 +33,9 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     reviews: [],
     risk: null,
     triage: null,
+    flowSource: null,
+    flowCommit: null,
+    stepOptions: [],
     ...over,
   };
 }

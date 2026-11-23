@@ -19,12 +19,15 @@ import {
   factoryRegressionProofSchema,
   factoryReviewVerdictSchema,
   factoryRiskSchema,
+  factoryStepOptionsRecordSchema,
   factoryTriageSchema,
   MAX_STORED_REVIEWS,
+  type FactoryFlowSource,
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
+  type FactoryStepOptionsRecord,
   type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
@@ -250,6 +253,12 @@ export interface FactoryRunView {
   risk: FactoryRisk | null;
   /** What triage decided about the issue, or null before it ran. */
   triage: FactoryTriage | null;
+  /** Where the run's flow came from; null on rows from before runs recorded it. */
+  flowSource: FactoryFlowSource | null;
+  /** The default-branch commit a repository flow was read at; null for a built-in. */
+  flowCommit: string | null;
+  /** The options each agent step ran with, in the order the steps started. */
+  stepOptions: FactoryStepOptionsRecord[];
 }
 
 export type FactoryRunSource = 'manual' | 'label';
@@ -298,7 +307,21 @@ const toView = (row: Row): FactoryRunView => ({
   reviews: parseReviews(row.reviews ?? null),
   risk: parseRisk(row.risk ?? null),
   triage: parseTriage(row.triage ?? null),
+  flowSource: flowSourceOf(row.flowSource ?? null),
+  flowCommit: row.flowCommit ?? null,
+  stepOptions: parseStepOptions(row.stepOptions ?? null),
 });
+
+const flowSourceOf = (raw: string | null): FactoryFlowSource | null =>
+  raw === 'repository' || raw === 'built-in' ? raw : null;
+
+const STEP_OPTIONS_SCHEMA = z.array(factoryStepOptionsRecordSchema);
+
+function parseStepOptions(raw: string | null): FactoryStepOptionsRecord[] {
+  if (!raw) return [];
+  const parsed = parseStoredJson(STEP_OPTIONS_SCHEMA, raw, 'factory_runs.step_options');
+  return parsed.ok ? parsed.value : [];
+}
 
 function parseTriage(raw: string | null): FactoryTriage | null {
   if (!raw) return null;
@@ -393,10 +416,21 @@ export interface UpdateRunInput {
   reviews?: FactoryReviewVerdict[];
   risk?: FactoryRisk;
   triage?: FactoryTriage;
+  flowSource?: FactoryFlowSource;
+  flowCommit?: string | null;
+  /** Every step's options so far (the run appends and writes the whole list). */
+  stepOptions?: FactoryStepOptionsRecord[];
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
-const PLAIN_FIELDS = ['currentStep', 'prUrl', 'launchStartedAt', 'failureReason'] as const;
+const PLAIN_FIELDS = [
+  'currentStep',
+  'prUrl',
+  'launchStartedAt',
+  'failureReason',
+  'flowSource',
+  'flowCommit',
+] as const;
 const JSON_FIELDS = [
   'threadIds',
   'flowSteps',
@@ -405,6 +439,7 @@ const JSON_FIELDS = [
   'reviews',
   'risk',
   'triage',
+  'stepOptions',
 ] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
@@ -575,6 +610,9 @@ function queueOperations(newId: () => string) {
             reviews: null,
             risk: null,
             triage: null,
+            flowSource: null,
+            flowCommit: null,
+            stepOptions: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -767,6 +805,9 @@ export function createFactoryRunsRepository(
       reviews: null,
       risk: null,
       triage: null,
+      flowSource: null,
+      flowCommit: null,
+      stepOptions: null,
     };
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
       toView(row),

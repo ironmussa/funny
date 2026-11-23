@@ -150,6 +150,18 @@ nodes:
     ]);
   });
 
+  test('thread: new on a provider the runner cannot hold to read-only', async () => {
+    const error = await problems(`  - id: implement
+    spawn_agent: { prompt: go }
+  - id: advise
+    depends_on: [implement]
+    spawn_agent: { prompt: look, thread: new, permission_mode: plan, provider: gemini }
+`);
+    expect(error.problems).toEqual([
+      { step: 'advise', field: 'provider', message: expect.stringContaining('gemini') },
+    ]);
+  });
+
   test('every problem is reported at once', async () => {
     const error = await problems(`  - id: implement
     spawn_agent: { prompt: go, permission_mode: ask }

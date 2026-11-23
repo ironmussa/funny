@@ -11,7 +11,12 @@
  * each naming its step and field, for the run failure and for Validate flow.
  */
 
-import { KNOWN_PROVIDER_IDS, providerModelProblem } from '@funny/shared/models';
+import type { AgentProvider } from '@funny/shared';
+import {
+  KNOWN_PROVIDER_IDS,
+  providerModelProblem,
+  READ_ONLY_PROVIDERS,
+} from '@funny/shared/models';
 import { listAgentSteps, type FlowAgentStep, type ParsedWorkflow } from '@funny/workflows';
 
 import {
@@ -152,6 +157,12 @@ function stepProblems(
       add(
         'thread',
         'thread: new runs beside the implementing thread, so it must be read-only (permission_mode: plan): only the implementing thread writes to the branch',
+      );
+    }
+    if (!READ_ONLY_PROVIDERS.includes(resolved.provider as AgentProvider)) {
+      add(
+        'provider',
+        `thread: new runs read-only, which only ${READ_ONLY_PROVIDERS.join(' and ')} can be held to; "${resolved.provider}" cannot`,
       );
     }
     if (step === firstNode) {

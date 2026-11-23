@@ -2266,6 +2266,19 @@ const migrations: Migration[] = [
       await ctx().addColumn('threads', 'read_only', 'INTEGER NOT NULL', '0');
     },
   },
+  {
+    // Change factory-flow-step-options, D6-D7: where a run's flow came from (and
+    // at which default-branch commit), the options each agent step ran with,
+    // and the factory's per-step overrides. All nullable: older rows show
+    // their source as unknown.
+    name: '113_factory_flow_step_options',
+    async up() {
+      await ctx().addColumn('factory_runs', 'flow_source', 'TEXT');
+      await ctx().addColumn('factory_runs', 'flow_commit', 'TEXT');
+      await ctx().addColumn('factory_runs', 'step_options', 'TEXT');
+      await ctx().addColumn('factory_settings', 'step_overrides', 'TEXT');
+    },
+  },
 ];
 
 /**

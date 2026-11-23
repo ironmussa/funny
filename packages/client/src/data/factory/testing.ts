@@ -25,6 +25,9 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     reviews: [],
     risk: null,
     triage: null,
+    flowSource: null,
+    flowCommit: null,
+    stepOptions: [],
     ...overrides,
   };
 }

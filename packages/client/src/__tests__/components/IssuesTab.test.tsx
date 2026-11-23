@@ -257,6 +257,7 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   autoMerge: 'low_risk',
   sensitivePaths: [],
   stageLimits: {},
+  stepOverrides: {},
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

@@ -366,6 +366,7 @@ export function createTestDb() {
       auto_merge TEXT NOT NULL DEFAULT 'low_risk',
       sensitive_paths TEXT,
       stage_limits TEXT,
+      step_overrides TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -413,7 +414,10 @@ export function createTestDb() {
       regression_proof TEXT,
       review_verdicts TEXT,
       risk TEXT,
-      triage TEXT
+      triage TEXT,
+      flow_source TEXT,
+      flow_commit TEXT,
+      step_options TEXT
     )
   `);
   testDb.run(sql`

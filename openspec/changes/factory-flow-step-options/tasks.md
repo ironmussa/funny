@@ -15,16 +15,16 @@
 
 ## 3. Applying options in runs
 
-- [ ] 3.1 Send resolved options on the first thread's create body and on every follow-up body (`factory-thread-requests.ts` `sendFactoryFollowUp` takes an options object); verify with `factory-action-provider` tests asserting the bodies for implement, a later step and a fix step
-- [ ] 3.2 Implement `thread: new` launches (step title, recorded in `threadIds`, `followUp` still targets the first thread, adoption matches the full title); verify with tests for launch, resume replay without a second launch, and stop stopping the review thread
-- [ ] 3.3 Migration: `factory_runs.flow_source`, `flow_commit`, `step_options` and `factory_settings.step_overrides` in `server/src/db/migrate.ts` and both schemas; verify `bun run db:push` on a scratch DB and the migrate test
-- [ ] 3.4 Record source, commit and per-step options in `factory-flow-runs.ts` (append on step start, keep on resume, update commit on retry); verify with flow-run tests reading the row back
+- [x] 3.1 Send resolved options on the first thread's create body and on every follow-up body (`factory-thread-requests.ts` `sendFactoryFollowUp` takes an options object); verify with `factory-action-provider` tests asserting the bodies for implement, a later step and a fix step
+- [x] 3.2 Implement `thread: new` launches (step title, recorded in `threadIds`, `followUp` still targets the first thread, adoption matches the full title); verify with tests for launch, resume replay without a second launch, and stop stopping the review thread
+- [x] 3.3 Migration: `factory_runs.flow_source`, `flow_commit`, `step_options` and `factory_settings.step_overrides` in `server/src/db/migrate.ts` and both schemas; verify `bun run db:push` on a scratch DB and the migrate test
+- [x] 3.4 Record source, commit and per-step options in `factory-flow-runs.ts` (append on step start, keep on resume, update commit on retry); verify with flow-run tests reading the row back
 - [ ] 3.5 Update `openwiki/architecture/issue-factory.md` (accepted fields, precedence, `thread: new`, prompt files, recording) and verify the doc's file references exist
 
 ## 4. Step overrides and Validate flow API
 
-- [ ] 4.1 Add the strict `stepOverrides` schema to `@funny/shared/contracts/factory` and wire it through `factory-settings.ts` and the `factory` tRPC port (save needs `steer`); verify with `factory-trpc` tests: save, refusal of a permission-mode field, 403 without `steer`
-- [ ] 4.2 Read overrides at each agent step in the action provider; verify a test where an override saved mid-run applies to the next step only
+- [x] 4.1 Add the strict `stepOverrides` schema to `@funny/shared/contracts/factory` and wire it through `factory-settings.ts` and the `factory` tRPC port (save needs `steer`); verify with `factory-trpc` tests: save, refusal of a permission-mode field, 403 without `steer`
+- [x] 4.2 Read overrides at each agent step in the action provider; verify a test where an override saved mid-run applies to the next step only
 - [ ] 4.3 Add `factory.validateFlow` (`projectProcedure('view')`) answering problems or the step summary, unused overrides and "context replay" warnings; verify with tRPC tests for a parse error, a valid built-in and a stale override, and that no thread is started
 
 ## 5. Built-in flows and prompts

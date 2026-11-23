@@ -53,3 +53,25 @@ for a label and run a flow to PR or merge, as the flow dictates.
   a manual trigger (what funny does today, without the executor); the factory is the
   `issue-to-merge` flow with the issue trigger; code review on commit is the `code-review`
   flow with the commit trigger.
+
+## Amendment: automations keep their own host
+
+The text above says "over time funny's runtime pipelines and automations would run [on the
+flow executor] too". For automations that was looked at and not done (openspec
+`automation-occurrence-claims`):
+
+- An automation is one read-only thread on a schedule, with an inbox. It needs no GitHub
+  repository, no GitHub App and no factory.
+- The flow executor belongs to a factory: a run is a row of a factory, a tick waits for the
+  project's GitHub repository, and a flow is read from that repository's default branch.
+  Running automations there would either require GitHub for every automation or first
+  extract a host-independent executor from the factory, for no new behavior.
+
+What the two share is how a schedule is fired, and that is now one mechanism: an occurrence
+is taken with a compare-and-set on the row's stored next run time before anything starts
+(`services/schedules.ts`), so several server processes start one run per occurrence.
+
+Scheduled work that must change code or run several steps uses a factory schedule (a
+trigger, openspec `flow-triggers`). A scheduled read-only look at a project uses an
+automation. The runtime's workflow runs (`/api/workflows`) remain a second, smaller
+executor on the runner.

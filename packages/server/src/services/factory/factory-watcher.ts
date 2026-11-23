@@ -14,7 +14,7 @@
  * whose flow is not running in this process (a restart) is resumed by the
  * next tick.
  *
- * Single-instance assumption (shared with the automation scheduler): every
+ * Single-instance assumption: every
  * server process that calls `startFactoryWatcher` polls every factory.
  *
  * @domain subdomain: Issue Factory

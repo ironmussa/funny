@@ -14,6 +14,12 @@ _Avoid_: Orchestrator, software factory pipeline
 One attempt by the issue factory to take one issue to a pull request.
 _Avoid_: Run (alone), session, job
 
+**Automation**:
+A prompt that runs on a schedule as one read-only thread in a project, with its result kept
+in an inbox for its owner. It needs no GitHub repository and no issue factory. For scheduled
+work that changes code or has several steps, use a factory schedule instead.
+_Avoid_: Scheduled flow, cron job, trigger
+
 **Triage**:
 The first step of a factory run: a read-only agent decides whether the issue can be worked
 unattended, and either writes the run's contract or asks on the issue.

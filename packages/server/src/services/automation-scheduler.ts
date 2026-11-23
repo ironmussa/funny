@@ -8,8 +8,11 @@
  * recorded in `automation_runs` and completed by `onAutomationThreadTerminal`
  * when the runner persists the thread's terminal status.
  *
- * Single-instance assumption: every server process that calls
- * `startAutomationScheduler` fires every automation.
+ * Every server process that calls `startAutomationScheduler` holds a timer for
+ * every automation, and each scheduled occurrence is taken with a
+ * compare-and-set on `next_run_at` before its run starts (`fire`), so several
+ * processes start one run per occurrence. The stale-run sweep and manual runs
+ * need no such claim: both are already compare-and-sets or deliberate.
  *
  * @domain subdomain: Automation
  * @domain type: app-service
@@ -33,6 +36,7 @@ import {
   type RunnerPorts,
   type StartThreadError,
 } from './runner-thread-launcher.js';
+import { occurrenceTaken, scheduleProblem } from './schedules.js';
 
 type Automation = typeof schema.automations.$inferSelect;
 
@@ -95,14 +99,7 @@ export const createCronJob: CreateJob = (pattern, onTick) =>
  * parser as `createCronJob`, so a schedule accepted on save is one the
  * scheduler can run (track-user-and-scheduled-actions, design D1).
  */
-export function parseAutomationSchedule(pattern: string): string | null {
-  try {
-    new Cron(pattern, { paused: true }).stop();
-    return null;
-  } catch (e) {
-    return e instanceof Error ? e.message : String(e);
-  }
-}
+export const parseAutomationSchedule = scheduleProblem;
 
 const jobs = new Map<string, AutomationJob>();
 /** The run each automation's current skip streak was recorded for (design D2). */
@@ -221,6 +218,9 @@ async function fire(id: string): Promise<void> {
   // Re-read so an edit that raced the tick (prompt, model, disable) is honored.
   const automation = await automationRepo.getAutomation(id);
   if (!automation?.enabled) return;
+  // One run per occurrence across server processes: only the process that
+  // moves `next_run_at` to the following occurrence goes on.
+  if (!(await takeOccurrence(id, automation.nextRunAt ?? null))) return;
   const running = await runInProgress(id);
   if (running) {
     log.info('Automation tick skipped: the previous run is still running', {
@@ -232,7 +232,25 @@ async function fire(id: string): Promise<void> {
     skipRecordedFor.delete(id);
     await runAutomation(automation);
   }
-  await recordNextRun(id);
+}
+
+/**
+ * Take the occurrence this process just reached. False when a peer already
+ * took it: the stored next run time is already the following occurrence (or a
+ * later one), or the compare-and-set from the stored value changed nothing.
+ * Compares stored times only, never a clock, so the processes' clocks may differ.
+ */
+async function takeOccurrence(id: string, stored: string | null): Promise<boolean> {
+  const next = jobs.get(id)?.nextRun()?.toISOString() ?? null;
+  const taken =
+    occurrenceTaken(stored, next) || !(await automationRepo.claimOccurrence(id, stored, next));
+  if (taken) {
+    log.debug('Automation occurrence already taken by another server process', {
+      namespace: 'automation',
+      automationId: id,
+    });
+  }
+  return !taken;
 }
 
 /**

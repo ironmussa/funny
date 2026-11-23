@@ -33,19 +33,41 @@ import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedAutomation, seedAutomationRun, seedProject, seedThread } from '../helpers/test-db.js';
 
 const NEXT = new Date('2030-01-01T09:00:00.000Z');
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** The occurrence after `NEXT`: what a job answers once `NEXT` has been reached. */
+const FOLLOWING = new Date(NEXT.getTime() + DAY_MS);
 
-/** Fake cron: records jobs by pattern and lets the test fire them. */
+interface FakeJob {
+  /** Reach the job's next occurrence, as its timer would. */
+  onTick: () => Promise<void>;
+  /** Reach the SAME occurrence again, as another server process's timer would. */
+  onPeerTick: () => Promise<void>;
+  stopped: boolean;
+}
+
+/**
+ * Fake cron: records jobs by pattern and lets the test fire them. As with
+ * croner, once an occurrence is reached the job's next run is the following one.
+ */
 function fakeCron() {
-  const live = new Map<string, { onTick: () => Promise<void>; stopped: boolean }>();
+  const live = new Map<string, FakeJob>();
   const createJob = (pattern: string, onTick: () => Promise<void>): AutomationJob => {
     if (pattern === 'not a cron') throw new Error('invalid pattern');
-    const entry = { onTick, stopped: false };
+    let at = NEXT;
+    const entry: FakeJob = {
+      onTick: () => {
+        at = new Date(at.getTime() + DAY_MS);
+        return onTick();
+      },
+      onPeerTick: onTick,
+      stopped: false,
+    };
     live.set(pattern, entry);
     return {
       stop: () => {
         entry.stopped = true;
       },
-      nextRun: () => NEXT,
+      nextRun: () => at,
     };
   };
   return { createJob, live };
@@ -226,6 +248,75 @@ describe('automation scheduler', () => {
       }
     });
 
+    describe('one run per occurrence across server processes (openspec automation-occurrence-claims)', () => {
+      const start = async () => {
+        seedAutomation(t.db, { id: 'on', projectId: 'p1', userId: 'alice', schedule: '0 9 * * *' });
+        const cron = fakeCron();
+        const launcher = fakeLauncher('ok', register);
+        const { recorded, activities } = fakeActivities();
+        await startAutomationScheduler({
+          ports,
+          createJob: cron.createJob,
+          launch: launcher.launch,
+          activities,
+        });
+        return { job: cron.live.get('0 9 * * *')!, launcher, recorded };
+      };
+
+      test('a second process reaching the same occurrence starts nothing and records no skip', async () => {
+        const { job, launcher, recorded } = await start();
+
+        await job.onTick();
+        await job.onPeerTick();
+
+        expect(launcher.calls).toHaveLength(1);
+        expect(runs()).toHaveLength(1);
+        expect(recorded).toEqual([]);
+        expect(automation('on').nextRunAt).toBe(FOLLOWING.toISOString());
+      });
+
+      test('two processes reaching the occurrence at once start one run', async () => {
+        const { job, launcher } = await start();
+
+        await Promise.all([job.onTick(), job.onPeerTick()]);
+
+        expect(launcher.calls).toHaveLength(1);
+        expect(runs()).toHaveLength(1);
+      });
+
+      test('the next occurrence starts a run again', async () => {
+        const { job, launcher } = await start();
+        await job.onTick();
+        t.db.update(schema.automationRuns).set({ status: 'completed' }).run();
+
+        await job.onTick();
+
+        expect(launcher.calls).toHaveLength(2);
+      });
+
+      test('an automation with no next run time stored is taken once', async () => {
+        const { job, launcher } = await start();
+        t.db.update(schema.automations).set({ nextRunAt: null }).run();
+
+        await job.onTick();
+        await job.onPeerTick();
+
+        expect(launcher.calls).toHaveLength(1);
+      });
+
+      test('a manual run takes no occurrence: the scheduled one still runs', async () => {
+        const { job, launcher } = await start();
+
+        const manual = await runAutomation(automation('on'));
+        expect(manual.isOk()).toBe(true);
+        expect(automation('on').nextRunAt).toBe(NEXT.toISOString());
+        t.db.update(schema.automationRuns).set({ status: 'completed' }).run();
+        await job.onTick();
+
+        expect(launcher.calls).toHaveLength(2);
+      });
+    });
+
     describe('a tick while the previous run is still going', () => {
       const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
       const start = async () => {
@@ -267,7 +358,7 @@ describe('automation scheduler', () => {
 
         expect(launcher.calls).toEqual([]);
         expect(runs()).toHaveLength(1);
-        expect(automation('on').nextRunAt).toBe(NEXT.toISOString());
+        expect(automation('on').nextRunAt).toBe(FOLLOWING.toISOString());
       });
 
       test('the first skip of a running run is recorded, the rest of the streak is not', async () => {

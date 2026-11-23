@@ -254,8 +254,8 @@ export function PlanReviewDialog({
         data-testid="plan-review-dialog"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3 select-none">
-          <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden text-sm">
+        <DialogHeader bordered className="overflow-hidden select-none">
+          <DialogTitle size="sm" className="flex min-w-0 items-center gap-2 overflow-hidden">
             <Pencil className="icon-base shrink-0" />
             {t('plan.reviewTitle', 'Review plan')}
           </DialogTitle>

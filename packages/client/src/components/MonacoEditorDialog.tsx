@@ -507,8 +507,11 @@ export function MonacoEditorDialog({
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3">
-          <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
+        <DialogHeader bordered className="overflow-hidden">
+          <DialogTitle
+            size="sm"
+            className="flex min-w-0 items-center gap-2 overflow-hidden font-mono"
+          >
             <FileCode className="icon-base shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"

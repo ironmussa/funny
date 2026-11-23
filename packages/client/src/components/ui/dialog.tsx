@@ -31,6 +31,7 @@ function DialogOverlay({
 function DialogContent({
   className,
   overlayClassName,
+  flush = false,
   children,
   ref,
   ...props
@@ -38,6 +39,8 @@ function DialogContent({
   ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Content>>;
   /** Extra classes for the backdrop overlay (e.g. to disable its fade animation). */
   overlayClassName?: string;
+  /** No padding or gap: the header, body and footer lay out their own sections. */
+  flush?: boolean;
 }) {
   return (
     <DialogPortal>
@@ -47,6 +50,7 @@ function DialogContent({
         aria-describedby={undefined}
         className={cn(
           'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-xl duration-100 outline-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg',
+          flush && 'gap-0 p-0',
           className,
         )}
         {...props}
@@ -56,7 +60,16 @@ function DialogContent({
     </DialogPortal>
   );
 }
-const DialogHeader = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
+const DialogHeader = ({
+  className,
+  children,
+  bordered = false,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
+  /** A header section of a flush dialog: padded, with a rule below it. */
+  bordered?: boolean;
+}) => {
+  const sectionClass = bordered && 'shrink-0 border-b border-border px-4 py-3';
   // Separate DialogTitle and DialogDescription from other children
   const childArray = React.Children.toArray(children);
   const title = childArray.find(
@@ -76,7 +89,10 @@ const DialogHeader = ({ className, children, ...props }: React.HTMLAttributes<HT
   // If no direct DialogTitle found, fall back to simple layout (for custom headers)
   if (!title) {
     return (
-      <div className={cn('relative flex flex-col gap-2 pr-8 sm:text-left', className)} {...props}>
+      <div
+        className={cn('relative flex flex-col gap-2 pr-8 sm:text-left', sectionClass, className)}
+        {...props}
+      >
         {children}
         <DialogPrimitive.Close
           tabIndex={-1}
@@ -90,7 +106,7 @@ const DialogHeader = ({ className, children, ...props }: React.HTMLAttributes<HT
   }
 
   return (
-    <div className={cn('flex flex-col gap-4 sm:text-left', className)} {...props}>
+    <div className={cn('flex flex-col gap-4 sm:text-left', sectionClass, className)} {...props}>
       {/* Title row: title + extra actions + close button */}
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 flex-1">{title}</div>
@@ -122,15 +138,22 @@ DialogFooter.displayName = 'DialogFooter';
 
 function DialogTitle({
   className,
+  size = 'default',
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title> & {
   ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Title>>;
+  /** `sm` for compact dialogs and panels (text-sm). */
+  size?: 'default' | 'sm';
 }) {
   return (
     <DialogPrimitive.Title
       ref={ref}
-      className={cn('text-base font-semibold leading-none tracking-tight', className)}
+      className={cn(
+        'font-semibold leading-none tracking-tight',
+        size === 'sm' ? 'text-sm' : 'text-base',
+        className,
+      )}
       {...props}
     />
   );

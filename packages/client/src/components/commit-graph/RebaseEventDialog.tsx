@@ -24,7 +24,7 @@ export function RebaseEventDialog({
             return (
               <div className="flex max-h-[80vh] min-h-0 flex-col">
                 <div className="border-sidebar-border border-b px-4 py-3">
-                  <DialogTitle className="text-sm leading-tight font-semibold">
+                  <DialogTitle size="sm" className="leading-tight">
                     {t('graph.rebaseDetailsTitle', 'Rebase details')}
                   </DialogTitle>
                   <DialogDescription className="text-muted-foreground mt-1 text-xs">

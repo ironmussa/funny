@@ -52,7 +52,7 @@ export function MediaPreviewDialog({ open, onOpenChange, filePath }: MediaPrevie
             data-testid="media-preview-dialog"
           >
             <DialogHeader>
-              <DialogTitle className="truncate text-sm font-medium">
+              <DialogTitle size="sm" className="truncate font-medium">
                 {fileName ?? 'Preview'}
               </DialogTitle>
             </DialogHeader>
@@ -112,8 +112,10 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
       onOpenAutoFocus={(e) => e.preventDefault()}
       data-testid="media-preview-dialog"
     >
-      <DialogHeader className="border-border shrink-0 border-b px-4 py-3">
-        <DialogTitle className="truncate text-sm font-medium">{name ?? 'Preview'}</DialogTitle>
+      <DialogHeader bordered>
+        <DialogTitle size="sm" className="truncate font-medium">
+          {name ?? 'Preview'}
+        </DialogTitle>
         <DialogDescription className="sr-only">Expanded image view</DialogDescription>
         <div className="flex items-center gap-1">
           <TooltipProvider>

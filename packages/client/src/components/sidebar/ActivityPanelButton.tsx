@@ -366,7 +366,8 @@ function WatchersDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex h-[85dvh] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+        flush
+        className="flex h-[85dvh] max-w-4xl flex-col overflow-hidden"
         data-testid="watchers-view"
       >
         <DialogHeader className="border-border border-b px-5 py-4">

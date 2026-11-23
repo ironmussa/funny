@@ -511,7 +511,8 @@ export function PRDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
+        flush
+        className="flex h-[85vh] max-w-[90vw] flex-col"
         data-testid="pr-detail-dialog"
       >
         <PRDetailHeader

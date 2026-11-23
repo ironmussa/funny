@@ -558,8 +558,10 @@ export function MermaidExpandedDialog({
         <div role="alert" hidden={!error} className="text-destructive px-4 py-2 text-xs">
           Invalid or unsupported diagram: {error}
         </div>
-        <DialogHeader className="border-border shrink-0 border-b px-4 py-3">
-          <DialogTitle className="flex items-center gap-2 text-sm">Mermaid Diagram</DialogTitle>
+        <DialogHeader bordered>
+          <DialogTitle size="sm" className="flex items-center gap-2">
+            Mermaid Diagram
+          </DialogTitle>
           <DialogDescription className="sr-only">Expanded Mermaid diagram view</DialogDescription>
           <div className="flex items-center gap-1">
             <ToolbarButton

@@ -56,14 +56,17 @@ export function MobileContentPreview({
       {!onExpand && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
-            className="flex h-dvh w-screen max-w-none flex-col gap-0 rounded-none p-0"
+            flush
+            className="flex h-dvh w-screen max-w-none flex-col rounded-none"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               triggerRef.current?.focus({ preventScroll: true });
             }}
           >
             <div className="border-border flex shrink-0 items-center gap-3 border-b p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-              <DialogTitle className="min-w-0 flex-1 text-sm">{title}</DialogTitle>
+              <DialogTitle size="sm" className="min-w-0 flex-1">
+                {title}
+              </DialogTitle>
               <DialogClose asChild>
                 <Button variant="outline" className="min-h-11">
                   {t('tools.closeViewer')}

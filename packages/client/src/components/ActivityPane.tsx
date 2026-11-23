@@ -468,7 +468,8 @@ export function ActivityPane() {
         }}
       >
         <DialogContent
-          className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col gap-0 overflow-hidden p-0"
+          flush
+          className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col overflow-hidden"
           data-testid="activity-expanded-diff-overlay"
         >
           {(() => {

@@ -258,12 +258,13 @@ export function CommitDetailDialog({
         }}
       >
         <DialogContent
-          className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
+          flush
+          className="flex h-[85vh] max-w-[90vw] flex-col"
           data-testid="commit-detail-dialog"
         >
           <div className="border-border shrink-0 border-b px-4 py-3">
             <div className="flex items-start justify-between gap-2">
-              <DialogTitle className="text-sm leading-tight font-semibold">
+              <DialogTitle size="sm" className="leading-tight">
                 {selectedCommit?.message ?? 'Commit details'}
               </DialogTitle>
               <Button

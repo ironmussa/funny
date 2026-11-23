@@ -7,14 +7,28 @@
  */
 
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { nullReporter, runPipeline } from '@funny/pipelines';
 
 import { loadWorkflowCatalog } from '../catalog.js';
 import type { ActionProvider, ActionResult } from '../compiler/action-provider.js';
 import { compileYamlPipeline } from '../compiler/yaml-compiler.js';
+import { resolvePromptFiles } from '../prompt-files.js';
 
 const ok: ActionResult = { ok: true, output: '' };
+
+/** A built-in flow as the factory runs it: its prompt files read from beside it. */
+async function resolvedBuiltIn(name: string) {
+  const { workflows } = await loadWorkflowCatalog();
+  const entry = workflows.get(name)!;
+  const resolved = await resolvePromptFiles(entry.workflow, (path) =>
+    readFile(join(dirname(entry.filePath), path), 'utf8').catch(() => null),
+  );
+  if (!resolved.ok) throw new Error(JSON.stringify(resolved.problems));
+  return resolved.workflow;
+}
 
 /** Triage that wrote a contract, as the factory's provider reports it. */
 const CONTRACT = 'Acceptance criteria:\n- Negative numbers are summed';
@@ -87,8 +101,7 @@ async function run(
   reviews?: ActionResult[],
   mergeResults?: ActionResult[],
 ) {
-  const { workflows } = await loadWorkflowCatalog();
-  const pipeline = compileYamlPipeline(workflows.get(flow)!.workflow);
+  const pipeline = compileYamlPipeline(await resolvedBuiltIn(flow));
   const fake = provider(ci, reviews, mergeResults);
   const result = await runPipeline(pipeline, {
     provider: fake.p,
@@ -105,6 +118,60 @@ async function run(
   });
   return { ...fake, outcome: result.outcome, error: result.error };
 }
+
+// openspec factory-flow-step-options, 5.2: the agent forgot to open the pull request.
+describe('a missing pull request', () => {
+  const noPr: ActionResult = {
+    ok: false,
+    error: 'No open pull request from the branch factory/issue-7: the agent did not open one.',
+  };
+
+  async function runWithPrs(name: string, prs: ActionResult[]) {
+    const fake = provider([green]);
+    let looks = 0;
+    const steps: Array<string | undefined> = [];
+    const spawn = fake.p.spawnAgent;
+    fake.p.spawnAgent = async (opts) => {
+      steps.push(opts.stepId);
+      return spawn(opts);
+    };
+    fake.p.createPr = async () => prs[Math.min(looks++, prs.length - 1)]!;
+    const result = await runPipeline(compileYamlPipeline(await resolvedBuiltIn(name)), {
+      provider: fake.p,
+      progress: nullReporter,
+      cwd: '',
+      inputs: {
+        repo: 'o/r',
+        issue_number: '7',
+        issue_title: 'Fix it',
+        issue_url: 'u/7',
+        branch: 'factory/issue-7',
+      },
+      outputs: {},
+    });
+    return { result, steps, prompts: fake.prompts, looks: () => looks };
+  }
+
+  test.each(['issue-to-pr', 'issue-to-merge'])(
+    '%s asks the agent once to open it, then goes on',
+    async (name) => {
+      const { result, steps, prompts, looks } = await runWithPrs(name, [noPr, ok]);
+      expect(looks()).toBe(2);
+      expect(steps).toContain('pull-request.before_retry');
+      const ask = prompts[steps.indexOf('pull-request.before_retry')]!;
+      expect(ask).toContain('there is no\nopen pull request from the branch `factory/issue-7`');
+      expect(ask).toContain('did not open one');
+      expect(result.outcome).toBe('completed');
+    },
+  );
+
+  test('still none after asking: the run fails with the same reason', async () => {
+    const { result, looks } = await runWithPrs('issue-to-pr', [noPr]);
+    expect(looks()).toBe(2);
+    expect(result.outcome).not.toBe('completed');
+    expect(String(result.error)).toContain('did not open one');
+  });
+});
 
 describe('issue-to-merge workflow', () => {
   test('is a built-in beside factory-issue, and both compile', async () => {
@@ -210,8 +277,7 @@ describe('issue-to-merge workflow', () => {
     });
 
     test('a flow whose review sets early: false tells the checks nothing', async () => {
-      const { workflows } = await loadWorkflowCatalog();
-      const builtIn = workflows.get('issue-to-merge')!.workflow;
+      const builtIn = await resolvedBuiltIn('issue-to-merge');
       const late = {
         ...builtIn,
         nodes: builtIn.nodes.map((node) =>
@@ -314,22 +380,19 @@ describe('issue-to-merge workflow', () => {
         output: 'none',
         metadata: { decision: 'none', contract: '' },
       });
-      const result = await runPipeline(
-        compileYamlPipeline(workflows.get('issue-to-pr')!.workflow),
-        {
-          provider: fake.p,
-          progress: nullReporter,
-          cwd: '',
-          inputs: {
-            repo: 'o/r',
-            issue_number: '7',
-            issue_title: 'Fix it',
-            issue_url: 'u/7',
-            branch: 'b',
-          },
-          outputs: {},
+      const result = await runPipeline(compileYamlPipeline(await resolvedBuiltIn('issue-to-pr')), {
+        provider: fake.p,
+        progress: nullReporter,
+        cwd: '',
+        inputs: {
+          repo: 'o/r',
+          issue_number: '7',
+          issue_title: 'Fix it',
+          issue_url: 'u/7',
+          branch: 'b',
         },
-      );
+        outputs: {},
+      });
       expect(result.outcome).toBe('completed');
       expect(fake.prompts[0]).not.toContain('contract');
       expect(fake.prompts[0]).toContain('Read the issue first: u/7');
@@ -340,7 +403,7 @@ describe('issue-to-merge workflow', () => {
       const fake = provider([green]);
       fake.p.triage = async () => ({ ok: false, error: 'The issue needs more information: ?' });
       const result = await runPipeline(
-        compileYamlPipeline(workflows.get('issue-to-merge')!.workflow),
+        compileYamlPipeline(await resolvedBuiltIn('issue-to-merge')),
         {
           provider: fake.p,
           progress: nullReporter,

@@ -149,6 +149,38 @@ function WorktreePathIcon({ isMain }: { isMain: boolean }) {
   );
 }
 
+/** What names a worktree: its branch, or its short commit when HEAD is detached. */
+function worktreeLabel(worktree: WorktreeInfo): string;
+function worktreeLabel(worktree: WorktreeInfo | null): string | undefined;
+function worktreeLabel(worktree: WorktreeInfo | null): string | undefined {
+  if (!worktree) return undefined;
+  return worktree.branch ?? worktree.commit.slice(0, 7);
+}
+
+/** The branch chip, or "detached at <commit>" for a worktree with no branch. */
+function WorktreeBranchLabel({ worktree }: { worktree: WorktreeInfo }) {
+  const { t } = useTranslation();
+  if (worktree.branch) {
+    return (
+      <BranchBadge
+        branch={worktree.branch}
+        size="xs"
+        data-testid={`worktree-branch-${worktree.branch}`}
+      />
+    );
+  }
+  const shortCommit = worktreeLabel(worktree);
+  return (
+    <span
+      className="text-muted-foreground text-2xs font-mono"
+      title={worktree.commit}
+      data-testid={`worktree-detached-${shortCommit}`}
+    >
+      {t('worktreeSettings.detached', { commit: shortCommit })}
+    </span>
+  );
+}
+
 function WorktreeCard({
   worktree,
   threads,
@@ -165,9 +197,7 @@ function WorktreeCard({
   readOnly: boolean;
 }) {
   const { t } = useTranslation();
-  // A detached worktree has no branch: its rows are keyed by the short commit.
-  const shortCommit = worktree.commit.slice(0, 7);
-  const rowKey = worktree.branch ?? shortCommit;
+  const rowKey = worktreeLabel(worktree);
   return (
     <div
       // oxlint-disable-next-line shadcn/require-static-classes -- listRowClassName is a static constant from list-row-styles
@@ -179,21 +209,7 @@ function WorktreeCard({
       <div className="flex min-w-0 flex-1 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            {worktree.branch ? (
-              <BranchBadge
-                branch={worktree.branch}
-                size="xs"
-                data-testid={`worktree-branch-${worktree.branch}`}
-              />
-            ) : (
-              <span
-                className="text-muted-foreground text-2xs font-mono"
-                title={worktree.commit}
-                data-testid={`worktree-detached-${shortCommit}`}
-              >
-                {t('worktreeSettings.detached', { commit: shortCommit })}
-              </span>
-            )}
+            <WorktreeBranchLabel worktree={worktree} />
           </div>
           {readOnly ? (
             <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
@@ -627,7 +643,7 @@ export function WorktreeSettings({
         }}
         title={t('dialog.deleteWorktree')}
         description={t('dialog.deleteWorktreeDesc', {
-          branch: confirmRemove?.branch ?? confirmRemove?.commit.slice(0, 7),
+          branch: worktreeLabel(confirmRemove),
         })}
         cancelLabel={t('common.cancel')}
         confirmLabel={t('common.delete')}

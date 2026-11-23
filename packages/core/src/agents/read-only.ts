@@ -67,6 +67,36 @@ const CREDENTIAL_FILES = [
   '.codex/auth.json',
 ];
 
+/** The paths a read-only agent's commands never read: credentials, funny's data, more `hidden`. */
+function hiddenPathsFor(home: string, hidden: readonly string[] = []): string[] {
+  return [...CREDENTIAL_FILES.map((path) => join(home, path)), ...hidden];
+}
+
+/** The Codex permission profile of a read-only agent (see `codexReadOnlyOverrides`). */
+const CODEX_PROFILE = 'funny_read_only';
+
+/**
+ * The raw `--config` overrides that hold a Codex agent to reading. Codex's own
+ * `read-only` sandbox blocks writes and the network but reads every file, so
+ * a permission profile extends it with the paths its commands may not read,
+ * and the shell environment drops the credentials. The profile is chosen with
+ * `default_permissions`, and the thread must NOT pass `--sandbox` as well: Codex
+ * then ignores the profile (checked with Codex 0.162). Raw strings, because the
+ * SDK's structured `config` would split the paths at their dots.
+ */
+export function codexReadOnlyOverrides(home: string, hidden: readonly string[] = []): string[] {
+  const unreadable = hiddenPathsFor(home, hidden)
+    .map((path) => `${JSON.stringify(path)} = "none"`)
+    .join(', ');
+  return [
+    `permissions.${CODEX_PROFILE}.extends=":read-only"`,
+    `permissions.${CODEX_PROFILE}.filesystem={ ${unreadable} }`,
+    `default_permissions="${CODEX_PROFILE}"`,
+    `shell_environment_policy.exclude=${JSON.stringify(CREDENTIAL_ENV_VARS)}`,
+    'approval_policy="never"',
+  ];
+}
+
 export type ReadOnlySandboxMode = 'strict' | 'socket-denylist';
 
 /** Unix sockets through which a command could run something outside the sandbox. */
@@ -105,7 +135,7 @@ export function readOnlySandboxSettings(
       : { allowedDomains: [], strictAllowlist: true },
     credentials: {
       envVars: CREDENTIAL_ENV_VARS.map((name) => ({ name, mode: 'deny' as const })),
-      files: [...CREDENTIAL_FILES.map((path) => join(home, path)), ...hidden].map((path) => ({
+      files: hiddenPathsFor(home, hidden).map((path) => ({
         path,
         mode: 'deny' as const,
       })),

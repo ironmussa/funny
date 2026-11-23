@@ -5,15 +5,21 @@
  * (merged or stopped). Laid out like the
  * global search view (search bar and a status filter on top, one row per run
  * with its thread's status icon); a row opens the run's last agent thread, and
- * carries the run's controls (PR, retry, stop).
+ * carries the run's controls (PR, retry, stop). The board layout (openspec
+ * factory-pipeline-board) shows the same filtered runs in stage columns.
  */
 import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 import { Clock, Factory } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
+import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
+import {
+  FactoryActiveToggle,
+  FactoryLayoutToggle,
+} from '@/components/factory-board/FactoryViewToggles';
 import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +43,7 @@ import { timeAgo } from '@/lib/thread-utils';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { type FactoryViewLayout, useFactoryViewStore } from '@/stores/factory-view-store';
 
 interface RowProps {
   run: FactoryQueueRun;
@@ -197,6 +204,48 @@ function FactoryQueueHeader({ runs }: { runs: FactoryQueueRun[] | undefined }) {
   );
 }
 
+/** The set with `value` added, or removed when it was in it. */
+function toggled(selected: ReadonlySet<string>, value: string): Set<string> {
+  const next = new Set(selected);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+function ClearFilters({ shown, onClear }: { shown: boolean; onClear: () => void }) {
+  const { t } = useTranslation();
+  if (!shown) return null;
+  return (
+    <button
+      type="button"
+      data-testid="factory-view-clear-filters"
+      onClick={onClear}
+      className="text-muted-foreground hover:text-foreground px-2 py-1 text-xs whitespace-nowrap transition-colors"
+    >
+      {t('allThreads.clearFilters')}
+    </button>
+  );
+}
+
+/** How many runs each state and project has, and the project options (only those with runs). */
+function useFactoryQueueCounts(
+  runs: FactoryQueueRun[] | undefined,
+  projectNameById: ReadonlyMap<string, string>,
+) {
+  return useMemo(() => {
+    const stateCounts: Record<string, number> = {};
+    const projectCounts: Record<string, number> = {};
+    for (const run of runs ?? []) {
+      stateCounts[run.state] = (stateCounts[run.state] ?? 0) + 1;
+      projectCounts[run.projectId] = (projectCounts[run.projectId] ?? 0) + 1;
+    }
+    const projectOptions = Object.keys(projectCounts)
+      .map((id) => ({ value: id, label: projectNameById.get(id) ?? id }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return { stateCounts, projectCounts, projectOptions };
+  }, [runs, projectNameById]);
+}
+
 interface ToolbarProps {
   search: string;
   onSearchChange: (search: string) => void;
@@ -213,59 +262,71 @@ interface ToolbarProps {
   shown: number;
   total: number;
   stateCounts: Record<string, number>;
+  activeOnly: boolean;
+  onActiveOnlyChange: (activeOnly: boolean) => void;
+  layout: FactoryViewLayout;
+  onLayoutChange: (layout: FactoryViewLayout) => void;
 }
 
-function FactoryQueueToolbar({
+function FactoryQueueSearch({
   search,
   onSearchChange,
   caseSensitive,
   onCaseSensitiveChange,
+  shown,
+  total,
+}: Pick<
+  ToolbarProps,
+  'search' | 'onSearchChange' | 'caseSensitive' | 'onCaseSensitiveChange' | 'shown' | 'total'
+>) {
+  const { t } = useTranslation();
+  const searching = search.trim() !== '';
+  return (
+    <SearchBar
+      query={search}
+      onQueryChange={onSearchChange}
+      totalMatches={shown}
+      resultLabel={searching ? `${shown}/${total}` : ''}
+      caseSensitive={caseSensitive}
+      onCaseSensitiveChange={onCaseSensitiveChange}
+      onClose={search ? () => onSearchChange('') : undefined}
+      autoFocus={false}
+      placeholder={t('factoryView.searchPlaceholder', 'Filter by issue, project or step')}
+      testIdPrefix="factory-view-search"
+      className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
+    />
+  );
+}
+
+function FactoryQueueFilters({
   stateFilter,
   onStateFilterChange,
   projectFilter,
   onProjectFilterChange,
   projectOptions,
   projectCounts,
-  shown,
-  total,
   stateCounts,
-}: ToolbarProps) {
+}: Pick<
+  ToolbarProps,
+  | 'stateFilter'
+  | 'onStateFilterChange'
+  | 'projectFilter'
+  | 'onProjectFilterChange'
+  | 'projectOptions'
+  | 'projectCounts'
+  | 'stateCounts'
+>) {
   const { t } = useTranslation();
-  const toggle = (selected: Set<string>, value: string, onChange: (next: Set<string>) => void) => {
-    const next = new Set(selected);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
-    onChange(next);
-  };
-  const searching = search.trim() !== '';
-
   return (
-    <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
-      <SearchBar
-        query={search}
-        onQueryChange={onSearchChange}
-        totalMatches={shown}
-        resultLabel={searching ? `${shown}/${total}` : ''}
-        caseSensitive={caseSensitive}
-        onCaseSensitiveChange={onCaseSensitiveChange}
-        onClose={search ? () => onSearchChange('') : undefined}
-        autoFocus={false}
-        placeholder={t('factoryView.searchPlaceholder', 'Filter by issue, project or step')}
-        testIdPrefix="factory-view-search"
-        className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
-      />
-
-      <div className="bg-border h-4 w-px" />
-
+    <>
       <FilterDropdown
         testId="factory-view-project-filter"
         label={t('allThreads.filterProject')}
         options={projectOptions}
         selected={projectFilter}
-        onToggle={(projectId) => toggle(projectFilter, projectId, onProjectFilterChange)}
+        onToggle={(projectId) => onProjectFilterChange(toggled(projectFilter, projectId))}
         counts={projectCounts}
       />
-
       <FilterDropdown
         testId="factory-view-status-filter"
         label={t('allThreads.filterStatus')}
@@ -274,62 +335,45 @@ function FactoryQueueToolbar({
           label: factoryRunStateLabel(t, state),
         }))}
         selected={stateFilter}
-        onToggle={(state) => toggle(stateFilter, state, onStateFilterChange)}
+        onToggle={(state) => onStateFilterChange(toggled(stateFilter, state))}
         counts={stateCounts}
       />
+    </>
+  );
+}
 
-      {(stateFilter.size > 0 || projectFilter.size > 0) && (
-        <button
-          type="button"
-          data-testid="factory-view-clear-filters"
-          onClick={() => {
-            onStateFilterChange(new Set());
-            onProjectFilterChange(new Set());
-          }}
-          className="text-muted-foreground hover:text-foreground px-2 py-1 text-xs whitespace-nowrap transition-colors"
-        >
-          {t('allThreads.clearFilters')}
-        </button>
-      )}
+function FactoryQueueToolbar(props: ToolbarProps) {
+  const { stateFilter, projectFilter, onStateFilterChange, onProjectFilterChange } = props;
+  return (
+    <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
+      <FactoryQueueSearch {...props} />
+      <div className="bg-border h-4 w-px" />
+      <FactoryQueueFilters {...props} />
+      <FactoryActiveToggle activeOnly={props.activeOnly} onChange={props.onActiveOnlyChange} />
+      <ClearFilters
+        shown={stateFilter.size > 0 || projectFilter.size > 0}
+        onClear={() => {
+          onStateFilterChange(new Set());
+          onProjectFilterChange(new Set());
+        }}
+      />
+      <div className="ml-auto">
+        <FactoryLayoutToggle layout={props.layout} onChange={props.onLayoutChange} />
+      </div>
     </div>
   );
 }
 
-export function FactoryQueueView() {
-  const runs = useFactoryQueueRuns();
-  const projects = useProjects();
-  const now = useMinuteTick();
+/** The view's filters and the runs they keep (both layouts show the same runs). */
+function useFactoryQueueFilters(
+  runs: FactoryQueueRun[] | undefined,
+  projectNameById: ReadonlyMap<string, string>,
+) {
   const [search, setSearch] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [stateFilter, setStateFilter] = useState<Set<string>>(() => new Set());
   const [projectFilter, setProjectFilter] = useState<Set<string>>(() => new Set());
-
-  const projectNameById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project.name])),
-    [projects],
-  );
-
-  const stateCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const run of runs ?? []) counts[run.state] = (counts[run.state] ?? 0) + 1;
-    return counts;
-  }, [runs]);
-
-  const projectCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const run of runs ?? []) counts[run.projectId] = (counts[run.projectId] ?? 0) + 1;
-    return counts;
-  }, [runs]);
-
-  // Only the projects that have runs, so every option keeps at least one row.
-  const projectOptions = useMemo(
-    () =>
-      Object.keys(projectCounts)
-        .map((id) => ({ value: id, label: projectNameById.get(id) ?? id }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [projectCounts, projectNameById],
-  );
-
+  const [activeOnly, setActiveOnly] = useState(false);
   const filtered = useMemo(
     () =>
       runs &&
@@ -339,29 +383,97 @@ export function FactoryQueueView() {
         states: stateFilter,
         projectIds: projectFilter,
         projectNameById,
+        activeOnly,
       }),
-    [runs, search, caseSensitive, stateFilter, projectFilter, projectNameById],
+    [runs, search, caseSensitive, stateFilter, projectFilter, projectNameById, activeOnly],
   );
+  return {
+    filtered,
+    toolbar: {
+      search,
+      onSearchChange: setSearch,
+      caseSensitive,
+      onCaseSensitiveChange: setCaseSensitive,
+      stateFilter,
+      onStateFilterChange: setStateFilter,
+      projectFilter,
+      onProjectFilterChange: setProjectFilter,
+      activeOnly,
+      onActiveOnlyChange: setActiveOnly,
+    },
+    singleProjectId: projectFilter.size === 1 ? [...projectFilter][0]! : null,
+    shown: filtered?.length ?? 0,
+  };
+}
+
+/** What the board does: open a run's thread, and show the finished runs it hides in the list. */
+function useFactoryBoardActions(
+  {
+    onActiveOnlyChange,
+    onStateFilterChange,
+  }: Pick<ToolbarProps, 'onActiveOnlyChange' | 'onStateFilterChange'>,
+  setLayout: (layout: FactoryViewLayout) => void,
+) {
+  const navigate = useStableNavigate();
+  const openRun = useCallback(
+    (run: FactoryQueueRun, threadId: string) =>
+      navigate(
+        buildPath(getThreadRoute({ id: threadId, projectId: run.projectId, isScratch: false })),
+      ),
+    [navigate],
+  );
+  const showOlderDone = useCallback(() => {
+    onActiveOnlyChange(false);
+    onStateFilterChange(new Set(['merged', 'stopped']));
+    setLayout('list');
+  }, [onActiveOnlyChange, onStateFilterChange, setLayout]);
+  return { openRun, showOlderDone };
+}
+
+export function FactoryQueueView() {
+  const runs = useFactoryQueueRuns();
+  const projects = useProjects();
+  const now = useMinuteTick();
+  const layout = useFactoryViewStore((state) => state.layout);
+  const setLayout = useFactoryViewStore((state) => state.setLayout);
+
+  const projectNameById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.name])),
+    [projects],
+  );
+  const counts = useFactoryQueueCounts(runs, projectNameById);
+  const { filtered, toolbar, singleProjectId, shown } = useFactoryQueueFilters(
+    runs,
+    projectNameById,
+  );
+
+  const { openRun, showOlderDone } = useFactoryBoardActions(toolbar, setLayout);
+  const total = runs?.length ?? 0;
+  const boardRuns = layout === 'board' && total > 0 ? filtered : undefined;
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="factory-view">
       <FactoryQueueHeader runs={runs} />
       <FactoryQueueToolbar
-        search={search}
-        onSearchChange={setSearch}
-        caseSensitive={caseSensitive}
-        onCaseSensitiveChange={setCaseSensitive}
-        stateFilter={stateFilter}
-        onStateFilterChange={setStateFilter}
-        projectFilter={projectFilter}
-        onProjectFilterChange={setProjectFilter}
-        projectOptions={projectOptions}
-        projectCounts={projectCounts}
-        shown={filtered?.length ?? 0}
-        total={runs?.length ?? 0}
-        stateCounts={stateCounts}
+        {...toolbar}
+        {...counts}
+        shown={shown}
+        total={total}
+        layout={layout}
+        onLayoutChange={setLayout}
       />
-      <FactoryQueueBody runs={filtered} projectNameById={projectNameById} now={now} />
+      {boardRuns ? (
+        <FactoryBoard
+          runs={boardRuns}
+          projectNameById={projectNameById}
+          now={now}
+          singleProjectId={singleProjectId}
+          onOpen={openRun}
+          onShowOlderDone={showOlderDone}
+        />
+      ) : (
+        <FactoryQueueBody runs={filtered} projectNameById={projectNameById} now={now} />
+      )}
     </div>
   );
 }

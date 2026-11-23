@@ -1810,6 +1810,10 @@
       "title": "El agente no hizo ningún cambio",
       "body": "No abrió ningún pull request ni hizo commits. Su explicación está en el issue #{{issue}}, que quedó marcado para revisión: cierra el issue o reintenta el run.",
       "unsavedBody": "No abrió ningún pull request ni hizo commits, pero dejó trabajo sin guardar en su checkout, que se conservó (la ruta está en el issue #{{issue}}). Escribe en este hilo para que haga commit y abra el pull request, o reintenta el run."
+    },
+    "risk": {
+      "low": "Riesgo bajo",
+      "high": "Riesgo alto"
     }
   },
   "projectSecrets": {
@@ -1909,6 +1913,58 @@
     "searchPlaceholder": "Filtrar por issue, proyecto o paso",
     "empty": "No hay nada en el factory",
     "emptyDescription": "Los issues enviados al factory de un proyecto aparecen aquí mientras esperan y se ejecutan.",
-    "issueTitle": "Issue #{{number}}"
+    "issueTitle": "Issue #{{number}}",
+    "showAll": "Todos",
+    "showActive": "Activos",
+    "layoutList": "Lista",
+    "layoutBoard": "Tablero"
+  },
+  "factoryBoard": {
+    "column": {
+      "queue": "Cola",
+      "triage": "Triage",
+      "implementing": "Implementación",
+      "pr": "PR · Prueba · CI",
+      "review": "Review",
+      "merge": "Merge",
+      "needsPerson": "Necesita una persona",
+      "done": "Hecho"
+    },
+    "doneHidden": "+{{count}} anteriores en la lista",
+    "emptyColumn": "Ningún run aquí",
+    "showMore": "Mostrar {{count}} más",
+    "limit": {
+      "merge": "1 a la vez por repositorio",
+      "stage": "Límite de la etapa \"{{node}}\"",
+      "max": "Máximo de runs simultáneos de la factory"
+    },
+    "step": {
+      "done": "terminado",
+      "current": "en curso",
+      "failed": "falló",
+      "pending": "sin empezar",
+      "round": "ronda {{round}}"
+    },
+    "gate": {
+      "stale": "De un commit anterior"
+    },
+    "proof": {
+      "pass": "Prueba superada",
+      "fail": "Prueba fallida",
+      "skipped": "No necesita prueba"
+    },
+    "ci": {
+      "running": "CI en curso",
+      "rounds": "CI ×{{count}}",
+      "detail": "{{red}} en rojo · {{conflicts}} conflictos"
+    },
+    "waiting": {
+      "questions": "Triage hizo {{count}} preguntas en el issue",
+      "needsInfo": "Triage preguntó en el issue",
+      "noChange": "Nada que cambiar: el issue necesita una persona",
+      "failed": "Falló",
+      "unsaved": "Sin commit, pero con trabajo sin guardar en su checkout",
+      "person": "Esperando a una persona"
+    }
   }
 }

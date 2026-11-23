@@ -43,7 +43,18 @@ export interface RunnerEnrollmentClientDependencies {
   clearCredentials(): void;
   sleep(ms: number): Promise<void>;
   env: Record<string, string | undefined>;
+  /** The clock of the rejection grace (`REJECTION_GRACE_MS`); `Date.now` by default. */
+  now?: () => number;
 }
+
+/**
+ * How long the server must keep rejecting stored credentials before the runner
+ * drops them and asks for a new device link. A single 401 is not enough: in
+ * production a runner deployed at the same second as the server got one 401
+ * from its heartbeat, deleted its credentials, and stayed unlinked until a
+ * person approved a new code by hand.
+ */
+export const REJECTION_GRACE_MS = 2 * 60 * 1000;
 
 const defaultDependencies: RunnerEnrollmentClientDependencies = {
   fetch: (input, init) => fetch(input, init),
@@ -65,6 +76,8 @@ class RegistrationRetry extends Error {
 /** Owns runner HTTP registration, credential resume, and device-link bootstrap. */
 export class RunnerEnrollmentClient {
   private session: RunnerEnrollmentSession | null = null;
+  /** When the server first rejected the stored credentials, in this run of rejections. */
+  private rejectedSince: number | null = null;
 
   constructor(
     readonly serverUrl: string,
@@ -192,14 +205,17 @@ export class RunnerEnrollmentClient {
     try {
       const result = await this.verifyHeartbeat();
       if (result === 'ok') {
+        this.rejectedSince = null;
         log.info('Resumed runner session from stored credentials', {
           namespace: 'runner',
           runnerId: credentials.runnerId,
         });
         return { ...this.session };
       }
-      if (result === 'rejected' || result === 'missing') this.dependencies.clearCredentials();
+      if (result === 'rejected' || result === 'missing') this.rejected(result);
     } catch (error) {
+      // A rejection inside its grace: retry with the credentials, never register without them.
+      if (error instanceof RegistrationRetry) throw error;
       log.warn('Session resume failed (network) — falling back to registration', {
         namespace: 'runner',
         error: String(error),
@@ -207,6 +223,32 @@ export class RunnerEnrollmentClient {
     }
     this.session = null;
     return null;
+  }
+
+  /**
+   * The server refused the stored credentials: keep them and try again (a
+   * server still starting answers this too), and drop them only once it has
+   * kept refusing for `REJECTION_GRACE_MS`. Until then the runner does not
+   * register without them, which would start a device link.
+   */
+  private rejected(result: 'rejected' | 'missing'): void {
+    const now = (this.dependencies.now ?? Date.now)();
+    this.rejectedSince ??= now;
+    if (now - this.rejectedSince < REJECTION_GRACE_MS) {
+      log.warn('Server rejected the stored runner credentials — keeping them and retrying', {
+        namespace: 'runner',
+        result,
+        rejectedForMs: now - this.rejectedSince,
+      });
+      this.session = null;
+      throw new RegistrationRetry(false);
+    }
+    log.warn('Server kept rejecting the stored runner credentials — dropping them', {
+      namespace: 'runner',
+      result,
+    });
+    this.rejectedSince = null;
+    this.dependencies.clearCredentials();
   }
 
   private async verifyHeartbeat(): Promise<'ok' | 'rejected' | 'missing' | 'unexpected'> {

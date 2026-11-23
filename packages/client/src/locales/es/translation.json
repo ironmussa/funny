@@ -1989,6 +1989,11 @@
       "failed": "Falló",
       "unsaved": "Sin commit, pero con trabajo sin guardar en su checkout",
       "person": "Esperando a una persona"
+    },
+    "time": {
+      "inStep": "En {{step}} {{duration}}",
+      "waiting": "Esperando {{step}} {{duration}}",
+      "medianTitle": "Mediana del tiempo en esta etapa, últimos 7 días"
     }
   },
   "factoryRunDetail": {
@@ -2016,6 +2021,16 @@
       "needsInfo": "Preguntado en el issue",
       "tooBig": "División propuesta",
       "none": "Triage no dio contrato: el review juzga contra el issue."
+    },
+    "timeline": {
+      "title": "Línea de tiempo",
+      "running": "en curso",
+      "succeeded": "terminado",
+      "failed": "falló",
+      "skipped": "saltado",
+      "cancelled": "cancelado",
+      "wait": "esperó {{duration}}",
+      "attempt": "intento {{attempt}}"
     }
   }
 }

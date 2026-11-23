@@ -30,6 +30,7 @@ import {
   type FactoryRunMetrics,
   type FactoryStackedOn,
   type FactoryStepOptionsRecord,
+  type FactoryStepTiming,
   type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
@@ -54,6 +55,7 @@ import { z } from 'zod';
 
 import { db, dbDialect, withDatabaseTransaction } from '../../db/index.js';
 import { factoryRuns, factorySettings, workflowNodeExecutions } from '../../db/schema.js';
+import { withStepTimings } from './factory-step-timings.js';
 import { syncRunThreadStages } from './factory-thread-stage.js';
 
 const THREAD_IDS_SCHEMA = z.array(z.string());
@@ -273,6 +275,8 @@ export interface FactoryRunView {
   stackedOn: FactoryStackedOn | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
+  /** Each flow node execution, in start order; only the run lists read it (openspec factory-step-timings). */
+  stepTimings?: FactoryStepTiming[];
 }
 
 export type FactoryRunSource = 'manual' | 'label';
@@ -877,7 +881,9 @@ export function createFactoryRunsRepository(
           .where(eq(factoryRuns.factoryId, factoryId))
           .orderBy(desc(factoryRuns.startedAt)),
         storage,
-      ).map((rows) => rows.map(toView));
+      )
+        .map((rows) => rows.map(toView))
+        .andThen((runs) => withStepTimings(runs, storage));
     },
 
     /**
@@ -937,7 +943,9 @@ export function createFactoryRunsRepository(
           )
           .orderBy(desc(factoryRuns.startedAt)),
         storage,
-      ).map((rows) => rows.map(({ run, projectId }) => ({ ...toView(run), projectId })));
+      )
+        .map((rows) => rows.map(({ run, projectId }) => ({ ...toView(run), projectId })))
+        .andThen((runs) => withStepTimings(runs, storage));
     },
 
     /** The non-terminal run for an issue, if any — the admission dedup check. */

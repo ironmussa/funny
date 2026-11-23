@@ -60,6 +60,16 @@ const verdict = (sha: string, pass: boolean) => ({
   reviewedAt: ago(1),
 });
 
+/** One flow node execution, `start` and `end` in hours before NOW (`end` null: running). */
+const tm = (step: string, start: number, end: number | null) => ({
+  step,
+  visit: '1',
+  attempt: 1,
+  status: end === null ? ('running' as const) : ('succeeded' as const),
+  startedAt: ago(start),
+  finishedAt: end === null ? null : ago(end),
+});
+
 const RUNS: FactoryQueueRun[] = [
   run('requested', { queueOrder: 1, waitReason: { kind: 'paths-overlap', blockers: [47] } }),
   run('requested', { queueOrder: 2, waitReason: { kind: 'blocker-in-progress', blockers: [44] } }),
@@ -77,6 +87,13 @@ const RUNS: FactoryQueueRun[] = [
     prUrl: PR(14),
     reviews: [verdict('aaa1111', false)],
     risk: { headSha: 'bbb2222', level: 'low', reasons: [] },
+    stepTimings: [
+      tm('implement', 5, 4),
+      tm('ci', 4, 3.5),
+      tm('review', 3.4, 3),
+      tm('address', 3, 2.2),
+      tm('review', 2, null),
+    ],
   }),
   run('merging', {
     currentStep: 'merge',
@@ -84,6 +101,7 @@ const RUNS: FactoryQueueRun[] = [
     reviews: [verdict('ccc3333', true)],
     risk: { headSha: 'ccc3333', level: 'low', reasons: [] },
     regressionProof: { headSha: 'ccc3333', verdict: 'pass', ranAt: ago(1) },
+    stepTimings: [tm('implement', 4, 3), tm('ci', 3, 2.5), tm('review', 2.5, 0.4)],
   }),
   run('waiting_human', {
     currentStep: 'merge',
@@ -98,7 +116,16 @@ const RUNS: FactoryQueueRun[] = [
   }),
   run('failed', { currentStep: 'ci', failureReason: 'CI kept failing after 3 fixes' }),
   run('no_change', { currentStep: 'implement' }),
-  run('merged', { completedAt: ago(2), prUrl: PR(17) }),
+  run('merged', {
+    completedAt: ago(2),
+    prUrl: PR(17),
+    stepTimings: [
+      tm('implement', 9, 8),
+      tm('ci', 8, 7.6),
+      tm('review', 7.6, 7.1),
+      tm('merge', 7, 2),
+    ],
+  }),
   run('stopped', { completedAt: ago(5) }),
   run('merged', { completedAt: ago(80) }),
 ];

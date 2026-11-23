@@ -371,7 +371,16 @@ The search, project and state filters and the **Active** filter (hides `merged`,
   for 14). Above the layouts, one banner per project whose factory has an open incident
   (`ProjectFactoryIncident`, the same banner as the project settings, read from each project's
   factory settings).
-- Time per stage is not shown: runs do not record when each step started and ended.
+- **Step timings** (openspec `factory-step-timings`): the run lists (`factory.queueRuns`,
+  `factory.runs`) carry `stepTimings`, each flow node execution (step, visit, attempt, status,
+  start, end) read from the workflow journal `workflow_node_executions` in one batched query of
+  its small columns (`services/factory/factory-step-timings.ts`); other answers that return a run
+  leave it out. A card says how long the run has been in its current step, or waiting for it
+  (no execution of the step yet: its slot, such as the merge lane); the panel shows a timeline
+  with the waits between executions; the Triage to Merge column headers show the median time in
+  the stage over 7 days, for the built-in flows' node ids (`step-stage.ts`). The engine writes an
+  execution once its slot is granted, so a slot wait shows only as the gap before the step, and a
+  run reopened from scratch has its journal, and so its timings, cleared.
 
 ## Security boundaries
 

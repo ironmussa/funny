@@ -1996,6 +1996,11 @@
       "failed": "Failed",
       "unsaved": "No commit, but unsaved work in its checkout",
       "person": "Waiting for a person"
+    },
+    "time": {
+      "inStep": "In {{step}} {{duration}}",
+      "waiting": "Waiting for {{step}} {{duration}}",
+      "medianTitle": "Median time in this stage, last 7 days"
     }
   },
   "factoryRunDetail": {
@@ -2023,6 +2028,16 @@
       "needsInfo": "Asked on the issue",
       "tooBig": "Proposed split",
       "none": "Triage gave no contract: the review judges against the issue."
+    },
+    "timeline": {
+      "title": "Timeline",
+      "running": "running",
+      "succeeded": "done",
+      "failed": "failed",
+      "skipped": "skipped",
+      "cancelled": "cancelled",
+      "wait": "waited {{duration}}",
+      "attempt": "attempt {{attempt}}"
     }
   }
 }

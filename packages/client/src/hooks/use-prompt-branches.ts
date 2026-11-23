@@ -50,16 +50,16 @@ function useFollowUpBranches({
   const [followUpSelectedBranch, setFollowUpSelectedBranch] = useState<string>('');
   const followUpBranchCacheRef = useRef<FollowUpBranchData | null>(null);
 
-  const applyBranchData = (data: FollowUpBranchData) => {
+  const applyBranchData = useCallback((data: FollowUpBranchData) => {
     setFollowUpBranches(data.branches);
     setFollowUpRemoteBranches(data.remoteBranches);
     setFollowUpDefaultBranch(data.defaultBranch);
     setFollowUpCurrentBranch(data.currentBranch);
-  };
-  const resetBranches = () => {
+  }, []);
+  const resetBranches = useCallback(() => {
     setFollowUpBranches([]);
     setFollowUpCurrentBranch(null);
-  };
+  }, []);
 
   // Fetch follow-up branches — only refetch when the project changes.
   // Branch selection is updated separately when activeThreadBaseBranch changes.
@@ -94,7 +94,7 @@ function useFollowUpBranches({
     return () => {
       cancelled = true;
     };
-  }, [isNewThread, selectedProjectId]);
+  }, [isNewThread, selectedProjectId, applyBranchData, resetBranches]);
 
   // Update selection when the active thread's base branch changes (no network call)
   const syncSelectedBranch = useStableCallback(() => {

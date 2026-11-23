@@ -69,7 +69,12 @@ const existing = {
     'react/react-in-jsx-scope': 'off',
     'react/capitalized-calls': 'error',
     'react/error-boundaries': 'error',
-    'react/exhaustive-effect-dependencies': 'warn',
+    // Off: it reports every dependency an effect does not read, and this
+    // codebase lists values on purpose so an effect re-runs when they change
+    // (a nonce, a thread id, the content). The rule takes no option to report
+    // only missing dependencies; react-hooks/exhaustive-deps covers those,
+    // except a missing plain function, which only this rule reported.
+    'react/exhaustive-effect-dependencies': 'off',
     'react/globals': 'error',
     'react/hooks': 'error',
     'react/immutability': 'error',

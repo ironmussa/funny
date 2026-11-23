@@ -10,6 +10,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';
 import { projectsApi } from '@/lib/api/projects';
 import { toastError } from '@/lib/toast-error';
@@ -161,7 +162,7 @@ export function useCommitWorkflow({
 
   // React to server-driven progress of the running workflow (failure, success).
   const prevCommitEntryRef = useRef({ id: commitProgressId, entry: commitEntry });
-  useEffect(() => {
+  const onCommitEntryChange = useStableCallback(() => {
     const previous = prevCommitEntryRef.current;
     prevCommitEntryRef.current = { id: commitProgressId, entry: commitEntry };
     // Just switched threads: the previous entry is another thread's.
@@ -229,7 +230,10 @@ export function useCommitWorkflow({
         toast.success(t('review.commitSuccess', 'Changes committed successfully'));
       }
     }
-  }, [commitProgressId, commitEntry]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    onCommitEntryChange();
+  }, [commitProgressId, commitEntry, onCommitEntryChange]);
 
   const handleCommitAction = useCallback(async () => {
     if (!hasGitContext || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
@@ -420,7 +424,7 @@ function useClearOnWorkflowEnd(
 ): void {
   const settled = useCommitProgressStore((s) => s.settled[commitProgressId]);
   const lastSettledRef = useRef({ id: commitProgressId, count: settled?.count ?? 0 });
-  useEffect(() => {
+  const onSettledChange = useStableCallback(() => {
     const last = lastSettledRef.current;
     const count = settled?.count ?? 0;
     lastSettledRef.current = { id: commitProgressId, count };
@@ -431,5 +435,8 @@ function useClearOnWorkflowEnd(
     if (count === last.count) return;
     clearInProgress();
     onEnded(settled?.action);
-  }, [commitProgressId, settled]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    onSettledChange();
+  }, [commitProgressId, settled, onSettledChange]);
 }

@@ -10,6 +10,7 @@ import {
   useThemeSync,
   writeAndRepaintTerminal,
 } from '@/components/terminal/xterm-utils';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { markMemoryPhase } from '@/lib/memory-phase';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
@@ -45,8 +46,8 @@ export function TauriTerminalTabContent({
   useThemeSync(termRef);
 
   // The effect cleanup cancels the pending RAF and invokes the deferred terminal teardown closure.
-  // react-doctor-disable-next-line effect-needs-cleanup
-  useEffect(() => {
+  // The font size is a one-shot read at mount: a later change is synced below.
+  const mountTerminal = useStableCallback(() => {
     if (!containerRef.current || !isTauri) return;
 
     let cleanup: (() => void) | null = null;
@@ -154,7 +155,8 @@ export function TauriTerminalTabContent({
       if (fitFrame !== null) cancelAnimationFrame(fitFrame);
       cleanup?.();
     };
-  }, [id, cwd]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => mountTerminal(), [id, cwd, mountTerminal]);
 
   // Sync font size when the setting changes
   useEffect(() => {

@@ -420,12 +420,12 @@ export function RunnersSettings() {
   const [runners, setRunners] = useState<RunnerInfo[]>([]);
   const [loadingRunners, setLoadingRunners] = useState(true);
 
-  const loadRunners = async () => {
+  const loadRunners = useCallback(async () => {
     await whilePending(setLoadingRunners, async () => {
       const result = await api.getMyRunners();
       if (result.isOk()) setRunners(result.value.runners);
     });
-  };
+  }, []);
 
   useEffect(() => {
     loadRunners();
@@ -433,7 +433,7 @@ export function RunnersSettings() {
     // Refresh runner statuses every 30s
     const interval = setInterval(loadRunners, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadRunners]);
 
   return (
     <div className="space-y-6">

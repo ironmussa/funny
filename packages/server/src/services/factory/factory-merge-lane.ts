@@ -58,7 +58,20 @@ export type QueueEnd =
 
 /** How often the queue is looked at, and how long a pull request may stay in it. */
 const QUEUE_INTERVAL_MS = 30 * 1000;
+/**
+ * GitHub errors in a row the queue watch rides out (a dropped connection, a
+ * 5xx) before it gives up. Seen in a real run: one reset connection ten seconds
+ * after the queue merged the pull request ended the run as failed.
+ */
+const QUEUE_READ_RETRIES = 5;
 const QUEUE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
+/** Where each final queue state leaves the pull request (`queued` is not final). */
+const QUEUE_ENDS: Partial<Record<string, QueueEnd>> = {
+  merged: { kind: 'merged' },
+  'not-queued': { kind: 'removed' },
+  closed: { kind: 'failed', error: 'The pull request was closed while in the merge queue.' },
+};
 
 export interface MergeLaneDeps {
   prs: Pick<
@@ -236,18 +249,33 @@ export function createMergeLane(deps: MergeLaneDeps) {
     return { updated };
   }
 
+  /**
+   * One look at the queue: how the pull request left it, or null to look again.
+   * `misses` counts the GitHub errors in a row; only those may pass (no access
+   * or no installation will not), and only `QUEUE_READ_RETRIES` of them.
+   */
+  async function lookAtQueue(
+    pr: FactoryPullRequestRef,
+    misses: { count: number },
+  ): Promise<QueueEnd | null> {
+    const state = await deps.prs.queueState(pr);
+    if (state.isOk()) {
+      misses.count = 0;
+      return QUEUE_ENDS[state.value] ?? null;
+    }
+    misses.count += 1;
+    const passes = state.error.kind === 'github-error' && misses.count <= QUEUE_READ_RETRIES;
+    return passes ? null : { kind: 'failed', error: state.error.message };
+  }
+
   /** Look at the queue until GitHub merges the pull request or takes it out. */
   async function followQueue(pr: FactoryPullRequestRef): Promise<QueueEnd> {
     const started = now();
+    const misses = { count: 0 };
     while (now() - started < QUEUE_TIMEOUT_MS) {
       if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
-      const state = await deps.prs.queueState(pr);
-      if (state.isErr()) return { kind: 'failed', error: state.error.message };
-      if (state.value === 'merged') return { kind: 'merged' };
-      if (state.value === 'not-queued') return { kind: 'removed' };
-      if (state.value === 'closed') {
-        return { kind: 'failed', error: 'The pull request was closed while in the merge queue.' };
-      }
+      const end = await lookAtQueue(pr, misses);
+      if (end) return end;
       const slept = await sleep(QUEUE_INTERVAL_MS, deps.signal).then(
         () => true,
         () => false,

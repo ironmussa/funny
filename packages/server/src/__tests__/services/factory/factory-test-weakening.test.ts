@@ -91,6 +91,36 @@ describe('checkTestWeakening', () => {
     ]);
   });
 
+  // test-funny PR #54: an agent renamed a test along with the behaviour it checks,
+  // and the run was held as "high risk" for a test it never removed.
+  test('a test renamed in place is not a removed test', () => {
+    const findings = check(
+      file('src/greet.test.js', [
+        "-test('greet returns Hello message with name', () => {",
+        "-  assert.strictEqual(greet('World'), 'Hello, World!');",
+        "+test('greet returns Hi message with name', () => {",
+        "+  assert.strictEqual(greet('World'), 'Hi, World!');",
+      ]),
+    );
+    expect(findings).toEqual([]);
+    const change = { files: [], truncated: false };
+    expect(classifyRisk({ headSha: SHA, change, findings }).level).toBe('low');
+  });
+
+  test('more tests gone than renamed: every title that went is named', () => {
+    const findings = check(
+      file('src/sum.test.ts', [
+        "-test('adds', () => {",
+        "-test('adds negative numbers', () => {",
+        "+test('sums', () => {",
+      ]),
+    );
+    expect(findings).toEqual([
+      { kind: 'test-case-removed', path: 'src/sum.test.ts', detail: 'adds' },
+      { kind: 'test-case-removed', path: 'src/sum.test.ts', detail: 'adds negative numbers' },
+    ]);
+  });
+
   test('a removed Python test function', () => {
     expect(
       check(file('tests/test_api.py', ['-def test_rejects_bad_token():', '-    assert 1'])),

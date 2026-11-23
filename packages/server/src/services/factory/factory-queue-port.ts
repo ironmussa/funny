@@ -20,6 +20,7 @@ import { createBatchLeader } from './factory-batch-leader.js';
 import type { FactoryBatchesRepository } from './factory-batches.js';
 import { createMergeQueue, type BatchOutcome, type QueueMember } from './factory-merge-queue.js';
 import { prNumberOf } from './factory-pull-requests.js';
+import { ciRunsOnQueueBranches } from './factory-readiness.js';
 import { factoryRunBranch, type FactoryRunView, type UpdateRunInput } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
 
@@ -30,6 +31,11 @@ export interface FactoryQueuePortDeps {
   /** Write a member's run (only while it is in flight). */
   record(runId: string, input: UpdateRunInput): Promise<void>;
   integrationFor(owner: { userId: string; projectId: string }): IntegrationProvider;
+  /**
+   * The default branch's GitHub Actions workflow files, as the leader's
+   * enabler reads them; null when they cannot be read.
+   */
+  workflows?(leader: QueueMember): Promise<string[] | null>;
   signal: AbortSignal;
   pollMs?: number;
 }
@@ -48,8 +54,34 @@ function pathsAt(run: FactoryRunView, sha: string): Pick<QueueMember, 'paths'> {
 
 /** Base branches whose up-to-date rule was learned from a refused merge (D3): batches of one there. */
 const strictBranches = new Set<string>();
+/** Repositories whose queue branches got no CI (D12): no batch there until their workflows change. */
+const noQueueCi = new Set<string>();
+/** Whether a repository's workflows run on queue branches, read at most every few minutes. */
+const queueCiRead = new Map<string, { runs: boolean; at: number }>();
+const QUEUE_CI_TTL_MS = 5 * 60_000;
 
 export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
+  /**
+   * Whether CI runs on the repository's queue branches: its workflows say so
+   * and no batch found otherwise. Unreadable workflows: no batch (the serial
+   * path never needs it). Without a reader (tests): assumed.
+   */
+  async function queueCiRuns(leader: QueueMember): Promise<boolean> {
+    if (noQueueCi.has(leader.repo)) {
+      const read = queueCiRead.get(leader.repo);
+      // Learned from a batch: only a newer read of the workflows clears it.
+      if (!read || Date.now() - read.at < QUEUE_CI_TTL_MS) return false;
+      noQueueCi.delete(leader.repo);
+    }
+    if (!deps.workflows) return true;
+    const cached = queueCiRead.get(leader.repo);
+    if (cached && Date.now() - cached.at < QUEUE_CI_TTL_MS) return cached.runs;
+    const files = await deps.workflows(leader);
+    const runs = files !== null && ciRunsOnQueueBranches(files);
+    queueCiRead.set(leader.repo, { runs, at: Date.now() });
+    return runs;
+  }
+
   const providerFor = (member: Pick<QueueMember, 'userId' | 'projectId'>) =>
     deps.integrationFor({ userId: member.userId, projectId: member.projectId });
 
@@ -120,6 +152,7 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
      */
     async batchable(leader: QueueMember): Promise<boolean> {
       if (strictBranches.has(`${leader.repo}:${leader.baseBranch}`)) return false;
+      if (!(await queueCiRuns(leader))) return false;
       const rules = await providerFor(leader).branchRules(leader.repo, leader.baseBranch);
       return rules.isOk() && !rules.value.mergeQueue && rules.value.upToDate !== true;
     },
@@ -135,6 +168,13 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
         providerFor,
         hold: (member: QueueMember) => holdOf(member, gates),
         left,
+        onNoQueueCi: (repo: string) => {
+          noQueueCi.add(repo);
+          log.warn('Issue factory: CI did not run on a merge queue branch', {
+            namespace: 'factory',
+            repo,
+          });
+        },
         signal: deps.signal,
         pollMs: deps.pollMs,
       };

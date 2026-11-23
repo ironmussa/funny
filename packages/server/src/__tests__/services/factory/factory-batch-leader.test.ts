@@ -194,13 +194,16 @@ describe('a green batch', () => {
     expect(mismatches).toEqual([['r1', 'r2']]);
   });
 
-  test('no check reported on the queue branch: nothing merges and nobody is blamed', async () => {
-    const { host, outcome } = await lead(2, { ci: () => 'none' });
-    expect(kinds(outcome.verdicts)).toEqual({ r1: 'held', r2: 'held' });
-    expect(outcome.verdicts.get('r1')).toMatchObject({
-      reason: expect.stringContaining('CI did not run on the queue branch'),
+  test('no check reported on the queue branch: nothing merges, nobody is blamed, CI is reported', async () => {
+    const noCi: string[] = [];
+    const { host, outcome } = await lead(2, {
+      ci: () => 'none',
+      deps: { onNoQueueCi: (repo) => noCi.push(repo) },
     });
+    // The members wait again (they merge on the serial path next).
+    expect(kinds(outcome.verdicts)).toEqual({ r1: 'requeued', r2: 'requeued' });
     expect(host.merged).toEqual([]);
+    expect(noCi).toEqual(['o/r']);
   });
 
   test('a stopped leader merges nothing; its members wait again', async () => {

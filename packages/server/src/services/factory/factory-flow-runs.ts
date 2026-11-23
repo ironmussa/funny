@@ -76,6 +76,7 @@ import {
   type FactoryFlowError,
 } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
+import type { QueueMember } from './factory-merge-queue.js';
 import { createFactoryQueuePort, type FactoryQueuePort } from './factory-queue-port.js';
 import {
   factoryRunBranch,
@@ -326,6 +327,9 @@ export function admissionPriority(run: Pick<FactoryRunView, 'admittedAt' | 'star
   return Math.max(0, Math.floor((admitted - PRIORITY_EPOCH_MS) / 1000));
 }
 
+/** Where a repository's GitHub Actions workflows live. */
+const WORKFLOWS_DIR = '.github/workflows';
+
 /** A bucket's weight in a merge priority: above any admission order (seconds since 2026). */
 const MERGE_BUCKET = 10_000_000_000;
 
@@ -516,6 +520,20 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     });
   }
 
+  /** The default branch's GitHub Actions workflows, read as the leader's enabler; null if unreadable. */
+  async function readWorkflows(leader: QueueMember): Promise<string[] | null> {
+    const reader = { repo: leader.repo, ownerId: leader.userId, projectId: leader.projectId };
+    const names = await deps.github.listDefaultBranchDir(reader, WORKFLOWS_DIR);
+    if (names.isErr()) return null;
+    const files: string[] = [];
+    for (const name of names.value.filter((n) => /\.ya?ml$/.test(n))) {
+      const path = name.includes('/') ? name : `${WORKFLOWS_DIR}/${name}`;
+      const text = await deps.github.readDefaultBranchFile(reader, path);
+      if (text.isOk() && text.value !== null) files.push(text.value);
+    }
+    return files;
+  }
+
   /** Whether another queued run of the factory waits for this run's issue (it is a blocker). */
   async function blocksOthers(job: FactoryRunJob): Promise<boolean> {
     const queued = await deps.runs.queue(job.factory.id);
@@ -545,6 +563,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         if (merged && factory) await deps.cleanupMerged(factory.userId, threadsOf(merged));
       },
       integrationFor: (owner) => integrationFor(owner),
+      workflows: (leader) => readWorkflows(leader),
       signal,
     });
   }

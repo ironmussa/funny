@@ -77,6 +77,8 @@ export interface MergeQueueDeps {
   ciTimeoutMs?: number;
   /** How long a queue branch may have no check at all before CI is said not to run there. */
   noChecksGraceMs?: number;
+  /** CI never ran on a queue branch of `repo`: its batches stop until it does (D12). */
+  onNoQueueCi?(repo: string): void;
   /** Whether a member left the batch (its run was stopped or taken over). */
   left?(member: QueueMember): boolean;
   /** A base whose tree is not the tested one after the merges (someone pushed in between). */
@@ -98,7 +100,8 @@ const ATTEMPT_END = { green: 'green', red: 'red', unknown: 'abandoned' } as cons
 type Verdict =
   | { kind: 'green' }
   | { kind: 'red'; checks: FailingCheck[] }
-  | { kind: 'unknown'; why: string };
+  /** `noCi`: no check ever reported on the queue branch (CI does not run there). */
+  | { kind: 'unknown'; why: string; noCi?: boolean };
 
 function verdictOf(ci: CiState): Verdict | null {
   if (ci.kind === 'green') return { kind: 'green' };
@@ -128,7 +131,7 @@ export function createMergeQueue(deps: MergeQueueDeps) {
         if (verdict) return verdict;
         const waited = Date.now() - started;
         if (ci.value.kind === 'none' && waited > noChecksGraceMs) {
-          return { kind: 'unknown', why: 'CI did not run on the queue branch' };
+          return { kind: 'unknown', why: 'CI did not run on the queue branch', noCi: true };
         }
         if (waited > ciTimeoutMs)
           return { kind: 'unknown', why: 'CI did not finish on the queue branch' };

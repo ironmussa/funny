@@ -253,6 +253,15 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
     await deps.batches.move(batch.id, 'test', { baseSha: base.value, queueSha: built.sha });
     let tested = built.sha;
     const verdict = await queue.waitVerdict(host, batch.repo, tested, expected);
+    if (verdict.kind === 'unknown' && verdict.noCi) {
+      // Nobody is blamed: the members wait again, and the repository's next
+      // merges take the serial path until CI runs on the queue branches.
+      deps.onNoQueueCi?.(batch.repo);
+      for (const member of built.merged) {
+        decide(progress, member, { kind: 'requeued', why: verdict.why });
+      }
+      return endWith(batch, progress, 'abandon', verdict.why);
+    }
     if (verdict.kind === 'unknown') return endUnknown(batch, built.merged, progress, verdict.why);
     if (verdict.kind === 'red') {
       const again = await retest(host, batch, tested, expected);

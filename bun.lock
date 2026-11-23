@@ -573,6 +573,7 @@
         "web-push": "^3.6.7",
         "winston": "^3.19.0",
         "winston-daily-rotate-file": "^5.0.0",
+        "yaml": "^2.8.3",
         "zod": "^4.6.6",
         "zod-openapi": "^6.0.2",
       },

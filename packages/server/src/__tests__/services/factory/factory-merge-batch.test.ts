@@ -143,6 +143,30 @@ describe('which base branches batch', () => {
     expect(await queue.batchable(leader)).toBe(false);
   });
 
+  test('a repository whose CI does not run on the queue branches keeps the serial path', async () => {
+    const host = createFakeHost();
+    const portWith = (workflows: string[] | null) =>
+      createFactoryQueuePort({
+        batches: createFactoryBatchesRepository(),
+        run: async () => null,
+        factory: async () => null,
+        record: async () => undefined,
+        integrationFor: (owner) => host.as(owner.userId),
+        workflows: async () => workflows,
+        signal: new AbortController().signal,
+      });
+    const prOnly = 'on:\n  pull_request:\n  push:\n    branches: [main]\n';
+    expect(await portWith([prOnly]).batchable({ ...member(1, null), repo: 'o/pr-only' })).toBe(
+      false,
+    );
+    expect(await portWith(null).batchable({ ...member(1, null), repo: 'o/unreadable' })).toBe(
+      false,
+    );
+    expect(await portWith(['on: push\n']).batchable({ ...member(1, null), repo: 'o/push' })).toBe(
+      true,
+    );
+  });
+
   test('a branch that requires pull requests to be up to date gets batches of one', async () => {
     const queue = port(() => ({ ...open, upToDate: true }));
     expect(await queue.batchable({ ...member(1, null), repo: 'o/strict' })).toBe(false);

@@ -69,6 +69,52 @@ export const REVIEWER_DISALLOWED_TOOLS: readonly string[] = [
   'AskUserQuestion',
 ];
 
+/**
+ * The launch body of a read-only role's thread (reviewer, triage): fixed by
+ * the server, whatever the flow says, as a new thread that cannot write.
+ * `readOnly` is what holds it (the runner's OS sandbox); the mode and the tool
+ * list are kept for a runner from before it. The issue's text, when the role
+ * needs it, goes as a role input, never in the prompt (`factory-issue-text.ts`).
+ */
+export function readOnlyRoleLaunch(input: {
+  scope: { projectId: string; mode: string; issueNumber: number };
+  title: string;
+  base: { baseBranch?: string; baseFromRemote?: boolean };
+  opts: { provider?: string | null; model?: string | null; effort?: string | null };
+  issue: FactoryIssueText | null;
+  prompt: string;
+}): Record<string, unknown> {
+  return {
+    projectId: input.scope.projectId,
+    title: input.title.slice(0, 200),
+    mode: input.scope.mode,
+    ...input.base,
+    source: 'factory',
+    readOnly: true,
+    permissionMode: 'plan',
+    disallowedTools: [...REVIEWER_DISALLOWED_TOOLS],
+    provider: input.opts.provider ?? undefined,
+    model: input.opts.model ?? undefined,
+    effort: input.opts.effort ?? undefined,
+    ...issueInputs(input.scope.issueNumber, input.issue),
+    prompt: input.prompt,
+  };
+}
+
+/**
+ * A role thread's launch as its id, or why there is none. Synchronous on
+ * purpose: the callers await the launch themselves, so a review abandoned
+ * for a newer commit settles in the order the run expects.
+ */
+export function launchedThread(
+  launched: Result<StartedThread, StartThreadError>,
+): Result<string, string> {
+  if (launched.isErr()) return err(launched.error.message);
+  return launched.value.threadId
+    ? ok(launched.value.threadId)
+    : err('the runner returned no thread');
+}
+
 /** A commit that keeps changing under review is reviewed this many times, then the step fails. */
 const MAX_HEAD_CHANGES = 3;
 
@@ -346,39 +392,21 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
     const change = await deps.classify();
     // Only read when there is no contract to judge against.
     const issue = deps.contract?.() ? null : ((await deps.issueText?.()) ?? null);
-    const launched = await deps.launch({
-      projectId: scope.projectId,
-      title: `${titlePrefixOf(sha)}${scope.issueTitle}`.slice(0, 200),
-      mode: scope.mode,
-      ...base,
-      source: 'factory',
-      // Fixed by the server, whatever the flow says: a new thread that cannot
-      // write. `readOnly` is what holds it (the runner's OS sandbox); the mode
-      // and the tool list are kept for a runner from before it.
-      readOnly: true,
-      permissionMode: 'plan',
-      disallowedTools: [...REVIEWER_DISALLOWED_TOOLS],
-      provider: opts.provider ?? undefined,
-      model: opts.model ?? undefined,
-      effort: opts.effort ?? undefined,
-      ...issueInputs(scope.issueNumber, issue),
-      prompt: reviewPrompt({
-        repo: scope.repo,
-        issueNumber: scope.issueNumber,
-        issueUrl: deps.issueUrl,
-        contract: deps.contract?.() ?? null,
-        issue,
-        prUrl: pr,
-        branch: scope.branch,
-        sha,
-        change: change?.sha === sha ? change : null,
-        otherPullRequests: (await deps.otherPullRequests?.()) ?? [],
-      }),
+    const prompt = reviewPrompt({
+      repo: scope.repo,
+      issueNumber: scope.issueNumber,
+      issueUrl: deps.issueUrl,
+      contract: deps.contract?.() ?? null,
+      issue,
+      prUrl: pr,
+      branch: scope.branch,
+      sha,
+      change: change?.sha === sha ? change : null,
+      otherPullRequests: (await deps.otherPullRequests?.()) ?? [],
     });
-    if (launched.isErr()) return err(launched.error.message);
-    return launched.value.threadId
-      ? ok(launched.value.threadId)
-      : err('the runner returned no thread');
+    const title = `${titlePrefixOf(sha)}${scope.issueTitle}`;
+    const body = readOnlyRoleLaunch({ scope, title, base, opts, issue, prompt });
+    return launchedThread(await deps.launch(body));
   }
 
   /** The reviewer's validated result for `sha`, asking once more on its thread when it is invalid. */

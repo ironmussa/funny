@@ -170,18 +170,24 @@ async function probeNestedUserNamespace(): Promise<boolean> {
 
 const ALLOWED = new Set(READ_ONLY_AGENT_TOOLS);
 
-/** Where a reading tool looks: its file or folder, or the static start of an absolute pattern. */
+const text = (value: unknown) => (typeof value === 'string' && value.length > 0 ? value : null);
+
+/** The folder an absolute glob pattern starts in (its part before the first wildcard). */
+function patternRoot(pattern: string | null): string[] {
+  if (!pattern || !isAbsolute(pattern)) return [];
+  const start = pattern.search(/[*?[{]/);
+  return [start === -1 ? pattern : dirname(`${pattern.slice(0, start)}x`)];
+}
+
+/** The pattern field of each searching tool. */
+const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
+
+/** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
 function targetsOf(toolName: string, input: Record<string, unknown>, cwd: string): string[] {
-  const str = (value: unknown) => (typeof value === 'string' && value.length > 0 ? value : null);
-  if (toolName === 'Read') return [str(input.file_path) ?? ''];
-  if (toolName !== 'Glob' && toolName !== 'Grep') return [];
-  const targets = [str(input.path) ?? cwd];
-  const pattern = toolName === 'Glob' ? str(input.pattern) : str(input.glob);
-  if (pattern && isAbsolute(pattern)) {
-    const start = pattern.search(/[*?[{]/);
-    targets.push(start === -1 ? pattern : dirname(pattern.slice(0, start) + 'x'));
-  }
-  return targets;
+  if (toolName === 'Read') return [text(input.file_path) ?? ''];
+  const field = PATTERN_FIELD[toolName];
+  if (!field) return [];
+  return [text(input.path) ?? cwd, ...patternRoot(text(input[field]))];
 }
 
 /** A path with its symlinks resolved, as far as it exists (a link inside the checkout can point out). */

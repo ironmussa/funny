@@ -260,6 +260,29 @@ export function createMergeLane(deps: MergeLaneDeps) {
     };
   }
 
+  /**
+   * One round of bringing the pull request up to date: its result, `again` for
+   * another round, or `stop` when it is still behind on the last one.
+   */
+  async function updateOnce(
+    pr: FactoryPullRequestRef,
+    carried: Array<{ from: string; to: string }>,
+    last: boolean,
+  ): Promise<UpToDate | 'again' | 'stop'> {
+    if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
+    const position = await positionOf(pr);
+    if ('error' in position) return { kind: 'failed', error: position.error };
+    const { sha, baseRef, behindBy } = position;
+    if (behindBy === 0) return { kind: 'current', sha, carried };
+    if (last) return 'stop';
+    const step = await mergeBaseIn(pr, baseRef, sha);
+    if ('kind' in step) return step;
+    if ('retry' in step) return 'again';
+    carried.push({ from: sha, to: step.updated });
+    // The checks that were green ran on the old base: wait for them on the new head.
+    return (await checksOnNewHead(pr, baseRef, step.updated)) ?? 'again';
+  }
+
   /** The pull request's head, its base and how far behind the base it is. */
   async function positionOf(
     pr: FactoryPullRequestRef,
@@ -327,21 +350,9 @@ export function createMergeLane(deps: MergeLaneDeps) {
       if (!pr) return { kind: 'failed', error: 'The run has no pull request yet.' };
       const carried: Array<{ from: string; to: string }> = [];
       for (let update = 0; update <= MAX_BASE_UPDATES; update++) {
-        if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
-        const position = await positionOf(pr);
-        if ('error' in position) return { kind: 'failed', error: position.error };
-        const { sha, baseRef, behindBy } = position;
-        if (behindBy === 0) return { kind: 'current', sha, carried };
-        if (update === MAX_BASE_UPDATES) break;
-
-        const step = await mergeBaseIn(pr, baseRef, sha);
-        if ('kind' in step) return step;
-        if ('retry' in step) continue;
-        carried.push({ from: sha, to: step.updated });
-
-        // The checks that were green ran on the old base: wait for them on the new head.
-        const refused = await checksOnNewHead(pr, baseRef, step.updated);
-        if (refused) return refused;
+        const step = await updateOnce(pr, carried, update === MAX_BASE_UPDATES);
+        if (step === 'stop') break;
+        if (step !== 'again') return step;
       }
       return {
         kind: 'failed',

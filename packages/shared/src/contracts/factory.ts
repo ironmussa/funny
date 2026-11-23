@@ -187,6 +187,12 @@ export const factoryRegressionProofSchema = z.object({
   outputTail: z.string().optional(),
   ranAt: z.string(),
   /**
+   * The commit the tests ran on, when the proof holds for `headSha` because
+   * `headSha` only brought the base branch into it (a merge lane update whose
+   * checks passed). Absent on a proof that ran on `headSha` itself.
+   */
+  carriedFrom: z.string().optional(),
+  /**
    * Whether the proof is on GitHub as its commit's check. False: publishing
    * failed and is tried again; absent on proofs stored before it was tracked.
    */

@@ -907,6 +907,25 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return { held: lastProof };
   }
 
+  /**
+   * The passing proof of `from` holds for `to`: the merge lane made `to` by
+   * merging only the base branch into `from`, and its checks passed there. The
+   * proof's tests ran on the implementing agent's worktree, which stays at
+   * `from`, so proving `to` again would only prove `from` once more.
+   */
+  async function carryProof(from: string, to: string): Promise<void> {
+    if (!lastProof?.ok || lastProof.record.headSha !== from) return;
+    const record: RegressionProofRecord = {
+      ...lastProof.record,
+      headSha: to,
+      carriedFrom: lastProof.record.carriedFrom ?? from,
+      checkPublished: false,
+    };
+    lastProof = { ...lastProof, record, checkPublished: false };
+    await deps.record({ regressionProof: record });
+    await count(metrics, { event: 'regression_proof_carried' });
+  }
+
   /** Whether the proof's check is on GitHub, publishing it now when an earlier try failed. */
   async function checkOnGithub(proof: HeldProof): Promise<boolean> {
     if (proof.checkPublished) return true;
@@ -1020,7 +1039,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const current = await lane.bringUpToDate();
     if (current.kind === 'failed') return { ok: false, error: current.error };
     if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
-    for (const step of current.carried) await reviewer.carry(step.from, step.to);
+    for (const step of current.carried) {
+      await reviewer.carry(step.from, step.to);
+      await carryProof(step.from, step.to);
+    }
     if (current.sha === sha) return sha;
     return (await mergeHeld(opts, current.sha)) ?? current.sha;
   }

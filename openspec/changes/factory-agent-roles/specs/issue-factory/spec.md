@@ -315,10 +315,12 @@ run whose review is missing or not passing, or whose risk class is not allowed, 
 
 Unless the step sets `require_regression_proof: false`, `merge` SHALL also require, checked when
 the step starts, a regression proof with verdict `pass` (or `skipped` when no test is required)
-for the commit it merges, whether or not the flow declares a `regression_proof` step. When the
-stored proof is for another commit or there is none (a commit made by bringing the base branch
-in is another commit), `merge` SHALL run the proof on that commit with the flow's
-`regression_proof` configuration before deciding; a flow with no such configuration SHALL get
+for the commit it merges, whether or not the flow declares a `regression_proof` step. A commit
+the merge lane made by merging only the base branch into a proved commit, whose checks then
+passed, SHALL hold that commit's proof, as it holds its review: the proof's tests ran in the
+implementer's checkout, which does not have that merge commit, and a commit made elsewhere is
+not run there. When the stored proof is for another commit or there is none, `merge` SHALL run
+the proof on that commit with the flow's `regression_proof` configuration before deciding; a flow with no such configuration SHALL get
 the verdict `fail` with the finding that no regression proof is configured. Without an allowed
 verdict it SHALL NOT merge and the run SHALL park in `waiting_human` with the reason. With the
 proof required, `merge` SHALL merge exactly the commit that was proved. When GitHub will not
@@ -348,6 +350,13 @@ the review required, it SHALL merge exactly the reviewed commit.
 - **WHEN** the proof passed on commit A, a CI fix pushed commit B, and `merge` starts with green
   checks on B
 - **THEN** `merge` runs the proof on B, and merges B only if it passes
+
+#### Scenario: The merge lane brings the base into a proved commit
+
+- **WHEN** the proof passed on commit A, the merge lane merged the moved base branch into A as
+  commit M, and the checks are green on M
+- **THEN** `merge` merges M on A's proof, without running the proof again, and the
+  `funny/regression-proof` check on M says the tests ran on A
 
 #### Scenario: A stale proof that no longer passes
 

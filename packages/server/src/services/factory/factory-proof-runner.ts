@@ -249,6 +249,12 @@ export function proofCheckOf(
       ? 'The changed tests pass on this commit (twice) and fail by an assertion on the commit the pull request branched from.'
       : (proof.finding ?? title),
   ];
+  if (proof.carriedFrom) {
+    lines.push(
+      '',
+      `The tests ran on \`${proof.carriedFrom}\`; this commit only merges the base branch into it, and its checks pass.`,
+    );
+  }
   if (proof.baseSha) lines.push('', `Base: \`${proof.baseSha}\``);
   if (proof.files?.length) lines.push('', '**Tests**', ...proof.files.map((f) => `- \`${f}\``));
   if (proof.commands?.length) lines.push('', '**Commands**', fenced(proof.commands.join('\n')));

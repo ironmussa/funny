@@ -1,13 +1,6 @@
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "aptPackages": [
-      "...",
-      "git",
-      "passwd",
-      "util-linux",
-      "bubblewrap",
-      "socat"
-    ]
+    "aptPackages": ["...", "git", "passwd", "util-linux", "bubblewrap", "socat"]
   }
 }

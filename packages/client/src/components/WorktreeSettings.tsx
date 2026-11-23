@@ -165,15 +165,19 @@ function WorktreeCard({
 }) {
   const { t } = useTranslation();
   return (
-    <div className={listRowClassName}>
+    <div
+      // oxlint-disable-next-line shadcn/require-static-classes -- listRowClassName is a static constant from list-row-styles
+      className={cn(listRowClassName, active && 'bg-sidebar-selected hover:bg-sidebar-selected')}
+      aria-current={active || undefined}
+      data-active={active || undefined}
+      data-testid={`worktree-row-${worktree.branch}`}
+    >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <BranchBadge
               branch={worktree.branch}
               size="xs"
-              highlighted={active}
-              highlightLabel={t('worktreeSettings.active')}
               data-testid={`worktree-branch-${worktree.branch}`}
             />
           </div>

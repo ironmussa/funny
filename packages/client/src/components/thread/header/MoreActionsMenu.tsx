@@ -371,12 +371,7 @@ export const MoreActionsMenu = memo(function MoreActionsMenu({
         <Tooltip {...tooltipMenu.tooltipProps}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button
-                data-testid="header-more-actions"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-              >
+              <Button data-testid="header-more-actions" variant="muted" size="icon-sm">
                 <EllipsisVertical className="icon-base" />
               </Button>
             </DropdownMenuTrigger>

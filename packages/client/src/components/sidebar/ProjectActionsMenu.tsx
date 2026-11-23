@@ -70,12 +70,11 @@ export function ProjectActionsMenu({
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               aria-label={t('sidebar.projectActions', 'Project actions')}
               data-testid={`project-more-actions-${project.id}`}
               onClick={(event) => event.stopPropagation()}
-              className="text-muted-foreground hover:text-foreground"
             >
               <MoreVertical className="icon-sm" />
             </Button>

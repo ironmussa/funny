@@ -124,9 +124,9 @@ function RowAction({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-xs"
-          className="text-muted-foreground size-6"
+          className="size-6"
           aria-label={label}
           data-testid={testId}
           onClick={onClick}

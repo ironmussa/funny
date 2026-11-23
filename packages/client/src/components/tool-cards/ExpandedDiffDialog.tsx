@@ -544,10 +544,10 @@ function CloseDiffButton({ onClose }: { onClose?: () => void }) {
   if (!onClose) return null;
   return (
     <Button
-      variant="ghost"
+      variant="muted"
       size="icon-sm"
       onClick={onClose}
-      className="text-muted-foreground shrink-0"
+      className="shrink-0"
       data-testid="expanded-diff-close"
     >
       <X className="icon-base" />

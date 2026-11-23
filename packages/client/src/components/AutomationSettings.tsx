@@ -257,12 +257,7 @@ export function AutomationSettings() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleToggleEnabled(a)}
-                      className="text-muted-foreground"
-                    >
+                    <Button variant="muted" size="icon-sm" onClick={() => handleToggleEnabled(a)}>
                       {a.enabled ? <Pause className="icon-sm" /> : <Play className="icon-sm" />}
                     </Button>
                   </TooltipTrigger>
@@ -270,12 +265,7 @@ export function AutomationSettings() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleViewRuns(a.id)}
-                      className="text-muted-foreground"
-                    >
+                    <Button variant="muted" size="icon-sm" onClick={() => handleViewRuns(a.id)}>
                       <History className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
@@ -284,12 +274,7 @@ export function AutomationSettings() {
                 {a.source !== 'config' && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => openEditDialog(a)}
-                        className="text-muted-foreground"
-                      >
+                      <Button variant="muted" size="icon-sm" onClick={() => openEditDialog(a)}>
                         <Pencil className="icon-sm" />
                       </Button>
                     </TooltipTrigger>
@@ -300,10 +285,10 @@ export function AutomationSettings() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="ghost"
+                        variant="muted"
                         size="icon-sm"
                         onClick={() => handleDelete(a)}
-                        className="text-muted-foreground hover:text-status-error"
+                        className="hover:text-status-error"
                       >
                         <Trash2 className="icon-sm" />
                       </Button>

@@ -281,12 +281,7 @@ export function StartupCommandsSettings() {
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => startEditing(cmd)}
-                    className="text-muted-foreground"
-                  >
+                  <Button variant="muted" size="icon-sm" onClick={() => startEditing(cmd)}>
                     <Pencil className="icon-sm" />
                   </Button>
                 </TooltipTrigger>
@@ -295,10 +290,10 @@ export function StartupCommandsSettings() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-sm"
                     onClick={() => handleDelete(cmd.id)}
-                    className="text-muted-foreground hover:text-status-error"
+                    className="hover:text-status-error"
                   >
                     <Trash2 className="icon-sm" />
                   </Button>

@@ -63,9 +63,9 @@ export function RunnerOnboardingBanner() {
           Connect a runner
         </Button>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon"
-          className="text-muted-foreground hover:text-foreground size-7 shrink-0"
+          className="size-7 shrink-0"
           onClick={() => setDismissed(true)}
           data-testid="runner-onboarding-dismiss"
           aria-label="Dismiss"

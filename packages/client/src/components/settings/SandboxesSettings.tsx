@@ -193,9 +193,8 @@ function ConnectionName({
       <span className="truncate text-sm font-medium">{connection.label}</span>
       <Button
         size="icon-xs"
-        variant="ghost"
+        variant="muted"
         aria-label="Rename"
-        className="text-muted-foreground"
         onClick={() => setDraft(connection.label)}
         data-testid={`sandbox-connection-rename-${connection.id}`}
       >

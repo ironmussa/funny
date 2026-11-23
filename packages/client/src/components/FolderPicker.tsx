@@ -291,7 +291,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
           </div>
 
           <Button
-            variant="ghost"
+            variant="muted"
             size="sm"
             onClick={() => {
               setCreatingFolder(true);
@@ -299,7 +299,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               setNewFolderError('');
             }}
             disabled={!currentPath || loading}
-            className="text-muted-foreground ml-1 h-6 shrink-0 px-2 text-xs"
+            className="ml-1 h-6 shrink-0 px-2 text-xs"
             data-testid="folder-picker-new-folder"
           >
             <FolderPlus className="icon-xs mr-1" />
@@ -314,10 +314,10 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               <Tooltip key={root}>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="sm"
                     onClick={() => loadDir(root)}
-                    className="text-muted-foreground h-6 px-2 text-xs"
+                    className="h-6 px-2 text-xs"
                   >
                     <HardDrive className="icon-xs mr-1" />
                     {root.replace(':\\', '')}

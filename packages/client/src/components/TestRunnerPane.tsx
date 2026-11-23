@@ -137,10 +137,9 @@ export function TestRunnerPane() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleClose}
-              className="text-muted-foreground"
               data-testid="test-runner-close"
             >
               <PanelRightClose className="icon-base" />

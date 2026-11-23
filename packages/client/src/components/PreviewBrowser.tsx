@@ -152,13 +152,7 @@ export function PreviewBrowser() {
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleRefresh}
-                  aria-label="Refresh"
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <Button variant="muted" size="icon-xs" onClick={handleRefresh} aria-label="Refresh">
                   <RefreshCw className="icon-sm" />
                 </Button>
               </TooltipTrigger>
@@ -167,11 +161,10 @@ export function PreviewBrowser() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   onClick={handleOpenExternal}
                   aria-label="Open in browser"
-                  className="text-muted-foreground hover:text-foreground"
                 >
                   <ExternalLink className="icon-sm" />
                 </Button>

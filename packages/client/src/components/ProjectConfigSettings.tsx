@@ -402,10 +402,10 @@ export function ProjectConfigSettings() {
                 data-testid={`post-create-edit-${i}`}
               />
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={() => removePostCreate(i)}
-                className="text-muted-foreground hover:text-status-error opacity-0 group-hover:opacity-100"
+                className="hover:text-status-error opacity-0 group-hover:opacity-100"
                 data-testid={`post-create-remove-${i}`}
               >
                 <Trash2 className="icon-xs" />

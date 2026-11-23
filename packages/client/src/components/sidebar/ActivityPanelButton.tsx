@@ -120,9 +120,9 @@ function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
           </div>
           {isActive ? (
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
-              className="text-muted-foreground size-6 shrink-0"
+              className="size-6 shrink-0"
               data-testid={`watcher-cancel-${watcher.id}`}
               onClick={() => void cancelWatcher(watcher.id)}
               aria-label="Stop watcher"
@@ -222,9 +222,9 @@ function JobRow({
             </button>
             {isRunning ? (
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
-                className="text-muted-foreground size-6 shrink-0"
+                className="size-6 shrink-0"
                 data-testid={`job-cancel-${job.id}`}
                 onClick={(e) => {
                   e.stopPropagation();

@@ -132,15 +132,12 @@ function DictationButton({
         <Button
           data-testid="plan-dictate"
           onClick={onToggle}
-          variant="ghost"
+          variant="muted"
           size="icon-sm"
           tabIndex={-1}
           aria-label={label}
           disabled={isTranscribing}
-          className={cn(
-            'text-muted-foreground hover:text-foreground',
-            isRecording && 'text-destructive hover:text-destructive',
-          )}
+          className={cn(isRecording && 'text-destructive hover:text-destructive')}
         >
           {isTranscribing ? (
             <Loader2 className="icon-xs animate-spin" />
@@ -219,14 +216,11 @@ function PlanCustomResponseEditor({
             <Button
               data-testid="plan-send-feedback"
               onClick={onSubmitInput}
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               disabled={!hasContent}
-              className={cn(
-                'text-muted-foreground hover:text-foreground',
-                hasContent && 'text-primary hover:text-primary',
-              )}
+              className={cn(hasContent && 'text-primary hover:text-primary')}
             >
               <Send className="icon-xs" />
             </Button>

@@ -549,12 +549,12 @@ export function WorktreeSettings({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 onClick={handleRefresh}
                 disabled={loading}
                 aria-label={t('worktreeSettings.refresh')}
-                className="text-muted-foreground shrink-0"
+                className="shrink-0"
                 data-testid="worktree-settings-refresh"
               >
                 <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
@@ -566,12 +566,12 @@ export function WorktreeSettings({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={() => setShowCreate(!showCreate)}
                   aria-label={createLabel}
                   aria-expanded={showCreate}
-                  className="text-muted-foreground shrink-0"
+                  className="shrink-0"
                   data-testid="worktree-settings-create"
                 >
                   {showCreate ? (

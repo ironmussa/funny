@@ -267,10 +267,10 @@ export function CommitDetailDialog({
                 {selectedCommit?.message ?? 'Commit details'}
               </DialogTitle>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={handleClose}
-                className="text-muted-foreground sr-only shrink-0"
+                className="sr-only shrink-0"
                 data-testid="commit-detail-close"
               >
                 <X className="icon-xs" />
@@ -362,10 +362,10 @@ export function CommitDetailDialog({
                   </Tooltip>
                   <div className="bg-border mx-1 h-4 w-px" />
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-xs"
                     onClick={handleClose}
-                    className="text-muted-foreground shrink-0"
+                    className="shrink-0"
                     data-testid="commit-detail-close"
                   >
                     <X className="icon-xs" />

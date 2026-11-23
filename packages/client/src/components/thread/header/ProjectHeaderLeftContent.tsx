@@ -108,10 +108,10 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
           <TooltipTrigger asChild>
             <Button
               data-testid="header-back-kanban"
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleBackToKanban}
-              className="text-muted-foreground hover:text-foreground shrink-0"
+              className="shrink-0"
             >
               <ArrowLeft className="icon-base" />
             </Button>
@@ -128,14 +128,14 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
           <TooltipTrigger asChild>
             <Button
               data-testid="header-back-parent"
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={() =>
                 navigate(
                   buildPath(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`),
                 )
               }
-              className="text-muted-foreground hover:text-foreground shrink-0"
+              className="shrink-0"
             >
               <ArrowLeft className="icon-base" />
             </Button>

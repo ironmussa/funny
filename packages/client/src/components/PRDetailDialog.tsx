@@ -312,10 +312,10 @@ function PRDetailHeader({
         mergeableState={detail?.mergeable_state}
         titleExtra={
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-xs"
             onClick={onClose}
-            className="text-muted-foreground shrink-0"
+            className="shrink-0"
             data-testid="pr-detail-close"
           >
             <X className="icon-xs" />

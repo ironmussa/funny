@@ -520,11 +520,11 @@ export function MonacoEditorDialog({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 onClick={() => copy(content)}
                 disabled={!content}
-                className="text-muted-foreground shrink-0"
+                className="shrink-0"
                 data-testid="editor-copy-content"
                 aria-label={t('editor.copy', 'Copy')}
               >
@@ -597,10 +597,10 @@ export function MonacoEditorDialog({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={() => setShowMinimap((prev) => !prev)}
-                  className="text-muted-foreground shrink-0"
+                  className="shrink-0"
                   data-testid="editor-toggle-minimap"
                 >
                   {showMinimap ? <EyeOff className="icon-base" /> : <Eye className="icon-base" />}
@@ -614,10 +614,10 @@ export function MonacoEditorDialog({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 onClick={() => setIsFullscreen((prev) => !prev)}
-                className="text-muted-foreground shrink-0"
+                className="shrink-0"
                 data-testid="editor-toggle-fullscreen"
               >
                 {isFullscreen ? (

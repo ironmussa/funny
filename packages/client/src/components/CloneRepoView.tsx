@@ -566,9 +566,8 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
         />
 
         <Button
-          variant="ghost"
+          variant="muted"
           size="sm"
-          className="text-muted-foreground"
           onClick={() => {
             if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             setView('connect');
@@ -595,9 +594,9 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
               </span>
             ) : (
               <Button
-                variant="ghost"
+                variant="muted"
                 size="sm"
-                className="text-muted-foreground ml-auto h-7 text-xs"
+                className="ml-auto h-7 text-xs"
                 onClick={disconnect}
                 data-testid="clone-repo-disconnect"
               >
@@ -682,12 +681,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   if (view === 'clone-config' && selectedRepo) {
     return (
       <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground -ml-2"
-          onClick={() => setView('repos')}
-        >
+        <Button variant="muted" size="sm" className="-ml-2" onClick={() => setView('repos')}>
           <ArrowLeft className="icon-sm mr-1" />
           {t('github.repos.title')}
         </Button>

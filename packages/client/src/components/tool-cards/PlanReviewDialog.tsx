@@ -326,11 +326,10 @@ export function PlanReviewDialog({
         {canRespond && (
           <DialogFooter className="border-border shrink-0 items-center gap-2 border-t px-4 py-3 sm:justify-between sm:space-x-0">
             <Button
-              variant="ghost"
+              variant="muted"
               size="sm"
               onClick={() => handleRespond(PLAN_REJECTED_RESPONSE)}
               data-testid="plan-review-reject"
-              className="text-muted-foreground hover:text-foreground"
             >
               <XCircle className="icon-xs" />
               {t('thread.rejectPlan', 'Reject plan')}

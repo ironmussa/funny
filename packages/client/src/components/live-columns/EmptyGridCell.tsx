@@ -106,9 +106,9 @@ export const EmptyGridCell = memo(function EmptyGridCell({
       />
       <div className="border-border/40 flex shrink-0 items-center justify-center border-t px-3 py-1.5">
         <Button
-          variant="ghost"
+          variant="muted"
           size="sm"
-          className="text-muted-foreground h-7"
+          className="h-7"
           data-testid={`grid-load-existing-${cellIndex}`}
           onClick={() => setThreadPickerOpen(true)}
         >

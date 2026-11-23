@@ -481,10 +481,10 @@ function JobRow({ projectId, job }: { projectId: string; job: ActionJob }) {
         <div className="min-w-0 flex-1" />
         {failed && (
           <Button
-            variant="ghost"
+            variant="muted"
             size="xs"
             onClick={() => setShowLog((v) => !v)}
-            className="text-muted-foreground h-5 shrink-0 px-1.5"
+            className="h-5 shrink-0 px-1.5"
             data-testid={`actions-job-log-toggle-${job.id}`}
           >
             {showLog

@@ -469,14 +469,13 @@ export function UserMessageCard({
           )}
           {hasCopyableContent && (
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               data-testid={`user-message-copy-content-${props['data-testid'] ?? ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 copyToClipboard(visibleContent);
               }}
-              className="text-muted-foreground hover:text-foreground"
               aria-label={
                 copied ? t('common.copied', 'Copied') : t('thread.copyContent', 'Copy content')
               }
@@ -492,12 +491,12 @@ export function UserMessageCard({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
                   disabled={forkDisabled && !hasCopyableContent}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground data-[state=open]:text-foreground"
+                  className="data-[state=open]:text-foreground"
                   aria-label={t('thread.threadActions', 'Thread actions')}
                 >
                   <MoreVertical className="icon-xs" />

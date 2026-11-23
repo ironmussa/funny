@@ -132,14 +132,14 @@ export function CommitActionsMenu({
       <DropdownMenu open={open} onOpenChange={handleOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-xs"
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
             // oxlint-disable shadcn/require-static-classes -- triggerClassName is a caller-provided prop; listRowActionClassName is a static constant
             className={cn(
               triggerClassName
-                ? cn('text-muted-foreground hover:text-foreground shrink-0', triggerClassName)
+                ? cn('shrink-0', triggerClassName)
                 : cn(listRowActionClassName, 'ml-auto', open && 'opacity-100'),
             )}
             // oxlint-enable shadcn/require-static-classes

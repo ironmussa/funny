@@ -8,7 +8,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 function timeAgo(ts: number, now: number): string {
@@ -47,11 +46,10 @@ export function HistoryPopover() {
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="browser-panel-history"
-              className={cn('text-muted-foreground')}
             >
               <History className="icon-base" />
             </Button>
@@ -64,11 +62,11 @@ export function HistoryPopover() {
           <span className="text-sm font-semibold">Sent history</span>
           {history.length > 0 && (
             <Button
-              variant="ghost"
+              variant="muted"
               size="sm"
               data-testid="browser-panel-history-clear"
               onClick={clearSentHistory}
-              className="text-muted-foreground h-6 px-2 text-xs"
+              className="h-6 px-2 text-xs"
             >
               Clear
             </Button>

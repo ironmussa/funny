@@ -188,10 +188,9 @@ function HookItem({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={() => onEdit(hook)}
-                className="text-muted-foreground"
                 data-testid={`hook-edit-${key}`}
               >
                 <Pencil className="icon-xs" />
@@ -202,10 +201,10 @@ function HookItem({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={() => onDelete(hook)}
-                className="text-muted-foreground hover:text-status-error"
+                className="hover:text-status-error"
                 data-testid={`hook-delete-${key}`}
               >
                 <Trash2 className="icon-xs" />

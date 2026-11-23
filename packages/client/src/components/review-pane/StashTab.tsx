@@ -145,10 +145,10 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 {selectedStashEntry?.message ?? t('review.stashDetails', 'Stash details')}
               </DialogTitle>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={() => setSelectedStashIndex(null)}
-                className="text-muted-foreground shrink-0"
+                className="shrink-0"
                 data-testid="stash-detail-close"
               >
                 <X className="icon-xs" />

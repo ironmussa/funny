@@ -378,10 +378,9 @@ export function ActivityPane() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               onClick={() => useUIStore.getState().setReviewPaneOpen(false)}
-              className="text-muted-foreground"
               data-testid="activity-close"
             >
               <PanelRightClose className="icon-sm" />

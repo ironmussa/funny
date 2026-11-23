@@ -110,9 +110,9 @@ export function AutomationInboxView() {
           )}
         </div>
         <Button
-          variant="ghost"
+          variant="muted"
           size="sm"
-          className="text-muted-foreground h-7 gap-1.5 text-xs"
+          className="h-7 gap-1.5 text-xs"
           data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >

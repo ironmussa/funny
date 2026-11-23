@@ -31,13 +31,7 @@ function ToolbarButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClick}
-          className="text-muted-foreground"
-          data-testid={testId}
-        >
+        <Button variant="muted" size="icon-sm" onClick={onClick} data-testid={testId}>
           {children}
         </Button>
       </TooltipTrigger>
@@ -175,10 +169,10 @@ export function MarkdownImageCard({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-sm"
                     onClick={pz.reset}
-                    className="text-muted-foreground text-xs"
+                    className="text-xs"
                     data-testid="markdown-image-zoom-reset"
                   >
                     1:1

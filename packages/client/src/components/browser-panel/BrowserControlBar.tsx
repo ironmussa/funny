@@ -73,12 +73,11 @@ function SessionActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-xs"
             aria-label={audioMuted ? 'Turn audio on' : 'Turn audio off'}
             aria-pressed={!audioMuted}
             onClick={() => void setAudioMuted(!audioMuted)}
-            className="text-muted-foreground"
             data-testid="browser-panel-audio-toggle"
           >
             {audioMuted ? <VolumeX className="icon-xs" /> : <Volume2 className="icon-xs" />}
@@ -91,11 +90,11 @@ function SessionActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-xs"
             aria-label="Stop browser"
             onClick={() => void endBrowserSession()}
-            className="text-muted-foreground hover:text-destructive"
+            className="hover:text-destructive"
             data-testid="browser-panel-stop"
           >
             <Square className="icon-xs" />

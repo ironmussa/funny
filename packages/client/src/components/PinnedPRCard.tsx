@@ -162,9 +162,8 @@ function ReactionBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
-              className="text-muted-foreground"
               disabled={disabled}
               onClick={() => setPickerOpen((v) => !v)}
               data-testid={`${testIdBase}-react-open`}
@@ -789,10 +788,10 @@ export function PinnedPRCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   asChild
-                  className="text-muted-foreground shrink-0"
+                  className="shrink-0"
                   data-testid={`pinned-pr-open-github-${pr.number}`}
                 >
                   <a

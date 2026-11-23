@@ -234,6 +234,9 @@ const existing = {
         // Marker classes with no styles of their own: dockview's right-pane
         // tabs and the PR detail conversation, which an inline <style> targets.
         // An empty `@utility` would declare them, but it breaks the Tailwind build.
+        // Layout classes (flex-1, shrink-0, w-full, margins) place a component in its
+        // parent and do not restyle it, which is the baseline @shadcn/lint documents.
+        'shadcn/no-restyle': ['warn', { allow: ['layout'] }],
         'shadcn/no-unknown-classes': [
           'error',
           { allow: ['dv-funny-right-tab', 'pr-detail-conversation'] },

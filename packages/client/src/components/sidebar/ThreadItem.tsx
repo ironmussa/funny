@@ -178,12 +178,11 @@ function ThreadItemActions({
       <DropdownMenu onOpenChange={handleDropdownChange}>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-xs"
             aria-label={t('sidebar.threadActions', 'Thread actions')}
             data-testid={`thread-item-more-${thread.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground hover:text-foreground"
           >
             <MoreVertical className="icon-sm" />
           </Button>

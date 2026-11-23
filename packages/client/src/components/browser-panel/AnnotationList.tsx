@@ -85,13 +85,13 @@ export function AnnotationList() {
                 {snippet && <span className="truncate">{snippet}</span>}
               </div>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 tabIndex={-1}
                 data-testid={`browser-panel-annotation-remove-${a.id}`}
                 aria-label={`Remove annotation ${i + 1}`}
                 onClick={() => removeAnnotation(a.id)}
-                className="text-muted-foreground hover:text-destructive shrink-0"
+                className="hover:text-destructive shrink-0"
               >
                 <Trash2 className="icon-base" />
               </Button>

@@ -136,13 +136,12 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-toggle-visibility"
             aria-pressed={!overlaysVisible}
             onClick={toggleOverlaysVisibility}
-            className="text-muted-foreground"
           >
             <VisibilityIcon className="icon-base" />
           </Button>
@@ -155,13 +154,12 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-copy-markdown"
             onClick={handleCopyMarkdown}
             disabled={!hasAnnotations}
-            className="text-muted-foreground"
           >
             <ClipboardCopy className="icon-base" />
           </Button>
@@ -172,13 +170,13 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-clear-all"
             onClick={clearAllAnnotations}
             disabled={!hasAnnotations}
-            className="text-muted-foreground hover:text-destructive"
+            className="hover:text-destructive"
           >
             <Trash2 className="icon-base" />
           </Button>
@@ -211,13 +209,12 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-screenshot"
             disabled={!cdpReady}
             onClick={handleScreenshot}
-            className="text-muted-foreground"
           >
             <Camera className="icon-base" />
           </Button>

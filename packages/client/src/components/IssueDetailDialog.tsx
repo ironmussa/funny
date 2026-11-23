@@ -115,9 +115,8 @@ export function IssueDetailDialog({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-xs"
-                    className="text-muted-foreground"
                     onClick={() => {
                       onCreateThread(issue);
                       onOpenChange(false);
@@ -135,10 +134,9 @@ export function IssueDetailDialog({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   asChild
-                  className="text-muted-foreground"
                   data-testid="issue-detail-open-github"
                 >
                   <a
@@ -156,10 +154,9 @@ export function IssueDetailDialog({
               </TooltipContent>
             </Tooltip>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               onClick={() => onOpenChange(false)}
-              className="text-muted-foreground"
               data-testid="issue-detail-close"
             >
               <X className="icon-xs" />

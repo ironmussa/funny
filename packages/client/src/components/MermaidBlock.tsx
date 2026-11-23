@@ -286,10 +286,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={() => pz.zoomBy(1 / 1.2)}
-                  className="text-muted-foreground"
                   data-testid="mermaid-inline-zoom-out"
                 >
                   <ZoomOut className="icon-base" />
@@ -300,10 +299,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={() => pz.zoomBy(1.2)}
-                  className="text-muted-foreground"
                   data-testid="mermaid-inline-zoom-in"
                 >
                   <ZoomIn className="icon-base" />
@@ -314,10 +312,10 @@ export function MermaidBlock({ chart }: { chart: string }) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={pz.reset}
-                  className="text-muted-foreground text-xs"
+                  className="text-xs"
                   data-testid="mermaid-inline-zoom-reset"
                 >
                   1:1
@@ -328,10 +326,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={() => setExpanded(true)}
-                  className="text-muted-foreground"
                   data-testid="mermaid-inline-expand"
                 >
                   <Maximize2 className="icon-base" />
@@ -496,10 +493,10 @@ function ToolbarButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-sm"
           onClick={onClick}
-          className={cn('text-muted-foreground', className)}
+          className={cn(className)}
           data-testid={testId}
         >
           {children}
@@ -615,13 +612,7 @@ export function MermaidExpandedDialog({
                 <Maximize2 className="icon-base" />
               )}
             </ToolbarButton>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              className="text-muted-foreground"
-              data-testid="mermaid-close"
-            >
+            <Button variant="muted" size="icon-sm" onClick={onClose} data-testid="mermaid-close">
               <X className="icon-base" />
             </Button>
           </div>

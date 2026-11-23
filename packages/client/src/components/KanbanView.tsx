@@ -208,12 +208,11 @@ export const KanbanCard = memo(function KanbanCard({
             <DropdownMenu onOpenChange={handleDropdownChange}>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   tabIndex={-1}
                   data-testid={`kanban-card-more-${thread.id}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground"
                 >
                   <MoreVertical className="icon-sm" />
                 </Button>

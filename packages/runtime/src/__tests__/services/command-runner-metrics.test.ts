@@ -51,6 +51,11 @@ mock.module('../../services/ws-broker.js', () => ({
   },
 }));
 
+// The ledger asks `ps` for start times; these tests count the metrics sampler's `ps` calls.
+mock.module('../../services/command-process-ledger.js', () => ({
+  commandProcessLedger: { record: vi.fn(), forget: vi.fn() },
+}));
+
 mock.module('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
   shutdownManager: {

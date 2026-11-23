@@ -149,7 +149,8 @@ describe('executeResult', () => {
 test('execute aborts an in-flight child and preserves the caller cancellation reason', async () => {
   const controller = new AbortController();
   const reason = new Error('stop requested');
-  const operation = execute('node', ['-e', 'setInterval(() => {}, 1000)'], {
+  // The child ends by itself, so a test run killed before the abort leaves no process behind.
+  const operation = execute('node', ['-e', 'setTimeout(() => {}, 30000)'], {
     signal: controller.signal,
     timeout: 60_000,
   });

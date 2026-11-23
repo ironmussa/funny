@@ -87,6 +87,17 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   await ptyManager.reattachSessions();
   reportNativeGitStatus(getNativeGitStatus(), log);
 
+  // A runner killed without a shutdown leaves its startup commands running.
+  const { commandProcessLedger } = await import('../services/command-process-ledger.js');
+  await commandProcessLedger.sweepOrphans().match(
+    () => undefined,
+    (error) =>
+      log.warn('Could not stop commands left by a previous runner', {
+        namespace: 'command-ledger',
+        error: error.message,
+      }),
+  );
+
   // Older runners left one safe.directory entry per worktree in ~/.gitconfig.
   void pruneStaleWorktreeSafeDirectories().match(
     (removed) => {

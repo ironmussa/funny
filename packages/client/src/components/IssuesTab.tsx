@@ -1,6 +1,6 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
 import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
-import { CircleCheck, CircleDot, MessageSquare, Plus } from 'lucide-react';
+import { CircleCheck, CircleDot, ExternalLink, MessageSquare, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,6 +25,7 @@ import {
 } from '@/components/review-pane/TabToolbar';
 import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -401,19 +402,17 @@ function IssueRow({
         <IssueStateIcon state={issue.state} className="icon-base mt-0.5 shrink-0" />
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-baseline gap-1.5">
-          <button
-            type="button"
-            onClick={() => onOpen(issue)}
-            className={cn(
-              listRowTitleClassName,
-              'hover:text-primary line-clamp-2 cursor-pointer text-left transition-colors',
-            )}
-            data-testid={`issue-title-${issue.number}`}
-          >
-            {issue.title}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onOpen(issue)}
+          className={cn(
+            listRowTitleClassName,
+            'hover:text-primary line-clamp-2 cursor-pointer text-left transition-colors',
+          )}
+          data-testid={`issue-title-${issue.number}`}
+        >
+          {issue.title}
+        </button>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-muted-foreground text-xs">#{issue.number}</span>
           {factoryRun && (
@@ -443,24 +442,48 @@ function IssueRow({
         ) : null}
       </div>
 
-      {!issue.linkedBranch && (
+      <ButtonGroup data-testid={`issue-actions-${issue.number}`}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={t('issues.createThread', 'Create thread')}
+              asChild
               // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
               className={listRowActionClassName}
-              onClick={() => onCreateThread(issue)}
-              data-testid={`issue-create-thread-${issue.number}`}
+              data-testid={`issue-open-github-${issue.number}`}
             >
-              <Plus className="icon-sm" />
+              <a
+                href={issue.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t('issues.viewOnGithub', 'View on GitHub')}
+              >
+                <ExternalLink className="icon-sm" />
+              </a>
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="left">{t('issues.createThread', 'Create thread')}</TooltipContent>
+          <TooltipContent side="top">{t('issues.viewOnGithub', 'View on GitHub')}</TooltipContent>
         </Tooltip>
-      )}
+        {!issue.linkedBranch && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('issues.createThread', 'Create thread')}
+                // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
+                className={listRowActionClassName}
+                onClick={() => onCreateThread(issue)}
+                data-testid={`issue-create-thread-${issue.number}`}
+              >
+                <Plus className="icon-sm" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{t('issues.createThread', 'Create thread')}</TooltipContent>
+          </Tooltip>
+        )}
+      </ButtonGroup>
     </div>
   );
 }

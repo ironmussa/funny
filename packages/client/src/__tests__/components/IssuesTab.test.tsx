@@ -171,6 +171,9 @@ describe('IssuesTab remote checks', () => {
     );
     const view = renderWithProviders(<IssuesTab visible />);
     expect(await screen.findByTestId('issue-item-1')).toHaveTextContent('Fix connection');
+    const githubLink = screen.getByTestId('issue-open-github-1');
+    expect(githubLink).toHaveAttribute('href', 'https://github.com/acme/repo/issues/1');
+    expect(githubLink).toHaveAttribute('target', '_blank');
     await waitFor(() => expect(apiMock.githubIssuesEnriched).toHaveBeenCalled());
     const signal = expectInstance(apiMock.githubIssuesEnriched.mock.calls[0][2], AbortSignal);
     view.unmount();

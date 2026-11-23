@@ -37,6 +37,7 @@ import {
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { getThreadRoute } from '@/lib/thread-variant';
+import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -161,12 +162,34 @@ function WorktreeCard({
               </LabelBadge>
             )}
           </div>
-          <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-            <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
-            <span title={worktree.path} className="truncate font-mono">
-              {worktree.path}
-            </span>
-          </div>
+          {readOnly ? (
+            <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+              <FolderOpen className="icon-xs shrink-0 opacity-70" />
+              <span title={worktree.path} className="truncate font-mono">
+                {worktree.path}
+              </span>
+            </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const result = await api.openDirectory({ path: worktree.path });
+                    if (result.isErr()) toastError(result.error);
+                  }}
+                  className="text-muted-foreground hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left text-xs transition-colors"
+                  data-testid={`worktree-open-directory-${worktree.branch}`}
+                >
+                  <FolderOpen className="icon-xs shrink-0 opacity-70" />
+                  <span className="truncate font-mono hover:underline">{worktree.path}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" variant="mono">
+                {worktree.path}
+              </TooltipContent>
+            </Tooltip>
+          )}
           {worktree.commit && (
             <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <GitCommitHorizontal className="icon-xs shrink-0" />

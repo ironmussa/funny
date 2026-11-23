@@ -7,6 +7,7 @@ import { mockT } from '../helpers/mock-i18n';
 
 const mockListWorktrees = (() => vi.fn())();
 const mockListBranches = (() => vi.fn())();
+const mockOpenDirectory = (() => vi.fn())();
 
 mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
@@ -14,7 +15,11 @@ mock.module('react-i18next', () => ({
 }));
 
 mock.module('@/lib/api', () => ({
-  api: { listWorktrees: mockListWorktrees, listBranches: mockListBranches },
+  api: {
+    listWorktrees: mockListWorktrees,
+    listBranches: mockListBranches,
+    openDirectory: mockOpenDirectory,
+  },
 }));
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -61,6 +66,16 @@ describe('WorktreeSettings refresh', () => {
     await waitFor(() => expect(screen.getByText('feature-x')).toBeInTheDocument());
     expect(mockListWorktrees).toHaveBeenCalledTimes(2);
     expect(mockListBranches).toHaveBeenCalledTimes(2);
+  });
+
+  test('clicking a worktree path opens it in the system file manager', async () => {
+    mockListWorktrees.mockReturnValueOnce(okAsync([main, feature]));
+    mockOpenDirectory.mockReturnValue(okAsync({ ok: true }));
+    renderSettings();
+
+    fireEvent.click(await screen.findByTestId('worktree-open-directory-feature-x'));
+
+    expect(mockOpenDirectory).toHaveBeenCalledWith({ path: '/repo/.worktrees/feature-x' });
   });
 
   test('keeps the list on screen while refreshing', async () => {

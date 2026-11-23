@@ -340,7 +340,7 @@ describe('buildGroupedRenderItems', () => {
       }
     }
     expect(exitPlanTc).toBeDefined();
-    expect(exitPlanTc._planText).toBe('# My Plan\nStep 1\nStep 2');
+    expect(exitPlanTc.planText).toBe('# My Plan\nStep 1\nStep 2');
   });
 
   test.each(['Bash', 'Think'])('keeps orphan %s calls visible across pagination', (name) => {
@@ -354,7 +354,7 @@ describe('buildGroupedRenderItems', () => {
     expect(hydrated).toEqual([
       expect.objectContaining({
         type: 'toolcall',
-        tc: expect.objectContaining({ id: 'parent', _childToolCalls: [child] }),
+        tc: expect.objectContaining({ id: 'parent', childToolCalls: [child] }),
       }),
     ]);
   });
@@ -393,7 +393,7 @@ describe('buildGroupedRenderItems', () => {
     expect(allIds).not.toContain('tc-child');
   });
 
-  test('attaches _childToolCalls to Task tool calls', () => {
+  test('attaches childToolCalls to Task tool calls', () => {
     const parentTc = {
       id: 'tc-parent',
       name: 'Task',
@@ -429,12 +429,12 @@ describe('buildGroupedRenderItems', () => {
       }
     }
     expect(taskTc).toBeDefined();
-    expect(taskTc._childToolCalls).toHaveLength(2);
-    expect(taskTc._childToolCalls[0].id).toBe('tc-child1');
-    expect(taskTc._childToolCalls[1].id).toBe('tc-child2');
+    expect(taskTc.childToolCalls).toHaveLength(2);
+    expect(taskTc.childToolCalls[0].id).toBe('tc-child1');
+    expect(taskTc.childToolCalls[1].id).toBe('tc-child2');
   });
 
-  test('does not attach _childToolCalls to non-Task tools', () => {
+  test('does not attach childToolCalls to non-Task tools', () => {
     const parentTc = {
       id: 'tc-parent',
       name: 'Read',
@@ -455,7 +455,7 @@ describe('buildGroupedRenderItems', () => {
       }
     }
     expect(readTc).toBeDefined();
-    expect(readTc._childToolCalls).toBeUndefined();
+    expect(readTc.childToolCalls).toBeUndefined();
   });
 
   test('child tool calls across messages are grouped under parent', () => {
@@ -487,8 +487,8 @@ describe('buildGroupedRenderItems', () => {
       }
     }
     expect(taskTc).toBeDefined();
-    expect(taskTc._childToolCalls).toHaveLength(1);
-    expect(taskTc._childToolCalls[0].id).toBe('tc-child');
+    expect(taskTc.childToolCalls).toHaveLength(1);
+    expect(taskTc.childToolCalls[0].id).toBe('tc-child');
   });
 
   test('attaches plan text from Write to plan.md file for ExitPlanMode', () => {
@@ -518,7 +518,7 @@ describe('buildGroupedRenderItems', () => {
       }
     }
     expect(exitPlanTc).toBeDefined();
-    expect(exitPlanTc._planText).toBe('# Plan from MD');
+    expect(exitPlanTc.planText).toBe('# Plan from MD');
   });
 });
 

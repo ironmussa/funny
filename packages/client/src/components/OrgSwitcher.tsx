@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select';
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
+import { withCleanup } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -40,27 +41,32 @@ export function OrgSwitcher() {
 
     let cancelled = false;
     (async () => {
-      try {
-        const res = await authClient.organization.list();
-        if (!cancelled && res.data) {
-          setOrgs(res.data.map((o: any) => ({ id: o.id, name: o.name, slug: o.slug })));
-        }
-        // The active org is already restored by auth-store.initialize().
-        // Only fetch it here if it wasn't restored (e.g. initialize ran
-        // before the org plugin was ready).
-        if (!cancelled && !useAuthStore.getState().activeOrgId) {
-          const session = await authClient.getSession();
-          const orgId = activeOrganizationIdFromSession(session.data);
-          if (!cancelled && orgId) {
-            const orgInfo = res.data?.find((o: any) => o.id === orgId);
-            setActiveOrg(orgId, orgInfo?.name ?? null, orgInfo?.slug ?? null);
+      return withCleanup(
+        async () => {
+          try {
+            const res = await authClient.organization.list();
+            if (!cancelled && res.data) {
+              setOrgs(res.data.map((o: any) => ({ id: o.id, name: o.name, slug: o.slug })));
+            }
+            // The active org is already restored by auth-store.initialize().
+            // Only fetch it here if it wasn't restored (e.g. initialize ran
+            // before the org plugin was ready).
+            if (!cancelled && !useAuthStore.getState().activeOrgId) {
+              const session = await authClient.getSession();
+              const orgId = activeOrganizationIdFromSession(session.data);
+              if (!cancelled && orgId) {
+                const orgInfo = res.data?.find((o: any) => o.id === orgId);
+                setActiveOrg(orgId, orgInfo?.name ?? null, orgInfo?.slug ?? null);
+              }
+            }
+          } catch (err) {
+            console.error('[OrgSwitcher] Failed to load orgs:', err);
           }
-        }
-      } catch (err) {
-        console.error('[OrgSwitcher] Failed to load orgs:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+        },
+        () => {
+          if (!cancelled) setLoading(false);
+        },
+      );
     })();
     return () => {
       cancelled = true;

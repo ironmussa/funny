@@ -134,7 +134,6 @@ export const threads = pgTable('threads', {
   cost: real('cost').notNull().default(0),
   archived: integer('archived').notNull().default(0),
   pinned: integer('pinned').notNull().default(0),
-  schedulerManaged: integer('scheduler_managed').notNull().default(0),
   stage: text('stage').notNull().default('backlog'),
   model: text('model').notNull().default(DEFAULT_MODEL),
   initialPrompt: text('initial_prompt'),
@@ -817,44 +816,6 @@ export const pipelineRuns = pgTable('pipeline_runs', {
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 });
-
-/**
- * Scheduler-managed run state. No code reads these tables or
- * `threads.scheduler_managed` since the standalone thread scheduler was
- * removed; they stay declared so the schema matches existing databases.
- * See sqlite schema for column docs.
- */
-export const schedulerRuns = pgTable('scheduler_runs', {
-  threadId: text('thread_id')
-    .primaryKey()
-    .references(() => threads.id, { onDelete: 'cascade' }),
-  pipelineRunId: text('pipeline_run_id'),
-  attempt: integer('attempt').notNull().default(0),
-  // Epoch-ms columns must be bigint on Postgres (int4 overflows ~2.1e9).
-  nextRetryAtMs: bigint('next_retry_at_ms', { mode: 'number' }),
-  lastEventAtMs: bigint('last_event_at_ms', { mode: 'number' }).notNull(),
-  lastError: text('last_error'),
-  claimedAtMs: bigint('claimed_at_ms', { mode: 'number' }).notNull(),
-  userId: text('user_id').notNull(),
-  tokensTotal: integer('tokens_total').notNull().default(0),
-  updatedAtMs: bigint('updated_at_ms', { mode: 'number' }).notNull(),
-});
-
-/**
- * Directed dependency edges between threads. See sqlite schema for column docs.
- */
-export const threadDependencies = pgTable(
-  'thread_dependencies',
-  {
-    threadId: text('thread_id')
-      .notNull()
-      .references(() => threads.id, { onDelete: 'cascade' }),
-    blockedBy: text('blocked_by')
-      .notNull()
-      .references(() => threads.id, { onDelete: 'cascade' }),
-  },
-  (table) => [primaryKey({ columns: [table.threadId, table.blockedBy] })],
-);
 
 export const teamProjects = pgTable(
   'team_projects',

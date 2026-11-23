@@ -133,13 +133,13 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   // Module-level scope caches outlive the DB rows they were read from (30s TTL /
   // no TTL), so a truncated table would otherwise keep serving the previous
   // test's runner owner / role / thread scope.
-  const { __resetRunnerScopeCache } = await import('../../services/runner-scope.js');
-  const { __resetDataScopeCache } = await import('../../services/data-scope.js');
-  const { __resetDataOwnershipCache } = await import('../../services/data-ownership.js');
+  const { resetRunnerScopeCache } = await import('../../services/runner-scope.js');
+  const { resetDataScopeCache } = await import('../../services/data-scope.js');
+  const { resetDataOwnershipCache } = await import('../../services/data-ownership.js');
   const cleanup = () => {
-    __resetRunnerScopeCache();
-    __resetDataScopeCache();
-    __resetDataOwnershipCache();
+    resetRunnerScopeCache();
+    resetDataScopeCache();
+    resetDataOwnershipCache();
     // Truncate all tables in reverse dependency order
     const tables = [
       // No foreign key to a project: nothing else removes its rows.
@@ -173,8 +173,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
       'project_members',
       'projects',
       'runners',
-      'scheduler_runs',
-      'thread_dependencies',
       'user_profiles',
       'instance_settings',
       'invite_links',

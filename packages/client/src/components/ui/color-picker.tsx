@@ -9,7 +9,6 @@ import {
   use,
   useCallback,
   useEffect,
-  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -25,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { cn } from '@/lib/utils';
 
 interface ColorPickerContextValue {
@@ -219,7 +219,7 @@ export const ColorPickerSelection = memo(({ className, ...props }: ColorPickerSe
     [setLightness, setSaturation],
   );
 
-  const updatePointerPositionEvent = useEffectEvent(updatePointerPosition);
+  const updatePointerPositionEvent = useStableCallback(updatePointerPosition);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -231,7 +231,7 @@ export const ColorPickerSelection = memo(({ className, ...props }: ColorPickerSe
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [isDragging]);
+  }, [isDragging, updatePointerPositionEvent]);
 
   return (
     <div

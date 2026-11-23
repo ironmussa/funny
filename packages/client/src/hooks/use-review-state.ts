@@ -17,6 +17,7 @@ import { useFileTreeState } from '@/hooks/use-file-tree-state';
 import { useGenerateCommitMsg } from '@/hooks/use-generate-commit-msg';
 import { usePublishState } from '@/hooks/use-publish-state';
 import { useReviewActions } from '@/hooks/use-review-actions';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { useStashState } from '@/hooks/use-stash-state';
 import { metric } from '@/lib/telemetry';
 import type { ReviewSubTab } from '@/stores/ui-store';
@@ -331,7 +332,7 @@ export function useReviewState(args: UseReviewStateArgs) {
   const prevCurrentBranchRef = useRef<string | undefined>(undefined);
 
   // ── Reset on context change (thread/project switch or branch checkout) ──
-  useEffect(() => {
+  const resetOnContextChange = useStableCallback(() => {
     const contextChanged = gitContextKey !== prevGitContextKeyRef.current;
     const branchChanged = currentBranch !== prevCurrentBranchRef.current;
     // `currentBranch` comes from the project's branch listing, which hydrates asynchronously
@@ -386,8 +387,10 @@ export function useReviewState(args: UseReviewStateArgs) {
     } else {
       needsRefreshRef.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+refresh on context change only
-  }, [gitContextKey, currentBranch]);
+  });
+  useEffect(() => {
+    resetOnContextChange();
+  }, [gitContextKey, currentBranch, resetOnContextChange]);
 
   // ── Reset selectedAction if "commit-pr" picked but PR already exists ──
   useEffect(() => {

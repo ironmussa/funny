@@ -29,6 +29,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
+import { whilePending } from '@/lib/while-pending';
 
 interface FolderPickerProps {
   onSelect: (path: string) => void;
@@ -74,6 +75,78 @@ function buildBreadcrumbs(fullPath: string): Array<{ label: string; path: string
   return crumbs;
 }
 
+/**
+ * Back/forward history of the visited folders. `step` moves one entry and
+ * answers the folder to load; the load that follows does not record itself.
+ */
+function useBrowseHistory() {
+  const entriesRef = useRef<string[]>([]);
+  const indexRef = useRef(-1);
+  const isNavRef = useRef(false);
+  // Mirrors the refs, so render does not read them.
+  const [position, setPosition] = useState({ index: -1, length: 0 });
+
+  const push = useCallback((path: string) => {
+    if (isNavRef.current) {
+      isNavRef.current = false;
+      return;
+    }
+    // Truncate forward history
+    entriesRef.current = [...entriesRef.current.slice(0, indexRef.current + 1), path];
+    indexRef.current = entriesRef.current.length - 1;
+    setPosition({ index: indexRef.current, length: entriesRef.current.length });
+  }, []);
+
+  const step = useCallback((delta: 1 | -1): string | null => {
+    const next = indexRef.current + delta;
+    if (next < 0 || next >= entriesRef.current.length) return null;
+    indexRef.current = next;
+    setPosition({ index: next, length: entriesRef.current.length });
+    isNavRef.current = true;
+    return entriesRef.current[next];
+  }, []);
+
+  return useMemo(
+    () => ({
+      canGoBack: position.index > 0,
+      canGoForward: position.index < position.length - 1,
+      push,
+      step,
+    }),
+    [position, push, step],
+  );
+}
+
+type Listing = NonNullable<Awaited<ReturnType<typeof listDirectory>>>;
+
+/** Shows a listing: each field the response carries replaces what is shown. */
+function applyListing(
+  data: Listing,
+  set: {
+    setCurrentPath: (path: string) => void;
+    setParentPath: (parent: Listing['parent']) => void;
+    setDirs: (dirs: NonNullable<Listing['dirs']>) => void;
+  },
+): void {
+  if (data.path) set.setCurrentPath(data.path);
+  if (data.parent !== undefined) set.setParentPath(data.parent);
+  if (data.dirs) set.setDirs(data.dirs);
+}
+
+/** Lists a directory, showing the failure as a toast; null when it could not be listed. */
+async function listDirectory(path: string) {
+  const result = await api.browseList(path);
+  if (result.isErr()) {
+    toast.error(result.error.message);
+    return null;
+  }
+  if (result.value.error) {
+    toast.error(result.value.error);
+    return null;
+  }
+  return result.value;
+}
+
 export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
   const { t } = useTranslation();
   const [currentPath, setCurrentPath] = useState('');
@@ -89,13 +162,23 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
   const newFolderInputRef = useRef<HTMLInputElement>(null);
 
   // Navigation history for back/forward
-  const historyRef = useRef<string[]>([]);
-  const historyIndexRef = useRef(-1);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const isNavRef = useRef(false); // flag to skip pushing to history during back/forward
+  const history = useBrowseHistory();
+  const pushHistory = history.push;
 
-  const canGoBack = historyIndex > 0;
-  const canGoForward = historyIndex < historyRef.current.length - 1;
+  const loadDir = useCallback(
+    async (path: string) => {
+      setError('');
+      await whilePending(setLoading, async () => {
+        const data = await listDirectory(path);
+        if (!data) return;
+        applyListing(data, { setCurrentPath, setParentPath, setDirs });
+        setSearch('');
+        pushHistory(data.path);
+        localStorage.setItem('funny:last-browse-path', data.path);
+      });
+    },
+    [pushHistory],
+  );
 
   // Load drive roots on mount, restore last path
   useEffect(() => {
@@ -126,8 +209,8 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         loadDir(data.home);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: loadDir and pushHistory are stable helpers called once on init
-  }, []);
+    // Both helpers keep one identity, so this still runs once, on mount.
+  }, [loadDir, pushHistory]);
 
   const filteredDirs = useMemo(() => {
     if (!search.trim()) return dirs;
@@ -144,61 +227,13 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
       });
   }, [dirs, search]);
 
-  const pushHistory = useCallback((path: string) => {
-    if (isNavRef.current) {
-      isNavRef.current = false;
-      return;
-    }
-    const idx = historyIndexRef.current;
-    // Truncate forward history
-    historyRef.current = historyRef.current.slice(0, idx + 1);
-    historyRef.current.push(path);
-    historyIndexRef.current = historyRef.current.length - 1;
-    setHistoryIndex(historyIndexRef.current);
-  }, []);
-
-  const loadDir = async (path: string) => {
-    setLoading(true);
-    setError('');
-    try {
-      const result = await api.browseList(path);
-      if (result.isErr()) {
-        toast.error(result.error.message);
-        return;
-      }
-      const data = result.value;
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-      if (data.path) setCurrentPath(data.path);
-      if (data.parent !== undefined) setParentPath(data.parent);
-      if (data.dirs) setDirs(data.dirs);
-      setSearch('');
-      pushHistory(data.path);
-      localStorage.setItem('funny:last-browse-path', data.path);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const goBack = useCallback(() => {
-    if (historyIndexRef.current <= 0) return;
-    historyIndexRef.current--;
-    setHistoryIndex(historyIndexRef.current);
-    isNavRef.current = true;
-    loadDir(historyRef.current[historyIndexRef.current]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadDir is a stable local function; adding it would cause infinite re-renders
-  }, []);
-
-  const goForward = useCallback(() => {
-    if (historyIndexRef.current >= historyRef.current.length - 1) return;
-    historyIndexRef.current++;
-    setHistoryIndex(historyIndexRef.current);
-    isNavRef.current = true;
-    loadDir(historyRef.current[historyIndexRef.current]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadDir is a stable local function; adding it would cause infinite re-renders
-  }, []);
+  const goStep = useCallback(
+    (delta: 1 | -1) => {
+      const path = history.step(delta);
+      if (path !== null) loadDir(path);
+    },
+    [history, loadDir],
+  );
 
   const handleCreateFolder = async () => {
     const name = newFolderName.trim();
@@ -232,20 +267,17 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="flex flex-col gap-0 p-0"
-        style={{ maxWidth: '60vw', height: '70vh' }}
-      >
+      <DialogContent flush className="flex flex-col" style={{ maxWidth: '60vw', height: '70vh' }}>
         <DialogHeader className="p-4 pb-2">
-          <DialogTitle className="text-sm">{t('folderPicker.title')}</DialogTitle>
+          <DialogTitle size="sm">{t('folderPicker.title')}</DialogTitle>
         </DialogHeader>
 
         {/* Navigation bar: back/forward + breadcrumbs */}
         <div className="border-border bg-muted/30 flex items-center gap-1 border-b px-4 py-2">
           <TooltipIconButton
             size="icon"
-            onClick={goBack}
-            disabled={!canGoBack}
+            onClick={() => goStep(-1)}
+            disabled={!history.canGoBack}
             className="size-6 shrink-0"
             tooltip={t('folderPicker.back')}
           >
@@ -253,8 +285,8 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
           </TooltipIconButton>
           <TooltipIconButton
             size="icon"
-            onClick={goForward}
-            disabled={!canGoForward}
+            onClick={() => goStep(1)}
+            disabled={!history.canGoForward}
             className="size-6 shrink-0"
             tooltip={t('folderPicker.forward')}
           >
@@ -289,15 +321,15 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
           </div>
 
           <Button
-            variant="ghost"
-            size="sm"
+            variant="muted"
+            size="xs"
             onClick={() => {
               setCreatingFolder(true);
               setNewFolderName('');
               setNewFolderError('');
             }}
             disabled={!currentPath || loading}
-            className="text-muted-foreground ml-1 h-6 shrink-0 px-2 text-xs"
+            className="ml-1 h-6 shrink-0"
             data-testid="folder-picker-new-folder"
           >
             <FolderPlus className="icon-xs mr-1" />
@@ -311,12 +343,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             {roots.map((root) => (
               <Tooltip key={root}>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => loadDir(root)}
-                    className="text-muted-foreground h-6 px-2 text-xs"
-                  >
+                  <Button variant="muted" size="xs" onClick={() => loadDir(root)} className="h-6">
                     <HardDrive className="icon-xs mr-1" />
                     {root.replace(':\\', '')}
                   </Button>
@@ -333,11 +360,12 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             <div className="relative">
               <Search className="icon-xs text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2" />
               <Input
+                size="xs"
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('folderPicker.searchPlaceholder')}
-                className="h-7 pr-2 pl-7 text-xs"
+                className="pr-2 pl-7"
                 autoFocus={false}
               />
             </div>

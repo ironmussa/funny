@@ -11,7 +11,10 @@ import type { IssueBlocker } from '@funny/core/github-app';
 import { errAsync, okAsync } from 'neverthrow';
 
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
-import { createFactoryQueue } from '../../../services/factory/factory-queue.js';
+import {
+  createFactoryQueue,
+  type FactoryQueueDeps,
+} from '../../../services/factory/factory-queue.js';
 import {
   createFactoryRunsRepository,
   type FactoryRunView,
@@ -59,12 +62,20 @@ interface Script {
   noToken?: boolean;
 }
 
-/** The fake GitHub port, with the merges the test reads back. */
-type FakeGithub = FactoryGithubPort & { merges: number };
+/** The fake GitHub port, with the merges and opened issues the test reads back. */
+type FakeGithub = FactoryGithubPort & {
+  merges: number;
+  opened: Array<{ ownerId: string; title: string; body: string }>;
+};
 
 function fakeGithub(script: Script = {}): FakeGithub {
   const port: FakeGithub = {
     merges: 0,
+    opened: [],
+    createIssue: (reader, issue) => {
+      port.opened.push({ ownerId: reader.ownerId, ...issue });
+      return okAsync({ number: 77, url: 'https://github.com/o/r/issues/77' });
+    },
     resolveRepo: async () => (script.noRepo ? null : 'o/r'),
     listReadyIssues: () => okAsync(script.labelled ?? []),
     getIssue: (_reader: unknown, number: number) => {
@@ -213,6 +224,7 @@ async function setUp(
     script?: Script;
     launcher?: ReturnType<typeof fakeLauncher>;
     waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
+    batches?: FactoryQueueDeps['batches'];
     /** The clock of the schedule triggers (change flow-triggers). */
     now?: () => Date;
   } = {},
@@ -256,6 +268,7 @@ async function setUp(
   // The tests fire the tick themselves: a send does not poke the factory here.
   const queue = createFactoryQueue({
     wake: async () => {},
+    batches: opts.batches,
     triggers: createFactoryTriggersRepository({
       newId: () => crypto.randomUUID(),
       now: opts.now ?? (() => new Date()),
@@ -437,6 +450,77 @@ describe('sending issues', () => {
     expect((await queue.flowDefinition(null, 'custom'))._unsafeUnwrapErr().kind).toBe(
       'invalid-flow',
     );
+  });
+});
+
+// openspec factory-integration D12: readiness, and the run that adds the queue's CI trigger.
+describe('merge queue readiness', () => {
+  const CI_ON_QUEUE = {
+    repoFlows: ['ci.yml'],
+    repoFiles: { '.github/workflows/ci.yml': "on:\n  push:\n    branches: ['factory/queue/**']\n" },
+  };
+
+  test('reads the merge driver of the last integration and the median CI of the batches', async () => {
+    const { factoryId, queue } = await setUp({
+      script: CI_ON_QUEUE,
+      batches: { ciDurations: () => okAsync<number[], never>([300_000, 100_000, 200_000]) },
+    });
+    await createFactoryRunsRepository().enqueue({
+      factoryId,
+      issueNumbers: [5],
+      flowName: 'issue-to-merge',
+    });
+    const run = await runFor(factoryId, 5);
+    await createFactoryRunsRepository().update(run.id, {
+      metrics: { ...run.metrics, integrateRounds: 2, weaveIntegrations: 2 },
+    });
+
+    const readiness = (await queue.readiness(factoryId))._unsafeUnwrap();
+
+    expect(readiness).toMatchObject({
+      queueCi: true,
+      mergeDriver: 'weave',
+      medianCiMs: 200_000,
+      batchWaitMs: 0,
+    });
+  });
+
+  test('the CI trigger is proposed as an issue the factory runs, opened as the person who asked', async () => {
+    const { factoryId, queue, github } = await setUp();
+
+    const proposal = (await queue.proposeQueueCi('bob', factoryId))._unsafeUnwrap();
+
+    expect(proposal).toEqual({
+      issueNumber: 77,
+      url: 'https://github.com/o/r/issues/77',
+      queued: true,
+    });
+    expect(github.opened).toEqual([
+      expect.objectContaining({
+        ownerId: 'bob',
+        body: expect.stringContaining('factory/queue/**'),
+      }),
+    ]);
+    expect((await runFor(factoryId, 77)).state).toBe('requested');
+  });
+
+  test('no issue when CI already runs on the queue branches', async () => {
+    const ready = await setUp({ script: CI_ON_QUEUE });
+    expect((await ready.queue.proposeQueueCi('alice', ready.factoryId))._unsafeUnwrapErr()).toEqual(
+      {
+        kind: 'cannot-work',
+        message: "CI already runs on the merge queue's branches.",
+      },
+    );
+    expect(ready.github.opened).toEqual([]);
+  });
+
+  test('no issue while the factory is paused', async () => {
+    const paused = await setUp({ enabled: false });
+    expect(
+      (await paused.queue.proposeQueueCi('alice', paused.factoryId))._unsafeUnwrapErr().kind,
+    ).toBe('paused');
+    expect(paused.github.opened).toEqual([]);
   });
 });
 

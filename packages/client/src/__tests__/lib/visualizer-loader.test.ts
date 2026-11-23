@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
 import {
-  __resetVisualizerRegistry,
+  resetVisualizerRegistry,
   getVisualizerForFence,
   registerVisualizer,
   type VisualizerPlugin,
@@ -19,7 +19,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 beforeEach(() => {
-  __resetVisualizerRegistry();
+  resetVisualizerRegistry();
 });
 
 describe('loadInstalledVisualizers', () => {

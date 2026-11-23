@@ -21,6 +21,7 @@ import { usePRDetail } from '@/data/pull-requests/hooks';
 import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { withCleanup } from '@/lib/while-pending';
 
 import { DiffStats } from './DiffStats';
 import { FileTree } from './FileTree';
@@ -203,7 +204,6 @@ function PRDetailInfoTab({
               ) : fileSummaries.length === 0 ? (
                 <EmptyState
                   fill={false}
-                  className="py-4"
                   title={fileSearch ? 'No matching files' : 'No files changed'}
                 />
               ) : (
@@ -311,10 +311,10 @@ function PRDetailHeader({
         mergeableState={detail?.mergeable_state}
         titleExtra={
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-xs"
             onClick={onClose}
-            className="text-muted-foreground shrink-0"
+            className="shrink-0"
             data-testid="pr-detail-close"
           >
             <X className="icon-xs" />
@@ -364,33 +364,36 @@ export function PRDetailDialog({
     const loadData = async () => {
       setLoadingFiles(true);
       setLoadingCommits(true);
-      try {
-        const [filesResult, commitsResult] = await Promise.all([
-          api.githubPRFiles(projectId, prNumber),
-          api.githubPRCommits(projectId, prNumber),
-        ]);
-        if (cancelled) return;
+      return withCleanup(
+        async () => {
+          const [filesResult, commitsResult] = await Promise.all([
+            api.githubPRFiles(projectId, prNumber),
+            api.githubPRCommits(projectId, prNumber),
+          ]);
+          if (cancelled) return;
 
-        if (filesResult.isOk()) {
-          setFiles(filesResult.value.files);
-          if (filesResult.value.files.length > 0) {
-            setSelectedFile(filesResult.value.files[0].filename);
+          if (filesResult.isOk()) {
+            setFiles(filesResult.value.files);
+            if (filesResult.value.files.length > 0) {
+              setSelectedFile(filesResult.value.files[0].filename);
+            }
+          } else {
+            log.error('Failed to fetch PR files', { error: filesResult.error });
+            setError(filesResult.error.message || 'Failed to load PR files');
           }
-        } else {
-          log.error('Failed to fetch PR files', { error: filesResult.error });
-          setError(filesResult.error.message || 'Failed to load PR files');
-        }
 
-        if (commitsResult.isOk()) setCommits(commitsResult.value.commits);
-        else log.error('Failed to fetch PR commits', { error: commitsResult.error });
-      } finally {
-        if (!cancelled) {
-          // Effect cleanup flips cancelled, so only the mounted request clears these flags.
-          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
-          setLoadingFiles(false);
-          setLoadingCommits(false);
-        }
-      }
+          if (commitsResult.isOk()) setCommits(commitsResult.value.commits);
+          else log.error('Failed to fetch PR commits', { error: commitsResult.error });
+        },
+        () => {
+          if (!cancelled) {
+            // Effect cleanup flips cancelled, so only the mounted request clears these flags.
+            // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
+            setLoadingFiles(false);
+            setLoadingCommits(false);
+          }
+        },
+      );
     };
 
     loadData();
@@ -508,7 +511,8 @@ export function PRDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
+        flush
+        className="flex h-[85vh] max-w-[90vw] flex-col"
         data-testid="pr-detail-dialog"
       >
         <PRDetailHeader

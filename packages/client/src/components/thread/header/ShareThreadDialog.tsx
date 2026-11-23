@@ -31,6 +31,7 @@ import {
 } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThreadSelector } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
@@ -112,13 +113,10 @@ function useThreadShares({
 
   /** Run `action`, then re-read the shares, with the buttons disabled meanwhile. */
   const busyWhile = async (action: () => Promise<unknown>) => {
-    setBusy(true);
-    try {
+    await whilePending(setBusy, async () => {
       await action();
       await refreshShares();
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
   const share = (userId: string, level: ShareLevel) =>
@@ -182,9 +180,7 @@ export function ShareThreadDialog({
   // a previous (owned) thread can't pop the dialog on an unrelated thread.
   useEffect(() => {
     setOpen(false);
-    // Intentionally only on threadId change, not on setOpen identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId]);
+  }, [threadId, setOpen]);
 
   const copyLink = () => {
     const url = `${window.location.origin}${buildPath(

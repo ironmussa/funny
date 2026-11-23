@@ -22,10 +22,10 @@ import { log } from '../lib/logger.js';
 import { db, dbDialect } from './index.js';
 
 // Lazily create context — db may not be ready at import time
-let _ctx: ReturnType<typeof createMigrationContext> | null = null;
+let migrationContext: ReturnType<typeof createMigrationContext> | null = null;
 function ctx() {
-  if (!_ctx) _ctx = createMigrationContext(db, dbDialect);
-  return _ctx;
+  if (!migrationContext) migrationContext = createMigrationContext(db, dbDialect);
+  return migrationContext;
 }
 
 const migrations: Migration[] = [
@@ -2410,10 +2410,21 @@ const migrations: Migration[] = [
     },
   },
   {
+    // The standalone thread scheduler was removed (#430): nothing reads its
+    // run state or its thread dependency edges. The tables go first; the
+    // `threads.scheduler_managed` column follows in its own migration, once no
+    // deployed server still selects it (`PENDING_DROP` in schema-drift.test.ts).
+    name: '120_drop_thread_scheduler_tables',
+    async up() {
+      await ctx().exec(sql`DROP TABLE IF EXISTS scheduler_runs`);
+      await ctx().exec(sql`DROP TABLE IF EXISTS thread_dependencies`);
+    },
+  },
+  {
     // Change thread-recap, D4 / D4b: the user's utility model (JSON
     // `UtilityModelSetting`, null = the claude-sdk / haiku default) and the
     // "Show thread recaps" toggle, on for every existing and new user.
-    name: '120_user_profiles_utility_model',
+    name: '121_user_profiles_utility_model',
     async up() {
       await ctx().addColumn('user_profiles', 'utility_model', 'TEXT');
       await ctx().addColumn('user_profiles', 'thread_recap_enabled', 'INTEGER NOT NULL', '1');

@@ -32,6 +32,7 @@ type AuditAction =
   | 'factory.run_stopped'
   | 'factory.run_retried'
   | 'factory.issues_sent'
+  | 'factory.queue_ci_proposed'
   | 'factory.queue_cleared'
   | 'factory.stopped_all'
   /** A schedule trigger of a factory was saved or removed, or a flow started without an issue. */

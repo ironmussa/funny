@@ -21,6 +21,7 @@ import { useProjectById } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 const NO_PROFILE_VALUE = '__default__';
@@ -61,6 +62,18 @@ function buildClaudeAuthCommand(configDir: string) {
   return `CLAUDE_CONFIG_DIR=${shellQuoteEnvValue(configDir)} claude auth login`;
 }
 
+/** The agent execution profiles, or null after telling the user they could not be loaded. */
+async function fetchProfiles(
+  t: ReturnType<typeof useTranslation>['t'],
+): Promise<AgentExecutionProfileResponse[] | null> {
+  const result = await api.listAgentExecutionProfiles();
+  if (result.isOk()) return result.value.profiles;
+  toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
+    description: result.error.message,
+  });
+  return null;
+}
+
 export function AgentExecutionProfilesSettings() {
   const { t } = useTranslation();
   const [profiles, setProfiles] = useState<AgentExecutionProfileResponse[]>([]);
@@ -74,21 +87,13 @@ export function AgentExecutionProfilesSettings() {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const profilesResult = await api.listAgentExecutionProfiles();
-      if (profilesResult.isErr()) {
-        toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
-          description: profilesResult.error.message,
-        });
-        return;
-      }
+    await whilePending(setLoading, async () => {
+      const profiles = await fetchProfiles(t);
+      if (!profiles) return;
 
-      setProfiles(profilesResult.value.profiles);
-      setDrafts(profilesToDrafts(profilesResult.value.profiles));
-    } finally {
-      setLoading(false);
-    }
+      setProfiles(profiles);
+      setDrafts(profilesToDrafts(profiles));
+    });
   }, [t]);
 
   useEffect(() => {
@@ -193,7 +198,7 @@ export function AgentExecutionProfilesSettings() {
   );
 
   if (loading) {
-    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
+    return <LoadingState padding="md" fill={false} label={t('common.loading', 'Loading…')} />;
   }
 
   return (
@@ -250,17 +255,11 @@ export function ProjectAgentExecutionProfileSettings() {
   const [bindingSaving, setBindingSaving] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const profilesResult = await api.listAgentExecutionProfiles();
-      if (profilesResult.isErr()) {
-        toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
-          description: profilesResult.error.message,
-        });
-        return;
-      }
+    await whilePending(setLoading, async () => {
+      const profiles = await fetchProfiles(t);
+      if (!profiles) return;
 
-      setProfiles(profilesResult.value.profiles);
+      setProfiles(profiles);
 
       if (selectedProjectId) {
         const bindingResult = await api.getProjectAgentProfileBinding(selectedProjectId);
@@ -272,9 +271,7 @@ export function ProjectAgentExecutionProfileSettings() {
           setBindingProfileId(null);
         }
       } else setBindingProfileId(null);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [selectedProjectId, t]);
 
   useEffect(() => {
@@ -286,8 +283,7 @@ export function ProjectAgentExecutionProfileSettings() {
       if (!selectedProjectId) return;
       const nextProfileId = value === NO_PROFILE_VALUE ? null : value;
       setBindingProfileId(nextProfileId);
-      setBindingSaving(true);
-      try {
+      await whilePending(setBindingSaving, async () => {
         const result = await api.updateProjectAgentProfileBinding(selectedProjectId, {
           profileId: nextProfileId,
         });
@@ -302,15 +298,13 @@ export function ProjectAgentExecutionProfileSettings() {
         setBindingProfileId(result.value.profile?.id ?? null);
         refreshProjectAgentProfiles();
         toast.success(t('agentProfiles.bindingSaved', 'Project profile saved'));
-      } finally {
-        setBindingSaving(false);
-      }
+      });
     },
     [load, selectedProjectId, t],
   );
 
   if (loading) {
-    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
+    return <LoadingState padding="md" fill={false} label={t('common.loading', 'Loading…')} />;
   }
 
   return (

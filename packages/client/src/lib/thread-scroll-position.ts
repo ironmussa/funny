@@ -23,7 +23,7 @@ let cached: StoredThreadScroll | null = null;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let pagehideListenerAttached = false;
 
-export function __resetThreadScrollPositionForTests(): void {
+export function resetThreadScrollPositionForTests(): void {
   cached = null;
   if (flushTimer) {
     clearTimeout(flushTimer);

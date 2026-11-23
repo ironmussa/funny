@@ -1,5 +1,5 @@
 /**
- * Migration 120_user_profiles_utility_model (openspec thread-recap, task 1.2):
+ * Migration 121_user_profiles_utility_model (openspec thread-recap, task 1.2):
  * a profile saved before the migration reads recaps on and no utility model
  * (the claude-sdk / haiku default).
  */
@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { sql } from 'drizzle-orm';
 
-describe('120_user_profiles_utility_model migration', () => {
+describe('121_user_profiles_utility_model migration', () => {
   test('backfills existing profiles with recaps on and no utility model', async () => {
     const { initDatabase } = await import('../../db/index.js');
     await initDatabase({ sqlitePath: ':memory:' });
@@ -21,7 +21,7 @@ describe('120_user_profiles_utility_model migration', () => {
     db.run(
       sql`INSERT INTO user_profiles (id, user_id, setup_completed, created_at, updated_at) VALUES ('p1', 'u1', 1, '2026-01-01', '2026-01-01')`,
     );
-    db.run(sql`DELETE FROM _migrations WHERE name = '120_user_profiles_utility_model'`);
+    db.run(sql`DELETE FROM _migrations WHERE name = '121_user_profiles_utility_model'`);
     await autoMigrate();
 
     expect(

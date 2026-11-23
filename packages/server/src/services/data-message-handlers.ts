@@ -9,6 +9,7 @@
  * before dispatching here — see `handleDataMessageWithAck` in data-handler.ts.
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import type { JobPatch, WatcherPatch } from '@funny/shared/repositories';
 import { and, eq, or } from 'drizzle-orm';
 
@@ -45,7 +46,6 @@ const RUNNER_IMMUTABLE_THREAD_FIELDS = new Set([
   'externalRequestId',
   'parentThreadId',
   'runnerId',
-  'schedulerManaged',
   'createdAt',
 ]);
 
@@ -119,7 +119,7 @@ function notifyTerminalStatusPersisted(
     log.error('Failed to complete automation run', {
       namespace: 'automation',
       threadId,
-      error: (error as Error).message,
+      error: errorMessage(error),
     }),
   );
   // A factory flow waiting on this thread goes on; a member's follow-up on a
@@ -128,7 +128,7 @@ function notifyTerminalStatusPersisted(
     log.error('Failed to resume factory run', {
       namespace: 'factory',
       threadId,
-      error: (error as Error).message,
+      error: errorMessage(error),
     }),
   );
   const event = { type: 'thread:updated', threadId, data: { status } };
@@ -514,7 +514,7 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
           namespace: 'data-handler',
           runnerId,
           projectId: cpResult.value.id,
-          error: (e as Error).message,
+          error: errorMessage(e),
         });
       }
       return {

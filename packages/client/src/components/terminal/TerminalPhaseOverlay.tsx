@@ -33,9 +33,9 @@ export function TerminalPhaseOverlay({
       <div className="absolute inset-x-0 bottom-0 flex items-center justify-center p-2">
         <Button
           variant="outline"
-          size="sm"
+          size="xs"
           onClick={onRestart}
-          className="gap-1.5 text-xs"
+          className="gap-1.5"
           data-testid="terminal-restart"
         >
           <RotateCcw className="icon-xs" />

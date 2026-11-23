@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 
 import type { AgentProvider } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../../lib/logger.js';
 import { getServices } from '../service-registry.js';
@@ -70,7 +71,7 @@ function prepareAssetsDirEnv(threadId: string, userId: string, assetsDir?: strin
       namespace: 'media',
       threadId,
       userId,
-      error: (assetsErr as Error).message,
+      error: errorMessage(assetsErr),
     });
     return {};
   }

@@ -188,7 +188,6 @@ app.post('/v1/facts', async (c) => {
 
 app.get('/v1/facts', async (c) => {
   const type = c.req.query('type');
-  const includeInvalidated = c.req.query('includeInvalidated') === 'true';
   const limit = Number(c.req.query('limit')) || undefined;
 
   try {

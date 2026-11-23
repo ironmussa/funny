@@ -140,7 +140,9 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    the batch; a refusal after a landing is a partial landing (the rest wait again, and a branch
    whose up-to-date rule could not be read gets batches of one from then on). Red: the same tree
    once more (a flake), then halves from B in parallel, every red half split again; culprits go
-   back to their loop with the failing checks, the rest are requeued; no red half: one at a time,
+   back to their loop with the failing checks (a culprit back at the same commit, its agent having
+   changed nothing, waits for a person instead of entering another batch: `culpritAt` in
+   `factory-batches.ts`), the rest are requeued; no red half: one at a time,
    in order. A member is settled with the output its own `merge` would have had
    (`merge.json.outcome`), and a landed one is recorded `merged` on its own run. Every write about
    a member uses its enabler's capped token (`integrationFor`, `@funny/core/github-app`
@@ -151,7 +153,13 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    D9: a conflict re-runs that node, `regenerate_node` on the run). The merge group grants a
    blocker first, then a much smaller change (powers of four of its changed lines, recorded with
    the risk), then admission order. **Settings > Factory** shows the merge queue's batch setting
-   and how the repository merges now, with what to change (`factory.readiness`).
+   and how the repository merges now, with what to change (`factory.readiness`): the merge
+   driver the enabler's runner used at the last integration (`weaveIntegrations` on the run's
+   metrics), the median CI time of the queue's last batch attempts against the batch wait
+   (`ciDurations` in `factory-batches.ts`), and advice that never blocks a batch. Where CI does not
+   run on the queue's branches it offers `factory.proposeQueueCi`: an issue, opened with the App
+   token capped by the person who asked, sent to the factory as a normal run, so the trigger is a
+   pull request the factory opens; nothing edits a workflow or a branch rule.
    4d. **Early integration and stacking** (change `factory-integration`, D8, D10): each tick
    that finds the base moved asks, for every run whose changed paths (its risk record's, or its
    contract's likely paths) overlap what merged, whether its pull request still merges, and runs

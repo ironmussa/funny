@@ -23,14 +23,14 @@ import { PipelineDispatcher } from './pipeline-dispatcher.js';
 
 export type RuntimePipelineDispatcher = PipelineDispatcher<YamlPipelineContext>;
 
-let _instance: RuntimePipelineDispatcher | null = null;
+let instance: RuntimePipelineDispatcher | null = null;
 
 export function getPipelineDispatcher(): RuntimePipelineDispatcher {
-  if (_instance) return _instance;
-  _instance = new PipelineDispatcher<YamlPipelineContext>({
+  if (instance) return instance;
+  instance = new PipelineDispatcher<YamlPipelineContext>({
     pipelines: new YamlPipelineLoader(),
     contextBuilder: new YamlContextBuilder(new RuntimeActionProviderFactory()),
     log,
   });
-  return _instance;
+  return instance;
 }

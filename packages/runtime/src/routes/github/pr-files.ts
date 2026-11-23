@@ -95,7 +95,7 @@ prFileRoutes.get('/pr-commits', async (c) => {
 // ── Commit Authors (avatar_url per SHA for commit history view) ──────
 
 prFileRoutes.get('/commit-authors', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const projectId = c.req.query('projectId');
   if (!projectId) return c.json({ error: 'projectId is required' }, 400);
 
@@ -204,7 +204,7 @@ prFileRoutes.post('/pr-revert-file', async (c) => {
   // Recorded as a `github.write` activity (track-user-and-scheduled-actions).
   return recordedGithubWrite(
     {
-      userId: c.get('userId') as string,
+      userId: c.get('userId'),
       projectId,
       title: `Revert ${filePath} in ${owner}/${repo}#${prNumber}`,
       input: {

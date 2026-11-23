@@ -463,7 +463,7 @@ describe('issue-to-merge workflow', () => {
     });
 
     test('a run without a contract gets no contract section', async () => {
-      const { workflows } = await loadWorkflowCatalog();
+      await loadWorkflowCatalog();
       const fake = provider([green]);
       fake.p.triage = async () => ({
         ok: true,
@@ -489,7 +489,7 @@ describe('issue-to-merge workflow', () => {
     });
 
     test('triage that stops the run starts no implementing agent', async () => {
-      const { workflows } = await loadWorkflowCatalog();
+      await loadWorkflowCatalog();
       const fake = provider([green]);
       fake.p.triage = async () => ({ ok: false, error: 'The issue needs more information: ?' });
       const result = await runPipeline(

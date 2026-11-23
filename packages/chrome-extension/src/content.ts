@@ -49,7 +49,7 @@ interface ElementData {
   fullPath: string;
   nearbyElements: string;
   outerHTML: string;
-  _element: Element; // private ref, not serialized
+  domElement: Element; // private ref, not serialized
 }
 
 interface Annotation {
@@ -85,7 +85,6 @@ console.info('[Funny Annotator] v2.1 loaded', new Date().toISOString());
 // ---------------------------------------------------------------------------
 let isActive = false;
 let annotations: Annotation[] = [];
-let _annotationCounter = 0;
 let hoveredElement: Element | null = null;
 let isPaused = false;
 let isBrowsing = false;
@@ -328,7 +327,7 @@ function renderAnnotations() {
   annotations.forEach((ann, i) => {
     // Each annotation can have one or more elements
     for (const elemData of ann.elements) {
-      const el = elemData._element;
+      const el = elemData.domElement;
       if (!el || !document.contains(el)) continue;
       const rect = el.getBoundingClientRect();
 
@@ -744,7 +743,7 @@ function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clic
   if (ann.elements.length > 1) {
     // Multi-element annotation: show chips, hide details
     pendingAnnotationElement = null;
-    pendingMultiSelectElements = ann.elements.map((e) => e._element);
+    pendingMultiSelectElements = ann.elements.map((e) => e.domElement);
     popoverElementName.textContent = `${ann.elements.length} elements selected`;
     popoverTextarea.placeholder = 'What should be done with these elements?';
     popoverElementList.innerHTML = '';
@@ -762,7 +761,7 @@ function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clic
   } else {
     // Single-element annotation
     const elemData = ann.elements[0];
-    pendingAnnotationElement = elemData._element;
+    pendingAnnotationElement = elemData.domElement;
     pendingMultiSelectElements = null;
     popoverElementName.textContent = elemData.elementName;
     popoverTextarea.placeholder = 'What should be done with this element?';
@@ -771,7 +770,7 @@ function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clic
     resetDetailsCollapsed();
     const header = popover.querySelector('.popover-header') as HTMLDivElement;
     if (header) header.style.display = '';
-    populateElementDetails(elemData._element);
+    populateElementDetails(elemData.domElement);
   }
 
   loadPopoverProjectName();
@@ -917,7 +916,7 @@ function buildElementData(el: Element): ElementData {
     fullPath: getFullPath(el),
     nearbyElements: getNearbyElements(el),
     outerHTML: el.outerHTML.slice(0, 2000),
-    _element: el,
+    domElement: el,
   };
 }
 
@@ -947,18 +946,16 @@ function addAnnotationFromPopover() {
   // Editing an existing annotation (single or multi-element)
   if (editingAnnotationIndex >= 0) {
     const existing = annotations[editingAnnotationIndex];
-    const elements = existing.elements.map((e) => e._element);
+    const elements = existing.elements.map((e) => e.domElement);
     annotations[editingAnnotationIndex] = buildAnnotation(prompt, elements);
   } else if (pendingMultiSelectElements && pendingMultiSelectElements.length > 0) {
     // New multi-select annotation
-    _annotationCounter++;
     annotations.push(buildAnnotation(prompt, pendingMultiSelectElements));
     clearMultiSelect();
   } else {
     // New single-element annotation
     const el = pendingAnnotationElement;
     if (!el) return;
-    _annotationCounter++;
     annotations.push(buildAnnotation(prompt, [el]));
   }
 
@@ -1176,7 +1173,6 @@ function handleToolbarAction(action: string) {
       break;
     case 'clear':
       annotations = [];
-      _annotationCounter = 0;
       clearMultiSelect();
       clearDrawing();
       renderAnnotations();
@@ -2289,10 +2285,10 @@ async function sendToFunny() {
       screenshot = drawingData;
     }
 
-    // Serialize annotations (strip _element refs from each element)
+    // Serialize annotations (strip domElement refs from each element)
     const serialized = annotations.map((ann) => ({
       ...ann,
-      elements: ann.elements.map(({ _element, ...rest }) => rest),
+      elements: ann.elements.map(({ domElement: _domElement, ...rest }) => rest),
     }));
 
     let markdown = generateMarkdown();
@@ -2329,7 +2325,6 @@ async function sendToFunny() {
 
           // Clear all annotations and drawings
           annotations = [];
-          _annotationCounter = 0;
           clearMultiSelect();
           clearDrawing();
           if (drawPromptInput) drawPromptInput.value = '';
@@ -2633,14 +2628,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       annotationCount: annotations.length,
       annotations: annotations.map((ann) => ({
         ...ann,
-        elements: ann.elements.map(({ _element, ...rest }) => rest),
+        elements: ann.elements.map(({ domElement: _domElement, ...rest }) => rest),
       })),
     });
   } else if (msg.type === 'GET_MARKDOWN') {
     sendResponse({ markdown: generateMarkdown() });
   } else if (msg.type === 'CLEAR_ANNOTATIONS') {
     annotations = [];
-    _annotationCounter = 0;
     clearMultiSelect();
     renderAnnotations();
     updateToolbarCount();

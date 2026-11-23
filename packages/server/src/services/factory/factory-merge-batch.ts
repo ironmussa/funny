@@ -85,6 +85,13 @@ export async function mergeAsBatch(input: {
   const requeueAll = () => {
     for (const member of batch.members) batch.settle(member.holder, { status: 'requeued' });
   };
+  // A culprit back unchanged waits for a person on every path, serial included:
+  // alone, only its own pull request's checks would be read before it merged.
+  const culprit = await queue.culpritHold(self);
+  if (culprit) {
+    requeueAll();
+    return { kind: 'held', reason: culprit };
+  }
   if (!(await queue.batchable(self))) {
     requeueAll();
     return null;

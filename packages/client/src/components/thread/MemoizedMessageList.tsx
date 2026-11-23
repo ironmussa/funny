@@ -3,7 +3,6 @@ import {
   useState,
   useRef,
   useEffect,
-  useEffectEvent,
   useLayoutEffect,
   useCallback,
   useMemo,
@@ -13,6 +12,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { findNearestPrecedingUserMessageItem } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
 
@@ -324,7 +324,7 @@ export const MemoizedMessageList = memo(
       });
     }, [heightCache, rowVirtualizer]);
 
-    const measureRowsEvent = useEffectEvent(resetAndMeasureMountedRows);
+    const measureRowsEvent = useStableCallback(resetAndMeasureMountedRows);
 
     useLayoutEffect(() => {
       const layoutChanged = prevLayoutKeyRef.current !== layoutKey;
@@ -372,6 +372,7 @@ export const MemoizedMessageList = memo(
         if (secondRafId !== null) cancelAnimationFrame(secondRafId);
       };
     }, [
+      measureRowsEvent,
       containerWidth,
       globalFontSize,
       heightCache,
@@ -379,6 +380,7 @@ export const MemoizedMessageList = memo(
       listScrollMargin,
       measuredRowBottomCache,
       rowBottomKey,
+      setMeasuredContentBottom,
       threadId,
       virtualRowsSignature,
     ]);
@@ -606,7 +608,6 @@ export const MemoizedMessageList = memo(
       const ro = new ResizeObserver(measure);
       ro.observe(el);
       return () => ro.disconnect();
-      // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
     }, [candidateSectionUserId]);
 
     // Smooth section handoff: as the next section's user card scrolls up to
@@ -635,7 +636,7 @@ export const MemoizedMessageList = memo(
       stickyPushBaseRef.current = stickyPushBase;
     }, [stickyPushBase]);
 
-    const applyStickyPush = useEffectEvent(() => {
+    const applyStickyPush = useStableCallback(() => {
       const el = stickySectionContentRef.current;
       if (!el) return;
       const base = stickyPushBaseRef.current;
@@ -649,7 +650,7 @@ export const MemoizedMessageList = memo(
       el.style.transform = push < 0 ? `translateY(${push}px)` : '';
     });
 
-    const handleViewportScroll = useEffectEvent(() => {
+    const handleViewportScroll = useStableCallback(() => {
       scrollTopAtLastScrollEventRef.current = scrollRef.current?.scrollTop ?? null;
       applyStickyPush();
       updateMountedSectionVisibility();

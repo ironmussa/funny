@@ -26,7 +26,7 @@ import { z } from 'zod';
 import * as runnerManager from '../../services/runner-manager.js';
 import type { RunnerRequest, RunnerResponse } from '../../services/runner-ports.js';
 import * as runnerResolver from '../../services/runner-resolver.js';
-import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
 import { buildProjectRunnerMatch, runnerRequestJson } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
@@ -78,7 +78,7 @@ describe('Thread creation — characterization', () => {
 
   beforeEach(() => {
     t.cleanup();
-    __resetRunnerScopeCache();
+    resetRunnerScopeCache();
     runnerAvailable = true;
     effects.length = 0;
     // Resolution is mocked below, but the authorized sink still certifies the

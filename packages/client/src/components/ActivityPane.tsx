@@ -24,6 +24,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
+import { useLoadDiffWhenMissing } from '@/hooks/use-load-diff-when-missing';
 import { useThreadChangedFiles } from '@/hooks/use-thread-changed-files';
 import { useTodoSnapshotsByAgent } from '@/hooks/use-todo-panel';
 import type { TodoSnapshot } from '@/hooks/use-todo-panel';
@@ -303,11 +304,7 @@ export function ActivityPane() {
     [threadId, diffCache, files],
   );
 
-  useEffect(() => {
-    if (expandedFile && !diffCache.has(expandedFile)) {
-      loadDiffForFile(expandedFile);
-    }
-  }, [expandedFile]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLoadDiffWhenMissing(expandedFile, diffCache, loadDiffForFile);
 
   const requestFullDiff = useCallback(
     async (
@@ -375,10 +372,9 @@ export function ActivityPane() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               onClick={() => useUIStore.getState().setReviewPaneOpen(false)}
-              className="text-muted-foreground"
               data-testid="activity-close"
             >
               <PanelRightClose className="icon-sm" />
@@ -446,8 +442,9 @@ export function ActivityPane() {
               />
             ) : filesLoading ? (
               <LoadingState
+                padding="sm"
                 fill={false}
-                className="px-4 py-3"
+                className="px-4"
                 label={t('activity.loadingFiles', 'Loading...')}
               />
             ) : (
@@ -465,7 +462,8 @@ export function ActivityPane() {
         }}
       >
         <DialogContent
-          className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col gap-0 overflow-hidden p-0"
+          flush
+          className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col overflow-hidden"
           data-testid="activity-expanded-diff-overlay"
         >
           {(() => {

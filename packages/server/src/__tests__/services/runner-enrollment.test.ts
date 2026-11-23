@@ -21,7 +21,7 @@ import { describe, test, expect, beforeAll, beforeEach, spyOn } from 'bun:test';
 import {
   signForwardedIdentity,
   verifyForwardedIdentity,
-  __resetForwardedIdentityNonceCacheForTests,
+  resetForwardedIdentityNonceCacheForTests,
 } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
@@ -183,7 +183,7 @@ describe('Runner Enrollment (device-link)', () => {
     });
 
     test('delivered forwardingKey round-trips with the per-runner signature only', async () => {
-      __resetForwardedIdentityNonceCacheForTests();
+      resetForwardedIdentityNonceCacheForTests();
       const started = await enroll.startEnrollment({ hostname: 'h', os: 'linux', ip: '' });
       await enroll.approve(started.userCode, 'user-1');
       const poll = await enroll.pollByToken(started.pollToken);

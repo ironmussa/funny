@@ -164,12 +164,12 @@ export function recordLoginSuccess(identifier: string): void {
 }
 
 /** Test helper — reset all state. Do not call from production code. */
-export function _resetLoginThrottle(): void {
+export function resetLoginThrottle(): void {
   records.clear();
   lastSweepAt = 0;
 }
 
 /** Test helper — number of tracked identifiers. Do not call from production code. */
-export function _loginThrottleSize(): number {
+export function loginThrottleSize(): number {
   return records.size;
 }

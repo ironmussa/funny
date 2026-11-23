@@ -12,7 +12,7 @@ import {
 import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireProject, requireThread } from '../../utils/route-helpers.js';
+import { requireCallerProject, requireProject, requireThread } from '../../utils/route-helpers.js';
 import { createCommandSchema, validate } from '../../validation/schemas.js';
 
 export const projectCommandsRoutes = new Hono<HonoEnv>();
@@ -269,12 +269,7 @@ projectCommandsRoutes.post('/:id/sync-processes', requireAdmin, async (c) => {
 // POST /api/projects/:id/sync-config — re-read the processes declared in .funny.json / Procfile
 projectCommandsRoutes.post('/:id/sync-config', requireAdmin, async (c) => {
   const projectId = requireRouteParam(c.req.param('id'), 'id');
-  const userId = c.get('userId');
-  const projectResult = await requireProject(
-    projectId,
-    userId,
-    c.get('organizationId') ?? undefined,
-  );
+  const projectResult = await requireCallerProject(c, projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 

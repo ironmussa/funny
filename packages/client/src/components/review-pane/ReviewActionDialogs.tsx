@@ -159,9 +159,10 @@ export function MergeBranchDialog({
           </label>
           {mergeDialog?.loading ? (
             <LoadingState
+              padding="sm"
               fill={false}
               layout="inline"
-              className="justify-start py-2"
+              className="justify-start"
               testId="merge-branches-loading"
               label={t('common.loading', 'Loading...')}
             />

@@ -117,7 +117,7 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
           </div>
         )}
         {commands.length === 0 ? (
-          <EmptyState fill={false} className="py-3" title={t('startup.noCommands')} />
+          <EmptyState padding="sm" fill={false} title={t('startup.noCommands')} />
         ) : (
           <div className="space-y-1">
             {commands.map((cmd) => {

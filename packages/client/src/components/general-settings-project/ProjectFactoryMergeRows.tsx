@@ -5,12 +5,18 @@
  * merge queue's batches (openspec factory-integration). One batch merges at a
  * time per repository; that is not a setting.
  */
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { proposeQueueCi } from '@/data/factory/actions';
 import { useFactoryFlowDefinition, useFactoryReadiness } from '@/data/factory/hooks';
 import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
+import { formatActionDuration } from '@/lib/github-actions';
+import { toastError } from '@/lib/toast-error';
 
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
@@ -142,6 +148,57 @@ function StageLimitInput({
   );
 }
 
+/** Open the issue that adds CI on the queue's branches, run by the factory (D12). */
+function ProposeQueueCi({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const propose = () => {
+    setBusy(true);
+    void proposeQueueCi(projectId)
+      .map((proposal) => {
+        if (proposal.queued) {
+          toast.success(
+            t(
+              'settings.projectFactoryQueueCiQueued',
+              'Issue #{{number}} opened and sent to the factory',
+              {
+                number: proposal.issueNumber,
+              },
+            ),
+          );
+        } else {
+          toast.warning(
+            t(
+              'settings.projectFactoryQueueCiNotQueued',
+              'Issue #{{number}} opened, but not sent to the factory: {{reason}}',
+              {
+                number: proposal.issueNumber,
+                reason: proposal.reason ?? '',
+              },
+            ),
+          );
+        }
+      })
+      .orTee((error) => toastError(error, 'factory'))
+      .match(
+        () => setBusy(false),
+        () => setBusy(false),
+      );
+  };
+  return (
+    <Button
+      size="xs"
+      variant="outline"
+      className="mt-2"
+      disabled={busy}
+      onClick={propose}
+      data-testid="settings-factory-propose-queue-ci"
+    >
+      {t('settings.projectFactoryQueueCiPropose', 'Open a factory run that adds the CI trigger')}
+    </Button>
+  );
+}
+
 /** How this repository merges now, and what to change for batches (D12). */
 function QueueReadiness({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
@@ -155,6 +212,11 @@ function QueueReadiness({ projectId }: { projectId: string }) {
       "Pull requests merge through GitHub's merge queue:",
     ),
   };
+  const drivers: Record<'weave' | 'git' | 'unknown', string> = {
+    weave: t('settings.projectFactoryMergeDriverWeave', 'weave'),
+    git: t('settings.projectFactoryMergeDriverGit', "git's own"),
+    unknown: t('settings.projectFactoryMergeDriverUnknown', 'known after the first integration'),
+  };
   return (
     <Alert className="mx-4 my-2 w-auto" data-testid="settings-factory-readiness">
       <AlertDescription>
@@ -166,6 +228,31 @@ function QueueReadiness({ projectId }: { projectId: string }) {
             ))}
           </ul>
         )}
+        <p className="mt-1" data-testid="settings-factory-readiness-driver">
+          {t('settings.projectFactoryMergeDriver', 'Merge driver on the runner: {{driver}}', {
+            driver: drivers[readiness.mergeDriver ?? 'unknown'],
+          })}
+        </p>
+        {readiness.medianCiMs !== null && (
+          <p data-testid="settings-factory-readiness-ci-time">
+            {t(
+              'settings.projectFactoryQueueCiTime',
+              'CI on a batch takes {{ci}} (median); the batch wait is {{wait}}',
+              {
+                ci: formatActionDuration(readiness.medianCiMs),
+                wait: formatActionDuration(readiness.batchWaitMs),
+              },
+            )}
+          </p>
+        )}
+        {readiness.advice.length > 0 && (
+          <ul className="mt-1 list-disc pl-4" data-testid="settings-factory-readiness-advice">
+            {readiness.advice.map((advice) => (
+              <li key={advice}>{advice}</li>
+            ))}
+          </ul>
+        )}
+        {readiness.queueCi === false && <ProposeQueueCi projectId={projectId} />}
       </AlertDescription>
     </Alert>
   );

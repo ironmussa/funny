@@ -38,6 +38,8 @@ function FrozenMessageInstance({ content }: { content: string }) {
   const nearRef = useRef(true);
   const [mode, setMode] = useState<'live' | 'frozen'>('live');
   const [frozenHeight, setFrozenHeight] = useState<number | null>(null);
+  // The effect checks the ref (captured once); the frozen render reads this copy.
+  const [capturedHtml, setCapturedHtml] = useState<string | null>(null);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -69,6 +71,7 @@ function FrozenMessageInstance({ content }: { content: string }) {
         const html = el2?.innerHTML ?? '';
         if (html && el2?.firstElementChild) {
           capturedHtmlRef.current = html;
+          setCapturedHtml(html);
           // The static markup is semantically identical but can have a
           // slightly different box tree. Retain the live height while this
           // offscreen row is frozen so its replacement cannot move the rows
@@ -102,7 +105,7 @@ function FrozenMessageInstance({ content }: { content: string }) {
     };
   }, [content, ctx]);
 
-  if (mode === 'frozen' && capturedHtmlRef.current !== null) {
+  if (mode === 'frozen' && capturedHtml !== null) {
     return (
       <div
         ref={wrapperRef}
@@ -110,7 +113,7 @@ function FrozenMessageInstance({ content }: { content: string }) {
         data-frozen="true"
         style={frozenHeight !== null ? { height: frozenHeight } : undefined}
         // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- sanitized Sätteri output, re-inserted verbatim
-        dangerouslySetInnerHTML={{ __html: capturedHtmlRef.current }}
+        dangerouslySetInnerHTML={{ __html: capturedHtml }}
       />
     );
   }

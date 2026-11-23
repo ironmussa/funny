@@ -272,11 +272,11 @@ export function BrowserPreview({
           </TooltipIconButton>
           {isRunning ? (
             <TooltipIconButton
+              variant="ghost-destructive"
               data-testid="browser-stop"
               tooltip="Stop"
               size="icon-sm"
               onClick={onStop}
-              className="text-destructive hover:text-destructive"
             >
               <Square className="icon-base fill-current" />
             </TooltipIconButton>

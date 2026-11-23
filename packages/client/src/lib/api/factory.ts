@@ -17,6 +17,7 @@ export type {
   FactoryFlowValidation,
   FactoryIssuelessFlow,
   FactoryMode,
+  FactoryQueueCiProposal,
   FactoryQueueClearResult,
   FactoryQueueRun,
   FactoryReadiness,
@@ -49,6 +50,8 @@ export const factoryApi = {
   getFlowDefinition: (projectId: string, flowName: string) =>
     trpcCall(() => procedures.flowDefinition.query({ projectId, flowName })),
   readiness: (projectId: string) => trpcCall(() => procedures.readiness.query({ projectId })),
+  proposeQueueCi: (projectId: string) =>
+    trpcCall(() => procedures.proposeQueueCi.mutate({ projectId })),
   validateFlow: (projectId: string, flowName: string) =>
     trpcCall(() => procedures.validateFlow.query({ projectId, flowName })),
   blockers: (projectId: string, issueNumbers: number[]) =>

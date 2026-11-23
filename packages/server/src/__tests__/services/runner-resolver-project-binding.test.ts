@@ -9,7 +9,7 @@ import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.
 import { findAnyRunnerForUser, findRunnerForProject } from '../../services/runner-manager.js';
 import { explainUnresolved, resolveRunner, uncacheThread } from '../../services/runner-resolver.js';
 import {
-  __resetRunnerScopeCache,
+  resetRunnerScopeCache,
   grantProjectRunner,
   setProjectDedicatedRunner,
 } from '../../services/runner-scope.js';
@@ -54,7 +54,7 @@ const resolve = (path: string, query: Record<string, string> = {}, userId = 'ali
 
 beforeEach(async () => {
   presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
-  __resetRunnerScopeCache();
+  resetRunnerScopeCache();
   for (const t of ['t-x', 't-y', 't-scratch']) uncacheThread(t);
   await bindTestDb();
   seedProject(testDb.db, { id: 'px', userId: 'alice', path: '/home/alice/x' });

@@ -17,7 +17,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join, relative, resolve, sep } from 'path';
 
 import type { AgentProvider } from '@funny/shared';
-import { type DomainError, badRequest, internal } from '@funny/shared/errors';
+import { type DomainError, badRequest, internal, errorMessage } from '@funny/shared/errors';
 import { getAttachmentLimits } from '@funny/shared/models';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 
@@ -109,7 +109,7 @@ export function uploadFile(params: UploadFileParams): ResultAsync<UploadFileResu
     log.error('uploadFile failed', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (e as Error).message,
+      error: errorMessage(e),
     });
     return internal('Upload failed');
   }).andThen((r) => r);
@@ -140,7 +140,7 @@ async function uploadFileImpl(
     log.error('uploadFile write failed', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (e as Error).message,
+      error: errorMessage(e),
     });
     return err(internal('Failed to write upload'));
   }

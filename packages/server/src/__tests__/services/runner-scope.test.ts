@@ -5,7 +5,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
 import {
-  __resetRunnerScopeCache,
+  resetRunnerScopeCache,
   canRunnerAccessProject,
   canRunnerServeProjectless,
   evaluateRunnerAccess,
@@ -40,7 +40,7 @@ function runner(id: string, userId: string, role: 'general' | 'dedicated' = 'gen
 }
 
 beforeEach(async () => {
-  __resetRunnerScopeCache();
+  resetRunnerScopeCache();
   await bindTestDb();
 });
 

@@ -6,7 +6,7 @@ import '@/i18n/config';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAuthStore } from '@/stores/auth-store';
 
-import { KanbanCard } from './KanbanView';
+import { KanbanCard } from './kanban/KanbanCard';
 
 // ── Helpers ──────────────────────────────────────────────────────
 

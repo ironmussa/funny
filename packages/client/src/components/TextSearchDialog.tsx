@@ -300,17 +300,17 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
             />
             <div className="flex gap-2">
               <Input
+                size="xs"
                 value={include}
                 onChange={(e) => setInclude(e.target.value)}
                 placeholder={t('textSearch.include', 'files to include (e.g. *.ts, src/**)')}
-                className="h-7 text-xs"
                 data-testid="text-search-include"
               />
               <Input
+                size="xs"
                 value={exclude}
                 onChange={(e) => setExclude(e.target.value)}
                 placeholder={t('textSearch.exclude', 'files to exclude')}
-                className="h-7 text-xs"
                 data-testid="text-search-exclude"
               />
             </div>

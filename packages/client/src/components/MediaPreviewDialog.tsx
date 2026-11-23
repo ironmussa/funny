@@ -1,5 +1,5 @@
 import { Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 
 import { MediaPreview } from '@/components/MediaPreview';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useBoxZoomPan } from '@/hooks/use-box-zoom-pan';
 import { detectMediaKind } from '@/lib/media-preview';
 import { isExternalUrl, toRawFileSrc } from '@/lib/raw-file-src';
@@ -52,7 +53,7 @@ export function MediaPreviewDialog({ open, onOpenChange, filePath }: MediaPrevie
             data-testid="media-preview-dialog"
           >
             <DialogHeader>
-              <DialogTitle className="truncate text-sm font-medium">
+              <DialogTitle size="sm" className="truncate font-medium">
                 {fileName ?? 'Preview'}
               </DialogTitle>
             </DialogHeader>
@@ -62,36 +63,6 @@ export function MediaPreviewDialog({ open, onOpenChange, filePath }: MediaPrevie
           </DialogContent>
         ))}
     </Dialog>
-  );
-}
-
-/** Toolbar icon button mirroring the Mermaid expanded-dialog controls. */
-function ToolbarButton({
-  onClick,
-  tip,
-  testId,
-  children,
-}: {
-  onClick: () => void;
-  tip: string;
-  testId: string;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClick}
-          className="text-muted-foreground"
-          data-testid={testId}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{tip}</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -118,35 +89,41 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
       onOpenAutoFocus={(e) => e.preventDefault()}
       data-testid="media-preview-dialog"
     >
-      <DialogHeader className="border-border shrink-0 border-b px-4 py-3">
-        <DialogTitle className="truncate text-sm font-medium">{name ?? 'Preview'}</DialogTitle>
+      <DialogHeader bordered>
+        <DialogTitle size="sm" className="truncate font-medium">
+          {name ?? 'Preview'}
+        </DialogTitle>
         <DialogDescription className="sr-only">Expanded image view</DialogDescription>
         <div className="flex items-center gap-1">
           <TooltipProvider>
             <span className="text-muted-foreground mr-1 text-xs" data-testid="media-preview-zoom">
               {Math.round(pz.scale * 100)}%
             </span>
-            <ToolbarButton
+            <TooltipIconButton
+              variant="muted"
+              size="icon-sm"
               onClick={() => pz.zoomBy(1 / 1.2)}
-              tip="Zoom out"
-              testId="media-preview-zoom-out"
+              tooltip="Zoom out"
+              data-testid="media-preview-zoom-out"
             >
               <ZoomOut className="icon-base" />
-            </ToolbarButton>
-            <ToolbarButton
+            </TooltipIconButton>
+            <TooltipIconButton
+              variant="muted"
+              size="icon-sm"
               onClick={() => pz.zoomBy(1.2)}
-              tip="Zoom in"
-              testId="media-preview-zoom-in"
+              tooltip="Zoom in"
+              data-testid="media-preview-zoom-in"
             >
               <ZoomIn className="icon-base" />
-            </ToolbarButton>
+            </TooltipIconButton>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={pz.reset}
-                  className="text-muted-foreground text-xs"
+                  className="text-xs"
                   data-testid="media-preview-zoom-reset"
                 >
                   1:1
@@ -154,17 +131,19 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
               </TooltipTrigger>
               <TooltipContent>Reset zoom</TooltipContent>
             </Tooltip>
-            <ToolbarButton
+            <TooltipIconButton
+              variant="muted"
+              size="icon-sm"
               onClick={() => setIsFullscreen((p) => !p)}
-              tip={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-              testId="media-preview-fullscreen"
+              tooltip={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              data-testid="media-preview-fullscreen"
             >
               {isFullscreen ? (
                 <Minimize2 className="icon-base" />
               ) : (
                 <Maximize2 className="icon-base" />
               )}
-            </ToolbarButton>
+            </TooltipIconButton>
           </TooltipProvider>
         </div>
       </DialogHeader>

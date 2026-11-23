@@ -190,12 +190,11 @@ export function ProjectFilesPane() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleCollapseAll}
               disabled={!basePath || files.length === 0}
               data-testid="project-files-collapse-all"
-              className="text-muted-foreground"
             >
               <FolderMinus className="icon-base" />
             </Button>
@@ -207,12 +206,11 @@ export function ProjectFilesPane() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={handleExpandAll}
               disabled={!basePath || files.length === 0}
               data-testid="project-files-expand-all"
-              className="text-muted-foreground"
             >
               <FolderOpen className="icon-base" />
             </Button>
@@ -224,12 +222,11 @@ export function ProjectFilesPane() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               onClick={loadFiles}
               disabled={loading || !basePath}
               data-testid="project-files-refresh"
-              className="text-muted-foreground"
             >
               <RefreshCw className={loading ? 'icon-base animate-spin' : 'icon-base'} />
             </Button>

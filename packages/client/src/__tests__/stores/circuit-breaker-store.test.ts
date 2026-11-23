@@ -24,20 +24,20 @@ describe('useCircuitBreakerStore', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     // Reset store to initial state
-    const { _cooldownTimer } = useCircuitBreakerStore.getState();
-    if (_cooldownTimer) clearTimeout(_cooldownTimer);
+    const { cooldownTimer } = useCircuitBreakerStore.getState();
+    if (cooldownTimer) clearTimeout(cooldownTimer);
     useCircuitBreakerStore.setState({
       state: 'closed',
       failureCount: 0,
-      _cooldownTimer: null,
+      cooldownTimer: null,
     });
     mockFetch.mockReset();
   });
 
   afterEach(() => {
     // Clean up any pending timers
-    const { _cooldownTimer } = useCircuitBreakerStore.getState();
-    if (_cooldownTimer) clearTimeout(_cooldownTimer);
+    const { cooldownTimer } = useCircuitBreakerStore.getState();
+    if (cooldownTimer) clearTimeout(cooldownTimer);
     vi.useRealTimers();
   });
 
@@ -51,7 +51,7 @@ describe('useCircuitBreakerStore', () => {
     });
 
     test('cooldown timer is null', () => {
-      expect(useCircuitBreakerStore.getState()._cooldownTimer).toBeNull();
+      expect(useCircuitBreakerStore.getState().cooldownTimer).toBeNull();
     });
   });
 
@@ -83,7 +83,7 @@ describe('useCircuitBreakerStore', () => {
 
     test('starts cooldown timer when transitioning to open', async () => {
       await openCircuit();
-      expect(useCircuitBreakerStore.getState()._cooldownTimer).not.toBeNull();
+      expect(useCircuitBreakerStore.getState().cooldownTimer).not.toBeNull();
     });
   });
 
@@ -133,10 +133,10 @@ describe('useCircuitBreakerStore', () => {
 
     test('clears cooldown timer', async () => {
       await openCircuit();
-      expect(useCircuitBreakerStore.getState()._cooldownTimer).not.toBeNull();
+      expect(useCircuitBreakerStore.getState().cooldownTimer).not.toBeNull();
 
       useCircuitBreakerStore.getState().recordSuccess();
-      expect(useCircuitBreakerStore.getState()._cooldownTimer).toBeNull();
+      expect(useCircuitBreakerStore.getState().cooldownTimer).toBeNull();
     });
 
     test('resets from closed state as well (no-op effectively)', () => {
@@ -167,11 +167,11 @@ describe('useCircuitBreakerStore', () => {
       useCircuitBreakerStore.setState({
         state: 'half-open',
         failureCount: 3,
-        _cooldownTimer: null,
+        cooldownTimer: null,
       });
 
       useCircuitBreakerStore.getState().recordFailure();
-      expect(useCircuitBreakerStore.getState()._cooldownTimer).not.toBeNull();
+      expect(useCircuitBreakerStore.getState().cooldownTimer).not.toBeNull();
     });
   });
 
@@ -191,13 +191,13 @@ describe('useCircuitBreakerStore', () => {
 
     test('clears existing cooldown timer', async () => {
       const timer = setTimeout(() => {}, 99999);
-      useCircuitBreakerStore.setState({ state: 'open', failureCount: 3, _cooldownTimer: timer });
+      useCircuitBreakerStore.setState({ state: 'open', failureCount: 3, cooldownTimer: timer });
 
       mockFetch.mockResolvedValueOnce({ ok: true });
 
       await useCircuitBreakerStore.getState().retryNow();
       // The old timer should have been cleared (new state has null timer after success)
-      expect(useCircuitBreakerStore.getState()._cooldownTimer).toBeNull();
+      expect(useCircuitBreakerStore.getState().cooldownTimer).toBeNull();
       clearTimeout(timer);
     });
 

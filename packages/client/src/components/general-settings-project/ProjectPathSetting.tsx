@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface Props {
@@ -54,8 +55,7 @@ export function ProjectPathSetting({ projectId, currentPath }: Props) {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
+    await whilePending(setSaving, async () => {
       const res = await trySave(value.trim());
       if (!res.ok) {
         if (GIT_INIT_TRIGGERS.some((s) => res.message.includes(s))) {
@@ -64,15 +64,12 @@ export function ProjectPathSetting({ projectId, currentPath }: Props) {
           toast.error(res.message, { id: 'project-settings-saved' });
         }
       }
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const handleGitInit = async () => {
     setGitInitOpen(false);
-    setSaving(true);
-    try {
+    await whilePending(setSaving, async () => {
       const path = value.trim();
       const initResult = await api.gitInit(path);
       if (initResult.isErr()) {
@@ -81,9 +78,7 @@ export function ProjectPathSetting({ projectId, currentPath }: Props) {
       }
       const res = await trySave(path);
       if (!res.ok) toast.error(res.message, { id: 'project-settings-saved' });
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   return (

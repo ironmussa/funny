@@ -19,6 +19,7 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { sendTerminalRealtime } from '@/hooks/use-ws';
@@ -75,7 +76,6 @@ export function TerminalPanel() {
   }, [fetchAvailableShells]);
 
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
-  const [searchVisible, setSearchVisible] = useState(false);
   const newTermMenu = useTooltipMenu();
   const startHeight = useRef(panelHeight);
 
@@ -107,6 +107,9 @@ export function TerminalPanel() {
     return visibleTabs[visibleTabs.length - 1]?.id ?? null;
   }, [activeTabId, visibleTabs]);
 
+  // Search closes when the active tab changes.
+  const [searchVisible, setSearchVisible] = useResettableState(false, [effectiveActiveTabId]);
+
   const handleNewTerminal = useCallback(
     (shell: TerminalShell) => {
       if (terminalScope.scopeId)
@@ -120,7 +123,7 @@ export function TerminalPanel() {
     const handler = () => setSearchVisible(true);
     window.addEventListener('terminal:search-open', handler);
     return () => window.removeEventListener('terminal:search-open', handler);
-  }, []);
+  }, [setSearchVisible]);
 
   const closeSearch = useCallback(() => {
     setSearchVisible(false);
@@ -129,12 +132,7 @@ export function TerminalPanel() {
       addon?.clearDecorations();
       terminalRegistry.get(effectiveActiveTabId)?.focus();
     }
-  }, [effectiveActiveTabId]);
-
-  // Close search when the active tab changes
-  useEffect(() => {
-    setSearchVisible(false);
-  }, [effectiveActiveTabId]);
+  }, [effectiveActiveTabId, setSearchVisible]);
 
   useTerminalTabReorder(selectedProjectId, reorderTabs);
 

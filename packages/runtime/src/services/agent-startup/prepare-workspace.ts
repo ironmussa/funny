@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 
 import { syncClaudeProjectAssets } from '@funny/core/ports';
+import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../../lib/logger.js';
 
@@ -18,7 +19,7 @@ export function syncWorktreeProjectAssets(
       threadId,
       projectPath,
       worktreePath,
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
   }
 }
@@ -41,7 +42,7 @@ export function ensureLazyCwd(threadId: string, userId: string, cwd: string): vo
       namespace: 'scratch-threads',
       threadId,
       cwd,
-      error: (mkErr as Error).message,
+      error: errorMessage(mkErr),
     });
     throw mkErr;
   }

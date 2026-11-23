@@ -48,13 +48,7 @@ export function ReviewPaneTabsHeader({ onClose }: { onClose: () => void }) {
       </TabsList>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            className="text-muted-foreground"
-            data-testid="review-close"
-          >
+          <Button variant="muted" size="icon-sm" onClick={onClose} data-testid="review-close">
             <PanelRightClose className="icon-base" />
           </Button>
         </TooltipTrigger>

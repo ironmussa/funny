@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface OrgEntry {
@@ -46,46 +47,51 @@ export function OrganizationManagement() {
   const loadProjects = useProjectStore((s) => s.loadProjects);
 
   const loadOrgs = useCallback(async () => {
-    try {
-      const session = await authClient.getSession();
-      setActiveOrgId(activeOrganizationIdFromSession(session.data));
+    return withCleanup(
+      async () => {
+        try {
+          const session = await authClient.getSession();
+          setActiveOrgId(activeOrganizationIdFromSession(session.data));
 
-      const res = await authClient.organization.list();
-      if (res.data) {
-        setOrgs(
-          res.data.map((o: any) => ({
-            id: o.id,
-            name: o.name,
-            slug: o.slug,
-            createdAt: o.createdAt || '',
-          })),
-        );
-        // Build membership map (orgId -> role)
-        const memberMap = new Map<string, string>();
-        const currentUserId = session.data?.user?.id;
-        const fulls = await Promise.all(
-          res.data.map((org) =>
-            authClient.organization
-              .getFullOrganization({ query: { organizationId: (org as any).id } })
-              .catch(() => null),
-          ),
-        );
-        for (let i = 0; i < res.data.length; i++) {
-          const full = fulls[i];
-          if (full?.data) {
-            const me = (full.data as any).members?.find((m: any) => m.userId === currentUserId);
-            if (me) {
-              memberMap.set((res.data[i] as any).id, me.role);
+          const res = await authClient.organization.list();
+          if (res.data) {
+            setOrgs(
+              res.data.map((o: any) => ({
+                id: o.id,
+                name: o.name,
+                slug: o.slug,
+                createdAt: o.createdAt || '',
+              })),
+            );
+            // Build membership map (orgId -> role)
+            const memberMap = new Map<string, string>();
+            const currentUserId = session.data?.user?.id;
+            const fulls = await Promise.all(
+              res.data.map((org) =>
+                authClient.organization
+                  .getFullOrganization({ query: { organizationId: (org as any).id } })
+                  .catch(() => null),
+              ),
+            );
+            for (let i = 0; i < res.data.length; i++) {
+              const full = fulls[i];
+              if (full?.data) {
+                const me = (full.data as any).members?.find((m: any) => m.userId === currentUserId);
+                if (me) {
+                  memberMap.set((res.data[i] as any).id, me.role);
+                }
+              }
             }
+            setMemberships(memberMap);
           }
+        } catch (err) {
+          console.error('[OrganizationManagement] Failed to load orgs:', err);
         }
-        setMemberships(memberMap);
-      }
-    } catch (err) {
-      console.error('[OrganizationManagement] Failed to load orgs:', err);
-    } finally {
-      setLoading(false);
-    }
+      },
+      () => {
+        setLoading(false);
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -97,22 +103,21 @@ export function OrganizationManagement() {
     const trimmedSlug = slug.trim() || slugify(trimmedName);
     if (!trimmedName || !trimmedSlug) return;
 
-    setCreating(true);
-    try {
-      await authClient.organization.create({
-        name: trimmedName,
-        slug: trimmedSlug,
-      });
-      toast.success(`Organization "${trimmedName}" created`);
-      setName('');
-      setSlug('');
-      slugManuallyEditedRef.current = false;
-      await loadOrgs();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create organization');
-    } finally {
-      setCreating(false);
-    }
+    await whilePending(setCreating, async () => {
+      try {
+        await authClient.organization.create({
+          name: trimmedName,
+          slug: trimmedSlug,
+        });
+        toast.success(`Organization "${trimmedName}" created`);
+        setName('');
+        setSlug('');
+        slugManuallyEditedRef.current = false;
+        await loadOrgs();
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to create organization');
+      }
+    });
   }, [name, slug, loadOrgs]);
 
   const handleSetActive = useCallback(
@@ -131,23 +136,22 @@ export function OrganizationManagement() {
 
   const handleDelete = useCallback(async () => {
     if (!deleteConfirm) return;
-    setDeleting(true);
-    try {
-      await authClient.organization.delete({
-        organizationId: deleteConfirm.id,
-      });
-      toast.success(`Organization "${deleteConfirm.name}" deleted`);
-      setDeleteConfirm(null);
-      await loadOrgs();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete organization');
-    } finally {
-      setDeleting(false);
-    }
+    await whilePending(setDeleting, async () => {
+      try {
+        await authClient.organization.delete({
+          organizationId: deleteConfirm.id,
+        });
+        toast.success(`Organization "${deleteConfirm.name}" deleted`);
+        setDeleteConfirm(null);
+        await loadOrgs();
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to delete organization');
+      }
+    });
   }, [deleteConfirm, loadOrgs]);
 
   if (loading) {
-    return <LoadingState fill={false} className="py-12" label="Loading organizations…" />;
+    return <LoadingState padding="lg" fill={false} label="Loading organizations…" />;
   }
 
   return (
@@ -189,6 +193,7 @@ export function OrganizationManagement() {
                 Slug
               </label>
               <Input
+                mono
                 id="organization-slug"
                 value={slug}
                 onChange={(e) => {
@@ -196,7 +201,6 @@ export function OrganizationManagement() {
                   slugManuallyEditedRef.current = true;
                 }}
                 placeholder="my-organization"
-                className="font-mono text-sm"
                 data-testid="org-create-slug"
               />
             </div>
@@ -219,8 +223,8 @@ export function OrganizationManagement() {
       <div className="settings-card">
         {orgs.length === 0 ? (
           <EmptyState
+            padding="md"
             fill={false}
-            className="px-4 py-6"
             title="No organizations yet. Create one above to get started."
           />
         ) : (
@@ -235,17 +239,10 @@ export function OrganizationManagement() {
                   <div className="flex items-center gap-2">
                     <Building2 className="icon-base text-muted-foreground shrink-0" />
                     <p className="text-foreground truncate text-sm font-medium">{org.name}</p>
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge size="xs" variant="secondary">
                       {role}
                     </Badge>
-                    {isActive && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-status-success/15 text-status-success dark:text-status-success"
-                      >
-                        Active
-                      </Badge>
-                    )}
+                    {isActive && <Badge variant="success">Active</Badge>}
                   </div>
                   <p className="text-muted-foreground ml-6 text-xs">{org.slug}</p>
                 </div>
@@ -263,9 +260,9 @@ export function OrganizationManagement() {
                   )}
                   {isOwner && (
                     <Button
-                      variant="ghost"
+                      variant="muted-destructive"
                       size="icon"
-                      className="text-muted-foreground hover:text-destructive size-8"
+                      className="size-8"
                       onClick={() => setDeleteConfirm(org)}
                       data-testid={`org-delete-${org.id}`}
                     >

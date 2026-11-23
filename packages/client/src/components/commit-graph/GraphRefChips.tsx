@@ -302,14 +302,14 @@ function branchActionForRef(ref: FoldedRef, summary: GraphBranchSummary | undefi
 }
 
 function BranchChipStatus({
-  ref,
+  gitRef,
   summary,
 }: {
-  ref: FoldedRef;
+  gitRef: FoldedRef;
   summary: GraphBranchSummary | undefined;
 }) {
   const { t } = useTranslation();
-  const status = branchChipStatusMeta(t, ref, summary);
+  const status = branchChipStatusMeta(t, gitRef, summary);
   if (!status) return null;
 
   const StatusIcon = status.icon;
@@ -318,12 +318,12 @@ function BranchChipStatus({
       <TooltipTrigger asChild>
         <span
           className="text-3xs inline-flex shrink-0 items-center gap-0.5 rounded-full bg-black/15 px-1 py-px leading-none font-semibold"
-          data-testid={`graph-branch-status-${ref.name}`}
+          data-testid={`graph-branch-status-${gitRef.name}`}
         >
           <StatusIcon
             className="icon-2xs"
             aria-hidden="true"
-            data-testid={`graph-branch-status-icon-${ref.name}`}
+            data-testid={`graph-branch-status-icon-${gitRef.name}`}
           />
           {status.label ? <span>{status.label}</span> : null}
         </span>
@@ -388,14 +388,14 @@ function CopyableRefValue({
 }
 
 function BranchRefDetail({
-  ref,
+  gitRef,
   summary,
   githubBrowseBaseUrl,
   actionInProgress,
   onPushBranch,
   onPullCurrentBranch,
 }: {
-  ref: FoldedRef;
+  gitRef: FoldedRef;
   summary: GraphBranchSummary | undefined;
   githubBrowseBaseUrl: string | null;
   actionInProgress: string | null;
@@ -403,7 +403,7 @@ function BranchRefDetail({
   onPullCurrentBranch: (branch: string) => void;
 }) {
   const { t } = useTranslation();
-  const action = branchActionForRef(ref, summary);
+  const action = branchActionForRef(gitRef, summary);
   const ActionIcon = action?.icon;
   const busy = !!action && actionInProgress === action.key;
   const githubUrl =
@@ -412,12 +412,12 @@ function BranchRefDetail({
       : null;
 
   return (
-    <div className="flex flex-col gap-3 text-xs" data-testid={`graph-branch-detail-${ref.name}`}>
+    <div className="flex flex-col gap-3 text-xs" data-testid={`graph-branch-detail-${gitRef.name}`}>
       <div className="min-w-0">
         <div className="text-muted-foreground text-2xs font-medium uppercase">
           {t('graph.branch', 'Branch')}
         </div>
-        <div className="truncate font-mono font-semibold">{summary?.branch ?? ref.name}</div>
+        <div className="truncate font-mono font-semibold">{summary?.branch ?? gitRef.name}</div>
       </div>
 
       <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
@@ -443,13 +443,7 @@ function BranchRefDetail({
         <div className="border-border/70 flex border-t pt-3">
           <div className="flex flex-wrap gap-2">
             {githubUrl ? (
-              <Button
-                asChild
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 px-2 text-xs"
-              >
+              <Button asChild type="button" variant="outline" size="xs" className="gap-1.5">
                 <a
                   href={githubUrl}
                   target="_blank"
@@ -465,9 +459,9 @@ function BranchRefDetail({
               <Button
                 type="button"
                 variant="default"
-                size="sm"
+                size="xs"
                 aria-label={branchActionTooltip(t, summary)}
-                className="h-7 gap-1.5 px-2 text-xs"
+                className="gap-1.5"
                 disabled={!!actionInProgress}
                 onClick={(event) => {
                   event.preventDefault();
@@ -492,7 +486,7 @@ function BranchRefDetail({
 }
 
 function GraphRefChip({
-  ref,
+  gitRef,
   summary,
   githubBrowseBaseUrl,
   actionInProgress,
@@ -504,7 +498,7 @@ function GraphRefChip({
   onPushBranch,
   onPullCurrentBranch,
 }: {
-  ref: FoldedRef;
+  gitRef: FoldedRef;
   summary: GraphBranchSummary | undefined;
   githubBrowseBaseUrl: string | null;
   actionInProgress: string | null;
@@ -517,13 +511,13 @@ function GraphRefChip({
   onPullCurrentBranch: (branch: string) => void;
 }) {
   const { t } = useTranslation();
-  const displayName = displayNameForRef(ref);
+  const displayName = displayNameForRef(gitRef);
 
   return (
     <div
       className={cn(
         'inline-flex max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
-        isMergedRef(ref) && 'opacity-60',
+        isMergedRef(gitRef) && 'opacity-60',
       )}
       style={{
         height: GRAPH_REF_CHIP_HEIGHT_PX,
@@ -532,8 +526,8 @@ function GraphRefChip({
         // The thread's chip is outlined in a darker shade of its own color.
         boxShadow: isThreadBranch ? `0 0 0 1.5px ${darkenHex(color, 0.35)}` : undefined,
       }}
-      data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
-      data-merged={isMergedRef(ref) || undefined}
+      data-testid={`graph-ref-chip-${gitRef.kind}:${gitRef.name}`}
+      data-merged={isMergedRef(gitRef) || undefined}
       data-thread-branch={isThreadBranch || undefined}
     >
       <Popover>
@@ -541,16 +535,16 @@ function GraphRefChip({
           <button
             type="button"
             className="focus-visible:ring-ring/70 inline-flex min-w-0 items-center gap-0.5 rounded-full px-0.5 text-left outline-hidden focus-visible:ring-1"
-            aria-label={tooltipForRef(t, ref, summary)}
+            aria-label={tooltipForRef(t, gitRef, summary)}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
-            data-testid={`graph-branch-info-${ref.name}`}
+            data-testid={`graph-branch-info-${gitRef.name}`}
           >
-            {renderRefIcon(ref, summary)}
+            {renderRefIcon(gitRef, summary)}
             <span
               className={cn(
                 'truncate text-2xs leading-tight font-medium whitespace-nowrap',
-                ref.kind === 'local' && ref.isCurrent && 'font-bold',
+                gitRef.kind === 'local' && gitRef.isCurrent && 'font-bold',
               )}
             >
               {hasSearchQuery ? (
@@ -559,7 +553,7 @@ function GraphRefChip({
                 displayName
               )}
             </span>
-            <BranchChipStatus ref={ref} summary={summary} />
+            <BranchChipStatus gitRef={gitRef} summary={summary} />
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -569,7 +563,7 @@ function GraphRefChip({
           onClick={(event) => event.stopPropagation()}
         >
           <BranchRefDetail
-            ref={ref}
+            gitRef={gitRef}
             summary={summary}
             githubBrowseBaseUrl={githubBrowseBaseUrl}
             actionInProgress={actionInProgress}
@@ -615,15 +609,15 @@ export function GraphRefChips({
       style={{ gap: GRAPH_REF_CHIP_GAP_PX }}
       data-testid="graph-ref-chips"
     >
-      {refs.map((ref) => {
-        const branchName = branchNameForRef(ref);
+      {refs.map((gitRef) => {
+        const branchName = branchNameForRef(gitRef);
         const summary = branchName ? branchSummaryByName.get(branchName) : undefined;
-        const isThreadBranch = isThreadBranchRef(ref, threadBranch);
+        const isThreadBranch = isThreadBranchRef(gitRef, threadBranch);
 
         const chip = (
           <GraphRefChip
-            key={`${ref.kind}:${ref.name}`}
-            ref={ref}
+            key={`${gitRef.kind}:${gitRef.name}`}
+            gitRef={gitRef}
             summary={summary}
             githubBrowseBaseUrl={githubBrowseBaseUrl}
             actionInProgress={actionInProgress}
@@ -641,11 +635,11 @@ export function GraphRefChips({
         // thread's branch never shifts its chip out of line with the others.
         return (
           <div
-            key={`${ref.kind}:${ref.name}`}
+            key={`${gitRef.kind}:${gitRef.name}`}
             className="relative flex max-w-full min-w-0 items-center"
           >
             <span className="absolute top-1/2 right-full mr-0.5 inline-flex -translate-y-1/2">
-              <ThreadBranchMarker branch={ref.name} color={color} />
+              <ThreadBranchMarker branch={gitRef.name} color={color} />
             </span>
             {chip}
           </div>

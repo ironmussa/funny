@@ -11,7 +11,8 @@ import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
 import { readProject } from '@/data/projects/read';
 import { useQueuedCount } from '@/data/queue/hooks';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
-import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { useKnownMessageIds } from '@/hooks/use-known-message-ids';
+import { useTodoSnapshotIndex } from '@/hooks/use-todo-panel';
 import { sessionChangesFromEvents } from '@/lib/session-changes-from-events';
 import {
   canDoGitOps,
@@ -108,26 +109,9 @@ export function ThreadConversation({
     useThreadCheckpoints(checkpointRefs);
 
   // Track which message/tool-call IDs existed when the thread was loaded.
-  const knownIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (stableMessages) {
-      for (const m of stableMessages) {
-        ids.add(m.id);
-        if (m.toolCalls) for (const tc of m.toolCalls) ids.add(tc.id);
-      }
-    }
-    return ids;
-    // Capture only the messages present when this thread becomes active. New
-    // messages must remain absent so the stream can animate their entrance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeThread?.id]);
+  const knownIds = useKnownMessageIds(activeThread?.id, stableMessages);
 
-  const snapshots = useTodoSnapshots();
-  const snapshotMap = useMemo(() => {
-    const next = new Map<string, number>();
-    snapshots.forEach((s, i) => next.set(s.toolCallId, i));
-    return next;
-  }, [snapshots]);
+  const snapshotMap = useTodoSnapshotIndex();
 
   const internalLightbox = useImageLightbox();
   const openLightbox = onOpenLightbox ?? internalLightbox.openLightbox;

@@ -6,6 +6,7 @@ import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureHighlight, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { markdownFileBasePath } from '@/lib/markdown-file-links';
 import { cn } from '@/lib/utils';
@@ -43,9 +44,10 @@ export function WriteFileCard({
   const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
   const isMarkdown = filePath ? isMarkdownFile(filePath) : false;
-  const [renderMarkdown, setRenderMarkdown] = useState(isMarkdown);
-
-  useEffect(() => setRenderMarkdown(isMarkdown), [filePath, isMarkdown]);
+  const [renderMarkdown, setRenderMarkdown] = useResettableState(isMarkdown, [
+    filePath,
+    isMarkdown,
+  ]);
 
   const hljsLang = ext ? extToHljsLang(ext) : 'plaintext';
   const [highlighted, setHighlighted] = useState<string | null>(null);

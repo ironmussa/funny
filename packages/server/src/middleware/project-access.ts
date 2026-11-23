@@ -60,7 +60,7 @@ export function createProjectAccessMiddleware(getRole: ProjectRoleResolver) {
         getRole,
         capability,
         c.req.param(param),
-        c.get('userId') as string,
+        c.get('userId'),
         forbidden,
       );
       if (refused) return c.json({ error: refused.message }, refused.status);

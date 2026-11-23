@@ -233,13 +233,13 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
 
 // Ref-count for explicit registrations from live columns. A thread is
 // kept in `threadDataById` while EITHER it's the selected thread (implicit
-// anchor) OR refcount > 0. When both drop, `_evictIfUnreferenced` removes
+// anchor) OR refcount > 0. When both drop, `evictIfUnreferenced` removes
 // the payload so memory doesn't grow without bound.
-const _liveThreadRefCounts = new Map<string, number>();
+const liveThreadRefCounts = new Map<string, number>();
 
 /** Read the explicit refcount for a thread (0 when not registered). */
-function _refCount(threadId: string): number {
-  return _liveThreadRefCounts.get(threadId) ?? 0;
+function liveRefCount(threadId: string): number {
+  return liveThreadRefCounts.get(threadId) ?? 0;
 }
 
 /**
@@ -247,8 +247,8 @@ function _refCount(threadId: string): number {
  * (refcount === 0 AND thread is not the currently selected one). Caller
  * is responsible for invoking after a refcount/select change.
  */
-function _evictIfUnreferenced(threadId: string): void {
-  if (_refCount(threadId) > 0) return;
+function evictIfUnreferenced(threadId: string): void {
+  if (liveRefCount(threadId) > 0) return;
   const state = useThreadStore.getState();
   if (state.selectedThreadId === threadId) return;
   if (!(threadId in state.threadDataById)) return;
@@ -372,7 +372,7 @@ function isAgentActive(state: ThreadState, threadId: string): boolean {
  */
 function forgetThread(threadId: string): void {
   cleanupThreadActor(threadId);
-  _liveThreadRefCounts.delete(threadId);
+  liveThreadRefCounts.delete(threadId);
   useThreadStore.setState((state) => mutations.clearThreadData(state, threadId));
   if (useThreadStore.getState().selectedThreadId === threadId) {
     useThreadStore.setState({ selectedThreadId: null, activeThread: null });
@@ -486,7 +486,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // eviction to the post-load path below, after `setThreadData(threadId)`
       // has repointed `activeThread` at the new thread.
       if (prevSelectedId && prevSelectedId !== threadId && !keepStale) {
-        _evictIfUnreferenced(prevSelectedId);
+        evictIfUnreferenced(prevSelectedId);
       }
 
       if (!threadId) return;
@@ -509,7 +509,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           // the view would wait on a payload that is never coming.
           set({ selectedThreadId: null, activeThread: null, threadLoadFailedId: threadId });
           // Drop any half-populated entry too so a retry starts clean.
-          _evictIfUnreferenced(threadId);
+          evictIfUnreferenced(threadId);
         }
         return;
       }
@@ -594,7 +594,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // missing from `threadDataById`. Now that `setThreadData` has repointed
       // `activeThread` at the new thread, it's safe to drop the old payload.
       if (keepStale && prevSelectedId && prevSelectedId !== threadId) {
-        _evictIfUnreferenced(prevSelectedId);
+        evictIfUnreferenced(prevSelectedId);
       }
 
       bridgeSelectProject(projectId);
@@ -1215,7 +1215,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         // map mutations.
         let working: ThreadState = { ...state, ...patch } as ThreadState;
         for (const id of ids) {
-          _liveThreadRefCounts.delete(id);
+          liveThreadRefCounts.delete(id);
           const sub = mutations.clearThreadData(working, id);
           Object.assign(patch, sub);
           working = Object.assign({ ...working }, sub) as ThreadState;
@@ -1238,8 +1238,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   // evicted from the map only when BOTH anchors drop.
 
   registerLiveThread: async (threadId) => {
-    const prev = _liveThreadRefCounts.get(threadId) ?? 0;
-    _liveThreadRefCounts.set(threadId, prev + 1);
+    const prev = liveThreadRefCounts.get(threadId) ?? 0;
+    liveThreadRefCounts.set(threadId, prev + 1);
 
     // Already hydrated (either by a previous register or because it's the
     // selected thread) — just hold the anchor.
@@ -1256,20 +1256,20 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     // Refcount may have dropped while fetching (unmount, race) — only land
     // the data if someone still wants it.
-    if ((_liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
+    if ((liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
     settlePreSendStateFromFetch(result.value.id, result.value.status);
     adoptThreadDetail(result.value);
     set((state) => mutations.setThreadData(state, threadId, result.value as ThreadWithMessages));
   },
 
   unregisterLiveThread: (threadId) => {
-    const count = (_liveThreadRefCounts.get(threadId) ?? 1) - 1;
+    const count = (liveThreadRefCounts.get(threadId) ?? 1) - 1;
     if (count > 0) {
-      _liveThreadRefCounts.set(threadId, count);
+      liveThreadRefCounts.set(threadId, count);
       return;
     }
-    _liveThreadRefCounts.delete(threadId);
-    _evictIfUnreferenced(threadId);
+    liveThreadRefCounts.delete(threadId);
+    evictIfUnreferenced(threadId);
   },
 
   // ── WebSocket event handlers (delegated) ─────────────────────

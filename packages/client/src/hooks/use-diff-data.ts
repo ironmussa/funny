@@ -1,4 +1,4 @@
-import type { FileDiffSummary } from '@funny/shared';
+import type { DiffSummaryResponse, FileDiffSummary } from '@funny/shared';
 import {
   useCallback,
   useEffect,
@@ -10,9 +10,12 @@ import {
 
 import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
+import { useLoadDiffWhenMissing } from '@/hooks/use-load-diff-when-missing';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { metric } from '@/lib/telemetry';
+import { withCleanup } from '@/lib/while-pending';
 
 interface UseDiffDataArgs {
   hasGitContext: boolean;
@@ -88,6 +91,75 @@ function dirtySignalScope(
  * Final piece of the ReviewPane god-file split — see
  * .claude/plans/reviewpane-split.md.
  */
+/** A file whose diff a refresh reloads, with the side (staged or not) it shows. */
+interface DiffLoad {
+  path: string;
+  staged: boolean;
+}
+
+/**
+ * What a refresh reloads: the selected file (or the first one when the
+ * selection is gone) and the expanded file when it is a different one.
+ */
+function planDiffReload(
+  files: FileDiffSummary[],
+  selectedFile: string | null,
+  expandedFile: string | null,
+): { fileToLoad: string | null; loads: DiffLoad[] } {
+  const paths = new Set(files.map((f) => f.path));
+  const fileToLoad = pickFileToLoad(files, paths, selectedFile);
+  const expanded = pickExpandedFile(paths, expandedFile, fileToLoad);
+  const loads = [loadFor(files, fileToLoad), loadFor(files, expanded)].filter(
+    (load): load is DiffLoad => load !== null,
+  );
+  return { fileToLoad, loads };
+}
+
+function pickFileToLoad(
+  files: FileDiffSummary[],
+  paths: Set<string>,
+  selectedFile: string | null,
+): string | null {
+  if (selectedFile && paths.has(selectedFile)) return selectedFile;
+  return firstPath(files);
+}
+
+function firstPath(files: FileDiffSummary[]): string | null {
+  return files[0]?.path ?? null;
+}
+
+function pickExpandedFile(
+  paths: Set<string>,
+  expandedFile: string | null,
+  fileToLoad: string | null,
+): string | null {
+  return expandedFile && expandedFile !== fileToLoad && paths.has(expandedFile)
+    ? expandedFile
+    : null;
+}
+
+function loadFor(files: FileDiffSummary[], path: string | null): DiffLoad | null {
+  const summary = path ? files.find((s) => s.path === path) : undefined;
+  return summary ? { path: summary.path, staged: summary.staged } : null;
+}
+
+/**
+ * The checked files after a refresh: files that left the list are dropped, and
+ * new files are checked when nothing was checked or the list grew. An empty
+ * result checks every file.
+ */
+function nextCheckedFiles(prev: Set<string>, files: FileDiffSummary[]): Set<string> {
+  const paths = files.map((f) => f.path);
+  const current = new Set(paths);
+  const next = new Set([...prev].filter((p) => current.has(p)));
+  if (shouldCheckNewFiles(prev, files.length)) for (const path of paths) next.add(path);
+  return next.size === 0 ? new Set(paths) : next;
+}
+
+function shouldCheckNewFiles(prev: Set<string>, fileCount: number): boolean {
+  return prev.size === 0 || fileCount > prev.size;
+}
+
 export function useDiffData({
   hasGitContext,
   effectiveThreadId,
@@ -176,136 +248,95 @@ export function useDiffData({
     if (effectiveThreadId) fetchForThread(effectiveThreadId);
     else if (projectModeId) fetchProjectStatus(projectModeId);
 
-    try {
-      const result = effectiveThreadId
-        ? await gitApi.getDiffSummary(effectiveThreadId, undefined, undefined, signal)
-        : await gitApi.projectDiffSummary(projectModeId!, undefined, undefined, signal);
+    const target = effectiveThreadId ?? projectModeId ?? 'unknown';
+    const isStale = () => refreshEpochRef.current !== epoch || signal.aborted;
 
-      // Superseded by a newer refresh, or this request was aborted (context
-      // reset / thread switch): don't write state. The `finally` below still
-      // clears `loading` when this is the live epoch, so the panel can't get
-      // stuck on the spinner.
-      if (refreshEpochRef.current !== epoch || signal.aborted) {
-        // Permanent diagnostic: a discarded refresh is the prime suspect when
-        // the Changes tab shows "No changes" on a dirty tree (result arrived
-        // but was thrown away by the epoch/abort guard). See instrumentation
-        // notes in packages/client/CLAUDE.md.
-        metric('review.refresh_outcome', 1, {
-          attributes: {
-            outcome: signal.aborted ? 'aborted' : 'superseded',
-            threadId: effectiveThreadId ?? projectModeId ?? 'unknown',
-          },
-        });
-        // This refresh's result was thrown away, so `summaries` may still be the
-        // empty array the reset effect left behind. Release the ensure-loaded
-        // latch so its backstop effect re-fires and reloads the *settled*
-        // context — otherwise a summary discarded during a thread switch leaves
-        // the Changes tab stuck on "No changes" even though the tree is dirty.
-        ensureLoadedKeyRef.current = null;
-        return;
+    const fetchSummary = () =>
+      effectiveThreadId
+        ? gitApi.getDiffSummary(effectiveThreadId, undefined, undefined, signal)
+        : gitApi.projectDiffSummary(projectModeId!, undefined, undefined, signal);
+
+    const fetchFreshDiff = async (filePath: string, staged: boolean) => {
+      setLoadingDiff(filePath);
+      const diffResult = effectiveThreadId
+        ? await gitApi.getFileDiff(effectiveThreadId, filePath, staged, signal)
+        : await gitApi.projectFileDiff(projectModeId!, filePath, staged, signal);
+      if (refreshEpochRef.current === epoch && diffResult.isOk() && !signal.aborted) {
+        setDiffCache((prev) => new Map(prev).set(filePath, diffResult.value.diff));
       }
+      setLoadingDiff((prev) => (prev === filePath ? null : prev));
+    };
 
-      if (result.isOk()) {
-        const data = result.value;
-        metric('review.refresh_outcome', 1, {
-          attributes: {
-            outcome: 'applied',
-            files: String(data.files.length),
-            threadId: effectiveThreadId ?? projectModeId ?? 'unknown',
-          },
-        });
+    // Superseded by a newer refresh, or this request was aborted (context
+    // reset / thread switch): no state is written; the cleanup below still
+    // clears `loading` when this is the live epoch.
+    const discardRefresh = () => {
+      // Permanent diagnostic: a discarded refresh is the prime suspect when
+      // the Changes tab shows "No changes" on a dirty tree (result arrived
+      // but was thrown away by the epoch/abort guard). See instrumentation
+      // notes in packages/client/CLAUDE.md.
+      metric('review.refresh_outcome', 1, {
+        attributes: { outcome: signal.aborted ? 'aborted' : 'superseded', threadId: target },
+      });
+      // This refresh's result was thrown away, so `summaries` may still be the
+      // empty array the reset effect left behind. Release the ensure-loaded
+      // latch so its backstop effect re-fires and reloads the *settled*
+      // context — otherwise a summary discarded during a thread switch leaves
+      // the Changes tab stuck on "No changes" even though the tree is dirty.
+      ensureLoadedKeyRef.current = null;
+    };
 
-        // Determine which visible files to reload before state updates so we can
-        // fire their diff requests in parallel with React batching.
-        const refreshedPaths = new Set(data.files.map((d) => d.path));
-        const selectedStillExists = selectedFile ? refreshedPaths.has(selectedFile) : false;
-        const fileToLoad = selectedStillExists
-          ? selectedFile
-          : data.files.length > 0
-            ? data.files[0].path
-            : null;
-        const fileToLoadSummary = fileToLoad
-          ? data.files.find((s) => s.path === fileToLoad)
-          : undefined;
-        const expandedFileToLoad =
-          expandedFile && expandedFile !== fileToLoad && refreshedPaths.has(expandedFile)
-            ? expandedFile
-            : null;
-        const expandedFileSummary = expandedFileToLoad
-          ? data.files.find((s) => s.path === expandedFileToLoad)
-          : undefined;
+    const reportLoadError = (error: { message: string }) => {
+      console.error('Failed to load diff summary:', error);
+      metric('review.refresh_outcome', 1, {
+        attributes: { outcome: 'error', error: error.message, threadId: target },
+      });
+      setLoadError(true);
+      setLoadErrorMessage(error.message);
+    };
 
-        const fetchFreshDiff = async (filePath: string, staged: boolean) => {
-          setLoadingDiff(filePath);
-          const diffResult = effectiveThreadId
-            ? await gitApi.getFileDiff(effectiveThreadId, filePath, staged, signal)
-            : await gitApi.projectFileDiff(projectModeId!, filePath, staged, signal);
-          if (refreshEpochRef.current === epoch && diffResult.isOk() && !signal.aborted) {
-            setDiffCache((prev) => new Map(prev).set(filePath, diffResult.value.diff));
-          }
-          setLoadingDiff((prev) => (prev === filePath ? null : prev));
-        };
+    const applySummary = async (data: DiffSummaryResponse) => {
+      metric('review.refresh_outcome', 1, {
+        attributes: { outcome: 'applied', files: String(data.files.length), threadId: target },
+      });
+      // Decide which visible files to reload before the state updates, so their
+      // diff requests run in parallel with React batching.
+      const plan = planDiffReload(data.files, selectedFile, expandedFile);
+      setSummaries(data.files);
+      setTruncatedInfo({ total: data.total, truncated: data.truncated });
+      // A refresh means git state may have changed even if the same file paths
+      // are still present. Clear stale per-path diffs before any fresh visible
+      // diff responses can populate the cache again.
+      setDiffCache(new Map());
+      // Start visible diff fetches after publishing the summary, so the file
+      // list does not depend on single-file diff timing.
+      const diffLoads = signal.aborted
+        ? []
+        : plan.loads.map((load) => fetchFreshDiff(load.path, load.staged));
+      setCheckedFiles((prev) => nextCheckedFiles(prev, data.files));
+      if (plan.fileToLoad !== selectedFile) setSelectedFile(plan.fileToLoad);
+      await Promise.all(diffLoads);
+    };
 
-        setSummaries(data.files);
-        setTruncatedInfo({ total: data.total, truncated: data.truncated });
-        // A refresh means git state may have changed even if the same file paths
-        // are still present. Clear stale per-path diffs before any fresh visible
-        // diff responses can populate the cache again.
-        setDiffCache(new Map());
-
-        // Start visible diff fetches after publishing the summary, so the file
-        // list does not depend on single-file diff timing.
-        const diffPromises: Promise<void>[] = [];
-        if (fileToLoad && fileToLoadSummary && !signal.aborted) {
-          diffPromises.push(fetchFreshDiff(fileToLoad, fileToLoadSummary.staged));
+    await withCleanup(
+      async () => {
+        const result = await fetchSummary();
+        if (isStale()) return discardRefresh();
+        if (result.isErr()) return reportLoadError(result.error);
+        await applySummary(result.value);
+      },
+      () => {
+        // Only the live refresh owns `loading`. A superseded refresh leaves the
+        // flag to its successor; the live one always clears it — even if its
+        // fetch was aborted — so the Changes tab never gets stuck on the spinner.
+        if (refreshEpochRef.current === epoch) {
+          // The epoch check gives the latest refresh exclusive ownership of loading.
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
+          setLoading(false);
+          refreshingRef.current = false;
         }
-        if (expandedFileToLoad && expandedFileSummary && !signal.aborted) {
-          diffPromises.push(fetchFreshDiff(expandedFileToLoad, expandedFileSummary.staged));
-        }
-
-        setCheckedFiles((prev) => {
-          const next = new Set(prev);
-          const currentPaths = new Set(data.files.map((d) => d.path));
-          for (const f of data.files) {
-            if (!prev.has(f.path) && prev.size === 0) {
-              next.add(f.path);
-            } else if (!prev.has(f.path) && data.files.length > prev.size) {
-              next.add(f.path);
-            }
-          }
-          for (const p of prev) {
-            if (!currentPaths.has(p)) next.delete(p);
-          }
-          return next.size === 0 ? new Set(data.files.map((d) => d.path)) : next;
-        });
-        if (fileToLoad !== selectedFile) {
-          setSelectedFile(fileToLoad);
-        }
-
-        if (diffPromises.length > 0) await Promise.all(diffPromises);
-      } else {
-        console.error('Failed to load diff summary:', result.error);
-        metric('review.refresh_outcome', 1, {
-          attributes: {
-            outcome: 'error',
-            error: result.error.message,
-            threadId: effectiveThreadId ?? projectModeId ?? 'unknown',
-          },
-        });
-        setLoadError(true);
-        setLoadErrorMessage(result.error.message);
-      }
-    } finally {
-      // Only the live refresh owns `loading`. A superseded refresh leaves the
-      // flag to its successor; the live one always clears it — even if its
-      // fetch was aborted — so the Changes tab never gets stuck on the spinner.
-      if (refreshEpochRef.current === epoch) {
-        // The epoch check gives the latest refresh exclusive ownership of loading.
-        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
-        setLoading(false);
-        refreshingRef.current = false;
-      }
-    }
+      },
+    );
   }, [
     hasGitContext,
     effectiveThreadId,
@@ -397,31 +428,28 @@ export function useDiffData({
   // Load diff when selected file changes. Skip when refresh() is running — it
   // already loads the diff for the selected file inline, so firing here would
   // cause a duplicate request.
+  const loadSelectedFileDiff = useStableCallback((path: string) => {
+    if (!diffCache.has(path) && !refreshingRef.current) loadDiffForFile(path);
+  });
   useEffect(() => {
-    if (selectedFile && !diffCache.has(selectedFile) && !refreshingRef.current) {
-      loadDiffForFile(selectedFile);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on file selection change; diffCache/loadDiffForFile change on every refresh and would cause loops
-  }, [selectedFile]);
+    if (selectedFile) loadSelectedFileDiff(selectedFile);
+  }, [selectedFile, loadSelectedFileDiff]);
 
   // Load diff when expanded file changes.
-  useEffect(() => {
-    if (expandedFile && !diffCache.has(expandedFile)) {
-      loadDiffForFile(expandedFile);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on expanded file change; diffCache/loadDiffForFile change on every refresh and would cause loops
-  }, [expandedFile]);
+  useLoadDiffWhenMissing(expandedFile, diffCache, loadDiffForFile);
 
   // Fire deferred refresh when the review pane becomes visible. Uses the
   // needsRefreshRef flag set by the parent's gitContextKey reset effect when
   // the pane is hidden.
-  useEffect(() => {
-    if (reviewPaneOpen && needsRefreshRef.current) {
+  const runDeferredRefresh = useStableCallback(() => {
+    if (needsRefreshRef.current) {
       needsRefreshRef.current = false;
       refresh();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh changes every render; only trigger on pane visibility change
-  }, [reviewPaneOpen]);
+  });
+  useEffect(() => {
+    if (reviewPaneOpen) runDeferredRefresh();
+  }, [reviewPaneOpen, runDeferredRefresh]);
 
   // Ensure the visible Changes tab loads its summary, once per (context +
   // git-status snapshot). This single effect covers two cases that used to be

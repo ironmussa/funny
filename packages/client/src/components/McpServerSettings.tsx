@@ -48,6 +48,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { openClaudeSettingsInEditor } from '@/lib/claude-settings';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface RecommendedServer {
@@ -74,8 +75,8 @@ function ClaudeSettingsEditorButton({ className }: { className?: string }) {
     <Button
       type="button"
       variant="outline"
-      size="sm"
-      className={cn('h-6 px-2 text-xs', className)}
+      size="xs"
+      className={cn('h-6', className)}
       data-testid="mcp-edit-claude-settings"
       onClick={() => void openClaudeSettingsInEditor()}
     >
@@ -134,21 +135,19 @@ function McpServerToggle({
   );
 }
 
+const PROTOCOL_BADGE_VARIANT = {
+  http: 'info',
+  sse: 'warning',
+  stdio: 'success',
+} as const satisfies Record<McpServerType, 'info' | 'warning' | 'success'>;
+
 function McpProtocolBadge({ type }: { type: McpServerType }) {
   return (
     <Badge
-      variant="outline"
+      variant={PROTOCOL_BADGE_VARIANT[type]}
       size="xs"
       data-testid={`mcp-protocol-badge-${type}`}
-      className={cn(
-        'rounded-md border-transparent uppercase tracking-wider',
-        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-        type === 'http'
-          ? 'bg-status-info/10 text-status-info/80'
-          : type === 'sse'
-            ? 'bg-status-warning/10 text-status-warning/80'
-            : 'bg-status-success/10 text-status-success/80',
-      )}
+      className="rounded-md tracking-wider uppercase"
     >
       {type === 'stdio' ? <Terminal className="icon-2xs" /> : <Globe className="icon-2xs" />}
       {type}
@@ -271,9 +270,10 @@ function InstalledServerCard({
             onToggle={onToggle}
           />
           <TooltipIconButton
+            variant="muted-destructive"
             onClick={onRemove}
             disabled={removing}
-            className="text-muted-foreground hover:text-destructive"
+
             tooltip={t('common.delete')}
           >
             {removing ? (
@@ -289,10 +289,10 @@ function InstalledServerCard({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
-              className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 h-6 px-2 text-xs"
+              className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 h-6"
               data-testid={`mcp-oauth-${server.name}`}
             >
               {authenticating ? (
@@ -304,10 +304,10 @@ function InstalledServerCard({
             </Button>
             <Button
               variant={showTokenInput ? 'secondary' : 'outline'}
-              size="sm"
+              size="xs"
               onClick={() => setShowTokenInput(!showTokenInput)}
               disabled={authenticating || settingToken}
-              className="h-6 px-2 text-xs"
+              className="h-6"
               data-testid={`mcp-manual-token-${server.name}`}
             >
               <KeyRound className="icon-xs mr-1" />
@@ -318,16 +318,17 @@ function InstalledServerCard({
           {showTokenInput && (
             <div className="flex items-center gap-2">
               <Input
+                size="xs"
                 type="password"
                 value={tokenValue}
                 onChange={(e) => setTokenValue(e.target.value)}
                 placeholder={t('mcp.tokenPlaceholder')}
-                className="h-7 flex-1 px-2 text-xs"
+                className="flex-1"
                 data-testid={`mcp-token-input-${server.name}`}
               />
               <Button
                 variant="outline"
-                size="sm"
+                size="xs"
                 onClick={() => {
                   if (tokenValue && onSetToken) {
                     onSetToken(tokenValue);
@@ -336,7 +337,6 @@ function InstalledServerCard({
                   }
                 }}
                 disabled={!tokenValue || settingToken}
-                className="h-7 px-2 text-xs"
                 data-testid={`mcp-token-save-${server.name}`}
               >
                 {settingToken ? (
@@ -438,18 +438,15 @@ export function McpServerSettings() {
 
   const loadServers = useCallback(async () => {
     if (!projectPath) return;
-    setLoading(true);
-    setError(null);
-    try {
+    return whilePending(setLoading, async () => {
+      setError(null);
       const result = await api.listMcpServers(projectPath, selectedProvider, projectId);
       if (result.isOk()) {
         setServers(result.value.servers);
       } else {
         setError(result.error.message);
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectPath, projectId, selectedProvider]);
 
   // Load servers when projectPath changes (track previous to avoid duplicate calls)
@@ -799,14 +796,14 @@ export function McpServerSettings() {
 
         {loading ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-6"
             testId="mcp-settings-loading"
             label={t('mcp.loadingServers')}
           />
         ) : servers.length === 0 ? (
-          <EmptyState fill={false} className="py-6" title={t('mcp.noServers')} />
+          <EmptyState padding="md" fill={false} title={t('mcp.noServers')} />
         ) : (
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {servers.map((server) => (

@@ -52,7 +52,7 @@ test.describe('A. Accessibility', () => {
     }
 
     // Active element should still be within the dialog
-    const _activeElement = await page.evaluate(() => {
+    await page.evaluate(() => {
       const el = document.activeElement;
       return (
         el?.closest('[role="dialog"]') !== null ||
@@ -100,7 +100,6 @@ test.describe('A. Accessibility', () => {
 
   test('A.5 Icon-only buttons have aria-label', async ({ authedPage: page }) => {
     // Navigate to a thread to get all header buttons
-    const _thread = await (await import('./fixtures')).default.skip; // Use API to create thread
     // Check header buttons that are icon-only
     await page.goto(`/projects/${projectId}`);
     await page.waitForLoadState('networkidle');

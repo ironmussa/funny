@@ -26,7 +26,7 @@ import { requireWorkingDirectory } from '../../utils/working-directory.js';
 
 // In-memory cache for bulk git status to avoid spawning excessive git processes.
 export { GIT_STATUS_CACHE_TTL_MS };
-export const _gitStatusCache = gitStatusCache;
+export { gitStatusCache };
 
 // The per-branch PR info cache lives in services/pr-info-cache.ts so the
 // `git:changed` status path shares it with these routes.
@@ -164,7 +164,7 @@ export function requireProjectCwdFromContext(
 ): Promise<Result<string, DomainError>> {
   return requireProjectCwd(
     c.req.param('projectId') as string,
-    c.get('userId') as string,
+    c.get('userId'),
     c.get('organizationId'),
   );
 }
@@ -177,11 +177,7 @@ export function requireProjectCwdFromContext(
 export function requireSteerableThreadCwdFromContext(
   c: Context<HonoEnv>,
 ): Promise<Result<string, DomainError>> {
-  return requireThreadCwd(
-    c.req.param('threadId') as string,
-    c.get('userId') as string,
-    steerFromContext(c),
-  );
+  return requireThreadCwd(c.req.param('threadId') as string, c.get('userId'), steerFromContext(c));
 }
 
 /**

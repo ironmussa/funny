@@ -73,7 +73,7 @@ mock.module('@/hooks/use-minute-tick', () => ({
 }));
 
 mock.module('@/hooks/use-todo-panel', () => ({
-  useTodoSnapshots: () => [],
+  useTodoSnapshotIndex: () => new Map(),
 }));
 
 const actualStoresSettingsStore = { ...(await import('@/stores/settings-store')) };

@@ -80,7 +80,7 @@ interface ProjectState {
   setProjectLocalPath: (projectId: string, localPath: string) => Promise<boolean>;
 }
 
-let _loadProjectsPromise: Promise<void> | null = null;
+let loadProjectsPromise: Promise<void> | null = null;
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
   expandedProjects: loadExpandedProjects(),
@@ -91,9 +91,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   loadProjects: async () => {
     // Deduplicate concurrent calls (StrictMode, cascading re-renders, etc.)
-    if (_loadProjectsPromise) return _loadProjectsPromise;
+    if (loadProjectsPromise) return loadProjectsPromise;
 
-    _loadProjectsPromise = (async () => {
+    loadProjectsPromise = (async () => {
       // Telemetry envelope for the critical startup load. Background work is
       // deliberately outside this span so it cannot obscure time-to-project-list.
       const loadSpan = startSpan('projects.load');
@@ -185,11 +185,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           setTimeout(fireGitStatus, 200);
         }
       } finally {
-        _loadProjectsPromise = null;
+        loadProjectsPromise = null;
       }
     })();
 
-    return _loadProjectsPromise;
+    return loadProjectsPromise;
   },
 
   toggleProject: (projectId: string) => {

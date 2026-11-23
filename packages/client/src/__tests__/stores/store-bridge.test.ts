@@ -8,7 +8,7 @@ import { getThreadsData } from '@/data/threads/store';
 
 /**
  * We test store-bridge by dynamically importing it fresh for each test
- * so the lazy refs (_projectStoreRef, _threadStoreRef) start as null.
+ * so the lazy refs (projectStoreRef, threadStoreRef) start as null.
  */
 
 /** A real vanilla store holding just the fields a test needs, as `StoreApi<T>`. */

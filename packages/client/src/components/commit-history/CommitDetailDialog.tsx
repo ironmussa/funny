@@ -22,6 +22,7 @@ import { api } from '@/lib/api';
 import { copyCommitHashToClipboard } from '@/lib/commit-hash-copy';
 import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 import { shortTimeAgo } from '@/lib/thread-utils';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 
 interface LogEntry {
   hash: string;
@@ -153,47 +154,53 @@ export function CommitDetailDialog({
     setCommitBody(selectedCommit?.body.trim() || null);
     setFileSearch('');
     (async () => {
-      try {
-        const [filesResult, bodyResult] = await Promise.all([
-          effectiveThreadId
-            ? api.getCommitFiles(effectiveThreadId, selectedHash)
-            : api.projectCommitFiles(projectModeId!, selectedHash),
-          effectiveThreadId
-            ? api.getCommitBody(effectiveThreadId, selectedHash)
-            : api.projectCommitBody(projectModeId!, selectedHash),
-        ]);
-        if (cancelled) return;
-        if (filesResult.isOk()) {
-          setCommitFiles(filesResult.value.files);
-          if (filesResult.value.files.length > 0) {
-            const firstPath = filesResult.value.files[0].path;
-            setExpandedFile(firstPath);
-            setDiffLoading(true);
-            setDiffContent(null);
-            try {
-              const diffResult = effectiveThreadId
-                ? await api.getCommitFileDiff(effectiveThreadId, selectedHash, firstPath)
-                : await api.projectCommitFileDiff(projectModeId!, selectedHash, firstPath);
-              if (!cancelled && diffResult.isOk()) setDiffContent(diffResult.value.diff);
-            } finally {
-              // The nested request clears its flag in finally and only while this selection owns it.
-              // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
-              if (!cancelled) setDiffLoading(false);
+      return withCleanup(
+        async () => {
+          const [filesResult, bodyResult] = await Promise.all([
+            effectiveThreadId
+              ? api.getCommitFiles(effectiveThreadId, selectedHash)
+              : api.projectCommitFiles(projectModeId!, selectedHash),
+            effectiveThreadId
+              ? api.getCommitBody(effectiveThreadId, selectedHash)
+              : api.projectCommitBody(projectModeId!, selectedHash),
+          ]);
+          if (cancelled) return;
+          if (filesResult.isOk()) {
+            setCommitFiles(filesResult.value.files);
+            if (filesResult.value.files.length > 0) {
+              const firstPath = filesResult.value.files[0].path;
+              setExpandedFile(firstPath);
+              setDiffLoading(true);
+              setDiffContent(null);
+              await withCleanup(
+                async () => {
+                  const diffResult = effectiveThreadId
+                    ? await api.getCommitFileDiff(effectiveThreadId, selectedHash, firstPath)
+                    : await api.projectCommitFileDiff(projectModeId!, selectedHash, firstPath);
+                  if (!cancelled && diffResult.isOk()) setDiffContent(diffResult.value.diff);
+                },
+                () => {
+                  // The nested request clears its flag once settled, and only while this selection owns it.
+                  // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
+                  if (!cancelled) setDiffLoading(false);
+                },
+              );
             }
+          } else {
+            toast.error(
+              t('review.logFailed', {
+                message: filesResult.error.message,
+                defaultValue: `Failed to load commit files: ${filesResult.error.message}`,
+              }),
+            );
+            setCommitFiles([]);
           }
-        } else {
-          toast.error(
-            t('review.logFailed', {
-              message: filesResult.error.message,
-              defaultValue: `Failed to load commit files: ${filesResult.error.message}`,
-            }),
-          );
-          setCommitFiles([]);
-        }
-        if (bodyResult.isOk() && bodyResult.value.body) setCommitBody(bodyResult.value.body);
-      } finally {
-        if (!cancelled) setFilesLoading(false);
-      }
+          if (bodyResult.isOk() && bodyResult.value.body) setCommitBody(bodyResult.value.body);
+        },
+        () => {
+          if (!cancelled) setFilesLoading(false);
+        },
+      );
     })();
     return () => {
       cancelled = true;
@@ -204,17 +211,14 @@ export function CommitDetailDialog({
     async (filePath: string) => {
       if (!selectedHash || !hasGitContext) return;
       setExpandedFile(filePath);
-      setDiffLoading(true);
-      setDiffContent(null);
-      try {
+      return whilePending(setDiffLoading, async () => {
+        setDiffContent(null);
         const result = effectiveThreadId
           ? await api.getCommitFileDiff(effectiveThreadId, selectedHash, filePath)
           : await api.projectCommitFileDiff(projectModeId!, selectedHash, filePath);
         if (result.isOk()) setDiffContent(result.value.diff);
         else toast.error(`Failed to load diff: ${result.error.message}`);
-      } finally {
-        setDiffLoading(false);
-      }
+      });
     },
     [selectedHash, hasGitContext, effectiveThreadId, projectModeId],
   );
@@ -254,19 +258,20 @@ export function CommitDetailDialog({
         }}
       >
         <DialogContent
-          className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
+          flush
+          className="flex h-[85vh] max-w-[90vw] flex-col"
           data-testid="commit-detail-dialog"
         >
           <div className="border-border shrink-0 border-b px-4 py-3">
             <div className="flex items-start justify-between gap-2">
-              <DialogTitle className="text-sm leading-tight font-semibold">
+              <DialogTitle size="sm" className="leading-tight">
                 {selectedCommit?.message ?? 'Commit details'}
               </DialogTitle>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={handleClose}
-                className="text-muted-foreground sr-only shrink-0"
+                className="sr-only shrink-0"
                 data-testid="commit-detail-close"
               >
                 <X className="icon-xs" />
@@ -341,9 +346,8 @@ export function CommitDetailDialog({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="ghost"
+                        variant="ghost-destructive"
                         size="xs"
-                        className="text-destructive hover:text-destructive"
                         onClick={() => selectedHash && request('reset', selectedHash)}
                         disabled={inProgress}
                         data-testid="commit-reset-btn"
@@ -358,10 +362,10 @@ export function CommitDetailDialog({
                   </Tooltip>
                   <div className="bg-border mx-1 h-4 w-px" />
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-xs"
                     onClick={handleClose}
-                    className="text-muted-foreground shrink-0"
+                    className="shrink-0"
                     data-testid="commit-detail-close"
                   >
                     <X className="icon-xs" />
@@ -407,15 +411,10 @@ export function CommitDetailDialog({
                 )}
                 <ScrollArea className="min-h-0 flex-1">
                   {commitFiles.length === 0 ? (
-                    <EmptyState
-                      fill={false}
-                      className="py-4"
-                      title={t('history.noFiles', 'No files changed')}
-                    />
+                    <EmptyState fill={false} title={t('history.noFiles', 'No files changed')} />
                   ) : treeFiles.length === 0 ? (
                     <EmptyState
                       fill={false}
-                      className="py-4"
                       title={t('history.noMatchingFiles', 'No matching files')}
                     />
                   ) : (

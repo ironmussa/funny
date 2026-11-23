@@ -116,14 +116,11 @@ function ToolbarToggleButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-sm"
           onClick={onClick}
           disabled={disabled}
-          className={cn(
-            'shrink-0 text-muted-foreground',
-            active && 'bg-accent text-accent-foreground',
-          )}
+          className={cn('shrink-0', active && 'bg-accent text-accent-foreground')}
           data-testid={testId}
         >
           {children}
@@ -328,11 +325,11 @@ export function CopyFullFileButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-sm"
           onClick={onCopy}
           disabled={disabled}
-          className="text-muted-foreground shrink-0"
+          className="shrink-0"
           data-testid="diff-copy-full-file"
           aria-label={t('tools.copy', 'Copy file contents')}
         >

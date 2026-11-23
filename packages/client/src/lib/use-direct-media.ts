@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { threadContextHeaders } from '@/lib/api/_core';
 import { createClientLogger } from '@/lib/client-logger';
 import { isExternalUrl, resolveImageSrc } from '@/lib/raw-file-src';
@@ -59,17 +60,17 @@ function pruneSignedCache(): void {
 }
 
 /** Test seam: clear the latched flag + cache between cases. */
-export function __resetDirectMediaForTests(): void {
+export function resetDirectMediaForTests(): void {
   directMediaDisabled = false;
   signedCache.clear();
 }
 
-export function __cacheSignedMediaForTests(path: string, url: string): void {
+export function cacheSignedMediaForTests(path: string, url: string): void {
   signedCache.set(path, url);
   pruneSignedCache();
 }
 
-export function __hasSignedMediaForTests(path: string): boolean {
+export function hasSignedMediaForTests(path: string): boolean {
   return signedCache.has(path);
 }
 
@@ -145,10 +146,9 @@ export interface ResolvedMedia {
  */
 export function useResolvedMediaSrc(src?: string): ResolvedMedia {
   const proxied = resolveImageSrc(src);
-  const [resolved, setResolved] = useState(proxied);
+  const [resolved, setResolved] = useResettableState(proxied, [proxied]);
 
   useEffect(() => {
-    setResolved(proxied);
     // Only local runner paths can be signed; external URLs load directly.
     if (!src || isExternalUrl(src) || directMediaDisabled) return;
     let cancelled = false;
@@ -158,7 +158,7 @@ export function useResolvedMediaSrc(src?: string): ResolvedMedia {
     return () => {
       cancelled = true;
     };
-  }, [src, proxied]);
+  }, [src, proxied, setResolved]);
 
   const onError = useCallback(() => {
     // We're showing an upgraded signed URL and it failed — drop it and fall back
@@ -170,7 +170,7 @@ export function useResolvedMediaSrc(src?: string): ResolvedMedia {
       return true;
     }
     return false;
-  }, [src, proxied, resolved]);
+  }, [src, proxied, resolved, setResolved]);
 
   return { src: resolved, onError };
 }

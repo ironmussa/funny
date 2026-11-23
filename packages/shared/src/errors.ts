@@ -31,3 +31,8 @@ export const processError = (message: string, exitCode?: number, stderr?: string
 });
 export const conflict = (message: string): DomainError => ({ type: 'CONFLICT', message });
 export const internal = (message: string): DomainError => ({ type: 'INTERNAL', message });
+
+/** The message of a caught value: an Error's message, or the value itself as text. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

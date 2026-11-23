@@ -129,6 +129,7 @@ function createFactoryPort(
     <T>(
       action:
         | 'factory.issues_sent'
+        | 'factory.queue_ci_proposed'
         | 'factory.queue_cleared'
         | 'factory.stopped_all'
         | 'factory.trigger_saved'
@@ -287,6 +288,23 @@ function createFactoryPort(
         .andThen((factoryId) => queue.readiness(factoryId).mapErr(queueFailure));
     },
 
+    async proposeQueueCi(userId, projectId) {
+      return configured(userId, projectId).andThen((factoryId) =>
+        queue
+          .proposeQueueCi(userId, factoryId)
+          .mapErr(queueFailure)
+          .map(
+            audited(
+              'factory.queue_ci_proposed',
+              userId,
+              (r) =>
+                `Opened issue #${r.issueNumber} for CI on the merge queue's branches of project ${projectId}`,
+              (r) => ({ projectId, issueNumber: r.issueNumber, queued: r.queued }),
+            ),
+          ),
+      );
+    },
+
     async validateFlow(userId, projectId, flowName) {
       return settings
         .factoryId(userId, projectId)
@@ -363,8 +381,7 @@ function createFactoryPort(
             audited(
               'factory.flow_started',
               userId,
-              (run) =>
-                `Started the flow "${input.flowName}" in the factory of project ${projectId}`,
+              () => `Started the flow "${input.flowName}" in the factory of project ${projectId}`,
               (run) => ({ projectId, runId: run.id, flowName: input.flowName }),
             ),
           ),

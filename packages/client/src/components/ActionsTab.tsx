@@ -44,6 +44,7 @@ import {
 } from '@/lib/list-row-styles';
 import { shortTimeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 /**
  * The review pane's Actions tab: the repository's GitHub Actions runs (this
@@ -340,19 +341,18 @@ function RunRow({
   const durationLabel = duration !== null ? formatActionDuration(duration) : null;
 
   const handleRerun = async () => {
-    setRerunning(true);
-    try {
-      await rerunFailedJobs(projectId, run.id);
-      toast.success(t('review.actions.rerunStarted', 'Re-running failed jobs'));
-    } catch (error) {
-      toast.error(
-        t('review.actions.rerunFailed', 'Could not re-run: {{message}}', {
-          message: error instanceof Error ? error.message : String(error),
-        }),
-      );
-    } finally {
-      setRerunning(false);
-    }
+    await whilePending(setRerunning, async () => {
+      try {
+        await rerunFailedJobs(projectId, run.id);
+        toast.success(t('review.actions.rerunStarted', 'Re-running failed jobs'));
+      } catch (error) {
+        toast.error(
+          t('review.actions.rerunFailed', 'Could not re-run: {{message}}', {
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+    });
   };
 
   return (
@@ -481,10 +481,10 @@ function JobRow({ projectId, job }: { projectId: string; job: ActionJob }) {
         <div className="min-w-0 flex-1" />
         {failed && (
           <Button
-            variant="ghost"
+            variant="muted"
             size="xs"
             onClick={() => setShowLog((v) => !v)}
-            className="text-muted-foreground h-5 shrink-0 px-1.5"
+            className="h-5 shrink-0 px-1.5"
             data-testid={`actions-job-log-toggle-${job.id}`}
           >
             {showLog

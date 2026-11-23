@@ -82,6 +82,7 @@ const METRICS_SCHEMA = z.object({
   batchSize: z.number().int().nonnegative().default(0),
   bisectionRounds: z.number().int().nonnegative().default(0),
   ciFlakes: z.number().int().nonnegative().default(0),
+  weaveIntegrations: z.number().int().nonnegative().default(0),
 });
 
 const WAIT_REASON_SCHEMA = z.object({

@@ -54,11 +54,12 @@ Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its ta
 
 ## 6. Readiness and metrics
 
-- [ ] 6.1 Readiness check per repository (CI on `factory/queue/**`, merge driver on the runner, median CI vs batch wait, required GitHub merge queue, required up-to-date branches); block batches with the reason when CI does not run on the queue branches; offer a factory run that opens the PR adding the trigger; verify with port and component tests
+- [x] 6.1 Readiness check per repository (CI on `factory/queue/**`, merge driver on the runner, median CI vs batch wait, required GitHub merge queue, required up-to-date branches); block batches with the reason when CI does not run on the queue branches; offer a factory run that opens the PR adding the trigger; verify with port and component tests
 - [x] 6.2 Extend `factory_runs.metrics` with `integrateRounds`, `conflictsResolvedWithoutLlm`, `conflictsSentToAgent`, `queueWaitMs`, `batchSize`, `bisectionRounds`, `ciFlakes` (missing read as 0) and the 30-day summary; extend `factory.integration_event`; verify with action-provider, queue and `factory-metrics` tests
-- [ ] 6.3 Update `openwiki/architecture/issue-factory.md` (queue, integrate, regenerators, run_command limits, stacking, readiness, metrics); verify its file references exist
+- [x] 6.3 Update `openwiki/architecture/issue-factory.md` (queue, integrate, regenerators, run_command limits, stacking, readiness, metrics); verify its file references exist
 
 ## 7. Integration
 
-- [ ] 7.1 Run `bun run lint`, `bun run typecheck` and the core, runtime, server, workflows and client suites; all pass
+- [x] 7.1 Run `bun run lint`, `bun run typecheck` and the core, runtime, server, workflows and client suites; all pass
 - [ ] 7.2 End to end on a test repository with CI on `factory/queue/**`: three issues merge as one green batch; a batch with one breaking change is bisected and the others merge after a green re-batch; two runs adding adjacent imports merge without the implementer; a lockfile conflict is regenerated
+  - 2026-11-23, test-funny: three issues merged as one green batch (#55-#57 → PRs #58-#60); a batch with a breaking change (PR #64 adds `BREAK_QUEUE`, which the CI's queue guard fails on queue branches only) was retested, bisected, the culprit isolated and the others (#69, #70) merged after a green re-batch. It found that an unchanged culprit was batched again (fixed: `c3852a3c9`, `deda79ab0`). Phase 1 regenerated a generated file (`src/index.json`) on a conflict. Not yet: adjacent imports settled by weave, a real lockfile.

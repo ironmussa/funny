@@ -20,7 +20,7 @@ test.describe('15. WebSocket & Real-Time', () => {
 
   test('15.1 WebSocket connects on page load', async ({ page: _page, authedPage }) => {
     // Verify that a WebSocket connection is established
-    const _wsConnected = await authedPage.evaluate(() => {
+    await authedPage.evaluate(() => {
       return new Promise<boolean>((resolve) => {
         // Check if any WebSocket exists in the page
         const checkInterval = setInterval(() => {
@@ -69,7 +69,7 @@ test.describe('15. WebSocket & Real-Time', () => {
     await page.waitForTimeout(1000);
 
     // The message should appear in the chat
-    const _msgVisible = await page
+    await page
       .getByText('This message arrived via WebSocket!')
       .isVisible()
       .catch(() => false);
@@ -121,7 +121,6 @@ test.describe('15. WebSocket & Real-Time', () => {
     await page.waitForTimeout(1000);
 
     // Tool call card should appear
-    const _readText = page.getByText('Read').first();
     // Might be visible depending on how the store processes without a parent message
   });
 

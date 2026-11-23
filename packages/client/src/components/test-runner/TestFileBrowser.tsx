@@ -143,9 +143,10 @@ function SpecItem({
         {!hasMultipleProjects &&
           (isRunning && fileStatus === 'running' ? (
             <TooltipIconButton
+              variant="ghost-destructive"
               data-testid={`test-spec-stop-${spec.file}-${spec.line}`}
               size="icon"
-              className="text-destructive hover:text-destructive size-5 opacity-100"
+              className="size-5 opacity-100"
               onClick={onStop}
               tooltip={t('common.stop')}
             >
@@ -450,9 +451,9 @@ function TreeItem({
           <Button
             aria-label={`Stop ${node.name}`}
             data-testid={`test-stop-${node.path}`}
-            variant="ghost"
+            variant="ghost-destructive"
             size="icon"
-            className="text-destructive hover:text-destructive size-5 opacity-100"
+            className="size-5 opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               onStop();
@@ -721,8 +722,8 @@ export function TestFileBrowser({
           <Button
             data-testid="test-stop"
             variant="destructive"
-            size="sm"
-            className="h-7 shrink-0 gap-1 px-2 text-xs"
+            size="xs"
+            className="shrink-0 gap-1"
             onClick={onStop}
           >
             <Square className="icon-sm" />
@@ -732,8 +733,8 @@ export function TestFileBrowser({
           <Button
             data-testid="test-run-all"
             variant="ghost"
-            size="sm"
-            className="h-7 shrink-0 gap-1 px-2 text-xs"
+            size="xs"
+            className="shrink-0 gap-1"
             disabled={files.length === 0}
             onClick={onRunAll}
           >
@@ -767,20 +768,16 @@ export function TestFileBrowser({
       <ScrollArea className="flex-1 pr-3">
         {isLoading ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-8"
             testId="test-file-browser-loading"
             label="Loading tests…"
           />
         ) : files.length === 0 ? (
-          <EmptyState fill={false} className="px-4 py-8" title="No test files found" />
+          <EmptyState padding="md" fill={false} title="No test files found" />
         ) : filteredFiles.length === 0 ? (
-          <EmptyState
-            fill={false}
-            className="px-4 py-8"
-            title={<> No tests matching "{search}" </>}
-          />
+          <EmptyState padding="md" fill={false} title={<> No tests matching "{search}" </>} />
         ) : (
           tree.map((node) => (
             <TreeItem

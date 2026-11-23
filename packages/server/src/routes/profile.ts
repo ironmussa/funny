@@ -15,7 +15,7 @@ import { answerJson } from '../trpc/reply.js';
 
 export const profileRoutes = new Hono<ServerEnv>();
 
-const userIdOf = (c: Context<ServerEnv>) => c.get('userId') as string;
+const userIdOf = (c: Context<ServerEnv>) => c.get('userId');
 
 /** Generate a temporary AssemblyAI streaming token (API key stays server-side) */
 profileRoutes.get('/transcribe-token', (c) => answerJson(c, port.transcribeToken(userIdOf(c))));

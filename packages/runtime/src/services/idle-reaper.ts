@@ -13,6 +13,7 @@
 
 import type { AgentOrchestrator, IdleReapPolicy } from '@funny/core/agents';
 import { scheduleRepeating } from '@funny/shared/async';
+import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../lib/logger.js';
 
@@ -78,7 +79,7 @@ export class IdleReaper {
       onError: (err) =>
         log.error('Idle reaper sweep failed', {
           namespace: 'agent',
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         }),
     });
     g.__funnyIdleReaperSchedule = this.schedule;
@@ -114,7 +115,7 @@ export class IdleReaper {
         log.error('Idle reap failed', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: errorMessage(err),
         });
       }
     }

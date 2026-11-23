@@ -12,6 +12,7 @@
 
 import type { AgentOrchestrator } from '@funny/core/agents';
 import type { WSEvent, ThreadStatus, TurnOutcomeEventData } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../lib/logger.js';
 import { metric, type startSpan } from '../lib/telemetry.js';
@@ -118,7 +119,7 @@ export class AgentEventRouter {
           log.error('Unhandled error in agent:message handler', {
             namespace: 'agent',
             threadId,
-            error: (err as Error).message,
+            error: errorMessage(err),
           });
         });
       this.messageQueues.set(threadId, next);
@@ -134,7 +135,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:error handler', {
           namespace: 'agent',
           threadId,
-          error: (innerErr as Error).message,
+          error: errorMessage(innerErr),
         });
       });
     });
@@ -147,7 +148,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:unexpected-exit handler', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: errorMessage(err),
         });
       });
     });
@@ -181,7 +182,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:stopped handler', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: errorMessage(err),
         });
       });
     });
@@ -197,7 +198,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:session-cleared handler', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: errorMessage(err),
         });
       });
     });

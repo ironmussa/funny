@@ -20,7 +20,7 @@ export function FileCopyButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-xs"
           onClick={(event) => {
             if (stopPropagation) event.stopPropagation();
@@ -28,7 +28,6 @@ export function FileCopyButton({
           }}
           data-testid={testId}
           aria-label={t('tools.copy', 'Copy')}
-          className="text-muted-foreground hover:text-foreground"
         >
           {copied ? (
             <Check className="icon-sm copy-feedback-icon text-status-success" />

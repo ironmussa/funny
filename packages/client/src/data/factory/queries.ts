@@ -158,6 +158,15 @@ export function factoryFlowDefinitionQuery(projectId: string, flowName: string |
  * How the repository merges through the merge queue (openspec
  * factory-integration D12): its rules and workflows change rarely.
  */
+/** Read the factory's readiness again (after a change that affects it). */
+export function refreshFactoryReadiness(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): void {
+  if (layer.disposed) return;
+  void layer.queryClient.invalidateQueries({ queryKey: ['factory', 'readiness', projectId] });
+}
+
 export function factoryReadinessQuery(projectId: string) {
   return {
     queryKey: ['factory', 'readiness', projectId] as const,

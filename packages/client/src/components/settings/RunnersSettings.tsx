@@ -43,17 +43,18 @@ import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-
-function statusColor(status: RunnerInfo['status']) {
-  if (status === 'online') return 'text-status-success';
-  if (status === 'busy') return 'text-status-warning';
-  return 'text-muted-foreground';
-}
+import { whilePending } from '@/lib/while-pending';
 
 function statusLabel(status: RunnerInfo['status']) {
   if (status === 'online') return 'Online';
   if (status === 'busy') return 'Busy';
   return 'Offline';
+}
+
+function runnerBadgeVariant(status: RunnerInfo['status']): 'success' | 'warning' | 'secondary' {
+  if (status === 'online') return 'success';
+  if (status === 'busy') return 'warning';
+  return 'secondary';
 }
 
 function osEmoji(os: string) {
@@ -85,8 +86,7 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
 
   const handleAssign = async () => {
     if (!projectId || !localPath.trim()) return;
-    setSaving(true);
-    try {
+    await whilePending(setSaving, async () => {
       const result = await api.assignRunnerProject(runnerId, projectId, localPath.trim());
       if (result.isOk()) {
         toast.success('Project assigned');
@@ -94,9 +94,7 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
         setLocalPath('');
         onAssigned();
       } else toast.error('Failed to assign project');
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   return (
@@ -117,15 +115,16 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
         </SelectContent>
       </Select>
       <Input
+        mono
+        size="xs"
         value={localPath}
         onChange={(e) => setLocalPath(e.target.value)}
         placeholder="/home/user/my-project"
-        className="h-7 font-mono text-xs"
         data-testid={`runner-assign-localpath-${runnerId}`}
       />
       <Button
-        size="sm"
-        className="h-6 text-xs"
+        size="xs"
+        className="h-6"
         disabled={!projectId || !localPath.trim() || saving}
         onClick={handleAssign}
         data-testid={`runner-assign-submit-${runnerId}`}
@@ -170,17 +169,14 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   }, [runner.runnerId]);
 
   const handleDelete = async () => {
-    setDeleting(true);
-    try {
+    await whilePending(setDeleting, async () => {
       const result = await api.deleteRunner(runner.runnerId);
       if (result.isOk()) {
         setConfirmDelete(false);
         toast.success('Runner removed');
         onDeleted();
       } else toast.error('Failed to remove runner');
-    } finally {
-      setDeleting(false);
-    }
+    });
   };
 
   const handleUnassign = async (projectId: string) => {
@@ -224,15 +220,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{runner.name}</span>
             <span className="text-xs">{osEmoji(runner.os)}</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                'h-4 px-1.5 text-2xs',
-                runner.status === 'online' && 'text-status-success',
-                runner.status === 'busy' && 'text-status-warning',
-                runner.status !== 'online' && runner.status !== 'busy' && 'text-muted-foreground',
-              )}
-            >
+            <Badge variant={runnerBadgeVariant(runner.status)} size="xxs">
               {statusLabel(runner.status)}
             </Badge>
           </div>
@@ -270,8 +258,9 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             <TooltipContent>{open ? t('common.collapse') : t('common.expand')}</TooltipContent>
           </Tooltip>
           <TooltipIconButton
+            variant="ghost-destructive"
             size="icon"
-            className="text-destructive hover:text-destructive size-6"
+            className="size-6"
             onClick={() => setConfirmDelete(true)}
             disabled={deleting}
             data-testid={`runner-item-${runner.runnerId}-delete`}
@@ -307,8 +296,9 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
                 >
                   <span className="truncate">{project?.name ?? a.projectId}</span>
                   <TooltipIconButton
+                    variant="ghost-destructive"
                     size="icon"
-                    className="text-destructive hover:text-destructive size-5"
+                    className="size-5"
                     onClick={() => handleUnassign(a.projectId)}
                     data-testid={`runner-item-${runner.runnerId}-unassign-${a.projectId}`}
                     tooltip={t('common.unassign')}
@@ -386,6 +376,7 @@ function LinkRunnerForm({ onLinked }: { onLinked: () => void }) {
   return (
     <div className="flex items-center gap-2">
       <Input
+        mono
         value={code}
         onChange={(e) => setCode(e.target.value)}
         onKeyDown={(e) => {
@@ -394,7 +385,7 @@ function LinkRunnerForm({ onLinked }: { onLinked: () => void }) {
         }}
         placeholder="Enter runner code, e.g. WXYZ-1234"
         size="xs"
-        className="flex-1 font-mono uppercase"
+        className="flex-1 uppercase"
         data-testid="link-runner-code"
       />
       <Button
@@ -431,15 +422,12 @@ export function RunnersSettings() {
   const [runners, setRunners] = useState<RunnerInfo[]>([]);
   const [loadingRunners, setLoadingRunners] = useState(true);
 
-  const loadRunners = async () => {
-    setLoadingRunners(true);
-    try {
+  const loadRunners = useCallback(async () => {
+    await whilePending(setLoadingRunners, async () => {
       const result = await api.getMyRunners();
       if (result.isOk()) setRunners(result.value.runners);
-    } finally {
-      setLoadingRunners(false);
-    }
-  };
+    });
+  }, []);
 
   useEffect(() => {
     loadRunners();
@@ -447,7 +435,7 @@ export function RunnersSettings() {
     // Refresh runner statuses every 30s
     const interval = setInterval(loadRunners, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadRunners]);
 
   return (
     <div className="space-y-6">
@@ -474,11 +462,11 @@ export function RunnersSettings() {
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">My Runners</p>
           <Button
-            size="sm"
+            size="xs"
             variant="ghost"
             onClick={loadRunners}
             disabled={loadingRunners}
-            className="h-6 text-xs"
+            className="h-6"
             data-testid="runners-refresh"
           >
             <RefreshCw className={cn('mr-1 icon-xs', loadingRunners && 'animate-spin')} />
@@ -490,8 +478,9 @@ export function RunnersSettings() {
           <LoadingState fill={false} label="Loading…" />
         ) : runners.length === 0 ? (
           <EmptyState
+            padding="md"
             fill={false}
-            className="border-border/50 rounded-lg border border-dashed px-4 py-6"
+            className="border-border/50 rounded-lg border border-dashed"
             icon={Server}
             title="No runners connected yet."
             description="Copy the install command above and run it on any machine."

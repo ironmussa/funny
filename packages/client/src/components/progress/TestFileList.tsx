@@ -47,11 +47,11 @@ function ShowMore({
   if (hidden === 0) return null;
   return (
     <Button
-      variant="ghost"
+      variant="muted"
       size="xs"
       onClick={onClick}
       data-testid={testId}
-      className={cn('text-muted-foreground self-start', className)}
+      className={cn('self-start', className)}
     >
       {t('testProgress.showMore', { count: Math.min(ROWS_PAGE, hidden), hidden })}
     </Button>

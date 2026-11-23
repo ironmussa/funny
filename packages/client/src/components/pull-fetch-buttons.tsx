@@ -31,11 +31,11 @@ export function PullFetchButtons({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             onClick={onPull}
             disabled={pullInProgress}
-            className="text-muted-foreground relative"
+            className="relative"
             data-testid={`${testIdPrefix}-pull`}
           >
             <Download className={cn('icon-base', pullInProgress && 'animate-pulse')} />
@@ -54,11 +54,10 @@ export function PullFetchButtons({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             onClick={onFetch}
             disabled={fetchInProgress}
-            className="text-muted-foreground"
             data-testid={`${testIdPrefix}-fetch-origin`}
           >
             <CloudDownload className={cn('icon-base', fetchInProgress && 'animate-pulse')} />

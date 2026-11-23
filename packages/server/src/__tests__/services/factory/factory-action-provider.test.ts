@@ -259,6 +259,7 @@ describe('factory action provider integration metrics', () => {
         integrateRounds: 0,
         conflictsResolvedWithoutLlm: 0,
         conflictsSentToAgent: 0,
+        weaveIntegrations: 0,
         mergeRoundsToAgent: 0,
         queueWaitMs: 0,
         batchSize: 0,

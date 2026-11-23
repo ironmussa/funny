@@ -55,13 +55,12 @@ export function SidebarTopBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-search"
               aria-label={t('sidebar.search', 'Search')}
               onClick={() => navigate(buildPath('/list'))}
-              className="text-muted-foreground"
             >
               <Search className="icon-base" />
             </Button>
@@ -76,13 +75,12 @@ export function SidebarTopBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-factory"
               aria-label={t('sidebar.factory', 'Factory queue')}
               onClick={() => navigate(buildPath('/factory'))}
-              className="text-muted-foreground"
             >
               <Factory className="icon-base" />
             </Button>
@@ -92,13 +90,12 @@ export function SidebarTopBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-kanban"
               aria-label="Kanban"
               onClick={() => navigate(buildPath('/kanban'))}
-              className="text-muted-foreground"
             >
               <Columns3 className="icon-base" />
             </Button>
@@ -108,13 +105,12 @@ export function SidebarTopBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-grid"
               aria-label="Grid"
               onClick={() => navigate(buildPath('/grid'))}
-              className="text-muted-foreground"
             >
               <LayoutGrid className="icon-base" />
             </Button>
@@ -124,13 +120,12 @@ export function SidebarTopBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-analytics"
               aria-label={t('sidebar.analytics')}
               onClick={() => navigate(buildPath('/analytics'))}
-              className="text-muted-foreground"
             >
               <BarChart3 className="icon-base" />
             </Button>

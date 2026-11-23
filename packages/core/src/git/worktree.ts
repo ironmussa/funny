@@ -213,6 +213,45 @@ async function remoteBaseRef(
   return check.exitCode === 0 && commit ? { ref: remoteRef, commit } : null;
 }
 
+/**
+ * The ref a new worktree starts from. With `fromRemote`, the fetched
+ * `origin/<baseBranch>`; otherwise the name as-is, then `origin/<name>` for
+ * remote-only branches (common after a fresh clone); `undefined` means HEAD.
+ */
+async function resolveWorktreeBase(
+  projectPath: string,
+  baseBranch: string | undefined,
+  fromRemote: boolean,
+  onProgress?: SetupProgressFn,
+): Promise<string | undefined> {
+  if (!baseBranch) return undefined;
+  const remoteBase = fromRemote ? await remoteBaseRef(projectPath, baseBranch) : null;
+  if (remoteBase) {
+    onProgress?.('worktree:resolve', `Using remote branch "${remoteBase.ref}"`, 'completed');
+    return remoteBase.commit;
+  }
+  onProgress?.('worktree:resolve', `Resolving branch "${baseBranch}"`, 'running');
+  const branchCheck = await gitRead(['rev-parse', '--verify', baseBranch], {
+    cwd: projectPath,
+    reject: false,
+  });
+  if (branchCheck.exitCode === 0) {
+    onProgress?.('worktree:resolve', `Resolved branch "${baseBranch}"`, 'completed');
+    return baseBranch;
+  }
+  const remoteRef = `origin/${baseBranch}`;
+  const remoteCheck = await gitRead(['rev-parse', '--verify', remoteRef], {
+    cwd: projectPath,
+    reject: false,
+  });
+  if (remoteCheck.exitCode === 0) {
+    onProgress?.('worktree:resolve', `Using remote branch "${remoteRef}"`, 'completed');
+    return remoteRef;
+  }
+  onProgress?.('worktree:resolve', `Branch "${baseBranch}" not found, using HEAD`, 'completed');
+  return undefined;
+}
+
 export function createWorktree(
   projectPath: string,
   branchName: string,
@@ -246,46 +285,12 @@ export function createWorktree(
       }
       onProgress?.('worktree:init', 'Checking repository', 'completed');
 
-      // Resolve the base branch ref. Try the name as-is first, then try
-      // origin/<name> for remote-only branches (common after a fresh clone).
-      let effectiveBase = baseBranch;
-      const remoteBase =
-        fromRemote && baseBranch ? await remoteBaseRef(projectPath, baseBranch) : null;
-      if (remoteBase) {
-        effectiveBase = remoteBase.commit;
-        onProgress?.('worktree:resolve', `Using remote branch "${remoteBase.ref}"`, 'completed');
-      } else if (baseBranch) {
-        onProgress?.('worktree:resolve', `Resolving branch "${baseBranch}"`, 'running');
-        const branchCheck = await gitRead(['rev-parse', '--verify', baseBranch], {
-          cwd: projectPath,
-          reject: false,
-        });
-        if (branchCheck.exitCode !== 0) {
-          // Branch doesn't exist locally — try origin/<name>
-          const remoteRef = `origin/${baseBranch}`;
-          const remoteCheck = await gitRead(['rev-parse', '--verify', remoteRef], {
-            cwd: projectPath,
-            reject: false,
-          });
-          if (remoteCheck.exitCode === 0) {
-            effectiveBase = remoteRef;
-            onProgress?.(
-              'worktree:resolve',
-              `Using remote branch "origin/${baseBranch}"`,
-              'completed',
-            );
-          } else {
-            effectiveBase = undefined;
-            onProgress?.(
-              'worktree:resolve',
-              `Branch "${baseBranch}" not found, using HEAD`,
-              'completed',
-            );
-          }
-        } else {
-          onProgress?.('worktree:resolve', `Resolved branch "${baseBranch}"`, 'completed');
-        }
-      }
+      const effectiveBase = await resolveWorktreeBase(
+        projectPath,
+        baseBranch,
+        fromRemote,
+        onProgress,
+      );
 
       const baseResult = await getWorktreeBase(projectPath);
       if (baseResult.isErr()) throw baseResult.error;

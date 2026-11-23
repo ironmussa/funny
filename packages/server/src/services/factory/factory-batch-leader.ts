@@ -74,7 +74,13 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
   async function startRow(members: QueueMember[]): Promise<FactoryBatch | null> {
     const leader = members[0]!;
     const stale = await deps.batches.active(leader.repo, leader.baseBranch);
-    if (stale.isOk() && stale.value) await deps.batches.move(stale.value.id, 'abandon');
+    if (stale.isOk() && stale.value) {
+      // Left by a leader whose server stopped: end it, and remove its branches.
+      await deps.batches.move(stale.value.id, 'abandon');
+      const host = deps.providerFor(leader);
+      await host.deleteBranch(leader.repo, stale.value.stagingBranch);
+      await host.deleteBranch(leader.repo, stale.value.queueBranch);
+    }
     const started = await deps.batches.start({
       repo: leader.repo,
       baseBranch: leader.baseBranch,

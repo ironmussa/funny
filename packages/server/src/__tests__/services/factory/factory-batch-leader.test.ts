@@ -222,6 +222,34 @@ describe('a green batch', () => {
   });
 });
 
+// Found end to end: a server that stopped while it led a batch left the
+// batch's branches behind.
+describe('a batch a stopped leader left', () => {
+  test('is ended and its branches removed before the next batch starts', async () => {
+    const host = createFakeHost();
+    const list = members(host, 2);
+    const batches = createFactoryBatchesRepository();
+    const stale = (
+      await batches.start({ repo: 'o/r', baseBranch: 'main', leaderRunId: 'gone', members: list })
+    )._unsafeUnwrap()!;
+    host.branches.set(stale.stagingBranch, 'B0');
+    host.branches.set(stale.queueBranch, 'B0');
+    const deps: MergeQueueDeps = {
+      batches,
+      providerFor: (member) => host.as(member.userId),
+      hold: async () => null,
+      signal: new AbortController().signal,
+      pollMs: 1,
+      noChecksGraceMs: 0,
+    };
+    const outcome = await createBatchLeader(createMergeQueue(deps), deps).lead(list);
+    expect((await batches.get(stale.id))._unsafeUnwrap()?.state).toBe('abandoned');
+    expect(host.branches.has(stale.stagingBranch)).toBe(false);
+    expect(host.branches.has(stale.queueBranch)).toBe(false);
+    expect(kinds(outcome.verdicts)).toEqual({ r1: 'merged', r2: 'merged' });
+  });
+});
+
 describe('what a batch costs (6.2)', () => {
   test('a green batch: its size, and no halves tested apart', async () => {
     const { outcome } = await lead(3);

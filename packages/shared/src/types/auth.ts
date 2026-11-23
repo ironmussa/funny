@@ -89,8 +89,27 @@ export interface UserProfile {
   toolPermissions: Record<string, string> | null;
   theme: string | null;
   runnerInviteToken: string | null;
+  /** The model for helper generations (thread recaps, commit messages); null = the default. */
+  utilityModel: UtilityModelSetting | null;
+  /** "Show thread recaps" (thread-recap); on unless the user turned it off. */
+  threadRecapEnabled: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Providers a utility model can run on (`UtilityModelSetting` schema in `contracts/profile`). */
+export type UtilityModelProvider =
+  | 'claude-sdk'
+  | 'anthropic'
+  | 'openai'
+  | 'ollama'
+  | 'openai-compatible';
+
+/** A user's utility model. `baseURL` is required for `openai-compatible`. */
+export interface UtilityModelSetting {
+  provider: UtilityModelProvider;
+  model: string;
+  baseURL?: string;
 }
 
 export interface UpdateProfileRequest {
@@ -110,4 +129,7 @@ export interface UpdateProfileRequest {
   terminalShell?: string;
   toolPermissions?: Record<string, string>;
   theme?: string;
+  /** null clears the setting back to the default utility model. */
+  utilityModel?: UtilityModelSetting | null;
+  threadRecapEnabled?: boolean;
 }

@@ -6,7 +6,37 @@
 
 import { z } from 'zod';
 
-import type { UpdateProfileRequest, UserProfile } from '../types/auth.js';
+import type {
+  UpdateProfileRequest,
+  UserProfile,
+  UtilityModelSetting as UtilityModelSettingType,
+} from '../types/auth.js';
+
+/**
+ * The model for a user's helper generations (thread recaps, commit messages):
+ * a provider, a model id and, for `openai-compatible` (required) and `ollama`
+ * (optional), the endpoint's base URL.
+ */
+export const UtilityModelSetting = z
+  .object({
+    provider: z.enum(['claude-sdk', 'anthropic', 'openai', 'ollama', 'openai-compatible']),
+    model: z.string().trim().min(1),
+    baseURL: z.string().trim().min(1).optional(),
+  })
+  .refine((s) => s.provider !== 'openai-compatible' || s.baseURL !== undefined, {
+    message: 'baseURL is required for an openai-compatible utility model',
+    path: ['baseURL'],
+  }) satisfies z.ZodType<UtilityModelSettingType>;
+
+export type UtilityModelSetting = UtilityModelSettingType;
+
+/** The utility model of a user who never chose one. */
+const DEFAULT_UTILITY_MODEL: UtilityModelSetting = { provider: 'claude-sdk', model: 'haiku' };
+
+/** The utility model a generation runs on: the user's setting, or Claude Haiku. */
+export function resolveUtilityModel(setting: UtilityModelSetting | null): UtilityModelSetting {
+  return setting ?? { ...DEFAULT_UTILITY_MODEL };
+}
 
 export const updateProfileBody = z.object({
   gitName: z.string().optional(),
@@ -21,6 +51,8 @@ export const updateProfileBody = z.object({
   terminalShell: z.string().optional(),
   toolPermissions: z.record(z.string(), z.string()).optional(),
   theme: z.string().optional(),
+  utilityModel: UtilityModelSetting.nullable().optional(),
+  threadRecapEnabled: z.boolean().optional(),
 }) satisfies z.ZodType<UpdateProfileRequest>;
 
 /**

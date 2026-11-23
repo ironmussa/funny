@@ -24,6 +24,8 @@ const defaultProfile = (userId: string) => ({
   toolPermissions: null,
   theme: null,
   runnerInviteToken: null,
+  utilityModel: null,
+  threadRecapEnabled: true,
 });
 
 export const profilePort: ProfilePort = {

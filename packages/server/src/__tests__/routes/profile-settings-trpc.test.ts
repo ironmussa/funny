@@ -114,6 +114,70 @@ describe('profile and settings tRPC procedures', () => {
       expect((await query('user-2', 'profile.get')).body.result.data.gitName).toBeNull();
     });
 
+    test('a user without a saved profile reads recaps on and the default utility model', async () => {
+      const res = await query('user-1', 'profile.get');
+      expect(res.body.result.data).toMatchObject({ threadRecapEnabled: true, utilityModel: null });
+    });
+
+    test('utility model and recap toggle are saved and read back', async () => {
+      // A profile created by another field keeps recaps on.
+      await mutate('user-1', 'profile.update', { gitName: 'Ada' });
+      expect((await query('user-1', 'profile.get')).body.result.data).toMatchObject({
+        threadRecapEnabled: true,
+        utilityModel: null,
+      });
+
+      const saved = await mutate('user-1', 'profile.update', {
+        utilityModel: { provider: 'openai', model: 'gpt-4o' },
+        threadRecapEnabled: false,
+      });
+      expect(saved.status).toBe(200);
+      expect(saved.body.result.data).toMatchObject({
+        utilityModel: { provider: 'openai', model: 'gpt-4o' },
+        threadRecapEnabled: false,
+      });
+
+      // An unrelated update leaves both untouched.
+      await mutate('user-1', 'profile.update', { theme: 'one-light' });
+      expect((await query('user-1', 'profile.get')).body.result.data).toMatchObject({
+        utilityModel: { provider: 'openai', model: 'gpt-4o' },
+        threadRecapEnabled: false,
+        gitName: 'Ada',
+      });
+
+      // null clears the utility model back to the default.
+      await mutate('user-1', 'profile.update', { utilityModel: null, threadRecapEnabled: true });
+      expect((await query('user-1', 'profile.get')).body.result.data).toMatchObject({
+        utilityModel: null,
+        threadRecapEnabled: true,
+      });
+    });
+
+    test('a first save can turn recaps off and set the utility model', async () => {
+      const res = await mutate('user-1', 'profile.update', {
+        utilityModel: { provider: 'ollama', model: 'llama3' },
+        threadRecapEnabled: false,
+      });
+      expect(res.body.result.data).toMatchObject({
+        utilityModel: { provider: 'ollama', model: 'llama3' },
+        threadRecapEnabled: false,
+      });
+    });
+
+    test('an openai-compatible utility model without a base URL is refused and the previous one kept', async () => {
+      await mutate('user-1', 'profile.update', {
+        utilityModel: { provider: 'anthropic', model: 'claude-haiku-5-5' },
+      });
+      const res = await mutate('user-1', 'profile.update', {
+        utilityModel: { provider: 'openai-compatible', model: 'local' },
+      });
+      expect(res.status).toBe(400);
+      expect((await query('user-1', 'profile.get')).body.result.data.utilityModel).toEqual({
+        provider: 'anthropic',
+        model: 'claude-haiku-5-5',
+      });
+    });
+
     test('update validates the body', async () => {
       const res = await mutate('user-1', 'profile.update', { setupCompleted: 'yes' });
       expect(res.status).toBe(400);

@@ -2409,6 +2409,16 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Change thread-recap, D4 / D4b: the user's utility model (JSON
+    // `UtilityModelSetting`, null = the claude-sdk / haiku default) and the
+    // "Show thread recaps" toggle, on for every existing and new user.
+    name: '120_user_profiles_utility_model',
+    async up() {
+      await ctx().addColumn('user_profiles', 'utility_model', 'TEXT');
+      await ctx().addColumn('user_profiles', 'thread_recap_enabled', 'INTEGER NOT NULL', '1');
+    },
+  },
 ];
 
 /**

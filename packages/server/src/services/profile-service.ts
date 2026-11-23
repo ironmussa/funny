@@ -8,6 +8,7 @@
  */
 
 import type { UserProfile } from '@funny/shared';
+import { UtilityModelSetting } from '@funny/shared/contracts/profile';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -27,6 +28,13 @@ function parseProviderKeys(raw: string | null): Record<string, string> {
   if (!raw) return {};
   const parsed = parseStoredJson(providerKeysSchema, raw, 'user_profiles.provider_keys');
   return parsed.ok ? parsed.value : {};
+}
+
+/** Parse the utility_model JSON column; null when unset or unreadable (the default). */
+function parseUtilityModel(raw: string | null): UtilityModelSetting | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(UtilityModelSetting, raw, 'user_profiles.utility_model');
+  return parsed.ok ? parsed.value : null;
 }
 
 /** Build the providerKeys presence map (id → boolean) for the API response. */
@@ -134,6 +142,8 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     toolPermissions: r.toolPermissions ? JSON.parse(r.toolPermissions as string) : null,
     theme: r.theme ?? null,
     runnerInviteToken: r.runnerInviteToken ?? null,
+    utilityModel: parseUtilityModel(r.utilityModel),
+    threadRecapEnabled: r.threadRecapEnabled !== 0,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
@@ -154,6 +164,8 @@ export async function upsertProfile(
     terminalShell?: string;
     toolPermissions?: Record<string, any>;
     theme?: string;
+    utilityModel?: UtilityModelSetting | null;
+    threadRecapEnabled?: boolean;
   },
 ): Promise<UserProfile> {
   // Handle provider keys (new generic + legacy fields)
@@ -185,6 +197,10 @@ export async function upsertProfile(
     if (updates.toolPermissions !== undefined)
       set.toolPermissions = JSON.stringify(updates.toolPermissions);
     if (updates.theme !== undefined) set.theme = updates.theme;
+    if (updates.utilityModel !== undefined)
+      set.utilityModel = updates.utilityModel ? JSON.stringify(updates.utilityModel) : null;
+    if (updates.threadRecapEnabled !== undefined)
+      set.threadRecapEnabled = updates.threadRecapEnabled ? 1 : 0;
 
     await db.update(userProfiles).set(set).where(eq(userProfiles.userId, userId));
   } else {
@@ -200,6 +216,8 @@ export async function upsertProfile(
       terminalShell: updates.terminalShell ?? null,
       toolPermissions: updates.toolPermissions ? JSON.stringify(updates.toolPermissions) : null,
       theme: updates.theme ?? null,
+      utilityModel: updates.utilityModel ? JSON.stringify(updates.utilityModel) : null,
+      threadRecapEnabled: updates.threadRecapEnabled === false ? 0 : 1,
       createdAt: now,
       updatedAt: now,
     });

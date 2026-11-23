@@ -682,6 +682,10 @@ export const userProfiles = pgTable('user_profiles', {
   runnerInviteTokenUsedAt: text('runner_invite_token_used_at'),
   /** Runner designated as this user's general runner (project-runner-binding). */
   generalRunnerId: text('general_runner_id'),
+  /** JSON `UtilityModelSetting` for helper generations; null = claude-sdk / haiku. */
+  utilityModel: text('utility_model'),
+  /** "Show thread recaps" toggle (thread-recap); on by default. */
+  threadRecapEnabled: integer('thread_recap_enabled').notNull().default(1),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

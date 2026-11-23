@@ -105,6 +105,9 @@ import {
   type KeptWorktree,
   pollRegressionProofOnRunner,
   sendFactoryFollowUp,
+  cancelFactoryStepOnRunner,
+  pollFactoryStepOnRunner,
+  startFactoryStepOnRunner,
   startRegressionProofOnRunner,
   stopFactoryThreads,
 } from './factory-thread-requests.js';
@@ -176,6 +179,8 @@ export interface FactoryWatcherDeps {
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Proof service override for tests; defaults to runner thread requests. */
   proof?: FactoryFlowRunsDeps['proof'];
+  /** Factory step override for tests; defaults to the enabler's runner. */
+  steps?: FactoryFlowRunsDeps['steps'];
   /** The flows' concurrency gate (tests); default: database leases. */
   gate?: ConcurrencyGate;
 }
@@ -237,7 +242,18 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
       pollProof: (tid, proofId) => pollRegressionProofOnRunner(d.ports, userId, tid, proofId),
       cancelProof: (tid, proofId) => cancelRegressionProofOnRunner(d.ports, userId, tid, proofId),
     }));
+  const steps =
+    d.steps ??
+    ((userId: string) => ({
+      startStep: (tid: string, body: Record<string, unknown>) =>
+        startFactoryStepOnRunner(d.ports, userId, tid, body),
+      pollStep: (tid: string, stepId: string) =>
+        pollFactoryStepOnRunner(d.ports, userId, tid, stepId),
+      cancelStep: (tid: string, stepId: string) =>
+        cancelFactoryStepOnRunner(d.ports, userId, tid, stepId),
+    }));
   flows = createFactoryFlowRuns({
+    steps,
     runs,
     github: d.github,
     launch: launchFor(d),

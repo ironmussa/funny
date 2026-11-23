@@ -24,8 +24,12 @@ import type { GithubCallError } from '@funny/core/github-app';
 import type { PipelineDefinition } from '@funny/pipelines';
 import type { FactoryFlowDefinition } from '@funny/shared/contracts/factory';
 import {
+  EMPTY_INTEGRATE_CONFIG,
   formatParseError,
+  INTEGRATE_CONFIG_PATH,
   isProofReady,
+  parseIntegrateConfig,
+  type IntegrateConfig,
   loadWorkflowCatalog,
   parseWorkflowYaml,
   resolvePromptFiles,
@@ -108,13 +112,28 @@ export interface FactoryFlow {
   proofReady: boolean;
   /** Its `regression_proof` step's configuration, when it has one (the watcher re-proves with it). */
   regressionProof?: RegressionProofOpts;
+  /**
+   * `.funny/integrate.yaml` as of the flow's commit, when the flow has an
+   * `integrate` step: the regenerators and checks it runs. Empty without the file.
+   */
+  integrate: IntegrateConfig;
 }
 
 type FlowNode = ParsedWorkflow['nodes'][number];
 
-/** Whether the node runs an agent on the run's thread (its action or a fixer it may spawn). */
+/**
+ * Whether the node works in the run's checkout: an agent on the run's thread
+ * (its action or a fixer it may spawn), or a command the runner runs there.
+ */
 function runsAgent(node: FlowNode): boolean {
-  return !!(node.spawn_agent || node.retry?.before_retry || node.approval?.on_reject);
+  return !!(
+    node.spawn_agent ||
+    node.retry?.before_retry ||
+    node.approval?.on_reject ||
+    node.run_command ||
+    node.bash ||
+    node.integrate
+  );
 }
 
 /** Every node `id` depends on, directly or not. */
@@ -144,7 +163,7 @@ function agentStepIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
       if (a.ancestors.has(b.node.id) || b.ancestors.has(a.node.id)) continue;
       issues.push({
         path: `nodes.${b.index}`,
-        message: `Agent steps "${a.node.id}" and "${b.node.id}" are in parallel branches, but a factory run has one agent thread that runs one turn at a time. Make one depend on the other.`,
+        message: `Agent steps "${a.node.id}" and "${b.node.id}" are in parallel branches, but a factory run has one checkout, used by one agent turn or command at a time. Make one depend on the other.`,
       });
     }
   }
@@ -229,6 +248,8 @@ async function compile(
     });
   }
   const workflow = prompts.workflow;
+  const integrate = await integrateConfigOf(workflow, found.readRepositoryFile);
+  if (integrate.isErr()) return err(integrate.error);
   const problems = validateFactoryFlow(workflow, context);
   if (problems.length > 0) {
     return err({ kind: 'invalid', message: formatFactoryFlowProblems(origin, problems), problems });
@@ -246,6 +267,7 @@ async function compile(
           : parsed.warnings,
       proofReady: isProofReady(workflow),
       regressionProof: proofConfigOf(workflow),
+      integrate: integrate.value,
     });
   } catch (error) {
     return err({
@@ -253,6 +275,29 @@ async function compile(
       message: `${origin}: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
+}
+
+/**
+ * The integrate configuration a flow with an `integrate` step runs with, read
+ * where the flow was read (the same default-branch commit). A file that does
+ * not validate fails the load with every problem, for the run and Validate flow.
+ */
+async function integrateConfigOf(
+  workflow: ParsedWorkflow,
+  readRepositoryFile: FoundFlow['readRepositoryFile'],
+): Promise<Result<IntegrateConfig, FactoryFlowError>> {
+  if (!workflow.nodes.some((node) => node.integrate)) return ok(EMPTY_INTEGRATE_CONFIG);
+  const read = await readRepositoryFile(INTEGRATE_CONFIG_PATH);
+  if (read.isErr()) return err({ kind: 'unavailable', message: read.error.message });
+  if (read.value === null) return ok(EMPTY_INTEGRATE_CONFIG);
+  const parsed = parseIntegrateConfig(read.value);
+  if (parsed.ok) return ok(parsed.config);
+  const problems = parsed.problems.map((problem) => ({ step: INTEGRATE_CONFIG_PATH, ...problem }));
+  return err({
+    kind: 'invalid',
+    message: formatFactoryFlowProblems(INTEGRATE_CONFIG_PATH, problems),
+    problems,
+  });
 }
 
 /** Where a repository flow lives; its prompt files are relative to it. */
@@ -307,6 +352,8 @@ interface FoundFlow {
   commit: string | null;
   /** Reads its prompt files, relative to its directory, from where it was read. */
   readPromptFile: PromptFileReader;
+  /** Reads a repository file at the commit the flow was read at (a built-in's too). */
+  readRepositoryFile: RepositoryReads['read'];
 }
 
 async function findFactoryFlow(
@@ -330,6 +377,7 @@ async function findFactoryFlow(
       yaml,
       commit: reads.value.commit,
       readPromptFile,
+      readRepositoryFile: reads.value.read,
     });
   }
 
@@ -354,6 +402,7 @@ async function findFactoryFlow(
     yaml: builtIn.yaml,
     commit: null,
     readPromptFile: builtInPromptReader(builtIn.filePath),
+    readRepositoryFile: reads.value.read,
   });
 }
 

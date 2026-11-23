@@ -669,6 +669,42 @@ export const startRegressionProofSchema = z.object({
   fetchHead: z.boolean().default(false),
 });
 
+/** A branch name a git command may take as an argument (never an option). */
+const factoryBranchSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .refine((s) => !s.startsWith('-'), 'branch must not start with "-"');
+
+/** A step timeout: 10 minutes by default, at most an hour. */
+const factoryTimeoutSchema = z.number().int().positive().max(3_600_000).default(600_000);
+
+/** A factory step the runner runs in the thread's checkout (openspec factory-integration). */
+export const startFactoryStepSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('command'),
+    command: z.string().min(1).max(10_000),
+    timeoutMs: factoryTimeoutSchema,
+  }),
+  z.object({
+    kind: z.literal('integrate'),
+    baseBranch: factoryBranchSchema,
+    branch: factoryBranchSchema,
+    regenerators: z
+      .array(
+        z.object({
+          paths: z.array(z.string().min(1)).min(1),
+          run: z.string().min(1).max(10_000),
+          timeoutMs: factoryTimeoutSchema,
+        }),
+      )
+      .max(50)
+      .default([]),
+    checks: z.array(z.string().min(1).max(10_000)).max(20).default([]),
+    timeoutMs: factoryTimeoutSchema,
+  }),
+]);
+
 // ── Helper ───────────────────────────────────────────────────────
 
 /** Validate request body; returns Result<T, DomainError> */

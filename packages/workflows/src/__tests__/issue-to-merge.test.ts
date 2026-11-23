@@ -52,6 +52,14 @@ const verdict = (allowsMerge: boolean, feedback = ''): ActionResult => ({
 });
 const pass = verdict(true);
 
+/** An integrate step as the factory's provider reports it. */
+const integrated = (outcome: string, feedback = ''): ActionResult => ({
+  ok: true,
+  output: outcome,
+  metadata: { outcome, conflict: outcome === 'conflict', feedback },
+});
+const upToDate = integrated('up-to-date');
+
 /**
  * A provider whose `wait_ci` answers from `ci` and whose `review` answers from
  * `reviews`, each in order (the last repeats).
@@ -60,10 +68,12 @@ function provider(
   ci: ActionResult[],
   reviews: ActionResult[] = [pass],
   mergeResults: ActionResult[] = [ok],
+  integrations: ActionResult[] = [upToDate],
 ) {
   const prompts: string[] = [];
   let looks = 0;
   let merges = 0;
+  let integrates = 0;
   let reviewed = 0;
   const waits: Array<{ earlyReview?: unknown }> = [];
   const p: ActionProvider = {
@@ -86,9 +96,18 @@ function provider(
       return ci[Math.min(looks++, ci.length - 1)]!;
     },
     merge: async () => mergeResults[Math.min(merges++, mergeResults.length - 1)]!,
+    integrate: async () => integrations[Math.min(integrates++, integrations.length - 1)]!,
     requestApproval: async () => ({ decision: 'approve' }),
   };
-  return { p, prompts, merges: () => merges, looks: () => looks, reviews: () => reviewed, waits };
+  return {
+    p,
+    prompts,
+    merges: () => merges,
+    looks: () => looks,
+    reviews: () => reviewed,
+    integrates: () => integrates,
+    waits,
+  };
 }
 
 const red: ActionResult = { ok: false, error: 'Failing checks: test\n\n--- test ---\nboom' };
@@ -100,9 +119,10 @@ async function run(
   flow = 'issue-to-merge',
   reviews?: ActionResult[],
   mergeResults?: ActionResult[],
+  integrations?: ActionResult[],
 ) {
   const pipeline = compileYamlPipeline(await resolvedBuiltIn(flow));
-  const fake = provider(ci, reviews, mergeResults);
+  const fake = provider(ci, reviews, mergeResults, integrations);
   const result = await runPipeline(pipeline, {
     provider: fake.p,
     progress: nullReporter,
@@ -308,38 +328,89 @@ describe('issue-to-merge workflow', () => {
     });
   });
 
-  // Change factory-agent-roles, D8/D9: `merge` sends a conflict back to the implementer.
+  // Change factory-agent-roles, D8/D9, and factory-integration 3.4: a round
+  // `merge` sends back starts again at `integrate`; only what it cannot settle,
+  // or checks that fail on the new base, reach the implementer.
   describe('merge loop', () => {
     const conflict = 'The pull request from `factory/issue-7` conflicts with `main`';
-    const sentBack: ActionResult = {
+    const sentBack = (why: 'conflict' | 'checks', feedback = conflict): ActionResult => ({
       ok: true,
       output: 'sent_back',
-      metadata: { outcome: 'sent_back', why: 'conflict', feedback: conflict },
-    };
+      metadata: { outcome: 'sent_back', why, feedback },
+    });
     const merged: ActionResult = { ok: true, output: 'merged', metadata: { outcome: 'merged' } };
+    const realConflict = integrated(
+      'conflict',
+      'Merging the base branch main into this branch left conflicts that could not be settled without you, in:\n- src/sum.ts',
+    );
 
-    test('a conflict goes to the implementer, then the checks and the review run again before the merge', async () => {
-      const r = await run([green], 'issue-to-merge', [pass], [sentBack, merged]);
+    test('integrate runs before the checks, and a branch with its base goes straight on', async () => {
+      const r = await run([green]);
+      expect(r.outcome).toBe('completed');
+      expect(r.integrates()).toBe(1);
+      expect(r.prompts).toHaveLength(1);
+    });
+
+    test('a conflict integrate settles never reaches the implementer', async () => {
+      const r = await run(
+        [green],
+        'issue-to-merge',
+        [pass],
+        [sentBack('conflict'), merged],
+        [upToDate, integrated('merged')],
+      );
       expect(r.outcome).toBe('completed');
       expect(r.merges()).toBe(2);
-      // The implement turn, then the conflict as a follow-up: not the review's wording.
-      expect(r.prompts).toHaveLength(2);
-      expect(r.prompts[1]).toContain(conflict);
-      expect(r.prompts[1]).toContain('passed its review but cannot merge yet');
-      expect(r.prompts[1]).not.toContain('An independent review');
-      expect(r.prompts[1]).toContain('Do not rebase or force push');
-      // The new commit went through the checks and the review again.
+      expect(r.integrates()).toBe(2);
+      // Only the implement turn: no address.
+      expect(r.prompts).toHaveLength(1);
+      // The merged commit went through the checks and the review again.
       expect(r.looks()).toBe(2);
       expect(r.reviews()).toBe(2);
     });
 
-    test('a review that fails after a conflict fix sends its own findings, not the conflict again', async () => {
+    test('a conflict integrate cannot settle goes to the implementer with its paths', async () => {
+      const r = await run(
+        [green],
+        'issue-to-merge',
+        [pass],
+        [sentBack('conflict'), merged],
+        [upToDate, realConflict, upToDate],
+      );
+      expect(r.outcome).toBe('completed');
+      expect(r.prompts).toHaveLength(2);
+      expect(r.prompts[1]).toContain('- src/sum.ts');
+      expect(r.prompts[1]).not.toContain('An independent review');
+      expect(r.prompts[1]).not.toContain('passed its review but cannot merge yet');
+      expect(r.prompts[1]).toContain('Do not rebase or force push');
+    });
+
+    test('a conflict on the first integration goes to the implementer before the checks', async () => {
+      const r = await run([green], 'issue-to-merge', [pass], [merged], [realConflict, upToDate]);
+      expect(r.outcome).toBe('completed');
+      expect(r.prompts).toHaveLength(2);
+      expect(r.prompts[1]).toContain('- src/sum.ts');
+      expect(r.looks()).toBe(1);
+    });
+
+    test('checks that fail on the new base go to the implementer', async () => {
+      const failing = 'The checks fail on the current base: test';
+      const r = await run([green], 'issue-to-merge', [pass], [sentBack('checks', failing), merged]);
+      expect(r.outcome).toBe('completed');
+      expect(r.prompts).toHaveLength(2);
+      expect(r.prompts[1]).toContain(failing);
+      expect(r.prompts[1]).toContain('passed its review but cannot merge yet');
+      expect(r.looks()).toBe(2);
+      expect(r.reviews()).toBe(2);
+    });
+
+    test('a review that fails after a fix sends its own findings, not the merge feedback', async () => {
       const findings = '- [high] src/sum.ts:3: the merge dropped a case';
       const r = await run(
         [green],
         'issue-to-merge',
         [pass, verdict(false, findings), pass],
-        [sentBack, merged],
+        [sentBack('checks'), merged],
       );
       expect(r.outcome).toBe('completed');
       expect(r.prompts).toHaveLength(3);
@@ -347,11 +418,30 @@ describe('issue-to-merge workflow', () => {
       expect(r.prompts[2]).not.toContain(conflict);
     });
 
-    test('a branch that conflicts every time ends the run without a merge', async () => {
-      const r = await run([green], 'issue-to-merge', [pass], [sentBack]);
+    test('four rounds settled by integrate do not end the run', async () => {
+      const r = await run(
+        [green],
+        'issue-to-merge',
+        [pass],
+        [
+          sentBack('conflict'),
+          sentBack('conflict'),
+          sentBack('conflict'),
+          sentBack('conflict'),
+          merged,
+        ],
+        [upToDate, integrated('merged')],
+      );
+      expect(r.outcome).toBe('completed');
+      expect(r.merges()).toBe(5);
+      expect(r.prompts).toHaveLength(1);
+    });
+
+    test('a branch sent back every time ends the run after 10 merge rounds', async () => {
+      const r = await run([green], 'issue-to-merge', [pass], [sentBack('conflict')]);
       expect(r.outcome).toBe('failed');
       expect(r.error).toContain('loop exhausted');
-      expect(r.merges()).toBe(3);
+      expect(r.merges()).toBe(10);
     });
 
     test('a provider whose merge reports no outcome ends the loop after one merge', async () => {

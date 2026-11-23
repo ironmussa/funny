@@ -61,3 +61,13 @@ export {
   type PromptFileProblem,
   type PromptFilesResult,
 } from './prompt-files.js';
+
+export {
+  INTEGRATE_CONFIG_PATH,
+  EMPTY_INTEGRATE_CONFIG,
+  parseIntegrateConfig,
+  type IntegrateConfig,
+  type IntegrateConfigProblem,
+  type IntegrateConfigResult,
+  type IntegrateRegenerator,
+} from './integrate-config.js';

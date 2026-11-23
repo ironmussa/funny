@@ -34,6 +34,8 @@ export interface RuntimeThreadRecord {
   isScratch?: boolean;
   /** `threads.read_only`: 1 when the agent may only read. */
   readOnly?: number | boolean | null;
+  /** Who started it (`threads.source`): `factory` for the issue factory's threads. */
+  source?: string | null;
   status?: string | null;
   stage?: string | null;
   mode?: string | null;

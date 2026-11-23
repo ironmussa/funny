@@ -117,6 +117,19 @@ describe('Worktrees sidebar', () => {
     );
   });
 
+  test('shows a detached worktree, which has no branch, without crashing', async () => {
+    mocked(api.listWorktrees).mockReturnValue(
+      okAsync([
+        { path: '/second', branch: 'main', commit: 'abcdef12', isMain: true },
+        { path: '/tmp/detached', commit: '1234567890abcdef', isMain: false },
+      ]),
+    );
+    renderWithProviders(<WorktreesPanel />);
+    const label = await screen.findByTestId('worktree-detached-1234567');
+    expect(label).toHaveTextContent('1234567');
+    expect(screen.getByText('/tmp/detached')).toBeInTheDocument();
+  });
+
   test('distinguishes the main checkout from the active linked worktree', async () => {
     mocked(api.listWorktrees).mockReturnValue(
       okAsync([
@@ -132,23 +145,25 @@ describe('Worktrees sidebar', () => {
       screen.getByTestId('worktree-main-icon'),
     );
     expect(screen.queryByTestId('worktree-badge-main')).not.toBeInTheDocument();
-    // The active worktree's branch chip is outlined (like History's thread
-    // branch) instead of carrying a separate "Current" badge.
-    const featureChip = screen.getByTestId('worktree-branch-feature/test');
-    expect(featureChip).toHaveAttribute('data-highlighted', 'true');
-    expect(featureChip.style.boxShadow).toContain('1.5px');
-    expect(featureChip).toHaveTextContent('Current');
-    expect(screen.getByTestId('worktree-branch-main')).not.toHaveAttribute('data-highlighted');
-    expect(screen.queryByTestId('worktree-badge-active')).not.toBeInTheDocument();
-    context.basePath = '/second';
-    view.rerender(<WorktreesPanel />);
-    expect(screen.getByTestId('worktree-branch-main')).toHaveAttribute('data-highlighted', 'true');
+    // The active worktree shows as a selected row (like the sidebar's selected
+    // thread), not as an outlined branch chip or a separate "Current" badge.
+    const featureRow = screen.getByTestId('worktree-row-feature/test');
+    expect(featureRow).toHaveAttribute('data-active', 'true');
+    expect(featureRow).toHaveAttribute('aria-current', 'true');
+    expect(featureRow.className).toContain('bg-sidebar-selected');
     expect(screen.getByTestId('worktree-branch-feature/test')).not.toHaveAttribute(
       'data-highlighted',
     );
+    expect(screen.getByTestId('worktree-row-main')).not.toHaveAttribute('data-active');
+    expect(screen.queryByTestId('worktree-badge-active')).not.toBeInTheDocument();
+    context.basePath = '/second';
+    view.rerender(<WorktreesPanel />);
+    expect(screen.getByTestId('worktree-row-main')).toHaveAttribute('data-active', 'true');
+    expect(screen.getByTestId('worktree-row-feature/test')).not.toHaveAttribute('data-active');
     context.basePath = '';
     view.rerender(<WorktreesPanel />);
-    expect(screen.queryByText('Current')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('worktree-row-main')).not.toHaveAttribute('data-active');
+    expect(screen.getByTestId('worktree-row-feature/test')).not.toHaveAttribute('data-active');
   });
 
   test("shows a worktree's thread title the way the sidebar does", async () => {

@@ -185,6 +185,38 @@ function stepProblems(
   ].map((problem) => ({ step, ...problem }));
 }
 
+/** A step timeout the runner accepts: at most an hour. */
+const MAX_STEP_TIMEOUT_MS = 3_600_000;
+
+/**
+ * The problems of the flow's commands (`run_command` / `bash`). They run from
+ * the root of the run's checkout on the runner, so `cwd` is refused (write
+ * `cd dir && …`), and their timeout is at most an hour.
+ */
+function commandProblems(parsed: ParsedWorkflow): FactoryFlowProblem[] {
+  return parsed.nodes.flatMap((node) => {
+    const command = node.run_command ?? node.bash;
+    if (!command) return [];
+    const problems: FactoryFlowProblem[] = [];
+    if (command.cwd !== undefined) {
+      problems.push({
+        step: node.id,
+        field: 'cwd',
+        message:
+          'run_command runs from the root of the run checkout: write `cd <dir> && …` instead of cwd',
+      });
+    }
+    if ((command.timeout_ms ?? 0) > MAX_STEP_TIMEOUT_MS) {
+      problems.push({
+        step: node.id,
+        field: 'timeout_ms',
+        message: 'A command may run for at most an hour (3600000 ms)',
+      });
+    }
+    return problems;
+  });
+}
+
 /**
  * Every reason the flow cannot run as a factory flow, given the factory's step
  * overrides (which may change a step's provider) and the project's defaults.
@@ -199,6 +231,7 @@ export function validateFactoryFlow(
   return [
     ...defaultsProblems(parsed),
     ...steps.flatMap((step) => stepProblems(step, parsed, firstNode, context)),
+    ...commandProblems(parsed),
   ];
 }
 

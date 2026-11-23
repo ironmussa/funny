@@ -3,6 +3,19 @@
 Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its tasks 1.7 and 3.4), and
 `factory-agent-roles` groups 6–7 (review gate, `merge` node, `address` loop).
 
+**Phases (2026-11-23).** Both prerequisites are archived. The change ships in two phases:
+
+- **Phase 1, conflicts resolved without an agent:** group 2 (`run_command`), group 3 (`integrate`,
+  regenerators, loop budget, review freshness; not 3.5), 6.2 for the integrate counters
+  (`integrateRounds`, `conflictsResolvedWithoutLlm`, `conflictsSentToAgent`), 6.3 for what phase 1
+  ships, 7.1, and the parts of 7.2 that do not need the queue (adjacent imports merge without the
+  implementer, a lockfile conflict is regenerated). The serial merge lane of `factory-agent-roles`
+  stays the merge path.
+- **Phase 2, the batched queue:** group 1 (integration provider), group 4 (queue, bisection),
+  3.5 (`regenerate:` on `merge`, a loop back to an arbitrary node),
+  group 5 (early integration, stacking), 6.1 (readiness), the queue counters of 6.2, and the rest
+  of 7.2.
+
 ## 1. Integration provider
 
 - [ ] 1.1 Add `IntegrationProvider` to `@funny/core` (`branchRules`, `createBranch`, `mergeRefInto`, `mergePullRequest`, `checks`, `deleteBranch`, `enqueueInHostQueue`, `pullRequestMergeability`) returning `ResultAsync`; verify with unit tests over a fake
@@ -10,18 +23,18 @@ Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its ta
 
 ## 2. Commands in factory flows
 
-- [ ] 2.1 Allow `run_command` in factory flows: executed by the runner in the run's worktree or sandbox (never on the server), default timeout 10 min, per-step `timeout`, bounded stdout/stderr recorded on the run, non-zero exit fails the step; verify with action-provider and runtime tests for success, failure, timeout kill and the refusal of a server-side execution path
-- [ ] 2.1b Mask the values of the secrets the runner put in a `run_command` step's environment (App installation token, provider keys) in its recorded output, keeping the last 64 KiB of each stream; verify with a runtime test that runs `env`
-- [ ] 2.2 Validate `run_command` in factory flow loading (only from the default branch, as flows are today) and show it in Validate flow; verify with factory-flow load tests
+- [x] 2.1 Allow `run_command` in factory flows: executed by the runner in the run's worktree or sandbox (never on the server), default timeout 10 min, per-step `timeout`, bounded stdout/stderr recorded on the run, non-zero exit fails the step; verify with action-provider and runtime tests for success, failure, timeout kill and the refusal of a server-side execution path
+- [x] 2.1b Mask the values of the secrets the runner put in a `run_command` step's environment (App installation token, provider keys) in its recorded output, keeping the last 64 KiB of each stream; verify with a runtime test that runs `env`
+- [x] 2.2 Validate `run_command` in factory flow loading (only from the default branch, as flows are today) and show it in Validate flow; verify with factory-flow load tests
 
 ## 3. Integrate step and regenerators
 
-- [ ] 3.1 Carry weave, the attributes file and `rerere` in the environment of a factory run's processes (`GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`, `core.attributesFile` on a funny-owned file) for `integrate` and agent steps, writing nothing to the repository; verify with a core test on a temp repo with a linked worktree (driver used, `.git/config` and `info/attributes` of the main checkout unchanged) and a runtime test for the sandbox
-- [ ] 3.2 Implement the `integrate` operation (merge base in, never rebase; regenerators; integration checks; commit; push; abort with conflicted paths and the in-between PR's diff on remaining conflicts); report the resolved hunks and regenerated paths; verify with temp-repo tests for: adjacent additions resolved by the driver, a lockfile regenerated, a real conflict aborted with feedback
-- [ ] 3.3 Parse and validate `.funny/integrate.yaml` from the default branch with the flow; report problems in Validate flow; verify with loader tests for a valid file, an invalid glob and a missing command
-- [ ] 3.4 Add the `integrate` node to the built-in flow as the start of both loop regions (`back_to: integrate`), skipped when the branch contains the base, with `address` skipped when no gate left feedback; verify with a flow-run test where a resolvable conflict never reaches the implementer and a real one does
-- [ ] 3.4c Loop budget: merge loop `max_iterations` 10 in the built-in, and the factory parks a run after 2 rounds that reached the implementer; verify with flow-run tests for four resolved rounds (not parked) and three agent rounds (parked)
-- [ ] 3.4b Review freshness after `integrate`: a clean merge of the base keeps the review; a resolved conflict sends the run through the review gate again with the reviewer limited to the resolved hunks and regenerated paths; verify with flow-run tests for both cases
+- [x] 3.1 Carry weave, the attributes file and `rerere` in the environment of a factory run's processes (`GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`, `core.attributesFile` on a funny-owned file) for `integrate` and agent steps, writing nothing to the repository; verify with a core test on a temp repo with a linked worktree (driver used, `.git/config` and `info/attributes` of the main checkout unchanged) and a runtime test for the sandbox
+- [x] 3.2 Implement the `integrate` operation (merge base in, never rebase; regenerators; integration checks; commit; push; abort with conflicted paths and the in-between PR's diff on remaining conflicts); report the resolved hunks and regenerated paths; verify with temp-repo tests for: adjacent additions resolved by the driver, a lockfile regenerated, a real conflict aborted with feedback
+- [x] 3.3 Parse and validate `.funny/integrate.yaml` from the default branch with the flow; report problems in Validate flow; verify with loader tests for a valid file, an invalid glob and a missing command
+- [x] 3.4 Add the `integrate` node to the built-in flow as the start of both loop regions (`back_to: integrate`), skipped when the branch contains the base, with `address` skipped when no gate left feedback; verify with a flow-run test where a resolvable conflict never reaches the implementer and a real one does
+- [x] 3.4c Loop budget: merge loop `max_iterations` 10 in the built-in, and the factory parks a run after 2 rounds that reached the implementer; verify with flow-run tests for four resolved rounds (not parked) and three agent rounds (parked)
+- [x] 3.4b Review freshness after `integrate`: a clean merge of the base keeps the review; a resolved conflict sends the run through the review gate again with the reviewer limited to the resolved hunks and regenerated paths; verify with flow-run tests for both cases
 - [ ] 3.5 `regenerate: <node>` on `merge`: a conflict re-runs that node on the new base through the merge loop; verify with a flow-run test for a codemod run
 
 ## 4. Merge queue

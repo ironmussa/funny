@@ -190,6 +190,16 @@ const mergeAction = z
   })
   .strict();
 
+// ── Integrate action ───────────────────────────────────────
+
+/**
+ * Merge the base branch into the run's branch on the runner, deterministically
+ * (structural merge driver, rerere, the regenerators of `.funny/integrate.yaml`),
+ * before an agent is asked to resolve a conflict. Takes no options: what it may
+ * run is declared in `.funny/integrate.yaml` on the default branch.
+ */
+const integrateAction = z.object({}).strict();
+
 // ── Review action ──────────────────────────────────────────
 
 /** What a `review` step accepts. Everything else about it is the host's. */
@@ -404,6 +414,7 @@ export const ACTION_KEYS = [
   'regression_proof',
   'review',
   'triage',
+  'integrate',
 ] as const;
 
 export type WorkflowActionKey = (typeof ACTION_KEYS)[number];
@@ -468,6 +479,7 @@ const pipelineNodeFields = z
     regression_proof: regressionProofAction.optional(),
     review: reviewAction.optional(),
     triage: triageAction.optional(),
+    integrate: integrateAction.optional(),
   })
   .strict();
 

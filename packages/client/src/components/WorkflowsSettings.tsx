@@ -720,6 +720,7 @@ const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string,
   regression_proof: {},
   review: {},
   triage: {},
+  integrate: {},
 };
 
 function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]): Record<string, unknown> {

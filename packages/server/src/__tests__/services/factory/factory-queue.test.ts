@@ -26,6 +26,7 @@ import type { StartThreadInput } from '../../../services/runner-thread-launcher.
 import {
   launchedThread,
   passingProof,
+  upToDateSteps,
   passingReview,
   proofReadyFlowFiles,
   runnerOffline,
@@ -235,6 +236,7 @@ async function setUp(
     waitThread: opts.waitThread ?? pendingThreads,
     notify: async () => undefined,
     proof: passingProof,
+    steps: upToDateSteps,
     lastThreadMessage: passingReview,
   });
   // The tests fire the tick themselves: a send does not poke the factory here.

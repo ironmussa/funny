@@ -41,4 +41,23 @@ describe('PRBadge', () => {
     expect(screen.getByTestId('pr-badge-inverse')).toHaveClass('bg-background/20');
     expect(screen.getByTestId('pr-badge-inverse')).toHaveClass('text-background/70');
   });
+
+  test.each([
+    ['OPEN', 'text-git-icon-pushed'],
+    ['MERGED', 'text-git-icon-merged'],
+    ['CLOSED', 'text-status-error'],
+  ] as const)(
+    'plain variant drops the pill and matches the git stat chips for %s',
+    (state, textClass) => {
+      renderWithProviders(
+        <PRBadge prNumber={9} prState={state} variant="plain" data-testid="pr" />,
+      );
+
+      const badge = screen.getByTestId('pr');
+      expect(badge).toHaveClass(textClass);
+      expect(badge).toHaveClass('text-xs');
+      expect(badge).not.toHaveClass('border');
+      expect(screen.getByTestId(`pr-icon-${state}`)).toHaveClass('icon-sm');
+    },
+  );
 });

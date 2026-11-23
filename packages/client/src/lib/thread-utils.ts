@@ -8,8 +8,6 @@ import {
   XCircle,
   AlertTriangle,
   CircleDot,
-  FileDiff,
-  GitCommitVertical,
   GitPullRequestArrow,
   GitMerge,
   LayoutList,
@@ -20,6 +18,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 
+import { GIT_CHANGES_ICON, GIT_COMMIT_ICON } from '@/lib/git-icons';
 import type { RunnerStatus } from '@/stores/runner-status-store';
 
 /**
@@ -143,9 +142,13 @@ export const gitSyncStateConfig: Record<
   GitSyncState,
   { icon: typeof Clock; className: string; labelKey: string }
 > = {
-  dirty: { icon: FileDiff, className: 'text-muted-foreground', labelKey: 'gitStatus.dirty' },
+  dirty: {
+    icon: GIT_CHANGES_ICON,
+    className: 'text-muted-foreground',
+    labelKey: 'gitStatus.dirty',
+  },
   unpushed: {
-    icon: GitCommitVertical,
+    icon: GIT_COMMIT_ICON,
     className: 'text-git-icon-unpushed',
     labelKey: 'gitStatus.unpushed',
   },

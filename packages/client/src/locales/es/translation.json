@@ -1792,6 +1792,9 @@
     "activity": {
       "tooltip": "Factory · #{{issue}} · {{state}}",
       "failedTooltip": "Factory · #{{issue}} · Falló en {{step}}",
+      "stoppedAfterFailureTooltip": "Factory · #{{issue}} · Detenido tras fallar en {{step}}",
+      "stoppedWithReasonTooltip": "Factory · #{{issue}} · Detenido: {{reason}}",
+      "resentTooltip": "{{label}} · Enviado de nuevo como otro run",
       "stopRun": "Detener el factory run"
     },
     "indicator": {

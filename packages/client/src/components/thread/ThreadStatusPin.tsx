@@ -1,5 +1,5 @@
 import type { Thread } from '@funny/shared';
-import { Clock, Loader2, Pin, PinOff } from 'lucide-react';
+import { CircleMinus, Clock, Loader2, Pin, PinOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -270,7 +270,9 @@ function StatusGlyph({
 /**
  * How a thread's factory activity reads: a spinner in the info tone while the
  * run works (apart from the agent's own), a clock while it waits for the
- * member, and the thread's own error icon once its pipeline stopped on an error.
+ * member, the thread's own error icon once its pipeline stopped on an error, and
+ * a muted minus once it ended without a merge and without an error (stopped, no
+ * change), so it does not read as done.
  * A theme that shows dots (Minimal) shows the working run as the running dot,
  * like any other thread in progress.
  */
@@ -282,6 +284,7 @@ const ACTIVITY_GLYPH: Record<Exclude<ThreadActivityView['activity'], 'none'>, St
   },
   'factory-attention': { icon: Clock, className: 'text-status-warning' },
   'factory-failed': statusConfig.failed,
+  'factory-ended': { icon: CircleMinus, className: 'text-muted-foreground' },
 };
 
 /**

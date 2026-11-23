@@ -1799,6 +1799,9 @@
     "activity": {
       "tooltip": "Factory · #{{issue}} · {{state}}",
       "failedTooltip": "Factory · #{{issue}} · Failed at {{step}}",
+      "stoppedAfterFailureTooltip": "Factory · #{{issue}} · Stopped after failing at {{step}}",
+      "stoppedWithReasonTooltip": "Factory · #{{issue}} · Stopped: {{reason}}",
+      "resentTooltip": "{{label}} · Sent again as a new run",
       "stopRun": "Stop factory run"
     },
     "indicator": {

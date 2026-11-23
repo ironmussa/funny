@@ -122,6 +122,16 @@ export function isFactoryRunFailed(run: Pick<FactoryRun, 'state' | 'failureReaso
   return run.state === 'failed' || (run.state === 'waiting_human' && run.failureReason !== null);
 }
 
+/**
+ * Stopped by the member (or its pull request closed) while it was failed or
+ * parked after a failure: the run ended, but on an error nobody fixed.
+ */
+export function isFactoryRunStoppedAfterFailure(
+  run: Pick<FactoryRun, 'state' | 'failureReason'>,
+): boolean {
+  return run.state === 'stopped' && run.failureReason !== null;
+}
+
 /** The step the run failed at, when it failed at one. */
 export function factoryRunFailedStep(
   run: Pick<FactoryRun, 'state' | 'currentStep' | 'flowSteps' | 'failureReason'>,

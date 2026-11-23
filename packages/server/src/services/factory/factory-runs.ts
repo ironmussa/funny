@@ -136,6 +136,9 @@ const PARKED: ReadonlySet<FactoryRunState> = new Set(PARKED_STATES);
 /** A sent issue waiting in the factory's queue: no flow, no slot. */
 const WAITING_STATES = ['requested'] as const satisfies FactoryRunState[];
 
+/** How a run ends without merging: what a thread must not show as done. */
+const UNMERGED_END_STATES = ['failed', 'stopped', 'no_change'] as const satisfies FactoryRunState[];
+
 /**
  * The queue's transitions, each written as a compare-and-set from the stored
  * state. Once `queued`, the flow drives the run through its own states
@@ -889,9 +892,12 @@ export function createFactoryRunsRepository(
     /**
      * The runs of every factory `userId` owns that the thread lists show on
      * their threads: not ended (in flight, or parked waiting for the member),
-     * or failed within `FAILED_RUN_WINDOW_MS`. A thread shows busy while its run
-     * works outside the agent (CI, merge), and the error icon once it failed.
-     * Queued (`requested`) runs have no thread yet.
+     * or ended without a merge (failed, stopped, no change) within
+     * `FAILED_RUN_WINDOW_MS`. A thread shows busy while its run works outside
+     * the agent (CI, merge), the error icon once it failed, and that it ended
+     * when it was stopped: its agent's own "completed" would read as done.
+     * Queued (`requested`) runs have no thread yet; they are returned once
+     * admitted, so a thread can say its issue was sent again.
      */
     activeForOwner(
       userId: string,
@@ -908,7 +914,10 @@ export function createFactoryRunsRepository(
               eq(factorySettings.userId, userId),
               or(
                 notInArray(factoryRuns.state, [...TERMINAL_STATES, ...WAITING_STATES]),
-                and(eq(factoryRuns.state, 'failed'), gte(factoryRuns.completedAt, failedSince)),
+                and(
+                  inArray(factoryRuns.state, [...UNMERGED_END_STATES]),
+                  gte(factoryRuns.completedAt, failedSince),
+                ),
               ),
             ),
           ),

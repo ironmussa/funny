@@ -10,6 +10,8 @@ import type {
   FactoryStepOverrides,
 } from '@funny/shared/contracts/factory';
 
+import { hasLaterRunOfIssue } from '@/lib/thread-activity';
+
 import { useDataQuery } from '../hooks';
 import {
   activeFactoryRunsQuery,
@@ -58,19 +60,23 @@ export function useFactoryRunForThread(
 }
 
 /**
- * The unended factory run a thread belongs to, from any project, or null. Only
- * a factory thread reads the caller's active runs (polled while shown); any
- * other thread answers null without a request.
+ * The factory run a thread belongs to, from any project, or null: unended, or
+ * ended without merging lately (failed, stopped, no change). `resent` says the
+ * same issue went into the factory again as a later run. Only a factory thread
+ * reads the caller's active runs (polled while shown); any other thread
+ * answers null without a request.
  */
 export function useActiveFactoryRunForThread(thread: {
   id: string;
   source?: string;
-}): FactoryRun | null {
+}): { run: FactoryRun; resent: boolean } | null {
   const isFactoryThread = thread.source === 'factory';
   const runs = useDataQuery(
     isFactoryThread ? activeFactoryRunsQuery() : NO_ACTIVE_FACTORY_RUNS,
   ).data;
-  return runs?.find((run) => run.threadIds.includes(thread.id)) ?? null;
+  const run = runs?.find((r) => r.threadIds.includes(thread.id));
+  if (!runs || !run) return null;
+  return { run, resent: hasLaterRunOfIssue(runs, run) };
 }
 
 /** The factory view's runs across projects, newest first; `undefined` while loading. */

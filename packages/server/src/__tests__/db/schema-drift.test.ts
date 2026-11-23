@@ -35,7 +35,7 @@ const DIALECT_SPECIFIC_TYPES = new Set(['user.banned', 'user.email_verified']);
  * one deploy and a migration drops it in the next, so a server from before the
  * drop never selects a column that is gone. Remove the entry with that migration.
  */
-const PENDING_DROP = new Set(['threads.scheduler_managed']);
+const PENDING_DROP = new Set<string>();
 
 interface ColumnInfo {
   /** Drizzle's JS value type: 'string' | 'number' | 'boolean' | 'json' | … */

@@ -2420,6 +2420,15 @@ const migrations: Migration[] = [
       await ctx().exec(sql`DROP TABLE IF EXISTS thread_dependencies`);
     },
   },
+  {
+    // The last of the thread scheduler (#430): the per-thread opt-in flag. Its
+    // own migration, one deploy after the code stopped declaring the column, so
+    // no running server still selects it.
+    name: '121_drop_threads_scheduler_managed',
+    async up() {
+      await ctx().dropColumn('threads', 'scheduler_managed');
+    },
+  },
 ];
 
 /**

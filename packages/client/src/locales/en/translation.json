@@ -755,7 +755,15 @@
       "inPreferences_other": "{{count}} results in Preferences",
       "inProject_one": "{{count}} result in Project Settings",
       "inProject_other": "{{count}} results in Project Settings"
-    }
+    },
+    "projectFactoryQueueCiQueued": "Issue #{{number}} opened and sent to the factory",
+    "projectFactoryQueueCiNotQueued": "Issue #{{number}} opened, but not sent to the factory: {{reason}}",
+    "projectFactoryQueueCiPropose": "Open a factory run that adds the CI trigger",
+    "projectFactoryMergeDriverWeave": "weave",
+    "projectFactoryMergeDriverGit": "git's own",
+    "projectFactoryMergeDriverUnknown": "known after the first integration",
+    "projectFactoryMergeDriver": "Merge driver on the runner: {{driver}}",
+    "projectFactoryQueueCiTime": "CI on a batch takes {{ci}} (median); the batch wait is {{wait}}"
   },
   "skills": {
     "showingFor": "Showing skills for:",

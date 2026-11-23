@@ -87,7 +87,17 @@ describe('integrate', () => {
     expect((await integration.integrate()).ok).toBe(true);
     expect(carried).toEqual([['a'.repeat(40), 'b'.repeat(40)]]);
     expect(integration.integrationOf('b'.repeat(40))).toBeNull();
-    expect(metrics()).toMatchObject({ integrateRounds: 1, conflictsResolvedWithoutLlm: 0 });
+    expect(metrics()).toMatchObject({
+      integrateRounds: 1,
+      conflictsResolvedWithoutLlm: 0,
+      weaveIntegrations: 0,
+    });
+  });
+
+  test('a round merged with weave as the driver is counted (the readiness check reads it)', async () => {
+    const { integration, metrics } = setup(integrateResult({ weave: true }));
+    expect((await integration.integrate()).ok).toBe(true);
+    expect(metrics()).toMatchObject({ integrateRounds: 1, weaveIntegrations: 1 });
   });
 
   test('a merge that settled conflicts is reviewed again, only where it settled them', async () => {

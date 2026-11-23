@@ -366,6 +366,8 @@ export interface FactoryRunMetrics {
   conflictsResolvedWithoutLlm: number;
   /** Integrations whose conflicts went to the implementing agent. */
   conflictsSentToAgent: number;
+  /** Integrations where weave was the merge driver on the runner (the rest used git's own). */
+  weaveIntegrations: number;
   /**
    * Merge rounds that reached the implementing agent (an integration conflict,
    * or checks failing on the current base); the run waits for a person after two.
@@ -395,6 +397,7 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
   integrateRounds: 0,
   conflictsResolvedWithoutLlm: 0,
   conflictsSentToAgent: 0,
+  weaveIntegrations: 0,
   mergeRoundsToAgent: 0,
   queueWaitMs: 0,
   batchSize: 0,
@@ -525,8 +528,28 @@ export interface FactoryReadiness {
   mergeQueueRequired: boolean | null;
   /** Whether pull requests must be up to date with the base; null when it cannot be read. */
   upToDateRequired: boolean | null;
+  /**
+   * The merge driver the enabler's runner used at the factory's last
+   * integration: `weave` (structural) or `git` (git's own); null before one.
+   */
+  mergeDriver: 'weave' | 'git' | null;
+  /** The median time CI took on the queue's branches (its last batches), in ms; null before one. */
+  medianCiMs: number | null;
+  /** How long the queue waits for a batch to fill, in ms. */
+  batchWaitMs: number;
   /** Why it is not batching, each with what to change. */
   reasons: string[];
+  /** What would make it merge faster or with fewer agent rounds; never blocks a batch. */
+  advice: string[];
+}
+
+/** The issue opened to add the merge queue's CI trigger, and whether the factory queued it (D12). */
+export interface FactoryQueueCiProposal {
+  issueNumber: number;
+  url: string;
+  /** False when the issue was opened but the factory did not take it (the reason says why). */
+  queued: boolean;
+  reason?: string;
 }
 
 export type FactoryFlowValidation =

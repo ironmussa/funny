@@ -743,7 +743,15 @@
       "inPreferences_other": "{{count}} resultados em Preferências",
       "inProject_one": "{{count}} resultado em Configurações do projeto",
       "inProject_other": "{{count}} resultados em Configurações do projeto"
-    }
+    },
+    "projectFactoryQueueCiQueued": "Issue #{{number}} aberto e enviado ao factory",
+    "projectFactoryQueueCiNotQueued": "Issue #{{number}} aberto, mas não enviado ao factory: {{reason}}",
+    "projectFactoryQueueCiPropose": "Abrir uma run do factory que adiciona o gatilho de CI",
+    "projectFactoryMergeDriverWeave": "weave",
+    "projectFactoryMergeDriverGit": "o do git",
+    "projectFactoryMergeDriverUnknown": "conhecido após a primeira integração",
+    "projectFactoryMergeDriver": "Merge driver no runner: {{driver}}",
+    "projectFactoryQueueCiTime": "O CI de um lote leva {{ci}} (mediana); a espera do lote é {{wait}}"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

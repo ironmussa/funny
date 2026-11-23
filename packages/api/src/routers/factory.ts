@@ -79,6 +79,12 @@ export const factoryRouter = router({
     .query(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.readiness(ctx.userId, input.projectId)),
     ),
+  // Open the issue that adds CI on the queue's branches, run by the caller's factory (D12).
+  proposeQueueCi: projectProcedure('steer', SEND_FORBIDDEN)
+    .input(factoryProjectInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.proposeQueueCi(ctx.userId, input.projectId)),
+    ),
   validateFlow: projectProcedure('view')
     .input(factoryFlowInput)
     .query(async ({ ctx, input }) =>

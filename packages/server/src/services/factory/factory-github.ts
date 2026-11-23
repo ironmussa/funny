@@ -155,6 +155,14 @@ export interface FactoryGithubPort {
     issueNumber: number,
     body: string,
   ): ResultAsync<void, GithubCallError>;
+  /**
+   * Open an issue, as the App with the token capped by `reader.ownerId`'s own
+   * access (the person who asked for it). Absent in fakes that never open one.
+   */
+  createIssue?(
+    reader: FactoryRepoReader,
+    issue: { title: string; body: string },
+  ): ResultAsync<{ number: number; url: string }, GithubCallError>;
   /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
   pullRequests: FactoryPullRequests;
 }
@@ -278,6 +286,7 @@ export function createFactoryGithub(
     defaultBranch: (reader) => reads(reader).defaultBranch(),
     relabelIssue: (reader, issueNumber, labels) => reads(reader).relabelIssue(issueNumber, labels),
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
+    createIssue: (reader, issue) => reads(reader).createIssue(issue),
     branchState: (reader, branch) => reads(reader).branchState(branch),
     mergeCommitState: (reader, number) => reads(reader).mergeCommitState(number),
     issueText: (reader, issueNumber) => reads(reader).issueText(issueNumber),

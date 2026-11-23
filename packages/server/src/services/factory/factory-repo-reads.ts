@@ -203,6 +203,16 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
         .map(() => undefined);
     },
 
+    /** Open an issue, as the App. */
+    createIssue(issue: {
+      title: string;
+      body: string;
+    }): ResultAsync<{ number: number; url: string }, GithubCallError> {
+      return github
+        .json<{ number: number; html_url: string }>(repo, 'POST', `/repos/${repo}/issues`, issue)
+        .map((created) => ({ number: created.number, url: created.html_url }));
+    },
+
     /** The issue's blockers (GitHub's "blocked by" relation), open or closed. */
     blockers(issueNumber: number): ResultAsync<IssueBlocker[], GithubCallError> {
       return issueBlockers(github, repo, issueNumber);

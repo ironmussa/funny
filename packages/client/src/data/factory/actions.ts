@@ -3,6 +3,7 @@ import type { ResultAsync } from 'neverthrow';
 
 import {
   factoryApi,
+  type FactoryQueueCiProposal,
   type FactoryQueueClearResult,
   type FactoryRun,
   type FactorySettings,
@@ -14,6 +15,7 @@ import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
 import {
   refetchFactorySettings,
+  refreshFactoryReadiness,
   refreshFactoryRuns,
   writeFactoryRun,
   writeFactorySettings,
@@ -74,6 +76,22 @@ export function sendIssuesToFactory(
 ): ResultAsync<FactorySubmitResult, DomainError> {
   return factoryApi.submitIssues({ projectId, issueNumbers, flowName }).map((result) => {
     refreshFactoryRuns(projectId, layer);
+    return result;
+  });
+}
+
+/**
+ * Open the issue that adds CI on the merge queue's branches and send it to
+ * the caller's factory (openspec factory-integration D12). Not optimistic;
+ * the runs and the readiness are re-read afterwards. The caller shows the error.
+ */
+export function proposeQueueCi(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryQueueCiProposal, DomainError> {
+  return factoryApi.proposeQueueCi(projectId).map((result) => {
+    refreshFactoryRuns(projectId, layer);
+    refreshFactoryReadiness(projectId, layer);
     return result;
   });
 }

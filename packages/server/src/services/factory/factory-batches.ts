@@ -29,7 +29,7 @@
  */
 
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
@@ -394,6 +394,36 @@ export function createFactoryBatchesRepository(
           .orderBy(asc(factoryBatchAttempts.createdAt)),
         storage,
       ).map((rows) => rows.map(toAttempt));
+    },
+
+    /**
+     * How long CI took on the repository's queue branches: the last `limit`
+     * attempts that reached a verdict (green or red), newest first, in ms.
+     */
+    ciDurations(repo: string, limit = 20): ResultAsync<number[], FactoryBatchesError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({
+            createdAt: factoryBatchAttempts.createdAt,
+            endedAt: factoryBatchAttempts.endedAt,
+          })
+          .from(factoryBatchAttempts)
+          .innerJoin(factoryBatches, eq(factoryBatches.id, factoryBatchAttempts.batchId))
+          .where(
+            and(
+              eq(factoryBatches.repo, repo),
+              inArray(factoryBatchAttempts.state, ['green', 'red']),
+              isNotNull(factoryBatchAttempts.endedAt),
+            ),
+          )
+          .orderBy(desc(factoryBatchAttempts.endedAt))
+          .limit(limit),
+        storage,
+      ).map((rows) =>
+        rows
+          .map((row) => Date.parse(row.endedAt ?? '') - Date.parse(row.createdAt))
+          .filter((ms) => Number.isFinite(ms) && ms >= 0),
+      );
     },
   };
 }

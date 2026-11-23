@@ -5,6 +5,7 @@ import { mocked } from '@funny/test-kit';
 
 import type { RunnerCredentials } from '../../services/runner-credentials.js';
 import {
+  REJECTION_GRACE_MS,
   RunnerEnrollmentClient,
   type RunnerEnrollmentClientDependencies,
 } from '../../services/runner-enrollment-client.js';
@@ -161,6 +162,78 @@ describe('RunnerEnrollmentClient', () => {
     expect(deps.sleep).not.toHaveBeenCalled();
     // Security M8: the delivered key is never written into process.env.
     expect(deps.env.RUNNER_AUTH_SECRET).toBe('shared-secret');
+  });
+
+  // Production: a runner deployed at the same second as the server got one 401
+  // from its heartbeat, dropped its credentials and waited for a hand-approved
+  // device link. A server still starting may answer 401 for a moment.
+  test('a stored credential rejected for a moment is kept, and the session resumes', async () => {
+    let heartbeats = 0;
+    const deps = dependencies(async (input) => {
+      if (String(input).endsWith('/register')) return new Response('unauthorized', { status: 401 });
+      heartbeats += 1;
+      return heartbeats <= 2
+        ? new Response('restarting', { status: 401 })
+        : Response.json({ ok: true });
+    });
+    deps.env = {};
+    deps.loadCredentials = vi.fn(() => ({
+      serverUrl: 'http://server.test',
+      runnerId: 'runner-1',
+      token: 'token-1',
+      forwardingKey: 'key-1',
+    }));
+    let clock = 0;
+    deps.now = () => clock;
+    deps.sleep = vi.fn(async (ms: number) => {
+      clock += ms;
+    });
+    const client = new RunnerEnrollmentClient('http://server.test', advertisement, deps);
+
+    await expect(client.bootstrap()).resolves.toMatchObject({
+      runnerId: 'runner-1',
+      token: 'token-1',
+    });
+    expect(deps.clearCredentials).not.toHaveBeenCalled();
+    expect(deps.enroll).not.toHaveBeenCalled();
+  });
+
+  test('a stored credential the server keeps rejecting is dropped for a device link', async () => {
+    let stored: RunnerCredentials | null = {
+      serverUrl: 'http://server.test',
+      runnerId: 'runner-deleted',
+      token: 'token-deleted',
+      forwardingKey: 'key-1',
+    };
+    const deps = dependencies(async (input) => {
+      if (String(input).endsWith('/register')) return new Response('unauthorized', { status: 401 });
+      // The heartbeat answers for the enrolled runner only.
+      return stored?.runnerId === 'runner-enrolled'
+        ? Response.json({ ok: true })
+        : new Response('unauthorized', { status: 401 });
+    });
+    deps.env = {};
+    deps.loadCredentials = vi.fn(() => stored);
+    deps.saveCredentials = (value) => {
+      stored = value;
+      deps.saved.push(value);
+    };
+    deps.clearCredentials = vi.fn(() => {
+      stored = null;
+    });
+    let clock = 0;
+    deps.now = () => clock;
+    deps.sleep = vi.fn(async (ms: number) => {
+      clock += ms;
+    });
+    const client = new RunnerEnrollmentClient('http://server.test', advertisement, deps);
+
+    await expect(client.bootstrap()).resolves.toMatchObject({ runnerId: 'runner-enrolled' });
+    // Dropped once the grace ran out (and again, harmlessly, before the device link).
+    expect(deps.clearCredentials).toHaveBeenCalled();
+    expect(deps.enroll).toHaveBeenCalledTimes(1);
+    // It kept trying for the whole grace before giving the credential up.
+    expect(clock).toBeGreaterThanOrEqual(REJECTION_GRACE_MS);
   });
 
   test('keeps a successful registration when heartbeat verification is temporarily unavailable', async () => {

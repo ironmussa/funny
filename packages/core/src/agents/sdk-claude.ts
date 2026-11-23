@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+
 import { query } from '@anthropic-ai/claude-agent-sdk';
 /**
  * SDKClaudeProcess — adapter that wraps @anthropic-ai/claude-agent-sdk query()
@@ -16,6 +18,7 @@ import { BaseAgentProcess } from './base-process.js';
 import { checkRedirectReason } from './check-redirect.js';
 import { toContextBreakdown } from './context-breakdown.js';
 import type { IAgentProcess } from './interfaces.js';
+import { detectReadOnlySandboxMode, readOnlyDenial, readOnlySandboxSettings } from './read-only.js';
 import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
@@ -391,6 +394,22 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       sdkOptions.spawnClaudeCodeProcess = this.options.spawnClaudeCodeProcess;
       sdkOptions.permissionMode = 'bypassPermissions';
       sdkOptions.allowDangerouslySkipPermissions = true;
+    }
+
+    // Read-only (see read-only.ts): the OS sandbox holds Bash to reading, the
+    // hook denies every other tool, and the checkout's settings are not loaded.
+    if (this.options.readOnly) {
+      sdkOptions.permissionMode = 'default';
+      delete sdkOptions.allowDangerouslySkipPermissions;
+      sdkOptions.settingSources = ['user'];
+      const mode = await detectReadOnlySandboxMode();
+      sdkOptions.sandbox = readOnlySandboxSettings(
+        this.options.cwd,
+        homedir(),
+        mode,
+        process.getuid?.() ?? 0,
+      );
+      dlog.info('Read-only agent sandbox', { mode, cwd: this.options.cwd });
     }
 
     // Custom spawn wrapper to:
@@ -828,6 +847,22 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     { signal }: { signal: AbortSignal },
   ): Promise<any> {
     const toolName: string = input.tool_name ?? '';
+
+    // Read-only: decided here, before any saved rule (an "always allow" or the
+    // sensitive-path executor would act outside the sandbox).
+    if (this.options.readOnly) {
+      const denial = readOnlyDenial(toolName, input.tool_input);
+      if (denial === null) {
+        return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } };
+      }
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: denial,
+        },
+      };
+    }
 
     // For AskUserQuestion / ExitPlanMode: hold the hook until the process
     // is killed. The message handler already sets the thread to "waiting"

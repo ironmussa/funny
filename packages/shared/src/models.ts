@@ -636,6 +636,22 @@ export function isModelForProvider(provider: AgentProvider, model: AgentModel): 
 export type _ModelsOf<P extends keyof typeof MODEL_REGISTRY> = ModelsOf<P>;
 
 /**
+ * A read-only thread (`threads.read_only`: the issue factory's reviewer,
+ * triage and sentinel). Its agent gets only these tools; its Bash runs in the
+ * provider's OS sandbox, with no writes to the checkout, no network and no
+ * credentials. Only the providers in `READ_ONLY_PROVIDERS` have such a
+ * sandbox, so a read-only thread on another one does not start.
+ */
+export const READ_ONLY_AGENT_TOOLS: readonly string[] = [
+  'Read',
+  'Glob',
+  'Grep',
+  'Bash',
+  'TodoWrite',
+];
+export const READ_ONLY_PROVIDERS: readonly AgentProvider[] = ['claude', 'codex'];
+
+/**
  * Tools an automation run's agent may never use — automations are read-only
  * (they report findings; they don't change the repository or run commands).
  */

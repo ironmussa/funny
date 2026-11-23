@@ -19,6 +19,8 @@ import {
   resolveResumePermissionMode,
   getDefaultAllowedTools,
   getAskModeTools,
+  READ_ONLY_AGENT_TOOLS,
+  READ_ONLY_PROVIDERS,
 } from '@funny/shared/models';
 
 import type { IAgentProcess, IAgentProcessFactory } from './interfaces.js';
@@ -53,6 +55,8 @@ export interface StartAgentOptions {
   fastMode?: boolean;
   /** Deny plain check commands in Bash, pointing at `funny_run_checks`. Claude SDK only. */
   redirectChecks?: boolean;
+  /** The agent may only read (see `ClaudeProcessOptions.readOnly`). Claude and Codex only. */
+  readOnly?: boolean;
   /**
    * Run the Claude process in persistent streaming-input mode so later prompts
    * can steer the live turn instead of respawning. Set when followUpMode ===
@@ -304,6 +308,13 @@ export class AgentOrchestrator extends EventEmitter {
       bypassExecutor,
       steer,
     } = options;
+    const readOnly = options.readOnly === true;
+    if (readOnly && !READ_ONLY_PROVIDERS.includes(provider)) {
+      // Only these providers have a sandbox that holds a read-only agent to it.
+      throw new Error(
+        `This thread may only read, and ${provider} cannot be held to that: use ${READ_ONLY_PROVIDERS.join(' or ')}.`,
+      );
+    }
 
     dlog.info('startAgent', {
       threadId,
@@ -415,14 +426,19 @@ export class AgentOrchestrator extends EventEmitter {
 
     // Resolve model ID and permission mode via registry
     const resolvedModel = resolveModelId(provider, model);
-    const effectivePermissionMode = resolvePermissionMode(provider, permissionMode);
+    // Read-only: `plan` is what Codex maps to its read-only sandbox; Claude
+    // ignores the mode and holds the agent to its own sandbox instead.
+    const requestedMode: PermissionMode = readOnly ? 'plan' : permissionMode;
+    const effectivePermissionMode = resolvePermissionMode(provider, requestedMode);
 
     // Build shared process options
     // In ask mode, restrict to read-only tools regardless of caller-provided lists
     const isAskMode = permissionMode === 'ask';
-    const effectiveAllowedTools = isAskMode
-      ? getAskModeTools()
-      : (allowedTools ?? getDefaultAllowedTools(provider));
+    const effectiveAllowedTools = readOnly
+      ? [...READ_ONLY_AGENT_TOOLS]
+      : isAskMode
+        ? getAskModeTools()
+        : (allowedTools ?? getDefaultAllowedTools(provider));
     const effectiveDisallowedTools = isAskMode
       ? ['Edit', 'Write', 'Bash', 'NotebookEdit', 'TodoWrite']
       : disallowedTools;
@@ -432,19 +448,22 @@ export class AgentOrchestrator extends EventEmitter {
       cwd,
       model: resolvedModel,
       permissionMode: effectivePermissionMode,
-      originalPermissionMode: permissionMode,
+      originalPermissionMode: requestedMode,
       allowedTools: effectiveAllowedTools,
       disallowedTools: effectiveDisallowedTools,
       maxTurns,
       images,
       provider,
-      mcpServers,
+      // A read-only agent gets no MCP server: one could write or start threads.
+      mcpServers: readOnly ? undefined : mcpServers,
       spawnClaudeCodeProcess,
       systemPrefix,
       env,
       effort,
       fastMode,
-      redirectChecks,
+      // The checks tool is an MCP tool, which a read-only agent does not get.
+      redirectChecks: readOnly ? false : redirectChecks,
+      readOnly,
       steerable,
       builtinSkillsDisabled,
       customSkillPaths,
@@ -464,7 +483,10 @@ export class AgentOrchestrator extends EventEmitter {
       // Downgrade plan → acceptEdits on resume so the agent can actually
       // execute after the user approved the plan.  Without this, the resumed
       // session stays in plan mode and immediately calls ExitPlanMode again.
-      const resumePermission = resolveResumePermissionMode(provider, processOpts.permissionMode);
+      // A read-only agent stays read-only on resume: there is no plan to approve.
+      const resumePermission = readOnly
+        ? processOpts.permissionMode
+        : resolveResumePermissionMode(provider, processOpts.permissionMode);
       if (resumePermission !== processOpts.permissionMode) {
         dlog.info('Downgrading permissionMode for resume', {
           threadId,

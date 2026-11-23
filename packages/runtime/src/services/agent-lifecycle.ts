@@ -43,6 +43,7 @@ import {
 } from './agent-startup/permission-hooks.js';
 import { ensureLazyCwd, syncWorktreeProjectAssets } from './agent-startup/prepare-workspace.js';
 import { composeAgentEnv, loadProjectSecrets } from './agent-startup/project-secrets.js';
+import { fetchForReadOnlyAgent, logReadOnlySandboxMode } from './agent-startup/read-only-fetch.js';
 import { recoverThreadContext } from './agent-startup/recover-context.js';
 import { buildSystemPrefix, projectInstructionsBlock } from './agent-startup/system-prefix.js';
 import type { AgentStateTracker } from './agent-state.js';
@@ -53,6 +54,7 @@ import { getServices } from './service-registry.js';
 import {
   canDoGitOps,
   hasLazyCwd,
+  isReadOnlyThread,
   receivesProjectSecrets,
   resolveThreadCwd,
   tmpAssetsPathFor,
@@ -384,6 +386,12 @@ export class AgentLifecycleManager {
     // Resolve per-user API keys and git identity for agent subprocesses.
     // git and gh in a sandbox use the thread's GitHub App token, renewed in place.
     await prepareAgentGithub(threadId);
+    // A read-only agent has no network: the runner fetches for it.
+    const readOnly = !!thread && isReadOnlyThread(thread);
+    if (readOnly && thread && canDoGitOps(thread)) {
+      await fetchForReadOnlyAgent({ threadId, cwd, userId, projectId: thread.projectId });
+    }
+    if (readOnly && provider === 'claude') await logReadOnlySandboxMode(threadId);
     const secrets = await this.loadThreadSecrets(threadId, thread);
     const baseEnv = await buildAgentEnv({ threadId, userId, provider, assetsDir });
     const agentEnv = await this.applyAgentProfile(
@@ -409,6 +417,7 @@ export class AgentLifecycleManager {
         env: agentEnv,
         effort: req.effort,
         ...projectRunFlags(project),
+        readOnly,
         steer: !!req.steer,
         builtinSkillsDisabled: tooling.builtinSkillsDisabled,
         customSkillPaths: tooling.customSkillPaths,

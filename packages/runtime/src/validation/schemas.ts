@@ -258,6 +258,12 @@ export const createThreadSchema = z
      */
     baseFromRemote: z.boolean().optional(),
     /**
+     * The agent may only read, at this start and every later one (stored on
+     * the thread, `threads.read_only`): the issue factory's reviewer, triage
+     * and sentinel. Claude or Codex only; see `readOnly` in `@funny/core`.
+     */
+    readOnly: z.boolean().optional(),
+    /**
      * The worktree's branch name (worktree mode only). The issue factory sends
      * the run's branch so the thread, its worktree and the pull request share
      * one branch. Absent, or already present in the repository: a name is

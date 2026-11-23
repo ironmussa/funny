@@ -2258,6 +2258,14 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // A thread whose agent may only read (the issue factory's reviewer, triage
+    // and sentinel): the runner enforces it at every start of the agent.
+    name: '112_threads_read_only',
+    async up() {
+      await ctx().addColumn('threads', 'read_only', 'INTEGER NOT NULL', '0');
+    },
+  },
 ];
 
 /**

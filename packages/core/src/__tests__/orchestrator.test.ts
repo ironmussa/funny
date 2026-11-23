@@ -336,6 +336,41 @@ describe('AgentOrchestrator', () => {
 
       expect(factory.lastProcess.options.allowedTools).toEqual(['Read']);
     });
+
+    test('a read-only Claude agent gets only reading tools, no MCP server and no checks redirect', async () => {
+      await orchestrator.startAgent(
+        baseOpts({
+          readOnly: true,
+          allowedTools: ['Read', 'Edit'],
+          mcpServers: { funny: {} },
+          redirectChecks: true,
+        }),
+      );
+      const options = factory.lastProcess.options;
+      expect(options.readOnly).toBe(true);
+      expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep', 'Bash', 'TodoWrite']);
+      expect(options.mcpServers).toBeUndefined();
+      expect(options.redirectChecks).toBe(false);
+    });
+
+    test('a read-only Codex agent runs in plan mode, which is its read-only sandbox', async () => {
+      await orchestrator.startAgent(
+        baseOpts({ provider: 'codex', model: 'gpt-5.5', readOnly: true }),
+      );
+      expect(factory.lastProcess.options.originalPermissionMode).toBe('plan');
+    });
+
+    test('a read-only agent on a provider without a sandbox does not start', async () => {
+      await expect(
+        orchestrator.startAgent(baseOpts({ provider: 'gemini', model: undefined, readOnly: true })),
+      ).rejects.toThrow('may only read');
+      expect(factory.processes).toHaveLength(0);
+    });
+
+    test('a read-only agent stays read-only when its session resumes', async () => {
+      await orchestrator.startAgent(baseOpts({ readOnly: true, sessionId: 's1' }));
+      expect(factory.lastProcess.options.permissionMode).toBe('plan');
+    });
   });
 
   // ── Steering (live multi-turn) ─────────────────────────────────

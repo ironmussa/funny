@@ -90,13 +90,25 @@ export function canDoGitOps(thread: { isScratch?: boolean | null }): boolean {
 
 /**
  * Returns true when the thread's agent starts with its project's secrets
- * (project-secrets). A scratch thread has no project, so nothing is asked.
+ * (project-secrets). A scratch thread has no project, so nothing is asked; a
+ * read-only agent only reads, so it is given none.
  */
 export function receivesProjectSecrets(thread: {
   isScratch?: boolean;
   projectId?: string | null;
+  readOnly?: number | boolean | null;
 }): boolean {
-  return !thread.isScratch && !!thread.projectId;
+  return !thread.isScratch && !!thread.projectId && !isReadOnlyThread(thread);
+}
+
+/**
+ * Returns true for a thread whose agent may only read (`threads.read_only`,
+ * set at creation: the issue factory's reviewer, triage and sentinel). Every
+ * start of its agent is read-only (`readOnly` in `@funny/core`), and the
+ * repository is fetched for it first, since its agent has no network.
+ */
+export function isReadOnlyThread(thread: { readOnly?: number | boolean | null }): boolean {
+  return thread.readOnly === true || thread.readOnly === 1;
 }
 
 /**

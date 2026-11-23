@@ -138,8 +138,7 @@ export function reviewPrompt(input: ReviewPromptInput): string {
     ...whatItMustDo(input),
     '',
     'How to review:',
-    `- Run \`git fetch origin\`, then read the change with \`git diff $(git merge-base origin/HEAD ${input.sha}) ${input.sha}\` and the files around it with \`git show ${input.sha}:<path>\`. Do not check out, commit, push or edit anything: you only read.`,
-    '- Read the pull request description with `gh pr view` if `gh` is available.',
+    `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read the change with \`git diff $(git merge-base origin/HEAD ${input.sha}) ${input.sha}\` and the files around it with \`git show ${input.sha}:<path>\`.`,
     '- Judge whether the change does what the issue asks, in every case the issue names, and whether it is correct: wrong logic, missing cases, races, broken callers, security problems, data loss.',
     '- Check that the regression test would fail without the fix and that no test, check or CI step was removed, skipped or weakened to make the change pass.',
     '- Report only what you verified in the code. Style and naming are at most `low`.',
@@ -347,7 +346,10 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
       mode: scope.mode,
       ...base,
       source: 'factory',
-      // Fixed by the server, whatever the flow says: a new thread that cannot write.
+      // Fixed by the server, whatever the flow says: a new thread that cannot
+      // write. `readOnly` is what holds it (the runner's OS sandbox); the mode
+      // and the tool list are kept for a runner from before it.
+      readOnly: true,
       permissionMode: 'plan',
       disallowedTools: [...REVIEWER_DISALLOWED_TOOLS],
       provider: opts.provider ?? undefined,

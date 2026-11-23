@@ -431,6 +431,21 @@ describe('createAndStartThread', () => {
     for (const meta of metas) expect(meta).not.toContain('SECRET-VALUE');
   });
 
+  test('stores a read-only thread as read-only, and others as not', async () => {
+    await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'local',
+      prompt: 'Review it',
+      readOnly: true,
+    });
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(expect.objectContaining({ readOnly: 1 }));
+    await createAndStartThread({ projectId: 'p-1', userId: 'u-1', mode: 'local', prompt: 'Fix' });
+    expect(mocks.tm.createThread).toHaveBeenLastCalledWith(
+      expect.objectContaining({ readOnly: 0 }),
+    );
+  });
+
   test('executes initial ! commands locally without starting the agent', async () => {
     mocks.tm.insertMessage
       .mockResolvedValueOnce('msg-user-shell')

@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import {
   resolveThreadCwd,
   canDoGitOps,
+  isReadOnlyThread,
   isScratchThread,
+  receivesProjectSecrets,
   scratchPathFor,
 } from '../../services/thread-context.js';
 
@@ -120,5 +122,20 @@ describe('isScratchThread', () => {
     expect(isScratchThread({ isScratch: false })).toBe(false);
     expect(isScratchThread({ isScratch: null })).toBe(false);
     expect(isScratchThread({})).toBe(false);
+  });
+});
+
+describe('isReadOnlyThread', () => {
+  test('is true for a row stored read-only (the DB column is an integer)', () => {
+    expect(isReadOnlyThread({ readOnly: 1 })).toBe(true);
+    expect(isReadOnlyThread({ readOnly: true })).toBe(true);
+    expect(isReadOnlyThread({ readOnly: 0 })).toBe(false);
+    expect(isReadOnlyThread({ readOnly: null })).toBe(false);
+    expect(isReadOnlyThread({})).toBe(false);
+  });
+
+  test('a read-only agent is given no project secrets', () => {
+    expect(receivesProjectSecrets({ projectId: 'p1', readOnly: 0 })).toBe(true);
+    expect(receivesProjectSecrets({ projectId: 'p1', readOnly: 1 })).toBe(false);
   });
 });

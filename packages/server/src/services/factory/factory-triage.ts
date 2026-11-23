@@ -235,7 +235,8 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       mode: scope.mode,
       ...base,
       source: 'factory',
-      // Fixed by the server: a new thread that cannot write.
+      // Fixed by the server: a new thread that cannot write (see the reviewer's).
+      readOnly: true,
       permissionMode: 'plan',
       disallowedTools: [...REVIEWER_DISALLOWED_TOOLS],
       provider: opts.provider ?? undefined,

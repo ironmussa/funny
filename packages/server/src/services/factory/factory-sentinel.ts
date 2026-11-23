@@ -170,7 +170,7 @@ export function sentinelPrompt(input: {
     failing,
     '',
     'How to investigate:',
-    `- Run \`git fetch origin\` and read what each pull request changed (\`git log origin/${input.baseBranch}\`, \`git show <merge commit>\`).`,
+    `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read what each pull request changed (\`git log origin/${input.baseBranch}\`, \`git show <merge commit>\`).`,
     '- Find which change makes these checks fail, and say how you know: a test it touched, a symbol it removed, an interaction between two of them.',
     '- Name a pull request only from the list above, and only when the failure follows from its change.',
     '- When you find the change that broke it and it is none of the listed merges (a direct push, another pull request), answer `unrelated` and name that change. A flaky test, a failing external service, or a cause you cannot find is `unknown`.',
@@ -238,7 +238,8 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
       baseBranch: incident.baseBranch,
       baseFromRemote: deps.mode === 'worktree',
       source: 'factory',
-      // Fixed by the server: a new thread that cannot write.
+      // Fixed by the server: a new thread that cannot write (see the reviewer's).
+      readOnly: true,
       permissionMode: 'plan',
       disallowedTools: [...REVIEWER_DISALLOWED_TOOLS],
       prompt: sentinelPrompt({

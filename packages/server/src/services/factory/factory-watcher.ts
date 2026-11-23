@@ -949,7 +949,7 @@ async function admitQueued(
 
   const blocked = await blockedReason(ctx, issue.number);
   const stackedOn = stackTarget(factory, ctx, blocked);
-  const reason = (stackedOn ? null : blocked) ?? pathsHeld(ctx, run);
+  const reason = (stackedOn ? null : blocked) ?? pathsHeld(ctx, run, stackedOn);
   await noteWaitReason(run, reason);
   if (reason) return false;
 
@@ -1023,10 +1023,17 @@ const STACKABLE_STATES: ReadonlySet<FactoryRunState> = new Set([
  * overlap a run in progress (change factory-agent-roles, D5). It starts, with
  * that contract, once the other run is no longer working on those files.
  */
-function pathsHeld(ctx: AdmissionContext, run: FactoryRunView): FactoryWaitReason | null {
+export function pathsHeld(
+  ctx: { runs: Parameters<typeof busyPathsOf>[0] },
+  run: Pick<FactoryRunView, 'id' | 'triage'>,
+  stackedOn: Pick<FactoryStackedOn, 'runId'> | null,
+): FactoryWaitReason | null {
   const paths = contractOf(run)?.likelyPaths ?? [];
   if (paths.length === 0) return null;
-  const blockers = overlappingIssues(paths, busyPathsOf(ctx.runs, run.id));
+  // A stacked run builds on its blocker's branch on purpose (D10): sharing
+  // its files is the point, so the blocker's paths do not hold it back.
+  const others = stackedOn ? ctx.runs.filter((other) => other.id !== stackedOn.runId) : ctx.runs;
+  const blockers = overlappingIssues(paths, busyPathsOf(others, run.id));
   return blockers.length > 0 ? { kind: 'paths-overlap', blockers } : null;
 }
 

@@ -821,8 +821,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       }),
     }),
     // Intentionally minimal: cwd/loadSkills accessed via refs
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applySuggestionItems, makeSuggestionKeyDown],
+    [applySuggestionItems, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── Slash command suggestion config ──
@@ -1106,8 +1105,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applySuggestionItems, makeSuggestionKeyDown],
+    [applySuggestionItems, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── TipTap editor ──

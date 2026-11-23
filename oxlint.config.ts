@@ -82,7 +82,7 @@ const existing = {
     'react/preserve-manual-memoization': 'error',
     'react/purity': 'error',
     'react/refs': 'warn',
-    'react/rule-suppression': 'warn',
+    'react/rule-suppression': 'error',
     'react/set-state-in-effect': 'warn',
     'react/set-state-in-render': 'error',
     'react/static-components': 'error',

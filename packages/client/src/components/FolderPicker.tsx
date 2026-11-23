@@ -29,6 +29,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
+import { whilePending } from '@/lib/while-pending';
 
 interface FolderPickerProps {
   onSelect: (path: string) => void;
@@ -92,10 +93,51 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  // Mirrors historyRef's length, so render does not read the ref.
+  const [historyLength, setHistoryLength] = useState(0);
   const isNavRef = useRef(false); // flag to skip pushing to history during back/forward
 
   const canGoBack = historyIndex > 0;
-  const canGoForward = historyIndex < historyRef.current.length - 1;
+  const canGoForward = historyIndex < historyLength - 1;
+
+  const pushHistory = useCallback((path: string) => {
+    if (isNavRef.current) {
+      isNavRef.current = false;
+      return;
+    }
+    const idx = historyIndexRef.current;
+    // Truncate forward history
+    historyRef.current = historyRef.current.slice(0, idx + 1);
+    historyRef.current.push(path);
+    historyIndexRef.current = historyRef.current.length - 1;
+    setHistoryIndex(historyIndexRef.current);
+    setHistoryLength(historyRef.current.length);
+  }, []);
+
+  const loadDir = useCallback(
+    async (path: string) => {
+      setError('');
+      await whilePending(setLoading, async () => {
+        const result = await api.browseList(path);
+        if (result.isErr()) {
+          toast.error(result.error.message);
+          return;
+        }
+        const data = result.value;
+        if (data.error) {
+          toast.error(data.error);
+          return;
+        }
+        if (data.path) setCurrentPath(data.path);
+        if (data.parent !== undefined) setParentPath(data.parent);
+        if (data.dirs) setDirs(data.dirs);
+        setSearch('');
+        pushHistory(data.path);
+        localStorage.setItem('funny:last-browse-path', data.path);
+      });
+    },
+    [pushHistory],
+  );
 
   // Load drive roots on mount, restore last path
   useEffect(() => {
@@ -126,8 +168,8 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         loadDir(data.home);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: loadDir and pushHistory are stable helpers called once on init
-  }, []);
+    // Both helpers keep one identity, so this still runs once, on mount.
+  }, [loadDir, pushHistory]);
 
   const filteredDirs = useMemo(() => {
     if (!search.trim()) return dirs;
@@ -144,52 +186,13 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
       });
   }, [dirs, search]);
 
-  const pushHistory = useCallback((path: string) => {
-    if (isNavRef.current) {
-      isNavRef.current = false;
-      return;
-    }
-    const idx = historyIndexRef.current;
-    // Truncate forward history
-    historyRef.current = historyRef.current.slice(0, idx + 1);
-    historyRef.current.push(path);
-    historyIndexRef.current = historyRef.current.length - 1;
-    setHistoryIndex(historyIndexRef.current);
-  }, []);
-
-  const loadDir = async (path: string) => {
-    setLoading(true);
-    setError('');
-    try {
-      const result = await api.browseList(path);
-      if (result.isErr()) {
-        toast.error(result.error.message);
-        return;
-      }
-      const data = result.value;
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-      if (data.path) setCurrentPath(data.path);
-      if (data.parent !== undefined) setParentPath(data.parent);
-      if (data.dirs) setDirs(data.dirs);
-      setSearch('');
-      pushHistory(data.path);
-      localStorage.setItem('funny:last-browse-path', data.path);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const goBack = useCallback(() => {
     if (historyIndexRef.current <= 0) return;
     historyIndexRef.current--;
     setHistoryIndex(historyIndexRef.current);
     isNavRef.current = true;
     loadDir(historyRef.current[historyIndexRef.current]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadDir is a stable local function; adding it would cause infinite re-renders
-  }, []);
+  }, [loadDir]);
 
   const goForward = useCallback(() => {
     if (historyIndexRef.current >= historyRef.current.length - 1) return;
@@ -197,8 +200,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
     setHistoryIndex(historyIndexRef.current);
     isNavRef.current = true;
     loadDir(historyRef.current[historyIndexRef.current]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadDir is a stable local function; adding it would cause infinite re-renders
-  }, []);
+  }, [loadDir]);
 
   const handleCreateFolder = async () => {
     const name = newFolderName.trim();

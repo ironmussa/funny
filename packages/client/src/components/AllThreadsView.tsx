@@ -18,6 +18,7 @@ import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
+import { whilePending } from '@/lib/while-pending';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -64,6 +65,30 @@ export function AllThreadsView() {
   });
   const [projectFilterOpen, setProjectFilterOpen] = useState(false);
 
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
+  const [caseSensitive, setCaseSensitive] = useState(() => searchParams.get('cs') === '1');
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
+    const paramStatus = searchParams.get('status');
+    if (paramStatus) return new Set(paramStatus.split(',').filter(Boolean));
+    return new Set();
+  });
+  const [gitFilter, setGitFilter] = useState<Set<string>>(new Set());
+  const [modeFilter, setModeFilter] = useState<Set<string>>(new Set());
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(() =>
+    searchParams.get('scratch') === '1' ? new Set(['scratch']) : new Set(),
+  );
+  const [showArchived, setShowArchived] = useState(false);
+  const [sortField, setSortField] = useState<SortField>(() => {
+    const paramSort = searchParams.get('sort');
+    if (paramSort === 'created' || paramSort === 'updated') return paramSort;
+    return 'updated';
+  });
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    const paramDir = searchParams.get('dir');
+    if (paramDir === 'asc' || paramDir === 'desc') return paramDir;
+    return 'desc';
+  });
+
   // Build search params from current filter state (preserves status/sort params if present)
   const buildSearchParams = (overrides?: {
     project?: string | null;
@@ -97,20 +122,15 @@ export function AllThreadsView() {
     const paramProject = searchParams.get('project') || null;
     const paramStatus = searchParams.get('status');
 
-    if (paramProject !== projectFilter) {
-      setProjectFilter(paramProject);
-    }
+    // Setting the value a state already holds is a no-op, so no comparison is needed.
+    setProjectFilter(paramProject);
 
     // Restore the text search from the URL (back button from a thread,
     // browser back/forward, deep links).
     const paramSearch = searchParams.get('search') ?? '';
-    if (paramSearch !== search) {
-      setSearch(paramSearch);
-    }
+    setSearch(paramSearch);
     const paramCs = searchParams.get('cs') === '1';
-    if (paramCs !== caseSensitive) {
-      setCaseSensitive(paramCs);
-    }
+    setCaseSensitive(paramCs);
 
     // When ?status= param is present, force list view and pre-set status filter
     if (paramStatus) {
@@ -131,7 +151,6 @@ export function AllThreadsView() {
     if (paramDir === 'asc' || paramDir === 'desc') {
       setSortDir(paramDir);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally syncs URL → state only when searchParams changes; adding projectFilter would loop
   }, [searchParams]);
 
   const filteredProject = projectFilter ? projects.find((p) => p.id === projectFilter) : null;
@@ -161,30 +180,6 @@ export function AllThreadsView() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchKeyDownRef = useRef<((e: React.KeyboardEvent) => void) | null>(null);
-  const [search, setSearch] = useState(() => searchParams.get('search') || '');
-  const [caseSensitive, setCaseSensitive] = useState(() => searchParams.get('cs') === '1');
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
-    const paramStatus = searchParams.get('status');
-    if (paramStatus) return new Set(paramStatus.split(',').filter(Boolean));
-    return new Set();
-  });
-  const [gitFilter, setGitFilter] = useState<Set<string>>(new Set());
-  const [modeFilter, setModeFilter] = useState<Set<string>>(new Set());
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(() =>
-    searchParams.get('scratch') === '1' ? new Set(['scratch']) : new Set(),
-  );
-  const [showArchived, setShowArchived] = useState(false);
-  const [sortField, setSortField] = useState<SortField>(() => {
-    const paramSort = searchParams.get('sort');
-    if (paramSort === 'created' || paramSort === 'updated') return paramSort;
-    return 'updated';
-  });
-  const [sortDir, setSortDir] = useState<SortDir>(() => {
-    const paramDir = searchParams.get('dir');
-    if (paramDir === 'asc' || paramDir === 'desc') return paramDir;
-    return 'desc';
-  });
-
   // Auto-focus search input on mount (e.g. when navigating via Ctrl+F)
   useEffect(() => {
     searchInputRef.current?.focus();
@@ -263,8 +258,7 @@ export function AllThreadsView() {
 
   const [loadingMore, setLoadingMore] = useState(false);
   const handleLoadMore = useCallback(async () => {
-    setLoadingMore(true);
-    try {
+    await whilePending(setLoadingMore, async () => {
       const relevantProjects = projectFilter ? [projectFilter] : projects.map((p) => p.id);
       await Promise.all(
         relevantProjects.flatMap((projectId) =>
@@ -273,9 +267,7 @@ export function AllThreadsView() {
             : [],
         ),
       );
-    } finally {
-      setLoadingMore(false);
-    }
+    });
   }, [
     projectFilter,
     projects,

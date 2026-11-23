@@ -26,11 +26,13 @@
  * (`providerFor`); the batch branches use the leader's.
  */
 
-import type {
-  CiState,
-  FailingCheck,
-  IntegrationProvider,
-  MergeMethod,
+import {
+  REGRESSION_PROOF_CHECK,
+  REVIEW_STATUS_CONTEXT,
+  type CiState,
+  type FailingCheck,
+  type IntegrationProvider,
+  type MergeMethod,
 } from '@funny/core/github-app';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 
@@ -93,6 +95,12 @@ const MAX_REBUILDS = 3;
 
 const prList = (members: QueueMember[]) => members.map((m) => `#${m.prNumber}`).join(', ');
 
+/** What the factory itself publishes on pull request heads: never on a queue commit. */
+const FACTORY_CHECKS: ReadonlySet<string> = new Set([
+  REGRESSION_PROOF_CHECK,
+  REVIEW_STATUS_CONTEXT,
+]);
+
 /** How an attempt ends for each verdict of its commit. */
 const ATTEMPT_END = { green: 'green', red: 'red', unknown: 'abandoned' } as const;
 
@@ -141,19 +149,32 @@ export function createMergeQueue(deps: MergeQueueDeps) {
     return { kind: 'unknown', why: 'the run was stopped' };
   }
 
-  /** The checks a batch commit must pass: the base's required ones, else those the members' heads reported. */
+  /**
+   * The checks a batch commit must pass: the base's required ones; else those
+   * that reported on the base's own head (the CI that runs on pushes, which
+   * is what runs on a queue branch); else those the members' heads reported.
+   * Never the factory's own (its proof check, its review status) nor a check
+   * that reports only on pull requests: a queue commit never gets those.
+   */
   async function expectedChecks(
     host: IntegrationProvider,
     members: QueueMember[],
     required: string[],
   ): Promise<string[]> {
     if (required.length > 0) return required;
+    const leader = members[0]!;
+    const base = await host.branchHead(leader.repo, leader.baseBranch);
+    if (base.isOk()) {
+      const onBase = await host.checkNames(leader.repo, base.value);
+      const pushed = onBase.isOk() ? onBase.value.filter((name) => !FACTORY_CHECKS.has(name)) : [];
+      if (pushed.length > 0) return pushed;
+    }
     const names = new Set<string>();
     for (const member of members) {
       const reported = await deps.providerFor(member).checkNames(member.repo, member.headSha);
       if (reported.isOk()) for (const name of reported.value) names.add(name);
     }
-    return [...names];
+    return [...names].filter((name) => !FACTORY_CHECKS.has(name));
   }
 
   /**

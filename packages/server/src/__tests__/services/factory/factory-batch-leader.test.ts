@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
+import { okAsync } from 'neverthrow';
 
 import { createBatchLeader } from '../../../services/factory/factory-batch-leader.js';
 import { createFactoryBatchesRepository } from '../../../services/factory/factory-batches.js';
@@ -309,5 +310,49 @@ describe('a red batch', () => {
   test('a red batch of one is that member’s failure', async () => {
     const { outcome } = await lead(1, { ci: () => 'red' });
     expect(outcome.verdicts.get('r1')).toMatchObject({ kind: 'sent_back', why: 'checks' });
+  });
+});
+
+// Found end to end on test-funny: the members' heads report the factory's own
+// checks and a review app's, which never run on a queue branch, so the batch
+// waited for checks that would never come.
+describe('the checks a batch waits for', () => {
+  function queueWith(names: Record<string, string[]>) {
+    const host = createFakeHost();
+    const provider = host.as('alice');
+    const reading = {
+      ...provider,
+      checkNames: (_repo: string, sha: string) => okAsync(names[sha] ?? []),
+    };
+    const list = members(host, 2);
+    const deps: MergeQueueDeps = {
+      batches: createFactoryBatchesRepository(),
+      providerFor: () => reading,
+      hold: async () => null,
+      signal: new AbortController().signal,
+    };
+    return { queue: createMergeQueue(deps), host: reading, list };
+  }
+
+  test("the base's own checks (its push CI), never the factory's or a pull-request app's", async () => {
+    const { queue, host, list } = queueWith({
+      B0: ['test', 'funny/review'],
+      h1: ['funny/regression-proof', 'CodeRabbit', 'test', 'funny/review'],
+      h2: ['test', 'CodeRabbit'],
+    });
+    expect(await queue.expectedChecks(host, list, [])).toEqual(['test']);
+  });
+
+  test('a base with no check: the members’ checks, without the factory’s own', async () => {
+    const { queue, host, list } = queueWith({
+      h1: ['funny/regression-proof', 'test', 'funny/review'],
+      h2: ['lint'],
+    });
+    expect(await queue.expectedChecks(host, list, [])).toEqual(['test', 'lint']);
+  });
+
+  test("the base branch's required checks win", async () => {
+    const { queue, host, list } = queueWith({ B0: ['test'] });
+    expect(await queue.expectedChecks(host, list, ['build'])).toEqual(['build']);
   });
 });

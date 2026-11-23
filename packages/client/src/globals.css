@@ -1750,6 +1750,11 @@ mark.md-search-match[data-active='true'] {
    so a single class handles both color schemes.
    ─────────────────────────────────────────────────────────────────────────── */
 .dockview-theme-funny {
+  /* Stacking of dockview's popovers (the tab overflow list, tab context menus).
+     Every built-in dockview theme sets it; without it the popover's z-index is
+     invalid, falls back to auto, and the list opens hidden under the tab strip. */
+  --dv-overlay-z-index: 999;
+
   /* Panel content + tab bar surfaces */
   --dv-group-view-background-color: hsl(var(--background));
   --dv-tabs-and-actions-container-background-color: hsl(var(--sidebar-background));

@@ -419,6 +419,17 @@ describe('factory pull requests: the proof gate (task 4.4)', () => {
       expect(calls.some((c) => c.key === 'POST /repos/o/r/pulls/7/reviews')).toBe(true);
     });
 
+    test('a verdict carried to a base-merge commit sets its status only, with no second comment', async () => {
+      const { prs, calls } = gated({ 'POST /repos/o/r/statuses/abc': { id: 2 } });
+      const { body: _body, ...carried } = review;
+      expect((await prs.publishReview(pr, carried))._unsafeUnwrap()).toEqual({ status: true });
+      expect(calls.some((c) => c.key === 'POST /repos/o/r/pulls/7/reviews')).toBe(false);
+      expect(calls.find((c) => c.key === 'POST /repos/o/r/statuses/abc')?.body).toMatchObject({
+        state: 'success',
+        context: 'funny/review',
+      });
+    });
+
     test('a comment GitHub refuses is the error, and no status is set', async () => {
       const { prs, calls } = gated({ 'POST /repos/o/r/pulls/7/reviews': { status: 422 } });
       expect((await prs.publishReview(pr, review)).isErr()).toBe(true);

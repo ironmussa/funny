@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   blockingReviewFindings,
+  contractOf,
   factoryReviewResultSchema,
+  factoryTriageResultSchema,
   reviewAllowsMerge,
 } from '../contracts/factory.js';
 
@@ -76,5 +78,52 @@ describe('reviewAllowsMerge', () => {
 
   test('a fail without findings blocks', () => {
     expect(reviewAllowsMerge(review('fail', []))).toBe(false);
+  });
+});
+
+describe('factoryTriageResultSchema', () => {
+  const contract = { acceptanceCriteria: ['Negative numbers are summed'] };
+
+  test('ready carries a contract; paths and hints default to none', () => {
+    expect(factoryTriageResultSchema.parse({ decision: 'ready', contract })).toEqual({
+      decision: 'ready',
+      contract: { ...contract, likelyPaths: [], riskHints: [] },
+    });
+  });
+
+  test('ready without acceptance criteria is refused', () => {
+    expect(factoryTriageResultSchema.safeParse({ decision: 'ready' }).success).toBe(false);
+    expect(
+      factoryTriageResultSchema.safeParse({
+        decision: 'ready',
+        contract: { acceptanceCriteria: [] },
+      }).success,
+    ).toBe(false);
+  });
+
+  test('needs_info carries questions, too_big a split', () => {
+    expect(
+      factoryTriageResultSchema.parse({ decision: 'needs_info', questions: ['Which API?'] }),
+    ).toEqual({ decision: 'needs_info', questions: ['Which API?'] });
+    expect(
+      factoryTriageResultSchema.parse({ decision: 'too_big', parts: ['Schema', 'UI'] }),
+    ).toEqual({ decision: 'too_big', parts: ['Schema', 'UI'] });
+    expect(factoryTriageResultSchema.safeParse({ decision: 'needs_info' }).success).toBe(false);
+    expect(factoryTriageResultSchema.safeParse({ decision: 'too_big', parts: [] }).success).toBe(
+      false,
+    );
+  });
+
+  test('an unknown decision is refused', () => {
+    expect(factoryTriageResultSchema.safeParse({ decision: 'maybe' }).success).toBe(false);
+  });
+
+  test('a run has a contract only when triage was ready', () => {
+    const at = '2026-11-22T00:00:00.000Z';
+    const full = { ...contract, likelyPaths: [], riskHints: [] };
+    expect(contractOf({ triage: { decision: 'ready', at, contract: full } })).toEqual(full);
+    expect(contractOf({ triage: { decision: 'needs_info', at, items: ['?'] } })).toBeNull();
+    expect(contractOf({ triage: { decision: 'none', at } })).toBeNull();
+    expect(contractOf({ triage: null })).toBeNull();
   });
 });

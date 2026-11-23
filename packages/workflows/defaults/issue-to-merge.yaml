@@ -60,10 +60,18 @@ inputs:
   branch: { type: string, required: true }
 
 nodes:
+  # A read-only agent reads the issue first: it either writes the run's
+  # contract (what the change must do, the files it will probably touch, its
+  # risks) or asks on the issue and the run waits there, holding no slot,
+  # until the issue changes. Takes `provider`, `model` and `effort` only.
+  - id: triage
+    triage: {}
+
   # Runs of one factory inside this step at once: this default, or the
   # factory's own limit for `implement` (Settings > Factory). `review` has a
   # limit there too; `merge` is always one per repository.
   - id: implement
+    depends_on: [triage]
     concurrency: { group: 'implement:{{inputs.factory_id}}', limit: 20 }
     spawn_agent:
       prompt: |
@@ -72,6 +80,12 @@ nodes:
 
         Implement GitHub issue #{{issue_number}} of {{repo}}: {{issue_title}}
         Read the issue first: {{issue_url}}
+        {{#triage.json.contract}}
+
+        The issue was triaged before you. Your change must meet this contract:
+
+        {{triage.json.contract}}
+        {{/triage.json.contract}}
 
         How to work:
         - Work on the branch `{{branch}}`. You may already be on it (check with

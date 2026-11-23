@@ -128,9 +128,12 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     retry(factoryId: string, runId: string): ResultAsync<FactoryRunView, FactoryRunControlError> {
       return runOf(factoryId, runId)
         .andThen((run) =>
-          ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
-            runs.reopen(run.id, kept).mapErr(reopenRefused),
-          ),
+          // A run parked on its issue has done no work to keep: it is triaged again.
+          run.state === 'needs_info'
+            ? runs.retriage(run).mapErr(storage)
+            : ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
+                runs.reopen(run.id, kept).mapErr(reopenRefused),
+              ),
         )
         .andThen((reopened) =>
           reopened

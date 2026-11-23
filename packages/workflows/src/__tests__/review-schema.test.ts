@@ -119,3 +119,31 @@ nodes:
     });
   });
 });
+
+describe('triage schema', () => {
+  const triageFlow = (triageYaml: string) =>
+    `
+name: test-flow
+nodes:
+  - id: can-we
+    ${triageYaml}
+  - id: implement
+    depends_on: [can-we]
+    spawn_agent: { prompt: do it }
+`.trim();
+
+  test('an empty triage step parses, and provider, model and effort are accepted', () => {
+    expect(parse(triageFlow('triage: {}')).nodes[0]?.triage).toEqual({});
+    expect(
+      parse(triageFlow('triage: { provider: claude, model: haiku, effort: low }')).nodes[0]?.triage,
+    ).toEqual({ provider: 'claude', model: 'haiku', effort: 'low' });
+  });
+
+  test('anything else is refused, naming the step and the field', () => {
+    for (const field of ['permission_mode: autoEdit', 'prompt: hi', 'early: true']) {
+      const message = parseErr(triageFlow(`triage: { ${field} }`));
+      expect(message).toContain('can-we');
+      expect(message).toContain(field.split(':')[0]!);
+    }
+  });
+});

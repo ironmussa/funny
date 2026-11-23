@@ -192,6 +192,8 @@ interface ReviewScript {
   gate?: (threadId: string) => Promise<void>;
   /** The factory's review slot: granted once this settles (default: reviews are not limited). */
   slot?: (holder: string) => Promise<() => void>;
+  /** What triage stored on the run (its contract). */
+  triage?: ProviderDeps['triage'];
 }
 
 /** A provider whose reviewer threads answer from a script; records what the server did. */
@@ -219,6 +221,7 @@ function reviewing(script: ReviewScript) {
     },
     {
       reviews: script.reviews,
+      triage: script.triage,
       admittedAt: '2026-11-22T00:00:00.000Z',
       launch: async (body) => {
         bodies.push(body);
@@ -1102,5 +1105,43 @@ describe('what a run counts about its review and its merge', () => {
       state: 'waiting_human',
       failureReason: MERGE_HOLD_REASONS.highRisk,
     });
+  });
+});
+
+// Change factory-agent-roles, phase 2: the contract reaches the reviewer and the risk class.
+describe('a run with a contract', () => {
+  const triage = {
+    decision: 'ready' as const,
+    at: '2026-11-22T00:00:00.000Z',
+    contract: {
+      acceptanceCriteria: ['Negative numbers are summed'],
+      likelyPaths: ['src/sum.ts'],
+      riskHints: ['changes the rounding of every invoice'],
+    },
+  };
+
+  test('the reviewer judges against the contract, not the issue', async () => {
+    const { provider, bodies } = reviewing({ says: [[passOf(SHA_A)]], triage });
+    await provider.review!({});
+    const prompt = String(bodies[0]?.prompt);
+    expect(prompt).toContain('The change must meet this contract');
+    expect(prompt).toContain('- Negative numbers are summed');
+    expect(prompt).not.toContain('https://github.com/o/r/issues/7');
+    expect(prompt).not.toContain('IMPLEMENTER-PRIVATE-NOTES');
+  });
+
+  test('a risk hint of the contract makes the change high risk, whatever the review says', async () => {
+    const { provider, recorded } = reviewing({
+      says: [[passOf(SHA_A)]],
+      triage,
+      files: [changed('src/sum.ts', ['+return a + b;'])],
+    });
+    await provider.review!({});
+    const result = await provider.merge({ requireRegressionProof: false });
+    expect(result).toMatchObject({ ok: false, metadata: { reason: MERGE_HOLD_REASONS.highRisk } });
+    expect(result.error).toContain(
+      'the contract names a risk: changes the rounding of every invoice',
+    );
+    expect(recorded.some((input) => input.risk?.level === 'high')).toBe(true);
   });
 });

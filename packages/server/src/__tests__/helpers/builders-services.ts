@@ -158,11 +158,16 @@ export function markerEvent(
 }
 
 /**
- * A reviewer that passes the fakes' head commit (`sha-head`): a reviewer's
- * thread (the fake launchers name them `rev-N`) says pass; any other thread
- * says what is stored for it.
+ * The read-only agents of the fakes: a triage thread (`tri-N`) says the issue
+ * is ready, a reviewer's thread (`rev-N`) passes the fakes' head commit
+ * (`sha-head`); any other thread says what is stored for it.
  */
 export async function passingReview(threadId: string): Promise<string | null> {
+  // A triage agent's thread (`tri-N`): the issue is ready, with a contract and no paths.
+  if (threadId.startsWith('tri-')) {
+    const ready = { decision: 'ready', contract: { acceptanceCriteria: ['It works'] } };
+    return ['```json', JSON.stringify(ready), '```'].join('\n');
+  }
   if (threadId.startsWith('rev-')) {
     return ['```json', JSON.stringify({ sha: 'sha-head', verdict: 'pass' }), '```'].join('\n');
   }

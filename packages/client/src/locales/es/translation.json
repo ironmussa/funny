@@ -1732,6 +1732,8 @@
       "prOpen": "PR abierto",
       "waitingCi": "Esperando CI",
       "fixing": "Arreglando CI",
+      "triaging": "En triage",
+      "needsInfo": "Falta información",
       "reviewing": "En revisión",
       "merging": "Haciendo merge",
       "waitingHuman": "Te espera",

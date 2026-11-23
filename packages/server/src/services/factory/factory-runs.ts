@@ -19,11 +19,13 @@ import {
   factoryRegressionProofSchema,
   factoryReviewVerdictSchema,
   factoryRiskSchema,
+  factoryTriageSchema,
   MAX_STORED_REVIEWS,
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
+  type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
@@ -74,6 +76,7 @@ const WAIT_REASON_SCHEMA = z.object({
     'circular',
     'blockers-unreadable',
     'proof-not-configured',
+    'paths-overlap',
   ]),
   blockers: z.array(z.number().int()),
 });
@@ -82,6 +85,8 @@ const WAIT_REASON_SCHEMA = z.object({
 export type FactoryRunState =
   | 'requested'
   | 'queued'
+  | 'triaging'
+  | 'needs_info'
   | 'working'
   | 'pr_open'
   | 'waiting_ci'
@@ -100,7 +105,9 @@ const TERMINAL: ReadonlySet<FactoryRunState> = new Set(TERMINAL_STATES);
  * Non-terminal states that do NOT hold a concurrency slot: the agent is done and
  * the run waits for a person. It still blocks re-admitting its issue.
  */
-const PARKED_STATES = ['waiting_human'] as const satisfies FactoryRunState[];
+const PARKED_STATES = ['waiting_human', 'needs_info'] as const satisfies FactoryRunState[];
+
+const PARKED: ReadonlySet<FactoryRunState> = new Set(PARKED_STATES);
 
 /** A sent issue waiting in the factory's queue: no flow, no slot. */
 const WAITING_STATES = ['requested'] as const satisfies FactoryRunState[];
@@ -117,11 +124,19 @@ const QUEUE_TRANSITIONS = {
   requeue: { from: ['queued'], to: 'requested' },
   /** Cancelled, or the queue was cleared. */
   cancel: { from: ['requested'], to: 'stopped' },
+  /**
+   * Triage found the run's likely paths overlap a run in progress: back in
+   * line without a slot, keeping its contract, until that run is done.
+   */
+  hold: { from: ['triaging'], to: 'requested' },
+  /** The issue changed (or a member retried): a `needs_info` run is triaged again. */
+  retriage: { from: ['needs_info'], to: 'requested' },
 } as const satisfies Record<string, { from: readonly FactoryRunState[]; to: FactoryRunState }>;
 
 /** States in which a flow is driving the run: neither terminal, parked nor waiting. */
 export const IN_FLIGHT_STATES = [
   'queued',
+  'triaging',
   'working',
   'pr_open',
   'waiting_ci',
@@ -218,18 +233,22 @@ export interface FactoryRunView {
   reviews: FactoryReviewVerdict[];
   /** The risk class of the last classified commit, or null. */
   risk: FactoryRisk | null;
+  /** What triage decided about the issue, or null before it ran. */
+  triage: FactoryTriage | null;
 }
 
 export type FactoryRunSource = 'manual' | 'label';
 
 /**
  * Every thread a run started: its implementing agent's (`threadIds`, the
- * steps a retry replays), then its reviewers' (kept with their verdicts).
+ * steps a retry replays), its triage agent's, then its reviewers' (kept with
+ * their verdicts).
  * What stopping the run stops and what a merge cleans up.
  */
-export function threadsOf(run: Pick<FactoryRunView, 'threadIds' | 'reviews'>): string[] {
+export function threadsOf(run: Pick<FactoryRunView, 'threadIds' | 'reviews' | 'triage'>): string[] {
   const reviewers = run.reviews.flatMap((review) => (review.threadId ? [review.threadId] : []));
-  return [...new Set([...run.threadIds, ...reviewers])];
+  const triage = run.triage?.threadId ? [run.triage.threadId] : [];
+  return [...new Set([...run.threadIds, ...triage, ...reviewers])];
 }
 
 export type FactoryRunsError = { kind: 'storage'; message: string };
@@ -263,7 +282,14 @@ const toView = (row: Row): FactoryRunView => ({
   regressionProof: parseRegressionProof(row.regressionProof ?? null),
   reviews: parseReviews(row.reviews ?? null),
   risk: parseRisk(row.risk ?? null),
+  triage: parseTriage(row.triage ?? null),
 });
+
+function parseTriage(raw: string | null): FactoryTriage | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryTriageSchema, raw, 'factory_runs.triage');
+  return parsed.ok ? parsed.value : null;
+}
 
 const REVIEWS_SCHEMA = z.array(factoryReviewVerdictSchema);
 
@@ -351,6 +377,7 @@ export interface UpdateRunInput {
   regressionProof?: RegressionProofRecord;
   reviews?: FactoryReviewVerdict[];
   risk?: FactoryRisk;
+  triage?: FactoryTriage;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
@@ -362,6 +389,7 @@ const JSON_FIELDS = [
   'regressionProof',
   'reviews',
   'risk',
+  'triage',
 ] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
@@ -369,7 +397,7 @@ function changesFor(input: UpdateRunInput): Partial<Row> | null {
   if (input.state !== undefined) {
     changes.state = input.state;
     // A parked run's flow ended too: when it parked is when a take-over may follow.
-    if (TERMINAL.has(input.state) || input.state === 'waiting_human') {
+    if (TERMINAL.has(input.state) || PARKED.has(input.state)) {
       changes.completedAt = new Date().toISOString();
     }
   }
@@ -406,7 +434,7 @@ function updateFromParked(
  */
 function moveRun(
   runId: string,
-  transition: 'admit' | 'requeue',
+  transition: 'admit' | 'requeue' | 'hold' | 'retriage',
   changes: Partial<Row>,
 ): ResultAsync<boolean, FactoryRunsError> {
   const { from, to } = QUEUE_TRANSITIONS[transition];
@@ -472,6 +500,7 @@ function queueOperations(newId: () => string) {
             regressionProof: null,
             reviews: null,
             risk: null,
+            triage: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -512,6 +541,44 @@ function queueOperations(newId: () => string) {
         launchStartedAt: null,
         failureReason: null,
       }),
+
+    /**
+     * `triaging → requested`: the run's likely paths overlap those of `blockers`
+     * (issues with a run in progress). It leaves its slot and keeps its contract.
+     */
+    holdForPaths: (runId: string, blockers: number[]) =>
+      moveRun(runId, 'hold', {
+        admittedAt: null,
+        currentStep: null,
+        launchStartedAt: null,
+        waitReason: JSON.stringify({ kind: 'paths-overlap', blockers }),
+      }),
+
+    /**
+     * `needs_info → requested`: the issue changed since triage asked, or a
+     * member retried. Its old answer is marked superseded, so triage runs
+     * again on a new thread.
+     */
+    retriage: (run: Pick<FactoryRunView, 'id' | 'triage'>) =>
+      moveRun(run.id, 'retriage', {
+        admittedAt: null,
+        currentStep: null,
+        launchStartedAt: null,
+        completedAt: null,
+        failureReason: null,
+        triage: run.triage ? JSON.stringify({ ...run.triage, superseded: true }) : null,
+      }),
+
+    /** The factory's runs waiting on their issue (`needs_info`). */
+    needingInfo(factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryRuns)
+          .where(and(eq(factoryRuns.factoryId, factoryId), eq(factoryRuns.state, 'needs_info'))),
+        storage,
+      ).map((rows) => rows.map(toView));
+    },
 
     /**
      * `requested → stopped` for one run, or for every waiting run of the factory
@@ -713,6 +780,7 @@ export function createFactoryRunsRepository(
         regressionProof: null,
         reviews: null,
         risk: null,
+        triage: null,
       };
       return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
         toView(row),

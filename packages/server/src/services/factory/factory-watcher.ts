@@ -26,6 +26,7 @@ import type { IssueBlocker } from '@funny/core/github-app';
 import type { ConcurrencyGate } from '@funny/pipelines';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
+import { contractOf } from '@funny/shared/contracts/factory';
 import type { RegressionProofOpts } from '@funny/workflows/compiler';
 import { and, eq } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
@@ -95,6 +96,7 @@ import {
   stopFactoryThreads,
 } from './factory-thread-requests.js';
 import { runsPushedCommits, type ThreadOutcome, type WaitAfter } from './factory-thread-waits.js';
+import { busyPathsOf, issueChangedSince, overlappingIssues } from './factory-triage.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
 export interface FactoryPoll {
@@ -339,9 +341,39 @@ async function fire(id: string): Promise<void> {
   // the listing or a launch below says otherwise).
   await reportBlocked(factory.id, null);
   await reconcileParked(factory, target.repo);
+  await retriageAnswered(factory, target.repo);
   await resumeRuns(factory, target.repo, target.mode);
   // A paused factory finishes its runs but admits nothing new; its queue waits.
   if (factory.enabled) await admitWork(factory, target.repo, target.mode);
+}
+
+/**
+ * Runs parked on their issue (`needs_info`) whose issue changed since triage
+ * asked, or was closed: back in the queue, where admission triages an open one
+ * again when a slot is free and drops a closed one. An issue that cannot be
+ * read now is looked at again next tick.
+ */
+async function retriageAnswered(factory: WatchedFactory, repo: string): Promise<void> {
+  if (!runs || !deps) return;
+  const waiting = await runs.needingInfo(factory.id);
+  if (waiting.isErr()) return;
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  for (const run of waiting.value) {
+    const issue = await deps.github.getIssue(reader, run.issueNumber);
+    if (issue.isErr()) continue;
+    const answered =
+      issue.value.state === 'closed' || issueChangedSince(run.triage, issue.value.updatedAt);
+    if (!answered) continue;
+    const moved = await runs.retriage(run);
+    if (moved.isOk() && moved.value) {
+      log.info('Issue factory triages an issue again: it changed', {
+        namespace: 'factory',
+        factoryId: factory.id,
+        runId: run.id,
+        issue: run.issueNumber,
+      });
+    }
+  }
 }
 
 /** Last reason written per factory, so a steady state writes nothing each tick. */
@@ -443,6 +475,8 @@ interface AdmissionContext {
   blockers: Map<number, Promise<IssueBlocker[] | null>>;
   /** Whether each flow read this pass is proof-ready, by name. */
   proofReady: Map<string, Promise<boolean>>;
+  /** Every run of the factory, as read for this pass (their likely paths). */
+  runs: FactoryRunView[];
 }
 
 function admissionContext(
@@ -460,6 +494,7 @@ function admissionContext(
     queued: new Set(all.flatMap((run) => (run.state === 'requested' ? [run.issueNumber] : []))),
     proofReady: new Map(),
     blockers: new Map(),
+    runs: all,
   };
 }
 
@@ -591,7 +626,7 @@ async function admitQueued(
   const issue = await openQueuedIssue(factory, run, ctx);
   if (!issue) return false;
 
-  const reason = await blockedReason(ctx, run.issueNumber);
+  const reason = (await blockedReason(ctx, run.issueNumber)) ?? pathsHeld(ctx, run);
   await noteWaitReason(run, reason);
   if (reason) return false;
 
@@ -599,6 +634,18 @@ async function admitQueued(
   // Cancelled meanwhile (or another pass took it): not ours to start.
   if (admitted.isErr() || !admitted.value) return false;
   return startFlow(factory, repo, mode, issue, { ...run, state: 'queued', waitReason: null });
+}
+
+/**
+ * Why a queued run that already has a contract still waits: its likely paths
+ * overlap a run in progress (change factory-agent-roles, D5). It starts, with
+ * that contract, once the other run is no longer working on those files.
+ */
+function pathsHeld(ctx: AdmissionContext, run: FactoryRunView): FactoryWaitReason | null {
+  const paths = contractOf(run)?.likelyPaths ?? [];
+  if (paths.length === 0) return null;
+  const blockers = overlappingIssues(paths, busyPathsOf(ctx.runs, run.id));
+  return blockers.length > 0 ? { kind: 'paths-overlap', blockers } : null;
 }
 
 /** Store why a queued run waits (or that it no longer does), when that changed. */

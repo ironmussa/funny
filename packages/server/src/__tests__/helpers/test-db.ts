@@ -379,7 +379,8 @@ export function createTestDb() {
       metrics TEXT,
       regression_proof TEXT,
       review_verdicts TEXT,
-      risk TEXT
+      risk TEXT,
+      triage TEXT
     )
   `);
   testDb.run(sql`

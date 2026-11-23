@@ -343,6 +343,8 @@ export const factoryRuns = sqliteTable('factory_runs', {
   reviews: text('review_verdicts'),
   /** JSON: the risk class of the last classified commit (`FactoryRisk`). */
   risk: text('risk'),
+  /** JSON: what triage decided about the issue (`FactoryTriage`): the contract, or what it asked. */
+  triage: text('triage'),
 });
 
 /**

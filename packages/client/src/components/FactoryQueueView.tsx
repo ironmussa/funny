@@ -117,8 +117,10 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: Row
 /** The run states, in the order the status filter lists them. */
 const STATE_ORDER: readonly FactoryRun['state'][] = [
   'waiting_human',
+  'needs_info',
   'requested',
   'queued',
+  'triaging',
   'working',
   'pr_open',
   'waiting_ci',

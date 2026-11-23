@@ -32,6 +32,7 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     regressionProof: null,
     reviews: [],
     risk: null,
+    triage: null,
     ...over,
   };
 }

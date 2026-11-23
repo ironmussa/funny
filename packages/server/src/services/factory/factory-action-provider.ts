@@ -33,17 +33,21 @@
  *   (`factory-review.ts`), never a follow-up on the implementing thread. Review
  *   threads are not recorded in `threadIds`, which stays the implementing
  *   agent's steps; each verdict keeps its thread id.
+ * - `triage` decides on its own read-only thread whether the issue can be
+ *   worked unattended and writes the run's contract (`factory-triage.ts`).
  * - `run_command`, `set_status`, `set_stage` and approvals are refused: there
  *   is nowhere on the server to run them (checks belong in the repository's CI).
  */
 
 import {
+  contractOf,
   EMPTY_FACTORY_RUN_METRICS,
   reviewAllowsMerge,
   type FactoryAutoMerge,
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
+  type FactoryTriage,
 } from '@funny/shared/contracts/factory';
 import type {
   ActionProvider,
@@ -78,6 +82,7 @@ import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './f
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
+import { createFactoryTriage } from './factory-triage.js';
 
 /**
  * A proof the agent can fix (its test): the flows retry it with the agent.
@@ -164,6 +169,16 @@ export interface FactoryActionProviderDeps {
   autoMerge?: FactoryAutoMerge;
   /** The review verdicts the run already has (a resumed run). */
   reviews?: readonly FactoryReviewVerdict[];
+  /** What the run already stores of its triage (a resumed run, or one back from a path hold). */
+  triage?: FactoryTriage | null;
+  /** The newest triage thread of this run by its title prefix, since `since`. */
+  findTriageThread?(titlePrefix: string, since: string): Promise<string | null>;
+  /** The likely paths of the factory's other runs in progress, by issue. */
+  busyPaths?(): Promise<Array<{ issue: number; paths: string[] }>>;
+  /** When the run's issue last changed, by GitHub's clock; null when unreadable. */
+  issueUpdatedAt?(): Promise<string | null>;
+  /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only). */
+  holdForPaths?(blockers: number[]): Promise<boolean>;
   /** When the run was admitted: review threads from before are not this run's. */
   admittedAt?: string;
   /** The newest review thread of this run by its title prefix, since `since`. */
@@ -700,6 +715,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           change: files.value,
           findings,
           sensitivePaths: deps.sensitivePaths,
+          riskHints: contractOf({ triage: triager.current() })?.riskHints,
         })
       : {
           headSha: sha,
@@ -748,6 +764,34 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       : deps.record({ state: stage === 'review' ? 'reviewing' : 'merging' });
 
   const offBranch = deps.continuation?.followUpOffBranch;
+  const askAgain =
+    offBranch && deps.continuation
+      ? { send: offBranch, completedAt: deps.continuation.completedAt }
+      : undefined;
+
+  const triager = createFactoryTriage({
+    scope,
+    issueUrl: scope.issueUrl ?? null,
+    stored: deps.triage ?? null,
+    since: deps.admittedAt ?? new Date(0).toISOString(),
+    signal: deps.signal,
+    launch: deps.launch,
+    findLaunched: async (prefix, since) => (await deps.findTriageThread?.(prefix, since)) ?? null,
+    waitThread: deps.waitThread,
+    finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
+    followUp: askAgain,
+    worktreeBase,
+    comment: async (body) => {
+      const posted = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
+      return posted.isOk() ? ok(undefined) : err(posted.error.message);
+    },
+    busyPaths: deps.busyPaths,
+    issueUpdatedAt: deps.issueUpdatedAt,
+    hold: deps.holdForPaths,
+    record: deps.record,
+    count: (event) => count(metrics, { event }),
+  });
+
   const reviewer = createFactoryReviewer({
     scope,
     issueUrl: scope.issueUrl ?? null,
@@ -767,10 +811,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     findLaunched: async (prefix, since) => (await deps.findReviewThread?.(prefix, since)) ?? null,
     waitThread: deps.waitThread,
     finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
-    followUp:
-      offBranch && deps.continuation
-        ? { send: offBranch, completedAt: deps.continuation.completedAt }
-        : undefined,
+    followUp: askAgain,
+    contract: () => contractOf({ triage: triager.current() }),
     abandon: deps.abandon,
     worktreeBase,
     otherPullRequests: deps.otherPullRequests,
@@ -1095,6 +1137,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     regressionProof: (opts) => runRegressionProof(opts),
 
     review: (opts) => reviewer.review(opts),
+
+    triage: (opts) => triager.triage(opts),
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

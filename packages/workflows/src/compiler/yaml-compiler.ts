@@ -310,6 +310,7 @@ async function dispatchGithubNode(
     return githubOutput(yamlNode, 'regression_proof', await regressionProof(yamlNode, ctx, scope));
   }
   if (yamlNode.review) return githubOutput(yamlNode, 'review', await review(yamlNode, ctx, scope));
+  if (yamlNode.triage) return githubOutput(yamlNode, 'triage', await triage(yamlNode, ctx, scope));
   return null;
 }
 
@@ -360,6 +361,19 @@ function merge(
     regressionProof: proofNode
       ? regressionProofOpts(interpolateObject(proofNode.regression_proof!, scope))
       : undefined,
+  });
+}
+
+function triage(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: TemplateScope) {
+  if (!ctx.provider.triage) {
+    throw new Error(`triage[${yamlNode.id}]: the provider does not support this action`);
+  }
+  const opts = interpolateObject(yamlNode.triage!, scope);
+  return ctx.provider.triage({
+    provider: opts.provider,
+    model: opts.model,
+    effort: opts.effort,
+    execution: ctx.execution,
   });
 }
 

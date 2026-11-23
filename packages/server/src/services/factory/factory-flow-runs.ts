@@ -85,6 +85,7 @@ import {
   type ThreadOutcome,
   type WaitAfter,
 } from './factory-thread-waits.js';
+import { busyPathsOf } from './factory-triage.js';
 
 export interface FactoryRunJob {
   factory: WatchedFactory;
@@ -151,12 +152,19 @@ interface FlowTrace {
   step: string | null;
   /** A step left the run for a person itself (e.g. `no change`): the end keeps that. */
   parked: boolean;
+  /**
+   * Triage took the run out of flight itself: it waits on its issue
+   * (`needs_info`) or in the queue behind other work on the same files. The
+   * end changes nothing about it.
+   */
+  held: boolean;
 }
 
 /** Note what a recorded update means for the flow's end; whether it recorded an agent thread. */
 function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
   if (input.prUrl) trace.prOpen = true;
   if (input.state === 'waiting_human') trace.parked = true;
+  if (input.state === 'needs_info') trace.held = true;
   if (!input.threadIds) return false;
   trace.agentsRan = true;
   return true;
@@ -414,6 +422,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   /** A flow that failed: dropped before any agent ran, left as a step parked it, failed, or parked. */
   async function settleFailed(job: FactoryRunJob, trace: FlowTrace, error?: string): Promise<void> {
     const { run } = job;
+    // Triage parked it on its issue or sent it back to the queue: nothing to settle.
+    if (trace.held) return;
     if (!trace.agentsRan && !wasReopened(job)) return dropUnstarted(job, error);
     if (trace.parked) {
       await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
@@ -467,6 +477,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const trace: FlowTrace = {
       agentsRan: job.run.threadIds.length > 0,
       prOpen: job.run.prUrl !== null,
+      held: false,
       step: null,
       parked: false,
     };
@@ -479,6 +490,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       // Stopped (or finished) elsewhere: stop driving it.
       if (live.isOk() && !live.value) controller.abort();
       if (live.isOk() && live.value && input.state === 'merged') cleanUpMerged(job);
+      // The tick that admitted the run waits for its implementing thread, so a
+      // launch that fails frees its slot in the same tick. While triage runs
+      // first that wait ends at the watcher's own limit (`ADMIT_WAIT_MS`).
       if (traceRecorded(trace, input)) agentStarted();
     };
 
@@ -539,6 +553,25 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       issueLabels: job.issue.labels ?? [],
       sensitivePaths: job.factory.sensitivePaths,
       autoMerge: job.factory.autoMerge,
+      triage: job.run.triage,
+      findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
+      busyPaths: async () => {
+        const others = await deps.runs.inFlight(job.factory.id);
+        return others.isOk() ? busyPathsOf(others.value, job.run.id) : [];
+      },
+      issueUpdatedAt: async () => {
+        const issue = await deps.github.getIssue(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+        );
+        return issue.isOk() ? (issue.value.updatedAt ?? null) : null;
+      },
+      holdForPaths: async (blockers) => {
+        const held = await deps.runs.holdForPaths(job.run.id, blockers);
+        if (held.isErr() || !held.value) return false;
+        trace.held = true;
+        return true;
+      },
       reviews: job.run.reviews,
       admittedAt: job.run.admittedAt ?? job.run.startedAt,
       findReviewThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),

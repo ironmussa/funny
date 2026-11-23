@@ -101,6 +101,10 @@ export type FactoryRunState =
   /** Sent to the factory and waiting in its queue; holds no concurrency slot. */
   | 'requested'
   | 'queued'
+  /** A read-only agent decides whether the issue can be worked unattended. */
+  | 'triaging'
+  /** Triage asked questions on the issue: parked, no slot, until the issue changes. */
+  | 'needs_info'
   | 'working'
   | 'pr_open'
   | 'waiting_ci'
@@ -143,6 +147,8 @@ export interface FactoryRun {
   metrics: FactoryRunMetrics;
   /** The last regression proof of the run's pull request, or null before one ran. */
   regressionProof: FactoryRegressionProof | null;
+  /** What triage decided about the issue, or null before it ran (and on older runs). */
+  triage: FactoryTriage | null;
   /** The review verdicts of the run's pull request, one per commit, oldest first. */
   reviews: FactoryReviewVerdict[];
   /** The risk class of the pull request's last classified commit, or null before one. */
@@ -253,7 +259,9 @@ export interface FactoryWaitReason {
     | 'circular'
     | 'blockers-unreadable'
     /** Its flow's merge needs a regression proof and the flow has no proof rules. */
-    | 'proof-not-configured';
+    | 'proof-not-configured'
+    /** Its likely paths overlap those of a run in progress (`blockers`: that run's issue). */
+    | 'paths-overlap';
   blockers: number[];
 }
 
@@ -418,3 +426,60 @@ export const factoryRiskSchema = z.object({
   reasons: z.array(z.string()),
 });
 export type FactoryRisk = z.infer<typeof factoryRiskSchema>;
+
+/**
+ * Triage (change factory-agent-roles, D4): a read-only agent reads the issue
+ * and answers whether it can be worked unattended. `ready` carries the run's
+ * contract; the other answers carry what to ask on the issue.
+ */
+const contractLine = z.string().trim().min(1).max(500);
+
+/** What the run must do, written by triage and read by the implementer and the reviewer. */
+export const factoryContractSchema = z.object({
+  /** What must be true for the issue to be done. */
+  acceptanceCriteria: z.array(contractLine).min(1).max(20),
+  /** Globs of the files the change will probably touch (a prediction). */
+  likelyPaths: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
+  /** Why the change may be risky; any hint makes it high risk. */
+  riskHints: z.array(contractLine).max(10).default([]),
+});
+export type FactoryContract = z.infer<typeof factoryContractSchema>;
+
+/** At most this many questions (or parts) go on the issue, each this long. */
+export const MAX_TRIAGE_ITEMS = 5;
+export const MAX_TRIAGE_ITEM_CHARS = 300;
+
+const triageItems = z.array(z.string().trim().min(1).max(2000)).min(1).max(20);
+
+export const factoryTriageResultSchema = z.discriminatedUnion('decision', [
+  z.object({ decision: z.literal('ready'), contract: factoryContractSchema }),
+  z.object({ decision: z.literal('needs_info'), questions: triageItems }),
+  z.object({ decision: z.literal('too_big'), parts: triageItems }),
+]);
+export type FactoryTriageResult = z.infer<typeof factoryTriageResultSchema>;
+
+/**
+ * What the run stores of its triage. `none`: triage gave no valid result
+ * twice, and the run went on without a contract.
+ */
+export const factoryTriageSchema = z.object({
+  decision: z.enum(['ready', 'needs_info', 'too_big', 'none']),
+  /** When triage answered; an issue changed after it is triaged again. */
+  at: z.string(),
+  /** The triage agent's thread. */
+  threadId: z.string().optional(),
+  /** The contract, for `ready`. */
+  contract: factoryContractSchema.optional(),
+  /** What was asked on the issue (`needs_info`) or the proposed split (`too_big`). */
+  items: z.array(z.string()).optional(),
+  /**
+   * The issue changed since (or a member retried): this answer is kept to show
+   * what was asked, and triage runs again on a new thread, not `threadId`.
+   */
+  superseded: z.boolean().optional(),
+});
+export type FactoryTriage = z.infer<typeof factoryTriageSchema>;
+
+/** The run's contract, when triage wrote one. */
+export const contractOf = (run: { triage: FactoryTriage | null }): FactoryContract | null =>
+  run.triage?.decision === 'ready' ? (run.triage.contract ?? null) : null;

@@ -192,6 +192,15 @@ export interface MergeOpts {
   requireReview?: boolean;
 }
 
+/** A `triage` step: whether the run's issue can be worked unattended, and its contract. */
+export interface TriageOpts {
+  provider?: string;
+  model?: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  /** The execution this triage belongs to. */
+  execution?: ActionExecution;
+}
+
 /**
  * A `review` step: an independent verdict on the run's pull request head. The
  * provider owns the reviewer's thread, permissions, inputs and result format.
@@ -294,6 +303,14 @@ export interface ActionProvider {
    * fail) and the head (must pass). The provider starts and polls the job.
    */
   regressionProof?(opts: RegressionProofOpts): Promise<ActionResult>;
+
+  /**
+   * Triage the run's issue on a read-only agent. Resolves `ok: true` when the
+   * run may go on, with `metadata.contract` (text for the implementing agent,
+   * empty without a contract); `ok: false` when the run stops here (questions
+   * were asked on the issue, or it waits for other work on the same files).
+   */
+  triage?(opts: TriageOpts): Promise<ActionResult>;
 
   /**
    * Review the run's pull request head on an independent read-only agent.

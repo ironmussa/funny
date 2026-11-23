@@ -135,12 +135,14 @@ function fakePoll() {
 let reviewerThreads = 0;
 
 /**
- * A reviewer's launch (change factory-agent-roles): a thread row that already
+ * A read-only agent's launch, the reviewer's or triage's (change
+ * factory-agent-roles): a thread row that already
  * completed, so the real thread wait sees it finished; `passingReview` is what
  * it says. Kept out of `calls`, which count the implementing agent's launches.
  */
 function launchReviewer(input: StartThreadInput): LaunchResult {
-  const id = `rev-${++reviewerThreads}`;
+  const kind = String(input.body.title).startsWith('[Factory triage]') ? 'tri' : 'rev';
+  const id = `${kind}-${++reviewerThreads}`;
   seedThread(testDb.db, {
     id,
     projectId: String(input.body.projectId),
@@ -153,7 +155,7 @@ function launchReviewer(input: StartThreadInput): LaunchResult {
 }
 
 const isReviewerLaunch = (input: StartThreadInput) =>
-  String(input.body.title).startsWith('[Factory review]');
+  /^\[Factory (review|triage)\]/.test(String(input.body.title));
 
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   const calls: StartThreadInput[] = [];
@@ -169,10 +171,14 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
 const issueOf = (call: StartThreadInput) => Number(/#(\d+)/.exec(String(call.body.title))![1]);
 
 /** Agent threads that never finish until the watcher stops. */
-const pendingThreads = async (_threadId: string, signal: AbortSignal) =>
-  new Promise<{ status: 'cancelled' }>((resolve) =>
+const pendingThreads = async (threadId: string, signal: AbortSignal) => {
+  // The triage agent finishes (its answer is `passingReview`'s): what never
+  // finishes is the work that follows it.
+  if (threadId.startsWith('tri-')) return { status: 'completed' as const, output: '' };
+  return new Promise<{ status: 'cancelled' }>((resolve) =>
     signal.addEventListener('abort', () => resolve({ status: 'cancelled' })),
   );
+};
 
 const finishedThreads = (status: 'completed' | 'failed') => async () => ({
   status,
@@ -479,9 +485,15 @@ describe('the queue', () => {
 
     await tick();
 
-    expect(launcher.calls).toHaveLength(1);
+    // The implementing agent was tried once (and its triage before it).
+    const implementing = launcher.calls.filter((call) =>
+      String(call.body.title).startsWith('[Factory] '),
+    );
+    expect(implementing).toHaveLength(1);
     const run = await eventually(factoryId, 7, (r) => r.state === 'requested');
     expect(run.source).toBe('manual');
+    // A triage that never ran is not remembered: the next attempt triages again.
+    expect(run.triage).toBeNull();
   });
 
   test('a queued issue closed since it was sent is dropped from the queue', async () => {

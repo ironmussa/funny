@@ -426,4 +426,49 @@ describe('factory runs', () => {
     expect(screen.getByTestId('factory-run-r1')).toHaveTextContent('In the merge lane');
     expect(screen.queryByTestId('factory-run-reason-r1')).toBeNull();
   });
+
+  // Change factory-agent-roles, phase 2: triage in the run's row.
+  test('a run parked on its issue says so and can be retried; its contract shows when it has one', () => {
+    mocks.settings = configured();
+    mocks.runs = [
+      runOf({
+        state: 'needs_info',
+        failureReason: 'needs info',
+        triage: { decision: 'needs_info', at: '2026-11-22T00:00:00Z', items: ['Which endpoint?'] },
+      }),
+    ];
+    const { unmount } = renderRuns();
+    expect(screen.getByTestId('factory-run-r1')).toHaveTextContent('Needs info');
+    expect(screen.getByTestId('factory-run-reason-r1')).toHaveTextContent('Asked on the issue');
+    expect(screen.queryByTestId('factory-run-contract-r1')).toBeNull();
+    fireEvent.click(screen.getByTestId('factory-run-retry-r1'));
+    expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
+    unmount();
+
+    mocks.runs = [
+      runOf({
+        triage: {
+          decision: 'ready',
+          at: '2026-11-22T00:00:00Z',
+          contract: {
+            acceptanceCriteria: ['Negative numbers are summed'],
+            likelyPaths: [],
+            riskHints: [],
+          },
+        },
+      }),
+    ];
+    renderRuns();
+    expect(screen.getByTestId('factory-run-contract-r1')).toHaveAttribute(
+      'title',
+      'Negative numbers are summed',
+    );
+  });
+
+  test('a run that went on without a contract shows "No contract"', () => {
+    mocks.settings = configured();
+    mocks.runs = [runOf({ triage: { decision: 'none', at: '2026-11-22T00:00:00Z' } })];
+    renderRuns();
+    expect(screen.getByTestId('factory-run-contract-r1')).toHaveTextContent('No contract');
+  });
 });

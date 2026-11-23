@@ -2197,6 +2197,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'stage_limits', 'TEXT');
     },
   },
+  {
+    // Change factory-agent-roles, phase 2: what triage decided about a run's
+    // issue (its contract, or what it asked). The new run states (`triaging`,
+    // `needs_info`) need no column.
+    name: '108_factory_runs_triage',
+    async up() {
+      await ctx().addColumn('factory_runs', 'triage', 'TEXT');
+    },
+  },
 ];
 
 /**

@@ -24,6 +24,7 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     regressionProof: null,
     reviews: [],
     risk: null,
+    triage: null,
     ...overrides,
   };
 }

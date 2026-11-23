@@ -350,6 +350,78 @@ describe('factory over tRPC', () => {
     });
   });
 
+  // Change factory-agent-roles, phase 2: triage and its two transitions.
+  test('a run triaging or waiting on its issue is listed with what triage decided', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('triaging');
+    expect((await query('alice', 'runs', { projectId: 'p1' })).body).toMatchObject([
+      { id: run.id, state: 'triaging', triage: null },
+    ]);
+
+    const triage = {
+      decision: 'needs_info' as const,
+      at: '2026-11-22T10:00:00.000Z',
+      threadId: 'th-triage',
+      items: ['Which endpoint is slow?'],
+    };
+    await runs.update(run.id, { state: 'needs_info', triage });
+    expect((await query('alice', 'runs', { projectId: 'p1' })).body).toMatchObject([
+      { state: 'needs_info', triage },
+    ]);
+    // Parked on its issue: it holds no slot, and still holds its issue.
+    expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(0);
+    expect((await runs.activeByIssue(run.factoryId, 7))._unsafeUnwrap()?.id).toBe(run.id);
+    expect((await runs.needingInfo(run.factoryId))._unsafeUnwrap().map((r) => r.id)).toEqual([
+      run.id,
+    ]);
+  });
+
+  test('a needs_info run goes back in line to be triaged again, only from needs_info', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('working');
+    expect((await runs.retriage(run))._unsafeUnwrap()).toBe(false);
+
+    const asked = { decision: 'needs_info' as const, at: '2026-11-22T10:00:00.000Z', items: ['?'] };
+    await runs.update(run.id, { state: 'needs_info', triage: asked });
+    const parked = (await runs.get(run.id))._unsafeUnwrap()!;
+    expect((await runs.retriage(parked))._unsafeUnwrap()).toBe(true);
+    const again = (await runs.get(run.id))._unsafeUnwrap()!;
+    // In the queue without a slot; what was asked stays, marked as no longer the answer.
+    expect(again).toMatchObject({
+      state: 'requested',
+      triage: { ...asked, superseded: true },
+      completedAt: null,
+    });
+    expect((await runs.retriage(again))._unsafeUnwrap()).toBe(false);
+  });
+
+  test('a run whose paths overlap leaves its slot from triaging only, keeping its contract', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('working');
+    expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(false);
+
+    const triage = {
+      decision: 'ready' as const,
+      at: '2026-11-22T10:00:00.000Z',
+      contract: {
+        acceptanceCriteria: ['It works'],
+        likelyPaths: ['src/db/migrate.ts'],
+        riskHints: [],
+      },
+    };
+    await runs.update(run.id, { state: 'triaging', triage });
+    expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(true);
+    expect((await runs.get(run.id))._unsafeUnwrap()).toMatchObject({
+      state: 'requested',
+      triage,
+      waitReason: { kind: 'paths-overlap', blockers: [12] },
+    });
+    expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(0);
+  });
+
   test('a send needs a factory, a running one, and a usable input', async () => {
     const send = { projectId: 'p1', issueNumbers: [7], flowName: 'issue-to-merge' };
     expect((await mutate('alice', 'submitIssues', send)).status).toBe(404);

@@ -23,6 +23,7 @@ export type ThreadActivity =
 /** Factory run states in which its flow drives the run. */
 const FACTORY_IN_FLIGHT: ReadonlySet<FactoryRun['state']> = new Set([
   'queued',
+  'triaging',
   'working',
   'pr_open',
   'waiting_ci',

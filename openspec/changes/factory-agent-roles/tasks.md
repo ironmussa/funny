@@ -58,18 +58,18 @@ Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, 
 
 ## 3. Triage
 
-- [ ] 3.6 Add the triage result schema (zod) to `@funny/shared/contracts/factory`; verify with schema tests for `ready`, `needs_info`, `too_big` and a missing field
-- [ ] 3.7 Migration and run machine: `factory_runs` contract and likely paths, states `triaging` / `needs_info` (`needs_info` parked without a slot, `needs_info → queued`, `triaging → queued` for a path hold) as compare-and-sets, mapped in the `factory` tRPC port; verify with the migrate test, transition tests including a refused transition, and `factory-trpc` tests reading a run in each state; add them to `docs/architecture/state-machines.md`
-- [ ] 3.1 Add the `triage` step kind to `packages/workflows` (schema, compiler, provider call) with only `provider` / `model` / `effort` / `prompt_file` accepted; verify with schema and compiler tests
-- [ ] 3.2 Run `triage` in the factory action provider on a new read-only thread with the server-built inputs and the result reader; store the contract; verify with action-provider tests for `ready`, `needs_info`, `too_big` and invalid-twice (proceeds with no contract)
-- [ ] 3.3 Post the templated issue comment (at most five items of 300 chars, mentions and links stripped); verify with tests including an `@mention` and a link in a question
-- [ ] 3.4 Re-triage `needs_info` runs on the tick when the issue's `updated_at` passed the triage time, and on Retry; verify with watcher tests for an edited issue, an unchanged one, and a label not creating a second run
-- [ ] 3.5 Pass the contract to the implementer's first prompt and to the reviewer in place of the issue URL, and its risk hints to the risk class; verify the launch bodies in action-provider tests and a risk test with a hint
-- [ ] 3.8 Add `triage` to both built-ins, with its prompt file; verify `issue-to-merge.test.ts`, `repo-issue-to-merge.test.ts` and `catalog.test.ts`
+- [x] 3.6 Add the triage result schema (zod) to `@funny/shared/contracts/factory`; verify with schema tests for `ready`, `needs_info`, `too_big` and a missing field
+- [x] 3.7 Migration and run machine: `factory_runs` contract and likely paths, states `triaging` / `needs_info` (`needs_info` parked without a slot; `needs_info → requested` to be triaged again and `triaging → requested` for a path hold: `requested` is the queue state that holds no slot and that the watcher admits in order, where the design text says `queued`, which holds a slot here) as compare-and-sets, mapped in the `factory` tRPC port; verify with the migrate test, transition tests including a refused transition, and `factory-trpc` tests reading a run in each state; add them to `docs/architecture/state-machines.md`
+- [x] 3.1 Add the `triage` step kind to `packages/workflows` (schema, compiler, provider call) with only `provider` / `model` / `effort` / `prompt_file` accepted; verify with schema and compiler tests
+- [x] 3.2 Run `triage` in the factory action provider on a new read-only thread with the server-built inputs and the result reader; store the contract; verify with action-provider tests for `ready`, `needs_info`, `too_big` and invalid-twice (proceeds with no contract)
+- [x] 3.3 Post the templated issue comment (at most five items of 300 chars, mentions and links stripped); verify with tests including an `@mention` and a link in a question
+- [x] 3.4 Re-triage `needs_info` runs on the tick when the issue's `updated_at` passed the triage time, and on Retry; verify with watcher tests for an edited issue, an unchanged one, and a label not creating a second run
+- [x] 3.5 Pass the contract to the implementer's first prompt and to the reviewer in place of the issue URL, and its risk hints to the risk class; verify the launch bodies in action-provider tests and a risk test with a hint
+- [x] 3.8 Add `triage` to both built-ins, with its prompt file; verify `issue-to-merge.test.ts`, `repo-issue-to-merge.test.ts` and `catalog.test.ts`
 
 ## 4. Path reservation
 
-- [ ] 4.1 After triage, hold a run whose likely paths intersect those of a working / fixing / reviewing / merging run of the same repository (glob intersection), releasing its slot with `wait_reason`; verify with watcher tests: overlap waits, no overlap starts, no contract never waits, the held run starts without re-triage once the other leaves those states
+- [x] 4.1 After triage, hold a run whose likely paths overlap (glob overlap, erring toward overlap) those of a run of the same factory that is changing files (working, PR open, waiting for CI, fixing, reviewing or merging): it leaves its slot for the queue (`requested`) with `wait_reason` `paths-overlap`, keeps its contract, and is admitted, without a new triage, once the other run leaves those states. Verified with watcher tests (overlap waits, no overlap starts, the held run starts later with two triage threads in all) and provider tests (no contract never waits). **Scope:** runs of the same factory; two users' factories on one repository do not see each other's paths (the merge lane still serializes their merges)
 
 ## 8. Sentinel
 

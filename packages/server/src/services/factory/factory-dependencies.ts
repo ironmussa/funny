@@ -51,6 +51,8 @@ const PRIORITY: BlockerStatus[] = [
 const IN_PROGRESS: ReadonlySet<FactoryRunState> = new Set([
   'requested',
   'queued',
+  'triaging',
+  'needs_info',
   'working',
   'pr_open',
   'waiting_ci',

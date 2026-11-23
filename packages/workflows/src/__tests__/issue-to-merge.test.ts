@@ -16,6 +16,14 @@ import { compileYamlPipeline } from '../compiler/yaml-compiler.js';
 
 const ok: ActionResult = { ok: true, output: '' };
 
+/** Triage that wrote a contract, as the factory's provider reports it. */
+const CONTRACT = 'Acceptance criteria:\n- Negative numbers are summed';
+const triaged: ActionResult = {
+  ok: true,
+  output: 'ready',
+  metadata: { decision: 'ready', contract: CONTRACT },
+};
+
 /** A review verdict as the factory's provider reports it. */
 const verdict = (allowsMerge: boolean, feedback = ''): ActionResult => ({
   ok: true,
@@ -57,6 +65,7 @@ function provider(
     setStatus: async () => ok,
     setStage: async () => ok,
     regressionProof: async () => ok,
+    triage: async () => triaged,
     review: async () => reviews[Math.min(reviewed++, reviews.length - 1)]!,
     waitCi: async (opts) => {
       waits.push(opts);
@@ -283,6 +292,72 @@ describe('issue-to-merge workflow', () => {
       const r = await run([green]);
       expect(r.outcome).toBe('completed');
       expect(r.merges()).toBe(1);
+    });
+  });
+
+  // Change factory-agent-roles, phase 2: triage comes first in both built-ins.
+  describe('triage', () => {
+    test('the implementing agent gets the contract triage wrote', async () => {
+      for (const flow of ['issue-to-merge', 'issue-to-pr']) {
+        const r = await run([green], flow);
+        expect(r.outcome).toBe('completed');
+        expect(r.prompts[0]).toContain('Your change must meet this contract');
+        expect(r.prompts[0]).toContain(CONTRACT);
+      }
+    });
+
+    test('a run without a contract gets no contract section', async () => {
+      const { workflows } = await loadWorkflowCatalog();
+      const fake = provider([green]);
+      fake.p.triage = async () => ({
+        ok: true,
+        output: 'none',
+        metadata: { decision: 'none', contract: '' },
+      });
+      const result = await runPipeline(
+        compileYamlPipeline(workflows.get('issue-to-pr')!.workflow),
+        {
+          provider: fake.p,
+          progress: nullReporter,
+          cwd: '',
+          inputs: {
+            repo: 'o/r',
+            issue_number: '7',
+            issue_title: 'Fix it',
+            issue_url: 'u/7',
+            branch: 'b',
+          },
+          outputs: {},
+        },
+      );
+      expect(result.outcome).toBe('completed');
+      expect(fake.prompts[0]).not.toContain('contract');
+      expect(fake.prompts[0]).toContain('Read the issue first: u/7');
+    });
+
+    test('triage that stops the run starts no implementing agent', async () => {
+      const { workflows } = await loadWorkflowCatalog();
+      const fake = provider([green]);
+      fake.p.triage = async () => ({ ok: false, error: 'The issue needs more information: ?' });
+      const result = await runPipeline(
+        compileYamlPipeline(workflows.get('issue-to-merge')!.workflow),
+        {
+          provider: fake.p,
+          progress: nullReporter,
+          cwd: '',
+          inputs: {
+            repo: 'o/r',
+            issue_number: '7',
+            issue_title: 'Fix it',
+            issue_url: 'u/7',
+            branch: 'b',
+          },
+          outputs: {},
+        },
+      );
+      expect(result.outcome).toBe('failed');
+      expect(fake.prompts).toEqual([]);
+      expect(fake.merges()).toBe(0);
     });
   });
 });

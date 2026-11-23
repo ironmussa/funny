@@ -187,6 +187,25 @@ const reviewAction = z
   })
   .catchall(z.unknown());
 
+// ── Triage action ──────────────────────────────────────────
+
+/** What a `triage` step accepts. Everything else about it is the host's. */
+export const TRIAGE_FIELDS = ['provider', 'model', 'effort'] as const;
+
+/**
+ * Triage of the run's issue before any work (the issue factory's triage
+ * agent): can it be worked unattended, and what must the change do. Like
+ * `review`, the host fixes its thread, permissions, inputs and result format;
+ * a flow chooses only who triages.
+ */
+const triageAction = z
+  .object({
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+  })
+  .catchall(z.unknown());
+
 // ── Regression proof action ────────────────────────────────
 
 const regressionProofRule = z
@@ -356,6 +375,7 @@ export const ACTION_KEYS = [
   'pipeline',
   'regression_proof',
   'review',
+  'triage',
 ] as const;
 
 export type WorkflowActionKey = (typeof ACTION_KEYS)[number];
@@ -419,10 +439,19 @@ const pipelineNodeFields = z
     pipeline: pipelineCallAction.optional(),
     regression_proof: regressionProofAction.optional(),
     review: reviewAction.optional(),
+    triage: triageAction.optional(),
   })
   .strict();
 
 const pipelineNode = pipelineNodeFields.superRefine((val, ctx) => {
+  for (const field of Object.keys(val.triage ?? {})) {
+    if ((TRIAGE_FIELDS as readonly string[]).includes(field)) continue;
+    ctx.addIssue({
+      code: 'custom',
+      path: ['triage', field],
+      message: `Triage step "${val.id}" does not accept "${field}": triage always runs on a new read-only thread and accepts only ${TRIAGE_FIELDS.join(', ')}.`,
+    });
+  }
   for (const field of Object.keys(val.review ?? {})) {
     if ((REVIEW_FIELDS as readonly string[]).includes(field)) continue;
     ctx.addIssue({

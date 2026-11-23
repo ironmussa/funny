@@ -18,8 +18,9 @@ const at = (iso: string) => Date.parse(iso);
 export type TimeInStep = { kind: 'in-step' | 'waiting'; since: number };
 
 /**
- * Since when the run has been in its current step (the latest execution of
- * that step), or waiting for it (no execution yet: since the latest one ended).
+ * Since when the run has been in its current step (the latest execution is
+ * that step's), or waiting for it (it has not started again: since the latest
+ * execution ended).
  */
 export function timeInCurrentStep(
   run: Pick<FactoryRun, 'state' | 'currentStep' | 'stepTimings'>,
@@ -27,8 +28,11 @@ export function timeInCurrentStep(
   const timings = run.stepTimings;
   if (!timings?.length || !run.currentStep) return null;
   if (!TIMED_COLUMNS.includes(factoryBoardColumn(run.state))) return null;
-  const current = timings.findLast((timing) => timing.step === run.currentStep);
-  if (current) return { kind: 'in-step', since: at(current.startedAt) };
+  // Only the latest execution can be the current one: an earlier execution of
+  // the same step (a merge that sent the run back) was superseded by the steps
+  // after it, and the run now waits for the step again.
+  const latest = timings.at(-1);
+  if (latest?.step === run.currentStep) return { kind: 'in-step', since: at(latest.startedAt) };
   const ended = timings.flatMap((timing) => (timing.finishedAt ? [at(timing.finishedAt)] : []));
   return ended.length > 0 ? { kind: 'waiting', since: Math.max(...ended) } : null;
 }

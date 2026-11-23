@@ -61,6 +61,19 @@ describe('timeInCurrentStep', () => {
     expect(timeInCurrentStep(run)).toEqual({ kind: 'waiting', since: NOW - 20 * 60_000 });
   });
 
+  test('back in merge after merge sent it back: waiting again, not since the old merge', () => {
+    const run = buildFactoryRun({
+      state: 'merging',
+      currentStep: 'merge',
+      stepTimings: [
+        timing('merge', 200, 190),
+        timing('address', 189, 150),
+        timing('review', 149, 30),
+      ],
+    });
+    expect(timeInCurrentStep(run)).toEqual({ kind: 'waiting', since: NOW - 30 * 60_000 });
+  });
+
   test('nothing without timings, or outside the timed columns', () => {
     expect(
       timeInCurrentStep(buildFactoryRun({ state: 'reviewing', currentStep: 'review' })),

@@ -213,3 +213,17 @@ describe('origin, effects and instant activities (track-funny-actions)', () => {
     expect((await repo.getById('runner'))?.status).toBe('running');
   });
 });
+
+describe('undo snapshot reference (track-user-and-scheduled-actions)', () => {
+  test('round-trips resultRef.snapshot', async () => {
+    await start('s1');
+    await repo.update('s1', {
+      status: 'succeeded',
+      resultRef: { projectId: 'p1', snapshot: 'refs/funny/undo/s1' },
+    });
+    expect((await repo.getById('s1'))?.resultRef).toEqual({
+      projectId: 'p1',
+      snapshot: 'refs/funny/undo/s1',
+    });
+  });
+});

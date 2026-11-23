@@ -28,6 +28,7 @@ const mocks = (() => ({
   removeWorktree: vi.fn(),
   removeBranch: vi.fn(),
   cleanupWorkspace: vi.fn(),
+  recordCheckoutSwitch: vi.fn(async (_change: unknown) => undefined),
   setupWorktree: vi.fn(),
   git: vi.fn(),
   findWorktreeForBranch: vi.fn(),
@@ -49,6 +50,11 @@ const mocks = (() => ({
     outputTruncated: false,
   })),
 }))();
+
+// Switching the user's checkout is recorded (track-funny-actions).
+mock.module('../../services/checkout-activity.js', () => ({
+  recordCheckoutSwitch: mocks.recordCheckoutSwitch,
+}));
 
 // A rollback goes through the workspace module (track-funny-actions).
 mock.module('../../services/workspace-cleanup.js', () => ({
@@ -1093,6 +1099,31 @@ describe('createAndStartThread', () => {
     expect(mocks.tm.createThread).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'develop' }),
     );
+    // The switch of the user's checkout is recorded.
+    expect(mocks.recordCheckoutSwitch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u-1',
+        projectId: 'p-1',
+        fromBranch: 'main',
+        toBranch: 'develop',
+        reason: 'thread-created',
+        origin: 'implicit',
+      }),
+    );
+    expect(mocks.recordCheckoutSwitch.mock.calls.at(-1)![0]).not.toHaveProperty('error');
+  });
+
+  test('a thread on the current branch records no checkout switch', async () => {
+    mocks.recordCheckoutSwitch.mockClear();
+    mocks.getCurrentBranch.mockResolvedValue(ok('main'));
+    await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'local',
+      baseBranch: 'main',
+      prompt: 'Work on main',
+    });
+    expect(mocks.recordCheckoutSwitch).not.toHaveBeenCalled();
   });
 
   test('returns 400 when baseBranch checkout fails', async () => {
@@ -1114,6 +1145,14 @@ describe('createAndStartThread', () => {
       expect(result.error.statusCode).toBe(400);
       expect(result.error.message).toContain('Failed to checkout branch');
     }
+    // The failed switch is recorded too.
+    expect(mocks.recordCheckoutSwitch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toBranch: 'missing-branch',
+        switched: false,
+        error: expect.any(String),
+      }),
+    );
   });
 
   test('merges always-allow permission rules into allowedTools', async () => {

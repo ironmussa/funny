@@ -35,7 +35,7 @@ describe('automation procedures ↔ scheduler', () => {
       },
     );
     const body = await res.json();
-    return { status: res.status, data: body.result?.data };
+    return { status: res.status, data: body.result?.data, error: body.error };
   };
   let launches: StartThreadInput[];
   let runnerOnline: boolean;
@@ -89,6 +89,33 @@ describe('automation procedures ↔ scheduler', () => {
 
     await call('user-1', 'remove', { id });
     expect(scheduledAutomationCount()).toBe(0);
+  });
+
+  test('an invalid schedule is refused on create (400), and nothing is created', async () => {
+    const res = await call('user-1', 'create', {
+      projectId: 'p1',
+      name: 'Bad',
+      prompt: 'look',
+      schedule: 'every morning',
+    });
+    expect(res.status).toBe(400);
+    // The client's save toast shows this message.
+    expect(JSON.stringify(res.error)).toContain('is not a valid cron schedule');
+    expect(scheduledAutomationCount()).toBe(0);
+  });
+
+  test('an invalid schedule is refused on update, and the stored one is kept', async () => {
+    const created = await call('user-1', 'create', {
+      projectId: 'p1',
+      name: 'Nightly',
+      prompt: 'look',
+      schedule: '0 9 * * *',
+    });
+    const { id } = created.data;
+    const res = await call('user-1', 'update', { id, data: { schedule: '61 * * * *' } });
+    expect(res.status).toBe(400);
+    const after = await call('user-1', 'get', { id }, 'GET');
+    expect(after.data.schedule).toBe('0 9 * * *');
   });
 
   test('creating an automation on a project the caller cannot see → 404', async () => {

@@ -59,6 +59,9 @@ export const WORKSPACE_CLEANUP_REASONS = [
 
 export type WorkspaceCleanupReason = (typeof WORKSPACE_CLEANUP_REASONS)[number];
 
+/** The most paths a `git.destructive` input keeps (the title says the total). */
+export const GIT_DESTRUCTIVE_PATHS_MAX = 50;
+
 export const ACTIVITY_KINDS = {
   'project.clone': {
     scope: 'none',
@@ -170,6 +173,46 @@ export const ACTIVITY_KINDS = {
     record: 'always',
     input: z.object({ reason: z.enum(['runner-binding-changed', 'runner-revoked']) }),
   },
+  // track-user-and-scheduled-actions (design D7).
+  'automation.unscheduled': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({ automationId: z.string().max(128), schedule: z.string().max(256) }),
+  },
+  'automation.skipped': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({ automationId: z.string().max(128), runningSince: z.string().max(64) }),
+  },
+  'github.write': {
+    scope: 'project',
+    destructive: true,
+    record: 'always',
+    input: z.object({
+      action: z.enum(['pr-merge', 'pr-revert-file', 'repo-publish']),
+      prNumber: z.number().int().optional(),
+      filePath: z.string().max(1024).optional(),
+      repo: z.string().max(256).optional(),
+    }),
+  },
+  'git.destructive': {
+    scope: 'project',
+    destructive: true,
+    record: 'always',
+    input: z.object({
+      action: z.enum(['discard', 'reset-hard', 'stash-drop', 'rewind', 'restore']),
+      paths: z
+        .array(z.string().max(1024))
+        .transform((paths) => paths.slice(0, GIT_DESTRUCTIVE_PATHS_MAX))
+        .optional(),
+      fromHead: z.string().max(64).optional(),
+      toHead: z.string().max(64).optional(),
+      stashIndex: z.number().int().min(0).optional(),
+      messageId: z.string().max(128).optional(),
+    }),
+  },
 } as const satisfies Record<
   string,
   {
@@ -234,6 +277,13 @@ export const ACTIVITY_EFFECTS = [
   'remote-branch-deleted',
   'agent-stopped',
   'factory-disabled',
+  'repo-published',
+  'file-reverted',
+  'changes-discarded',
+  'commits-reset',
+  'stash-dropped',
+  'code-rewound',
+  'snapshot-saved',
 ] as const satisfies readonly ActivityEffectType[];
 
 /** The most effects an activity keeps, and the longest name of one. */

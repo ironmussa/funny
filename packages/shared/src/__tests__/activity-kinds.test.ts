@@ -100,6 +100,10 @@ describe('parseActivityInput for the new kinds', () => {
     'factory.merge': { issueNumber: 3, prNumber: 9 },
     'factory.disabled': { reason: 'access-lost' },
     'agents.stopped': { reason: 'runner-binding-changed' },
+    'automation.unscheduled': { automationId: 'a1', schedule: 'every morning' },
+    'automation.skipped': { automationId: 'a1', runningSince: '2026-11-22T10:00:00.000Z' },
+    'github.write': { action: 'pr-merge', prNumber: 7, repo: 'o/r' },
+    'git.destructive': { action: 'discard', paths: ['a.ts', 'b.ts'] },
   };
 
   test('every kind has a sample', () => {
@@ -122,6 +126,18 @@ describe('parseActivityInput for the new kinds', () => {
   });
 });
 
+describe('git.destructive input', () => {
+  test('keeps at most 50 paths', () => {
+    const paths = Array.from({ length: 80 }, (_, i) => `f${i}.ts`);
+    const input = parseActivityInput('git.destructive', { action: 'discard', paths });
+    expect(input?.paths).toHaveLength(50);
+  });
+
+  test('refuses an unknown action', () => {
+    expect(parseActivityInput('git.destructive', { action: 'rm-rf' })).toBeNull();
+  });
+});
+
 describe('parseActivityEffects', () => {
   test('drops unknown effects and extra fields', () => {
     expect(
@@ -141,6 +157,14 @@ describe('parseActivityEffects', () => {
     const parsed = parseActivityEffects(many);
     expect(parsed).toHaveLength(ACTIVITY_EFFECTS_MAX);
     expect(parsed?.[0]?.target).toHaveLength(ACTIVITY_EFFECT_TARGET_MAX);
+  });
+
+  test('keeps the effects of this change', () => {
+    const effects = ['changes-discarded', 'snapshot-saved', 'repo-published'].map((effect) => ({
+      effect,
+      target: 'x',
+    }));
+    expect(parseActivityEffects(effects)).toHaveLength(3);
   });
 
   test('anything but a list is null', () => {

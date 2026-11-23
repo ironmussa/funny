@@ -19,6 +19,7 @@ import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
 
 import { requestSpan } from '../../middleware/tracing.js';
+import { stashDropTracked, threadTarget } from '../../services/git-destructive.js';
 import {
   stashChanges as gitServiceStash,
   stashSelectedFiles as gitServiceStashFiles,
@@ -140,7 +141,10 @@ stashRoutes.post('/project/:projectId/stash/drop/:stashIndex', async (c) => {
   if (Number.isNaN(stashIndex) || stashIndex < 0) {
     return resultToResponse(c, err(badRequest('Invalid stash index')));
   }
-  const result = await stashDrop(cwdResult.value, `stash@{${stashIndex}}`);
+  const cwd = cwdResult.value;
+  const result = await stashDropTracked({ userId, cwd, projectId }, stashIndex, () =>
+    stashDrop(cwd, `stash@{${stashIndex}}`),
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -188,7 +192,10 @@ stashRoutes.post('/:threadId/stash/drop/:stashIndex', async (c) => {
   if (Number.isNaN(stashIndex) || stashIndex < 0) {
     return resultToResponse(c, err(badRequest('Invalid stash index')));
   }
-  const result = await gitServiceDropStash(threadId, userId, cwdResult.value, stashIndex);
+  const cwd = cwdResult.value;
+  const result = await stashDropTracked(await threadTarget(userId, threadId, cwd), stashIndex, () =>
+    gitServiceDropStash(threadId, userId, cwd, stashIndex),
+  );
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });

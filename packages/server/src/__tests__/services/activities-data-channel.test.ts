@@ -286,4 +286,22 @@ describe('activity data channel', () => {
     expect((await update('laptop', 'alice', 's1', { status: 'failed' })).applied).toBe(false);
     expect((await repos.activities().getById('s1'))?.status).toBe('running');
   });
+
+  test('keeps an undo snapshot ref and drops any other value', async () => {
+    const base = { kind: 'project.clone', title: 'C', input: CLONE_INPUT, status: 'succeeded' };
+    await start('laptop', 'alice', {
+      ...base,
+      id: 'u1',
+      resultRef: { snapshot: 'refs/funny/undo/u1' },
+    });
+    await start('laptop', 'alice', {
+      ...base,
+      id: 'u2',
+      resultRef: { snapshot: 'refs/heads/main' },
+    });
+    expect((await repos.activities().getById('u1'))?.resultRef).toEqual({
+      snapshot: 'refs/funny/undo/u1',
+    });
+    expect((await repos.activities().getById('u2'))?.resultRef).toBeNull();
+  });
 });

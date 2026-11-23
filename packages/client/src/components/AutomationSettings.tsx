@@ -127,13 +127,15 @@ export function AutomationSettings() {
     let automationId: string | null = null;
 
     if (editingId) {
-      await updateAutomation(editingId, {
+      const updated = await updateAutomation(editingId, {
         name: form.name.trim(),
         prompt: form.prompt.trim(),
         schedule: form.schedule,
         model: form.model,
         permissionMode: form.permissionMode,
       });
+      // A refused save (an invalid schedule) keeps the dialog open; the toast says why.
+      if (updated.isErr()) return;
       automationId = editingId;
     } else {
       const created = await createAutomation({
@@ -144,7 +146,8 @@ export function AutomationSettings() {
         model: form.model,
         permissionMode: form.permissionMode,
       });
-      automationId = created.isOk() ? created.value.id : null;
+      if (created.isErr()) return;
+      automationId = created.value.id;
     }
     setDialogOpen(false);
 

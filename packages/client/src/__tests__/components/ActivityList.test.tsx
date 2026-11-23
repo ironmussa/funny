@@ -3,18 +3,25 @@
  * its own carries the automatic badge, a destructive kind is marked, and a
  * finished row lists its effects.
  */
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, vi } from 'bun:test';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { ActivityList } from '@/components/sidebar/ActivityList';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildActivity } from '@/data/activities/testing';
 
-function renderList(activities: ReturnType<typeof buildActivity>[]) {
+function renderList(
+  activities: ReturnType<typeof buildActivity>[],
+  restore: {
+    canRestore?: (a: ReturnType<typeof buildActivity>) => boolean;
+    onRestore?: () => void;
+  } = {},
+) {
   return render(
     <TooltipProvider>
       <ActivityList
+        {...restore}
         activities={activities}
         progress={{}}
         runnerOffline={false}
@@ -64,5 +71,19 @@ describe('ActivityList', () => {
     expect(screen.queryByTestId('activity-item-automatic-u1')).toBeNull();
     expect(screen.queryByTestId('activity-item-destructive-u1')).toBeNull();
     expect(screen.queryByTestId('activity-item-effects-u1')).toBeNull();
+  });
+
+  test('Restore is shown only where the panel allows it, and calls back', () => {
+    const onRestore = vi.fn();
+    renderList(
+      [
+        buildActivity({ id: 'd1', kind: 'git.destructive', status: 'succeeded', input: {} }),
+        buildActivity({ id: 'd2', kind: 'git.destructive', status: 'succeeded', input: {} }),
+      ],
+      { canRestore: (a) => a.id === 'd1', onRestore },
+    );
+    expect(screen.queryByTestId('activity-item-restore-d2')).toBeNull();
+    fireEvent.click(screen.getByTestId('activity-item-restore-d1'));
+    expect(onRestore).toHaveBeenCalledTimes(1);
   });
 });

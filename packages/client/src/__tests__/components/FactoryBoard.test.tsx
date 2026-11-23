@@ -129,6 +129,42 @@ describe('FactoryBoard', () => {
   });
 });
 
+describe('time on the board', () => {
+  const minAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
+  const timing = (step: string, start: number, end: number | null) => ({
+    step,
+    visit: '1',
+    attempt: 1,
+    status: end === null ? ('running' as const) : ('succeeded' as const),
+    startedAt: minAgo(start),
+    finishedAt: end === null ? null : minAgo(end),
+  });
+
+  test('a card says how long the run has been in its step, or waiting for it', () => {
+    renderBoard([
+      queueRun('rev', 'reviewing', {
+        currentStep: 'review',
+        stepTimings: [timing('review', 120, null)],
+      }),
+      queueRun('mrg', 'merging', { currentStep: 'merge', stepTimings: [timing('review', 60, 20)] }),
+      queueRun('none', 'working', { currentStep: 'implement' }),
+    ]);
+    expect(screen.getByTestId('factory-board-time-rev')).toHaveTextContent('In review 2h');
+    expect(screen.getByTestId('factory-board-time-mrg')).toHaveTextContent('Waiting for merge 20m');
+    expect(screen.queryByTestId('factory-board-time-none')).toBeNull();
+  });
+
+  test('a column header shows the median time in its stage, none without timings', () => {
+    renderBoard([
+      queueRun('a', 'merged', { completedAt: minAgo(1), stepTimings: [timing('review', 20, 10)] }),
+      queueRun('b', 'merged', { completedAt: minAgo(1), stepTimings: [timing('review', 70, 30)] }),
+      queueRun('c', 'merged', { completedAt: minAgo(1), stepTimings: [timing('review', 200, 80)] }),
+    ]);
+    expect(screen.getByTestId('factory-board-median-review')).toHaveTextContent('40m');
+    expect(screen.queryByTestId('factory-board-median-merge')).toBeNull();
+  });
+});
+
 describe('FactoryQueueView layouts', () => {
   test('filters apply to the board, and the layout survives a remount', () => {
     mocks.queue = [

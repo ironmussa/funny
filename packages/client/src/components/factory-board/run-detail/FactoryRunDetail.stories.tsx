@@ -112,6 +112,25 @@ const EVERY_SECTION: FactoryQueueRun = {
       },
     ],
     risk: { headSha: 'bbb2222ffff', level: 'high', reasons: ['touches packages/server/src/auth'] },
+    stepTimings: [
+      ['triage', 1, 'succeeded', 0, 4],
+      ['implement', 1, 'succeeded', 5, 40],
+      ['pull-request', 1, 'succeeded', 40, 41],
+      ['regression-proof', 1, 'succeeded', 41, 47],
+      ['ci', 1, 'failed', 47, 60],
+      ['ci', 2, 'succeeded', 61, 72],
+      ['review', 1, 'succeeded', 72, 90],
+      ['address', 1, 'succeeded', 90, 110, '2'],
+      ['review', 1, 'succeeded', 112, 125, '2'],
+      ['merge', 1, 'succeeded', 150, 152],
+    ].map(([step, attempt, status, start, end, visit]) => ({
+      step: step as string,
+      visit: (visit as string | undefined) ?? '1',
+      attempt: attempt as number,
+      status: status as 'succeeded' | 'failed',
+      startedAt: new Date(Date.parse(at) + (start as number) * 60_000).toISOString(),
+      finishedAt: new Date(Date.parse(at) + (end as number) * 60_000).toISOString(),
+    })),
     stepOptions: [
       step('triage', 't-triage', 'new'),
       step('implement', 't-impl'),
@@ -140,6 +159,7 @@ export const EverySection: Story = {
       'Session row not deleted',
     );
     await expect(body.getByTestId('factory-run-detail-threads')).toBeInTheDocument();
+    await expect(body.getByTestId('factory-run-detail-timeline')).toBeInTheDocument();
   },
 };
 

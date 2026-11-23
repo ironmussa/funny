@@ -175,7 +175,29 @@ export interface FactoryRun {
   flowCommit: string | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
+  /**
+   * Each execution of a node of the run's flow, in the order they started
+   * (openspec factory-step-timings), from the workflow engine's journal.
+   * Absent on answers that do not look it up (only the run lists do).
+   */
+  stepTimings?: FactoryStepTiming[];
 }
+
+/** One execution of a flow node of a run, as the run lists return it. */
+export interface FactoryStepTiming {
+  /** The flow node (`implement`, `review`, `merge`, …). */
+  step: string;
+  /** Which iteration of a loop this execution belongs to. */
+  visit: string;
+  /** 1 for the first try; higher after a retry or a resume. */
+  attempt: number;
+  status: FactoryStepTimingStatus;
+  startedAt: string;
+  /** Null while the execution runs. */
+  finishedAt: string | null;
+}
+
+export type FactoryStepTimingStatus = 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
 
 /** Where a run's flow came from (openspec factory-flow-step-options). */
 export type FactoryFlowSource = 'repository' | 'built-in';

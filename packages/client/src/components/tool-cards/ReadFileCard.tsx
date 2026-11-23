@@ -6,6 +6,7 @@ import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureHighlight, filePathToHljsLang, highlightLine } from '@/hooks/use-highlight';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { markdownFileBasePath } from '@/lib/markdown-file-links';
 import { cn } from '@/lib/utils';
@@ -141,9 +142,10 @@ export function ReadFileCard({
   const hasOutput = typeof output === 'string' && output.length > 0;
 
   const [expanded, setExpanded] = useState(false);
-  const [renderMarkdown, setRenderMarkdown] = useState(isMarkdown);
-
-  useEffect(() => setRenderMarkdown(isMarkdown), [filePath, isMarkdown]);
+  const [renderMarkdown, setRenderMarkdown] = useResettableState(isMarkdown, [
+    filePath,
+    isMarkdown,
+  ]);
 
   const cleanContent = useMemo(
     () => (hasOutput ? stripLinePrefix(output!) : ''),

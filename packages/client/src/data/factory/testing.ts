@@ -11,6 +11,8 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     id: 'run-1',
     factoryId: 'f1',
     issueNumber: 1,
+    triggerName: null,
+    inputs: {},
     prUrl: null,
     state: 'merged',
     currentStep: null,

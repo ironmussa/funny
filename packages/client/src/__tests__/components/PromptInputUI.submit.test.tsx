@@ -54,12 +54,14 @@ mock.module('@/components/PromptSelectors', () => ({
 }));
 
 mock.module('@/components/prompt-editor/PromptEditor', () => {
-  const { forwardRef, useImperativeHandle, useRef, useState } = require('react');
+  const { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } = require('react');
   return {
     PromptEditor: forwardRef(function MockPromptEditor(props: any, ref: any) {
       const [value, setValue] = useState('');
       const valueRef = useRef(value);
-      valueRef.current = value;
+      useLayoutEffect(() => {
+        valueRef.current = value;
+      }, [value]);
       useImperativeHandle(ref, () => ({
         getJSON: () => ({ text: valueRef.current }),
         setContent: (content: any) => {

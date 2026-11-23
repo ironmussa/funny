@@ -24,6 +24,7 @@ import * as tm from '../../services/thread-manager.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
+import { traced } from './checkout-route.js';
 import {
   requireGitWorkingTree,
   requireProjectCwdFromContext,
@@ -208,7 +209,7 @@ function submoduleFileHandler(scope: DiffScope) {
 
 // GET /api/git/project/:projectId/diff/summary
 diffRoutes.get('/project/:projectId/diff/summary', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireProjectCwdFromContext(c);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const projectId = c.req.param('projectId');
@@ -231,7 +232,7 @@ diffRoutes.get('/project/:projectId/diff/file', fileDiffHandler(projectScope));
 
 // GET /api/git/:threadId/diff/summary
 diffRoutes.get('/:threadId/diff/summary', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireSteerableThreadCwdFromContext(c);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const threadId = c.req.param('threadId');
@@ -263,11 +264,8 @@ diffRoutes.get('/:threadId/diff', async (c) => {
   const cwd = cwdResult.value;
   const notWorkTree = await rejectNonWorkTree(c, cwd);
   if (notWorkTree) return notWorkTree;
-  const span = requestSpan(c, 'git.diff', { threadId: c.req.param('threadId') });
-  const diffResult = await getDiff(cwd);
-  span.end(
-    diffResult.isOk() ? 'ok' : 'error',
-    diffResult.isErr() ? diffResult.error.message : undefined,
+  const diffResult = await traced(c, 'git.diff', { threadId: c.req.param('threadId') }, () =>
+    getDiff(cwd),
   );
   if (diffResult.isErr()) return resultToResponse(c, diffResult);
   return c.json(diffResult.value);

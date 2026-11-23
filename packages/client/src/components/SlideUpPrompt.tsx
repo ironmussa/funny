@@ -71,9 +71,9 @@ export function SlideUpPrompt({
         if (!v) onClose();
       }}
     >
-      <DialogContent className="gap-0 p-0 sm:max-w-3xl">
+      <DialogContent flush className="sm:max-w-3xl">
         <DialogHeader className="px-4 pt-4 pb-2">
-          <DialogTitle className="text-sm">{t('kanban.addThread', 'Add new thread')}</DialogTitle>
+          <DialogTitle size="sm">{t('kanban.addThread', 'Add new thread')}</DialogTitle>
           <DialogDescription className="sr-only">
             {t('thread.describeTask', 'Describe the task for the agent')}
           </DialogDescription>

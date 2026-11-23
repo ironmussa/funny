@@ -108,12 +108,10 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { threadRoutes } = await import('../../routes/threads.js');
   const { shareRoutes } = await import('../../routes/thread-shares.js');
   const { profileRoutes } = await import('../../routes/profile.js');
-  const { schedulerRoutes } = await import('../../routes/scheduler.js');
   const { teamProjectRoutes } = await import('../../routes/team-projects.js');
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
   const { refuseRetiredRestRoutes } = await import('../../routes/retired-rest.js');
   const { pipelineRoutes } = await import('../../routes/pipelines.js');
-  const { schedulerSystemRoutes } = await import('../../routes/scheduler-system.js');
   const { userRoutes } = await import('../../routes/users.js');
 
   app.route('/api/projects', projectRoutes);
@@ -122,8 +120,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/threads', shareRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/profile', profileRoutes);
-  app.route('/api/scheduler', schedulerRoutes);
-  app.route('/api/scheduler/system', schedulerSystemRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
   // Retired REST groups answer 404 here, as in app.ts, instead of reaching a runner.
   refuseRetiredRestRoutes(app);
@@ -137,13 +133,13 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   // Module-level scope caches outlive the DB rows they were read from (30s TTL /
   // no TTL), so a truncated table would otherwise keep serving the previous
   // test's runner owner / role / thread scope.
-  const { __resetRunnerScopeCache } = await import('../../services/runner-scope.js');
-  const { __resetDataScopeCache } = await import('../../services/data-scope.js');
-  const { __resetDataOwnershipCache } = await import('../../services/data-ownership.js');
+  const { resetRunnerScopeCache } = await import('../../services/runner-scope.js');
+  const { resetDataScopeCache } = await import('../../services/data-scope.js');
+  const { resetDataOwnershipCache } = await import('../../services/data-ownership.js');
   const cleanup = () => {
-    __resetRunnerScopeCache();
-    __resetDataScopeCache();
-    __resetDataOwnershipCache();
+    resetRunnerScopeCache();
+    resetDataScopeCache();
+    resetDataOwnershipCache();
     // Truncate all tables in reverse dependency order
     const tables = [
       // No foreign key to a project: nothing else removes its rows.

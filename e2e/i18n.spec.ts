@@ -37,7 +37,6 @@ test.describe('E. Internationalization (i18n)', () => {
     await page.waitForTimeout(300);
 
     // Verify dialog has Spanish text (e.g., "Guardar" instead of "Save")
-    const _pageText = await page.textContent('body');
     // Reset to English
     const langSelect2 = page.getByTestId('settings-dialog-language-select');
     if (await langSelect2.isVisible()) {

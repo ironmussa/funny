@@ -64,13 +64,19 @@ export function useIssueFactory(projectId: string): IssueFactory {
   return useMemo(() => {
     const latestRun = new Map<number, FactoryRun>();
     // Runs come newest first: the first one seen for an issue is its latest.
-    for (const run of runs ?? [])
-      if (!latestRun.has(run.issueNumber)) latestRun.set(run.issueNumber, run);
+    for (const run of runs ?? []) {
+      // A run without an issue (a schedule, "Run a flow") belongs to no row here.
+      if (run.issueNumber === null || latestRun.has(run.issueNumber)) continue;
+      latestRun.set(run.issueNumber, run);
+    }
     const queuePosition = new Map(
       (runs ?? [])
         .filter((run) => run.state === 'requested')
         .sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0))
-        .map((run, index) => [run.issueNumber, index + 1] as const),
+        // It still holds its place in line, so the positions count it.
+        .flatMap((run, index) =>
+          run.issueNumber === null ? [] : [[run.issueNumber, index + 1] as const],
+        ),
     );
     return {
       active: canSteer && settings !== null,
@@ -358,10 +364,9 @@ export function IssuesFactoryBar({
           {t('factory.selectedCount', '{{count}} selected', { count: selected.length })}
         </span>
         <Button
-          variant="ghost"
+          variant="muted"
           size="xs"
           onClick={onClear}
-          className="text-muted-foreground"
           data-testid="issues-factory-clear-selection"
         >
           {t('common.clear', 'Clear')}

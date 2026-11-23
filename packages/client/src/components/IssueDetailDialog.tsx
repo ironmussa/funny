@@ -76,7 +76,8 @@ export function IssueDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex h-[85vh] max-w-3xl flex-col gap-0 p-0"
+        flush
+        className="flex h-[85vh] max-w-3xl flex-col"
         data-testid="issue-detail-dialog"
       >
         <div className="border-border flex shrink-0 items-start gap-2 border-b px-4 py-3">
@@ -86,16 +87,13 @@ export function IssueDetailDialog({
             <CircleCheck className="icon-base text-status-violet mt-1 shrink-0" />
           )}
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <DialogTitle
-              className="text-sm leading-snug font-semibold"
-              data-testid="issue-detail-title"
-            >
+            <DialogTitle size="sm" className="leading-snug" data-testid="issue-detail-title">
               {issue.title}{' '}
               <span className="text-muted-foreground font-normal">#{issue.number}</span>
             </DialogTitle>
             <DialogDescription asChild>
               <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
-                <Badge variant="outline" className="h-4 px-1.5 text-xs">
+                <Badge size="xs" variant="outline">
                   {issue.state === 'open' ? t('issues.open', 'Open') : t('issues.closed', 'Closed')}
                 </Badge>
                 {issue.user && (
@@ -115,9 +113,8 @@ export function IssueDetailDialog({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-xs"
-                    className="text-muted-foreground"
                     onClick={() => {
                       onCreateThread(issue);
                       onOpenChange(false);
@@ -135,10 +132,9 @@ export function IssueDetailDialog({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   asChild
-                  className="text-muted-foreground"
                   data-testid="issue-detail-open-github"
                 >
                   <a
@@ -156,10 +152,9 @@ export function IssueDetailDialog({
               </TooltipContent>
             </Tooltip>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
               onClick={() => onOpenChange(false)}
-              className="text-muted-foreground"
               data-testid="issue-detail-close"
             >
               <X className="icon-xs" />
@@ -217,7 +212,7 @@ function IssueComments({ state, now }: { state: CommentsState; now: number }) {
             <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
             <span className="text-muted-foreground">{timeAgo(c.created_at, t, now)}</span>
             {c.author_association && c.author_association !== 'NONE' && (
-              <Badge variant="outline" className="h-4 px-1 text-xs">
+              <Badge size="xs" variant="outline">
                 {c.author_association}
               </Badge>
             )}

@@ -2,7 +2,9 @@ import type { FileDiffSummary } from '@funny/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 import type { ReviewSubTab } from '@/stores/ui-store';
 
 interface StashEntry {
@@ -137,17 +139,14 @@ export function useStashState({
   const refreshStashList = useCallback(async () => {
     if (!hasGitContext) return;
     const signal = abortRef.current?.signal;
-    setStashListLoading(true);
-    try {
+    await whilePending(setStashListLoading, async () => {
       const result = effectiveThreadId
         ? await gitApi.stashList(effectiveThreadId, signal)
         : await gitApi.projectStashList(projectModeId!, signal);
       if (result.isOk() && !signal?.aborted) {
         setStashEntries(result.value.entries);
       }
-    } finally {
-      setStashListLoading(false);
-    }
+    });
   }, [hasGitContext, effectiveThreadId, projectModeId, abortRef]);
 
   const handleStashPop = useCallback(async () => {
@@ -205,17 +204,14 @@ export function useStashState({
     async (index: string, filePath: string) => {
       if (!hasGitContext) return;
       setStashDialogFile(filePath);
-      setStashDialogDiffLoading(true);
       setStashDialogDiff(null);
-      try {
+      await whilePending(setStashDialogDiffLoading, async () => {
         const result = effectiveThreadId
           ? await gitApi.stashFileDiff(effectiveThreadId, index, filePath)
           : await gitApi.projectStashFileDiff(projectModeId!, index, filePath);
         if (result.isOk()) setStashDialogDiff(result.value.diff);
         else toast.error(`Failed to load diff: ${result.error.message}`);
-      } finally {
-        setStashDialogDiffLoading(false);
-      }
+      });
     },
     [hasGitContext, effectiveThreadId, projectModeId],
   );
@@ -223,12 +219,12 @@ export function useStashState({
   // Lazy: load the stash list only when the stash sub-tab is visible. Loading
   // it on every git-context change wastes git requests when the user only
   // looks at the Changes tab.
+  const loadVisibleStashList = useStableCallback(() => {
+    refreshStashList();
+  });
   useEffect(() => {
-    if (reviewPaneOpen && reviewSubTab === 'stash') {
-      refreshStashList();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only re-runs on context/visibility/tab change
-  }, [gitContextKey, reviewPaneOpen, reviewSubTab]);
+    if (reviewPaneOpen && reviewSubTab === 'stash') loadVisibleStashList();
+  }, [gitContextKey, reviewPaneOpen, reviewSubTab, loadVisibleStashList]);
 
   // When a stash is selected, load its file list + first diff.
   // All post-await updates are ignored after this stash selection is cleaned up.
@@ -244,38 +240,46 @@ export function useStashState({
     let cancelled = false;
     setStashFilesLoading(true);
     setStashFileSearch('');
-    const load = async () => {
-      try {
-        const filesResult = effectiveThreadId
-          ? await gitApi.stashShow(effectiveThreadId, selectedStashIndex)
-          : await gitApi.projectStashShow(projectModeId!, selectedStashIndex);
-        if (cancelled) return;
-        if (filesResult.isOk()) {
-          setStashFiles(filesResult.value.files);
-          if (filesResult.value.files.length > 0) {
-            const firstPath = filesResult.value.files[0].path;
-            setStashDialogFile(firstPath);
-            setStashDialogDiffLoading(true);
-            setStashDialogDiff(null);
-            try {
-              const diffResult = effectiveThreadId
-                ? await gitApi.stashFileDiff(effectiveThreadId, selectedStashIndex, firstPath)
-                : await gitApi.projectStashFileDiff(projectModeId!, selectedStashIndex, firstPath);
-              if (!cancelled && diffResult.isOk()) setStashDialogDiff(diffResult.value.diff);
-            } finally {
-              // The diff request clears its flag in finally only while this selection remains current.
-              // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
-              if (!cancelled) setStashDialogDiffLoading(false);
+    const load = () =>
+      withCleanup(
+        async () => {
+          const filesResult = effectiveThreadId
+            ? await gitApi.stashShow(effectiveThreadId, selectedStashIndex)
+            : await gitApi.projectStashShow(projectModeId!, selectedStashIndex);
+          if (cancelled) return;
+          if (filesResult.isOk()) {
+            setStashFiles(filesResult.value.files);
+            if (filesResult.value.files.length > 0) {
+              const firstPath = filesResult.value.files[0].path;
+              setStashDialogFile(firstPath);
+              setStashDialogDiffLoading(true);
+              setStashDialogDiff(null);
+              await withCleanup(
+                async () => {
+                  const diffResult = effectiveThreadId
+                    ? await gitApi.stashFileDiff(effectiveThreadId, selectedStashIndex, firstPath)
+                    : await gitApi.projectStashFileDiff(
+                        projectModeId!,
+                        selectedStashIndex,
+                        firstPath,
+                      );
+                  if (!cancelled && diffResult.isOk()) setStashDialogDiff(diffResult.value.diff);
+                },
+                () => {
+                  // The diff request clears its flag only while this selection remains current.
+                  if (!cancelled) setStashDialogDiffLoading(false);
+                },
+              );
             }
+          } else {
+            toast.error(`Failed to load stash files: ${filesResult.error.message}`);
+            setStashFiles([]);
           }
-        } else {
-          toast.error(`Failed to load stash files: ${filesResult.error.message}`);
-          setStashFiles([]);
-        }
-      } finally {
-        if (!cancelled) setStashFilesLoading(false);
-      }
-    };
+        },
+        () => {
+          if (!cancelled) setStashFilesLoading(false);
+        },
+      );
     load();
     return () => {
       cancelled = true;

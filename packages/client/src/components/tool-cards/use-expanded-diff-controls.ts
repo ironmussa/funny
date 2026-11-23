@@ -1,13 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import {
   applyDragRange,
   selectionStateOf,
@@ -18,6 +11,7 @@ import {
 import { isOneSidedDiff } from '@/lib/diff-math';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { getChangeableIndices, parseRawDiff } from '@/lib/patch-builder';
+import { whilePending } from '@/lib/while-pending';
 
 import type { DiffViewMode } from '../VirtualDiff';
 
@@ -152,15 +146,12 @@ function useFullDiffCache(filePath: string, onRequestFullDiff: RequestFullDiff |
     if (cached) return cached;
     if (!onRequestFullDiff) return null;
 
-    setLoadingFullDiff(true);
-    try {
+    return whilePending(setLoadingFullDiff, async () => {
       const result = await onRequestFullDiff(filePath);
       if (!result) return null;
       setFullDiffCache((prev) => new Map(prev).set(filePath, result));
       return result;
-    } finally {
-      setLoadingFullDiff(false);
-    }
+    });
   }, [filePath, fullDiffCache, onRequestFullDiff]);
 
   return { fullDiff: fullDiffCache.get(filePath), loadingFullDiff, requestFullFile };
@@ -268,7 +259,7 @@ export function useDiffKeyboardShortcuts({
   /** Called on Escape when the search bar is not open */
   onIdleEscape?: () => void;
 }) {
-  const onKey = useEffectEvent((e: KeyboardEvent) => {
+  const onKey = useStableCallback((e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f' && canOpenSearch) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -290,7 +281,7 @@ export function useDiffKeyboardShortcuts({
     const handler = (e: KeyboardEvent) => onKey(e);
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [enabled]);
+  }, [enabled, onKey]);
 }
 
 /* ── Line selection for partial staging ── */

@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import {
-  __resetDataOwnershipCache,
+  resetDataOwnershipCache,
   assertDataOwnership,
   forgetThreadOwnership,
 } from '../../services/data-ownership.js';
@@ -36,7 +36,7 @@ describe('assertDataOwnership', () => {
   });
 
   beforeEach(() => {
-    __resetDataOwnershipCache();
+    resetDataOwnershipCache();
     for (const table of [
       'pending_permission_requests',
       'watchers',

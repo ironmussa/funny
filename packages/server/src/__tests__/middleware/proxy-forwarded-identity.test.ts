@@ -4,7 +4,7 @@ import {
   NONCE_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
-  __resetForwardedIdentityNonceCacheForTests,
+  resetForwardedIdentityNonceCacheForTests,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
@@ -17,7 +17,7 @@ import { createRunnerAccessMock } from '../helpers/proxy-test-mocks.js';
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 describe('gRPC proxy forwarded identity', () => {
-  beforeEach(() => __resetForwardedIdentityNonceCacheForTests());
+  beforeEach(() => resetForwardedIdentityNonceCacheForTests());
 
   function setup(role?: UserRole) {
     const captured: Array<Record<string, string>> = [];

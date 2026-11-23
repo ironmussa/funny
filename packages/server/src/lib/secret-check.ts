@@ -2,7 +2,7 @@
  * Security CR-1 — pure helper that identifies pairs of identical secrets.
  *
  * Each shared secret authenticates a distinct trust boundary
- * (runner↔server, scheduler↔server, external webhook→runner). Reusing
+ * (runner↔server, external webhook→runner). Reusing
  * one value across two of them means compromise of any single channel
  * leaks the other.
  *
@@ -11,7 +11,7 @@
  * undefined value is paired only with other undefineds, which is also
  * acceptable — the boot script's downstream checks enforce presence).
  */
-export type SecretName = 'RUNNER_AUTH_SECRET' | 'INGEST_WEBHOOK_SECRET' | 'SCHEDULER_AUTH_SECRET';
+export type SecretName = 'RUNNER_AUTH_SECRET' | 'INGEST_WEBHOOK_SECRET';
 
 export function findDuplicateSecretPairs(
   secrets: Partial<Record<SecretName, string | undefined>>,
@@ -20,7 +20,6 @@ export function findDuplicateSecretPairs(
     [
       ['RUNNER_AUTH_SECRET', secrets.RUNNER_AUTH_SECRET],
       ['INGEST_WEBHOOK_SECRET', secrets.INGEST_WEBHOOK_SECRET],
-      ['SCHEDULER_AUTH_SECRET', secrets.SCHEDULER_AUTH_SECRET],
     ] as const
   ).filter(
     (entry): entry is [SecretName, string] => typeof entry[1] === 'string' && entry[1].length > 0,
@@ -58,7 +57,6 @@ export function findWeakSecrets(
     [
       ['RUNNER_AUTH_SECRET', secrets.RUNNER_AUTH_SECRET],
       ['INGEST_WEBHOOK_SECRET', secrets.INGEST_WEBHOOK_SECRET],
-      ['SCHEDULER_AUTH_SECRET', secrets.SCHEDULER_AUTH_SECRET],
     ] as const
   ).flatMap((entry) =>
     typeof entry[1] === 'string' && entry[1].length > 0 && entry[1].length < MIN_SECRET_LENGTH

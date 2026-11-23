@@ -57,9 +57,16 @@ const dropdownMenuItemVariants = cva(
         sm: 'gap-2 px-2 py-1.5 text-sm [&>svg]:size-3.5 [&>svg]:shrink-0',
         xs: 'gap-1.5 px-1.5 py-1 text-xs [&>svg]:size-3 [&>svg]:shrink-0',
       },
+      // Items that delete or discard: red, and they stay red when highlighted.
+      variant: {
+        default: '',
+        destructive:
+          'text-status-error hover:text-status-error focus:text-status-error focus-visible:text-status-error data-[highlighted]:text-status-error',
+      },
     },
     defaultVariants: {
       size: 'sm',
+      variant: 'default',
     },
   },
 );
@@ -68,6 +75,7 @@ function DropdownMenuItem({
   className,
   inset,
   size,
+  variant,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> &
@@ -78,7 +86,7 @@ function DropdownMenuItem({
     <DropdownMenuPrimitive.Item
       ref={ref}
       className={cn(
-        dropdownMenuItemVariants({ size }),
+        dropdownMenuItemVariants({ size, variant }),
         // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         inset && (size === 'xs' ? 'pl-6' : size === 'sm' ? 'pl-7' : 'pl-8'),
         className,

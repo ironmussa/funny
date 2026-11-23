@@ -22,10 +22,10 @@ import { log } from '../lib/logger.js';
 import { db, dbDialect } from './index.js';
 
 // Lazily create context — db may not be ready at import time
-let _ctx: ReturnType<typeof createMigrationContext> | null = null;
+let migrationContext: ReturnType<typeof createMigrationContext> | null = null;
 function ctx() {
-  if (!_ctx) _ctx = createMigrationContext(db, dbDialect);
-  return _ctx;
+  if (!migrationContext) migrationContext = createMigrationContext(db, dbDialect);
+  return migrationContext;
 }
 
 const migrations: Migration[] = [
@@ -2363,6 +2363,50 @@ const migrations: Migration[] = [
     async up() {
       await ctx().addColumn('factory_settings', 'dependencies', 'TEXT');
       await ctx().addColumn('factory_runs', 'stacked_on', 'TEXT');
+    },
+  },
+  {
+    // Change flow-triggers: a run records the trigger that started it and the
+    // inputs it supplied, and no longer needs an issue (`issue_number = 0`).
+    // `source` holds the trigger kind (`manual`, `label`, `schedule`,
+    // `run_now`). The one-run-per-issue index now leaves issueless runs out,
+    // and a second index allows one working run per schedule trigger (a run
+    // parked for a person does not hold its trigger).
+    name: '119_factory_flow_triggers',
+    async up() {
+      await ctx().addColumn('factory_runs', 'trigger_id', 'TEXT');
+      await ctx().addColumn('factory_runs', 'trigger_name', 'TEXT');
+      await ctx().addColumn('factory_runs', 'inputs', 'TEXT');
+      await ctx().exec(sql`DROP INDEX IF EXISTS factory_runs_one_active_per_issue`);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+        ON factory_runs (factory_id, issue_number)
+        WHERE issue_number > 0 AND state NOT IN ('merged', 'no_change', 'failed', 'stopped')
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_trigger
+        ON factory_runs (factory_id, trigger_id)
+        WHERE trigger_id IS NOT NULL
+          AND state IN ('requested', 'queued', 'triaging', 'working', 'pr_open', 'waiting_ci', 'fixing', 'reviewing', 'merging')
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_triggers (
+          id TEXT PRIMARY KEY,
+          factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'schedule',
+          schedule TEXT NOT NULL,
+          flow_name TEXT NOT NULL,
+          inputs TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          next_run_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS factory_triggers_factory ON factory_triggers (factory_id)
+      `);
     },
   },
 ];

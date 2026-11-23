@@ -97,9 +97,6 @@ export interface FactoryFlowContext {
   project?: ProjectAgentDefaults;
 }
 
-/** Built-ins written for the orchestrator's workspace, not for a server-run factory. */
-const WORKSPACE_ONLY_FLOWS = new Set(['factory-issue']);
-
 export interface FactoryFlow {
   name: string;
   source: 'repository' | 'built-in';
@@ -389,12 +386,6 @@ async function findFactoryFlow(
     });
   }
 
-  if (WORKSPACE_ONLY_FLOWS.has(flowName)) {
-    return err({
-      kind: 'invalid',
-      message: `"${flowName}" runs inside a workspace and never pushes, so it cannot run as a server factory flow. Use "issue-to-pr" (stops at the pull request) or "issue-to-merge".`,
-    });
-  }
   const { workflows } = await loadWorkflowCatalog({ defaultsDir: deps.defaultsDir });
   const builtIn = workflows.get(flowName);
   if (!builtIn) {
@@ -484,8 +475,8 @@ export interface FactoryFlowChoice {
  * The flows a send may pick (change factory-manual-queue): the built-in
  * factory flows, plus every `.funny/workflows/*.y{a,}ml` of the default branch
  * (a repository copy replaces the built-in of its name, as `loadFactoryFlow`
- * does), minus the workspace-only ones. A listed repository flow may still fail
- * to compile; the send loads it and says so.
+ * does). A listed repository flow may still fail to compile; the send loads
+ * it and says so.
  */
 export async function listFactoryFlows(deps: {
   listDefaultBranchDir(path: string): PromiseLike<Result<string[], GithubCallError>>;
@@ -495,8 +486,7 @@ export async function listFactoryFlows(deps: {
   const fromRepo = new Set(
     files.value
       .map((file) => file.match(/^(.+)\.ya?ml$/)?.[1])
-      .filter((name): name is string => !!name && FLOW_NAME.test(name))
-      .filter((name) => !WORKSPACE_ONLY_FLOWS.has(name)),
+      .filter((name): name is string => !!name && FLOW_NAME.test(name)),
   );
   const builtIns = BUILT_IN_FACTORY_FLOWS.flatMap((name): FactoryFlowChoice[] =>
     fromRepo.has(name) ? [] : [{ name, source: 'built-in' }],

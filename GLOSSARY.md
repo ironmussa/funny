@@ -8,17 +8,23 @@ its own thread.
 **Issue factory**:
 The product that turns an issue ready for an agent into a merged or reviewable pull
 request without a person in the loop. Each user runs their own.
-_Avoid_: Orchestrator (for the product), software factory pipeline
-
-**Orchestrator**:
-The separate process that runs one user's issue factory: it decides which issues to
-admit and when each factory run starts and ends. It starts on its own, apart from the
-funny server.
-_Avoid_: Agent, factory service
+_Avoid_: Orchestrator, software factory pipeline
 
 **Factory run**:
 One attempt by the issue factory to take one issue to a pull request.
 _Avoid_: Run (alone), session, job
+
+**Automation**:
+A prompt that runs on a schedule as one read-only thread in a project, with its result kept
+in an inbox for its owner. It needs no GitHub repository and no issue factory. For scheduled
+work that changes code or has several steps, use a factory schedule instead.
+_Avoid_: Scheduled flow, cron job, trigger
+
+**Trigger**:
+What starts a factory run and with which input values: an issue sent to the factory, a
+labelled issue, a schedule, or a member starting a flow without an issue. A trigger never
+says what the run does; the flow does.
+_Avoid_: Automation (that is a scheduled read-only thread), cron job
 
 **Triage**:
 The first step of a factory run: a read-only agent decides whether the issue can be worked

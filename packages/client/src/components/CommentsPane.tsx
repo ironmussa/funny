@@ -125,9 +125,9 @@ export function CommentsPane() {
                       </span>
                       {isOwner && (
                         <Button
-                          variant="ghost"
+                          variant="muted-destructive"
                           size="icon-sm"
-                          className="text-muted-foreground hover:text-status-error ml-auto h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
+                          className="ml-auto h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
                           onClick={() => void deleteComment(threadId, c.id)}
                           data-testid={`comment-delete-${c.id}`}
                           aria-label={t('comments.delete', 'Delete comment')}

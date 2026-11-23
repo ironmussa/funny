@@ -1,7 +1,12 @@
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { STATE_ICON_CLASS, STATE_TEXT_CLASS } from '@/components/ui/state-styles';
+import {
+  STATE_ICON_CLASS,
+  STATE_PADDING,
+  STATE_TEXT_CLASS,
+  type StatePadding,
+} from '@/components/ui/state-styles';
 import { cn } from '@/lib/utils';
 
 type LoadingLayout = 'stack' | 'inline';
@@ -17,6 +22,8 @@ interface LoadingStateProps {
   layout?: LoadingLayout;
   /** When false, sizes to content instead of filling the parent. */
   fill?: boolean;
+  /** Vertical padding: sm (12px), md (24px), lg (48px). */
+  padding?: StatePadding;
 }
 
 /**
@@ -31,6 +38,7 @@ export function LoadingState({
   testId,
   layout = 'stack',
   fill = true,
+  padding,
 }: LoadingStateProps) {
   const isInline = layout === 'inline';
 
@@ -42,6 +50,7 @@ export function LoadingState({
         isInline ? 'flex-row text-left' : 'flex-col text-center',
         fill && 'h-full w-full min-h-0 flex-1 p-4',
         'gap-2',
+        padding && STATE_PADDING[padding],
         className,
       )}
     >

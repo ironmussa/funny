@@ -48,8 +48,9 @@ export function TerminalSignalMenu({ ptyId }: { ptyId: string }) {
           SIGTERM
         </DropdownMenuItem>
         <DropdownMenuItem
+          variant="destructive"
           onClick={() => sendSignal(ptyId, 'SIGKILL')}
-          className="text-destructive"
+
           data-testid="terminal-signal-sigkill"
         >
           SIGKILL (Force)

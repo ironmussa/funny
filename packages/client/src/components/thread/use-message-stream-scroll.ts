@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { metric } from '@/lib/telemetry';
 import {
   loadThreadScrollPosition as loadStoredThreadScrollPosition,
@@ -251,8 +252,8 @@ export function useMessageStreamScroll({
       updateStickyMetrics,
     ],
   );
-  const applyThreadScrollPositionEvent = useEffectEvent(applyThreadScrollPosition);
-  const saveUnmountScrollPositionEvent = useEffectEvent(() => {
+  const applyThreadScrollPositionEvent = useStableCallback(applyThreadScrollPosition);
+  const saveUnmountScrollPositionEvent = useStableCallback(() => {
     const viewport = scrollViewportRef.current;
     const committedThreadId = committedThreadIdRef.current;
     if (!viewport || !committedThreadId) return;
@@ -335,13 +336,13 @@ export function useMessageStreamScroll({
       cancelled = true;
       cancelAnimationFrame(firstRafId);
     };
-  }, [beginSettle, threadId]);
+  }, [beginSettle, threadId, applyThreadScrollPositionEvent]);
 
   useEffect(() => {
     return () => {
       saveUnmountScrollPositionEvent();
     };
-  }, []);
+  }, [saveUnmountScrollPositionEvent]);
 
   useThreadSwitchResizeRestore({
     applyThreadScrollPosition,
@@ -351,7 +352,7 @@ export function useMessageStreamScroll({
     threadId,
   });
 
-  const handleViewportScroll = useEffectEvent(() => {
+  const handleViewportScroll = useStableCallback(() => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
@@ -424,7 +425,7 @@ export function useMessageStreamScroll({
   });
   useLayoutEffect(() => {
     handleViewportScrollRef.current = handleViewportScroll;
-  }, []);
+  }, [handleViewportScroll]);
 
   useViewportScrollListeners({
     onScrollRef: handleViewportScrollRef,

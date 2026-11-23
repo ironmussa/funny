@@ -20,7 +20,7 @@ import type {
   Thread,
   ThreadStatus,
 } from '@funny/shared';
-import { internal, type DomainError } from '@funny/shared/errors';
+import { internal, type DomainError, errorMessage as caughtMessage } from '@funny/shared/errors';
 import { createSecretRedactor, type SecretValue } from '@funny/shared/project-secrets';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
@@ -163,7 +163,7 @@ export class AgentLifecycleManager {
     } catch (err) {
       log.warn('Orphaned-agent reaper failed', {
         namespace: 'agent',
-        error: err instanceof Error ? err.message : String(err),
+        error: caughtMessage(err),
       });
     }
   }
@@ -654,7 +654,7 @@ export class AgentLifecycleManager {
         namespace: 'agent',
         threadId,
         cwd,
-        error: (err as Error).message,
+        error: caughtMessage(err),
       });
     }
   }

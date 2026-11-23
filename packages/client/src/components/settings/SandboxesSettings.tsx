@@ -39,15 +39,12 @@ function canSubmitConnection(form: {
 
 /** Form state + submit for a new provider connection. */
 function useAddConnectionForm(providers: SandboxProviderInfo[], onAdded: () => void) {
-  const [provider, setProvider] = useState(providers[0]?.id ?? '');
+  // Providers load asynchronously: until one is chosen, the first one is the default.
+  const [chosenProvider, setProvider] = useState('');
+  const provider = chosenProvider || (providers[0]?.id ?? '');
   const [label, setLabel] = useState('');
   const [credential, setCredential] = useState('');
   const [saving, setSaving] = useState(false);
-
-  // Providers load asynchronously: default to the first one once it arrives.
-  useEffect(() => {
-    if (!provider && providers[0]) setProvider(providers[0].id);
-  }, [provider, providers]);
 
   const handleAdd = async () => {
     setSaving(true);
@@ -122,24 +119,25 @@ function AddConnectionForm({
           </SelectContent>
         </Select>
         <Input
+          size="xs"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Name, e.g. Personal Boat"
-          className="h-7 text-xs"
           data-testid="sandbox-connection-label"
         />
         <Input
+          mono
+          size="xs"
           type="password"
           autoComplete="off"
           value={credential}
           onChange={(e) => setCredential(e.target.value)}
           placeholder="API key"
-          className="h-7 font-mono text-xs"
           data-testid="sandbox-connection-credential"
         />
         <Button
-          size="sm"
-          className="h-6 self-start text-xs"
+          size="xs"
+          className="h-6 self-start"
           disabled={!canSubmit}
           onClick={handleAdd}
           data-testid="sandbox-connection-add"
@@ -196,9 +194,8 @@ function ConnectionName({
       <span className="truncate text-sm font-medium">{connection.label}</span>
       <Button
         size="icon-xs"
-        variant="ghost"
+        variant="muted"
         aria-label="Rename"
-        className="text-muted-foreground"
         onClick={() => setDraft(connection.label)}
         data-testid={`sandbox-connection-rename-${connection.id}`}
       >
@@ -256,9 +253,9 @@ function ConnectionRow({
         )}
       </div>
       <Button
-        size="sm"
+        size="xs"
         variant="ghost"
-        className="h-6 text-xs"
+        className="h-6"
         disabled={testing}
         onClick={handleTest}
         data-testid={`sandbox-connection-test-${connection.id}`}
@@ -267,9 +264,9 @@ function ConnectionRow({
         {testing ? 'Testing…' : 'Test'}
       </Button>
       <Button
-        size="sm"
+        size="xs"
         variant="ghost"
-        className="text-destructive h-6 text-xs"
+        className="text-destructive h-6"
         onClick={() => setConfirmOpen(true)}
         data-testid={`sandbox-connection-remove-${connection.id}`}
       >
@@ -314,8 +311,9 @@ export function SandboxesSettings() {
           <LoadingState fill={false} label="Loading…" />
         ) : connections.length === 0 ? (
           <EmptyState
+            padding="md"
             fill={false}
-            className="border-border/50 rounded-lg border border-dashed px-4 py-6"
+            className="border-border/50 rounded-lg border border-dashed"
             icon={Boxes}
             title="No sandbox providers connected yet."
             description="Add one above to run threads in their own sandbox."

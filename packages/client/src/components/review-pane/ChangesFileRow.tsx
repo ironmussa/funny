@@ -345,8 +345,8 @@ function FileWriteMenuItems({
         </DropdownMenuItem>
       )}
       <DropdownMenuItem
+        variant="destructive"
         onClick={stopThen(() => ctx.handleRevertFile(f.path))}
-        className="text-destructive focus:text-destructive"
       >
         <Undo2 />
         {t('review.discardChanges')}

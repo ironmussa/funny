@@ -2,6 +2,7 @@ import { useEffect, useRef, type MutableRefObject, type RefObject } from 'react'
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import type { PromptAttachmentsHandle } from '@/components/prompt-input/use-prompt-attachments';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { useDraftStore } from '@/stores/draft-store';
 
 type Draft = ReturnType<typeof useDraftStore.getState>['drafts'][string];
@@ -49,6 +50,27 @@ function swapDraftOnThreadChange(
 }
 
 /** Re-focuses the editor on thread switch and whenever the agent goes idle. */
+/**
+ * Saves the draft when the prompt unmounts. It reads the refs' values at
+ * unmount on purpose: the thread, attachments and submitted flag that are
+ * current then, not the ones from when the effect ran.
+ */
+function saveDraftOnUnmount(
+  editor: PromptEditorHandle | null,
+  refs: {
+    hasSubmittedRef: MutableRefObject<boolean>;
+    threadIdRef: MutableRefObject<string | undefined>;
+    attachmentsRef: RefObject<PromptAttachmentsHandle | null>;
+  },
+  setEditorDraft: ReturnType<typeof useDraftStore.getState>['setEditorDraft'],
+) {
+  if (refs.hasSubmittedRef.current) return;
+  const threadId = refs.threadIdRef.current;
+  const editorJSON = threadId ? editor?.getJSON() : undefined;
+  const images = refs.attachmentsRef.current?.getImages() ?? [];
+  if (threadId && editorJSON) setEditorDraft(threadId, editorJSON, images);
+}
+
 function useEditorAutoFocus(
   editorRef: RefObject<PromptEditorHandle | null>,
   threadId: string | undefined,
@@ -95,7 +117,7 @@ export function usePromptDraft({
   const prevThreadIdRef = useRef<string | null | undefined>(null);
   const hasSubmittedRef = useRef(false);
 
-  useEffect(() => {
+  const swapDraft = useStableCallback(() => {
     const prevId = prevThreadIdRef.current;
     prevThreadIdRef.current = effectiveThreadId;
     const editor = editorRef.current;
@@ -113,18 +135,15 @@ export function usePromptDraft({
       initialPromptProp,
     );
     stopRecordingRef.current();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveThreadId]);
+  });
+  useEffect(() => {
+    swapDraft();
+  }, [effectiveThreadId, swapDraft]);
 
   useEffect(() => {
-    const editorRefCurrent = editorRef.current;
-    return () => {
-      if (hasSubmittedRef.current) return;
-      const threadId = threadIdRef.current;
-      const editorJSON = threadId ? editorRefCurrent?.getJSON() : undefined;
-      const images = attachmentsRef.current?.getImages() ?? [];
-      if (threadId && editorJSON) setEditorDraft(threadId, editorJSON, images);
-    };
+    const editor = editorRef.current;
+    return () =>
+      saveDraftOnUnmount(editor, { hasSubmittedRef, threadIdRef, attachmentsRef }, setEditorDraft);
   }, [setEditorDraft, editorRef, attachmentsRef, threadIdRef]);
 
   useEditorAutoFocus(editorRef, effectiveThreadId, running, loading);

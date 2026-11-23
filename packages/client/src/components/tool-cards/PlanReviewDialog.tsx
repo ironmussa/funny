@@ -254,8 +254,8 @@ export function PlanReviewDialog({
         data-testid="plan-review-dialog"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3 select-none">
-          <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden text-sm">
+        <DialogHeader bordered className="overflow-hidden select-none">
+          <DialogTitle size="sm" className="flex min-w-0 items-center gap-2 overflow-hidden">
             <Pencil className="icon-base shrink-0" />
             {t('plan.reviewTitle', 'Review plan')}
           </DialogTitle>
@@ -313,7 +313,7 @@ export function PlanReviewDialog({
               onAddEmoji={onAddEmoji}
               onRemoveComment={onRemoveComment}
               active={open && !isEditing}
-              highlightDeps={[open]}
+              highlightKey={open}
               highlightDelay={50}
             >
               <div className={PROSE_CLASSES}>
@@ -326,11 +326,10 @@ export function PlanReviewDialog({
         {canRespond && (
           <DialogFooter className="border-border shrink-0 items-center gap-2 border-t px-4 py-3 sm:justify-between sm:space-x-0">
             <Button
-              variant="ghost"
+              variant="muted"
               size="sm"
               onClick={() => handleRespond(PLAN_REJECTED_RESPONSE)}
               data-testid="plan-review-reject"
-              className="text-muted-foreground hover:text-foreground"
             >
               <XCircle className="icon-xs" />
               {t('thread.rejectPlan', 'Reject plan')}

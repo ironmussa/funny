@@ -18,13 +18,12 @@
 
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
-import { err, ok, type Result } from 'neverthrow';
+import { err, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
-import { authorizedRunnerRequests, runnerActor, withRunnerFor } from '../runner-access/index.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { sendToThreadRunner, type ThreadRunnerError } from '../thread-runner-requests.js';
 import { sandboxWaker } from '../thread-sandboxes/sandbox-lifecycle.js';

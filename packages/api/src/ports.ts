@@ -60,11 +60,13 @@ import type {
   FactoryQueueCiProposal,
   FactoryReadiness,
   FactoryIssueBlockers,
+  FactoryIssuelessFlow,
   FactoryQueueClearResult,
   FactoryQueueRun,
   FactoryRun,
   FactorySettings,
   FactorySubmitResult,
+  FactoryTrigger,
   SaveFactorySettingsInput,
 } from '@funny/shared/contracts/factory';
 import type {
@@ -505,6 +507,43 @@ export interface FactoryPort {
    * the settings as they are afterwards.
    */
   closeIncident(userId: string, projectId: string): PortResult<FactorySettings>;
+  /** The schedule triggers of the caller's factory (change flow-triggers); empty without one. */
+  triggers(userId: string, projectId: string): PortResult<FactoryTrigger[]>;
+  /**
+   * Create or change a schedule trigger of the caller's factory. 400 for a
+   * schedule that cannot run, a reserved input name, or a flow that cannot run
+   * without an issue; audited.
+   */
+  saveTrigger(
+    userId: string,
+    projectId: string,
+    data: {
+      id?: string;
+      name: string;
+      schedule: string;
+      flowName: string;
+      inputs: Record<string, string>;
+      enabled: boolean;
+    },
+  ): PortResult<FactoryTrigger>;
+  /** Remove a schedule trigger of the caller's factory; audited. */
+  removeTrigger(userId: string, projectId: string, triggerId: string): PortResult<{ ok: true }>;
+  /** Whether a flow can run without an issue, and the inputs to type to start it. Reads only. */
+  issuelessFlow(
+    userId: string,
+    projectId: string,
+    flowName: string,
+  ): PortResult<FactoryIssuelessFlow>;
+  /**
+   * Start one run of a flow of the caller's factory now, without an issue.
+   * Refused (409) when the factory is paused or cannot work now, 400 for a
+   * flow that needs an issue or an input left out. Audited.
+   */
+  runFlow(
+    userId: string,
+    projectId: string,
+    input: { flowName: string; inputs: Record<string, string> },
+  ): PortResult<FactoryRun>;
 }
 
 /** The server's authorization decisions that are not about one thread. */

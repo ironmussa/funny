@@ -10,7 +10,7 @@ import { homedir, platform } from 'os';
 import { join, parse as parsePath, resolve, normalize } from 'path';
 
 import { getRemoteUrl, extractRepoName, initRepo } from '@funny/core/git';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 
 import { openDirectoryOnHost } from '../services/directory-opener.js';
 import * as tm from '../services/thread-manager.js';
@@ -31,6 +31,13 @@ function checkRequired(value: string | undefined, label = 'path'): string | Resp
     });
   }
   return value;
+}
+
+/** The `?path=` directory, when it belongs to one of the caller's projects; else the refusal. */
+async function projectPathFrom(c: Context<HonoEnv>): Promise<string | Response> {
+  const dirPath = checkRequired(c.req.query('path'), 'path query parameter');
+  if (dirPath instanceof Response) return dirPath;
+  return (await requireProjectPath(dirPath, c.get('userId'))) ?? dirPath;
 }
 
 // List drives (Windows) or root dirs
@@ -238,7 +245,7 @@ async function resolveBodyPath(
 // Open directory in file explorer
 app.post('/open-directory', async (c) => {
   const body = await c.req.json<{ path?: string; threadId?: string }>();
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const resolved = await resolveBodyPath(body, userId);
   if (resolved instanceof Response) return resolved;
   const dirPath = resolved;
@@ -274,7 +281,7 @@ app.post('/open-in-editor', async (c) => {
   const { path: dirPath, editor } = await c.req.json<{ path: string; editor: string }>();
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
   if (!editor) return c.json({ error: 'editor is required' }, 400);
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;
@@ -389,13 +396,8 @@ export function searchFilesAndFolders(
 
 // List files and folders in a git repository (respects .gitignore)
 app.get('/files', async (c) => {
-  const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
-  if (dirPathOrRes instanceof Response) return dirPathOrRes;
-  const dirPath = dirPathOrRes;
-  const userId = c.get('userId') as string;
-
-  const denied = await requireProjectPath(dirPath, userId);
-  if (denied) return denied;
+  const dirPath = await projectPathFrom(c);
+  if (dirPath instanceof Response) return dirPath;
 
   const query = c.req.query('query') || '';
   const limitParam = Number(c.req.query('limit'));
@@ -432,13 +434,8 @@ import { indexProject, searchSymbols, isIndexing } from '../services/symbol-inde
 
 // Search symbols in a project
 app.get('/symbols', async (c) => {
-  const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
-  if (dirPathOrRes instanceof Response) return dirPathOrRes;
-  const dirPath = dirPathOrRes;
-  const userId = c.get('userId') as string;
-
-  const denied = await requireProjectPath(dirPath, userId);
-  if (denied) return denied;
+  const dirPath = await projectPathFrom(c);
+  if (dirPath instanceof Response) return dirPath;
 
   const query = c.req.query('query') || '';
   const file = c.req.query('file') || undefined;
@@ -459,7 +456,7 @@ app.get('/symbols', async (c) => {
 app.post('/symbols/index', async (c) => {
   const { path: dirPath } = await c.req.json<{ path: string }>();
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;

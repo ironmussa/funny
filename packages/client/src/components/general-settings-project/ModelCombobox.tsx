@@ -35,11 +35,12 @@ export function ModelCombobox({ value, onChange, options, placeholder, searchPla
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          size="xs"
           variant="outline"
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
-          className="h-8 w-[160px] justify-between text-xs"
+          className="h-8 w-[160px] justify-between"
         >
           <span className="truncate">{selected?.label ?? placeholder}</span>
           <ChevronsUpDown className="icon-xs ml-1 shrink-0 opacity-50" />

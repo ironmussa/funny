@@ -62,9 +62,9 @@ let testDb: ReturnType<typeof createTestDb>;
 
 const ports = unusedRunnerPorts();
 
-const _origStartWatcher = startFactoryWatcher;
+const originalStartWatcher = startFactoryWatcher;
 const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
-  _origStartWatcher({
+  originalStartWatcher({
     proof: passingProof,
     steps: upToDateSteps,
     lastThreadMessage: passingReview,
@@ -1369,9 +1369,11 @@ describe('factory flow', () => {
     });
 
     test('a merge that opts out of the proof is admitted without rules', async () => {
-      const optOut = proofReadyFlowFiles()
-        ['.funny/workflows/issue-to-merge.yaml']!.replace(/      rules:\n.*\n.*\n/, '')
-        .replace('    merge:', '    merge:\n      require_regression_proof: false');
+      const flowFiles = proofReadyFlowFiles();
+      const optOut = flowFiles['.funny/workflows/issue-to-merge.yaml']!.replace(
+        /      rules:\n.*\n.*\n/,
+        '',
+      ).replace('    merge:', '    merge:\n      require_regression_proof: false');
       expect(optOut).not.toContain('    regression_proof:\n      rules:');
       const { factoryId } = await runFlow(
         { files: { '.funny/workflows/issue-to-merge.yaml': optOut } },
@@ -1627,8 +1629,8 @@ describe('factory flow', () => {
     expect(github.merges).toBe(0);
   });
 
-  test('the workspace-only factory-issue flow is refused before any agent starts', async () => {
-    const factoryId = await enableFactory({ flowName: 'factory-issue' });
+  test('an unknown flow is refused before any agent starts', async () => {
+    const factoryId = await enableFactory({ flowName: 'no-such-flow' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
     await startWatcherWithProof({

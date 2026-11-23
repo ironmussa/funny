@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 const log = createClientLogger('create-design-dialog');
 
@@ -24,6 +25,11 @@ export interface CreateDesignDialogProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
+}
+
+/** What the dialog shows when the design could not be created. */
+function createFailureMessage(error: { friendlyMessage?: string; message?: string }): string {
+  return error.friendlyMessage ?? error.message ?? 'Failed to create design';
 }
 
 export function CreateDesignDialog({
@@ -53,15 +59,12 @@ export function CreateDesignDialog({
   };
 
   const submit = async (payload: Parameters<typeof api.createDesign>[1]): Promise<void> => {
-    setSubmitting(true);
-    setError(null);
-    try {
+    return whilePending(setSubmitting, async () => {
+      setError(null);
       const created = await api.createDesign(projectId, payload);
       if (created.isErr()) {
         log.error('createDesign failed', { projectId, type: payload.type, error: created.error });
-        setError(
-          created.error.friendlyMessage ?? created.error.message ?? 'Failed to create design',
-        );
+        setError(createFailureMessage(created.error));
         return;
       }
 
@@ -82,9 +85,7 @@ export function CreateDesignDialog({
       );
       resetAndClose();
       navigate(buildPath(`/projects/${projectId}/designs/${design.id}`));
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   const handleCreatePrototype = () =>
@@ -243,16 +244,16 @@ export function CreateDesignDialog({
 
           <TabsContent value="template" className="mt-4 min-h-[360px]">
             <EmptyState
+              padding="md"
               fill={false}
-              className="py-8"
               title={t('createDesign.template.empty', 'Templates coming soon.')}
             />
           </TabsContent>
 
           <TabsContent value="other" className="mt-4 min-h-[360px]">
             <EmptyState
+              padding="md"
               fill={false}
-              className="py-8"
               title={t('createDesign.other.empty', 'More design types coming soon.')}
             />
           </TabsContent>

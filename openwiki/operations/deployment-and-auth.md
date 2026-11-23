@@ -184,7 +184,7 @@ See the "Machine B — Runner" section of [INSTALL.md](../../INSTALL.md) for the
 
 Runner isolation is enforced where the server actually sends to a runner. Every
 proxied HTTP request, thread creation/fork/delete cleanup, browser-session command,
-terminal message, scheduler dispatch/cancel and stop-sessions call goes through
+terminal message and stop-sessions call goes through
 `packages/server/src/services/runner-access/` with a `RunnerFor` proof that the
 runner belongs to, and is in scope for, the identity signed into the request; the
 authorized sink signs that identity itself (HMAC, fresh nonce) and drops any
@@ -194,8 +194,8 @@ unchanged. Two deliberate exceptions stay explicit: steer-share delegation
 `steer` claim while the runner is certified for the thread owner) and the
 unauthenticated MCP OAuth callback (`OAuthCallbackRunner` → `sendOAuthCallback`,
 shared secret only, no identity), routed only to the runner its server-signed
-`state` is bound to; the server renders the callback page itself. The scheduler's `/dispatch` and `/cancel` sign
-the thread owner read from the DB and refuse a mismatching `userId`. See the
+`state` is bound to; the server renders the callback page itself. Stop-sessions signs
+the project owner read from the DB and refuses a mismatching `userId`. See the
 [development workflow](../workflows/development.md#runner-request-isolation-proof-checks)
 for the lint, type-test and fitness checks that keep this closed.
 

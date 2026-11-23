@@ -9,7 +9,7 @@ import { assertRunnerDataScope, canRunnerActOnThread } from '../../services/data
 import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import { explainUnresolved, resolveRunner, uncacheThread } from '../../services/runner-resolver.js';
 import {
-  __resetRunnerScopeCache,
+  resetRunnerScopeCache,
   bindSandboxRunner,
   canRunnerAccessProject,
   canRunnerServeProjectless,
@@ -53,7 +53,7 @@ const resolve = (path: string, query: Record<string, string> = {}) =>
 
 beforeEach(async () => {
   presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
-  __resetRunnerScopeCache();
+  resetRunnerScopeCache();
   for (const t of ['t-box', 't-other', 't-scratch', 't-failed-box']) uncacheThread(t);
   await bindTestDb();
   seedProject(testDb.db, { id: 'px', userId: 'alice', path: '/home/alice/x' });

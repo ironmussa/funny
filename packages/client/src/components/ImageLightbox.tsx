@@ -1,9 +1,10 @@
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState, useCallback, useEffect, useEffectEvent } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { ImageZoomControls } from '@/components/ImageZoomControls';
 import { BUTTON_ZOOM_FACTOR, useImageZoomPan } from '@/hooks/use-image-zoom-pan';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { cn } from '@/lib/utils';
 
 interface LightboxImage {
@@ -44,7 +45,7 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
     zoom.reset();
   }, [images.length, zoom]);
 
-  const onKey = useEffectEvent((e: KeyboardEvent) => {
+  const onKey = useStableCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
     if (e.key === 'ArrowRight') goNext();
     if (e.key === 'ArrowLeft') goPrev();
@@ -58,7 +59,7 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
     const handleKeyDown = (e: KeyboardEvent) => onKey(e);
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open]);
+  }, [open, onKey]);
 
   if (!open || images.length === 0) return null;
 

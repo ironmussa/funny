@@ -37,7 +37,7 @@ On the server (the issue factory), the journal lives in `workflow_node_execution
 
 The workflows canvas (`packages/client/src/components/WorkflowsSettings.tsx`, nodes in `components/workflows/WorkflowNodeView.tsx`) draws loop regions, non-default joins, concurrency groups and the `waiting_slot` state.
 
-Related runtime services: `git-pipelines.ts`, `pipeline-adapter.ts`, `git-workflow-service.ts`, `scheduler-pipeline-adapters.ts`, `pipeline-approval-store.ts`, `pipeline-prompts.ts`.
+Related runtime services: `git-pipelines.ts`, `pipeline-adapter.ts`, `git-workflow-service.ts`, `pipeline-dispatcher.ts` (runs a workflow started from `/api/workflows`), `pipeline-dispatcher-adapters.ts`, `pipeline-approval-store.ts`, `pipeline-prompts.ts`.
 
 **This is distinct from `packages/reviewbot`.** `reviewbot` is a standalone webhook service that reviews already-opened GitHub PRs via the Anthropic API and posts a `gh pr review` — it is not referenced anywhere in `docs/architecture/pipeline.md` and nothing in the runtime pipeline imports it. See [integrations/extensions-and-services.md](../integrations/extensions-and-services.md).
 
@@ -49,8 +49,8 @@ Related runtime services: `git-pipelines.ts`, `pipeline-adapter.ts`, `git-workfl
   - On each tick, or on `POST /api/automations/:id/trigger`, it starts a read-only `source: 'automation'` thread on the **owner's** runner via `startThreadOnRunner` (`services/runner-thread-launcher.ts`), which delegates to the `modules/threads` creation use case that interactive threads use. Runner isolation and the project ↔ runner binding therefore apply unchanged.
   - The run is recorded in `automation_runs`. If the owner's runner is unreachable, the run is recorded as failed and is not retried on another runner.
   - `services/automation-runs.ts` completes the run when the runner persists the thread's terminal status (`data-handler.ts` → `notifyTerminalStatusPersisted`), with no polling, and archives runs beyond `maxRunHistory`.
-  - The scheduler assumes a **single server instance**: replicas would each fire every automation.
-- **`packages/scheduler` (`@funny/thread-scheduler`)** is the poll/reconcile "brain" for scheduled/automated thread dispatch. Its own code comment describes it as transport-agnostic: with in-process adapters it can run inside the server; with HTTP adapters (the current default — `packages/scheduler/src/adapters/http-*.ts`) it runs as its own process hitting `/api/scheduler/system/*` on the server. It's built on pure logic exported from `@funny/core/scheduler` (`planDispatch`, retry/backoff). Root `package.json`'s `dev:scheduler` script runs it alongside server/runner/client in development.
+  - Every server process holds a timer per automation, and each scheduled occurrence is taken with a compare-and-set on `automations.next_run_at` before its run starts (`claimOccurrence` in `automation-repository.ts`, `occurrenceTaken` in `services/schedules.ts`), so several processes start one run per occurrence. A process that loses the claim starts nothing and records no skip. Manual runs take no occurrence.
+  - Automations are **not** run by the issue factory's flow executor (ADR 0002, amendment): an automation is one read-only thread and needs no GitHub repository; the executor belongs to a factory. They share only how a schedule is fired.
 
 ## Optional durable-workflow infra (not part of the above)
 

@@ -5,7 +5,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
 import {
-  __resetForwardedIdentityNonceCacheForTests,
+  resetForwardedIdentityNonceCacheForTests,
   signForwardedIdentity,
   verifyForwardedIdentity,
 } from '../../auth/forwarded-identity.js';
@@ -16,7 +16,7 @@ const ROOT = 'root-secret-0123456789abcdef0123456789abcdef';
 const identity = { userId: 'admin-user', role: 'admin', orgId: null, orgName: null };
 
 describe('per-runner forwarding keys', () => {
-  beforeEach(() => __resetForwardedIdentityNonceCacheForTests());
+  beforeEach(() => resetForwardedIdentityNonceCacheForTests());
 
   test('derivation is deterministic, per-runner, and never the root secret', () => {
     const a = deriveRunnerForwardingKey(ROOT, 'runner-a');

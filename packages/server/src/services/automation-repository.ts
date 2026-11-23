@@ -3,7 +3,7 @@
  * Pure data operations only — scheduler hooks live in the runtime.
  */
 
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
@@ -39,6 +39,30 @@ export async function getAutomation(id: string) {
 export async function updateAutomationRow(id: string, updates: Record<string, any>) {
   updates.updatedAt = new Date().toISOString();
   await dbRun(db.update(schema.automations).set(updates).where(eq(schema.automations.id, id)));
+}
+
+/**
+ * Take a scheduled occurrence: move `next_run_at` from `stored` to `next`, as a
+ * compare-and-set. False when the row no longer holds `stored`: another server
+ * process took the occurrence, or the automation was rescheduled meanwhile.
+ */
+export async function claimOccurrence(
+  id: string,
+  stored: string | null,
+  next: string | null,
+): Promise<boolean> {
+  const held =
+    stored === null
+      ? isNull(schema.automations.nextRunAt)
+      : eq(schema.automations.nextRunAt, stored);
+  const rows = await dbAll<{ id: string }>(
+    db
+      .update(schema.automations)
+      .set({ nextRunAt: next, updatedAt: new Date().toISOString() })
+      .where(and(eq(schema.automations.id, id), held))
+      .returning({ id: schema.automations.id }),
+  );
+  return rows.length > 0;
 }
 
 // ── Run CRUD ─────────────────────────────────────────────────────

@@ -13,14 +13,14 @@ import * as realThreadAccessModule from '../../services/thread-access-check.js';
 import { snapshotModule } from '../helpers/module-mocks.js';
 
 // Mutable fakes so each test can vary access/ownership.
-let _canView = true;
-let _isOwner = false;
+let canView = true;
+let isOwner = false;
 // mock.module is process-global and never undone by mock.restore(); put the
 // real module back once this file finishes so later files are unaffected.
 const realThreadAccess = snapshotModule(realThreadAccessModule);
 mock.module('../../services/thread-access-check.js', () => ({
-  canUserViewThread: async () => _canView,
-  isThreadOwnedBy: async () => _isOwner,
+  canUserViewThread: async () => canView,
+  isThreadOwnedBy: async () => isOwner,
   getUserDisplay: async () => ({ id: 'ana', name: 'Ana', image: 'https://img/ana.png' }),
 }));
 afterAll(() => {
@@ -38,7 +38,7 @@ import {
 } from '@funny/shared/socket-events';
 
 import {
-  __resetPresenceForTests,
+  resetPresenceForTests,
   setupThreadPresenceHandlers,
 } from '../../services/socketio/thread-presence.js';
 
@@ -69,9 +69,9 @@ const STREAM = 'thread:t1:stream';
 
 describe('thread presence handler', () => {
   beforeEach(() => {
-    _canView = true;
-    _isOwner = false;
-    __resetPresenceForTests();
+    canView = true;
+    isOwner = false;
+    resetPresenceForTests();
   });
 
   test('sharee open: joins presence + stream rooms, gets sync, announces join', async () => {
@@ -95,7 +95,7 @@ describe('thread presence handler', () => {
   });
 
   test('owner open: joins presence room ONLY (not the stream room)', async () => {
-    _isOwner = true;
+    isOwner = true;
     const f = makeSocket('s2');
     setupThreadPresenceHandlers(f.socket, 'owner-1');
 
@@ -106,7 +106,7 @@ describe('thread presence handler', () => {
   });
 
   test('denied open (no view access): no joins, no broadcasts', async () => {
-    _canView = false;
+    canView = false;
     const f = makeSocket('s3');
     setupThreadPresenceHandlers(f.socket, 'bob-3');
 

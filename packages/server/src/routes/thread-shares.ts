@@ -41,7 +41,7 @@ const createThreadShareSchema = z.object({
 // `/:id` (handled by mounting shareRoutes ahead of threadRoutes in index.ts).
 // Kept on REST: called by client-gpuix.
 shareRoutes.get('/shared-with-me', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threads = await shareRepo.listThreadsSharedWithUser(userId);
   return c.json({ threads });
 });
@@ -49,7 +49,7 @@ shareRoutes.get('/shared-with-me', async (c) => {
 // POST /api/threads/:id/shares — grant a specific org member read+comment access
 shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
-  const ownerId = c.get('userId') as string;
+  const ownerId = c.get('userId');
   const thread = c.get('thread');
 
   const parsed = await parseJsonBody(c, createThreadShareSchema);

@@ -215,7 +215,7 @@ export async function resolveGitFiles(cwd: string, prefix = ''): Promise<string[
     const inflight = inflightRequests.get(cwd);
     if (inflight) return inflight;
 
-    const promise = _resolveTopLevel(cwd)
+    const promise = resolveTopLevel(cwd)
       .then((files) => {
         fileCache.set(cwd, { files, ts: Date.now() });
         inflightRequests.delete(cwd);
@@ -230,7 +230,7 @@ export async function resolveGitFiles(cwd: string, prefix = ''): Promise<string[
     return promise;
   }
 
-  return _resolveGitFilesInner(cwd, prefix);
+  return resolveGitFilesInner(cwd, prefix);
 }
 
 /**
@@ -239,7 +239,7 @@ export async function resolveGitFiles(cwd: string, prefix = ''): Promise<string[
  * shelling out and prunes heavy build dirs in `can_recurse`). Falls back to
  * the CLI pipeline on any error.
  */
-async function _resolveTopLevel(cwd: string): Promise<string[]> {
+async function resolveTopLevel(cwd: string): Promise<string[]> {
   const native = getNativeGit();
   if (native?.listFiles) {
     const span = startSpan('file-index.list-files', {
@@ -264,7 +264,7 @@ async function _resolveTopLevel(cwd: string): Promise<string[]> {
     attributes: { backend: 'cli', cwd },
   });
   try {
-    const files = await _resolveGitFilesInner(cwd, '');
+    const files = await resolveGitFilesInner(cwd, '');
     span.attributes['file.count'] = files.length;
     span.end('ok');
     return files;
@@ -275,7 +275,7 @@ async function _resolveTopLevel(cwd: string): Promise<string[]> {
 }
 
 /** Inner implementation without caching (handles recursion). */
-async function _resolveGitFilesInner(cwd: string, prefix: string): Promise<string[]> {
+async function resolveGitFilesInner(cwd: string, prefix: string): Promise<string[]> {
   const entries = await gitLsFiles(cwd);
   const resolved: string[] = [];
   const nestedDirs: string[] = [];
@@ -291,7 +291,7 @@ async function _resolveGitFilesInner(cwd: string, prefix: string): Promise<strin
   // Resolve nested git repos in parallel
   if (nestedDirs.length > 0) {
     const nested = await Promise.all(
-      nestedDirs.map((dir) => _resolveGitFilesInner(join(cwd, dir), prefix + dir + '/')),
+      nestedDirs.map((dir) => resolveGitFilesInner(join(cwd, dir), prefix + dir + '/')),
     );
     for (const files of nested) {
       resolved.push(...files);

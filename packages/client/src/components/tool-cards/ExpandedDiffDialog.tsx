@@ -410,15 +410,19 @@ export function ExpandedDiffDialog(props: ExpandedDiffDialogProps) {
       }}
     >
       <DialogContent
-        className="flex h-dvh w-screen max-w-none flex-col gap-0 rounded-none p-0 md:h-[85vh] md:w-[90vw] md:max-w-[90vw] md:rounded-lg"
+        flush
+        className="flex h-dvh w-screen max-w-none flex-col rounded-none md:h-[85vh] md:w-[90vw] md:max-w-[90vw] md:rounded-lg"
         onOpenAutoFocus={focus.onOpenAutoFocus}
         onCloseAutoFocus={focus.onCloseAutoFocus}
         onEscapeKeyDown={(e) => {
           if (search.showSearch) e.preventDefault();
         }}
       >
-        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3 select-none">
-          <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
+        <DialogHeader bordered className="overflow-hidden select-none">
+          <DialogTitle
+            size="sm"
+            className="flex min-w-0 items-center gap-2 overflow-hidden font-mono"
+          >
             <Icon className="icon-base shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
@@ -544,10 +548,10 @@ function CloseDiffButton({ onClose }: { onClose?: () => void }) {
   if (!onClose) return null;
   return (
     <Button
-      variant="ghost"
+      variant="muted"
       size="icon-sm"
       onClick={onClose}
-      className="text-muted-foreground shrink-0"
+      className="shrink-0"
       data-testid="expanded-diff-close"
     >
       <X className="icon-base" />

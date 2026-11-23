@@ -20,7 +20,7 @@ export function serveExclusive<T>(options: ServeOptions & { port: number }): Bun
   } catch (error) {
     if ((error as { code?: string } | null)?.code === 'EADDRINUSE') {
       log.error(
-        `Port ${options.port} is already in use. Another funny-server may be running; the server runs as a single instance (the automation scheduler assumes one).`,
+        `Port ${options.port} is already in use. Another funny-server may be running; the server runs as a single instance (the issue factory watcher assumes one).`,
         { namespace: 'server', port: options.port },
       );
     }

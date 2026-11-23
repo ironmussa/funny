@@ -878,7 +878,6 @@ export interface WSThreadUpdatedData {
   /** Forces clients to reload durable state after a recoverable stream gap. */
   resync?: boolean;
   archived?: number;
-  schedulerManaged?: number;
   branch?: string | null;
   worktreePath?: string | null;
   mode?: string;

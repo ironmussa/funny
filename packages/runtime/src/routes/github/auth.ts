@@ -9,6 +9,7 @@ import {
   DEVICE_CODE_URL,
   getClientId,
   githubApiFetch,
+  requireGithubToken,
   resolveGithubToken,
 } from './helpers.js';
 
@@ -17,7 +18,7 @@ export const authRoutes = new Hono<HonoEnv>();
 // ── GET /status — check GitHub connection ──────────────────
 
 authRoutes.get('/status', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const resolved = await resolveGithubToken(userId);
   if (!resolved) {
@@ -92,7 +93,7 @@ authRoutes.post('/oauth/poll', async (c) => {
     return c.json({ error: 'GITHUB_CLIENT_ID is not configured' }, 500);
   }
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const raw = await c.req.json();
   const parsed = validate(githubPollSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
@@ -153,7 +154,7 @@ authRoutes.post('/oauth/poll', async (c) => {
 // ── DELETE /oauth/disconnect — clear GitHub token ──────────
 
 authRoutes.delete('/oauth/disconnect', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   await getServices().profile.updateProfile(userId, { githubToken: null });
   return c.json({ ok: true });
 });
@@ -161,13 +162,10 @@ authRoutes.delete('/oauth/disconnect', async (c) => {
 // ── GET /user — get authenticated GitHub user ──────────────
 
 authRoutes.get('/user', async (c) => {
-  const userId = c.get('userId') as string;
-  const resolved = await resolveGithubToken(userId);
-  if (!resolved) {
-    return c.json({ error: 'Not connected to GitHub' }, 401);
-  }
+  const token = await requireGithubToken(c);
+  if (token instanceof Response) return token;
 
-  const res = await githubApiFetch('/user', resolved.token);
+  const res = await githubApiFetch('/user', token);
   if (!res.ok) {
     return c.json({ error: 'Failed to fetch GitHub user' }, 502);
   }

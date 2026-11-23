@@ -251,7 +251,7 @@ prRoutes.get('/prs-search', async (c) => {
 // ── GET /pr-filter-options — labels + assignable users for the filter UI ──────
 
 prRoutes.get('/pr-filter-options', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const projectId = c.req.query('projectId');
   if (!projectId) {
     return c.json({ error: 'projectId is required' }, 400);
@@ -358,7 +358,7 @@ prRoutes.post('/pr-merge', async (c) => {
   // Recorded as a `github.write` activity (track-user-and-scheduled-actions).
   return recordedGithubWrite(
     {
-      userId: c.get('userId') as string,
+      userId: c.get('userId'),
       projectId: raw.projectId,
       title: `Merge ${target}`,
       input: { action: 'pr-merge', prNumber: Number(prNumber), repo: `${owner}/${repo}` },

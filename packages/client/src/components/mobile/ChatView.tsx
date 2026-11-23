@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
@@ -12,7 +12,8 @@ import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useQueuedCount } from '@/data/queue/hooks';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
-import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { useKnownMessageIds } from '@/hooks/use-known-message-ids';
+import { useTodoSnapshotIndex } from '@/hooks/use-todo-panel';
 import {
   useCompactionEvents,
   useThreadEvents,
@@ -77,26 +78,9 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
 
   // Track which message/tool-call IDs existed when the thread was loaded, so
   // already-present items skip the entrance animation (matches desktop).
-  const knownIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (stableMessages) {
-      for (const m of stableMessages) {
-        ids.add(m.id);
-        if (m.toolCalls) for (const tc of m.toolCalls) ids.add(tc.id);
-      }
-    }
-    return ids;
-    // Capture only the messages present when this thread becomes active. New
-    // messages must remain absent so the stream can animate their entrance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeThread?.id]);
+  const knownIds = useKnownMessageIds(activeThread?.id, stableMessages);
 
-  const snapshots = useTodoSnapshots();
-  const snapshotMap = useMemo(() => {
-    const next = new Map<string, number>();
-    snapshots.forEach((s, i) => next.set(s.toolCallId, i));
-    return next;
-  }, [snapshots]);
+  const snapshotMap = useTodoSnapshotIndex();
 
   const isExternal = activeThread?.provider === 'external';
   const queuedCount = useQueuedCount(activeThread?.id);

@@ -13,7 +13,7 @@ import {
   issueThreadProvisionToken,
 } from '../../services/runner-provision-tokens.js';
 import {
-  __resetRunnerScopeCache,
+  resetRunnerScopeCache,
   sandboxRunnerIdForThread,
   sandboxThreadOfRunner,
 } from '../../services/runner-scope.js';
@@ -32,7 +32,7 @@ beforeEach(async () => {
     mode: 'sqlite',
     close: async () => testDb.sqlite.close(),
   });
-  __resetRunnerScopeCache();
+  resetRunnerScopeCache();
   seedProject(testDb.db, { id: 'px', userId: 'alice', path: '/home/alice/x' });
   seedThread(testDb.db, { id: 't-box', projectId: 'px', userId: 'alice' });
 });

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
 import {
-  __resetVisualizerRegistry,
+  resetVisualizerRegistry,
   getVisualizerForFence,
   getVisualizerForFileExt,
   hasFileVisualizer,
@@ -17,7 +17,7 @@ function makePlugin(id: string, contributes: VisualizerPlugin['contributes']): V
 }
 
 beforeEach(() => {
-  __resetVisualizerRegistry();
+  resetVisualizerRegistry();
 });
 
 describe('visualizer registry', () => {

@@ -182,7 +182,7 @@ const mockConversation: PRConversation = {
 // ── Fetch mock ──────────────────────────────────────────────
 
 /** Capture real fetch once at module load — before any story can overwrite it. */
-const _realFetch = window.fetch.bind(window);
+const realFetch = window.fetch.bind(window);
 
 interface MockFetchOptions {
   /** PRs returned by `/github/prs`. */
@@ -225,7 +225,7 @@ function installMockFetch(opts: MockFetchOptions = {}) {
 }
 
 function restoreFetch() {
-  window.fetch = _realFetch;
+  window.fetch = realFetch;
 }
 
 // ── Store seeders ───────────────────────────────────────────

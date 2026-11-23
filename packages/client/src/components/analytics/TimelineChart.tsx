@@ -129,7 +129,7 @@ export function TimelineChart({
   }, [created, completed, movedToPlanning, movedToReview, movedToDone, movedToArchived]);
 
   if (chartData.length === 0) {
-    return <EmptyState fill={false} className="py-8" title={t('analytics.noData')} />;
+    return <EmptyState padding="md" fill={false} title={t('analytics.noData')} />;
   }
 
   // Format date labels based on groupBy granularity

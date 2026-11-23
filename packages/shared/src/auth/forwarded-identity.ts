@@ -180,6 +180,6 @@ export function verifyForwardedIdentity(
  * Test-only helper to reset the nonce cache between cases.
  * Not part of the runtime contract — do not call from production code.
  */
-export function __resetForwardedIdentityNonceCacheForTests(): void {
+export function resetForwardedIdentityNonceCacheForTests(): void {
   nonceCache.clear();
 }

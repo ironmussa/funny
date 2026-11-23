@@ -1,10 +1,11 @@
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { MediaLoadError } from '@/components/MediaLoadError';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useBoxZoomPan } from '@/hooks/use-box-zoom-pan';
 
 /** Inline box height — mirrors the Mermaid diagram card so the two read alike. */
@@ -15,35 +16,6 @@ function fileNameOf(src: string): string {
   const clean = src.split(/[?#]/)[0];
   const idx = clean.lastIndexOf('/');
   return idx === -1 ? clean : clean.slice(idx + 1);
-}
-
-function ToolbarButton({
-  onClick,
-  tip,
-  testId,
-  children,
-}: {
-  onClick: () => void;
-  tip: string;
-  testId: string;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClick}
-          className="text-muted-foreground"
-          data-testid={testId}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{tip}</TooltipContent>
-    </Tooltip>
-  );
 }
 
 export interface MarkdownImageCardProps {
@@ -158,27 +130,31 @@ export function MarkdownImageCard({
               >
                 {Math.round(pz.scale * 100)}%
               </span>
-              <ToolbarButton
+              <TooltipIconButton
+                variant="muted"
+                size="icon-sm"
                 onClick={() => pz.zoomBy(1 / 1.2)}
-                tip="Zoom out"
-                testId="markdown-image-zoom-out"
+                tooltip="Zoom out"
+                data-testid="markdown-image-zoom-out"
               >
                 <ZoomOut className="icon-base" />
-              </ToolbarButton>
-              <ToolbarButton
+              </TooltipIconButton>
+              <TooltipIconButton
+                variant="muted"
+                size="icon-sm"
                 onClick={() => pz.zoomBy(1.2)}
-                tip="Zoom in"
-                testId="markdown-image-zoom-in"
+                tooltip="Zoom in"
+                data-testid="markdown-image-zoom-in"
               >
                 <ZoomIn className="icon-base" />
-              </ToolbarButton>
+              </TooltipIconButton>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="muted"
                     size="icon-sm"
                     onClick={pz.reset}
-                    className="text-muted-foreground text-xs"
+                    className="text-xs"
                     data-testid="markdown-image-zoom-reset"
                   >
                     1:1
@@ -186,13 +162,15 @@ export function MarkdownImageCard({
                 </TooltipTrigger>
                 <TooltipContent>Reset zoom</TooltipContent>
               </Tooltip>
-              <ToolbarButton
+              <TooltipIconButton
+                variant="muted"
+                size="icon-sm"
                 onClick={() => setLightboxOpen(true)}
-                tip="Expand"
-                testId="markdown-image-expand"
+                tooltip="Expand"
+                data-testid="markdown-image-expand"
               >
                 <Maximize2 className="icon-base" />
-              </ToolbarButton>
+              </TooltipIconButton>
             </div>
           </div>
         </TooltipProvider>

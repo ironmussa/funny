@@ -30,7 +30,7 @@ import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 
 import { BrowserV1IdempotencyStore } from '../../services/socketio/browser-v1-idempotency.js';
 import { setupBrowserV1Operations } from '../../services/socketio/browser-v1-operations.js';
-import { __resetPresenceForTests } from '../../services/socketio/thread-presence.js';
+import { resetPresenceForTests } from '../../services/socketio/thread-presence.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
 function requestWire(
@@ -91,7 +91,7 @@ function socketFixture(idempotency?: BrowserV1IdempotencyStore) {
 describe('browser.v1 thread lifecycle operations', () => {
   beforeEach(() => {
     canView = true;
-    __resetPresenceForTests();
+    resetPresenceForTests();
   });
 
   test('shares authorized room lifecycle and returns causal revisions', async () => {

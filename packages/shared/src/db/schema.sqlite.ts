@@ -319,6 +319,7 @@ export const factoryRuns = sqliteTable('factory_runs', {
   factoryId: text('factory_id')
     .notNull()
     .references(() => factorySettings.id, { onDelete: 'cascade' }),
+  /** The run's issue; `0` for a run without one (mapped to null in `factory-runs.ts`). */
   issueNumber: integer('issue_number').notNull(),
   prUrl: text('pr_url'),
   state: text('state').notNull().default('queued'),
@@ -332,7 +333,7 @@ export const factoryRuns = sqliteTable('factory_runs', {
   launchStartedAt: text('launch_started_at'),
   startedAt: text('started_at').notNull(),
   completedAt: text('completed_at'),
-  /** How the issue came in (change factory-manual-queue): `manual` (sent) or `label`. */
+  /** What started the run: `manual` (a sent issue), `label`, `schedule` or `run_now`. */
   source: text('source').notNull().default('label'),
   /** The flow the run executes; null on rows from before runs recorded their own. */
   flowName: text('flow_name'),
@@ -368,6 +369,36 @@ export const factoryRuns = sqliteTable('factory_runs', {
   integrationPendingAt: text('integration_pending_at'),
   /** JSON: the run this one is stacked on (D10: run id, issue, branch, retargeted), or null. */
   stackedOn: text('stacked_on'),
+  /** The schedule trigger that started the run (change flow-triggers); null otherwise. */
+  triggerId: text('trigger_id'),
+  /** The trigger's name when the run started, kept for display after an edit or a delete. */
+  triggerName: text('trigger_name'),
+  /** JSON object of the input values the trigger supplied; null for an issue run. */
+  inputs: text('inputs'),
+});
+
+/**
+ * What starts a factory flow besides an issue (change flow-triggers): a cron
+ * schedule with a flow and input values. `next_run_at` is taken with a
+ * compare-and-set, so one server instance starts each occurrence.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryTriggers = sqliteTable('factory_triggers', {
+  id: text('id').primaryKey(),
+  factoryId: text('factory_id')
+    .notNull()
+    .references(() => factorySettings.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  kind: text('kind').notNull().default('schedule'),
+  schedule: text('schedule').notNull(),
+  flowName: text('flow_name').notNull(),
+  /** JSON object of the input values each run gets. */
+  inputs: text('inputs'),
+  enabled: integer('enabled').notNull().default(1),
+  nextRunAt: text('next_run_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 /**
@@ -763,7 +794,9 @@ export const pipelineRuns = sqliteTable('pipeline_runs', {
 });
 
 /**
- * Scheduler-managed run state.
+ * Scheduler-managed run state. No code reads these tables or
+ * `threads.scheduler_managed` since the standalone thread scheduler was
+ * removed; they stay declared so the schema matches existing databases.
  *
  * One row per actively claimed thread. Removed (released) when the
  * underlying pipeline reaches a terminal outcome (completed, failed,

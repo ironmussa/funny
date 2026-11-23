@@ -139,14 +139,10 @@ export function AvailableMcpServers({
             <Tooltip key={server.name}>
               <TooltipTrigger asChild>
                 <Badge
-                  variant="outline"
+                  variant={needsAuth ? 'warning' : 'outline'}
                   size="xs"
                   data-testid={`available-mcp-${server.name}`}
                   aria-label={needsAuth ? `${server.name}: ${t('mcp.needsAuth')}` : server.name}
-                  className={cn(
-                    needsAuth &&
-                      'border-status-warning/50 bg-status-warning/10 text-status-warning',
-                  )}
                 >
                   {needsAuth && <ShieldAlert aria-hidden="true" />}
                   {server.name}

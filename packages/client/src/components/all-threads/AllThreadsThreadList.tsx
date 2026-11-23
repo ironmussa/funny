@@ -282,9 +282,9 @@ export function AllThreadsThreadList({
         </div>
         {loadingMore && (
           <LoadingState
+            padding="sm"
             fill={false}
             layout="inline"
-            className="py-3"
             testId="all-threads-thread-list-loading-more"
             label={t('common.loading')}
           />

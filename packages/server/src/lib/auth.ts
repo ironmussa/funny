@@ -140,14 +140,14 @@ function buildDatabaseConfig() {
 }
 
 // Lazy init — auth is created on first call to initBetterAuth()
-let _auth: ReturnType<typeof betterAuth> | null = null;
+let authSingleton: ReturnType<typeof betterAuth> | null = null;
 
 export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
   get(_target, prop) {
-    if (!_auth) {
+    if (!authSingleton) {
       throw new Error('Auth not initialized. Call initBetterAuth() at startup.');
     }
-    return (_auth as any)[prop];
+    return (authSingleton as any)[prop];
   },
 });
 
@@ -157,7 +157,7 @@ export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
 export async function initBetterAuth(): Promise<void> {
   const cookieOpts = resolveSessionCookieSecure();
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Better Auth plugin overloads widen the return type beyond the base signature
-  _auth = betterAuth({
+  authSingleton = betterAuth({
     database: buildDatabaseConfig(),
     baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,
     basePath: '/api/auth',
@@ -231,7 +231,7 @@ export async function initBetterAuth(): Promise<void> {
   // Better Auth tables are created by the server's own migration system (027_better_auth_tables).
 
   try {
-    const authInstance = _auth;
+    const authInstance = authSingleton;
     if (!authInstance) throw new Error('Auth initialization failed');
     const ctx = await authInstance.$context;
 

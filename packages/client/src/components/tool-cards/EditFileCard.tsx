@@ -488,10 +488,10 @@ export function EditFileCard({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={() => setShowExpandedDiff(true)}
-                className="text-muted-foreground hover:text-foreground mr-1 shrink-0"
+                className="mr-1 shrink-0"
               >
                 <Maximize2 className="icon-sm" />
               </Button>

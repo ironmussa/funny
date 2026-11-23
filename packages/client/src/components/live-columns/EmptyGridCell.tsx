@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ThreadPickerDialog } from '@/components/live-columns/ThreadPickerDialog';
 import { NewThreadInput } from '@/components/thread/NewThreadInput';
 import { Button } from '@/components/ui/button';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 
 interface Props {
   cellIndex: number;
@@ -36,14 +37,16 @@ export const EmptyGridCell = memo(function EmptyGridCell({
   // in this cell). Mount-time presets and post-mount presets are handled the
   // same way: adopt the project, then tell the parent to clear the entry so
   // the cell isn't repeatedly resurrected.
-  useEffect(() => {
-    if (initialProjectId && initialProjectId !== selectedProject) {
-      setSelectedProject(initialProjectId);
+  const adoptPreset = useStableCallback((presetProjectId: string | null | undefined) => {
+    if (presetProjectId && presetProjectId !== selectedProject) {
+      setSelectedProject(presetProjectId);
       setScratchMode(false);
       onConsumePreset?.();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialProjectId]);
+  });
+  useEffect(() => {
+    adoptPreset(initialProjectId);
+  }, [initialProjectId, adoptPreset]);
 
   const handleCancel = useCallback(() => {
     setSelectedProject(null);
@@ -103,9 +106,9 @@ export const EmptyGridCell = memo(function EmptyGridCell({
       />
       <div className="border-border/40 flex shrink-0 items-center justify-center border-t px-3 py-1.5">
         <Button
-          variant="ghost"
+          variant="muted"
           size="sm"
-          className="text-muted-foreground h-7"
+          className="h-7"
           data-testid={`grid-load-existing-${cellIndex}`}
           onClick={() => setThreadPickerOpen(true)}
         >

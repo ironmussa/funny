@@ -1,5 +1,5 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useGitStatusMaps } from '@/data/git-status/hooks';
 import {
@@ -32,7 +32,10 @@ export function useSidebarGitStatuses(threads: Thread[]) {
     return { fingerprint: fp, statuses: result };
   }, [maps, threads, threadBranchKeys]);
 
-  // Re-derive only when the visible fingerprint changes (or the thread list does).
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
-  return useMemo(() => statuses, [threads, fingerprint]);
+  // Hand out a new object only when the visible fingerprint (or the thread
+  // list) changes; otherwise callers keep the one they already have.
+  const [stable, setStable] = useState({ threads, fingerprint, statuses });
+  if (stable.threads === threads && stable.fingerprint === fingerprint) return stable.statuses;
+  setStable({ threads, fingerprint, statuses });
+  return statuses;
 }

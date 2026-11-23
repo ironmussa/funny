@@ -72,7 +72,6 @@ export function toThread(row: ListedThreadRow): Thread {
     cost: row.cost,
     archived: row.archived === 1,
     pinned: row.pinned === 1,
-    schedulerManaged: row.schedulerManaged === 1,
     source: row.source as ThreadSource,
     externalRequestId: row.externalRequestId ?? undefined,
     parentThreadId: row.parentThreadId ?? undefined,

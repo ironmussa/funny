@@ -6,7 +6,7 @@ import { createElement } from 'react';
 
 import { baseMarkdownComponents } from '@/lib/markdown-components';
 import { renderMarkdownToSafeHtml } from '@/lib/satteri-markdown';
-import { __resetVisualizerRegistry } from '@/lib/visualizer-registry';
+import { resetVisualizerRegistry } from '@/lib/visualizer-registry';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
 
@@ -17,7 +17,7 @@ const Img = baseMarkdownComponents.img;
 afterEach(() => {
   cleanup();
   useMediaPreviewStore.getState().close();
-  __resetVisualizerRegistry();
+  resetVisualizerRegistry();
   unstubAllGlobals();
 });
 

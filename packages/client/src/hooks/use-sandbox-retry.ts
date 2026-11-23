@@ -5,6 +5,7 @@ import type { SubmitFn } from '@/hooks/prompt-input-types';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildSendMessagePayload } from '@/lib/send-message-payload';
+import { withCleanup } from '@/lib/while-pending';
 import { useSettingsStore } from '@/stores/settings-store';
 
 const log = createClientLogger('sandbox-retry');
@@ -24,20 +25,26 @@ export function useSandboxRetry(threadId: string): { retry: SubmitFn; retrying: 
       if (inFlightRef.current) return false;
       inFlightRef.current = true;
       setRetrying(true);
-      try {
-        const payload = buildSendMessagePayload(opts, useSettingsStore.getState().toolPermissions);
-        const result = await api.retrySandboxThread(threadId, prompt, payload, images);
-        if (result.isErr()) {
-          log.warn('sandbox retry refused', { threadId, error: result.error.message });
-          toast.error(result.error.message);
-          return false;
-        }
-        log.info('sandbox retry started', { threadId });
-        return true;
-      } finally {
-        inFlightRef.current = false;
-        setRetrying(false);
-      }
+      return withCleanup(
+        async () => {
+          const payload = buildSendMessagePayload(
+            opts,
+            useSettingsStore.getState().toolPermissions,
+          );
+          const result = await api.retrySandboxThread(threadId, prompt, payload, images);
+          if (result.isErr()) {
+            log.warn('sandbox retry refused', { threadId, error: result.error.message });
+            toast.error(result.error.message);
+            return false;
+          }
+          log.info('sandbox retry started', { threadId });
+          return true;
+        },
+        () => {
+          inFlightRef.current = false;
+          setRetrying(false);
+        },
+      );
     },
     [threadId],
   );

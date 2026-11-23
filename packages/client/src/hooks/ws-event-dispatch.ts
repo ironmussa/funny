@@ -27,12 +27,6 @@ import {
 } from '@/data/git-status/actions';
 import { readGitStatusMaps } from '@/data/git-status/read';
 import { fetchProjectBranches } from '@/data/projects/branches';
-import {
-  applyRunClaimed,
-  applyRunDispatched,
-  applyRunReleased,
-  applyRunRetryQueued,
-} from '@/data/scheduler/store';
 import { readThreadRow } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
 import { showAgentNotification } from '@/hooks/use-notifications';
@@ -758,18 +752,6 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
       useWorkflowRunStore.getState().handleNodeState(data);
     });
   },
-  'thread:claimed': (threadId, data) => {
-    applyRunClaimed(threadId, data);
-  },
-  'thread:dispatched': (threadId, data) => {
-    applyRunDispatched(threadId, data);
-  },
-  'thread:retry-queued': (threadId, data) => {
-    applyRunRetryQueued(threadId, data);
-  },
-  'thread:released': (threadId) => {
-    applyRunReleased(threadId);
-  },
   'thread:created': handleThreadCreated,
   'thread:comment': handleThreadComment,
   'thread:comment_deleted': handleThreadCommentDeleted,
@@ -1077,10 +1059,6 @@ const ALL_EVENT_TYPES = [
   'pipeline:approval_requested',
   'pipeline:approval_resolved',
   'workflow:node_state',
-  'thread:claimed',
-  'thread:dispatched',
-  'thread:retry-queued',
-  'thread:released',
   'thread:created',
   'thread:comment',
   'thread:comment_deleted',

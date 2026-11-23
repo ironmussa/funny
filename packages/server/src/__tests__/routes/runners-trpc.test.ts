@@ -24,7 +24,7 @@ import {
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import type { RunnerRequestPort } from '../../services/runner-ports.js';
-import { __resetRunnerScopeCache, canRunnerAccessProject } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache, canRunnerAccessProject } from '../../services/runner-scope.js';
 import { stopProjectSessionsOnRunners } from '../../trpc/ports/project-runners.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
@@ -86,7 +86,7 @@ describe('runners over tRPC', () => {
 
   beforeEach(() => {
     t.cleanup();
-    __resetRunnerScopeCache();
+    resetRunnerScopeCache();
     sent.length = 0;
     seedProject(t.db, { id: 'px', userId: 'alice' });
     seedRunner(t.db, { id: 'laptop', userId: 'alice', token: 'tl', hostname: 'l' });

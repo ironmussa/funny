@@ -22,6 +22,21 @@ function parseModelJSON(raw: any): EventModelData {
  * - .ts files are sent to the dev server's /api/convert endpoint
  *   which runs them through bun to extract the JSON
  */
+/** Asks the dev server to turn a `.ts` model file into the model's JSON. */
+async function convertTsModel(file: File): Promise<string> {
+  const text = await file.text();
+  const res = await fetch('/api/convert', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: text,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(body.error || `Server returned ${res.status}`);
+  }
+  return res.text();
+}
+
 export function DataLoader() {
   const setModel = useViewerStore((s) => s.setModel);
   const hasModel = useViewerStore((s) => !!s.model);
@@ -50,30 +65,16 @@ export function DataLoader() {
         reader.readAsText(file);
       } else if (file.name.endsWith('.ts')) {
         setConverting(true);
-        try {
-          const text = await file.text();
-          const res = await fetch('/api/convert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: text,
-          });
-
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({ error: 'Unknown error' }));
-            throw new Error(body.error || `Server returned ${res.status}`);
-          }
-
-          const json = await res.text();
-          loadJSON(json);
-        } catch (err) {
-          alert(
-            `Failed to convert .ts file:\n\n${err instanceof Error ? err.message : err}\n\n` +
-              `Make sure the file exports a function that returns an EventModel ` +
-              `(e.g. export function createRuntimeModel())`,
-          );
-        } finally {
-          setConverting(false);
-        }
+        await convertTsModel(file)
+          .then(loadJSON)
+          .catch((err: unknown) => {
+            alert(
+              `Failed to convert .ts file:\n\n${err instanceof Error ? err.message : err}\n\n` +
+                `Make sure the file exports a function that returns an EventModel ` +
+                `(e.g. export function createRuntimeModel())`,
+            );
+          })
+          .finally(() => setConverting(false));
       } else {
         alert('Please load a .json or .ts file');
       }

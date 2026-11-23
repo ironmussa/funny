@@ -21,7 +21,6 @@ packages/memory/src/consolidator.ts	#1	const data = JSON.parse(confirm) as LockD
 packages/memory/src/consolidator.ts	#1	const data = JSON.parse(existing) as LockData;	direct JSON.parse without boundary parser helper
 packages/memory/src/types.ts	#1	related: JSON.parse(row.related || '[]'),	direct JSON.parse without boundary parser helper
 packages/memory/src/types.ts	#1	tags: JSON.parse(row.tags || '[]'),	direct JSON.parse without boundary parser helper
-packages/orchestrator/src/adapters/http-client.ts	#1	return JSON.parse(text) as T;	direct JSON.parse without boundary parser helper
 packages/runtime/src/pipelines/yaml-compiler.ts	#1	return JSON.parse(fenced[1]);	direct JSON.parse without boundary parser helper
 packages/runtime/src/pipelines/yaml-compiler.ts	#1	return JSON.parse(text.slice(start, i + 1));	direct JSON.parse without boundary parser helper
 packages/runtime/src/routes/mcp.ts	#1	const status = JSON.parse(el.textContent || '{}');	direct JSON.parse without boundary parser helper

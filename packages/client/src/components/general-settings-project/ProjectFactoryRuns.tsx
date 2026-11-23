@@ -28,6 +28,7 @@ import {
   factoryRunStateLabel as stateLabel,
   factoryRunStateVariant as stateVariant,
   factoryWaitReasonText,
+  factoryRunRef,
 } from '@/lib/factory-run-labels';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
@@ -44,7 +45,7 @@ function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
   return (
     <li className="py-1.5 text-sm" data-testid={`factory-run-${run.id}`}>
       <div className="flex items-center gap-2">
-        <span className="w-14 shrink-0 font-medium">#{run.issueNumber}</span>
+        <span className="w-14 shrink-0 truncate font-medium">{factoryRunRef(t, run)}</span>
         <Badge size="xs" variant={stateVariant(run.state)}>
           {stateLabel(t, run.state)}
         </Badge>

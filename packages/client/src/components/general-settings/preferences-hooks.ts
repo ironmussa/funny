@@ -11,6 +11,7 @@ import { updateProfile } from '@/data/profile/actions';
 import { useProfile } from '@/data/profile/hooks';
 import { refreshProfile } from '@/data/profile/queries';
 import { api } from '@/lib/api';
+import { whilePending } from '@/lib/while-pending';
 
 /** Toast shown after every auto-saved preference (deduped by id). */
 export function toastSettingsSaved(t: (key: string) => string) {
@@ -103,8 +104,7 @@ export function useSmtpSettings() {
   }, []);
 
   const handleSaveSmtp = useCallback(async () => {
-    setSmtpSaving(true);
-    try {
+    await whilePending(setSmtpSaving, async () => {
       const result = await api.updateSmtpSettings({
         host: smtpHost,
         port: smtpPort,
@@ -120,23 +120,18 @@ export function useSmtpSettings() {
       } else {
         toast.error('Failed to save SMTP settings');
       }
-    } finally {
-      setSmtpSaving(false);
-    }
+    });
   }, [smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom]);
 
   const handleTestSmtp = useCallback(async () => {
-    setSmtpTesting(true);
-    try {
+    await whilePending(setSmtpTesting, async () => {
       const result = await api.testSmtpSettings();
       if (result.isOk()) {
         toast.success(`Test email sent to ${result.value.sentTo}`);
       } else {
         toast.error('Failed to send test email. Check your SMTP settings.');
       }
-    } finally {
-      setSmtpTesting(false);
-    }
+    });
   }, []);
 
   return {

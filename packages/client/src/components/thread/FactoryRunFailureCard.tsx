@@ -15,6 +15,7 @@ import {
   isFactoryRunFailed,
   isFactoryRunNoChange,
   isFactoryRunUnsavedWork,
+  factoryRunBanner,
 } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { isFactoryThread } from '@/lib/thread-variant';
@@ -61,9 +62,7 @@ function RunFailure({ projectId, threadId }: { projectId: string; threadId: stri
           <span className="font-medium">
             {t('factory.noChange.title', 'The agent made no change')}
           </span>
-          <span className="text-muted-foreground ml-auto">
-            {t('factory.banner.title', 'Factory · #{{issue}}', { issue: run.issueNumber })}
-          </span>
+          <span className="text-muted-foreground ml-auto">{factoryRunBanner(t, run)}</span>
         </div>
         <p className="text-foreground">
           {unsaved
@@ -95,9 +94,7 @@ function RunFailure({ projectId, threadId }: { projectId: string; threadId: stri
             ? t('factory.failure.titleAtStep', 'The factory pipeline stopped at {{step}}', { step })
             : t('factory.failure.title', 'The factory pipeline stopped on an error')}
         </span>
-        <span className="text-muted-foreground ml-auto">
-          {t('factory.banner.title', 'Factory · #{{issue}}', { issue: run.issueNumber })}
-        </span>
+        <span className="text-muted-foreground ml-auto">{factoryRunBanner(t, run)}</span>
       </div>
       {run.failureReason && (
         <p className="text-foreground break-words whitespace-pre-wrap">{run.failureReason}</p>

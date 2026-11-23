@@ -1,8 +1,7 @@
 /**
  * An issue's blockers: GitHub's native "blocked by" relation
  * (`GET /repos/{repo}/issues/{n}/dependencies/blocked_by`), read with the
- * caller's repository client and therefore its token. Shared by the standalone
- * issue factory (packages/orchestrator) and the server factory.
+ * caller's repository client and therefore its token.
  */
 
 import { okAsync, type ResultAsync } from 'neverthrow';
@@ -55,16 +54,5 @@ export function issueBlockers(
       repo: repoOf(b, repo),
       open: b.state !== 'closed',
     })),
-  );
-}
-
-/** The numbers of the blockers of issue `number` that are still open. */
-export function openBlockers(
-  github: RepoGithub,
-  repo: string,
-  number: number,
-): ResultAsync<number[], GithubCallError> {
-  return issueBlockers(github, repo, number).map((blockers) =>
-    blockers.filter((b) => b.open).map((b) => b.number),
   );
 }

@@ -125,8 +125,9 @@ function FolderWriteMenuItems({
   return (
     <>
       <DropdownMenuItem
+        variant="destructive"
         onClick={stopThen(() => handleDiscardFolder(path))}
-        className="text-destructive focus:text-destructive"
+
         data-testid={`review-folder-discard-${path}`}
       >
         <Undo2 />

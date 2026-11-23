@@ -59,7 +59,7 @@ export function hasFileVisualizer(ext: string): boolean {
 }
 
 /** Test-only: drop all registrations so each test starts from a clean slate. */
-export function __resetVisualizerRegistry(): void {
+export function resetVisualizerRegistry(): void {
   byFence.clear();
   byExt.clear();
 }

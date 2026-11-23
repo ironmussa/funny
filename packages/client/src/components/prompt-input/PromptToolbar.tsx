@@ -89,12 +89,11 @@ export function PromptToolbar(props: PromptToolbarProps) {
           <Button
             data-testid="prompt-attach"
             onClick={props.onAttach}
-            variant="ghost"
+            variant="muted"
             size="icon-sm"
             tabIndex={-1}
             aria-label={t('prompt.attach')}
             disabled={loading}
-            className="text-muted-foreground hover:text-foreground"
           >
             <Paperclip className="icon-base" />
           </Button>

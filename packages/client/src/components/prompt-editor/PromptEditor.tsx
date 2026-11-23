@@ -565,6 +565,55 @@ function useSuggestionStateRefs(
   return { suggestionItemsRef, suggestionTypeRef, suggestionQueryRef, suggestionIndexRef };
 }
 
+// Declared at module level: the `this` in addAttributes is not something
+// React Compiler can compile inside a component.
+const FileMention = Mention.extend({
+  name: 'fileMention',
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      path: { default: null },
+      fileType: { default: 'file' },
+    };
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const fileType = node.attrs.fileType || 'file';
+    return [
+      'span',
+      {
+        ...HTMLAttributes,
+        class: 'file-mention',
+        'data-file-type': fileType,
+      },
+      node.attrs.label || node.attrs.id,
+    ];
+  },
+});
+
+const SymbolMention = Mention.extend({
+  name: 'symbolMention',
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      path: { default: null },
+      kind: { default: 'function' },
+      line: { default: 0 },
+      endLine: { default: null },
+    };
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      {
+        ...HTMLAttributes,
+        class: 'symbol-mention',
+        'data-symbol-kind': node.attrs.kind || 'function',
+      },
+      node.attrs.label || node.attrs.id,
+    ];
+  },
+});
+
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
   {
     placeholder,
@@ -644,6 +693,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     suggestionType,
     workflows,
     workflowsLoading,
+    suggestionItemsRef,
+    suggestionTypeRef,
+    suggestionQueryRef,
+    suggestionIndexRef,
   ]);
 
   // Track the trigger position so we can read the full query (@ to next space/EOL)
@@ -682,22 +735,35 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     }
   }, []);
 
-  const applySuggestionItems = useCallback((items: SuggestionItem[]) => {
-    const previousItems = suggestionItemsRef.current;
-    const changed =
-      previousItems.length !== items.length ||
-      previousItems.some((item, index) => item.id !== items[index]?.id);
+  const applySuggestionItems = useCallback(
+    (items: SuggestionItem[]) => {
+      const previousItems = suggestionItemsRef.current;
+      const changed =
+        previousItems.length !== items.length ||
+        previousItems.some((item, index) => item.id !== items[index]?.id);
 
-    suggestionItemsRef.current = items;
-    setSuggestionItems(items);
-    if (changed) setSuggestionIndex(0);
-  }, []);
+      suggestionItemsRef.current = items;
+      setSuggestionItems(items);
+      if (changed) setSuggestionIndex(0);
+    },
+    [suggestionItemsRef],
+  );
 
   // Every trigger (@, /, #, >>) renders the same popup off one shared
   // `suggestionType`/`suggestionIndex` pair, and more than one TipTap suggestion
   // plugin can be active at the same time. So a plugin claims keys only while
   // its own menu is the one on screen — otherwise two plugins would move the
   // shared selected index for a single keypress.
+  /** Closes the open suggestion menu and forgets where it was triggered. */
+  const closeSuggestions = useCallback(() => {
+    triggerPosRef.current = null;
+    setSuggestionType(null);
+    setSuggestionItems([]);
+    setSuggestionQuery('');
+    setSuggestionLoading(false);
+    setSuggestionTruncated(false);
+  }, []);
+
   const makeSuggestionKeyDown = useCallback(
     (menuType: SuggestionMenuType) =>
       ({ event }: { event: KeyboardEvent }) => {
@@ -728,7 +794,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         }
         return false;
       },
-    [],
+    [suggestionItemsRef, suggestionTypeRef, suggestionIndexRef],
   );
 
   // ── File suggestion config ──
@@ -803,19 +869,11 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           suggestionCommandRef.current = props.command;
         },
         onKeyDown: makeSuggestionKeyDown('file'),
-        onExit: () => {
-          triggerPosRef.current = null;
-          setSuggestionType(null);
-          setSuggestionItems([]);
-          setSuggestionQuery('');
-          setSuggestionLoading(false);
-          setSuggestionTruncated(false);
-        },
+        onExit: closeSuggestions,
       }),
     }),
     // Intentionally minimal: cwd/loadSkills accessed via refs
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applySuggestionItems, makeSuggestionKeyDown],
+    [applySuggestionItems, closeSuggestions, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── Slash command suggestion config ──
@@ -841,6 +899,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     sdkSlashCommands,
     commandProvider,
     applySuggestionItems,
+    suggestionQueryRef,
   ]);
 
   const slashSuggestion = useCallback(
@@ -920,7 +979,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         query: suggestionQueryRef.current,
       }),
     );
-  }, [suggestionType, workflows, workflowsLoading, applySuggestionItems]);
+  }, [suggestionType, workflows, workflowsLoading, applySuggestionItems, suggestionQueryRef]);
 
   const workflowSuggestion = useCallback(
     () => ({
@@ -1088,18 +1147,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           suggestionCommandRef.current = props.command;
         },
         onKeyDown: makeSuggestionKeyDown('symbol'),
-        onExit: () => {
-          triggerPosRef.current = null;
-          setSuggestionType(null);
-          setSuggestionItems([]);
-          setSuggestionQuery('');
-          setSuggestionLoading(false);
-          setSuggestionTruncated(false);
-        },
+        onExit: closeSuggestions,
       }),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applySuggestionItems, makeSuggestionKeyDown],
+    [applySuggestionItems, closeSuggestions, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── TipTap editor ──
@@ -1130,28 +1181,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       // during thread preparation), not just while editable.
       Placeholder.configure({ placeholder: placeholder ?? '', showOnlyWhenEditable: false }),
       // File mentions (@ trigger)
-      Mention.extend({
-        name: 'fileMention',
-        addAttributes() {
-          return {
-            ...this.parent?.(),
-            path: { default: null },
-            fileType: { default: 'file' },
-          };
-        },
-        renderHTML({ node, HTMLAttributes }) {
-          const fileType = node.attrs.fileType || 'file';
-          return [
-            'span',
-            {
-              ...HTMLAttributes,
-              class: 'file-mention',
-              'data-file-type': fileType,
-            },
-            node.attrs.label || node.attrs.id,
-          ];
-        },
-      }).configure({
+      FileMention.configure({
         HTMLAttributes: { class: 'file-mention' },
         suggestion: fileSuggestion(),
         deleteTriggerWithBackspace: true,
@@ -1182,29 +1212,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         deleteTriggerWithBackspace: true,
       }),
       // Symbol mentions (# trigger)
-      Mention.extend({
-        name: 'symbolMention',
-        addAttributes() {
-          return {
-            ...this.parent?.(),
-            path: { default: null },
-            kind: { default: 'function' },
-            line: { default: 0 },
-            endLine: { default: null },
-          };
-        },
-        renderHTML({ node, HTMLAttributes }) {
-          return [
-            'span',
-            {
-              ...HTMLAttributes,
-              class: 'symbol-mention',
-              'data-symbol-kind': node.attrs.kind || 'function',
-            },
-            node.attrs.label || node.attrs.id,
-          ];
-        },
-      }).configure({
+      SymbolMention.configure({
         HTMLAttributes: { class: 'symbol-mention' },
         suggestion: symbolSuggestion(),
         deleteTriggerWithBackspace: true,

@@ -505,6 +505,6 @@ export async function filterDataResponse(runnerId: string, type: string, respons
 }
 
 /** Test helper. */
-export function __resetDataScopeCache() {
+export function resetDataScopeCache() {
   threadCache.clear();
 }

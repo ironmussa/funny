@@ -72,7 +72,7 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   tabIndex={-1}
                   data-testid="sidebar-scratch-new"
@@ -80,7 +80,6 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
                     e.stopPropagation();
                     handleNewScratch();
                   }}
-                  className="text-muted-foreground hover:text-foreground"
                   aria-label={t('sidebar.scratchNew', { defaultValue: 'New quick chat' })}
                 >
                   <Plus className="icon-sm" />

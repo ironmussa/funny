@@ -28,19 +28,20 @@ import type { HonoEnv } from '../../types/hono-env.js';
 import { computeBranchKey } from '../../utils/git-status-helpers.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import {
-  requireThread,
-  requireProject,
-  steerFromContext,
   isSteerGrantFor,
+  requireCallerProject,
+  requireProject,
+  requireThread,
+  steerFromContext,
 } from '../../utils/route-helpers.js';
+import { traced, withProjectCheckout } from './checkout-route.js';
 import {
-  _gitStatusCache,
+  gitStatusCache,
   GIT_STATUS_CACHE_TTL_MS,
   countUnpushedCommits,
   emitPRUpdateForThread,
   getCachedPR,
   notifyStatusChanged,
-  requireProjectCwd,
   scheduleBackgroundFetch,
   schedulePRLookup,
 } from './helpers.js';
@@ -65,7 +66,7 @@ function parseThreadScope(raw: string | undefined): Set<string> | null {
 }
 
 function getCachedScope(projectId: string, scopeKey: string) {
-  const cached = _gitStatusCache.get(projectId);
+  const cached = gitStatusCache.get(projectId);
   if (!cached || (cached.scope ?? '') !== scopeKey) return undefined;
   return Date.now() - cached.ts < GIT_STATUS_CACHE_TTL_MS ? cached : undefined;
 }
@@ -83,12 +84,8 @@ statusRoutes.get('/status', async (c) => {
   const cached = getCachedScope(projectId, scopeKey);
   if (cached) return c.json(cached.data);
 
-  const userId = c.get('userId') as string;
-  const projectResult = await requireProject(
-    projectId,
-    userId,
-    c.get('organizationId') ?? undefined,
-  );
+  const userId = c.get('userId');
+  const projectResult = await requireCallerProject(c, projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
@@ -507,7 +504,7 @@ async function computeBulkStatus(
   ].map(attachPR);
 
   const response = { statuses };
-  _gitStatusCache.set(projectId, { data: response, ts: Date.now(), scope: scopeKey });
+  gitStatusCache.set(projectId, { data: response, ts: Date.now(), scope: scopeKey });
 
   schedulePRRefreshes({
     projectPath: project.path,
@@ -522,45 +519,38 @@ async function computeBulkStatus(
 }
 
 // GET /api/git/project/:projectId/status
-statusRoutes.get('/project/:projectId/status', async (c) => {
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const projectId = c.req.param('projectId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  if (!existsSync(cwd)) {
-    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
-  }
+statusRoutes.get('/project/:projectId/status', (c) =>
+  withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
+    if (!existsSync(cwd)) {
+      return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
+    }
 
-  // Background fetch so unpulledCommitCount is fresh on next request. On
-  // completion, hint the client to re-fetch the project status (the project-mode
-  // slice uses `fetchProjectStatus`, not the WS `git:status` path) so incoming
-  // commits surface without a second manual refresh.
-  const identity = await resolveIdentity(userId, projectId);
-  scheduleBackgroundFetch(projectId, cwd, identity ?? undefined, undefined, () => {
-    wsBroker.emitToUser(userId, {
-      type: 'git:refs-updated',
-      threadId: '',
-      data: { projectId },
+    // Background fetch so unpulledCommitCount is fresh on next request. On
+    // completion, hint the client to re-fetch the project status (the project-mode
+    // slice uses `fetchProjectStatus`, not the WS `git:status` path) so incoming
+    // commits surface without a second manual refresh.
+    const identity = await resolveIdentity(userId, projectId);
+    scheduleBackgroundFetch(projectId, cwd, identity ?? undefined, undefined, () => {
+      wsBroker.emitToUser(userId, {
+        type: 'git:refs-updated',
+        threadId: '',
+        data: { projectId },
+      });
     });
-  });
 
-  const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
-  const summaryResult = await getStatusSummary(cwd, undefined, undefined, {
-    onChanged: notifyStatusChanged(userId, projectId),
-  });
-  statusSpan.end(
-    summaryResult.isOk() ? 'ok' : 'error',
-    summaryResult.isErr() ? summaryResult.error.message : undefined,
-  );
-  if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
-  const summary = summaryResult.value;
-  return c.json({
-    state: deriveGitSyncState(summary),
-    ...summary,
-  });
-});
+    const summaryResult = await traced(c, 'git.status_summary', { projectId }, () =>
+      getStatusSummary(cwd, undefined, undefined, {
+        onChanged: notifyStatusChanged(userId, projectId),
+      }),
+    );
+    if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
+    const summary = summaryResult.value;
+    return c.json({
+      state: deriveGitSyncState(summary),
+      ...summary,
+    });
+  }),
+);
 
 function statusWithPR(
   baseStatus: Record<string, unknown>,
@@ -577,7 +567,7 @@ function statusWithPR(
 // GET /api/git/:threadId/status
 statusRoutes.get('/:threadId/status', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   // Steer-share delegation (thread-sharing-steer): a verified `steer` grant
   // authorizes a non-owner sharee for read-only git. The working directory must
@@ -644,13 +634,10 @@ statusRoutes.get('/:threadId/status', async (c) => {
   const project = projectResult.value;
 
   const cwd = thread.worktreePath || project.path;
-  const summarySpan = requestSpan(c, 'git.status_summary', { threadId });
-  const summaryResult = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path, {
-    onChanged: notifyStatusChanged(userId, thread.projectId, threadId),
-  });
-  summarySpan.end(
-    summaryResult.isOk() ? 'ok' : 'error',
-    summaryResult.isErr() ? summaryResult.error.message : undefined,
+  const summaryResult = await traced(c, 'git.status_summary', { threadId }, () =>
+    getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path, {
+      onChanged: notifyStatusChanged(userId, thread.projectId, threadId),
+    }),
   );
   if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
   const summary = summaryResult.value;

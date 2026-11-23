@@ -120,8 +120,7 @@ export function useFrozenScroll({
       updateScrollDownButton(viewport);
     });
     return () => cancelAnimationFrame(raf1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId]);
+  }, [threadId, updateScrollDownButton]);
 
   // Save on unmount so a thread switch persists the last position.
   useEffect(() => {
@@ -129,8 +128,7 @@ export function useFrozenScroll({
       if (saveRafRef.current !== null) cancelAnimationFrame(saveRafRef.current);
       saveScrollPosition(threadIdRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [saveScrollPosition]);
 
   // ── Native scroll listener: track pin state, persist, toggle button ─────
   useEffect(() => {

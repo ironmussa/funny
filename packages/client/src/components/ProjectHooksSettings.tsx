@@ -188,10 +188,9 @@ function HookItem({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
                 onClick={() => onEdit(hook)}
-                className="text-muted-foreground"
                 data-testid={`hook-edit-${key}`}
               >
                 <Pencil className="icon-xs" />
@@ -202,10 +201,9 @@ function HookItem({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted-destructive"
                 size="icon-xs"
                 onClick={() => onDelete(hook)}
-                className="text-muted-foreground hover:text-status-error"
                 data-testid={`hook-delete-${key}`}
               >
                 <Trash2 className="icon-xs" />
@@ -388,7 +386,7 @@ export function ProjectHooksSettings() {
   }, [hooks]);
 
   if (!selectedProjectId) {
-    return <EmptyState fill={false} className="py-6" title={t('hooks.noHooks')} />;
+    return <EmptyState padding="md" fill={false} title={t('hooks.noHooks')} />;
   }
 
   return (
@@ -413,8 +411,8 @@ export function ProjectHooksSettings() {
       {/* Empty state */}
       {hooks.length === 0 && !adding && (
         <EmptyState
+          padding="md"
           fill={false}
-          className="py-8"
           title={t('hooks.noHooks')}
           action={
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>

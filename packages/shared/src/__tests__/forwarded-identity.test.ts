@@ -2,12 +2,12 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 
 import {
   SIGNATURE_MAX_SKEW_MS,
-  __resetForwardedIdentityNonceCacheForTests,
+  resetForwardedIdentityNonceCacheForTests,
   signForwardedIdentity,
   verifyForwardedIdentity,
 } from '../auth/forwarded-identity.js';
 
-beforeEach(() => __resetForwardedIdentityNonceCacheForTests());
+beforeEach(() => resetForwardedIdentityNonceCacheForTests());
 
 const SECRET = 'super-secret-value-0123456789abcdef';
 

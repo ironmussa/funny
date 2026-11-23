@@ -14,8 +14,8 @@ import {
 
 import { log } from '../../lib/logger.js';
 import {
-  _loginThrottleSize,
-  _resetLoginThrottle,
+  loginThrottleSize,
+  resetLoginThrottle,
   checkLoginAllowed,
   MAX_IDENTIFIER_LENGTH,
   MAX_TRACKED_IDENTIFIERS,
@@ -33,7 +33,7 @@ beforeAll(() => {
 afterAll(() => logInfo.mockRestore());
 
 afterEach(() => {
-  _resetLoginThrottle();
+  resetLoginThrottle();
   setSystemTime();
 });
 
@@ -109,11 +109,11 @@ describe('login-throttle (security HI-12)', () => {
     setSystemTime(new Date('2026-01-01T00:00:00Z'));
     for (let i = 0; i < 50; i++) recordLoginFailure(`user-${i}`);
     for (let i = 0; i < 10; i++) recordLoginFailure('locked');
-    expect(_loginThrottleSize()).toBe(51);
+    expect(loginThrottleSize()).toBe(51);
     // Past both the 15-min window and the 5-min lockout of every record.
     setSystemTime(new Date('2026-01-01T00:30:00Z'));
     recordLoginFailure('fresh');
-    expect(_loginThrottleSize()).toBe(1);
+    expect(loginThrottleSize()).toBe(1);
   });
 
   test('a record whose lockout outlasts its window is kept until the lockout ends', () => {
@@ -132,7 +132,7 @@ describe('login-throttle (security HI-12)', () => {
     for (let i = 0; i < MAX_TRACKED_IDENTIFIERS + 500; i++) {
       recordLoginFailure(`spray-${i}`);
     }
-    expect(_loginThrottleSize()).toBeLessThanOrEqual(MAX_TRACKED_IDENTIFIERS);
+    expect(loginThrottleSize()).toBeLessThanOrEqual(MAX_TRACKED_IDENTIFIERS);
     // The most recent identifiers are the ones kept.
     for (let i = 0; i < 9; i++) recordLoginFailure(`spray-${MAX_TRACKED_IDENTIFIERS + 499}`);
     expect(checkLoginAllowed(`spray-${MAX_TRACKED_IDENTIFIERS + 499}`).ok).toBe(false);
@@ -150,7 +150,7 @@ describe('login-throttle (security HI-12)', () => {
   test('oversized identifiers are stored truncated, not whole (#197)', () => {
     const huge = 'x'.repeat(1_000_000);
     for (let i = 0; i < 10; i++) recordLoginFailure(huge);
-    expect(_loginThrottleSize()).toBe(1);
+    expect(loginThrottleSize()).toBe(1);
     // Same bucket as its truncated prefix: the key is bounded.
     expect(checkLoginAllowed('x'.repeat(MAX_IDENTIFIER_LENGTH)).ok).toBe(false);
   });

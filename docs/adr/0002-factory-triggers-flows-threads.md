@@ -1,7 +1,7 @@
 # The factory is three levels — triggers, flows and threads — turned on per project
 
-The issue factory, when it lives inside funny (ADR 0001 keeps the standalone orchestrator
-for now), is not one engine. It is three levels, each with a single responsibility:
+The issue factory lives inside funny (the standalone orchestrator of ADR 0001 has been
+removed) and is not one engine. It is three levels, each with a single responsibility:
 
 - **Trigger** — _when_ a flow starts and _with what data_. Manual, cron, the ingest
   webhook, a child agent (`funny_spawn_thread`), a git commit, and a new one: a GitHub
@@ -16,7 +16,7 @@ for now), is not one engine. It is three levels, each with a single responsibili
   profile (prompt, model, permissions, tools, where it runs).
 
 A single flow executor runs the steps, waits for them to finish and applies retries. It is
-what `packages/orchestrator` does today; over time funny's runtime pipelines and
+what the server factory's flow runs do today (`factory-flow-runs.ts`); over time funny's runtime pipelines and
 automations would run there too, instead of three separate orchestrators.
 
 The factory itself is not an engine: it is a **per-project toggle**, a default flow, the
@@ -53,3 +53,25 @@ for a label and run a flow to PR or merge, as the flow dictates.
   a manual trigger (what funny does today, without the executor); the factory is the
   `issue-to-merge` flow with the issue trigger; code review on commit is the `code-review`
   flow with the commit trigger.
+
+## Amendment: automations keep their own host
+
+The text above says "over time funny's runtime pipelines and automations would run [on the
+flow executor] too". For automations that was looked at and not done (openspec
+`automation-occurrence-claims`):
+
+- An automation is one read-only thread on a schedule, with an inbox. It needs no GitHub
+  repository, no GitHub App and no factory.
+- The flow executor belongs to a factory: a run is a row of a factory, a tick waits for the
+  project's GitHub repository, and a flow is read from that repository's default branch.
+  Running automations there would either require GitHub for every automation or first
+  extract a host-independent executor from the factory, for no new behavior.
+
+What the two share is how a schedule is fired, and that is now one mechanism: an occurrence
+is taken with a compare-and-set on the row's stored next run time before anything starts
+(`services/schedules.ts`), so several server processes start one run per occurrence.
+
+Scheduled work that must change code or run several steps uses a factory schedule (a
+trigger, openspec `flow-triggers`). A scheduled read-only look at a project uses an
+automation. The runtime's workflow runs (`/api/workflows`) remain a second, smaller
+executor on the runner.

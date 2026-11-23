@@ -45,7 +45,7 @@ function useTodoWriteCalls(): { id: string; input: any; parentToolCallId?: strin
  * Returns all TodoWrite snapshots in chronological order.
  * Each snapshot represents the full todo state at that point in the conversation.
  */
-export function useTodoSnapshots(): TodoSnapshot[] {
+function useTodoSnapshots(): TodoSnapshot[] {
   const todoCalls = useTodoWriteCalls();
 
   return useMemo(() => {
@@ -74,6 +74,16 @@ export function useTodoSnapshots(): TodoSnapshot[] {
  * Returns the latest TodoWrite snapshot grouped by agent.
  * Main agent todos have no parentToolCallId; sub-agent todos are keyed by their parent Task ID.
  */
+/** The position of each todo snapshot in the thread, by the tool call that wrote it. */
+export function useTodoSnapshotIndex(): Map<string, number> {
+  const snapshots = useTodoSnapshots();
+  return useMemo(() => {
+    const next = new Map<string, number>();
+    snapshots.forEach((s, i) => next.set(s.toolCallId, i));
+    return next;
+  }, [snapshots]);
+}
+
 export function useTodoSnapshotsByAgent(): AgentTodos {
   const snapshots = useTodoSnapshots();
 

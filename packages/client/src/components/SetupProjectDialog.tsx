@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 import { FolderPicker } from './FolderPicker';
@@ -34,15 +35,12 @@ export function SetupProjectDialog({
 
   const handleSelect = async (path: string) => {
     setFolderPickerOpen(false);
-    setSaving(true);
-    setError('');
-    try {
+    return whilePending(setSaving, async () => {
+      setError('');
       const success = await setProjectLocalPath(projectId, path);
       if (success) onOpenChange(false);
       else setError('Failed to set directory. Make sure the path is a valid git repository.');
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   return (

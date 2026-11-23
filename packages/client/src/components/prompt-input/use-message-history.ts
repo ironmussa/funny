@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { useResettableState } from '@/hooks/use-resettable-state';
 
 interface UseMessageHistoryParams {
   editorRef: React.RefObject<PromptEditorHandle | null>;
@@ -21,13 +22,9 @@ export function useMessageHistory({
   messageHistory,
   onContentChange,
 }: UseMessageHistoryParams) {
-  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
+  // Back to the draft when the thread changes; the saved draft is replaced on the next step back.
+  const [historyIndex, setHistoryIndex] = useResettableState<number | null>(null, [threadId]);
   const historyDraftRef = useRef<ReturnType<PromptEditorHandle['getJSON']>>(undefined);
-
-  useEffect(() => {
-    setHistoryIndex(null);
-    historyDraftRef.current = undefined;
-  }, [threadId]);
 
   const showPrevious = useCallback(() => {
     const nextIndex = historyIndex === null ? messageHistory.length - 1 : historyIndex - 1;
@@ -36,7 +33,7 @@ export function useMessageHistory({
     editorRef.current?.setContent(messageHistory[nextIndex]);
     setHistoryIndex(nextIndex);
     onContentChange();
-  }, [editorRef, historyIndex, messageHistory, onContentChange]);
+  }, [editorRef, historyIndex, messageHistory, onContentChange, setHistoryIndex]);
 
   const showNext = useCallback(
     (index: number) => {
@@ -53,7 +50,7 @@ export function useMessageHistory({
       }
       onContentChange();
     },
-    [editorRef, messageHistory, onContentChange],
+    [editorRef, messageHistory, onContentChange, setHistoryIndex],
   );
 
   return useCallback(

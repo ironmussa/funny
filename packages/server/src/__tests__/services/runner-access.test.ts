@@ -15,7 +15,7 @@ import {
   SHARE_LEVEL_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
-  __resetForwardedIdentityNonceCacheForTests,
+  resetForwardedIdentityNonceCacheForTests,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
@@ -38,7 +38,7 @@ import {
   type RunnerTarget,
 } from '../../services/runner-access/index.js';
 import type { RunnerRequest } from '../../services/runner-ports.js';
-import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
 import { FakeRunnerRequestPort, FakeRunnerTerminalPort } from '../helpers/runner-port-fakes.js';
 import {
   createTestDb,
@@ -86,8 +86,8 @@ async function certified(actor: RunnerActor, target: RunnerTarget) {
 
 beforeEach(async () => {
   presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
-  __resetRunnerScopeCache();
-  __resetForwardedIdentityNonceCacheForTests();
+  resetRunnerScopeCache();
+  resetForwardedIdentityNonceCacheForTests();
   testDb = createTestDb();
   const { setConnection } = await import('../../db/index.js');
   setConnection({

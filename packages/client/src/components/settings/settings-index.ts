@@ -557,6 +557,15 @@ const ENTRIES = [
     description: 'settings.projectFactoryStepOptionsDesc',
     keywords: ['model', 'provider', 'effort', 'override', 'validate', 'flow', 'step'],
   },
+  {
+    id: 'factory.triggers',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryTriggers',
+    description: 'settings.projectFactoryTriggersDesc',
+    keywords: ['schedule', 'cron', 'trigger', 'nightly', 'run a flow', 'without an issue'],
+  },
 ] as const satisfies readonly SettingsIndexEntry[];
 
 export type SettingId = (typeof ENTRIES)[number]['id'];

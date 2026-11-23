@@ -149,7 +149,6 @@ export const threadPatchBody = z.object({
   stage: z.enum(THREAD_STAGE_VALUES).optional(),
   archived: z.boolean().optional(),
   pinned: z.boolean().optional(),
-  schedulerManaged: z.boolean().optional(),
   model: z.string().min(1).optional(),
   mode: z.enum(THREAD_MODE_VALUES).optional(),
   branch: z.string().nullable().optional(),

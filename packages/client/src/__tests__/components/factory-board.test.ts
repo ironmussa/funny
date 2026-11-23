@@ -44,6 +44,7 @@ describe('factoryBoardColumn', () => {
     failed: 'needs_person',
     no_change: 'needs_person',
     merged: 'done',
+    done: 'done',
     stopped: 'done',
   };
   test('places every run state in one column', () => {

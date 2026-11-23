@@ -105,12 +105,21 @@ mock.module('@/components/ImageLightbox', () => ({
 // Mock PromptEditor with a simple textarea to avoid TipTap contentEditable complexities
 let mockEditorContent = '';
 mock.module('@/components/prompt-editor/PromptEditor', () => {
-  const { forwardRef, useImperativeHandle, useState, useRef, useEffect } = require('react');
+  const {
+    forwardRef,
+    useImperativeHandle,
+    useState,
+    useRef,
+    useEffect,
+    useLayoutEffect,
+  } = require('react');
   return {
     PromptEditor: forwardRef(function MockPromptEditor(props: any, ref: any) {
       const [value, setValue] = useState('');
       const valueRef = useRef(value);
-      valueRef.current = value;
+      useLayoutEffect(() => {
+        valueRef.current = value;
+      }, [value]);
 
       useImperativeHandle(ref, () => ({
         getJSON: () => ({

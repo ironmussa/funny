@@ -71,7 +71,7 @@ export const ProjectHeader = memo(function ProjectHeader({
     } else if (selectedProjectId) {
       fetchProjectStatus(selectedProjectId);
     }
-  }, [activeThreadId, selectedProjectId, fetchForThread, fetchProjectStatus]);
+  }, [activeThreadId, selectedProjectId]);
 
   if (!projectId && !activeThreadIsScratch) return null;
 

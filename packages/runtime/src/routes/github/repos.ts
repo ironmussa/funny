@@ -6,7 +6,7 @@ import { cloneRepository } from '@funny/core/git';
 import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
 import { stripUrlCredentials } from '@funny/shared/activities';
 import { retryAsync } from '@funny/shared/async';
-import { badRequest, conflict, processError } from '@funny/shared/errors';
+import { badRequest, conflict } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -19,7 +19,7 @@ import { redactGithubToken } from '../../utils/github-clone-url.js';
 import { requirePickerPath } from '../../utils/path-scope.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { validate, cloneRepoSchema } from '../../validation/schemas.js';
-import { githubApiFetch, resolveGithubToken } from './helpers.js';
+import { githubApiFetch, requireGithubToken, resolveGithubToken } from './helpers.js';
 import { readPaging, readRepoSort } from './query.js';
 
 export const repoRoutes = new Hono<HonoEnv>();
@@ -43,12 +43,8 @@ function isSingleDirName(name: string): boolean {
 // ── GET /repos — list repos with optional search ───────────
 
 repoRoutes.get('/repos', async (c) => {
-  const userId = c.get('userId') as string;
-  const resolved = await resolveGithubToken(userId);
-  if (!resolved) {
-    return c.json({ error: 'Not connected to GitHub' }, 401);
-  }
-  const token = resolved.token;
+  const token = await requireGithubToken(c);
+  if (token instanceof Response) return token;
 
   const { page, perPage } = readPaging(c, 30);
   const search = c.req.query('search') || '';
@@ -338,7 +334,7 @@ async function runClone(
  * it can match events that arrive before this response.
  */
 repoRoutes.post('/clone', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const raw = await c.req.json();
   const parsed = validate(cloneRepoSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);

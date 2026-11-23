@@ -61,8 +61,9 @@ export function PreferencesPanelBody() {
       <SidebarHeader className="px-4 py-3">
         <div className="flex items-center gap-2">
           <TooltipIconButton
+            variant="muted"
             onClick={leave}
-            className="text-muted-foreground hover:text-foreground"
+
             data-testid="preferences-back"
             tooltip={t('common.back')}
           >

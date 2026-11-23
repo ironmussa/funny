@@ -6,6 +6,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+// Module-level loaders: React Compiler cannot compile `import()` inside a component.
+const loadTauriEvents = () => import('@tauri-apps/api/event');
+
 interface PreviewTab {
   commandId: string;
   projectId: string;
@@ -15,9 +18,20 @@ interface PreviewTab {
 
 const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
+/** The selected tab, or the last open tab when the selected one was closed. */
+function resolveActiveTabId(tabs: PreviewTab[], selectedTabId: string | null): string | null {
+  if (selectedTabId && !tabs.some((t) => t.commandId === selectedTabId)) return lastTabId(tabs);
+  return selectedTabId;
+}
+
+function lastTabId(tabs: PreviewTab[]): string | null {
+  return tabs.at(-1)?.commandId ?? null;
+}
+
 export function PreviewBrowser() {
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [selectedTabId, setActiveTabId] = useState<string | null>(null);
+  const activeTabId = resolveActiveTabId(tabs, selectedTabId);
   const [iframeKey, setIframeKey] = useState(0);
 
   const activeTab = tabs.find((t) => t.commandId === activeTabId);
@@ -29,7 +43,7 @@ export function PreviewBrowser() {
     const unlisteners: Array<() => void> = [];
 
     (async () => {
-      const { listen, emit } = await import('@tauri-apps/api/event');
+      const { listen, emit } = await loadTauriEvents();
 
       const u1 = await listen<PreviewTab>('preview:add-tab', (e) => {
         const tab = e.payload;
@@ -50,7 +64,7 @@ export function PreviewBrowser() {
         setActiveTabId((prev) => {
           if (prev === commandId) {
             // Switch to last remaining tab using the setter's callback for fresh state
-            return null; // Will be corrected by the sync effect below
+            return null;
           }
           return prev;
         });
@@ -77,13 +91,6 @@ export function PreviewBrowser() {
     };
   }, []);
 
-  // Update active tab reference when tabs change
-  useEffect(() => {
-    if (activeTabId && !tabs.some((t) => t.commandId === activeTabId)) {
-      setActiveTabId(tabs[tabs.length - 1]?.commandId ?? null);
-    }
-  }, [tabs, activeTabId]);
-
   const handleRefresh = () => setIframeKey((k) => k + 1);
 
   const handleCloseTab = async (commandId: string) => {
@@ -94,7 +101,7 @@ export function PreviewBrowser() {
     }
     // Notify main window
     if (isTauri) {
-      const { emit } = await import('@tauri-apps/api/event');
+      const { emit } = await loadTauriEvents();
       emit('preview:tab-closed', { commandId });
     }
   };
@@ -151,13 +158,7 @@ export function PreviewBrowser() {
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleRefresh}
-                  aria-label="Refresh"
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <Button variant="muted" size="icon-xs" onClick={handleRefresh} aria-label="Refresh">
                   <RefreshCw className="icon-sm" />
                 </Button>
               </TooltipTrigger>
@@ -166,11 +167,10 @@ export function PreviewBrowser() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   onClick={handleOpenExternal}
                   aria-label="Open in browser"
-                  className="text-muted-foreground hover:text-foreground"
                 >
                   <ExternalLink className="icon-sm" />
                 </Button>

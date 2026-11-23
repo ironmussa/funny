@@ -12,7 +12,6 @@ import {
   createJobRepository,
   createMessageRepository,
   createPendingPermissionRepository,
-  createSchedulerRunRepository,
   createStageHistoryRepository,
   createThreadRepository,
   createThreadShareRepository,
@@ -42,7 +41,6 @@ export const repos = {
   jobs: lazy(() => createJobRepository(deps)),
   messages: lazy(() => createMessageRepository(deps)),
   pendingPermissions: lazy(() => createPendingPermissionRepository(deps)),
-  schedulerRuns: lazy(() => createSchedulerRunRepository(deps)),
   stageHistory,
   threads: lazy(() =>
     createThreadRepository({

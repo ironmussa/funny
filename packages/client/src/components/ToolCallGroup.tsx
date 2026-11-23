@@ -27,7 +27,7 @@ export interface ToolCallGroupProps {
    * the parent so this component doesn't import `ToolCallCard` directly —
    * that would form a static import cycle.
    */
-  renderCall?: (call: ToolCallItem & { _childToolCalls?: any[] }) => ReactNode;
+  renderCall?: (call: ToolCallItem & { childToolCalls?: any[] }) => ReactNode;
 }
 
 function toolCallGroupAreEqual(prev: ToolCallGroupProps, next: ToolCallGroupProps) {

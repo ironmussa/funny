@@ -22,7 +22,7 @@ import { copyFile, cp, mkdir, readdir, rm, stat, writeFile } from 'fs/promises';
 import { join } from 'path';
 
 import type { AgentProvider } from '@funny/shared';
-import { type DomainError, badRequest, internal } from '@funny/shared/errors';
+import { type DomainError, badRequest, internal, errorMessage } from '@funny/shared/errors';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 
 import { DATA_DIR } from '../../lib/data-dir.js';
@@ -99,7 +99,7 @@ export function stageUpload(params: StageUploadParams): ResultAsync<StagedUpload
     log.error('stageUpload failed', {
       namespace: 'thread-service',
       userId: params.userId,
-      error: (e as Error).message,
+      error: errorMessage(e),
     });
     return internal('Upload failed');
   }).andThen((r) => r);
@@ -168,7 +168,7 @@ export function adoptStagedUploads(
     log.error('adoptStagedUploads failed', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (e as Error).message,
+      error: errorMessage(e),
     });
     return internal('Failed to attach uploaded files');
   }).andThen((r) => r);
@@ -191,7 +191,7 @@ export function releaseStagedUploads(
         ),
       );
     })(),
-    (e) => internal(`Failed to release staged uploads: ${(e as Error).message}`),
+    (e) => internal(`Failed to release staged uploads: ${errorMessage(e)}`),
   );
 }
 
@@ -215,6 +215,6 @@ export function copyThreadUploads(
       if (prepared.isErr()) throw new Error(prepared.error.message);
       await cp(source, join(toCwd, rel), { recursive: true });
     })(),
-    (e) => internal(`Failed to copy uploads: ${(e as Error).message}`),
+    (e) => internal(`Failed to copy uploads: ${errorMessage(e)}`),
   );
 }

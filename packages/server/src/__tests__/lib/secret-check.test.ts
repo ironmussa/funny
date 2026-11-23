@@ -12,11 +12,10 @@ import {
 } from '../../lib/secret-check.js';
 
 describe('findDuplicateSecretPairs (security CR-1)', () => {
-  test('returns no pairs when all three are distinct', () => {
+  test('returns no pairs when both are distinct', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: 'a-1',
       INGEST_WEBHOOK_SECRET: 'b-2',
-      SCHEDULER_AUTH_SECRET: 'c-3',
     });
     expect(out).toEqual([]);
   });
@@ -25,33 +24,14 @@ describe('findDuplicateSecretPairs (security CR-1)', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: 'shared',
       INGEST_WEBHOOK_SECRET: 'shared',
-      SCHEDULER_AUTH_SECRET: 'distinct',
     });
     expect(out).toEqual([['RUNNER_AUTH_SECRET', 'INGEST_WEBHOOK_SECRET']]);
-  });
-
-  test('flags all three when they are identical (3 pairs)', () => {
-    const out = findDuplicateSecretPairs({
-      RUNNER_AUTH_SECRET: 'same',
-      INGEST_WEBHOOK_SECRET: 'same',
-      SCHEDULER_AUTH_SECRET: 'same',
-    });
-    expect(out).toHaveLength(3);
-  });
-
-  test('flags SCHEDULER_AUTH_SECRET == INGEST_WEBHOOK_SECRET (no runner set)', () => {
-    const out = findDuplicateSecretPairs({
-      INGEST_WEBHOOK_SECRET: 'x',
-      SCHEDULER_AUTH_SECRET: 'x',
-    });
-    expect(out).toEqual([['INGEST_WEBHOOK_SECRET', 'SCHEDULER_AUTH_SECRET']]);
   });
 
   test('ignores undefined values entirely', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: undefined,
-      INGEST_WEBHOOK_SECRET: undefined,
-      SCHEDULER_AUTH_SECRET: 'only',
+      INGEST_WEBHOOK_SECRET: 'only',
     });
     expect(out).toEqual([]);
   });
@@ -60,7 +40,6 @@ describe('findDuplicateSecretPairs (security CR-1)', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: '',
       INGEST_WEBHOOK_SECRET: '',
-      SCHEDULER_AUTH_SECRET: '',
     });
     expect(out).toEqual([]);
   });
@@ -86,10 +65,9 @@ describe('findWeakSecrets (security — forgeable forwarded-identity HMAC key)',
   test('flags every present secret below the threshold', () => {
     const out = findWeakSecrets({
       RUNNER_AUTH_SECRET: 'short',
-      INGEST_WEBHOOK_SECRET: strong,
-      SCHEDULER_AUTH_SECRET: 'weak',
+      INGEST_WEBHOOK_SECRET: 'weak',
     });
-    expect(out).toEqual(['RUNNER_AUTH_SECRET', 'SCHEDULER_AUTH_SECRET']);
+    expect(out).toEqual(['RUNNER_AUTH_SECRET', 'INGEST_WEBHOOK_SECRET']);
   });
 
   test('ignores undefined / empty (presence is enforced elsewhere)', () => {

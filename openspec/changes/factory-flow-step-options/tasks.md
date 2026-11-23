@@ -35,9 +35,9 @@
 
 ## 6. Client
 
-- [ ] 6.1 Factory settings: step overrides table (rows from Validate flow's agent steps; provider/model/effort selects; unused rows marked) with `data-testid`s, saving through `data/factory/` actions; verify with `ProjectFactorySetting.test.tsx`
-- [ ] 6.2 Validate flow action showing problems (step, field, message) or the step summary with warnings; verify with a component test for both answers
-- [ ] 6.3 Run row: flow source, short commit link and collapsible per-step options; verify with a `ProjectFactoryRuns` test and a story
+- [x] 6.1 Factory settings: step overrides table (rows from Validate flow's agent steps; provider/model/effort selects; unused rows marked) with `data-testid`s, saving through `data/factory/` actions; verify with `ProjectFactorySetting.test.tsx`
+- [x] 6.2 Validate flow action showing problems (step, field, message) or the step summary with warnings; verify with a component test for both answers
+- [x] 6.3 Run row: flow source, short commit link and collapsible per-step options; verify with a `ProjectFactoryRuns` test and a story
 
 ## 7. Integration
 

@@ -5,7 +5,7 @@ import { errAsync, okAsync } from 'neverthrow';
 import { MemoryRouter } from 'react-router-dom';
 
 import { buildFactoryRun } from '@/data/factory/testing';
-import type { FactoryRun, FactorySettings } from '@/lib/api/factory';
+import type { FactoryFlowValidation, FactoryRun, FactorySettings } from '@/lib/api/factory';
 
 interface FactoryMocks {
   settings: FactorySettings | null;
@@ -18,6 +18,8 @@ interface FactoryMocks {
   canSteer: boolean;
   /** Whether the flow's review step resolves to the implementer's provider and model. */
   sameReviewer: boolean | undefined;
+  /** What Validate flow answers once asked. */
+  validation: FactoryFlowValidation | undefined;
 }
 
 const mocks = ((): FactoryMocks => ({
@@ -30,6 +32,7 @@ const mocks = ((): FactoryMocks => ({
   toastError: vi.fn(),
   canSteer: true,
   sameReviewer: undefined,
+  validation: undefined,
 }))();
 
 mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
@@ -47,6 +50,12 @@ mock.module('@/data/factory/hooks', () => ({
     },
     error: null,
   }),
+  useFactoryFlowValidation: (_projectId: string, _flow: string, requested: boolean) => ({
+    validation: requested ? mocks.validation : undefined,
+    error: null,
+    loading: false,
+    refresh: () => {},
+  }),
 }));
 mock.module('@/data/factory/actions', () => ({
   saveFactorySettings: (input: unknown) => mocks.save(input),
@@ -63,6 +72,7 @@ mock.module('react-i18next', () => ({
 }));
 
 import { ProjectFactorySetting } from '@/components/general-settings-project/ProjectFactorySetting';
+import { withStepOverride } from '@/components/general-settings-project/ProjectFactoryStepOptions';
 
 const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   projectId: 'p1',
@@ -89,6 +99,7 @@ beforeEach(() => {
   mocks.settings = null;
   mocks.canSteer = true;
   mocks.sameReviewer = undefined;
+  mocks.validation = undefined;
   mocks.runs = [];
   mocks.control.mockImplementation(() => okAsync({}));
   mocks.empty.mockImplementation(() => okAsync({ cleared: 0, stopped: 0 }));
@@ -560,5 +571,119 @@ describe('factory runs', () => {
     mocks.runs = [runOf({ triage: { decision: 'none', at: '2026-11-22T00:00:00Z' } })];
     renderRuns();
     expect(screen.getByTestId('factory-run-contract-r1')).toHaveTextContent('No contract');
+  });
+});
+
+// openspec factory-flow-step-options, 6.1-6.3.
+describe('agent step options', () => {
+  const agentStep = (stepId: string, over: Record<string, unknown> = {}) => ({
+    stepId,
+    provider: 'claude',
+    model: 'opus',
+    effort: null,
+    permissionMode: 'autoEdit',
+    allowedTools: null,
+    disallowedTools: null,
+    thread: 'continue' as const,
+    overridden: false,
+    ...over,
+  });
+
+  test('Validate flow shows each problem with its step and field', () => {
+    mocks.settings = configured();
+    mocks.validation = {
+      ok: false,
+      message: 'refused',
+      problems: [
+        { step: 'implement', field: 'permission_mode', message: 'cannot run unattended' },
+        { step: 'flow', field: 'flow', message: 'YAML syntax error at line 3' },
+      ],
+    };
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.queryByTestId('settings-factory-problems')).toBeNull();
+    fireEvent.click(screen.getByTestId('settings-factory-validate-flow'));
+    const problems = screen.getAllByTestId('settings-factory-problem').map((li) => li.textContent);
+    expect(problems).toEqual([
+      'implement · permission_mode: cannot run unattended',
+      'flow: YAML syntax error at line 3',
+    ]);
+  });
+
+  test('a valid flow lists its agent steps, their options, warnings and unused overrides', () => {
+    mocks.settings = configured({ stepOverrides: { review: { model: 'haiku' } } });
+    mocks.validation = {
+      ok: true,
+      name: 'issue-to-merge',
+      source: 'repository',
+      commit: 'abc1234def',
+      steps: [],
+      agentSteps: [
+        agentStep('implement', { effort: 'high' }),
+        agentStep('advise', { thread: 'new', permissionMode: 'plan', provider: 'codex' }),
+      ],
+      unusedOverrides: ['review'],
+      warnings: ['Step ci.before_retry continues the implementing thread on haiku'],
+    };
+    render(<ProjectFactorySetting projectId="p1" />);
+    fireEvent.click(screen.getByTestId('settings-factory-validate-flow'));
+    expect(screen.getByTestId('settings-factory-flow-source').textContent).toContain('abc1234');
+    expect(screen.getByTestId('settings-factory-step-implement-resolved').textContent).toBe(
+      'claude · opus · high · autoEdit',
+    );
+    expect(screen.getByTestId('settings-factory-step-advise-own-thread')).toBeTruthy();
+    expect(screen.getByTestId('settings-factory-flow-warning').textContent).toContain('haiku');
+    fireEvent.click(screen.getByTestId('settings-factory-unused-review-remove'));
+    expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: true, stepOverrides: {} });
+  });
+
+  test('withStepOverride sets, clears, and drops a model the new provider lacks', () => {
+    expect(withStepOverride({}, 'ci.before_retry', 'model', 'haiku')).toEqual({
+      'ci.before_retry': { model: 'haiku' },
+    });
+    expect(withStepOverride({ a: { model: 'haiku' } }, 'a', 'model', null)).toEqual({});
+    expect(
+      withStepOverride({ a: { model: 'haiku', effort: 'low' } }, 'a', 'provider', 'codex'),
+    ).toEqual({ a: { provider: 'codex', effort: 'low' } });
+  });
+
+  test("a run row shows its flow's source and commit, and each step's options", () => {
+    mocks.settings = configured();
+    mocks.runs = [
+      buildFactoryRun({
+        id: 'run-1',
+        prUrl: 'https://github.com/o/r/pull/9',
+        flowName: 'issue-to-merge',
+        flowSource: 'repository',
+        flowCommit: 'abc1234def',
+        stepOptions: [
+          {
+            stepId: 'implement',
+            threadId: 't1',
+            provider: 'claude',
+            model: 'opus',
+            effort: 'high',
+            permissionMode: 'autoEdit',
+            allowedTools: null,
+            disallowedTools: null,
+            thread: 'continue',
+          },
+        ],
+      }),
+    ];
+    render(
+      <MemoryRouter>
+        <ProjectFactorySetting projectId="p1" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('factory-run-flow-run-1').textContent).toBe(
+      'issue-to-merge · repository',
+    );
+    expect(screen.getByTestId('factory-run-flow-commit-run-1').getAttribute('href')).toBe(
+      'https://github.com/o/r/blob/abc1234def/.funny/workflows/issue-to-merge.yaml',
+    );
+    fireEvent.click(screen.getByTestId('factory-run-flow-toggle-run-1'));
+    expect(screen.getByTestId('factory-run-step-run-1-implement').textContent).toBe(
+      'implementclaude · opus · high · autoEdit',
+    );
   });
 });

@@ -1,10 +1,12 @@
 import type {
   FactoryFlowDefinition,
+  FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueRun,
   FactoryRun,
   FactorySettings,
+  FactoryStepOverrides,
 } from '@funny/shared/contracts/factory';
 
 import { useDataQuery } from '../hooks';
@@ -13,6 +15,7 @@ import {
   NO_ACTIVE_FACTORY_RUNS,
   factoryBlockersQuery,
   factoryFlowDefinitionQuery,
+  factoryFlowValidationQuery,
   factoryFlowsQuery,
   factoryQueueRunsQuery,
   factoryRunsQuery,
@@ -85,6 +88,32 @@ export function useFactoryFlowDefinition(
 ): { definition: FactoryFlowDefinition | undefined; error: Error | null } {
   const { data, error } = useDataQuery(factoryFlowDefinitionQuery(projectId, flowName));
   return { definition: data, error: error ?? null };
+}
+
+/**
+ * Validate flow's answer for `flowName`, once `requested`; `refresh` asks again
+ * (after a change to the flow or the overrides).
+ */
+export function useFactoryFlowValidation(
+  projectId: string,
+  flowName: string,
+  requested: boolean,
+  overrides: FactoryStepOverrides,
+): {
+  validation: FactoryFlowValidation | undefined;
+  error: Error | null;
+  loading: boolean;
+  refresh: () => void;
+} {
+  const { data, error, isFetching, refetch } = useDataQuery(
+    factoryFlowValidationQuery(projectId, flowName, requested, overrides),
+  );
+  return {
+    validation: data,
+    error: error ?? null,
+    loading: isFetching,
+    refresh: () => void refetch(),
+  };
 }
 
 /** The open blockers of `issueNumbers`; empty while none are selected. */

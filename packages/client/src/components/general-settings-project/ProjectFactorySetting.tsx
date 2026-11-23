@@ -21,6 +21,7 @@ import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
 import { ProjectFactoryMetrics } from './ProjectFactoryMetrics';
 import { ProjectFactoryRuns } from './ProjectFactoryRuns';
+import { ProjectFactoryStepOptions } from './ProjectFactoryStepOptions';
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
 type OnOff = 'on' | 'off';
@@ -35,14 +36,25 @@ const DEFAULT_FORM = {
   autoMerge: 'low_risk' as FactorySettings['autoMerge'],
   sensitivePaths: [] as string[],
   stageLimits: {} as Record<string, number>,
+  stepOverrides: {} as FactorySettings['stepOverrides'],
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
 function formValues(settings: FactorySettings | null | undefined) {
   if (!settings) return DEFAULT_FORM;
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
-  const { autoMerge, sensitivePaths, stageLimits } = settings;
-  return { enabled, mode, label, flowName, maxConcurrent, autoMerge, sensitivePaths, stageLimits };
+  const { autoMerge, sensitivePaths, stageLimits, stepOverrides } = settings;
+  return {
+    enabled,
+    mode,
+    label,
+    flowName,
+    maxConcurrent,
+    autoMerge,
+    sensitivePaths,
+    stageLimits,
+    stepOverrides,
+  };
 }
 
 /** The trimmed text when it is non-empty and differs from `current`, else null (nothing to save). */
@@ -240,6 +252,13 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
             settings={form}
             rowKey={rowKey}
             onSave={(input) => void save({ enabled, ...input })}
+          />
+
+          <ProjectFactoryStepOptions
+            projectId={projectId}
+            flowName={flowName}
+            overrides={form.stepOverrides}
+            onSave={(stepOverrides) => void save({ enabled, stepOverrides })}
           />
         </>
       )}

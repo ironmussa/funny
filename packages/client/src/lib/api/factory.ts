@@ -10,12 +10,18 @@ import type {
 import { trpc, trpcCall } from './_trpc';
 
 export type {
+  FactoryFlowAgentStep,
+  FactoryFlowProblem,
+  FactoryFlowValidation,
   FactoryMode,
   FactoryQueueClearResult,
   FactoryQueueRun,
   FactoryRegressionProof,
   FactoryRun,
   FactorySettings,
+  FactoryStepOptionsRecord,
+  FactoryStepOverride,
+  FactoryStepOverrides,
   FactorySubmitResult,
   FactoryWaitReason,
   SaveFactorySettingsInput,
@@ -38,6 +44,8 @@ export const factoryApi = {
   listFlows: (projectId: string) => trpcCall(() => procedures.flows.query({ projectId })),
   getFlowDefinition: (projectId: string, flowName: string) =>
     trpcCall(() => procedures.flowDefinition.query({ projectId, flowName })),
+  validateFlow: (projectId: string, flowName: string) =>
+    trpcCall(() => procedures.validateFlow.query({ projectId, flowName })),
   blockers: (projectId: string, issueNumbers: number[]) =>
     trpcCall(() => procedures.blockers.query({ projectId, issueNumbers })),
   clearQueue: (projectId: string) => trpcCall(() => procedures.clearQueue.mutate({ projectId })),

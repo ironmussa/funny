@@ -415,6 +415,62 @@ export const factoryIncidents = pgTable('factory_incidents', {
 });
 
 /**
+ * A batch of the issue factory's merge queue (change factory-integration, D2):
+ * the members one leader tests together on base commit `base_sha`. At most one
+ * batch that has not ended per repository and base branch (the partial unique
+ * index `factory_batches_one_active`, migration 114). States and transitions:
+ * `factory-batches.ts`.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryBatches = pgTable('factory_batches', {
+  id: text('id').primaryKey(),
+  /** `owner/name`. */
+  repo: text('repo').notNull(),
+  baseBranch: text('base_branch').notNull(),
+  state: text('state').notNull().default('building'),
+  /** Rebuilds of the batch (the base moved, a member left), from 1. */
+  attempt: integer('attempt').notNull().default(1),
+  /** The run whose `merge` step leads it. */
+  leaderRunId: text('leader_run_id').notNull(),
+  /** JSON: the members in queue order, each with the head commit it tests. */
+  members: text('members').notNull(),
+  /** The base commit the batch is built on. */
+  baseSha: text('base_sha'),
+  /** Where the members are merged one by one (`[skip ci]` commits). */
+  stagingBranch: text('staging_branch').notNull(),
+  /** Where CI tests the finished batch. */
+  queueBranch: text('queue_branch').notNull(),
+  /** The commit CI tests on the queue branch. */
+  queueSha: text('queue_sha'),
+  /** JSON: how it ended (`FactoryBatchResult`). */
+  result: text('result'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  endedAt: text('ended_at'),
+});
+
+/** A half of a red batch, tested on its own from the batch's base (change factory-integration, D2). */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryBatchAttempts = pgTable('factory_batch_attempts', {
+  id: text('id').primaryKey(),
+  batchId: text('batch_id')
+    .notNull()
+    .references(() => factoryBatches.id, { onDelete: 'cascade' }),
+  /** JSON: the run ids of the members it tests. */
+  members: text('members').notNull(),
+  branch: text('branch').notNull(),
+  sha: text('sha'),
+  /** `testing` → `green` | `red` | `abandoned`. */
+  state: text('state').notNull().default('testing'),
+  /** JSON: the failing checks of a red attempt. */
+  result: text('result'),
+  createdAt: text('created_at').notNull(),
+  endedAt: text('ended_at'),
+});
+
+/**
  * The workflow engine's journal on the server (change workflow-dag-engine,
  * D6): one row per node execution of a run, keyed by node, visit path and
  * attempt. A run that starts again replays its rows instead of repeating

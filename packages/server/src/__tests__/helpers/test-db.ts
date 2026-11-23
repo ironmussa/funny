@@ -443,6 +443,43 @@ export function createTestDb() {
     WHERE state <> 'closed'
   `);
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_batches (
+      id TEXT PRIMARY KEY,
+      repo TEXT NOT NULL,
+      base_branch TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'building',
+      attempt INTEGER NOT NULL DEFAULT 1,
+      leader_run_id TEXT NOT NULL,
+      members TEXT NOT NULL,
+      base_sha TEXT,
+      staging_branch TEXT NOT NULL,
+      queue_branch TEXT NOT NULL,
+      queue_sha TEXT,
+      result TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      ended_at TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_batches_one_active
+    ON factory_batches (repo, base_branch)
+    WHERE ended_at IS NULL
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_batch_attempts (
+      id TEXT PRIMARY KEY,
+      batch_id TEXT NOT NULL REFERENCES factory_batches(id) ON DELETE CASCADE,
+      members TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      sha TEXT,
+      state TEXT NOT NULL DEFAULT 'testing',
+      result TEXT,
+      created_at TEXT NOT NULL,
+      ended_at TEXT
+    )
+  `);
+  testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
     WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')

@@ -18,8 +18,8 @@ Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its ta
 
 ## 1. Integration provider
 
-- [ ] 1.1 Add `IntegrationProvider` to `@funny/core` (`branchRules`, `createBranch`, `mergeRefInto`, `mergePullRequest`, `checks`, `deleteBranch`, `enqueueInHostQueue`, `pullRequestMergeability`) returning `ResultAsync`; verify with unit tests over a fake
-- [ ] 1.2 GitHub implementation over the App token (rulesets and the GraphQL merge queue field for "merge queue required", never an endpoint that needs the administration permission; the merges API for `mergeRefInto` with a commit message; a tree-identical commit through the git data API); verify with tests against recorded GitHub responses, including a conflict answer and a required-merge-queue ruleset
+- [x] 1.1 Add `IntegrationProvider` to `@funny/core` (`branchRules`, `createBranch`, `mergeRefInto`, `mergePullRequest`, `checks`, `deleteBranch`, `enqueueInHostQueue`, `pullRequestMergeability`) returning `ResultAsync`; verify with unit tests over a fake
+- [x] 1.2 GitHub implementation over the App token (rulesets and the GraphQL merge queue field for "merge queue required", never an endpoint that needs the administration permission; the merges API for `mergeRefInto` with a commit message; a tree-identical commit through the git data API); verify with tests against recorded GitHub responses, including a conflict answer and a required-merge-queue ruleset
 
 ## 2. Commands in factory flows
 
@@ -39,7 +39,7 @@ Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its ta
 
 ## 4. Merge queue
 
-- [ ] 4.1 Batch rows (members, base SHA, branch, attempt, state) and bisection attempt rows with compare-and-set writers; add the machine to `docs/architecture/state-machines.md`; verify with migration and transition tests
+- [x] 4.1 Batch rows (members, base SHA, branch, attempt, state) and bisection attempt rows with compare-and-set writers; add the machine to `docs/architecture/state-machines.md`; verify with migration and transition tests
 - [ ] 4.2 Batch leader: re-verify members, build the batch on `factory/staging/<batchId>` with `mergeRefInto` (App token capped by the leader's enabler) and point `factory/queue/<batchId>` at the result, drop a member that does not merge (to `integrate`), wait for checks, base check, merge in order with each run's enabler-capped token, verify the resulting tree, delete the branch; staging merge commits carry `[skip ci]` and the queue branch gets a tree-identical commit; the batch verdict requires the expected checks (no checks is never green); each merge call carries the member's recorded head SHA; verify with queue tests over a fake provider: green batch with one CI run, base moved, member conflict, tree mismatch escalates, members of two enablers each merged with their own token, no checks reported, a member's head moved, a member stopped, the leader stopped, a merge refused after the first landed (partial landing recorded, the rest requeued)
 - [ ] 4.3 Red batch: one more test of the same tree first, on a tree-identical commit (green → flake, merge); then bisection in parallel halves from the same base, splitting every red half, culprits to `address`, the rest settled as requeued and tested again as a new batch before merging, no red half → batches of one; verify with tests for a culprit at each position, two culprits, a flake, an interaction failure and a batch of one
 - [ ] 4.4 Delegate to GitHub's merge queue when the rules require it, read per batch; verify with a test that switches when the rule appears

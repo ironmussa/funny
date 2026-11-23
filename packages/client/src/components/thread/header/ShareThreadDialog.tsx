@@ -187,142 +187,205 @@ export function ShareThreadDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Access-level picker applied to the next member added. */}
-        <div className="min-w-0 px-6 pt-4">
-          <p className="text-muted-foreground mb-1.5 text-xs font-medium">Access level</p>
-          <div
-            className="bg-muted/50 inline-flex rounded-md p-0.5"
-            role="group"
-            data-testid="share-level-picker"
-          >
-            {(['view', 'comment', 'steer'] as const).map((lvl) => (
-              <button
-                key={lvl}
-                type="button"
-                onClick={() => setLevel(lvl)}
-                aria-pressed={level === lvl}
-                data-testid={`share-level-${lvl}`}
-                className={cn(
-                  'rounded px-3 py-1 text-xs font-medium transition-colors',
-                  level === lvl
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {LEVEL_LABEL[lvl]}
-              </button>
-            ))}
-          </div>
-          <p className="text-muted-foreground text-compact mt-1.5">{LEVEL_HINT[level]}</p>
-          <SteerRepositoryWarning level={level} />
-          <SteerSecretsWarning level={level} />
-        </div>
-
-        <div className="min-w-0 px-6 pt-4">
-          <Command className="rounded-lg border" shouldFilter>
-            <CommandInput placeholder="Add a project member…" className="h-10" />
-            <CommandList className="max-h-44">
-              <CommandEmpty className="text-muted-foreground py-6 text-center text-sm">
-                No project members to add.
-              </CommandEmpty>
-              <CommandGroup>
-                {pickable.map((m) => (
-                  <CommandItem
-                    key={m.userId}
-                    value={m.name}
-                    disabled={busy}
-                    onSelect={() => void share(m.userId)}
-                    className="gap-2"
-                    data-testid={`share-add-${m.userId}`}
-                  >
-                    <Avatar className="h-7 w-7 shrink-0">
-                      <AvatarFallback name={m.name} className="text-xs">
-                        {m.name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="truncate text-sm">{m.name}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </div>
-
-        <div className="min-w-0 px-6 pt-5">
-          <p className="text-muted-foreground mb-2 text-xs font-medium">People with access</p>
-          <div className="space-y-1" data-testid="share-current-list">
-            {/* Owner row (you) — always pinned on top, not revocable */}
-            <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback name={selfName} className="text-xs">
-                  {selfName.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{selfName} (you)</p>
-              </div>
-              <span className="text-muted-foreground shrink-0 text-xs">Owner</span>
-            </div>
-
-            {shares.map((s) => (
-              <div
-                key={s.sharedWithUserId}
-                className="hover:bg-muted/50 flex items-center gap-3 rounded-md px-1 py-1.5"
-                data-testid={`share-row-${s.sharedWithUserId}`}
-              >
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback name={s.user?.name ?? s.sharedWithUserId} className="text-xs">
-                    {(s.user?.name ?? '?').charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{s.user?.name ?? s.sharedWithUserId}</p>
-                </div>
-                <span
-                  className="text-muted-foreground shrink-0 text-xs"
-                  data-testid={`share-row-level-${s.sharedWithUserId}`}
-                >
-                  {accessLabel(s.level ?? 'view')}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-status-error h-7 w-7 shrink-0"
-                  disabled={busy}
-                  onClick={() => revoke(s.sharedWithUserId)}
-                  data-testid={`share-revoke-${s.sharedWithUserId}`}
-                  aria-label="Remove access"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <DialogFooter className="mt-5 items-center justify-between border-t px-6 py-4 sm:justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={copyLink}
-            data-testid="share-copy-link"
-          >
-            {copied ? (
-              <Check className="copy-feedback-icon text-status-success h-4 w-4" />
-            ) : (
-              <Link2 className="copy-feedback-icon h-4 w-4" />
-            )}
-            {copied ? 'Copied' : 'Copy link'}
-          </Button>
-          <DialogClose asChild>
-            <Button size="sm" data-testid="share-done">
-              Done
-            </Button>
-          </DialogClose>
-        </DialogFooter>
+        <LevelPicker level={level} onLevel={setLevel} />
+        <MemberPicker members={pickable} busy={busy} onPick={(userId) => void share(userId)} />
+        <AccessList
+          selfName={selfName}
+          shares={shares}
+          busy={busy}
+          onRevoke={(userId) => void revoke(userId)}
+        />
+        <ShareFooter copied={copied} onCopyLink={copyLink} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The access level applied to the next member added. */
+function LevelPicker({
+  level,
+  onLevel,
+}: {
+  level: ShareLevel;
+  onLevel: (level: ShareLevel) => void;
+}) {
+  return (
+    <div className="min-w-0 px-6 pt-4">
+      <p className="text-muted-foreground mb-1.5 text-xs font-medium">Access level</p>
+      <div
+        className="bg-muted/50 inline-flex rounded-md p-0.5"
+        role="group"
+        data-testid="share-level-picker"
+      >
+        {(['view', 'comment', 'steer'] as const).map((lvl) => (
+          <button
+            key={lvl}
+            type="button"
+            onClick={() => onLevel(lvl)}
+            aria-pressed={level === lvl}
+            data-testid={`share-level-${lvl}`}
+            className={cn(
+              'rounded px-3 py-1 text-xs font-medium transition-colors',
+              level === lvl
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {LEVEL_LABEL[lvl]}
+          </button>
+        ))}
+      </div>
+      <p className="text-muted-foreground text-compact mt-1.5">{LEVEL_HINT[level]}</p>
+      <SteerRepositoryWarning level={level} />
+      <SteerSecretsWarning level={level} />
+    </div>
+  );
+}
+
+/** The project members the thread is not shared with yet. */
+function MemberPicker({
+  members,
+  busy,
+  onPick,
+}: {
+  members: ProjectMemberPick[];
+  busy: boolean;
+  onPick: (userId: string) => void;
+}) {
+  return (
+    <div className="min-w-0 px-6 pt-4">
+      <Command className="rounded-lg border" shouldFilter>
+        <CommandInput placeholder="Add a project member…" className="h-10" />
+        <CommandList className="max-h-44">
+          <CommandEmpty className="text-muted-foreground py-6 text-center text-sm">
+            No project members to add.
+          </CommandEmpty>
+          <CommandGroup>
+            {members.map((m) => (
+              <CommandItem
+                key={m.userId}
+                value={m.name}
+                disabled={busy}
+                onSelect={() => onPick(m.userId)}
+                className="gap-2"
+                data-testid={`share-add-${m.userId}`}
+              >
+                <Avatar className="h-7 w-7 shrink-0">
+                  <AvatarFallback name={m.name} className="text-xs">
+                    {m.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate text-sm">{m.name}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </div>
+  );
+}
+
+/** One person the thread is shared with, and the button that removes them. */
+function ShareRow({
+  share,
+  busy,
+  onRevoke,
+}: {
+  share: ThreadShareGrant;
+  busy: boolean;
+  onRevoke: (userId: string) => void;
+}) {
+  const name = share.user?.name ?? share.sharedWithUserId;
+  return (
+    <div
+      className="hover:bg-muted/50 flex items-center gap-3 rounded-md px-1 py-1.5"
+      data-testid={`share-row-${share.sharedWithUserId}`}
+    >
+      <Avatar className="h-8 w-8 shrink-0">
+        <AvatarFallback name={name} className="text-xs">
+          {(share.user?.name ?? '?').charAt(0).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm">{name}</p>
+      </div>
+      <span
+        className="text-muted-foreground shrink-0 text-xs"
+        data-testid={`share-row-level-${share.sharedWithUserId}`}
+      >
+        {accessLabel(share.level ?? 'view')}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground hover:text-status-error h-7 w-7 shrink-0"
+        disabled={busy}
+        onClick={() => onRevoke(share.sharedWithUserId)}
+        data-testid={`share-revoke-${share.sharedWithUserId}`}
+        aria-label="Remove access"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+/** Who has access: the owner pinned on top (not revocable), then every share. */
+function AccessList({
+  selfName,
+  shares,
+  busy,
+  onRevoke,
+}: {
+  selfName: string;
+  shares: ThreadShareGrant[];
+  busy: boolean;
+  onRevoke: (userId: string) => void;
+}) {
+  return (
+    <div className="min-w-0 px-6 pt-5">
+      <p className="text-muted-foreground mb-2 text-xs font-medium">People with access</p>
+      <div className="space-y-1" data-testid="share-current-list">
+        <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback name={selfName} className="text-xs">
+              {selfName.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{selfName} (you)</p>
+          </div>
+          <span className="text-muted-foreground shrink-0 text-xs">Owner</span>
+        </div>
+        {shares.map((share) => (
+          <ShareRow key={share.sharedWithUserId} share={share} busy={busy} onRevoke={onRevoke} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Copy the thread's link, and close. */
+function ShareFooter({ copied, onCopyLink }: { copied: boolean; onCopyLink: () => void }) {
+  const CopyIcon = copied ? Check : Link2;
+  return (
+    <DialogFooter className="mt-5 items-center justify-between border-t px-6 py-4 sm:justify-between">
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        onClick={onCopyLink}
+        data-testid="share-copy-link"
+      >
+        <CopyIcon className={cn('copy-feedback-icon h-4 w-4', copied && 'text-status-success')} />
+        {copied ? 'Copied' : 'Copy link'}
+      </Button>
+      <DialogClose asChild>
+        <Button size="sm" data-testid="share-done">
+          Done
+        </Button>
+      </DialogClose>
+    </DialogFooter>
   );
 }
 

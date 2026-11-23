@@ -22,7 +22,7 @@
  *   reported yet is pending); `merge` uses the names of the last `wait_ci`.
  */
 
-import type { CiState, MergeMethod } from '@funny/core/github-app';
+import type { CiState, FailingCheck, MergeMethod } from '@funny/core/github-app';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 
 import type { FactoryPullRequestRef, FactoryPullRequests } from './factory-pull-requests.js';
@@ -80,6 +80,15 @@ const noPullRequest: CiActionResult = {
   error: 'The run has no pull request yet: wait_ci and merge need one opened by an earlier step.',
 };
 
+/** One failing check as the fix step reads it; null when GitHub gave nothing to show. */
+function checkDetail(check: FailingCheck): string | null {
+  const lines = [`--- ${check.name} ---`];
+  if (check.failedStep) lines.push(`Failed step: ${check.failedStep}`);
+  if (check.url) lines.push(`Link: ${check.url}`);
+  if (check.excerpt) lines.push(check.excerpt.slice(0, EXCERPT_CHARS));
+  return lines.length > 1 ? lines.join('\n') : null;
+}
+
 function redResult(ci: Extract<CiState, { kind: 'failing' | 'conflict' }>): CiActionResult {
   if (ci.kind === 'conflict') {
     return {
@@ -89,13 +98,14 @@ function redResult(ci: Extract<CiState, { kind: 'failing' | 'conflict' }>): CiAc
     };
   }
   const names = ci.checks.map((check) => check.name).join(', ');
-  // The error is what a fix step reads (`LAST_ERROR`): the names, then each excerpt.
-  const excerpts = ci.checks
-    .filter((check) => check.excerpt)
-    .map((check) => `--- ${check.name} ---\n${check.excerpt.slice(0, EXCERPT_CHARS)}`);
+  // The error is what a fix step reads (`LAST_ERROR`): the names (first, as
+  // the flow's `should_retry` matches "Failing checks"), the commit checked,
+  // then for each check its failed step, its link and the end of its log.
+  const commit = ci.sha ? [`Commit checked: ${ci.sha}`] : [];
+  const details = ci.checks.map(checkDetail).filter((detail) => detail !== null);
   return {
     ok: false,
-    error: [`Failing checks: ${names}`, ...excerpts].join('\n\n'),
+    error: [`Failing checks: ${names}`, ...commit, ...details].join('\n\n'),
     metadata: { verdict: 'red', failingChecks: ci.checks },
   };
 }

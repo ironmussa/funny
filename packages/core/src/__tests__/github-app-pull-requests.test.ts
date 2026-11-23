@@ -98,6 +98,47 @@ describe('pull request CI over GitHub (shared by the factory and the server)', (
     expect((await ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({
       kind: 'failing',
       checks: [{ name: 'test', conclusion: 'failure', excerpt: 'FAIL src/x.test.ts' }],
+      sha: 'abc',
+    });
+  });
+
+  test('a failing Actions job names its failed step and its link, and the commit checked', async () => {
+    const { ci } = ciFor({
+      'GET /repos/o/r/pulls/7': pull,
+      'GET /repos/o/r/commits/abc/check-runs?per_page=100': {
+        check_runs: [
+          {
+            id: 9,
+            name: 'test',
+            status: 'completed',
+            conclusion: 'failure',
+            app: { slug: 'github-actions' },
+            html_url: 'https://github.com/o/r/actions/runs/1/job/9',
+          },
+        ],
+      },
+      'GET /repos/o/r/commits/abc/status': { statuses: [] },
+      'GET /repos/o/r/actions/jobs/9/logs': 'FAIL src/x.test.ts',
+      'GET /repos/o/r/actions/jobs/9': {
+        steps: [
+          { name: 'Set up job', conclusion: 'success' },
+          { name: 'Run tests', conclusion: 'failure' },
+          { name: 'Upload', conclusion: 'skipped' },
+        ],
+      },
+    });
+    expect((await ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({
+      kind: 'failing',
+      checks: [
+        {
+          name: 'test',
+          conclusion: 'failure',
+          excerpt: 'FAIL src/x.test.ts',
+          url: 'https://github.com/o/r/actions/runs/1/job/9',
+          failedStep: 'Run tests',
+        },
+      ],
+      sha: 'abc',
     });
   });
 

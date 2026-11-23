@@ -31,7 +31,7 @@
 
 - [x] 5.1 Add `packages/workflows/defaults/prompts/` (`implement.md`, `fix-ci.md`, `open-pr.md`) with the improved prompts, and switch `issue-to-pr` / `issue-to-merge` to `prompt_file`; verify `issue-to-merge.test.ts` and `catalog.test.ts` pass with updated expectations
 - [x] 5.2 Add the `pull-request` retry with the open-PR follow-up to both flows; verify a factory test where the first `create_pr` finds nothing and the second finds the PR, and one where both find nothing and the run fails with the existing reason
-- [ ] 5.3 Extend the CI failure text with head SHA, check URL and failed GitHub Actions step, keeping `Failing checks` / `conflicts with its base` verbatim and the size bounded; verify with `factory-ci-actions` and `@funny/core/github-app` pull-request tests
+- [x] 5.3 Extend the CI failure text with head SHA, check URL and failed GitHub Actions step, keeping `Failing checks` / `conflicts with its base` verbatim and the size bounded; verify with `factory-ci-actions` and `@funny/core/github-app` pull-request tests
 
 ## 6. Client
 

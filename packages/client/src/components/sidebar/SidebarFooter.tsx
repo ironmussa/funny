@@ -2,7 +2,6 @@ import { Keyboard, LogOut, Settings, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { ActivityPanelButton } from '@/components/sidebar/ActivityPanelButton';
-import { AutomationInboxButton } from '@/components/sidebar/AutomationInboxButton';
 import { KeyboardShortcutsDialog } from '@/components/sidebar/KeyboardShortcutsDialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -22,7 +21,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 
 /**
- * Bottom of AppSidebar: automation-inbox button, user identity (when signed
+ * Bottom of AppSidebar: activity panel button, user identity (when signed
  * in), an always-visible settings shortcut, and an account menu (shortcuts +
  * logout) opened by clicking the avatar/name row.
  *
@@ -39,7 +38,6 @@ export function SidebarFooter() {
   return (
     <ShadSidebarFooter className="pb-4">
       <div className="px-1">
-        <AutomationInboxButton />
         <ActivityPanelButton />
       </div>
       <div className="flex items-center gap-2 px-1">

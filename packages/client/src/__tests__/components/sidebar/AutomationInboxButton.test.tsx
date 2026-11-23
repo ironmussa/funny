@@ -9,8 +9,8 @@ mock.module('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-mock.module('@/components/ui/nav-item', () => ({
-  NavItem: () => null,
+mock.module('@/components/ui/button', () => ({
+  Button: () => null,
 }));
 
 mock.module('@/stores/auth-store', () => ({
@@ -29,6 +29,7 @@ mock.module('@/stores/ui-store', () => ({
 }));
 
 import { AutomationInboxButton } from '@/components/sidebar/AutomationInboxButton';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 describe('AutomationInboxButton', () => {
   beforeEach(() => {
@@ -47,7 +48,11 @@ describe('AutomationInboxButton', () => {
     });
     mockLoadInbox.mockReturnValue(ResultAsync.fromSafePromise(load));
 
-    const { unmount } = render(<AutomationInboxButton />);
+    const { unmount } = render(
+      <TooltipProvider>
+        <AutomationInboxButton />
+      </TooltipProvider>,
+    );
     expect(mockLoadInbox).toHaveBeenCalledTimes(1);
 
     unmount();

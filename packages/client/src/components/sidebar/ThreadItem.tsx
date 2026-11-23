@@ -438,7 +438,7 @@ function useThreadItemState({
     effectiveGitStatus,
     rowHandlers,
     rowClassName: isSelected
-      ? 'bg-accent text-foreground'
+      ? 'bg-sidebar-selected text-foreground'
       : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
     handlePin: onPin ? () => onPin() : undefined,
     handleRename: onRename ? renameDialog.openDialog : undefined,

@@ -115,6 +115,9 @@
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
+  /* The selected thread row in the sidebar. Defaults to --accent; a theme
+     whose accent barely stands out from its sidebar sets --sidebar-selected. */
+  --color-sidebar-selected: hsl(var(--sidebar-selected, var(--accent)));
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -941,6 +944,7 @@ mark.md-search-match[data-active='true'] {
     --sidebar-primary-foreground: 0 0% 4%;
     --sidebar-accent: 0 0% 8%;
     --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-selected: 0 0% 14%;
     --sidebar-border: 0 0% 13%;
     --sidebar-ring: 0 0% 40%;
 

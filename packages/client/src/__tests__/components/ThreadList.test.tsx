@@ -251,12 +251,12 @@ describe('ThreadList', () => {
       route: '/projects/p1/threads/t-b',
     });
 
-    // Selected rows get `bg-accent text-foreground`; unselected get
+    // Selected rows get `bg-sidebar-selected text-foreground`; unselected get
     // `text-muted-foreground` (+ a hover:bg-accent/50, so match the exact combo).
     const rowB = screen.getByTestId('thread-item-t-b').parentElement;
     const rowA = screen.getByTestId('thread-item-t-a').parentElement;
-    expect(rowB?.className).toContain('bg-accent text-foreground');
-    expect(rowA?.className).not.toContain('bg-accent text-foreground');
+    expect(rowB?.className).toContain('bg-sidebar-selected text-foreground');
+    expect(rowA?.className).not.toContain('bg-sidebar-selected text-foreground');
     expect(rowA?.className).toContain('text-muted-foreground');
   });
 

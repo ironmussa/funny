@@ -145,10 +145,6 @@ jobs:
         if: matrix.shard == 'core'
         run: bun run --cwd packages/core test
 
-      - name: Run tests (agent)
-        if: matrix.shard == 'core'
-        run: bun run --cwd packages/orchestrator test
-
       - name: Run tests (runtime)
         if: matrix.shard == 'runtime'
         run: bun run --cwd packages/runtime test

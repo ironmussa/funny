@@ -207,9 +207,6 @@ nodes:
         - globs: ['packages/harness/**/*.test.ts']
           cwd: packages/harness
           command: 'bun test --parallel {{files}}'
-        - globs: ['packages/orchestrator/**/*.test.ts']
-          cwd: packages/orchestrator
-          command: 'bun test --timeout 20000 {{files}}'
         - globs: ['packages/**/*.test.ts', 'packages/**/*.test.tsx']
           command: 'bun test {{files}}'
       require_test: always

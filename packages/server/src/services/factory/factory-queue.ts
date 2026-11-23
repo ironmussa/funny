@@ -61,7 +61,7 @@ export type FactoryQueueError =
   | { kind: 'paused'; message: string }
   /** The factory cannot work now (runner, sandbox, GitHub App…): the message says why. */
   | { kind: 'cannot-work'; message: string }
-  /** The chosen flow is unknown, workspace-only or does not compile. */
+  /** The chosen flow is unknown or does not compile. */
   | { kind: 'invalid-flow'; message: string }
   | { kind: 'storage'; message: string };
 

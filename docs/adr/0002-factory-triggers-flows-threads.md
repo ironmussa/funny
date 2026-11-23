@@ -1,7 +1,7 @@
 # The factory is three levels — triggers, flows and threads — turned on per project
 
-The issue factory, when it lives inside funny (ADR 0001 keeps the standalone orchestrator
-for now), is not one engine. It is three levels, each with a single responsibility:
+The issue factory lives inside funny (the standalone orchestrator of ADR 0001 has been
+removed) and is not one engine. It is three levels, each with a single responsibility:
 
 - **Trigger** — _when_ a flow starts and _with what data_. Manual, cron, the ingest
   webhook, a child agent (`funny_spawn_thread`), a git commit, and a new one: a GitHub
@@ -16,7 +16,7 @@ for now), is not one engine. It is three levels, each with a single responsibili
   profile (prompt, model, permissions, tools, where it runs).
 
 A single flow executor runs the steps, waits for them to finish and applies retries. It is
-what `packages/orchestrator` does today; over time funny's runtime pipelines and
+what the server factory's flow runs do today (`factory-flow-runs.ts`); over time funny's runtime pipelines and
 automations would run there too, instead of three separate orchestrators.
 
 The factory itself is not an engine: it is a **per-project toggle**, a default flow, the

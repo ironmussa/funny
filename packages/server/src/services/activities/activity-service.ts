@@ -26,6 +26,7 @@ import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
 import { relayToUser } from '../browser-events.js';
 
+const SNAPSHOT_REF = /^refs\/funny\/undo\/[A-Za-z0-9_-]{1,128}$/;
 const ID_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,127}$/;
 const REPORTED_STATUSES = new Set<ActivityStatus>(['running', 'succeeded', 'failed']);
 
@@ -39,16 +40,23 @@ function optionalId(value: unknown): string | null {
   return typeof value === 'string' && ID_PATTERN.test(value) ? value : null;
 }
 
+/** Each field a reported result may carry, and how it is checked. */
+const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string | null]> = [
+  ['projectId', (v) => (ID_PATTERN.test(v) ? v : null)],
+  ['prUrl', (v) => (/^https?:\/\//.test(v) ? v.slice(0, 2048) : null)],
+  // An undo snapshot's ref (track-user-and-scheduled-actions, design D6).
+  ['snapshot', (v) => (SNAPSHOT_REF.test(v) ? v : null)],
+];
+
 function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object') return null;
   const raw = value as Record<string, unknown>;
   const ref: ActivityResultRef = {};
-  if (typeof raw.projectId === 'string' && ID_PATTERN.test(raw.projectId)) {
-    ref.projectId = raw.projectId;
-  }
-  if (typeof raw.prUrl === 'string' && /^https?:\/\//.test(raw.prUrl)) {
-    ref.prUrl = raw.prUrl.slice(0, 2048);
+  for (const [field, check] of RESULT_REF_FIELDS) {
+    const given = raw[field];
+    const kept = typeof given === 'string' ? check(given) : null;
+    if (kept) ref[field] = kept;
   }
   return Object.keys(ref).length > 0 ? ref : null;
 }

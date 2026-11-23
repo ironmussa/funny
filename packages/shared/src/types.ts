@@ -1057,7 +1057,14 @@ export type ActivityEffectType =
   | 'pr-merged'
   | 'remote-branch-deleted'
   | 'agent-stopped'
-  | 'factory-disabled';
+  | 'factory-disabled'
+  | 'repo-published'
+  | 'file-reverted'
+  | 'changes-discarded'
+  | 'commits-reset'
+  | 'stash-dropped'
+  | 'code-rewound'
+  | 'snapshot-saved';
 
 /** One thing an activity changed, with the name of the thing (a path, a branch, a PR). */
 export interface ActivityEffect {
@@ -1069,6 +1076,8 @@ export interface ActivityEffect {
 export interface ActivityResultRef {
   projectId?: string;
   prUrl?: string;
+  /** The undo snapshot the operation saved (`refs/funny/undo/<activity id>`). */
+  snapshot?: string;
 }
 
 export interface Activity {

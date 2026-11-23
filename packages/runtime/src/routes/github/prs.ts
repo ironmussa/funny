@@ -1,8 +1,9 @@
 import { getRemoteUrl } from '@funny/core/git';
 import type { GitHubPR, GitHubUserRef, PRCommit, PRFilterOptions, PRSortKey } from '@funny/shared';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
+import { recordedGithubWrite } from '../../services/github-write-activity.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
 import {
@@ -351,7 +352,31 @@ prRoutes.post('/pr-merge', async (c) => {
   const ctx = await githubRepoFor(c, raw.projectId);
   if (ctx instanceof Response) return ctx;
   const { owner, repo, token } = ctx;
+  const prNumber = raw.prNumber;
+  const target = `${owner}/${repo}#${prNumber}`;
 
+  // Recorded as a `github.write` activity (track-user-and-scheduled-actions).
+  return recordedGithubWrite(
+    {
+      userId: c.get('userId') as string,
+      projectId: raw.projectId,
+      title: `Merge ${target}`,
+      input: { action: 'pr-merge', prNumber: Number(prNumber), repo: `${owner}/${repo}` },
+      effectsOf: () => [{ effect: 'pr-merged', target }],
+      resultRefOf: () => ({
+        prUrl: `https://github.com/${owner}/${repo}/pull/${prNumber}`,
+      }),
+    },
+    () => mergePullRequest(c, { owner, repo, token, prNumber, method }),
+  );
+});
+
+async function mergePullRequest(
+  c: Context<HonoEnv>,
+  args: { owner: string; repo: string; token: string; prNumber: number | string; method: string },
+): Promise<Response> {
+  const { owner, repo, token, method } = args;
+  const raw = { prNumber: args.prNumber };
   try {
     const res = await githubApiFetch(`/repos/${owner}/${repo}/pulls/${raw.prNumber}/merge`, token, {
       method: 'PUT',
@@ -371,4 +396,4 @@ prRoutes.post('/pr-merge', async (c) => {
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }
-});
+}

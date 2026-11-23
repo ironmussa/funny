@@ -19,6 +19,7 @@ import { remoteRoutes } from './git/remote.js';
 import { stageRoutes } from './git/stage.js';
 import { stashRoutes } from './git/stash.js';
 import { statusRoutes } from './git/status.js';
+import { undoRoutes } from './git/undo.js';
 import { workflowRoutes } from './git/workflow.js';
 
 export { invalidateGitStatusCacheByProject };
@@ -75,6 +76,7 @@ gitRoutes.route('/', statusRoutes);
 gitRoutes.route('/', diffRoutes);
 gitRoutes.route('/', logRoutes);
 gitRoutes.route('/', stashRoutes);
+gitRoutes.route('/', undoRoutes);
 gitRoutes.route('/', stageRoutes);
 gitRoutes.route('/', commitRoutes);
 gitRoutes.route('/', remoteRoutes);

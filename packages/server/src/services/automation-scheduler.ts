@@ -25,6 +25,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { db, dbAll, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import { serverActivities, type ServerActivities } from './activities/server-activities.js';
 import * as automationRepo from './automation-repository.js';
 import { relayToUser } from './browser-events.js';
 import {
@@ -59,6 +60,8 @@ export interface AutomationSchedulerDeps {
   /** Launcher override for tests. */
   launch?: typeof startThreadOnRunner;
   now?: () => Date;
+  /** Records skips and unscheduled automations (default: the server's activities). */
+  activities?: Pick<ServerActivities, 'recordServerActivity'>;
 }
 
 /** A run still `running` after this long gets marked failed (startup and every sweep). */
@@ -87,7 +90,23 @@ const startIntervalSweep: StartSweep = (onSweep) => {
 export const createCronJob: CreateJob = (pattern, onTick) =>
   new Cron(pattern, { protect: true }, onTick);
 
+/**
+ * Why `pattern` is not a schedule croner can run, or null when it is. The same
+ * parser as `createCronJob`, so a schedule accepted on save is one the
+ * scheduler can run (track-user-and-scheduled-actions, design D1).
+ */
+export function parseAutomationSchedule(pattern: string): string | null {
+  try {
+    new Cron(pattern, { paused: true }).stop();
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
 const jobs = new Map<string, AutomationJob>();
+/** The run each automation's current skip streak was recorded for (design D2). */
+const skipRecordedFor = new Map<string, string>();
 let deps: AutomationSchedulerDeps | null = null;
 let sweep: SweepTimer | null = null;
 
@@ -108,6 +127,7 @@ export async function startAutomationScheduler(d: AutomationSchedulerDeps): Prom
 export function stopAutomationScheduler(): void {
   for (const job of jobs.values()) job.stop();
   jobs.clear();
+  skipRecordedFor.clear();
   sweep?.stop();
   sweep = null;
   deps = null;
@@ -142,12 +162,26 @@ async function schedule(automation: Automation): Promise<void> {
   try {
     job = (deps.createJob ?? createCronJob)(automation.schedule, () => tick(automation.id));
   } catch (e) {
+    const reason = (e as Error).message;
     log.warn('Invalid automation schedule — not scheduled', {
       namespace: 'automation',
       automationId: automation.id,
       schedule: automation.schedule,
-      error: (e as Error).message,
+      error: reason,
     });
+    // The owner is told the automation will not run (saved before schedules
+    // were validated on save).
+    await activities().recordServerActivity(
+      {
+        kind: 'automation.unscheduled',
+        userId: automation.userId,
+        projectId: automation.projectId,
+        title: `Automation "${automation.name}" is not scheduled`,
+        input: { automationId: automation.id, schedule: automation.schedule },
+        origin: 'system',
+      },
+      { ok: false, error: `Its schedule "${automation.schedule}" cannot be read: ${reason}` },
+    );
     return;
   }
   jobs.set(automation.id, job);
@@ -187,12 +221,15 @@ async function fire(id: string): Promise<void> {
   // Re-read so an edit that raced the tick (prompt, model, disable) is honored.
   const automation = await automationRepo.getAutomation(id);
   if (!automation?.enabled) return;
-  if (await hasRunInProgress(id)) {
+  const running = await runInProgress(id);
+  if (running) {
     log.info('Automation tick skipped: the previous run is still running', {
       namespace: 'automation',
       automationId: id,
     });
+    await recordSkip(automation, running);
   } else {
+    skipRecordedFor.delete(id);
     await runAutomation(automation);
   }
   await recordNextRun(id);
@@ -204,11 +241,13 @@ async function fire(id: string): Promise<void> {
  * `STALE_RUN_MS` does not count, so one lost completion cannot stop the
  * automation for good; the stale-run sweep marks those failed. Manual runs skip this.
  */
-async function hasRunInProgress(automationId: string): Promise<boolean> {
+async function runInProgress(
+  automationId: string,
+): Promise<{ id: string; startedAt: string } | null> {
   const since = new Date(now().getTime() - STALE_RUN_MS).toISOString();
-  const active = await dbAll(
+  const active = await dbAll<{ id: string; startedAt: string }>(
     db
-      .select({ id: schema.automationRuns.id })
+      .select({ id: schema.automationRuns.id, startedAt: schema.automationRuns.startedAt })
       .from(schema.automationRuns)
       .where(
         and(
@@ -219,7 +258,31 @@ async function hasRunInProgress(automationId: string): Promise<boolean> {
       )
       .limit(1),
   );
-  return active.length > 0;
+  return active[0] ?? null;
+}
+
+function activities(): Pick<ServerActivities, 'recordServerActivity'> {
+  return deps?.activities ?? serverActivities;
+}
+
+/** The first skip while a run is still running is recorded; the rest of the streak is not. */
+async function recordSkip(
+  automation: Automation,
+  running: { id: string; startedAt: string },
+): Promise<void> {
+  if (skipRecordedFor.get(automation.id) === running.id) return;
+  skipRecordedFor.set(automation.id, running.id);
+  await activities().recordServerActivity(
+    {
+      kind: 'automation.skipped',
+      userId: automation.userId,
+      projectId: automation.projectId,
+      title: `Skipped a run of "${automation.name}": the previous one is still running`,
+      input: { automationId: automation.id, runningSince: running.startedAt },
+      origin: 'system',
+    },
+    { ok: true },
+  );
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────

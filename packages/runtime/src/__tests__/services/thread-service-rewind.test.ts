@@ -33,6 +33,16 @@ mock.module('../../services/thread-service/fork.js', () => ({
   forkThread: mocks.forkThread,
 }));
 
+// A rewind saves an undo snapshot first (track-user-and-scheduled-actions);
+// git-undo.test.ts covers that. Here the wrapper passes through.
+const rewinds: Array<{ target: unknown; messageId: string }> = [];
+mock.module('../../services/git-destructive.js', () => ({
+  rewindTracked: (target: unknown, messageId: string, run: () => unknown) => {
+    rewinds.push({ target, messageId });
+    return run();
+  },
+}));
+
 mock.module('../../services/git-checkpoints.js', () => ({
   restoreGitCheckpoint: mocks.restoreGitCheckpoint,
 }));
@@ -174,6 +184,11 @@ describe('rewindCode — success and failures', () => {
         cwd: '/repo',
       });
       expect(mocks.tm.deleteMessagesAfter).toHaveBeenCalledWith('t-1', 'm-user-2');
+      // Recorded as an undoable rewind of this thread, for the caller.
+      expect(rewinds.at(-1)).toEqual({
+        target: expect.objectContaining({ userId: 'u-1', threadId: 't-1', cwd: '/repo' }),
+        messageId: 'm-user-2',
+      });
       expect(mocks.tm.updateThread).toHaveBeenCalledWith(
         't-1',
         expect.objectContaining({

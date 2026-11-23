@@ -1833,8 +1833,21 @@
       "pr-merged": "Pull request mesclado",
       "remote-branch-deleted": "Branch remoto excluído",
       "agent-stopped": "Agente interrompido",
-      "factory-disabled": "Factory desativada"
-    }
+      "factory-disabled": "Factory desativada",
+      "repo-published": "Repositório publicado",
+      "file-reverted": "Arquivo revertido",
+      "changes-discarded": "Alterações descartadas",
+      "commits-reset": "Reset",
+      "stash-dropped": "Stash removido",
+      "code-rewound": "Código rebobinado",
+      "snapshot-saved": "Snapshot salvo"
+    },
+    "restore": "Restaurar",
+    "restored": "Restaurado. O estado anterior foi salvo como um novo snapshot.",
+    "snapshotGone": "Este snapshot não existe mais no runner.",
+    "restoreFailed": "Não foi possível restaurar",
+    "restoreTitle": "Restaurar este snapshot?",
+    "restoreDescription": "Devolve o que “{{title}}” removeu. O estado atual é salvo antes, então isso também pode ser desfeito."
   },
   "factoryView": {
     "title": "Fila da factory",

@@ -66,6 +66,19 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok', register?: (threadId: str
 
 const ports = unusedRunnerPorts();
 
+/** What the scheduler recorded as server activities. */
+function fakeActivities() {
+  const recorded: Array<{ spec: any; outcome: any }> = [];
+  return {
+    recorded,
+    activities: {
+      recordServerActivity: async (spec: any, outcome: any) => {
+        recorded.push({ spec, outcome });
+      },
+    },
+  };
+}
+
 describe('automation scheduler', () => {
   let t: TestApp;
   const automation = (id: string) => {
@@ -224,12 +237,14 @@ describe('automation scheduler', () => {
         });
         const cron = fakeCron();
         const launcher = fakeLauncher('ok', register);
+        const { recorded, activities } = fakeActivities();
         await startAutomationScheduler({
           ports,
           createJob: cron.createJob,
           launch: launcher.launch,
+          activities,
         });
-        return { tick: () => cron.live.get('0 9 * * *')!.onTick(), launcher };
+        return { tick: () => cron.live.get('0 9 * * *')!.onTick(), launcher, recorded };
       };
       const previousRun = (status: string, startedAt: string) => {
         seedThread(t.db, { id: 'prev', projectId: 'p1', userId: 'alice' });
@@ -253,6 +268,44 @@ describe('automation scheduler', () => {
         expect(launcher.calls).toEqual([]);
         expect(runs()).toHaveLength(1);
         expect(automation('on').nextRunAt).toBe(NEXT.toISOString());
+      });
+
+      test('the first skip of a running run is recorded, the rest of the streak is not', async () => {
+        const { tick, recorded } = await start();
+        previousRun('running', ago(60_000));
+
+        await tick();
+        await tick();
+        await tick();
+
+        const skips = recorded.filter((r) => r.spec.kind === 'automation.skipped');
+        expect(skips).toHaveLength(1);
+        expect(skips[0]!.spec).toMatchObject({
+          userId: 'alice',
+          origin: 'system',
+          input: { automationId: 'on' },
+        });
+        expect(skips[0]!.outcome).toEqual({ ok: true });
+      });
+
+      test('a skip of a later run is recorded again', async () => {
+        const { tick, recorded } = await start();
+        previousRun('running', ago(60_000));
+        await tick();
+        // The run finishes, a new one starts and runs past the next tick.
+        t.db.update(schema.automationRuns).set({ status: 'completed' }).run();
+        await tick();
+        seedThread(t.db, { id: 'next', projectId: 'p1', userId: 'alice' });
+        seedAutomationRun(t.db, {
+          id: 'r-next',
+          automationId: 'on',
+          threadId: 'next',
+          status: 'running',
+          startedAt: ago(1_000),
+        });
+        await tick();
+
+        expect(recorded.filter((r) => r.spec.kind === 'automation.skipped')).toHaveLength(2);
       });
 
       test('runs when the previous run has finished', async () => {
@@ -337,13 +390,22 @@ describe('automation scheduler', () => {
       seedAutomation(t.db, { id: 'bad', projectId: 'p1', schedule: 'not a cron' });
       seedAutomation(t.db, { id: 'good', projectId: 'p1', schedule: '0 9 * * *' });
 
+      const { recorded, activities } = fakeActivities();
       await startAutomationScheduler({
         ports,
         createJob: fakeCron().createJob,
         launch: fakeLauncher().launch,
+        activities,
       });
 
       expect(scheduledAutomationCount()).toBe(1);
+      // Its owner is told it will not run.
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0]!.spec).toMatchObject({
+        kind: 'automation.unscheduled',
+        input: { automationId: 'bad', schedule: 'not a cron' },
+      });
+      expect(recorded[0]!.outcome.ok).toBe(false);
     });
   });
 

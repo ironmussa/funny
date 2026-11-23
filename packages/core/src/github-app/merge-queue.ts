@@ -17,7 +17,10 @@ interface RestBranchRule {
   type: string;
 }
 
-/** Whether an active rule of `branch` requires the merge queue (`GET /rules/branches/{branch}`). */
+/**
+ * Whether an active rule of `branch` requires the merge queue
+ * (`GET /rules/branches/{branch}`). False where rules are not available.
+ */
 export function requiresMergeQueue(
   github: RepoGithub,
   repo: string,
@@ -31,8 +34,10 @@ export function requiresMergeQueue(
         `/repos/${repo}/rules/branches/${refPath(branch)}?per_page=100`,
       )
       .map((rules) => rules.some((rule) => rule.type === 'merge_queue'))
-      // No rules for the branch (or no branch): nothing requires the queue.
-      .orElse((e) => (e.status === 404 ? okAsync(false) : errAsync(e)))
+      // No rules for the branch (404), or a repository whose plan has no rules
+      // at all (403, a private repository on GitHub Free): nothing requires the
+      // queue. Seen on a real private repository, where every merge failed here.
+      .orElse((e) => (e.status === 404 || e.status === 403 ? okAsync(false) : errAsync(e)))
   );
 }
 

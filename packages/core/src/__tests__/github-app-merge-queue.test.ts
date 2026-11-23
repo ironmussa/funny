@@ -10,6 +10,13 @@ import {
 } from '../github-app/index.js';
 import { fakeFetch } from './helpers/test-helpers.js';
 
+interface Refusal {
+  status: number;
+  body: unknown;
+}
+const isRefusal = (value: unknown): value is Refusal =>
+  typeof value === 'object' && value !== null && 'status' in value && 'body' in value;
+
 /** A GitHub whose REST answers come from `rest` and whose GraphQL answer is `graphql`. */
 function github(rest: Record<string, unknown>, graphql: unknown = {}) {
   const queries: Array<{ query: string; variables: Record<string, unknown> }> = [];
@@ -20,7 +27,12 @@ function github(rest: Record<string, unknown>, graphql: unknown = {}) {
       return new Response(JSON.stringify(graphql), { status: 200 });
     }
     if (!(path in rest)) return new Response('{"message":"Not Found"}', { status: 404 });
-    return new Response(JSON.stringify(rest[path]), { status: 200 });
+    const answer = rest[path];
+    // `{ status, body }` answers with that status.
+    if (isRefusal(answer)) {
+      return new Response(JSON.stringify(answer.body), { status: answer.status });
+    }
+    return new Response(JSON.stringify(answer), { status: 200 });
   });
   return { gh: createRepoGithub({ tokenFor: () => okAsync('tok'), fetch: fetchImpl }), queries };
 }
@@ -38,6 +50,21 @@ describe("GitHub's merge queue", () => {
     expect((await requiresMergeQueue(other.gh, 'o/r', 'main'))._unsafeUnwrap()).toBe(false);
     // A branch without rules answers 404.
     expect((await requiresMergeQueue(github({}).gh, 'o/r', 'main'))._unsafeUnwrap()).toBe(false);
+  });
+
+  // ironmussa/test-funny (private, GitHub Free) answers this to the rules of any branch.
+  test('a repository whose plan has no rules does not require the queue', async () => {
+    const rules = '/repos/o/r/rules/branches/main?per_page=100';
+    const free = github({
+      [rules]: {
+        status: 403,
+        body: { message: 'Upgrade to GitHub Pro or make this repository public.' },
+      },
+    });
+    expect((await requiresMergeQueue(free.gh, 'o/r', 'main'))._unsafeUnwrap()).toBe(false);
+    // Another failure is still a failure: it is not read as "no queue".
+    const down = github({ [rules]: { status: 502, body: { message: 'bad gateway' } } });
+    expect((await requiresMergeQueue(down.gh, 'o/r', 'main')).isErr()).toBe(true);
   });
 
   test('where a pull request stands', async () => {

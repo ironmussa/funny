@@ -154,27 +154,36 @@ export function createRepoCheckOps(github: RepoGithub): RepoCheckOps {
       // A missing branch or rule set (404) holds nothing.
       const none = <T>(e: GithubCallError) =>
         e.status === 404 ? okAsync<T | null, GithubCallError>(null) : errAsync(e);
-      return github
-        .json<RestBranchRule[]>(repo, 'GET', `/repos/${repo}/rules/branches/${ref}?per_page=100`)
-        .orElse((e) => none<RestBranchRule[]>(e))
-        .andThen((rules) => {
-          const byRule = (rules ?? []).some(
-            (rule) =>
-              rule.type === 'required_status_checks' &&
-              (rule.parameters?.required_status_checks ?? []).some(
-                (check) => check.context === checkName && check.integration_id === appId,
-              ),
-          );
-          if (byRule) return okAsync<boolean, GithubCallError>(true);
-          return github
-            .json<RestBranch>(repo, 'GET', `/repos/${repo}/branches/${ref}`)
-            .orElse((e) => none<RestBranch>(e))
-            .map((info) =>
-              (info?.protection?.required_status_checks?.checks ?? []).some(
-                (check) => check.context === checkName && check.app_id === appId,
-              ),
+      return (
+        github
+          .json<RestBranchRule[]>(repo, 'GET', `/repos/${repo}/rules/branches/${ref}?per_page=100`)
+          // Rulesets are not available on every plan (403 on a private repository
+          // on GitHub Free): then no ruleset holds the check, and classic branch
+          // protection is still looked at.
+          .orElse((e) =>
+            e.status === 403
+              ? okAsync<RestBranchRule[] | null, GithubCallError>(null)
+              : none<RestBranchRule[]>(e),
+          )
+          .andThen((rules) => {
+            const byRule = (rules ?? []).some(
+              (rule) =>
+                rule.type === 'required_status_checks' &&
+                (rule.parameters?.required_status_checks ?? []).some(
+                  (check) => check.context === checkName && check.integration_id === appId,
+                ),
             );
-        });
+            if (byRule) return okAsync<boolean, GithubCallError>(true);
+            return github
+              .json<RestBranch>(repo, 'GET', `/repos/${repo}/branches/${ref}`)
+              .orElse((e) => none<RestBranch>(e))
+              .map((info) =>
+                (info?.protection?.required_status_checks?.checks ?? []).some(
+                  (check) => check.context === checkName && check.app_id === appId,
+                ),
+              );
+          })
+      );
     },
   };
 }

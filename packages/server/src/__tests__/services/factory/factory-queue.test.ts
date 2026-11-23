@@ -104,6 +104,7 @@ function fakeGithub(script: Script = {}): FakeGithub {
     defaultBranch: () => okAsync('main'),
     branchState: () => okAsync({ sha: 'base-sha', ci: { kind: 'green' as const } }),
     mergeCommitState: () => okAsync(null),
+    issueText: () => okAsync({ title: 'Issue', body: '', comments: [] }),
     revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
     relabelIssue: () => okAsync(undefined),
     commentOnIssue: () => okAsync(undefined),

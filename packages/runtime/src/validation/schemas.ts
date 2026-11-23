@@ -201,6 +201,11 @@ export const updateProjectSchema = z
     );
   });
 
+/** What a read-only agent reads besides its checkout (`agent-startup/role-inputs.ts`). */
+const roleInputsSchema = z
+  .record(z.string().regex(/^[a-z0-9-]{1,40}\.md$/), z.string().max(200_000))
+  .refine((inputs) => Object.keys(inputs).length <= 5, 'At most 5 role inputs');
+
 const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 
 /** Tool policy + attachments accepted by every request that runs the agent. */
@@ -249,6 +254,12 @@ export const createThreadSchema = z
      */
     readOnly: z.boolean().optional(),
     /**
+     * Files the read-only agent reads besides its checkout (the issue's text):
+     * written outside the checkout and named in `FUNNY_ROLE_INPUTS`, see
+     * `agent-startup/role-inputs.ts`. Only with `readOnly`.
+     */
+    roleInputs: roleInputsSchema.optional(),
+    /**
      * The worktree's branch name (worktree mode only). The issue factory sends
      * the run's branch so the thread, its worktree and the pull request share
      * one branch. Absent, or already present in the repository: a name is
@@ -292,6 +303,13 @@ export const createThreadSchema = z
         path: ['mode'],
       });
     }
+    if (data.roleInputs && !data.readOnly) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'role inputs are only for read-only threads',
+        path: ['roleInputs'],
+      });
+    }
   });
 
 export const createIdleThreadSchema = z.object({
@@ -319,6 +337,11 @@ export const sendMessageSchema = z
     ...agentRunInputFields,
     baseBranch: optionalBaseBranchSchema,
     forceQueue: z.boolean().optional(),
+    /**
+     * A sandbox thread's role inputs come with its first message (the server
+     * creates its row). Written only for a read-only thread.
+     */
+    roleInputs: roleInputsSchema.optional(),
     /**
      * The branch the thread's worktree must be on for this message to run (the
      * issue factory sends its run's branch). A worktree checked out on another

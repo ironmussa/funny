@@ -65,6 +65,7 @@ import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
+import type { FactoryIssueText } from './factory-issue-text.js';
 import { createMergeLane } from './factory-merge-lane.js';
 import {
   proofAllowsMerge,
@@ -189,6 +190,8 @@ export interface FactoryActionProviderDeps {
   busyPaths?(): Promise<Array<{ issue: number; paths: string[] }>>;
   /** When the run's issue last changed, by GitHub's clock; null when unreadable. */
   issueUpdatedAt?(): Promise<string | null>;
+  /** The run's issue as text, for the read-only roles (they have no network); null when unreadable. */
+  issueText?(): Promise<FactoryIssueText | null>;
   /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only). */
   holdForPaths?(blockers: number[]): Promise<boolean>;
   /** When the run was admitted: review threads from before are not this run's. */
@@ -891,6 +894,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     },
     busyPaths: deps.busyPaths,
     issueUpdatedAt: deps.issueUpdatedAt,
+    issueText: deps.issueText,
     hold: deps.holdForPaths,
     record: deps.record,
     count: (event) => count(metrics, { event }),
@@ -899,6 +903,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   const reviewer = createFactoryReviewer({
     scope,
     issueUrl: scope.issueUrl ?? null,
+    issueText: deps.issueText,
     reviews: deps.reviews ?? [],
     since: deps.admittedAt ?? new Date(0).toISOString(),
     signal: deps.signal,

@@ -182,6 +182,10 @@ export interface ClaudeProcessOptions {
    * `read-only` sandbox. No MCP server is given.
    */
   readOnly?: boolean;
+  /** Read-only: folders besides the checkout its reading tools may read (the role's inputs). */
+  readOnlyRoots?: string[];
+  /** Read-only: more paths its commands never read (funny's data folder). */
+  readOnlyHiddenPaths?: string[];
   /**
    * Deny a Bash call that is only a check (`npx vitest`, `tsc`, `bun run lint`)
    * and point the agent at `mcp__funny__funny_run_checks`. Claude SDK only.

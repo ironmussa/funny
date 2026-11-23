@@ -4,6 +4,9 @@
  * sandbox. The sandbox itself is the SDK's; this checks what funny asks of it.
  */
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { READ_ONLY_AGENT_TOOLS } from '@funny/shared/models';
 
@@ -19,17 +22,55 @@ import { SDKClaudeProcess } from '../agents/sdk-claude.js';
 describe('readOnlyDenial', () => {
   test('reading tools and Bash pass; writing, web, subagents and MCP tools do not', () => {
     for (const tool of ['Read', 'Glob', 'Grep', 'Bash']) {
-      expect(readOnlyDenial(tool, { command: 'git log' })).toBeNull();
+      expect(readOnlyDenial(tool, { command: 'git log', file_path: '/w/a.ts' }, ['/w'])).toBeNull();
     }
     for (const tool of ['Edit', 'Write', 'NotebookEdit', 'WebFetch', 'Task', 'mcp__funny__x']) {
-      expect(readOnlyDenial(tool, {})).toContain('may only read');
+      expect(readOnlyDenial(tool, {}, ['/w'])).toContain('may only read');
     }
   });
 
   test('a command that asks to leave the sandbox is denied', () => {
     expect(
-      readOnlyDenial('Bash', { command: 'git push', dangerouslyDisableSandbox: true }),
+      readOnlyDenial('Bash', { command: 'git push', dangerouslyDisableSandbox: true }, ['/w']),
     ).toContain('sandbox');
+  });
+});
+
+describe('reading tools stay in the checkout (they run outside the sandbox)', () => {
+  const base = mkdtempSync(join(tmpdir(), 'ro-roots-'));
+  const checkout = join(base, 'checkout');
+  const inputs = join(base, 'inputs');
+  const secret = join(base, 'funny-data');
+  mkdirSync(checkout);
+  mkdirSync(inputs);
+  mkdirSync(secret);
+  writeFileSync(join(secret, 'encryption.keys.json'), '{}');
+  writeFileSync(join(inputs, 'issue.md'), '# Issue');
+  symlinkSync(secret, join(checkout, 'innocent'));
+  const roots = [checkout, inputs];
+
+  test('a file of the checkout or of the role inputs can be read', () => {
+    expect(readOnlyDenial('Read', { file_path: join(checkout, 'src/a.ts') }, roots)).toBeNull();
+    expect(readOnlyDenial('Read', { file_path: join(inputs, 'issue.md') }, roots)).toBeNull();
+    expect(readOnlyDenial('Grep', { pattern: 'x' }, roots)).toBeNull();
+  });
+
+  test("funny's data, or any file outside, cannot", () => {
+    expect(
+      readOnlyDenial('Read', { file_path: join(secret, 'encryption.keys.json') }, roots),
+    ).toContain('outside');
+    expect(readOnlyDenial('Read', { file_path: '/etc/passwd' }, roots)).toContain('outside');
+    expect(readOnlyDenial('Grep', { pattern: 'key', path: secret }, roots)).toContain('outside');
+    expect(readOnlyDenial('Glob', { pattern: `${secret}/**` }, roots)).toContain('outside');
+    expect(
+      readOnlyDenial('Read', { file_path: join(checkout, '../funny-data/x') }, roots),
+    ).toContain('outside');
+  });
+
+  test('nor through a symlink inside the checkout', () => {
+    expect(
+      readOnlyDenial('Read', { file_path: join(checkout, 'innocent/encryption.keys.json') }, roots),
+    ).toContain('outside');
   });
 });
 
@@ -57,6 +98,10 @@ describe('readOnlySandboxSettings', () => {
     const files = settings.credentials?.files?.map((f) => f.path) ?? [];
     expect(files).toContain('/home/u/.config/gh');
     expect(files).toContain('/home/u/.git-credentials');
+    expect(files).toContain('/home/u/.funny');
+    expect(files).toContain('/home/u/.claude/.credentials.json');
+    const withData = readOnlySandboxSettings('/w', '/home/u', 'strict', 0, ['/srv/funny-data']);
+    expect(withData.credentials?.files?.map((f) => f.path)).toContain('/srv/funny-data');
   });
 });
 

@@ -81,6 +81,8 @@ const FORWARDED_MESSAGE_FIELDS = [
   'symbolReferences',
   'allowedTools',
   'disallowedTools',
+  // A read-only role's inputs (the issue's text): the runner writes them before the agent starts.
+  'roleInputs',
 ] as const;
 
 export interface SandboxThreadFailure {

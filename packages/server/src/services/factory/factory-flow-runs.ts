@@ -605,6 +605,13 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         );
         return issue.isOk() ? (issue.value.updatedAt ?? null) : null;
       },
+      issueText: async () => {
+        const text = await deps.github.issueText(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+        );
+        return text.isOk() ? text.value : null;
+      },
       holdForPaths: async (blockers) => {
         const held = await deps.runs.holdForPaths(job.run.id, blockers);
         if (held.isErr() || !held.value) return false;

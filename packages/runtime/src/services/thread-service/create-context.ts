@@ -75,6 +75,8 @@ export interface CreateAndStartThreadParams {
   baseFromRemote?: boolean;
   /** The agent may only read, at every start (`threads.read_only`). */
   readOnly?: boolean;
+  /** What a read-only agent reads besides its checkout (`agent-startup/role-inputs.ts`). */
+  roleInputs?: Record<string, string>;
   /** Branch for a `worktree` thread's worktree; generated from the title when absent. */
   branch?: string;
   prompt: string;

@@ -46,6 +46,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import type { FactoryRunScope } from './factory-action-provider.js';
+import type { IntegrationScope } from './factory-integrate.js';
 import { issueInputs, issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import type { FactoryPullRequestRef } from './factory-pull-requests.js';
 import { readRoleResult } from './factory-role-results.js';
@@ -138,6 +139,23 @@ interface ReviewPromptInput {
   change: ReviewedChange | null;
   /** Other open pull requests of this factory (their URLs). */
   otherPullRequests: readonly string[];
+  /** Set when `sha` is an integration merge of a commit that passed review: judge only what it settled. */
+  integration?: IntegrationScope | null;
+}
+
+/** How to read the change: the whole pull request, or only what an integration merge settled. */
+function howToRead(input: ReviewPromptInput): string[] {
+  const scope = input.integration;
+  if (!scope) {
+    return [
+      `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read the change with \`git diff $(git merge-base origin/HEAD ${input.sha}) ${input.sha}\` and the files around it with \`git show ${input.sha}:<path>\`.`,
+    ];
+  }
+  return [
+    `- Commit ${input.sha} merges the base branch into ${scope.from}, which was already reviewed and passed. The merge settled changes on both sides by itself (a merge driver, recorded resolutions or a regenerated file) in these paths, and only that is yours to judge:`,
+    ...scope.paths.map((path) => `  - ${path}`),
+    `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read how the merge settled them with \`git show --remerge-diff ${input.sha} -- <path>\` (or \`git diff ${scope.from} ${input.sha} -- <path>\`), and the files with \`git show ${input.sha}:<path>\`. Check that both sides' changes survive and still work together; do not review the rest of the pull request again.`,
+  ];
 }
 
 const RESULT_FORMAT = [
@@ -187,7 +205,7 @@ function reviewPrompt(input: ReviewPromptInput): string {
     ...whatItMustDo(input),
     '',
     'How to review:',
-    `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read the change with \`git diff $(git merge-base origin/HEAD ${input.sha}) ${input.sha}\` and the files around it with \`git show ${input.sha}:<path>\`.`,
+    ...howToRead(input),
     '- Judge whether the change does what the issue asks, in every case the issue names, and whether it is correct: wrong logic, missing cases, races, broken callers, security problems, data loss.',
     '- Check that the regression test would fail without the fix and that no test, check or CI step was removed, skipped or weakened to make the change pass.',
     '- Report only what you verified in the code. Style and naming are at most `low`.',
@@ -356,6 +374,11 @@ export interface FactoryReviewerDeps {
   /** Move the run into its review step (a compare-and-set on the stored state). */
   enterReview(): Promise<void>;
   count(event: string): Promise<void>;
+  /**
+   * What an integration merge settled, when `sha` is one the run made: the
+   * review then judges only those paths (the rest was reviewed before it).
+   */
+  integrationOf?(sha: string): IntegrationScope | null;
 }
 
 type ReviewEnd =
@@ -383,6 +406,14 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
   const titlePrefixOf = (sha: string) =>
     `[Factory review] #${scope.issueNumber} ${sha.slice(0, 8)} `;
 
+  /** What the integration merge `sha` settled, when the commit before it passed review. */
+  function reviewedIntegration(sha: string): IntegrationScope | null {
+    const integration = deps.integrationOf?.(sha) ?? null;
+    if (!integration) return null;
+    const before = reviews.find((review) => review.sha === integration.from);
+    return before && reviewAllowsMerge(before) ? integration : null;
+  }
+
   /** Start the reviewer's thread for `sha`; the error says why there is none. */
   async function launch(sha: string, opts: ReviewOpts): Promise<Result<string, string>> {
     const pr = deps.prUrl();
@@ -403,6 +434,7 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
       sha,
       change: change?.sha === sha ? change : null,
       otherPullRequests: (await deps.otherPullRequests?.()) ?? [],
+      integration: reviewedIntegration(sha),
     });
     const title = `${titlePrefixOf(sha)}${scope.issueTitle}`;
     const body = readOnlyRoleLaunch({ scope, title, base, opts, issue, prompt });

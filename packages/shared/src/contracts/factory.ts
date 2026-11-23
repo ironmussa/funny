@@ -315,6 +315,12 @@ export interface FactoryRunMetrics {
   mergeHolds: number;
   /** Times `merge` sent the change back (a conflict, or checks failing on the current base). */
   mergeSentBack: number;
+  /** `integrate` steps that had to merge the base in (not already up to date). */
+  integrateRounds: number;
+  /** Integrations whose conflicts were settled without an agent (merge driver, rerere, regenerator). */
+  conflictsResolvedWithoutLlm: number;
+  /** Integrations whose conflicts went to the implementing agent. */
+  conflictsSentToAgent: number;
 }
 
 export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
@@ -328,6 +334,9 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
   reviewFails: 0,
   mergeHolds: 0,
   mergeSentBack: 0,
+  integrateRounds: 0,
+  conflictsResolvedWithoutLlm: 0,
+  conflictsSentToAgent: 0,
 };
 
 export type FactoryRunSource = 'manual' | 'label';

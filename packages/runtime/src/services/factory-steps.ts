@@ -25,6 +25,8 @@ const ns = 'factory-steps';
 export const OUTPUT_LIMIT = 64 * 1024;
 /** A command may print a lot; only the tail is kept, but it must not be killed for it. */
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
+/** How much of the base's diff a conflict result carries. */
+const BASE_DIFF_LIMIT = 20_000;
 /** Values shorter than this are not masked (they would mask ordinary words). */
 const MIN_SECRET_LENGTH = 8;
 /** Environment variables whose values are secrets. */
@@ -77,6 +79,11 @@ export interface IntegrateResult {
   regeneratedPaths: string[];
   /** Paths still conflicted (on `conflict`). */
   conflictedPaths: string[];
+  /**
+   * On `conflict`: what the base changed in the conflicted paths since the
+   * branch left it (the work that merged in between), at most 20,000 characters.
+   */
+  baseDiff: string;
   /** Whether weave was the merge driver. */
   weave: boolean;
   message: string;
@@ -275,6 +282,7 @@ async function integrateStep(
       resolvedPaths: [],
       regeneratedPaths: [],
       conflictedPaths: [],
+      baseDiff: '',
       weave: gitEnv.weave,
       ...over,
     }) satisfies IntegrateResult;
@@ -319,9 +327,15 @@ async function integrateStep(
   }
   if (conflicted.length > 0) {
     await gitWrite(['merge', '--abort'], { cwd, env, reject: false });
+    // Three dots: the base's side only, from where the branch left it.
+    const diff = await gitRead(['diff', `HEAD...${base}`, '--', ...conflicted], {
+      cwd,
+      reject: false,
+    });
     return result({
       outcome: 'conflict',
       conflictedPaths: conflicted,
+      baseDiff: diff.exitCode === 0 ? diff.stdout.slice(0, BASE_DIFF_LIMIT) : '',
       message: `Merging ${base} left conflicts in: ${conflicted.join(', ')}`,
     });
   }
@@ -400,6 +414,7 @@ function failedResult(request: FactoryStepRequest, message: string): FactoryStep
     resolvedPaths: [],
     regeneratedPaths: [],
     conflictedPaths: [],
+    baseDiff: '',
     weave: false,
     message,
   };

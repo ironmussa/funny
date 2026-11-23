@@ -217,6 +217,10 @@ describe('integrate', () => {
 
     const result = await run(work, request());
     expect(result).toMatchObject({ outcome: 'conflict', conflictedPaths: ['a.txt'] });
+    if (result.kind !== 'integrate') return;
+    // The implementer is told what the base changed there.
+    expect(result.baseDiff).toContain('+BASE');
+    expect(result.baseDiff).not.toContain('FEATURE');
     expect(git(origin, 'rev-parse', 'feature')).toBe(pushed);
     // The merge was aborted: the checkout is clean.
     expect(git(work, 'status', '--porcelain')).toBe('');

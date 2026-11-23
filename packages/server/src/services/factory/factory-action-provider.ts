@@ -35,8 +35,10 @@
  *   agent's steps; each verdict keeps its thread id.
  * - `triage` decides on its own read-only thread whether the issue can be
  *   worked unattended and writes the run's contract (`factory-triage.ts`).
- * - `run_command`, `set_status`, `set_stage` and approvals are refused: there
- *   is nowhere on the server to run them (checks belong in the repository's CI).
+ * - `run_command` and `integrate` run on the runner in the run's checkout
+ *   (`factory-step-runner.ts`, `factory-integrate.ts`), never on the server.
+ * - `set_status`, `set_stage` and approvals are refused: the run has no thread
+ *   of its own and nobody to approve.
  */
 
 import {
@@ -49,6 +51,7 @@ import {
   type FactoryRunMetrics,
   type FactoryTriage,
 } from '@funny/shared/contracts/factory';
+import { EMPTY_INTEGRATE_CONFIG, type IntegrateConfig } from '@funny/workflows';
 import type {
   ActionProvider,
   ActionResult,
@@ -66,6 +69,7 @@ import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
+import { createFactoryIntegrate } from './factory-integrate.js';
 import type { FactoryIssueText } from './factory-issue-text.js';
 import { createMergeLane } from './factory-merge-lane.js';
 import {
@@ -214,6 +218,8 @@ export interface FactoryActionProviderDeps {
   proof?: FactoryProofDeps;
   /** Factory steps (a flow's command, integrate) start/poll through the runner. */
   steps?: FactoryStepDeps;
+  /** `.funny/integrate.yaml` as the flow was loaded with it: what `integrate` regenerates and checks. */
+  integrateConfig?: IntegrateConfig;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
   /**
@@ -937,6 +943,22 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     record: deps.record,
     enterReview: () => enterStage('review'),
     count: (event) => count(reviewCounted(metrics, event), { event }),
+    integrationOf: (sha) => integration.integrationOf(sha),
+  });
+
+  const integration = createFactoryIntegrate({
+    steps: deps.steps,
+    threadId: () => threadIds[0],
+    branch: scope.branch,
+    defaultBranch: deps.defaultBranch,
+    config: deps.integrateConfig ?? EMPTY_INTEGRATE_CONFIG,
+    signal: deps.signal,
+    metrics: () => metrics,
+    count: (next, attributes) => count(next, attributes),
+    carry: async (from, to) => {
+      await reviewer.carry(from, to);
+      await carryProof(from, to);
+    },
   });
 
   /** The enabler reads the repository: the App token capped by their access. */
@@ -1350,6 +1372,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     async runCommand(opts) {
       return runCommandStep(opts);
     },
+
+    integrate: () => integration.integrate(),
 
     async setStatus() {
       return refused('set_status', 'the run has no thread of its own.');

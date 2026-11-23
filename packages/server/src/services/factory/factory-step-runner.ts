@@ -53,6 +53,7 @@ const integrateResultSchema = z.object({
   resolvedPaths: z.array(z.string()),
   regeneratedPaths: z.array(z.string()),
   conflictedPaths: z.array(z.string()),
+  baseDiff: z.string().default(''),
   weave: z.boolean(),
   message: z.string(),
 });

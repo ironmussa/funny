@@ -678,6 +678,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           }
         : undefined,
       steps: deps.steps?.(scope.userId),
+      integrateConfig: flow.value.integrate,
       record,
       signal: controller.signal,
       legacyReplay: journaled.value.length === 0,

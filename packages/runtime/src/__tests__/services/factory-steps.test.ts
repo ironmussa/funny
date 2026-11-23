@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
  * and `integrate` merging the base in on temporary repositories.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -202,6 +202,37 @@ describe('integrate', () => {
     expect(result.outcome).toBe('merged');
     expect(result.regeneratedPaths).toEqual(['lock.json']);
     expect(readFileSync(join(work, 'lock.json'), 'utf8')).toBe('{"v":"regenerated"}\n');
+    expect(git(origin, 'rev-parse', 'feature')).toBe(result.headAfter);
+  });
+
+  // Found in the E2E: the repository's broken husky hook failed the merge commit.
+  test("a regenerated merge is committed without the repository's pre-commit hook, as git merge does", async () => {
+    const { seed, work, origin } = repos();
+    write(work, 'lock.json', '{"v":"feature"}\n');
+    commit(work, 'feature lock');
+    write(seed, 'lock.json', '{"v":"base"}\n');
+    commit(seed, 'base lock');
+    git(seed, 'push', '-q', 'origin', 'main');
+    // Its own hooks directory, so a hooks path set on the machine cannot hide the hook.
+    mkdirSync(join(work, '.test-hooks'));
+    write(work, '.test-hooks/pre-commit', '#!/bin/sh\necho broken hook >&2\nexit 1\n');
+    chmodSync(join(work, '.test-hooks/pre-commit'), 0o755);
+    git(work, 'config', 'core.hooksPath', '.test-hooks');
+
+    const result = await run(
+      work,
+      request({
+        regenerators: [
+          {
+            paths: ['lock.json'],
+            run: 'echo \'{"v":"regenerated"}\' > lock.json',
+            timeoutMs: 10_000,
+          },
+        ],
+      }),
+    );
+    if (result.kind !== 'integrate') throw new Error('expected an integrate result');
+    expect(result.outcome).toBe('merged');
     expect(git(origin, 'rev-parse', 'feature')).toBe(result.headAfter);
   });
 

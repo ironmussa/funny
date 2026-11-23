@@ -197,13 +197,13 @@ export function ProjectActionsMenu({
               )
             )}
             <DropdownMenuItem
+              variant="destructive"
               data-testid="project-menu-delete"
               onClick={(event) => {
                 event.stopPropagation();
                 setOpen(false);
                 onDeleteProject(project.id, project.name);
               }}
-              className="text-status-error focus:text-status-error"
             >
               <Trash2 className="icon-sm" />
               {t('sidebar.deleteProject')}

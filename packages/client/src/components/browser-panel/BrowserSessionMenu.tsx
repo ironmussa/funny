@@ -53,9 +53,9 @@ export function BrowserSessionMenu() {
             Close browser session
           </DropdownMenuItem>
           <DropdownMenuItem
+            variant="destructive"
             onSelect={() => setConfirmClear(true)}
             data-testid="browser-panel-clear-profile"
-            className="text-destructive"
           >
             <Trash2 className="icon-base" />
             Clear browser profile…

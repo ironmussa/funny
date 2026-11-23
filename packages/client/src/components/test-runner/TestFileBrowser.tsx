@@ -143,9 +143,10 @@ function SpecItem({
         {!hasMultipleProjects &&
           (isRunning && fileStatus === 'running' ? (
             <TooltipIconButton
+              variant="ghost-destructive"
               data-testid={`test-spec-stop-${spec.file}-${spec.line}`}
               size="icon"
-              className="text-destructive hover:text-destructive size-5 opacity-100"
+              className="size-5 opacity-100"
               onClick={onStop}
               tooltip={t('common.stop')}
             >

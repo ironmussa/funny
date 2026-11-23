@@ -447,9 +447,10 @@ export function AllThreadsView() {
       <div className="border-border flex items-center gap-3 border-b px-4 py-3">
         {projectFilter && (
           <TooltipIconButton
+            variant="muted"
             data-testid="all-threads-back"
             onClick={handleBack}
-            className="text-muted-foreground hover:text-foreground"
+
             tooltip={t('common.back')}
           >
             <ChevronLeft className="icon-base" />

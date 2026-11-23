@@ -270,9 +270,10 @@ function InstalledServerCard({
             onToggle={onToggle}
           />
           <TooltipIconButton
+            variant="muted-destructive"
             onClick={onRemove}
             disabled={removing}
-            className="text-muted-foreground hover:text-destructive"
+
             tooltip={t('common.delete')}
           >
             {removing ? (

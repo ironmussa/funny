@@ -298,9 +298,10 @@ function PinDeleteSection({ menu }: { menu: Menu }) {
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem
+        variant="destructive"
         data-testid="header-menu-delete"
         onClick={() => setDeleteOpen(true)}
-        className="text-status-error focus:text-status-error cursor-pointer"
+        className="cursor-pointer"
       >
         <Trash2 className="icon-base mr-2" />
         {t('common.delete', 'Delete')}

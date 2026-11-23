@@ -172,15 +172,17 @@ export function ArchivedThreadsSettings() {
             renderActions={(thread) => (
               <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100">
                 <TooltipIconButton
+                  variant="muted"
                   onClick={() => handleUnarchive(thread)}
-                  className="text-muted-foreground hover:text-foreground"
+
                   tooltip={t('archived.restore')}
                 >
                   <ArchiveRestore className="icon-sm" />
                 </TooltipIconButton>
                 <TooltipIconButton
+                  variant="muted-destructive"
                   onClick={() => handleDelete(thread)}
-                  className="text-muted-foreground hover:text-destructive"
+
                   tooltip={t('common.delete')}
                 >
                   <Trash2 className="icon-sm" />

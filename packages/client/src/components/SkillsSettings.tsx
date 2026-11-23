@@ -81,9 +81,10 @@ function InstalledSkillCard({
       </div>
       {skill.scope !== 'project' && (
         <TooltipIconButton
+          variant="muted-destructive"
           onClick={onRemove}
           disabled={removing}
-          className="text-muted-foreground hover:text-destructive shrink-0"
+          className="shrink-0"
           tooltip={t('common.remove')}
         >
           {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}

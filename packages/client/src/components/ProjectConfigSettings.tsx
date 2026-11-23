@@ -193,8 +193,9 @@ export function ProjectConfigSettings() {
                 data-testid={`env-file-edit-${i}`}
               />
               <TooltipIconButton
+                variant="muted-destructive"
                 onClick={() => removeEnvFile(i)}
-                className="text-muted-foreground hover:text-status-error opacity-0 group-hover:opacity-100"
+                className="opacity-0 group-hover:opacity-100"
                 data-testid={`env-file-remove-${i}`}
                 tooltip={t('common.delete')}
               >
@@ -272,8 +273,9 @@ export function ProjectConfigSettings() {
                   />
                 </div>
                 <TooltipIconButton
+                  variant="muted-destructive"
                   onClick={() => removePortGroup(gi)}
-                  className="text-muted-foreground hover:text-status-error opacity-0 group-hover:opacity-100"
+                  className="opacity-0 group-hover:opacity-100"
                   data-testid={`port-group-remove-${gi}`}
                   tooltip={t('common.delete')}
                 >

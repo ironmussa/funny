@@ -258,8 +258,9 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             <TooltipContent>{open ? t('common.collapse') : t('common.expand')}</TooltipContent>
           </Tooltip>
           <TooltipIconButton
+            variant="ghost-destructive"
             size="icon"
-            className="text-destructive hover:text-destructive size-6"
+            className="size-6"
             onClick={() => setConfirmDelete(true)}
             disabled={deleting}
             data-testid={`runner-item-${runner.runnerId}-delete`}
@@ -295,8 +296,9 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
                 >
                   <span className="truncate">{project?.name ?? a.projectId}</span>
                   <TooltipIconButton
+                    variant="ghost-destructive"
                     size="icon"
-                    className="text-destructive hover:text-destructive size-5"
+                    className="size-5"
                     onClick={() => handleUnassign(a.projectId)}
                     data-testid={`runner-item-${runner.runnerId}-unassign-${a.projectId}`}
                     tooltip={t('common.unassign')}

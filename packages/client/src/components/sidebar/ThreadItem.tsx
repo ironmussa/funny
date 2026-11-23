@@ -124,6 +124,7 @@ function StopFactoryRunItem({
     <>
       <DropdownMenuSeparator />
       <DropdownMenuItem
+        variant="destructive"
         data-testid={`thread-stop-factory-run-${thread.id}`}
         onClick={(e) => {
           e.stopPropagation();
@@ -131,7 +132,6 @@ function StopFactoryRunItem({
             toastError(error, 'factory'),
           );
         }}
-        className="text-status-error focus:text-status-error"
       >
         <Factory className="icon-sm" />
         {t('factory.activity.stopRun', 'Stop factory run')}
@@ -256,6 +256,7 @@ function ThreadItemActions({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                variant="destructive"
                 onClick={async (e) => {
                   e.stopPropagation();
                   const result = await api.stopThread(thread.id);
@@ -263,7 +264,6 @@ function ThreadItemActions({
                     console.error('Failed to stop thread:', result.error);
                   }
                 }}
-                className="text-status-error focus:text-status-error"
               >
                 <Square className="icon-sm" />
                 {t('common.stop')}
@@ -286,12 +286,12 @@ function ThreadItemActions({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                variant="destructive"
                 data-testid={`thread-delete-${thread.id}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="text-status-error focus:text-status-error"
               >
                 <Trash2 className="icon-sm" />
                 {t('common.delete')}

@@ -214,12 +214,12 @@ export const KanbanCard = memo(function KanbanCard({
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
+                      variant="destructive"
                       onClick={async (e) => {
                         e.stopPropagation();
                         const result = await api.stopThread(thread.id);
                         if (result.isErr()) console.error('Failed to stop thread:', result.error);
                       }}
-                      className="text-status-error focus:text-status-error"
                     >
                       <Square className="icon-sm" />
                       {t('common.stop')}
@@ -239,12 +239,12 @@ export const KanbanCard = memo(function KanbanCard({
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  variant="destructive"
                   data-testid={`kanban-card-delete-${thread.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onDelete(thread);
                   }}
-                  className="text-status-error focus:text-status-error"
                 >
                   <Trash2 className="icon-sm" />
                   {t('common.delete')}

@@ -382,8 +382,9 @@ export function TeamMembers() {
                       )}
                     </TooltipIconButton>
                     <TooltipIconButton
+                      variant="muted-destructive"
                       size="icon"
-                      className="text-muted-foreground hover:text-destructive size-7 shrink-0"
+                      className="size-7 shrink-0"
                       onClick={() => handleRevokeLink(link.id)}
                       data-testid={`team-link-revoke-${link.id}`}
                       tooltip={t('common.revoke')}

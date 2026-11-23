@@ -250,7 +250,8 @@ export function CommitActionsMenu({
                 {t('history.revert', 'Revert')}
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
+                variant="destructive"
+
                 onClick={() => request('reset', hash)}
                 data-testid={`graph-commit-menu-reset-${shortHash}`}
               >

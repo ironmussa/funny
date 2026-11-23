@@ -410,15 +410,10 @@ export function CommitDetailDialog({
                 )}
                 <ScrollArea className="min-h-0 flex-1">
                   {commitFiles.length === 0 ? (
-                    <EmptyState
-                      fill={false}
-                      className="py-4"
-                      title={t('history.noFiles', 'No files changed')}
-                    />
+                    <EmptyState fill={false} title={t('history.noFiles', 'No files changed')} />
                   ) : treeFiles.length === 0 ? (
                     <EmptyState
                       fill={false}
-                      className="py-4"
                       title={t('history.noMatchingFiles', 'No matching files')}
                     />
                   ) : (

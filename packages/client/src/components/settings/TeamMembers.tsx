@@ -243,7 +243,7 @@ export function TeamMembers() {
   const ownerCount = members.filter((m) => m.role === 'owner').length;
 
   if (loading) {
-    return <LoadingState fill={false} className="py-12" label="Loading members…" />;
+    return <LoadingState padding="lg" fill={false} label="Loading members…" />;
   }
 
   return (

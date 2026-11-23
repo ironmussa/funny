@@ -143,7 +143,7 @@ export function StartupCommandsSettings() {
   };
 
   if (!selectedProjectId) {
-    return <EmptyState fill={false} className="py-6" title={t('startup.noCommands')} />;
+    return <EmptyState padding="md" fill={false} title={t('startup.noCommands')} />;
   }
 
   return (
@@ -169,8 +169,8 @@ export function StartupCommandsSettings() {
       {/* Command list */}
       {commands.length === 0 && !adding && (
         <EmptyState
+          padding="md"
           fill={false}
-          className="py-8"
           title={t('startup.noCommands')}
           action={
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>

@@ -241,16 +241,16 @@ export function CreateDesignDialog({
 
           <TabsContent value="template" className="mt-4 min-h-[360px]">
             <EmptyState
+              padding="md"
               fill={false}
-              className="py-8"
               title={t('createDesign.template.empty', 'Templates coming soon.')}
             />
           </TabsContent>
 
           <TabsContent value="other" className="mt-4 min-h-[360px]">
             <EmptyState
+              padding="md"
               fill={false}
-              className="py-8"
               title={t('createDesign.other.empty', 'More design types coming soon.')}
             />
           </TabsContent>

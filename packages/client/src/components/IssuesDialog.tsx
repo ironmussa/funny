@@ -121,8 +121,8 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
         <ScrollArea className="-mx-6 min-h-0 flex-1 px-6">
           {loading && issues.length === 0 ? (
             <LoadingState
+              padding="lg"
               fill={false}
-              className="py-12"
               testId="issues-loading"
               label={t('common.loading', 'Loading…')}
             />
@@ -132,7 +132,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
               <p className="mt-1 text-xs">{error}</p>
             </div>
           ) : issues.length === 0 ? (
-            <EmptyState fill={false} className="py-12" title={t('issues.noIssues')} />
+            <EmptyState padding="lg" fill={false} title={t('issues.noIssues')} />
           ) : (
             <div className="space-y-1">
               {issues.map((issue) => (

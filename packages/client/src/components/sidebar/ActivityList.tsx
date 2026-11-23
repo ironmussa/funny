@@ -301,7 +301,7 @@ export function ActivityList({
     return (
       <EmptyState
         fill={false}
-        className="px-2 py-4"
+        className="px-2"
         title={t('activity.empty')}
         testId="activity-panel-empty"
       />

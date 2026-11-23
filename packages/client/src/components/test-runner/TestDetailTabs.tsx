@@ -710,7 +710,7 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
   }, [entry.postData]);
 
   if (queryParams.length === 0 && !hasBody) {
-    return <EmptyState fill={false} className="py-4" title="No payload data" />;
+    return <EmptyState fill={false} title="No payload data" />;
   }
 
   return (

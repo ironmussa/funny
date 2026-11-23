@@ -190,11 +190,7 @@ export function PipelineSettings() {
 
   if (!selectedProjectId) {
     return (
-      <EmptyState
-        fill={false}
-        className="py-6"
-        title="Select a project to manage pipeline settings."
-      />
+      <EmptyState padding="md" fill={false} title="Select a project to manage pipeline settings." />
     );
   }
 

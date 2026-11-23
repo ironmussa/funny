@@ -797,14 +797,14 @@ export function McpServerSettings() {
 
         {loading ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-6"
             testId="mcp-settings-loading"
             label={t('mcp.loadingServers')}
           />
         ) : servers.length === 0 ? (
-          <EmptyState fill={false} className="py-6" title={t('mcp.noServers')} />
+          <EmptyState padding="md" fill={false} title={t('mcp.noServers')} />
         ) : (
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {servers.map((server) => (

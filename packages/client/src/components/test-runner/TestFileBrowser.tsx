@@ -767,20 +767,16 @@ export function TestFileBrowser({
       <ScrollArea className="flex-1 pr-3">
         {isLoading ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-8"
             testId="test-file-browser-loading"
             label="Loading tests…"
           />
         ) : files.length === 0 ? (
-          <EmptyState fill={false} className="px-4 py-8" title="No test files found" />
+          <EmptyState padding="md" fill={false} title="No test files found" />
         ) : filteredFiles.length === 0 ? (
-          <EmptyState
-            fill={false}
-            className="px-4 py-8"
-            title={<> No tests matching "{search}" </>}
-          />
+          <EmptyState padding="md" fill={false} title={<> No tests matching "{search}" </>} />
         ) : (
           tree.map((node) => (
             <TreeItem

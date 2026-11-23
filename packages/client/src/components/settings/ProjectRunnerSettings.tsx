@@ -74,7 +74,7 @@ export function ProjectRunnerSettings() {
   );
 
   if (!projectId || !settings) {
-    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
+    return <LoadingState padding="md" fill={false} label={t('common.loading', 'Loading…')} />;
   }
 
   const runners = settings.runners ?? [];

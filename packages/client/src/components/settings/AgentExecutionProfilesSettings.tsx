@@ -191,7 +191,7 @@ export function AgentExecutionProfilesSettings() {
   );
 
   if (loading) {
-    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
+    return <LoadingState padding="md" fill={false} label={t('common.loading', 'Loading…')} />;
   }
 
   return (
@@ -302,7 +302,7 @@ export function ProjectAgentExecutionProfileSettings() {
   );
 
   if (loading) {
-    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
+    return <LoadingState padding="md" fill={false} label={t('common.loading', 'Loading…')} />;
   }
 
   return (

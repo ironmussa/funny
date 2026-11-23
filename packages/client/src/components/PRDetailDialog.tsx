@@ -204,7 +204,6 @@ function PRDetailInfoTab({
               ) : fileSummaries.length === 0 ? (
                 <EmptyState
                   fill={false}
-                  className="py-4"
                   title={fileSearch ? 'No matching files' : 'No files changed'}
                 />
               ) : (

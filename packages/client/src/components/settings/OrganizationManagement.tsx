@@ -151,7 +151,7 @@ export function OrganizationManagement() {
   }, [deleteConfirm, loadOrgs]);
 
   if (loading) {
-    return <LoadingState fill={false} className="py-12" label="Loading organizations…" />;
+    return <LoadingState padding="lg" fill={false} label="Loading organizations…" />;
   }
 
   return (
@@ -223,8 +223,8 @@ export function OrganizationManagement() {
       <div className="settings-card">
         {orgs.length === 0 ? (
           <EmptyState
+            padding="md"
             fill={false}
-            className="px-4 py-6"
             title="No organizations yet. Create one above to get started."
           />
         ) : (

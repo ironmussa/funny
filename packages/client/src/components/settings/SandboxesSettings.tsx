@@ -311,8 +311,9 @@ export function SandboxesSettings() {
           <LoadingState fill={false} label="Loading…" />
         ) : connections.length === 0 ? (
           <EmptyState
+            padding="md"
             fill={false}
-            className="border-border/50 rounded-lg border border-dashed px-4 py-6"
+            className="border-border/50 rounded-lg border border-dashed"
             icon={Boxes}
             title="No sandbox providers connected yet."
             description="Add one above to run threads in their own sandbox."

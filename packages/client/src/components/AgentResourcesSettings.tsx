@@ -161,9 +161,9 @@ export function AgentResourcesSettings() {
 
       {loading ? (
         <LoadingState
+          padding="md"
           fill={false}
           layout="inline"
-          className="py-6"
           testId="agent-resources-loading"
           label={t('common.loading')}
         />
@@ -191,7 +191,7 @@ export function AgentResourcesSettings() {
           })}
 
           {resources.length === 0 && (
-            <EmptyState fill={false} className="py-6" title={t('agentResources.empty')} />
+            <EmptyState padding="md" fill={false} title={t('agentResources.empty')} />
           )}
 
           {/* Incompatible resources — shown for audit only; not suggested or injected. */}

@@ -210,9 +210,9 @@ export function VirtualThreadList({
       </div>
       {loadingMore && (
         <LoadingState
+          padding="sm"
           fill={false}
           layout="inline"
-          className="py-3"
           testId="virtual-thread-list-loading-more"
           label={t('common.loading')}
         />

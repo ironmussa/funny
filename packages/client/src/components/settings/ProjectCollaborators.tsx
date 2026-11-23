@@ -251,7 +251,7 @@ export function ProjectCollaborators() {
       {/* Member list */}
       <div className="settings-card divide-border/50 divide-y">
         {members.length === 0 ? (
-          <EmptyState fill={false} className="px-4 py-6" title="No collaborators yet." />
+          <EmptyState padding="md" fill={false} title="No collaborators yet." />
         ) : (
           members.map((m) => {
             const isOwner = m.userId === ownerId;

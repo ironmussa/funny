@@ -163,7 +163,7 @@ export function ProjectConfigSettings() {
   }
 
   if (loading) {
-    return <LoadingState fill={false} className="py-6" label={t('common.loading')} />;
+    return <LoadingState padding="md" fill={false} label={t('common.loading')} />;
   }
 
   return (

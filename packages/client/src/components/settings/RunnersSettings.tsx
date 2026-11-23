@@ -477,8 +477,9 @@ export function RunnersSettings() {
           <LoadingState fill={false} label="Loading…" />
         ) : runners.length === 0 ? (
           <EmptyState
+            padding="md"
             fill={false}
-            className="border-border/50 rounded-lg border border-dashed px-4 py-6"
+            className="border-border/50 rounded-lg border border-dashed"
             icon={Server}
             title="No runners connected yet."
             description="Copy the install command above and run it on any machine."

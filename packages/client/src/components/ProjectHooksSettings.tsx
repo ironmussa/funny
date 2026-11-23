@@ -386,7 +386,7 @@ export function ProjectHooksSettings() {
   }, [hooks]);
 
   if (!selectedProjectId) {
-    return <EmptyState fill={false} className="py-6" title={t('hooks.noHooks')} />;
+    return <EmptyState padding="md" fill={false} title={t('hooks.noHooks')} />;
   }
 
   return (
@@ -411,8 +411,8 @@ export function ProjectHooksSettings() {
       {/* Empty state */}
       {hooks.length === 0 && !adding && (
         <EmptyState
+          padding="md"
           fill={false}
-          className="py-8"
           title={t('hooks.noHooks')}
           action={
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>

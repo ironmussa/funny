@@ -200,15 +200,10 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 )}
                 <ScrollArea className="min-h-0 flex-1">
                   {stashFiles.length === 0 ? (
-                    <EmptyState
-                      fill={false}
-                      className="py-4"
-                      title={t('review.noFiles', 'No files')}
-                    />
+                    <EmptyState fill={false} title={t('review.noFiles', 'No files')} />
                   ) : stashTreeFiles.length === 0 ? (
                     <EmptyState
                       fill={false}
-                      className="py-4"
                       title={t('history.noMatchingFiles', 'No matching files')}
                     />
                   ) : (

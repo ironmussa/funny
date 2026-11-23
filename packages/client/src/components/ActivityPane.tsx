@@ -448,8 +448,9 @@ export function ActivityPane() {
               />
             ) : filesLoading ? (
               <LoadingState
+                padding="sm"
                 fill={false}
-                className="px-4 py-3"
+                className="px-4"
                 label={t('activity.loadingFiles', 'Loading...')}
               />
             ) : (

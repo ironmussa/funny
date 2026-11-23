@@ -13,7 +13,7 @@ export function ProjectPickerResults({
 }) {
   const { t } = useTranslation();
   if (projects.length === 0)
-    return <EmptyState fill={false} className="py-3" title={t('commandPalette.noResults')} />;
+    return <EmptyState padding="sm" fill={false} title={t('commandPalette.noResults')} />;
   return projects.map((project) => (
     <button
       key={project.id}

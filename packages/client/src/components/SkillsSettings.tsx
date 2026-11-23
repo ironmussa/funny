@@ -402,14 +402,14 @@ export function SkillsSettings() {
 
         {loading ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-6"
             testId="skills-loading"
             label={t('skills.loadingSkills')}
           />
         ) : globalSkills.length === 0 ? (
-          <EmptyState fill={false} className="py-6" title={t('skills.noGlobalSkills')} />
+          <EmptyState padding="md" fill={false} title={t('skills.noGlobalSkills')} />
         ) : (
           <div className="space-y-1.5">
             {globalSkills.map((skill) => (
@@ -437,14 +437,14 @@ export function SkillsSettings() {
 
         {loadingPlugins ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-6"
             testId="skills-loading-plugins"
             label={t('plugins.loadingPlugins')}
           />
         ) : plugins.length === 0 ? (
-          <EmptyState fill={false} className="py-4" title={t('plugins.noPlugins')} />
+          <EmptyState fill={false} title={t('plugins.noPlugins')} />
         ) : (
           <div className="space-y-1.5">
             {plugins.map((plugin) => (

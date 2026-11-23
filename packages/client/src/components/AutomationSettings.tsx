@@ -175,9 +175,7 @@ export function AutomationSettings() {
   };
 
   if (!selectedProjectId) {
-    return (
-      <EmptyState fill={false} className="py-6" title="Select a project to manage automations." />
-    );
+    return <EmptyState padding="md" fill={false} title="Select a project to manage automations." />;
   }
 
   return (
@@ -195,8 +193,8 @@ export function AutomationSettings() {
       {/* Automation list */}
       {automations.length === 0 ? (
         <EmptyState
+          padding="md"
           fill={false}
-          className="py-8"
           title="No automations yet."
           action={
             <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>

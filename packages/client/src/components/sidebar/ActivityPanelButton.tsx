@@ -403,7 +403,7 @@ function WatchersDialog({
         </div>
         <ScrollArea className="min-h-0 flex-1 px-3 py-2">
           {filtered.length === 0 ? (
-            <EmptyState fill={false} className="py-12" title="No matching background activity." />
+            <EmptyState padding="lg" fill={false} title="No matching background activity." />
           ) : (
             <ActivityEntryList
               items={filtered.slice(0, visibleCount)}
@@ -448,7 +448,7 @@ function BackgroundEntriesTab({
         {activeCount} active · {items.length - activeCount} in history
       </p>
       {items.length === 0 ? (
-        <EmptyState fill={false} className="px-2 py-4" title="No background activity yet." />
+        <EmptyState fill={false} className="px-2" title="No background activity yet." />
       ) : (
         <>
           <ScrollArea className={cn('max-h-96', items.length > 6 && 'h-96')}>

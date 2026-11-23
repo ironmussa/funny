@@ -441,7 +441,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
 
   // Loading / Checking state
   if (view === 'checking') {
-    return <LoadingState fill={false} className="py-12" testId="clone-repo-checking" />;
+    return <LoadingState padding="lg" fill={false} testId="clone-repo-checking" />;
   }
 
   // Error state — API call failed (network error, server down, etc.)
@@ -668,7 +668,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
           )}
 
           {!loadingRepos && repos.length === 0 && (
-            <EmptyState fill={false} className="py-8" title={t('github.repos.noRepos')} />
+            <EmptyState padding="md" fill={false} title={t('github.repos.noRepos')} />
           )}
 
           <div ref={sentinelRef} aria-hidden className="h-1 w-full" />

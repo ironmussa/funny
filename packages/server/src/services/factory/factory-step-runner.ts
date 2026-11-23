@@ -60,7 +60,6 @@ const integrateResultSchema = z.object({
 
 const stepResultSchema = z.discriminatedUnion('kind', [commandResultSchema, integrateResultSchema]);
 
-export type CommandStepResult = z.infer<typeof commandResultSchema>;
 export type IntegrateStepResult = z.infer<typeof integrateResultSchema>;
 export type FactoryStepResult = z.infer<typeof stepResultSchema>;
 
@@ -70,6 +69,26 @@ export type StepRun =
 
 const STEP_POLL_MS = 2_000;
 const STEP_OFFLINE_GRACE_MS = 3 * 60_000;
+
+/** What one poll says: the step's end, or keep waiting (`offline`: the runner could not be reached). */
+type PollVerdict = { kind: 'end'; run: StepRun } | { kind: 'wait'; offline: boolean };
+
+function verdictOf(polled: Result<{ state: string; result?: unknown }, string>): PollVerdict {
+  if (polled.isErr()) {
+    if (polled.error.startsWith(RUNNER_UNAVAILABLE_PREFIX)) return { kind: 'wait', offline: true };
+    const why =
+      polled.error === 'step-not-found' ? 'the runner restarted during the step.' : polled.error;
+    return { kind: 'end', run: { kind: 'unavailable', why } };
+  }
+  if (polled.value.state !== 'done') return { kind: 'wait', offline: false };
+  const parsed = stepResultSchema.safeParse(polled.value.result);
+  return {
+    kind: 'end',
+    run: parsed.success
+      ? { kind: 'done', result: parsed.data }
+      : { kind: 'unavailable', why: 'the runner answered a result the server cannot read.' },
+  };
+}
 
 /**
  * Start `body` on the runner of `threadId` and wait for its result, up to its
@@ -93,26 +112,12 @@ export async function runStepOnRunner(
     await interruptibleSleep(pollMs, signal).catch(() => undefined);
     if (signal.aborted) break;
     const polled = await steps.pollStep(threadId, stepId);
-    if (polled.isErr()) {
-      if (!polled.error.startsWith(RUNNER_UNAVAILABLE_PREFIX)) {
-        return {
-          kind: 'unavailable',
-          why:
-            polled.error === 'step-not-found'
-              ? 'the runner restarted during the step.'
-              : polled.error,
-        };
-      }
-      offlineSince ??= Date.now();
-      if (Date.now() - offlineSince > graceMs) return { kind: 'unavailable', why: polled.error };
-      continue;
+    const verdict = verdictOf(polled);
+    if (verdict.kind === 'end') return verdict.run;
+    offlineSince = verdict.offline ? (offlineSince ?? Date.now()) : null;
+    if (offlineSince !== null && Date.now() - offlineSince > graceMs && polled.isErr()) {
+      return { kind: 'unavailable', why: polled.error };
     }
-    offlineSince = null;
-    if (polled.value.state !== 'done') continue;
-    const parsed = stepResultSchema.safeParse(polled.value.result);
-    return parsed.success
-      ? { kind: 'done', result: parsed.data }
-      : { kind: 'unavailable', why: 'the runner answered a result the server cannot read.' };
   }
 
   await steps.cancelStep?.(threadId, stepId);

@@ -32,12 +32,7 @@ import {
   clearThreadWorkspace,
   requestThreadWorkspaceCleanup,
 } from '../thread-workspace-cleanup.js';
-import {
-  cancelRunnerJob,
-  pollRunnerJob,
-  runnerErrorText,
-  startRunnerJob,
-} from './factory-runner-jobs.js';
+import { cancelRunnerJob, pollRunnerJob, startRunnerJob } from './factory-runner-jobs.js';
 
 const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 

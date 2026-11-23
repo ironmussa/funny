@@ -23,7 +23,7 @@ export const RUNNER_UNAVAILABLE_PREFIX = 'runner unavailable: ';
 const runnerErrorBody = z.object({ error: z.string() }).passthrough();
 
 /** The runner's `{ error }` message, when its answer carries one. */
-export function runnerErrorText(body: string | null | undefined): string | null {
+function runnerErrorText(body: string | null | undefined): string | null {
   if (!body) return null;
   const parsed = parseStoredJson(runnerErrorBody, body, 'runner error');
   return parsed.ok ? parsed.value.error.slice(0, 500) : null;

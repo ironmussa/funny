@@ -264,9 +264,84 @@ async function runChecks(
   return null;
 }
 
+type IntegrateRequest = Extract<FactoryStepRequest, { kind: 'integrate' }>;
+
+/** How the merge of the base went: settled (with what was regenerated), conflicted, or failed. */
+type MergeOutcome =
+  | { kind: 'settled'; regenerated: string[] }
+  | { kind: 'conflict'; paths: string[] }
+  | { kind: 'failed'; message: string };
+
+/**
+ * Merge `base` in (never a rebase: no force push, and the reviewed commit stays
+ * in the history), regenerate the declared paths, and abort on what is left.
+ */
+async function mergeBase(
+  cwd: string,
+  request: IntegrateRequest,
+  base: string,
+  signal: AbortSignal,
+  env: Record<string, string>,
+): Promise<MergeOutcome> {
+  const message = `Merge ${base} into ${request.branch}`;
+  await gitWrite(['merge', '--no-ff', '--no-edit', '-m', message, base], {
+    cwd,
+    env,
+    reject: false,
+  });
+  const conflicted = await conflictedPaths(cwd, env);
+  if (conflicted.length === 0) return { kind: 'settled', regenerated: [] };
+  const produced = await regenerate(cwd, conflicted, request.regenerators, signal, env);
+  const left = 'error' in produced ? [] : await conflictedPaths(cwd, env);
+  if ('error' in produced || left.length > 0) {
+    await gitWrite(['merge', '--abort'], { cwd, env, reject: false });
+  }
+  if ('error' in produced) return { kind: 'failed', message: produced.error };
+  if (left.length > 0) return { kind: 'conflict', paths: left };
+  return { kind: 'settled', regenerated: produced.paths };
+}
+
+/** Commit a merge left open (it needed regenerated files); the error, or null. */
+async function commitOpenMerge(cwd: string, env: Record<string, string>): Promise<string | null> {
+  const open = await gitRead(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd, reject: false });
+  if (open.exitCode !== 0) return null;
+  const committed = await gitWrite(['commit', '--no-edit'], { cwd, env, reject: false });
+  if (committed.exitCode === 0) return null;
+  await gitWrite(['merge', '--abort'], { cwd, env, reject: false });
+  return `Could not commit the merge: ${committed.stderr.trim()}`;
+}
+
+/** Run the integration checks and push; on failure the branch goes back to `headBefore`. */
+async function checkAndPush(
+  cwd: string,
+  request: IntegrateRequest,
+  headBefore: string,
+  signal: AbortSignal,
+  env: Record<string, string>,
+): Promise<string | null> {
+  let failure = await runChecks(cwd, request.checks, signal, request.timeoutMs, env);
+  if (!failure) {
+    const pushed = await gitNetwork(['push', 'origin', `HEAD:${request.branch}`], {
+      cwd,
+      env,
+      reject: false,
+    });
+    if (pushed.exitCode !== 0)
+      failure = `Could not push ${request.branch}: ${pushed.stderr.trim()}`;
+  }
+  if (failure) await gitWrite(['reset', '--hard', headBefore], { cwd, env, reject: false });
+  return failure;
+}
+
+/** What the base changed in `paths` since the branch left it (three dots: the base's side only). */
+async function baseDiffOf(cwd: string, base: string, paths: string[]): Promise<string> {
+  const diff = await gitRead(['diff', `HEAD...${base}`, '--', ...paths], { cwd, reject: false });
+  return diff.exitCode === 0 ? diff.stdout.slice(0, BASE_DIFF_LIMIT) : '';
+}
+
 async function integrateStep(
   cwd: string,
-  request: Extract<FactoryStepRequest, { kind: 'integrate' }>,
+  request: IntegrateRequest,
   signal: AbortSignal,
   gitEnv: { env: Record<string, string>; weave: boolean },
 ): Promise<IntegrateResult> {
@@ -306,73 +381,26 @@ async function integrateStep(
   }
 
   const touched = await bothChanged(cwd, base);
-  const message = `Merge ${base} into ${request.branch}`;
-  // Never a rebase: no force push, and the reviewed commit stays in the history.
-  await gitWrite(['merge', '--no-ff', '--no-edit', '-m', message, base], {
-    cwd,
-    env,
-    reject: false,
-  });
-  let conflicted = await conflictedPaths(cwd, env);
-  let regenerated: string[] = [];
-  if (conflicted.length > 0) {
-    const produced = await regenerate(cwd, conflicted, request.regenerators, signal, env);
-    if ('error' in produced) {
-      await gitWrite(['merge', '--abort'], { cwd, env, reject: false });
-      return result({ outcome: 'failed', message: produced.error });
-    }
-    regenerated = produced.paths;
-    conflicted = await conflictedPaths(cwd, env);
-  }
-  if (conflicted.length > 0) {
-    await gitWrite(['merge', '--abort'], { cwd, env, reject: false });
-    // Three dots: the base's side only, from where the branch left it.
-    const diff = await gitRead(['diff', `HEAD...${base}`, '--', ...conflicted], {
-      cwd,
-      reject: false,
-    });
+  const merged = await mergeBase(cwd, request, base, signal, env);
+  if (merged.kind === 'failed') return result({ outcome: 'failed', message: merged.message });
+  if (merged.kind === 'conflict') {
     return result({
       outcome: 'conflict',
-      conflictedPaths: conflicted,
-      baseDiff: diff.exitCode === 0 ? diff.stdout.slice(0, BASE_DIFF_LIMIT) : '',
-      message: `Merging ${base} left conflicts in: ${conflicted.join(', ')}`,
+      conflictedPaths: merged.paths,
+      baseDiff: await baseDiffOf(cwd, base, merged.paths),
+      message: `Merging ${base} left conflicts in: ${merged.paths.join(', ')}`,
     });
   }
-  // A merge that needed regenerated files is still open: commit it.
-  const open = await gitRead(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd, reject: false });
-  if (open.exitCode === 0) {
-    const committed = await gitWrite(['commit', '--no-edit'], { cwd, env, reject: false });
-    if (committed.exitCode !== 0) {
-      await gitWrite(['merge', '--abort'], { cwd, env, reject: false });
-      return result({
-        outcome: 'failed',
-        message: `Could not commit the merge: ${committed.stderr.trim()}`,
-      });
-    }
-  }
-  const failedCheck = await runChecks(cwd, request.checks, signal, request.timeoutMs, env);
-  if (failedCheck) {
-    await gitWrite(['reset', '--hard', headBefore], { cwd, env, reject: false });
-    return result({ outcome: 'failed', message: failedCheck });
-  }
-  const pushed = await gitNetwork(['push', 'origin', `HEAD:${request.branch}`], {
-    cwd,
-    env,
-    reject: false,
-  });
-  if (pushed.exitCode !== 0) {
-    await gitWrite(['reset', '--hard', headBefore], { cwd, env, reject: false });
-    return result({
-      outcome: 'failed',
-      message: `Could not push ${request.branch}: ${pushed.stderr.trim()}`,
-    });
-  }
-  const regeneratedSet = new Set(regenerated);
+  const failure =
+    (await commitOpenMerge(cwd, env)) ??
+    (await checkAndPush(cwd, request, headBefore, signal, env));
+  if (failure) return result({ outcome: 'failed', message: failure });
+  const regenerated = new Set(merged.regenerated);
   return result({
     outcome: 'merged',
     headAfter: await headOf(cwd),
-    resolvedPaths: touched.filter((path) => !regeneratedSet.has(path)),
-    regeneratedPaths: regenerated,
+    resolvedPaths: touched.filter((path) => !regenerated.has(path)),
+    regeneratedPaths: merged.regenerated,
     message: `Merged ${base} into ${request.branch}.`,
   });
 }

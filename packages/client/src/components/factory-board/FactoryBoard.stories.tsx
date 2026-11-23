@@ -109,7 +109,7 @@ export const EveryState: Story = {
     projectNameById: new Map([['p1', 'acme/app']]),
     now: NOW,
     singleProjectId: null,
-    onOpen: () => {},
+    onSelect: () => {},
     onShowOlderDone: () => {},
   },
   play: async ({ canvasElement }) => {
@@ -124,7 +124,7 @@ export const Empty: Story = { args: { ...EveryState.args, runs: [] } };
 export const Card: StoryObj<typeof FactoryRunCard> = {
   render: () => (
     <div className="w-92 p-3">
-      <FactoryRunCard run={RUNS[6]!} projectName="acme/app" now={NOW} onOpen={() => {}} />
+      <FactoryRunCard run={RUNS[6]!} projectName="acme/app" now={NOW} onSelect={() => {}} />
     </div>
   ),
 };

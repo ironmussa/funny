@@ -1,5 +1,9 @@
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
-import type { FactoryRun } from '@funny/shared/contracts/factory';
+import type { FactoryRun, FactorySettings } from '@funny/shared/contracts/factory';
+
+import type { DataLayer } from '../data-layer';
+import { getDataLayer } from '../runtime';
+import { factorySettingsQuery } from './queries';
 
 /** A complete `FactoryRun` for tests and stories (a merged label run); overrides win. */
 export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun {
@@ -30,4 +34,13 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     stepOptions: [],
     ...overrides,
   };
+}
+
+/** Seed a project's factory settings into its cached read (tests and stories). */
+export function seedFactorySettings(
+  projectId: string,
+  settings: FactorySettings | null,
+  layer: DataLayer = getDataLayer(),
+): void {
+  layer.queryClient.setQueryData(factorySettingsQuery(projectId).queryKey, settings);
 }

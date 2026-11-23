@@ -10,16 +10,22 @@
  */
 import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
-import { Clock, Factory } from 'lucide-react';
+import { Clock, Factory, PanelRight } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
 import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
 import {
+  FactoryHealthStats,
+  FactoryIncidentBanners,
+} from '@/components/factory-board/FactoryHealthHeader';
+import {
   FactoryActiveToggle,
   FactoryLayoutToggle,
 } from '@/components/factory-board/FactoryViewToggles';
+import { FactoryRunDetail } from '@/components/factory-board/run-detail/FactoryRunDetail';
+import { useSelectedFactoryRun } from '@/components/factory-board/use-selected-factory-run';
 import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +33,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useFactoryQueueRuns } from '@/data/factory/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -49,6 +56,8 @@ interface RowProps {
   run: FactoryQueueRun;
   projectName: string | undefined;
   now: number;
+  /** Opens the run's detail panel. */
+  onSelect: (run: FactoryQueueRun) => void;
 }
 
 /** The row's second line: why it waits, why it failed, or the step it is on. */
@@ -57,7 +66,7 @@ function runDetail(t: TFunction, run: FactoryQueueRun): string | null {
   return run.state === 'failed' ? run.failureReason : run.currentStep;
 }
 
-const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: RowProps) {
+const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now, onSelect }: RowProps) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const lastThreadId = implementingThreadOf(run);
@@ -115,6 +124,16 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: Row
           run={run}
           testId={(button) => `factory-view-${button}-${run.id}`}
         />
+        <TooltipIconButton
+          size="icon-xs"
+          variant="ghost"
+          tooltip={t('factoryView.details', 'Run details')}
+          aria-label={t('factoryView.details', 'Run details')}
+          onClick={() => onSelect(run)}
+          data-testid={`factory-view-details-${run.id}`}
+        >
+          <PanelRight className="icon-sm" />
+        </TooltipIconButton>
       </span>
       <span className="text-muted-foreground w-10 shrink-0 text-right text-xs">
         {timeAgo(run.admittedAt ?? run.startedAt, t, now)}
@@ -147,10 +166,12 @@ function FactoryQueueBody({
   runs,
   projectNameById,
   now,
+  onSelect,
 }: {
   runs: FactoryQueueRun[] | undefined;
   projectNameById: ReadonlyMap<string, string>;
   now: number;
+  onSelect: (run: FactoryQueueRun) => void;
 }) {
   const { t } = useTranslation();
   if (!runs) return <LoadingState testId="factory-view-loading" />;
@@ -176,6 +197,7 @@ function FactoryQueueBody({
             run={run}
             projectName={projectNameById.get(run.projectId)}
             now={now}
+            onSelect={onSelect}
           />
         ))}
       </ul>
@@ -183,12 +205,12 @@ function FactoryQueueBody({
   );
 }
 
-function FactoryQueueHeader({ runs }: { runs: FactoryQueueRun[] | undefined }) {
+function FactoryQueueHeader({ runs, now }: { runs: FactoryQueueRun[] | undefined; now: number }) {
   const { t } = useTranslation();
   const all = runs ?? [];
   return (
-    <div className="border-border flex items-center gap-3 border-b px-4 py-3">
-      <div className="min-w-0 flex-1">
+    <div className="border-border flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-4 py-3">
+      <div className="min-w-0">
         <h2 className="flex items-center gap-2 text-sm font-medium">
           <Factory className="icon-sm text-muted-foreground" />
           {t('factoryView.title', 'Factory queue')}
@@ -200,6 +222,7 @@ function FactoryQueueHeader({ runs }: { runs: FactoryQueueRun[] | undefined }) {
           })}
         </p>
       </div>
+      <FactoryHealthStats runs={all} now={now} />
     </div>
   );
 }
@@ -406,28 +429,68 @@ function useFactoryQueueFilters(
   };
 }
 
-/** What the board does: open a run's thread, and show the finished runs it hides in the list. */
-function useFactoryBoardActions(
+/** Shows, in the list, the finished runs the board's Done column hides. */
+function useShowOlderDone(
   {
     onActiveOnlyChange,
     onStateFilterChange,
   }: Pick<ToolbarProps, 'onActiveOnlyChange' | 'onStateFilterChange'>,
   setLayout: (layout: FactoryViewLayout) => void,
 ) {
-  const navigate = useStableNavigate();
-  const openRun = useCallback(
-    (run: FactoryQueueRun, threadId: string) =>
-      navigate(
-        buildPath(getThreadRoute({ id: threadId, projectId: run.projectId, isScratch: false })),
-      ),
-    [navigate],
-  );
-  const showOlderDone = useCallback(() => {
+  return useCallback(() => {
     onActiveOnlyChange(false);
     onStateFilterChange(new Set(['merged', 'stopped']));
     setLayout('list');
   }, [onActiveOnlyChange, onStateFilterChange, setLayout]);
-  return { openRun, showOlderDone };
+}
+
+/** What the view shows under its toolbar: the board or the list, and the open run's panel. */
+function FactoryQueueContent({
+  runs,
+  filtered,
+  layout,
+  projectNameById,
+  now,
+  singleProjectId,
+  onShowOlderDone,
+}: {
+  runs: FactoryQueueRun[] | undefined;
+  filtered: FactoryQueueRun[] | undefined;
+  layout: FactoryViewLayout;
+  projectNameById: ReadonlyMap<string, string>;
+  now: number;
+  singleProjectId: string | null;
+  onShowOlderDone: () => void;
+}) {
+  const selection = useSelectedFactoryRun(runs);
+  const boardRuns = layout === 'board' && (runs?.length ?? 0) > 0 ? filtered : undefined;
+  const selectedProject = selection.run ? projectNameById.get(selection.run.projectId) : undefined;
+  return (
+    <>
+      {boardRuns ? (
+        <FactoryBoard
+          runs={boardRuns}
+          projectNameById={projectNameById}
+          now={now}
+          singleProjectId={singleProjectId}
+          onSelect={selection.select}
+          onShowOlderDone={onShowOlderDone}
+        />
+      ) : (
+        <FactoryQueueBody
+          runs={filtered}
+          projectNameById={projectNameById}
+          now={now}
+          onSelect={selection.select}
+        />
+      )}
+      <FactoryRunDetail
+        run={selection.run}
+        projectName={selectedProject}
+        onClose={selection.close}
+      />
+    </>
+  );
 }
 
 export function FactoryQueueView() {
@@ -446,34 +509,30 @@ export function FactoryQueueView() {
     runs,
     projectNameById,
   );
-
-  const { openRun, showOlderDone } = useFactoryBoardActions(toolbar, setLayout);
-  const total = runs?.length ?? 0;
-  const boardRuns = layout === 'board' && total > 0 ? filtered : undefined;
+  const showOlderDone = useShowOlderDone(toolbar, setLayout);
+  const all = runs ?? [];
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="factory-view">
-      <FactoryQueueHeader runs={runs} />
+      <FactoryQueueHeader runs={runs} now={now} />
+      <FactoryIncidentBanners runs={all} />
       <FactoryQueueToolbar
         {...toolbar}
         {...counts}
         shown={shown}
-        total={total}
+        total={all.length}
         layout={layout}
         onLayoutChange={setLayout}
       />
-      {boardRuns ? (
-        <FactoryBoard
-          runs={boardRuns}
-          projectNameById={projectNameById}
-          now={now}
-          singleProjectId={singleProjectId}
-          onOpen={openRun}
-          onShowOlderDone={showOlderDone}
-        />
-      ) : (
-        <FactoryQueueBody runs={filtered} projectNameById={projectNameById} now={now} />
-      )}
+      <FactoryQueueContent
+        runs={runs}
+        filtered={filtered}
+        layout={layout}
+        projectNameById={projectNameById}
+        now={now}
+        singleProjectId={singleProjectId}
+        onShowOlderDone={showOlderDone}
+      />
     </div>
   );
 }

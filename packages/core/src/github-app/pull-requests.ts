@@ -86,6 +86,17 @@ export interface PullRequestCi {
    * a base branch after merges, with the commit it is at.
    */
   refState(repo: string, ref: string): ResultAsync<{ sha: string; ci: CiState }, GithubCallError>;
+  /**
+   * The CI verdict of commit `sha`. With `required`, only those checks (or
+   * commit statuses) count, and one not reported yet is pending.
+   */
+  commitState(
+    repo: string,
+    sha: string,
+    required?: readonly string[],
+  ): ResultAsync<CiState, GithubCallError>;
+  /** The names of the checks and commit statuses that reported on commit `sha`. */
+  checkNames(repo: string, sha: string): ResultAsync<string[], GithubCallError>;
   /** Take the pull request out of draft. */
   markReady(repo: string, number: number): ResultAsync<void, GithubCallError>;
   /**
@@ -365,6 +376,27 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     github.json<RestPull>(repo, 'GET', `/repos/${repo}/pulls/${number}`);
 
   return {
+    commitState: stateOfCommit,
+
+    checkNames(repo, sha) {
+      return github
+        .json<{ check_runs: RestCheckRun[] }>(
+          repo,
+          'GET',
+          `/repos/${repo}/commits/${sha}/check-runs?per_page=100`,
+        )
+        .andThen((checks) =>
+          github
+            .json<RestCombinedStatus>(repo, 'GET', `/repos/${repo}/commits/${sha}/status`)
+            .map((all) => [
+              ...new Set([
+                ...checks.check_runs.map((run) => run.name),
+                ...all.statuses.map((status) => status.context),
+              ]),
+            ]),
+        );
+    },
+
     refState(repo, ref) {
       const path = ref.split('/').map(encodeURIComponent).join('/');
       return github

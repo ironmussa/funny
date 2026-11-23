@@ -10,3 +10,4 @@ export * from './pull-request-reviews.js';
 export * from './pull-request-base.js';
 export * from './merge-queue.js';
 export * from './pull-request-revert.js';
+export * from './integration.js';

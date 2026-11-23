@@ -57,6 +57,7 @@ import type {
   FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryFlowValidation,
+  FactoryReadiness,
   FactoryIssueBlockers,
   FactoryQueueClearResult,
   FactoryQueueRun,
@@ -469,6 +470,8 @@ export interface FactoryPort {
     projectId: string,
     flowName: string,
   ): PortResult<FactoryFlowDefinition>;
+  /** How the project's repository merges through the merge queue, and why. */
+  readiness(userId: string, projectId: string): PortResult<FactoryReadiness>;
   /**
    * One flow loaded as an admitted run of the caller's factory would load it
    * now, with its summary or every problem. Reads only: no run, no thread.

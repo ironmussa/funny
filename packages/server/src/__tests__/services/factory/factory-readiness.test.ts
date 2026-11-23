@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   ciRunsOnQueueBranches,
+  readinessOf,
   workflowRunsOnQueueBranches,
 } from '../../../services/factory/factory-readiness.js';
 
@@ -48,5 +49,47 @@ jobs: {}
   test('one workflow that runs there is enough', () => {
     expect(ciRunsOnQueueBranches(['on: pull_request\n', 'on: push\n'])).toBe(true);
     expect(ciRunsOnQueueBranches([])).toBe(false);
+  });
+});
+
+describe('readiness', () => {
+  const open = { mergeQueue: false, requiredChecks: [], upToDate: null };
+  const pushes = ['on: push\n'];
+
+  test('CI on the queue branches and no rule against it: batches', () => {
+    expect(readinessOf({ batchSize: 5, rules: open, workflows: pushes })).toEqual({
+      mode: 'batches',
+      queueCi: true,
+      mergeQueueRequired: false,
+      upToDateRequired: null,
+      reasons: [],
+    });
+  });
+
+  test("GitHub's required merge queue takes over", () => {
+    expect(
+      readinessOf({ batchSize: 5, rules: { ...open, mergeQueue: true }, workflows: pushes }).mode,
+    ).toBe('host-queue');
+  });
+
+  test('one at a time, with each reason and what to change', () => {
+    const readiness = readinessOf({
+      batchSize: 5,
+      rules: { ...open, upToDate: true },
+      workflows: ['on: pull_request\n'],
+    });
+    expect(readiness.mode).toBe('serial');
+    expect(readiness.reasons).toEqual([
+      expect.stringContaining('up to date'),
+      expect.stringContaining('factory/queue/**'),
+    ]);
+    expect(readinessOf({ batchSize: 1, rules: open, workflows: pushes }).reasons).toEqual([
+      expect.stringContaining('batch size is 1'),
+    ]);
+    expect(readinessOf({ batchSize: 5, rules: null, workflows: null })).toMatchObject({
+      mode: 'serial',
+      queueCi: null,
+      reasons: [expect.stringContaining('could not be read')],
+    });
   });
 });

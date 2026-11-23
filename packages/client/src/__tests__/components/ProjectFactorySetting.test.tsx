@@ -5,7 +5,12 @@ import { errAsync, okAsync } from 'neverthrow';
 import { MemoryRouter } from 'react-router-dom';
 
 import { buildFactoryRun } from '@/data/factory/testing';
-import type { FactoryFlowValidation, FactoryRun, FactorySettings } from '@/lib/api/factory';
+import type {
+  FactoryFlowValidation,
+  FactoryReadiness,
+  FactoryRun,
+  FactorySettings,
+} from '@/lib/api/factory';
 
 interface FactoryMocks {
   settings: FactorySettings | null;
@@ -20,6 +25,8 @@ interface FactoryMocks {
   sameReviewer: boolean | undefined;
   /** What Validate flow answers once asked. */
   validation: FactoryFlowValidation | undefined;
+  /** How the repository merges through the merge queue. */
+  readiness: FactoryReadiness | undefined;
 }
 
 const mocks = ((): FactoryMocks => ({
@@ -33,11 +40,13 @@ const mocks = ((): FactoryMocks => ({
   canSteer: true,
   sameReviewer: undefined,
   validation: undefined,
+  readiness: undefined,
 }))();
 
 mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
 
 mock.module('@/data/factory/hooks', () => ({
+  useFactoryReadiness: () => mocks.readiness,
   useFactorySettings: () => mocks.settings,
   useFactoryRuns: () => mocks.runs,
   useFactoryFlowDefinition: (_projectId: string, name: string) => ({
@@ -282,6 +291,26 @@ describe('review and merge settings', () => {
     blur('settings-factory-limit-review', '2');
     expect(mocks.save).not.toHaveBeenCalled();
     expect(screen.queryByTestId('settings-factory-limit-merge')).toBeNull();
+  });
+
+  // openspec factory-integration 6.1: how the repository merges, and why.
+  test('a repository that cannot batch says why and what to change', () => {
+    mocks.settings = configured();
+    mocks.readiness = {
+      mode: 'serial',
+      queueCi: false,
+      mergeQueueRequired: false,
+      upToDateRequired: null,
+      reasons: ["CI does not run on the merge queue's branches"],
+    };
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-readiness-mode')).toHaveTextContent(
+      'Pull requests merge one at a time:',
+    );
+    expect(screen.getByTestId('settings-factory-readiness')).toHaveTextContent(
+      "CI does not run on the merge queue's branches",
+    );
+    mocks.readiness = undefined;
   });
 
   // openspec factory-integration 4.6: the merge queue's batches.

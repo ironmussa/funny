@@ -462,6 +462,23 @@ export interface FactoryFlowAgentStep {
  * Validate flow's answer (openspec factory-flow-step-options, D8): the flow as
  * an admitted run would load it now, or why it cannot run. Nothing is started.
  */
+/**
+ * How a repository's merges go through the factory's merge queue (openspec
+ * factory-integration D12): in batches, one at a time (and why), or through
+ * GitHub's own merge queue. Each reason says what to change.
+ */
+export interface FactoryReadiness {
+  mode: 'batches' | 'serial' | 'host-queue';
+  /** Whether CI runs on pushes to `factory/queue/**`; null when the workflows cannot be read. */
+  queueCi: boolean | null;
+  /** Whether the base branch requires GitHub's merge queue; null when unknown. */
+  mergeQueueRequired: boolean | null;
+  /** Whether pull requests must be up to date with the base; null when it cannot be read. */
+  upToDateRequired: boolean | null;
+  /** Why it is not batching, each with what to change. */
+  reasons: string[];
+}
+
 export type FactoryFlowValidation =
   | { ok: false; message: string; problems: FactoryFlowProblem[] }
   | {

@@ -13,7 +13,11 @@
  * filter, or a filter that matches it and no ignore that does).
  */
 
+import type { BranchRules } from '@funny/core/github-app';
+import type { FactoryReadiness } from '@funny/shared/contracts/factory';
 import { parse as parseYaml } from 'yaml';
+
+import type { FactoryGithubPort, FactoryRepoReader } from './factory-github.js';
 
 /** A branch a queue batch is tested on, to match a workflow's filters with. */
 const QUEUE_BRANCH = 'factory/queue/batch';
@@ -76,4 +80,67 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
 /** Whether any of the repository's workflows runs on a push to a queue branch. */
 export function ciRunsOnQueueBranches(workflows: string[]): boolean {
   return workflows.some(workflowRunsOnQueueBranches);
+}
+
+/** Where a repository's GitHub Actions workflows live. */
+const WORKFLOWS_DIR = '.github/workflows';
+
+/** The default branch's workflow files, as `reader` reads them; null when they cannot be read. */
+export async function readWorkflowFiles(
+  port: Pick<FactoryGithubPort, 'listDefaultBranchDir' | 'readDefaultBranchFile'>,
+  reader: FactoryRepoReader,
+): Promise<string[] | null> {
+  const names = await port.listDefaultBranchDir(reader, WORKFLOWS_DIR);
+  if (names.isErr()) return null;
+  const files: string[] = [];
+  for (const name of names.value.filter((n) => /\.ya?ml$/.test(n))) {
+    const path = name.includes('/') ? name : `${WORKFLOWS_DIR}/${name}`;
+    const text = await port.readDefaultBranchFile(reader, path);
+    if (text.isOk() && text.value !== null) files.push(text.value);
+  }
+  return files;
+}
+
+/** What readiness is read from. */
+export interface ReadinessInputs {
+  batchSize: number;
+  /** The base branch's rules; null when they cannot be read. */
+  rules: BranchRules | null;
+  /** The workflow files; null when they cannot be read. */
+  workflows: string[] | null;
+}
+
+/** How a repository merges through the merge queue, and what to change for batches (D12). */
+export function readinessOf({ batchSize, rules, workflows }: ReadinessInputs): FactoryReadiness {
+  const queueCi = workflows === null ? null : ciRunsOnQueueBranches(workflows);
+  const readiness: FactoryReadiness = {
+    mode: 'batches',
+    queueCi,
+    mergeQueueRequired: rules?.mergeQueue ?? null,
+    upToDateRequired: rules?.upToDate ?? null,
+    reasons: [],
+  };
+  if (rules?.mergeQueue) {
+    readiness.mode = 'host-queue';
+    readiness.reasons.push(
+      "The base branch requires GitHub's merge queue: GitHub tests and merges each pull request.",
+    );
+    return readiness;
+  }
+  if (batchSize <= 1) readiness.reasons.push('The batch size is 1: one pull request at a time.');
+  if (rules?.upToDate) {
+    readiness.reasons.push(
+      "The base branch requires pull requests to be up to date before they merge, so a batch cannot land: turn that rule off (the queue tests each batch on the base it lands on) or require GitHub's merge queue.",
+    );
+  }
+  if (queueCi === false) {
+    readiness.reasons.push(
+      "CI does not run on the merge queue's branches, so a batch would never be tested: run a workflow on pushes to them (on: push: branches: ['factory/queue/**']).",
+    );
+  }
+  if (queueCi === null) {
+    readiness.reasons.push("The repository's workflows could not be read.");
+  }
+  if (readiness.reasons.length > 0) readiness.mode = 'serial';
+  return readiness;
 }

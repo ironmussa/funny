@@ -402,6 +402,16 @@ describe('factory over tRPC', () => {
     expect(refused.status).toBe(403);
   });
 
+  // openspec factory-integration 6.1: how the repository merges, and why.
+  test('readiness says how the repository merges; without a running factory, one at a time', async () => {
+    await save('alice', { projectId: 'p1', enabled: true });
+    const answer = await query('alice', 'readiness', { projectId: 'p1' });
+    expect(answer).toMatchObject({
+      status: 200,
+      body: { mode: 'serial', reasons: [expect.stringContaining('not running on this server')] },
+    });
+  });
+
   // openspec factory-integration 4.6: the merge queue's batches.
   test('the batch size and wait default to 5 and 60 s, are saved, and are bounded', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({

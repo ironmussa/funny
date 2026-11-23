@@ -4,6 +4,7 @@ import type {
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueRun,
+  FactoryReadiness,
   FactoryRun,
   FactorySettings,
   FactoryStepOverrides,
@@ -148,6 +149,18 @@ export function factoryFlowDefinitionQuery(projectId: string, flowName: string |
       unwrapResult(factoryApi.getFlowDefinition(projectId, flowName ?? '')),
     staleTime: 5 * 60_000,
     enabled: !!flowName,
+  };
+}
+
+/**
+ * How the repository merges through the merge queue (openspec
+ * factory-integration D12): its rules and workflows change rarely.
+ */
+export function factoryReadinessQuery(projectId: string) {
+  return {
+    queryKey: ['factory', 'readiness', projectId] as const,
+    queryFn: (): Promise<FactoryReadiness> => unwrapResult(factoryApi.readiness(projectId)),
+    staleTime: 5 * 60_000,
   };
 }
 

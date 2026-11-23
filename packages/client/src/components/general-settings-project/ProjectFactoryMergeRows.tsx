@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
-import { useFactoryFlowDefinition } from '@/data/factory/hooks';
+import { useFactoryFlowDefinition, useFactoryReadiness } from '@/data/factory/hooks';
 import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
@@ -141,6 +141,35 @@ function StageLimitInput({
   );
 }
 
+/** How this repository merges now, and what to change for batches (D12). */
+function QueueReadiness({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const readiness = useFactoryReadiness(projectId);
+  if (!readiness) return null;
+  const modes: Record<typeof readiness.mode, string> = {
+    batches: t('settings.projectFactoryReadinessBatches', 'Ready pull requests merge in batches.'),
+    serial: t('settings.projectFactoryReadinessSerial', 'Pull requests merge one at a time:'),
+    'host-queue': t(
+      'settings.projectFactoryReadinessHostQueue',
+      "Pull requests merge through GitHub's merge queue:",
+    ),
+  };
+  return (
+    <Alert className="mx-4 my-2 w-auto" data-testid="settings-factory-readiness">
+      <AlertDescription>
+        <p data-testid="settings-factory-readiness-mode">{modes[readiness.mode]}</p>
+        {readiness.reasons.length > 0 && (
+          <ul className="mt-1 list-disc pl-4">
+            {readiness.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        )}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 export function ProjectFactoryMergeRows({
   projectId,
   flowName,
@@ -257,6 +286,7 @@ export function ProjectFactoryMergeRows({
       >
         <BatchInputs batch={batch} inputKey={rowKey} onSave={(next) => onSave({ batch: next })} />
       </ProjectSettingRow>
+      <QueueReadiness projectId={projectId} />
     </>
   );
 }

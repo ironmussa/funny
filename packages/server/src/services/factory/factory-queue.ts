@@ -27,6 +27,7 @@ import type {
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueClearResult,
+  FactoryReadiness,
   FactorySubmitResult,
 } from '@funny/shared/contracts/factory';
 import { err, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
@@ -41,6 +42,7 @@ import {
   readFactoryFlowDefinition,
 } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssueDetail, FactoryRepoReader } from './factory-github.js';
+import { readinessOf, readWorkflowFiles } from './factory-readiness.js';
 import { createFactoryRunControl } from './factory-run-control.js';
 import { createFactoryRunsRepository } from './factory-runs.js';
 import {
@@ -282,6 +284,33 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
    * and the project's defaults), and its summary or every problem. Reads only:
    * no run, no thread. Without a factory, the built-ins only.
    */
+  /** How the factory's repository merges through the merge queue, and why (D12). */
+  async function readiness(factoryId: string | null): Promise<FactoryReadiness> {
+    const factory = factoryId ? await loadFactory(factoryId) : null;
+    const where = factoryId ? await readerOf(factoryId) : null;
+    if (!factory || !where) {
+      return {
+        mode: 'serial',
+        queueCi: null,
+        mergeQueueRequired: null,
+        upToDateRequired: null,
+        reasons: [NOT_RUNNING_HERE],
+      };
+    }
+    const base = await where.port.defaultBranch(where.reader);
+    const host = where.port.pullRequests.integrationFor?.({
+      userId: factory.userId,
+      projectId: factory.projectId,
+    });
+    const rules =
+      base.isOk() && host ? await host.branchRules(where.reader.repo, base.value) : null;
+    return readinessOf({
+      batchSize: factory.batch.size,
+      rules: rules?.isOk() ? rules.value : null,
+      workflows: await readWorkflowFiles(where.port, where.reader),
+    });
+  }
+
   async function validateFlow(
     factoryId: string | null,
     projectId: string,
@@ -355,6 +384,9 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
 
     blockers: (factoryId: string, issueNumbers: number[]) =>
       new ResultAsync(blockers(factoryId, issueNumbers)),
+
+    readiness: (factoryId: string | null): ResultAsync<FactoryReadiness, FactoryQueueError> =>
+      ResultAsync.fromSafePromise(readiness(factoryId)),
 
     validateFlow: (factoryId: string | null, projectId: string, flowName: string) =>
       new ResultAsync(validateFlow(factoryId, projectId, flowName)),

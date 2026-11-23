@@ -4,6 +4,7 @@ import type {
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueRun,
+  FactoryReadiness,
   FactoryRun,
   FactorySettings,
   FactoryStepOverrides,
@@ -18,6 +19,7 @@ import {
   factoryFlowValidationQuery,
   factoryFlowsQuery,
   factoryQueueRunsQuery,
+  factoryReadinessQuery,
   factoryRunsQuery,
   factorySettingsQuery,
 } from './queries';
@@ -114,6 +116,11 @@ export function useFactoryFlowValidation(
     loading: isFetching,
     refresh: () => void refetch(),
   };
+}
+
+/** How the repository merges through the merge queue, and why; `undefined` while loading. */
+export function useFactoryReadiness(projectId: string): FactoryReadiness | undefined {
+  return useDataQuery(factoryReadinessQuery(projectId)).data;
 }
 
 /** The open blockers of `issueNumbers`; empty while none are selected. */

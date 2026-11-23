@@ -129,6 +129,33 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    round that would reach the implementing agent (an integration conflict, or checks failing on
    the new base) parks the run (`merge rounds spent`). Counters: `integrateRounds`,
    `conflictsResolvedWithoutLlm`, `conflictsSentToAgent`, `mergeRoundsToAgent`.
+   4c. **Merge queue** (change `factory-integration`, D2-D3, D11-D12): the merge group batches
+   (`batch: { max, wait }` from the factory's setting, default 5 pull requests and 60 s; size 1
+   is one at a time). The run whose `merge` gets the slot leads the batch the gate gathered
+   (`factory-merge-batch.ts`, `factory-batch-leader.ts`, `factory-merge-queue.ts`, rows in
+   `factory_batches` / `factory_batch_attempts`, `factory-batches.ts`). It re-checks each member
+   from its own run row (a passing review, an accepted risk and a passing proof for the head it is
+   tested at), keeps members whose changed paths do not overlap, builds the batch from base B on
+   `factory/staging/<id>` with `[skip ci]` merges through the merges API, points
+   `factory/queue/<id>` at a tree-identical commit, and waits for the base's required checks, or
+   the checks the members' heads reported (none is never green). Green, with the base and every
+   head unchanged: each pull request merges in order with its own enabler's token, pinned to the
+   tested head, and the base's tree is compared with the tested one. A moved base or head rebuilds
+   the batch; a refusal after a landing is a partial landing (the rest wait again, and a branch
+   whose up-to-date rule could not be read gets batches of one from then on). Red: the same tree
+   once more (a flake), then halves from B in parallel, every red half split again; culprits go
+   back to their loop with the failing checks, the rest are requeued; no red half: one at a time,
+   in order. A member is settled with the output its own `merge` would have had
+   (`merge.json.outcome`), and a landed one is recorded `merged` on its own run. Every write about
+   a member uses its enabler's capped token (`integrationFor`, `@funny/core/github-app`
+   `createGithubIntegration`). The serial path stays where GitHub's merge queue is required,
+   where pull requests must be up to date, where CI does not run on pushes to
+   `factory/queue/**` (read from the default branch's workflows, `factory-readiness.ts`, or
+   learned from a batch that got no check), and for a regenerable change (`merge.regenerate`,
+   D9: a conflict re-runs that node, `regenerate_node` on the run). The merge group grants a
+   blocker first, then a much smaller change (powers of four of its changed lines, recorded with
+   the risk), then admission order. **Settings > Factory** shows the merge queue's batch setting
+   and how the repository merges now, with what to change (`factory.readiness`).
 5. **Merge**: one at a time per repository and base branch (the lane, `factory-merge-lane.ts`).
    On entry, whatever path led to it, `merge` checks: the head commit has a verdict of the
    flow's own `review` step that allows a merge (unless `require_review: false`; an external

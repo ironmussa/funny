@@ -1,5 +1,6 @@
 import type { WSEvent } from '@funny/shared';
 import { isRunnerUserEventType } from '@funny/shared/runner-protocol';
+import { FailureCode } from '@funny/shared/runner-v2/common';
 import { EventDurability } from '@funny/shared/runner-v2/events';
 import { nanoid } from 'nanoid';
 
@@ -17,9 +18,16 @@ export function runnerEventDurability(event: WSEvent): EventDurability {
   return event.type.startsWith('agent:') ? EventDurability.DURABLE : EventDurability.TRANSIENT;
 }
 
+/** Executions whose stored events are sent again at a time after a reconnect. */
+const REPLAY_BATCH_SCOPES = 100;
+
 /** Publishes replayable application events and applies server receipts. */
 export class RunnerEventPublisher {
   private readonly executions = new Map<string, string>();
+  /** Executions replayed in this session, so each is sent once per session. */
+  private readonly replayed = new Set<string>();
+  /** Replayed executions of the current batch the server has not answered. */
+  private readonly awaiting = new Set<string>();
   /** Whether the server enabled `RUNNER_CAPABILITY_USER_EVENTS` this session. */
   private userEventsEnabled = false;
 
@@ -69,7 +77,24 @@ export class RunnerEventPublisher {
   }
 
   activated(): void {
-    for (const scope of this.store.pendingScopes()) {
+    this.replayed.clear();
+    this.awaiting.clear();
+    this.replayNext();
+  }
+
+  /**
+   * Send the stored events of the next executions. The following batch goes
+   * out when the server has answered this one, so a long backlog reaches the
+   * server in steps instead of the first batch only.
+   */
+  private replayNext(): void {
+    const batch = this.store
+      .pendingScopes(this.replayed.size + REPLAY_BATCH_SCOPES)
+      .filter((scope) => !this.replayed.has(scope.executionId))
+      .slice(0, REPLAY_BATCH_SCOPES);
+    for (const scope of batch) {
+      this.replayed.add(scope.executionId);
+      this.awaiting.add(scope.executionId);
       const page = this.store.replay(scope, 0n);
       if (!page.historyAvailable) {
         this.sender.send('events', {
@@ -87,15 +112,29 @@ export class RunnerEventPublisher {
   }
 
   receiveReceipt(message: RunnerGrpcWireMessage): void {
-    if (!message.accepted || !message.scope) return;
-    this.store.acknowledge(
-      { threadId: String(message.scope.threadId), executionId: String(message.scope.executionId) },
-      BigInt(message.accepted.highestContiguousSequence),
-    );
+    if (!message.scope) return;
+    const scope = {
+      threadId: String(message.scope.threadId),
+      executionId: String(message.scope.executionId),
+    };
+    if (message.accepted) {
+      this.store.acknowledge(scope, BigInt(message.accepted.highestContiguousSequence));
+    } else if (message.failure) {
+      // A failure the server may lift (session not active yet) keeps the events.
+      if (message.failure.retryable === true) return;
+      // The thread was deleted or is out of this runner's scope: the server
+      // will never accept these events, and keeping them replays them forever.
+      if (message.failure.code === FailureCode.PERMISSION_DENIED) this.store.discardPending(scope);
+    } else if (!message.gap) {
+      return;
+    }
+    if (this.awaiting.delete(scope.executionId) && this.awaiting.size === 0) this.replayNext();
   }
 
   shutdown(): void {
     this.executions.clear();
+    this.replayed.clear();
+    this.awaiting.clear();
     this.store.close();
   }
 

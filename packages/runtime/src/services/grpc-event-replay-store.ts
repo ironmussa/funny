@@ -312,7 +312,7 @@ export class GrpcEventReplayStore {
     return this.database
       .query<Pick<ScopeRow, 'execution_id' | 'acknowledged_sequence'>, []>(
         `SELECT execution_id, acknowledged_sequence FROM grpc_event_scopes
-         WHERE acknowledged_sequence < next_sequence - 1
+         WHERE MAX(acknowledged_sequence, trimmed_through_sequence) < next_sequence - 1
          ORDER BY execution_id ASC`,
       )
       .all()
@@ -323,8 +323,33 @@ export class GrpcEventReplayStore {
   }
 
   /**
-   * Delete the executions of an earlier runner process whose events are all
-   * acknowledged, and return how many. Call it once when the process starts,
+   * Drop the stored events of an execution the server refuses for good (its
+   * thread was deleted, or the runner may no longer act on it), and return how
+   * many. The execution is marked as trimmed through its last event, so it
+   * reports the gap if it is ever sent again and counts as settled.
+   */
+  discardPending(scope: GrpcEventScope): number {
+    validateScope(scope);
+    return this.database.transaction(() => {
+      const current = this.scope(scope.executionId);
+      if (!current || current.thread_id !== scope.threadId) return 0;
+      const discarded = this.database
+        .query('DELETE FROM grpc_event_replay WHERE thread_id = ? AND execution_id = ?')
+        .run(scope.threadId, scope.executionId).changes;
+      this.database
+        .query(
+          `UPDATE grpc_event_scopes
+           SET trimmed_through_sequence = MAX(trimmed_through_sequence, next_sequence - 1)
+           WHERE thread_id = ? AND execution_id = ?`,
+        )
+        .run(scope.threadId, scope.executionId);
+      return discarded;
+    })();
+  }
+
+  /**
+   * Delete the executions of an earlier runner process that have no stored
+   * event left (all acknowledged or discarded), and return how many. Call it once when the process starts,
    * before any event is appended: execution IDs are kept in memory, so a new
    * process never appends to an old execution, but this process still appends
    * to its own after they are acknowledged.
@@ -337,11 +362,15 @@ export class GrpcEventReplayStore {
            SELECT 1 FROM grpc_event_scopes AS scope
            WHERE scope.thread_id = grpc_event_replay.thread_id
              AND scope.execution_id = grpc_event_replay.execution_id
-             AND scope.acknowledged_sequence >= scope.next_sequence - 1
+             AND MAX(scope.acknowledged_sequence, scope.trimmed_through_sequence)
+                 >= scope.next_sequence - 1
          )`,
       );
       return this.database
-        .query('DELETE FROM grpc_event_scopes WHERE acknowledged_sequence >= next_sequence - 1')
+        .query(
+          `DELETE FROM grpc_event_scopes
+           WHERE MAX(acknowledged_sequence, trimmed_through_sequence) >= next_sequence - 1`,
+        )
         .run().changes;
     })();
   }

@@ -42,6 +42,40 @@ describe('GrpcEventReplayStore', () => {
     store.close();
   });
 
+  test('discards the stored events of an execution the server refuses', () => {
+    const path = databasePath();
+    const refused = { threadId: 'thread-deleted', executionId: 'execution-refused' };
+    const kept = { threadId: 'thread-1', executionId: 'execution-kept' };
+    const store = new GrpcEventReplayStore(path);
+    for (const scope of [refused, refused, kept]) {
+      store.append({ scope, eventType: 'git:status', data: {}, durability: 1 });
+    }
+
+    expect(store.discardPending(refused)).toBe(2);
+    expect(store.discardPending({ threadId: 'thread-1', executionId: 'execution-refused' })).toBe(
+      0,
+    );
+
+    expect(store.pendingScopes().map((scope) => scope.executionId)).toEqual(['execution-kept']);
+    expect(store.resumeCursors().map((cursor) => cursor.executionId)).toEqual(['execution-kept']);
+    // An event sent later for the same execution reports the gap instead of reusing a sequence.
+    expect(
+      store.append({ scope: refused, eventType: 'git:status', data: {}, durability: 1 }).sequence,
+    ).toBe(3n);
+    expect(store.replay(refused, 0n)).toMatchObject({
+      historyAvailable: false,
+      earliestAvailableSequence: 3n,
+    });
+    store.discardPending(refused);
+    store.close();
+
+    // With nothing left to send, the next process drops the execution.
+    const restarted = new GrpcEventReplayStore(path);
+    expect(restarted.dropSettledScopes()).toBe(1);
+    expect(restarted.pendingScopes().map((scope) => scope.executionId)).toEqual(['execution-kept']);
+    restarted.close();
+  });
+
   test('drops the acknowledged executions of an earlier process and keeps the pending ones', () => {
     const path = databasePath();
     const settled = { threadId: 'thread-1', executionId: 'execution-settled' };

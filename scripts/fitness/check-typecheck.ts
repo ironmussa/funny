@@ -46,7 +46,6 @@ const PROJECTS = [
   'packages/api/tsconfig.json',
   'packages/harness/tsconfig.json',
   'packages/sdk/tsconfig.json',
-  'packages/scheduler/tsconfig.json',
   'packages/sandbox/tsconfig.json',
   'packages/test-kit/tsconfig.json',
 ];

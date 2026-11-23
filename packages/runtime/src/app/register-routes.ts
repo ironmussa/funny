@@ -15,7 +15,6 @@ import pluginRoutes from '../routes/plugins.js';
 import { projectRoutes } from '../routes/projects.js';
 import { regressionProofRoutes } from '../routes/regression-proof.js';
 import { sandboxCheckoutRoutes } from '../routes/sandbox-checkout.js';
-import { schedulerRuntimeRoutes } from '../routes/scheduler.js';
 import skillsRoutes from '../routes/skills.js';
 import { testRoutes } from '../routes/tests.js';
 import { textSearchRoutes } from '../routes/text-search.js';
@@ -54,7 +53,6 @@ export function registerRoutes(app: Hono<HonoEnv>): void {
   app.route('/api/tests', testRoutes);
   app.route('/api/jobs', jobRoutes);
   app.route('/api/pipelines', pipelineRuntimeRoutes);
-  app.route('/api/scheduler', schedulerRuntimeRoutes);
   app.route('/api/workflows', workflowRuntimeRoutes);
   app.route('/api/projects', designProjectRoutes);
   app.route('/api/browser-session', browserSessionRoutes);

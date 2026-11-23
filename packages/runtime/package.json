@@ -83,7 +83,6 @@
     "@funny/pipelines": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/test-kit": "workspace:*",
-    "@funny/thread-scheduler": "workspace:*",
     "@funny/workflows": "workspace:*",
     "@types/bun": "^1.4.0",
     "@types/pg": "^8.18.0",

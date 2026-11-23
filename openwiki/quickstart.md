@@ -13,7 +13,7 @@ It ships as a Bun workspaces monorepo with **19 packages** under `packages/*`, a
 | [architecture/overview.md](./architecture/overview.md)                                     | Full package map (all 19 packages), what's live app vs. standalone service vs. experimental, deployment topology                          |
 | [architecture/agent-execution.md](./architecture/agent-execution.md)                       | End-to-end trace of a live chat thread: client → server → runner → agent process → WebSocket back                                         |
 | [architecture/client-platform-boundary.md](./architecture/client-platform-boundary.md)     | Renderer-independent client services, composition flow, store inventory, and intentionally web-only areas                                 |
-| [architecture/pipelines-and-automation.md](./architecture/pipelines-and-automation.md)     | Post-commit review/fix pipeline, the `@funny/pipelines` engine, scheduler, and automations                                                |
+| [architecture/pipelines-and-automation.md](./architecture/pipelines-and-automation.md)     | Post-commit review/fix pipeline, the `@funny/pipelines` engine and automations                                                            |
 | [architecture/issue-factory.md](./architecture/issue-factory.md)                           | Server-run issue factory: labelled issues → flow (implement, PR, CI fix loop, merge) as the enabler; resume, controls, boundaries         |
 | [architecture/issue-factory-improvements.md](./architecture/issue-factory-improvements.md) | Issue factory: possible improvements not yet implemented (orphaned-worktree sweep, UI refresh, metrics, sandbox runs, graph labels)       |
 | [architecture/background-activities.md](./architecture/background-activities.md)           | Tracked background operations (clone, worktree setup, git workflow): runner tracker, server rows, panel; how to add a kind                |
@@ -31,7 +31,7 @@ For Railway setup and installing tools inside remote terminals, see [Railway dep
 
 ```bash
 bun install
-bun run dev        # server (3001) + runner (3003) + client (5173) + scheduler, concurrently
+bun run dev        # server (3001) + runner (3003) + client (5173), concurrently
 ```
 
 Do **not** run `bun run dev` (or any `--watch`/`vite` process) from an automated agent session — it hangs forever. Use `bun run build` or `bun run typecheck` to verify changes instead. See [workflows/development.md](./workflows/development.md).

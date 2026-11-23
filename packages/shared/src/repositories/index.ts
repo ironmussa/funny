@@ -28,13 +28,6 @@ export {
 export { createStageHistoryRepository, type StageHistoryDeps } from './stage-history.js';
 export { createDesignRepository, type DesignRepositoryDeps } from './design-repository.js';
 export {
-  createSchedulerRunRepository,
-  type SchedulerRunRepositoryDeps,
-  type SchedulerRunRepository,
-  type SchedulerRunRow,
-  type ClaimArgs,
-} from './scheduler-run-repository.js';
-export {
   createWatcherRepository,
   type WatcherRepositoryDeps,
   type WatcherRepository,

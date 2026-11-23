@@ -53,8 +53,6 @@ type AuditAction =
   | 'auth.role_coerced'
   /** Request carrying an unauthorized runner secret or token was rejected. */
   | 'auth.runner_rejected'
-  /** Request carrying a scheduler secret without X-Forwarded-User was rejected. */
-  | 'auth.scheduler_rejected'
   /** Runner-scoped resource access refused because runner.userId ≠ requester/owner. */
   | 'authz.cross_tenant_refused'
   /** A runner asked for data of a project outside its scope (project-runner-binding). */

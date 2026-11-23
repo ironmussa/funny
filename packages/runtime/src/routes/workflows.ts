@@ -3,7 +3,7 @@
  *
  * Workflow YAML is a project artifact under `.funny/workflows/*.yaml`.
  * The runtime validates and saves those files, then delegates execution to
- * the existing scheduler pipeline dispatcher.
+ * the pipeline dispatcher.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -27,7 +27,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
-import { getSchedulerPipelineDispatcher } from '../services/scheduler-pipeline-bootstrap.js';
+import { getPipelineDispatcher } from '../services/pipeline-dispatcher-bootstrap.js';
 import { getServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -214,7 +214,7 @@ workflowRuntimeRoutes.post('/:name/run', async (c) => {
     );
   }
 
-  const result = await getSchedulerPipelineDispatcher().dispatch({
+  const result = await getPipelineDispatcher().dispatch({
     threadId: thread.id,
     projectId: thread.projectId,
     userId,
@@ -246,7 +246,7 @@ workflowRuntimeRoutes.post('/runs/:runId/cancel', async (c) => {
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
   const runId = c.req.param('runId');
-  const handle = getSchedulerPipelineDispatcher().getActive(runId);
+  const handle = getPipelineDispatcher().getActive(runId);
   if (!handle) return c.json({ ok: true, found: false });
   handle.abort();
   return c.json({ ok: true, found: true });

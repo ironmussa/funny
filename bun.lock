@@ -457,7 +457,6 @@
         "@funny/pipelines": "workspace:*",
         "@funny/shared": "workspace:*",
         "@funny/test-kit": "workspace:*",
-        "@funny/thread-scheduler": "workspace:*",
         "@funny/workflows": "workspace:*",
         "@types/bun": "^1.4.0",
         "@types/pg": "^8.18.0",
@@ -478,24 +477,6 @@
         "@funny/core": "workspace:*",
         "@funny/shared": "workspace:*",
         "neverthrow": "^8.2.0",
-        "zod": "^4.6.6",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.4.0",
-      },
-    },
-    "packages/scheduler": {
-      "name": "@funny/thread-scheduler",
-      "version": "0.1.0",
-      "bin": {
-        "funny-scheduler": "./src/bin/scheduler.ts",
-      },
-      "dependencies": {
-        "@funny/core": "workspace:*",
-        "@funny/pipelines": "workspace:*",
-        "@funny/shared": "workspace:*",
-        "@funny/workflows": "workspace:*",
-        "nanoid": "^5.1.6",
         "zod": "^4.6.6",
       },
       "devDependencies": {
@@ -526,7 +507,6 @@
         "@funny/pipelines": "workspace:*",
         "@funny/sandbox": "workspace:*",
         "@funny/shared": "workspace:*",
-        "@funny/thread-scheduler": "workspace:*",
         "@funny/workflows": "workspace:*",
         "@gdp-ts/core": "0.1.0",
         "@grpc/grpc-js": "1.14.7",
@@ -1015,8 +995,6 @@
     "@funny/shared": ["@funny/shared@workspace:packages/shared"],
 
     "@funny/test-kit": ["@funny/test-kit@workspace:packages/test-kit"],
-
-    "@funny/thread-scheduler": ["@funny/thread-scheduler@workspace:packages/scheduler"],
 
     "@funny/ui-contracts": ["@funny/ui-contracts@workspace:packages/ui-contracts"],
 

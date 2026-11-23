@@ -748,7 +748,6 @@ export function seedThread(
     title: overrides.title ?? 'Test Thread',
     mode: overrides.mode ?? 'local',
     status: overrides.status ?? 'pending',
-    schedulerManaged: overrides.schedulerManaged ?? 1,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     updatedAt: overrides.updatedAt ?? new Date().toISOString(),
     ...overrides,
@@ -1006,33 +1005,6 @@ export function seedInviteLink(
   return link;
 }
 
-export function seedSchedulerRun(
-  db: SeedDb,
-  overrides: {
-    threadId?: string;
-    userId?: string;
-    pipelineRunId?: string | null;
-    attempt?: number;
-  } = {},
-) {
-  const now = Date.now();
-  const row = {
-    threadId: overrides.threadId ?? 'test-thread-1',
-    pipelineRunId: overrides.pipelineRunId ?? null,
-    attempt: overrides.attempt ?? 0,
-    nextRetryAtMs: null,
-    lastEventAtMs: now,
-    lastError: null,
-    claimedAtMs: now,
-    userId: overrides.userId ?? 'user-1',
-    tokensTotal: 0,
-    updatedAtMs: now,
-    ...overrides,
-  };
-  db.insert(schema.schedulerRuns).values(row).run();
-  return row;
-}
-
 export function seedAutomation(
   db: SeedDb,
   overrides: Partial<typeof schema.automations.$inferInsert> = {},
@@ -1088,18 +1060,6 @@ export function seedPipelineRun(
   };
   db.insert(schema.pipelineRuns).values(run).run();
   return run;
-}
-
-export function seedThreadDependency(
-  db: SeedDb,
-  overrides: { threadId?: string; blockedBy?: string } = {},
-) {
-  const row = {
-    threadId: overrides.threadId ?? 'test-thread-1',
-    blockedBy: overrides.blockedBy ?? 'blocker-thread-1',
-  };
-  db.insert(schema.threadDependencies).values(row).run();
-  return row;
 }
 
 export function seedToolCall(

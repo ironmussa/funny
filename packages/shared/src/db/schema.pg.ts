@@ -784,7 +784,9 @@ export const pipelineRuns = pgTable('pipeline_runs', {
 });
 
 /**
- * Scheduler-managed run state.
+ * Scheduler-managed run state. No code reads these tables or
+ * `threads.scheduler_managed` since the standalone thread scheduler was
+ * removed; they stay declared so the schema matches existing databases.
  * See sqlite schema for column docs.
  */
 export const schedulerRuns = pgTable('scheduler_runs', {

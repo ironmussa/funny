@@ -47,7 +47,6 @@ describe('loadWorkflowCatalog', () => {
       'issue-to-merge',
       'issue-to-pr',
       'pre-push',
-      'scheduler-thread',
     ]);
   });
 
@@ -61,7 +60,6 @@ describe('loadWorkflowCatalog', () => {
       'issue-to-merge',
       'issue-to-pr',
       'pre-push',
-      'scheduler-thread',
     ]);
     expect(result.workflows.get('commit')?.source).toBe('built-in');
   });
@@ -141,6 +139,6 @@ nodes:
 
     const result = await loadWorkflowCatalog({ repoRoot: workDir });
     expect(result.warnings.some((warning) => warning.includes('broken.yaml'))).toBe(true);
-    expect(result.workflows.get('scheduler-thread')).toBeDefined();
+    expect(result.workflows.get('commit')).toBeDefined();
   });
 });

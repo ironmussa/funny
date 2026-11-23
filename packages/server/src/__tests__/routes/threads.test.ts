@@ -952,27 +952,12 @@ describe('Thread Routes (Integration)', () => {
   });
 
   describe('POST /api/threads/:id/scheduler/workflow-event', () => {
-    test('relays workflow events to the authenticated user', async () => {
+    test('is refused: the route went away with the thread scheduler', async () => {
       const res = await t.requestAs('user-1').post('/api/threads/t-any/scheduler/workflow-event', {
         event: 'workflow:step',
         data: { step: 1 },
       });
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
-      expect(relayCalls).toHaveLength(1);
-      expect(relayCalls[0]?.userId).toBe('user-1');
-      expect(relayCalls[0]?.event).toMatchObject({
-        type: 'workflow:step',
-        threadId: 't-any',
-        data: { step: 1 },
-      });
-    });
-
-    test('rejects events that do not start with workflow:', async () => {
-      const res = await t.requestAs('user-1').post('/api/threads/t-any/scheduler/workflow-event', {
-        event: 'agent:result',
-      });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
       expect(relayCalls).toHaveLength(0);
     });
   });

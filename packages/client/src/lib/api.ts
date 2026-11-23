@@ -16,7 +16,6 @@ import { pipelinesApi } from './api/pipelines';
 import { profileApi } from './api/profile';
 import { projectRunnersApi } from './api/project-runners';
 import { projectsApi } from './api/projects';
-import { schedulerApi } from './api/scheduler';
 import { skillsApi } from './api/skills';
 import { systemApi } from './api/system';
 import { teamApi } from './api/team';
@@ -41,7 +40,6 @@ export const api = {
   ...skillsApi, // Skills + Plugins
   ...automationsApi, // Automations
   ...pipelinesApi, // Pipelines
-  ...schedulerApi, // Scheduler queue
   ...agentExecutionProfilesApi, // Agent execution profiles
   ...projectRunnersApi, // Project ↔ runner binding (project-runner-binding)
   ...infraApi, // Sandbox provider connections + thread sandboxes (thread-sandboxes)

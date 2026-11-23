@@ -61,7 +61,7 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   // origin WITHOUT preflight) unless the Origin matches the allowlist. JSON
   // requests are unaffected because they require CORS preflight and so are
   // already gated by the same allowlist via the `cors()` middleware above.
-  // Runner/scheduler/proxy traffic is JSON-only, so this is invisible to
+  // Runner/proxy traffic is JSON-only, so this is invisible to
   // them.
   app.use('*', csrf({ origin: corsOrigins }));
   // These two run their post-`next()` code AFTER `secureHeaders` below (they are
@@ -263,8 +263,6 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   const { shareRoutes } = await import('./routes/thread-shares.js');
   const { teamProjectRoutes } = await import('./routes/team-projects.js');
   const { pipelineRoutes } = await import('./routes/pipelines.js');
-  const { schedulerRoutes } = await import('./routes/scheduler.js');
-  const { schedulerSystemRoutes } = await import('./routes/scheduler-system.js');
   const { jobRoutes } = await import('./routes/jobs.js');
   const { refuseRetiredRestRoutes } = await import('./routes/retired-rest.js');
   const { userRoutes } = await import('./routes/users.js');
@@ -292,10 +290,6 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   app.route('/api/pipelines', pipelineRoutes);
   app.route('/api/invite-links', inviteLinkRoutes);
   app.route('/api/jobs', jobRoutes);
-  // System routes mounted FIRST so /api/scheduler/system/* matches them
-  // before the user-scoped /api/scheduler/* tree.
-  app.route('/api/scheduler/system', schedulerSystemRoutes);
-  app.route('/api/scheduler', schedulerRoutes);
 
   const { extensionRoutes } = await import('./routes/extensions.js');
   app.route('/api/extensions', extensionRoutes);

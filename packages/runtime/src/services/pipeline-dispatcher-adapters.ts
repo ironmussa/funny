@@ -5,8 +5,8 @@
  * @domain layer: infrastructure
  * @domain depends: yaml-loader, RuntimeActionProvider, agent-registry
  *
- * Production adapters that plug `SchedulerPipelineDispatcher` (from
- * `@funny/scheduler`) into the rest of the runtime:
+ * Production adapters that plug `PipelineDispatcher` into the rest of the
+ * runtime:
  *
  *   - `YamlPipelineLoader`        wraps `loadPipelines()` so the dispatcher
  *                                 can resolve a YAML pipeline by name. Each
@@ -28,24 +28,23 @@
  * wires these, tests pass fakes.
  */
 
-import type { PipelineDefinition, ProgressReporter } from '@funny/pipelines';
+import type { ProgressReporter } from '@funny/pipelines';
+import type { ActionProvider } from '@funny/workflows/compiler';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
+
+import { log } from '../lib/logger.js';
+import { loadPipelines } from '../pipelines/yaml-loader.js';
+import { resolveBuiltinAgentByName } from './agent-registry.js';
+import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
 import type {
   ContextBuildMeta,
   ContextBuilder,
   DispatchInput,
   PipelineLoader,
   PipelineLoaderScope,
-} from '@funny/thread-scheduler';
-import type { ActionProvider } from '@funny/workflows/compiler';
-import type { YamlPipelineContext } from '@funny/workflows/compiler';
-import { Result, ok, err } from 'neverthrow';
+} from './pipeline-dispatcher.js';
 
-import { log } from '../lib/logger.js';
-import { loadPipelines } from '../pipelines/yaml-loader.js';
-import { resolveBuiltinAgentByName } from './agent-registry.js';
-import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
-
-const NS = 'scheduler-pipeline-adapters';
+const NS = 'pipeline-dispatcher-adapters';
 
 // ── PipelineLoader ───────────────────────────────────────────
 
@@ -57,7 +56,7 @@ export class YamlPipelineLoader implements PipelineLoader<YamlPipelineContext> {
     });
 
     if (result.warnings.length > 0) {
-      log.warn('Scheduler pipeline loader: non-fatal warnings', {
+      log.warn('Pipeline loader: non-fatal warnings', {
         namespace: NS,
         warnings: result.warnings,
         projectId: scope.projectId,
@@ -98,8 +97,7 @@ export class RuntimeActionProviderFactory implements ActionProviderFactory {
 // ── ContextBuilder ───────────────────────────────────────────
 //
 // Bridges the runtime's factory + YAML context shape to the generic
-// `ContextBuilder<C>` contract the dispatcher in @funny/scheduler
-// expects.
+// `ContextBuilder<C>` contract the dispatcher expects.
 
 export class YamlContextBuilder implements ContextBuilder<YamlPipelineContext> {
   constructor(private readonly factory: ActionProviderFactory) {}
@@ -143,20 +141,4 @@ class MultiplexProgressReporter implements ProgressReporter {
   onPipelineEvent(event: string, data: Record<string, unknown>): void {
     for (const reporter of this.reporters) reporter.onPipelineEvent(event, data);
   }
-}
-
-// ── Result-flavored helpers (for callers in `result-response` paths) ──
-//
-// The class API throws on programmer errors (bad config), but most
-// scheduler call sites prefer Result. These small wrappers keep the
-// neverthrow boundary at the service layer per CLAUDE.md.
-
-export async function loadSchedulerPipeline(
-  name: string,
-  scope: PipelineLoaderScope,
-): Promise<Result<PipelineDefinition<YamlPipelineContext>, string>> {
-  const loader = new YamlPipelineLoader();
-  const loaded = await loader.load(name, scope);
-  if (!loaded) return err(`pipeline "${name}" not found`);
-  return ok(loaded.definition);
 }

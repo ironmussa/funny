@@ -12,7 +12,7 @@ import { ok, okAsync } from 'neverthrow';
 import { integrateStacked } from '../../../services/factory/factory-early-watch.js';
 import type { FactoryRunView } from '../../../services/factory/factory-runs.js';
 import { createStacking, type BlockerState } from '../../../services/factory/factory-stacking.js';
-import { stackTarget } from '../../../services/factory/factory-watcher.js';
+import { pathsHeld, stackTarget } from '../../../services/factory/factory-watcher.js';
 
 const on: FactoryStackedOn = {
   runId: 'blocker-run',
@@ -129,6 +129,36 @@ describe('admission with dependencies: stack', () => {
         blockers: [7],
       }),
     ).toBeNull();
+  });
+});
+
+describe('path reservation of a stacked run', () => {
+  const triaged = (likelyPaths: string[]) => ({
+    decision: 'ready' as const,
+    at: '2026-11-23T00:00:00Z',
+    contract: { acceptanceCriteria: ['done'], likelyPaths, riskHints: [] },
+  });
+  const blocker = {
+    id: 'blocker-run-id',
+    issueNumber: 80,
+    state: 'waiting_ci' as const,
+    triage: triaged(['src/pad.js', 'src/index.json']),
+  };
+  const other = { ...blocker, id: 'other-run-id', issueNumber: 90 };
+  const stacked = { id: 'stacked-run-id', triage: triaged(['src/table.js', 'src/index.json']) };
+  const runsOf = (runs: Array<typeof blocker>) => ({ runs });
+
+  // Found in the E2E: #81, stacked on #80, waited for #80 because both add a module to src/index.json.
+  test("is not held by the paths of the run it stacks on, only by another run's", () => {
+    expect(pathsHeld(runsOf([blocker]), stacked, { runId: 'blocker-run-id' })).toBeNull();
+    expect(pathsHeld(runsOf([blocker]), stacked, null)).toEqual({
+      kind: 'paths-overlap',
+      blockers: [80],
+    });
+    expect(pathsHeld(runsOf([blocker, other]), stacked, { runId: 'blocker-run-id' })).toEqual({
+      kind: 'paths-overlap',
+      blockers: [90],
+    });
   });
 });
 

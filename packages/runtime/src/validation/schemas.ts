@@ -6,8 +6,7 @@
 
 import { WORKSPACE_CLEANUP_REASONS } from '@funny/shared/activities';
 import { validationErr, type DomainError } from '@funny/shared/errors';
-import { DEFAULT_PROVIDER, MODEL_REGISTRY } from '@funny/shared/models';
-import { getManifest } from '@funny/shared/provider-manifests';
+import { DEFAULT_PROVIDER, MODEL_REGISTRY, providerModelProblem } from '@funny/shared/models';
 import { ok, err, type Result } from 'neverthrow';
 import { z } from 'zod';
 
@@ -64,22 +63,8 @@ function validateProviderModel(
   data: { provider?: string; model?: string },
   ctx: z.RefinementCtx,
 ): void {
-  const provider = data.provider;
-  const model = data.model;
-  if (!provider || !model) return;
-  if (provider === 'pi') return;
-  // Providers with a dynamic catalog (manifest `models.kind: 'dynamic'`) accept
-  // any non-empty string — their real ids are discovered at runtime.
-  if (getManifest(provider)?.models.kind === 'dynamic') return;
-  if (!(provider in MODEL_REGISTRY)) return;
-  const bucket = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY] as Record<string, unknown>;
-  if (!(model in bucket)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['model'],
-      message: `Invalid model "${model}" for provider "${provider}"`,
-    });
-  }
+  const problem = providerModelProblem(data.provider, data.model);
+  if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['model'], message: problem });
 }
 export const permissionModeSchema = z.enum(['plan', 'auto', 'autoEdit', 'confirmEdit', 'ask']);
 export const threadStageSchema = z.enum([

@@ -24,6 +24,7 @@
  * theirs; here a run must belong to that factory.
  */
 
+import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import { and, eq, inArray } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -208,7 +209,10 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
   const found = await runs.reopenableByThread(threadId);
   if (found.isErr()) return;
   for (const run of found.value) {
-    if (run.threadIds.at(-1) !== threadId || !followedUpAfterParking(run, threadId)) continue;
+    // Only the implementing thread takes a run over, never a step's own read-only thread.
+    if (implementingThreadOf(run) !== threadId || !followedUpAfterParking(run, threadId)) {
+      continue;
+    }
     const reopened = await runs.reopen(run, run.threadIds);
     if (reopened.isOk() && reopened.value === NO_FREE_SLOT) {
       // The factory is full: the run stays parked, and a later completion of

@@ -19,10 +19,12 @@ export const ThreadHeaderActions = memo(function ThreadHeaderActions({
   return (
     <ThreadHeaderActionsBase
       {...props}
-      renderMoreActions={({ isScratchThread, onOpenInEditor }) => (
+      renderMoreActions={({ isScratchThread, onOpenInEditor, comments, canShare }) => (
         <MoreActionsMenu
           onOpenInEditor={!isScratchThread ? onOpenInEditor : undefined}
           hideTimeline={hideTimeline}
+          comments={comments}
+          canShare={canShare}
         />
       )}
     />

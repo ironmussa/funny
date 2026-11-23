@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { okAsync, ResultAsync } from 'neverthrow';
 
 import { WorktreesPanel } from '@/components/review-pane/panels/WorktreesPanel';
 import { buildSettingsItems, routableSettingsIds } from '@/components/settings/items';
 import { buildProject, withProjects } from '@/data/projects/testing';
+import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -125,16 +126,49 @@ describe('Worktrees sidebar', () => {
     );
     const view = renderWithProviders(<WorktreesPanel />);
     await screen.findByText('feature/test');
-    const mainBadge = screen.getByText('Main');
-    const currentBadge = screen.getByText('Current');
-    expect(mainBadge.parentElement).toHaveTextContent('main');
-    expect(currentBadge.parentElement).toHaveTextContent('feature/test');
+    // The original checkout is marked by a house icon on its path, not a chip.
+    expect(screen.getAllByTestId('worktree-main-icon')).toHaveLength(1);
+    expect(screen.getByTestId('worktree-open-directory-main')).toContainElement(
+      screen.getByTestId('worktree-main-icon'),
+    );
+    expect(screen.queryByTestId('worktree-badge-main')).not.toBeInTheDocument();
+    // The active worktree's branch chip is outlined (like History's thread
+    // branch) instead of carrying a separate "Current" badge.
+    const featureChip = screen.getByTestId('worktree-branch-feature/test');
+    expect(featureChip).toHaveAttribute('data-highlighted', 'true');
+    expect(featureChip.style.boxShadow).toContain('1.5px');
+    expect(featureChip).toHaveTextContent('Current');
+    expect(screen.getByTestId('worktree-branch-main')).not.toHaveAttribute('data-highlighted');
+    expect(screen.queryByTestId('worktree-badge-active')).not.toBeInTheDocument();
     context.basePath = '/second';
     view.rerender(<WorktreesPanel />);
-    expect(screen.getByText('Main').parentElement).toContainElement(screen.getByText('Current'));
+    expect(screen.getByTestId('worktree-branch-main')).toHaveAttribute('data-highlighted', 'true');
+    expect(screen.getByTestId('worktree-branch-feature/test')).not.toHaveAttribute(
+      'data-highlighted',
+    );
     context.basePath = '';
     view.rerender(<WorktreesPanel />);
     expect(screen.queryByText('Current')).not.toBeInTheDocument();
+  });
+
+  test("shows a worktree's thread title the way the sidebar does", async () => {
+    seedProjectThreads({
+      p2: [
+        buildThread({
+          id: 't-wt',
+          projectId: 'p2',
+          title: 'mover comment y share',
+          worktreePath: '/second/feature',
+        }),
+      ],
+    });
+    renderWithProviders(<WorktreesPanel />);
+
+    const link = await screen.findByTestId('worktree-thread-link-t-wt');
+    const title = within(link).getByText('mover comment y share');
+    // Same treatment as the sidebar's ThreadTitle: first letter capitalized.
+    expect(title).toHaveClass('first-letter:uppercase');
+    expect(link).toHaveClass('text-thread-title', 'text-sm');
   });
 
   test('removes worktrees from project settings', () => {

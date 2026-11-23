@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -103,7 +102,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
     <div className="flex min-h-0 flex-1 flex-col">
       {toolbar}
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
-        {/* One list: this branch's stashes first (marked Current), then the
+        {/* One list: this branch's stashes first (branch chip outlined), then the
             other branches' — each row names its branch, like the worktrees. */}
         <div className="divide-sidebar-border flex flex-col divide-y" data-testid="stash-list">
           {filteredStashEntries.map((entry) => (
@@ -302,7 +301,7 @@ function StashRow({
   entry: UseStashStateResult['filteredStashEntries'][number];
   /** The branch the stash was made on (shown on the row). */
   branch?: string;
-  /** The stash was made on the checked-out branch: shows the Current chip. */
+  /** The stash was made on the checked-out branch: its branch chip is outlined. */
   current?: boolean;
   /** Set when the stash was made on another branch: popping it here is refused. */
   otherBranch?: string;
@@ -338,15 +337,11 @@ function StashRow({
           {branch && (
             <BranchBadge
               branch={branch}
-              variant="plain"
-              className="min-w-0 font-mono"
+              size="xs"
+              highlighted={current}
+              highlightLabel={t('review.stashCurrentBranch', 'Current')}
               data-testid={`stash-branch-${idx}`}
             />
-          )}
-          {current && (
-            <LabelBadge tone="success" data-testid={`stash-current-${idx}`}>
-              {t('review.stashCurrentBranch', 'Current')}
-            </LabelBadge>
           )}
           <span className="shrink-0">{timeAgo(entry.createdAt, t, now)}</span>
         </div>

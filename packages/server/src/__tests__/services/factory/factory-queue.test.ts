@@ -95,6 +95,11 @@ function fakeGithub(script: Script = {}): FakeGithub {
       script.repoUnreadable
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
         : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
+    defaultBranchHead: () => okAsync({ branch: 'main', sha: 'head-sha' }),
+    readFileAt: (_reader: unknown, path: string) =>
+      script.repoUnreadable
+        ? errAsync({ message: 'GitHub answered 500', status: 500 })
+        : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
     branchAhead: () => okAsync(true),
     defaultBranch: () => okAsync('main'),
     branchState: () => okAsync({ sha: 'base-sha', ci: { kind: 'green' as const } }),
@@ -202,6 +207,7 @@ async function setUp(
     enabled?: boolean;
     maxConcurrent?: number;
     flowName?: string;
+    stepOverrides?: Record<string, { provider?: string; model?: string }>;
     script?: Script;
     launcher?: ReturnType<typeof fakeLauncher>;
     waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
@@ -213,6 +219,7 @@ async function setUp(
     mode: opts.mode,
     maxConcurrent: opts.maxConcurrent,
     flowName: opts.flowName,
+    stepOverrides: opts.stepOverrides,
   });
   if (saved.isErr()) throw new Error(saved.error.message);
   const factoryId = (await settings.factoryId('alice', 'p1'))._unsafeUnwrap()!;
@@ -410,6 +417,80 @@ describe('sending issues', () => {
     expect((await queue.flowDefinition(null, 'custom'))._unsafeUnwrapErr().kind).toBe(
       'invalid-flow',
     );
+  });
+});
+
+// openspec factory-flow-step-options, 4.3: Validate flow.
+describe('validating a flow', () => {
+  test('a broken repository flow answers its parse error, and nothing is started', async () => {
+    const { factoryId, queue, launcher } = await setUp({
+      script: { repoFiles: { '.funny/workflows/custom.yaml': 'name: custom\nnodes: [oops' } },
+    });
+
+    const answer = (await queue.validateFlow(factoryId, 'p1', 'custom'))._unsafeUnwrap();
+
+    expect(answer.ok).toBe(false);
+    if (answer.ok) return;
+    expect(answer.message).toContain('.funny/workflows/custom.yaml');
+    expect(answer.problems).toEqual([{ step: 'flow', field: 'flow', message: answer.message }]);
+    expect(launcher.calls).toEqual([]);
+    expect(await runsOf(factoryId)).toEqual([]);
+  });
+
+  test('a refused option answers its step and field', async () => {
+    const { factoryId, queue } = await setUp({
+      script: {
+        repoFiles: {
+          '.funny/workflows/custom.yaml':
+            'name: custom\nnodes:\n  - id: implement\n    spawn_agent: { prompt: go, permission_mode: ask }\n',
+        },
+      },
+    });
+
+    const answer = (await queue.validateFlow(factoryId, 'p1', 'custom'))._unsafeUnwrap();
+
+    expect(answer).toMatchObject({
+      ok: false,
+      problems: [{ step: 'implement', field: 'permission_mode' }],
+    });
+  });
+
+  test('the built-in issue-to-merge is summarized with its steps and their options', async () => {
+    const { factoryId, queue } = await setUp({
+      stepOverrides: { 'ci.before_retry': { model: 'haiku' }, review: { model: 'opus' } },
+    });
+
+    const answer = (await queue.validateFlow(factoryId, 'p1', 'issue-to-merge'))._unsafeUnwrap();
+
+    if (!answer.ok) throw new Error(answer.message);
+    expect(answer).toMatchObject({ name: 'issue-to-merge', source: 'repository' });
+    expect(answer.steps.map((step) => `${step.id}:${step.kind}`)).toContain('ci:wait_ci');
+    expect(answer.agentSteps.find((step) => step.stepId === 'implement')).toMatchObject({
+      permissionMode: 'autoEdit',
+      thread: 'continue',
+      overridden: false,
+    });
+    expect(answer.agentSteps.find((step) => step.stepId === 'ci.before_retry')).toMatchObject({
+      model: 'haiku',
+      overridden: true,
+    });
+    // `review` is a review step kind, not an agent step: its override is unused.
+    expect(answer.unusedOverrides).toEqual(['review']);
+    // A cheaper model on the continuing thread replays its context: said so.
+    expect(answer.warnings.join('\n')).toContain('ci.before_retry');
+  });
+
+  test('without a factory, a built-in validates with no overrides', async () => {
+    const queue = createFactoryQueue({ wake: async () => {} });
+
+    const answer = (await queue.validateFlow(null, 'p1', 'issue-to-pr'))._unsafeUnwrap();
+
+    expect(answer).toMatchObject({
+      ok: true,
+      source: 'built-in',
+      commit: null,
+      unusedOverrides: [],
+    });
   });
 });
 

@@ -337,6 +337,71 @@ describe('factory over tRPC', () => {
     );
   });
 
+  // openspec factory-flow-step-options, 4.1.
+  test('step overrides are saved and read back; a permission mode or a bad pair is refused', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      stepOverrides: {},
+    });
+    const overrides = {
+      'ci.before_retry': { model: 'haiku' },
+      review: { provider: 'codex', effort: 'high' },
+    };
+    const saved = await save('alice', { projectId: 'p1', enabled: true, stepOverrides: overrides });
+    expect(saved.body).toMatchObject({ stepOverrides: overrides });
+    // Omitted: kept.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      stepOverrides: overrides,
+    });
+    // The permission mode and tool lists stay in the reviewed flow file.
+    const withMode = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      stepOverrides: { implement: { permissionMode: 'auto' } },
+    });
+    expect(withMode.status).toBe(400);
+    const withTools = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      stepOverrides: { implement: { disallowedTools: [] } },
+    });
+    expect(withTools.status).toBe(400);
+    // A model the provider does not have, or an unknown provider.
+    const badPair = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      stepOverrides: { implement: { provider: 'codex', model: 'opus' } },
+    });
+    expect(badPair.status).toBe(400);
+    const unknown = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      stepOverrides: { implement: { provider: 'nope' } },
+    });
+    expect(unknown.status).toBe(400);
+    expect((await query('alice', 'settings', { projectId: 'p1' })).body).toMatchObject({
+      stepOverrides: overrides,
+    });
+  });
+
+  test('Validate flow reads with view and answers a summary; an outsider gets 404', async () => {
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    const input = { projectId: 'p1', flowName: 'issue-to-pr' };
+    const answer = await query('vic', 'validateFlow', input);
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({ ok: true, name: 'issue-to-pr', source: 'built-in' });
+    expect((await query('bob', 'validateFlow', input)).status).toBe(404);
+  });
+
+  test('a viewer cannot change step overrides', async () => {
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    const refused = await save('vic', {
+      projectId: 'p1',
+      enabled: true,
+      stepOverrides: { implement: { model: 'haiku' } },
+    });
+    expect(refused.status).toBe(403);
+  });
+
   test('the merge limit cannot be raised', async () => {
     await save('alice', { projectId: 'p1', enabled: true, stageLimits: { review: 2 } });
     const refused = await save('alice', {

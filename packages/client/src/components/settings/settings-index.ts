@@ -530,6 +530,15 @@ const ENTRIES = [
     description: 'settings.projectFactoryStageLimitsDesc',
     keywords: ['limit', 'implement', 'review', 'concurrency'],
   },
+  {
+    id: 'factory.stepOptions',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryStepOptions',
+    description: 'settings.projectFactoryStepOptionsDesc',
+    keywords: ['model', 'provider', 'effort', 'override', 'validate', 'flow', 'step'],
+  },
 ] as const satisfies readonly SettingsIndexEntry[];
 
 export type SettingId = (typeof ENTRIES)[number]['id'];

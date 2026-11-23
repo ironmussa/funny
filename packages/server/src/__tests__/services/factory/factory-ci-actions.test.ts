@@ -90,6 +90,42 @@ describe('wait_ci', () => {
     });
   });
 
+  // openspec factory-flow-step-options, 5.3: enough for the fix step to reproduce it.
+  test('red names the commit checked, each failed step and link, still starting with "Failing checks"', async () => {
+    const checks = [
+      {
+        name: 'test',
+        conclusion: 'failure',
+        excerpt: 'boom',
+        url: 'https://github.com/o/r/actions/runs/1/job/9',
+        failedStep: 'Run tests',
+      },
+      { name: 'lint', conclusion: 'failure', excerpt: '' },
+    ];
+    const { prs } = scripted([{ kind: 'failing', checks, sha: 'abc123' }]);
+    const result = await actionsFor(prs).waitCi();
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe(
+      [
+        'Failing checks: test, lint',
+        'Commit checked: abc123',
+        '--- test ---\nFailed step: Run tests\nLink: https://github.com/o/r/actions/runs/1/job/9\nboom',
+      ].join('\n\n'),
+    );
+  });
+
+  test('the failure text stays bounded however long the logs are', async () => {
+    const checks = Array.from({ length: 5 }, (_, i) => ({
+      name: `check-${i}`,
+      conclusion: 'failure',
+      excerpt: 'x'.repeat(100_000),
+      url: `https://example.test/${i}`,
+    }));
+    const { prs } = scripted([{ kind: 'failing', checks, sha: 'abc123' }]);
+    const result = await actionsFor(prs).waitCi();
+    expect(result.error!.length).toBeLessThan(5 * 10_000);
+  });
+
   test('checks that could not run fail without the "Failing checks" the fix loop retries', async () => {
     const checks = [
       { name: '0security - PR Security', conclusion: 'error', excerpt: 'add a card' },

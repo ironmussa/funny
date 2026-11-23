@@ -60,7 +60,12 @@ import {
   type FactoryRunJob,
   type WaitingNotice,
 } from './factory-flow-runs.js';
-import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
+import {
+  flowReadsOf,
+  loadFactoryFlow,
+  type FactoryFlow,
+  type FactoryFlowError,
+} from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './factory-github.js';
 import {
   createFactoryIncidentsRepository,
@@ -156,6 +161,8 @@ export interface FactoryWatcherDeps {
     threadId: string,
     content: string,
     expectedBranch?: string,
+    /** The step's agent options, carried on the message body. */
+    options?: Record<string, unknown>,
   ) => Promise<Result<void, string>>;
   /** Where the merged-run cleanup tells the enabler's browsers about the cleared threads. */
   browserEvents?: BrowserEventsPort;
@@ -251,8 +258,8 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
           }),
     followUp:
       d.followUp ??
-      ((userId, threadId, content, expectedBranch) =>
-        sendFactoryFollowUp(d.ports, userId, threadId, content, expectedBranch)),
+      ((userId, threadId, content, expectedBranch, options) =>
+        sendFactoryFollowUp(d.ports, userId, threadId, content, expectedBranch, options)),
   });
   for (const factory of await listWatchedFactories([...IN_FLIGHT_STATES])) schedule(factory);
   log.info('Issue factory watcher started', { namespace: 'factory', jobs: jobs.size });
@@ -700,9 +707,9 @@ const proofNotConfigured = (flowName: string) =>
 function flowProofReady(ctx: AdmissionContext, name: string): Promise<boolean> {
   let ready = ctx.proofReady.get(name);
   if (!ready) {
-    ready = loadFactoryFlow(name, {
-      readDefaultBranchFile: (path) => deps!.github.readDefaultBranchFile(ctx.reader, path),
-    }).then((flow) => !flow.isOk() || flow.value.proofReady);
+    ready = loadFactoryFlow(name, flowReadsOf(deps!.github, ctx.reader)).then(
+      (flow) => !flow.isOk() || flow.value.proofReady,
+    );
     ctx.proofReady.set(name, ready);
   }
   return ready;
@@ -975,9 +982,7 @@ async function proofConfigOf(
   if (!deps) return null;
   const github = deps.github;
   const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
-  const flow = await loadFactoryFlow(run.flowName ?? factory.flowName, {
-    readDefaultBranchFile: (path) => github.readDefaultBranchFile(reader, path),
-  });
+  const flow = await loadFactoryFlow(run.flowName ?? factory.flowName, flowReadsOf(github, reader));
   const config = flow.isOk() ? flow.value.regressionProof : undefined;
   return config && config.rules.length > 0 ? config : null;
 }

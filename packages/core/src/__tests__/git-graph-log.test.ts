@@ -16,8 +16,8 @@ const TMP = resolve(tmpdir(), 'core-graph-log-' + Date.now());
 /** Project the classified refs back to their display names for name-only asserts. */
 const refNames = (refs: GraphRef[]) => refs.map((r) => r.name);
 
-function git(repo: string, args: string[]) {
-  executeSync('git', args, { cwd: repo });
+function git(repo: string, args: string[]): string {
+  return executeSync('git', args, { cwd: repo }).stdout.trim();
 }
 
 function writeCommit(repo: string, file: string, content: string, message: string) {
@@ -152,6 +152,21 @@ describe('getGraphLog', () => {
     git(repo, ['branch', 'saved-snapshot', checkpointRef]);
     const withBranch = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();
     expect(withBranch.some((entry) => entry.message.startsWith('t3 checkpoint'))).toBe(true);
+  });
+
+  it("excludes funny's own snapshot refs (rewind checkpoints, undo snapshots)", async () => {
+    const repo = initMergeRepo();
+    const baseline = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();
+    // Same shape as git-checkpoints.ts / git-undo.ts: a parentless commit of the
+    // worktree tree, plus a ref that points at a bare tree.
+    const tree = git(repo, ['write-tree']);
+    const orphan = git(repo, ['commit-tree', tree, '-m', 'funny checkpoint thread message']);
+    git(repo, ['update-ref', 'refs/funny/codex-checkpoints/thread/message/worktree', orphan]);
+    git(repo, ['update-ref', 'refs/funny/codex-checkpoints/thread/message/index', tree]);
+    git(repo, ['update-ref', 'refs/funny/undo/activity', orphan]);
+
+    const entries = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();
+    expect(entries.map((entry) => entry.hash)).toEqual(baseline.map((entry) => entry.hash));
   });
 
   it('returns author and committer identities for rebased commits', async () => {

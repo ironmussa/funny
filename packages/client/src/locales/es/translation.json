@@ -160,7 +160,7 @@
     "openDesign": "Abrir diseño"
   },
   "thread": {
-    "browserOpenTooltip": "Navegador abierto",
+    "browserOpenTooltip": "Navegador abierto — haz clic para verlo",
     "claudeContext": "Claude Code · Contexto automático",
     "claudeContextDescription": "Instrucciones proporcionadas a Claude Code; no es un mensaje escrito por ti.",
     "status": {

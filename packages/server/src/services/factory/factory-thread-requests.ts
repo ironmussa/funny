@@ -183,6 +183,11 @@ export async function sendFactoryFollowUp(
   threadId: string,
   content: string,
   expectedBranch?: string,
+  /**
+   * The step's agent options (provider, model, permission mode, effort, tool
+   * lists): every step sends its own, so one step's never carry to the next.
+   */
+  options?: Record<string, unknown>,
 ): Promise<Result<void, string>> {
   const [thread] = await db
     .select({ id: threads.id })
@@ -190,7 +195,8 @@ export async function sendFactoryFollowUp(
     .where(and(eq(threads.id, threadId), eq(threads.userId, userId)));
   if (!thread) return err('the thread no longer exists');
   const path = `/api/threads/${threadId}/message`;
-  const message = expectedBranch ? { content, expectedBranch } : { content };
+  const message: Record<string, unknown> = { ...options, content };
+  if (expectedBranch) message.expectedBranch = expectedBranch;
   const sent = await postToThread(ports, userId, path, message);
   if (sent.isOk() || !sent.error.sandboxAsleep) return sent.mapErr((e) => e.message);
   // The run waited (e.g. on CI) long enough for its sandbox to sleep: wake it once.

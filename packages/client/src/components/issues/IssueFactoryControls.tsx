@@ -4,9 +4,9 @@
  * that sends the selection with one flow. Only a caller who may start threads
  * on the project and has set up a factory sees any of it.
  */
-import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
+import { MAX_ISSUES_PER_SEND, implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
-import { RotateCw, Send, X } from 'lucide-react';
+import { Factory, RotateCw, Send, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -171,12 +171,13 @@ export function IssueFactoryStatus({
   position: number | undefined;
 }) {
   const { t } = useTranslation();
-  const lastThread = run.threadIds.at(-1);
+  const lastThread = implementingThreadOf(run);
   const badge = (
     <LabelBadge
       tone={factoryRunTone(run.state)}
       data-testid={`issue-factory-status-${run.issueNumber}`}
     >
+      <Factory className="size-2.5 shrink-0" aria-hidden />
       {statusText(t, run, position)}
     </LabelBadge>
   );

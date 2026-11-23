@@ -20,6 +20,7 @@ import {
   geminiModels,
   opencodeModels,
   piModels,
+  getManifest,
 } from './provider-manifests.js';
 import type { AttachmentLimits, ModelDefinition, ProviderKeyConfig } from './provider-types.js';
 
@@ -624,6 +625,25 @@ export function getDefaultAllowedTools(provider: AgentProvider): string[] {
 /** Get read-only tools for ask mode (Claude only). */
 export function getAskModeTools(): string[] {
   return [...CLAUDE_ASK_TOOLS];
+}
+
+/**
+ * Why `model` cannot run on `provider`, or null when it can (or when there is
+ * nothing to check). Pi and providers with a dynamic catalog (manifest
+ * `models.kind: 'dynamic'`) accept any non-empty id, discovered at runtime;
+ * a provider outside the registry is not checked here. The runtime's thread
+ * schemas and the issue factory's flow validation share this rule.
+ */
+export function providerModelProblem(
+  provider: string | undefined,
+  model: string | undefined,
+): string | null {
+  if (!provider || !model) return null;
+  if (provider === 'pi') return null;
+  if (getManifest(provider)?.models.kind === 'dynamic') return null;
+  if (!(provider in MODEL_REGISTRY)) return null;
+  const bucket = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY] as Record<string, unknown>;
+  return model in bucket ? null : `Invalid model "${model}" for provider "${provider}"`;
 }
 
 /** Check if a model belongs to the given provider. */

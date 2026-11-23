@@ -8,6 +8,7 @@
  * removes them and "Stop all" also stops the runs in progress, after a
  * confirmation.
  */
+import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -31,78 +32,88 @@ import {
 import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 
+import { ProjectFactoryRunFlow } from './ProjectFactoryRunFlow';
+
 function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
   const { t } = useTranslation();
-  const lastThread = run.threadIds.at(-1);
+  const lastThread = implementingThreadOf(run);
   const review = factoryRunReviewLabel(t, run);
   const contract = factoryRunContractLabel(t, run);
   const parked =
     run.state === 'waiting_human' || run.state === 'failed' || run.state === 'needs_info';
   return (
-    <li className="flex items-center gap-2 py-1.5 text-sm" data-testid={`factory-run-${run.id}`}>
-      <span className="w-14 shrink-0 font-medium">#{run.issueNumber}</span>
-      <Badge size="xs" variant={stateVariant(run.state)}>
-        {stateLabel(t, run.state)}
-      </Badge>
-      {run.currentStep && <span className="text-muted-foreground truncate">{run.currentStep}</span>}
-      {run.state === 'requested' && run.waitReason && (
-        <span className="text-muted-foreground truncate" data-testid={`factory-run-wait-${run.id}`}>
-          {factoryWaitReasonText(t, run.waitReason)}
+    <li className="py-1.5 text-sm" data-testid={`factory-run-${run.id}`}>
+      <div className="flex items-center gap-2">
+        <span className="w-14 shrink-0 font-medium">#{run.issueNumber}</span>
+        <Badge size="xs" variant={stateVariant(run.state)}>
+          {stateLabel(t, run.state)}
+        </Badge>
+        {run.currentStep && (
+          <span className="text-muted-foreground truncate">{run.currentStep}</span>
+        )}
+        {run.state === 'requested' && run.waitReason && (
+          <span
+            className="text-muted-foreground truncate"
+            data-testid={`factory-run-wait-${run.id}`}
+          >
+            {factoryWaitReasonText(t, run.waitReason)}
+          </span>
+        )}
+        {contract && (
+          <Badge
+            size="xs"
+            variant="outline"
+            title={contract.detail}
+            data-testid={`factory-run-contract-${run.id}`}
+          >
+            {contract.text}
+          </Badge>
+        )}
+        {review && (
+          <Badge
+            size="xs"
+            variant={review.passed ? 'outline' : 'destructive'}
+            data-testid={`factory-run-review-${run.id}`}
+          >
+            {review.text}
+          </Badge>
+        )}
+        {run.risk?.level === 'high' && (
+          <Badge
+            size="xs"
+            variant="outline"
+            title={run.risk.reasons.join('; ')}
+            data-testid={`factory-run-risk-${run.id}`}
+          >
+            {t('factory.risk.high', 'High risk')}
+          </Badge>
+        )}
+        {parked && run.failureReason && (
+          <span
+            className="text-muted-foreground truncate"
+            title={run.failureReason}
+            data-testid={`factory-run-reason-${run.id}`}
+          >
+            {factoryRunReasonText(t, run.failureReason)}
+          </span>
+        )}
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          <FactoryRunControls
+            projectId={projectId}
+            run={run}
+            testId={(button) => `factory-run-${button}-${run.id}`}
+          >
+            {lastThread && (
+              <Button asChild size="xs" variant="link" data-testid={`factory-run-thread-${run.id}`}>
+                <Link to={getThreadRoute({ id: lastThread, projectId, isScratch: false })}>
+                  {t('factory.thread', 'Thread')}
+                </Link>
+              </Button>
+            )}
+          </FactoryRunControls>
         </span>
-      )}
-      {contract && (
-        <Badge
-          size="xs"
-          variant="outline"
-          title={contract.detail}
-          data-testid={`factory-run-contract-${run.id}`}
-        >
-          {contract.text}
-        </Badge>
-      )}
-      {review && (
-        <Badge
-          size="xs"
-          variant={review.passed ? 'outline' : 'destructive'}
-          data-testid={`factory-run-review-${run.id}`}
-        >
-          {review.text}
-        </Badge>
-      )}
-      {run.risk?.level === 'high' && (
-        <Badge
-          size="xs"
-          variant="outline"
-          title={run.risk.reasons.join('; ')}
-          data-testid={`factory-run-risk-${run.id}`}
-        >
-          {t('factory.risk.high', 'High risk')}
-        </Badge>
-      )}
-      {parked && run.failureReason && (
-        <span
-          className="text-muted-foreground truncate"
-          title={run.failureReason}
-          data-testid={`factory-run-reason-${run.id}`}
-        >
-          {factoryRunReasonText(t, run.failureReason)}
-        </span>
-      )}
-      <span className="ml-auto flex shrink-0 items-center gap-1">
-        <FactoryRunControls
-          projectId={projectId}
-          run={run}
-          testId={(button) => `factory-run-${button}-${run.id}`}
-        >
-          {lastThread && (
-            <Button asChild size="xs" variant="link" data-testid={`factory-run-thread-${run.id}`}>
-              <Link to={getThreadRoute({ id: lastThread, projectId, isScratch: false })}>
-                {t('factory.thread', 'Thread')}
-              </Link>
-            </Button>
-          )}
-        </FactoryRunControls>
-      </span>
+      </div>
+      <ProjectFactoryRunFlow run={run} />
     </li>
   );
 }

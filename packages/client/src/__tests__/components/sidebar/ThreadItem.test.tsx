@@ -11,6 +11,7 @@ import { getDataLayer } from '@/data/runtime';
 import { buildThread } from '@/data/threads/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
+import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useThreadActiveToolStore } from '@/stores/thread-active-tool-store';
 
 import { buildJob, buildWatcher } from '../../helpers/builders-lib';
@@ -295,6 +296,29 @@ describe('ThreadItem', () => {
     act(() => useBrowserLiveThreadsStore.getState().markClosed('t-4'));
     expect(screen.queryByTestId('thread-browser-open-t-4')).not.toBeInTheDocument();
   });
+
+  test('clicking the browser icon opens the thread and shows its browser in the panel', () => {
+    useBrowserLiveThreadsStore.setState({ byThread: { 't-5': true } });
+    const showThreadBrowser = vi.fn();
+    const restore = useBrowserPanelStore.getState().showThreadBrowser;
+    useBrowserPanelStore.setState({ showThreadBrowser });
+    const onSelect = vi.fn();
+    try {
+      renderWithProviders(
+        <ThreadItem
+          thread={makeThread({ id: 't-5', projectId: 'p-1', isScratch: false, status: 'idle' })}
+          projectPath="/repo"
+          isSelected={false}
+          onSelect={onSelect}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('thread-browser-open-t-5'));
+      expect(showThreadBrowser).toHaveBeenCalledWith('t-5');
+      expect(onSelect).toHaveBeenCalled();
+    } finally {
+      useBrowserPanelStore.setState({ showThreadBrowser: restore });
+    }
+  });
   describe('a factory thread whose run works outside the agent', () => {
     const run = (over: Partial<FactoryRun> = {}): FactoryRun =>
       buildFactoryRun({
@@ -349,6 +373,16 @@ describe('ThreadItem', () => {
       openMenu();
       expect(await screen.findByTestId('thread-stop-factory-run-t-factory')).toBeInTheDocument();
       expect(screen.queryByText('sidebar.archive')).not.toBeInTheDocument();
+    });
+
+    test('a working run has the running dot, so a dot theme does not show a spinner', () => {
+      seedActiveRuns([run()]);
+      renderThread();
+
+      const glyph = screen.getByTestId('thread-factory-activity-t-factory').parentElement!;
+      const dot = glyph.querySelector('.status-glyph-dot');
+      expect(dot).not.toBeNull();
+      expect(dot).toHaveClass('bg-thread-dot-running');
     });
 
     test('a run waiting for the member asks for attention and can be archived', async () => {

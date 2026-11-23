@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { parseWorkflowYaml } from '../parse.js';
 import { isProofReady } from '../schema.js';
@@ -38,6 +38,16 @@ describe("funny's issue-to-merge flow", () => {
           : node,
       );
     expect(withoutRules(repo)).toEqual(withoutRules(builtIn));
+  });
+
+  test("keeps the built-in's prompt files, since a repository flow reads its own", () => {
+    const names = readdirSync(new URL('../../defaults/prompts/', import.meta.url));
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      expect(read(`../../../../.funny/workflows/prompts/${name}`)).toBe(
+        read(`../../defaults/prompts/${name}`),
+      );
+    }
   });
 
   test('routes each package to its own test command, the rest to the root', () => {

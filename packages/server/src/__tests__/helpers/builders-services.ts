@@ -2,7 +2,7 @@
  * Typed fixtures and test doubles for the server service tests
  * (`__tests__/services/**`), so the tests do not need type assertions.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 import type { WSEvent } from '@funny/shared';
 import type { StartAgentPayload } from '@funny/shared/runner-protocol';
@@ -207,5 +207,16 @@ export function proofReadyFlowFiles(): Record<string, string> {
     "    regression_proof:\n      rules:\n        - globs: ['**/*.test.ts']\n          command: 'bun test {{files}}'\n",
   );
   if (withRule === builtIn) throw new Error('issue-to-merge.yaml has no regression_proof step');
-  return { '.funny/workflows/issue-to-merge.yaml': withRule };
+  return { '.funny/workflows/issue-to-merge.yaml': withRule, ...builtInPromptFiles() };
+}
+
+/** The built-in prompt files, as a repository holds them next to its flows. */
+function builtInPromptFiles(): Record<string, string> {
+  const dir = new URL('../../../../workflows/defaults/prompts/', import.meta.url);
+  return Object.fromEntries(
+    readdirSync(dir).map((name) => [
+      `.funny/workflows/prompts/${name}`,
+      readFileSync(new URL(name, dir), 'utf8'),
+    ]),
+  );
 }

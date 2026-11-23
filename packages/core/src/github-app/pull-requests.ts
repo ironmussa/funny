@@ -18,6 +18,10 @@ export interface FailingCheck {
   /** GitHub's conclusion (`failure`, `timed_out`, …). */
   conclusion: string;
   excerpt: string;
+  /** Where the check is on GitHub, when it reports one. */
+  url?: string;
+  /** The first job step that failed, for a GitHub Actions check. */
+  failedStep?: string;
 }
 
 export type CiState =
@@ -27,8 +31,8 @@ export type CiState =
   | { kind: 'green' }
   /** No check or status reported on the head commit (yet, or the repository has no CI). */
   | { kind: 'none' }
-  /** At least one check failed; none is still running. */
-  | { kind: 'failing'; checks: FailingCheck[] }
+  /** At least one check failed; none is still running. `sha`: the commit checked. */
+  | { kind: 'failing'; checks: FailingCheck[]; sha?: string }
   /**
    * Nothing failed in the code, but a check could not run: a commit status in
    * `error` (the CI service itself failed, e.g. "add a card") or a check run
@@ -137,12 +141,18 @@ interface RestCheckRun {
   name: string;
   status: string;
   conclusion: string | null;
+  html_url?: string | null;
   app?: { slug?: string } | null;
   output?: { title?: string | null; summary?: string | null; text?: string | null } | null;
 }
 
 interface RestCombinedStatus {
-  statuses: Array<{ context: string; state: string; description: string | null }>;
+  statuses: Array<{
+    context: string;
+    state: string;
+    description: string | null;
+    target_url?: string | null;
+  }>;
 }
 
 const FAILED_CONCLUSIONS = new Set([
@@ -235,6 +245,19 @@ function excerptOf(github: RepoGithub, repo: string, run: RestCheckRun) {
     .orElse(() => okAsync(tail(checkSummary(run))));
 }
 
+/** The first step of a GitHub Actions job that failed; none for another check, or unreadable. */
+function failedStepOf(github: RepoGithub, repo: string, run: RestCheckRun) {
+  if (run.app?.slug !== 'github-actions') return okAsync<string | undefined, never>(undefined);
+  return github
+    .json<{ steps?: Array<{ name: string; conclusion: string | null }> }>(
+      repo,
+      'GET',
+      `/repos/${repo}/actions/jobs/${run.id}`,
+    )
+    .map((job) => job.steps?.find((step) => step.conclusion === 'failure')?.name)
+    .orElse(() => okAsync<string | undefined, never>(undefined));
+}
+
 const anyFailed = (runs: RestCheckRun[], status: RestCombinedStatus) =>
   runs.some((run) => run.conclusion && FAILED_CONCLUSIONS.has(run.conclusion)) ||
   status.statuses.some((s) => s.state === 'failure' || s.state === 'error');
@@ -267,11 +290,11 @@ const isBlocked = (check: FailingCheck) =>
  * Failed checks become `failing` when one of them is the code's (only those,
  * so a fix step is not asked to fix a CI service), else `blocked`.
  */
-function verdictOfFailures(failing: FailingCheck[]): CiState {
+function verdictOfFailures(failing: FailingCheck[], sha: string): CiState {
   if (failing.length === 0) return { kind: 'green' };
   const fixable = failing.filter((check) => !isBlocked(check));
   return fixable.length > 0
-    ? { kind: 'failing', checks: fixable }
+    ? { kind: 'failing', checks: fixable, sha }
     : { kind: 'blocked', checks: failing };
 }
 
@@ -284,17 +307,24 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     const failedRuns = runs.filter((r) => r.conclusion && FAILED_CONCLUSIONS.has(r.conclusion));
     const failedStatuses: FailingCheck[] = status.statuses
       .filter((s) => s.state === 'failure' || s.state === 'error')
-      .map((s) => ({
-        name: s.context,
-        conclusion: s.state,
-        excerpt: s.description ?? '(no details)',
-      }));
+      .map((s): FailingCheck => {
+        const check: FailingCheck = {
+          name: s.context,
+          conclusion: s.state,
+          excerpt: s.description ?? '(no details)',
+        };
+        if (s.target_url) check.url = s.target_url;
+        return check;
+      });
     const fromRuns = failedRuns.slice(0, MAX_CHECKS).map((run) =>
-      excerptOf(github, repo, run).map((excerpt): FailingCheck => ({
-        name: run.name,
-        conclusion: run.conclusion!,
-        excerpt,
-      })),
+      ResultAsync.combine([excerptOf(github, repo, run), failedStepOf(github, repo, run)]).map(
+        ([excerpt, failedStep]): FailingCheck => {
+          const check: FailingCheck = { name: run.name, conclusion: run.conclusion!, excerpt };
+          if (run.html_url) check.url = run.html_url;
+          if (failedStep) check.failedStep = failedStep;
+          return check;
+        },
+      ),
     );
     return ResultAsync.combine(fromRuns).map((checks) =>
       [...checks, ...failedStatuses].slice(0, MAX_CHECKS),
@@ -325,7 +355,9 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
               runs.some((r) => r.status !== 'completed') ||
               status.statuses.some((s) => s.state === 'pending');
             if (pending) return okAsync({ kind: 'pending' });
-            return failingChecks(repo, runs, status).map(verdictOfFailures);
+            return failingChecks(repo, runs, status).map((failing) =>
+              verdictOfFailures(failing, sha),
+            );
           }),
       );
 

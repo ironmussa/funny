@@ -16,7 +16,7 @@ import type { NodeRunInfo, ProgressReporter } from '@funny/pipelines';
  * workflow.
  */
 export type ActionExecution = NodeRunInfo;
-import type { AgentDefinition } from '@funny/shared';
+import type { AgentDefinition, EffortLevel, PermissionMode } from '@funny/shared';
 
 // ── Action results ──────────────────────────────────────────
 
@@ -38,8 +38,23 @@ export interface SpawnAgentOpts {
   prompt: string;
   /** Working directory for the agent. */
   cwd: string;
-  /** Agent permission mode. */
-  mode?: 'plan' | 'autoEdit' | 'confirmEdit';
+  /**
+   * The step this spawn is: the node id, `<node>.before_retry` for a retry's
+   * fixer agent. The same for every attempt, so a host can key per-step
+   * settings on it.
+   */
+  stepId?: string;
+  /** Agent permission mode, as the flow wrote it (the host decides what it allows). */
+  mode?: PermissionMode;
+  /** Reasoning effort for this step. */
+  effort?: EffortLevel;
+  /**
+   * `continue` (default): the host may run the step on a thread an earlier
+   * agent step started. `new`: the step asks for its own thread.
+   */
+  thread?: 'continue' | 'new';
+  /** The flow's `defaults:` block, for the host to apply under the step's own options. */
+  defaults?: SpawnAgentDefaults;
   /** Model to use (e.g. 'sonnet', 'opus', 'haiku'). */
   model?: string;
   /**
@@ -68,6 +83,16 @@ export interface SpawnAgentOpts {
   disallowedTools?: string[];
   /** The execution this spawn belongs to: adopt `resume.recorded` work, `checkpoint` new work. */
   execution?: ActionExecution;
+}
+
+/** A flow's `defaults:` block: options every agent step gets unless it sets its own. */
+export interface SpawnAgentDefaults {
+  provider?: string;
+  model?: string;
+  effort?: EffortLevel;
+  permissionMode?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
 }
 
 export interface RunCommandOpts {

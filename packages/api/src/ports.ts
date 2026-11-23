@@ -56,6 +56,7 @@ import type { CreateDesignBody } from '@funny/shared/contracts/designs';
 import type {
   FactoryFlowDefinition,
   FactoryFlowOption,
+  FactoryFlowValidation,
   FactoryIssueBlockers,
   FactoryQueueClearResult,
   FactoryQueueRun,
@@ -468,6 +469,15 @@ export interface FactoryPort {
     projectId: string,
     flowName: string,
   ): PortResult<FactoryFlowDefinition>;
+  /**
+   * One flow loaded as an admitted run of the caller's factory would load it
+   * now, with its summary or every problem. Reads only: no run, no thread.
+   */
+  validateFlow(
+    userId: string,
+    projectId: string,
+    flowName: string,
+  ): PortResult<FactoryFlowValidation>;
   /** The open blockers of some issues, and whether the caller's factory has each. */
   blockers(
     userId: string,

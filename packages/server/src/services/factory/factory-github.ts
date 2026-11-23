@@ -96,6 +96,16 @@ export interface FactoryGithubPort {
     reader: FactoryRepoReader,
     path: string,
   ): ResultAsync<string | null, GithubCallError>;
+  /** The default branch and the commit it is at now. */
+  defaultBranchHead(
+    reader: FactoryRepoReader,
+  ): ResultAsync<{ branch: string; sha: string }, GithubCallError>;
+  /** A file as of `ref` (a commit of the default branch), or null when absent there. */
+  readFileAt(
+    reader: FactoryRepoReader,
+    path: string,
+    ref: string,
+  ): ResultAsync<string | null, GithubCallError>;
   /**
    * The pull request whose head is `branch` in the repository itself, or null:
    * the open one unless `state` is `'all'` (the newest, merged or closed too).
@@ -261,6 +271,8 @@ export function createFactoryGithub(
     issueBlockers: (reader, issueNumber) => reads(reader).blockers(issueNumber),
     listDefaultBranchDir: (reader, path) => reads(reader).listDefaultBranchDir(path),
     readDefaultBranchFile: (reader, path) => reads(reader).readDefaultBranchFile(path),
+    defaultBranchHead: (reader) => reads(reader).defaultBranchHead(),
+    readFileAt: (reader, path, ref) => reads(reader).readFileAt(path, ref),
     findPullRequest: (reader, branch, state) => reads(reader).findPullRequest(branch, state),
     branchAhead: (reader, branch) => reads(reader).branchAhead(branch),
     defaultBranch: (reader) => reads(reader).defaultBranch(),

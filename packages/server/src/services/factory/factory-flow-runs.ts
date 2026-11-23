@@ -65,7 +65,9 @@ import {
 } from './factory-action-provider.js';
 import {
   isMergeLane,
+  flowReadsOf,
   loadFactoryFlow,
+  type FactoryFlowContext,
   type FactoryFlow,
   type FactoryFlowError,
 } from './factory-flow.js';
@@ -78,7 +80,11 @@ import {
   type FactoryRunView,
   type UpdateRunInput,
 } from './factory-runs.js';
-import type { WatchedFactory } from './factory-settings.js';
+import {
+  getWatchedFactory,
+  projectAgentDefaults,
+  type WatchedFactory,
+} from './factory-settings.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import {
   createThreadWaits,
@@ -112,6 +118,8 @@ export interface FactoryFlowRunsDeps {
     threadId: string,
     content: string,
     expectedBranch?: string,
+    /** The step's agent options, carried on the message body. */
+    options?: Record<string, unknown>,
   ) => Promise<Result<void, string>>;
   /** Record why the factory cannot make progress (a run that could not start). */
   reportBlocked?: (factoryId: string, reason: string) => Promise<void>;
@@ -124,7 +132,10 @@ export interface FactoryFlowRunsDeps {
    * returning) the worktrees with uncommitted files or unpushed commits.
    */
   cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
-  loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
+  loadFlow?: (
+    job: FactoryRunJob,
+    context: FactoryFlowContext,
+  ) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Regression proof start/poll through the enabler's runner. */
   proof?: (userId: string, threadId: string) => FactoryProofDeps;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
@@ -326,14 +337,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
   const loadFlow =
     deps.loadFlow ??
-    ((job: FactoryRunJob) =>
-      loadFactoryFlow(flowOf(job), {
-        readDefaultBranchFile: (path) =>
-          deps.github.readDefaultBranchFile(
-            { repo: job.repo, ownerId: job.factory.userId, projectId: job.factory.projectId },
-            path,
-          ),
-      }));
+    ((job: FactoryRunJob, context: FactoryFlowContext) =>
+      loadFactoryFlow(
+        flowOf(job),
+        flowReadsOf(deps.github, {
+          repo: job.repo,
+          ownerId: job.factory.userId,
+          projectId: job.factory.projectId,
+        }),
+        context,
+      ));
 
   /** A run whose flow could not be loaded: dropped when it never ran, failed when invalid. */
   async function flowUnavailable(job: FactoryRunJob, error: FactoryFlowError): Promise<void> {
@@ -472,7 +485,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     controller: AbortController,
     agentStarted: () => void,
   ): Promise<FactoryRunStart> {
-    const flow = await loadFlow(job);
+    const projectDefaults = await projectAgentDefaults(job.factory.projectId);
+    const flow = await loadFlow(job, {
+      project: projectDefaults,
+      overrides: job.factory.stepOverrides,
+    });
     if (flow.isErr()) {
       await flowUnavailable(job, flow.error);
       return 'not-started';
@@ -505,6 +522,13 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
     // The thread view draws the run's step chain from these.
     await record({ flowSteps: flow.value.pipeline.nodes.map((node) => node.name) });
+    // Where the flow came from: written when the run first starts and on a
+    // retry (it runs the flow as read now); a resumed run keeps what it had.
+    if (job.run.flowSource === null || wasReopened(job)) {
+      await record({ flowSource: flow.value.source, flowCommit: flow.value.commit });
+    }
+    // What each agent step ran with, after the steps an earlier attempt recorded.
+    const stepOptions = [...job.run.stepOptions];
 
     // A run with journal rows resumes through them; one without replays `threadIds`.
     const journaled = await journalRows.load(job.run.id);
@@ -529,6 +553,14 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       issueUrl: job.issue.url,
     };
     const provider = createFactoryActionProvider({
+      projectDefaults,
+      // Read at every agent step: a change saved mid-run reaches the steps not started yet.
+      stepOverrides: async () =>
+        (await getWatchedFactory(job.factory.id))?.stepOverrides ?? job.factory.stepOverrides,
+      recordStepOptions: async (entry) => {
+        stepOptions.push(entry);
+        await record({ stepOptions: [...stepOptions] });
+      },
       scope,
       threadIds: job.run.threadIds,
       prUrl: job.run.prUrl,
@@ -541,8 +573,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       continuation: deps.followUp
         ? {
             // The run's branch: a worktree switched away refuses the step.
-            followUp: (threadId, content) =>
-              deps.followUp!(scope.userId, threadId, content, scope.branch),
+            followUp: (threadId, content, options) =>
+              deps.followUp!(scope.userId, threadId, content, scope.branch, { ...options }),
             completedAt: threadCompletedAt,
             followedUpSince,
             // A reviewer's thread is on its own branch: no branch guard.

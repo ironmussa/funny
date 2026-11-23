@@ -80,6 +80,12 @@ import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.
 import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
 import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import {
+  resolveStepOptions,
+  type ProjectAgentDefaults,
+  type ResolvedStepOptions,
+  type StepOverrides,
+} from './factory-step-options.js';
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -231,6 +237,15 @@ export interface FactoryActionProviderDeps {
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
   /** Continue the first thread for later agent steps; without it each step starts a thread. */
   continuation?: FactoryContinuation;
+  /**
+   * The factory's step overrides now. Read at each agent step, so a change
+   * saved mid-run reaches the steps that have not started yet.
+   */
+  stepOverrides?: () => Promise<StepOverrides>;
+  /** The project's agent defaults (provider, model, effort), under the flow's. */
+  projectDefaults?: ProjectAgentDefaults;
+  /** Record the options a step ran with, once it has its thread. */
+  recordStepOptions?: (entry: StepOptionsEntry) => Promise<void>;
   github: Pick<
     FactoryGithubPort,
     'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
@@ -258,9 +273,42 @@ export interface FactoryActionProviderDeps {
   signal: AbortSignal;
 }
 
+/** What one agent step ran with, as the run records it. */
+export interface StepOptionsEntry extends ResolvedStepOptions {
+  threadId: string;
+}
+
+/** The agent options a launch or follow-up body carries (unset fields are omitted). */
+export interface StepAgentBody {
+  provider: string;
+  model: string;
+  permissionMode: string;
+  effort?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+}
+
+/** The body fields of a step's resolved options: every kept field explicit, the rest only when set. */
+function stepAgentBody(options: ResolvedStepOptions): StepAgentBody {
+  const body: StepAgentBody = {
+    provider: options.provider,
+    model: options.model,
+    permissionMode: options.permissionMode,
+  };
+  if (options.effort) body.effort = options.effort;
+  if (options.allowedTools) body.allowedTools = options.allowedTools;
+  if (options.disallowedTools) body.disallowedTools = options.disallowedTools;
+  return body;
+}
+
 /** Following up on a run's thread, as the enabler. */
 export interface FactoryContinuation {
-  followUp(threadId: string, content: string): Promise<Result<void, string>>;
+  /** Send `content` with the step's agent options (provider, model, permission mode, …). */
+  followUp(
+    threadId: string,
+    content: string,
+    options?: StepAgentBody,
+  ): Promise<Result<void, string>>;
   /** The thread's `completedAt` now (before a follow-up runs it again). */
   completedAt(threadId: string): Promise<string | null>;
   /** Whether a member/user message reached the thread since `since` (an interrupted follow-up). */
@@ -414,7 +462,15 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     await deps.record({ metrics });
   }
   const titlePrefix = `[Factory] #${scope.issueNumber} `;
-  const title = `${titlePrefix}${scope.issueTitle}`.slice(0, 200);
+  /**
+   * The title prefix of a step's thread: the implementing thread's, or one of
+   * its own for a `thread: new` step, so adopting an interrupted launch never
+   * mistakes one for the other.
+   */
+  const titlePrefixOf = (options: ResolvedStepOptions) =>
+    options.thread === 'new' ? `[Factory ${options.stepId}] #${scope.issueNumber} ` : titlePrefix;
+  const titleOf = (options: ResolvedStepOptions) =>
+    `${titlePrefixOf(options)}${scope.issueTitle}`.slice(0, 200);
 
   const pullRequest = (): FactoryPullRequestRef | null => {
     const number = prNumberOf(prUrl);
@@ -450,11 +506,14 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   }
 
   /** The thread an interrupted launch of this step started, if it got that far. */
-  async function adoptInterrupted(step: number): Promise<string | null> {
+  async function adoptInterrupted(
+    step: number,
+    options: ResolvedStepOptions,
+  ): Promise<string | null> {
     const since = pendingLaunch;
     pendingLaunch = null;
     if (!since || step !== threadIds.length) return null;
-    const found = await deps.findLaunched(titlePrefix, since);
+    const found = await deps.findLaunched(titlePrefixOf(options), since);
     return found && !threadIds.includes(found) ? found : null;
   }
 
@@ -463,6 +522,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     continuation: FactoryContinuation,
     first: string,
     opts: SpawnAgentOpts,
+    options: ResolvedStepOptions,
     checkpoint: Checkpoint = noCheckpoint,
   ): Promise<StepThread | ActionResult> {
     const since = pendingLaunch;
@@ -478,7 +538,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const sentAt = new Date().toISOString();
     await checkpoint({ phase: 'following-up', threadId: first, since: sentAt, before });
     await deps.record({ launchStartedAt: sentAt });
-    const sent = await continuation.followUp(first, prompted(opts));
+    const sent = await continuation.followUp(first, prompted(opts), stepAgentBody(options));
     if (sent.isErr()) {
       await deps.record({ launchStartedAt: null });
       return { ok: false, error: `The agent could not continue: ${sent.error}` };
@@ -529,6 +589,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   /** Start a new thread for this step, marked first so a crash in between is adopted. */
   async function launchNew(
     opts: SpawnAgentOpts,
+    options: ResolvedStepOptions,
     checkpoint: Checkpoint = noCheckpoint,
   ): Promise<StepThread | ActionResult> {
     const base = await worktreeBase();
@@ -536,18 +597,24 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const since = new Date().toISOString();
     await checkpoint({ phase: 'launching', since });
     await deps.record({ launchStartedAt: since });
-    const launched = await deps.launch({
+    const own = options.thread === 'new';
+    const body: Record<string, unknown> = {
       projectId: scope.projectId,
-      title,
+      title: titleOf(options),
       mode: scope.mode,
       ...base,
-      // A worktree thread is created on the run's branch, so the thread, its
-      // worktree and the pull request share one branch.
-      branch: scope.branch,
       source: 'factory',
       prompt: prompted(opts),
-      model: opts.model ?? undefined,
-    });
+      ...stepAgentBody(options),
+    };
+    // A worktree thread is created on the run's branch, so the thread, its
+    // worktree and the pull request share one branch. A step on its own
+    // thread is read-only and reads the branch from the remote instead.
+    if (!own) body.branch = scope.branch;
+    // A step on its own thread may only read: the runner holds it to that
+    // (its OS sandbox), whatever the agent tries; `plan` alone is a prompt.
+    if (own) body.readOnly = true;
+    const launched = await deps.launch(body);
     const threadId = launched.isOk() ? launched.value.threadId : undefined;
     if (threadId) {
       await checkpoint({ phase: 'thread', threadId });
@@ -574,12 +641,13 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   async function adoptCheckpoint(
     state: StepCheckpoint,
     checkpoint: Checkpoint,
+    options: ResolvedStepOptions,
   ): Promise<StepThread | undefined> {
     if (state.phase === 'thread') {
       return { threadId: await rememberThread(state.threadId), after: state.after };
     }
     if (state.phase === 'launching') {
-      const found = await deps.findLaunched(titlePrefix, state.since);
+      const found = await deps.findLaunched(titlePrefixOf(options), state.since);
       if (!found) return undefined;
       await checkpoint({ phase: 'thread', threadId: found });
       return { threadId: await rememberThread(found) };
@@ -595,7 +663,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   }
 
   /** A journaled step's thread: adopted from its checkpoint, a follow-up, or new. */
-  async function journaledThreadFor(opts: SpawnAgentOpts): Promise<StepThread | ActionResult> {
+  async function journaledThreadFor(
+    opts: SpawnAgentOpts,
+    options: ResolvedStepOptions,
+  ): Promise<StepThread | ActionResult> {
     const execution = opts.execution;
     const checkpoint: Checkpoint = execution
       ? (state) => execution.checkpoint(state)
@@ -603,21 +674,42 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     // The journal resumes the run; the launch marker belongs to the numbering path.
     pendingLaunch = null;
     const saved = STEP_CHECKPOINT.safeParse(execution?.resume?.recorded.data);
-    const adopted = saved.success ? await adoptCheckpoint(saved.data, checkpoint) : undefined;
+    const adopted = saved.success
+      ? await adoptCheckpoint(saved.data, checkpoint, options)
+      : undefined;
     if (adopted) return adopted;
     const first = threadIds[0];
-    if (first && deps.continuation) return followUp(deps.continuation, first, opts, checkpoint);
-    return launchNew(opts, checkpoint);
+    if (first && deps.continuation && options.thread !== 'new') {
+      return followUp(deps.continuation, first, opts, options, checkpoint);
+    }
+    return launchNew(opts, options, checkpoint);
   }
 
   /** The thread of the current agent step: recorded, continued, adopted, or new. */
-  async function threadFor(opts: SpawnAgentOpts, step: number): Promise<StepThread | ActionResult> {
+  async function threadFor(
+    opts: SpawnAgentOpts,
+    options: ResolvedStepOptions,
+    step: number,
+  ): Promise<StepThread | ActionResult> {
     const recorded = threadIds[step];
     if (recorded) return { threadId: recorded, replayed: true };
     const first = threadIds[0];
-    if (step > 0 && first && deps.continuation) return followUp(deps.continuation, first, opts);
-    const adopted = await adoptInterrupted(step);
-    return adopted ? { threadId: await recordThread(adopted) } : launchNew(opts);
+    if (step > 0 && first && deps.continuation && options.thread !== 'new') {
+      return followUp(deps.continuation, first, opts, options);
+    }
+    const adopted = await adoptInterrupted(step, options);
+    return adopted ? { threadId: await recordThread(adopted) } : launchNew(opts, options);
+  }
+
+  /** The options this agent step runs with, the factory's overrides read now. */
+  async function optionsOf(opts: SpawnAgentOpts, index: number): Promise<ResolvedStepOptions> {
+    return resolveStepOptions({
+      stepId: opts.stepId ?? `step-${index}`,
+      step: opts,
+      flowDefaults: opts.defaults,
+      overrides: (await deps.stepOverrides?.()) ?? {},
+      project: deps.projectDefaults,
+    });
   }
 
   /**
@@ -1133,9 +1225,13 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   return {
     async spawnAgent(opts) {
       const index = agentSteps++;
+      const options = await optionsOf(opts, index);
       const step =
-        (deps.legacyReplay ?? true) ? await threadFor(opts, index) : await journaledThreadFor(opts);
+        (deps.legacyReplay ?? true)
+          ? await threadFor(opts, options, index)
+          : await journaledThreadFor(opts, options);
       if (!('threadId' in step)) return step;
+      if (!step.replayed) await deps.recordStepOptions?.({ ...options, threadId: step.threadId });
       // A replayed step that a LATER recorded step continued on the same thread
       // finished before that one started: waiting on the thread now would read
       // the later step's run instead of this one.

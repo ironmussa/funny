@@ -316,6 +316,8 @@ export const factorySettings = pgTable(
     sensitivePaths: text('sensitive_paths'),
     /** JSON object: runs inside a flow node at once, per node id. */
     stageLimits: text('stage_limits'),
+    /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
+    stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
@@ -371,6 +373,12 @@ export const factoryRuns = pgTable('factory_runs', {
   risk: text('risk'),
   /** JSON: what triage decided about the issue (`FactoryTriage`): the contract, or what it asked. */
   triage: text('triage'),
+  /** Where the run's flow came from: `repository` or `built-in`; null on runs from before. */
+  flowSource: text('flow_source'),
+  /** The default-branch commit a repository flow (and its prompt files) was read at. */
+  flowCommit: text('flow_commit'),
+  /** JSON array of the options each agent step ran with (`FactoryStepOptionsRecord[]`). */
+  stepOptions: text('step_options'),
 });
 
 /**

@@ -16,6 +16,7 @@ import { gitSyncStateConfig } from '@/lib/thread-utils';
 import { canShowPowerline, isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useThreadHasLiveBrowser } from '@/stores/browser-live-threads-store';
+import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useThreadActiveTool, type ActiveTool } from '@/stores/thread-active-tool-store';
 
 // ── Row 1: title + badges ────────────────────────────────────────────
@@ -279,6 +280,11 @@ function ScratchBadge({ threadId }: { threadId: string }) {
   );
 }
 
+/**
+ * The thread has a live browser. Clicking it shows that browser in the panel;
+ * the click goes on to the row, which opens the thread. It stays a `span`: the
+ * row is a button, and buttons must not nest.
+ */
 function LiveBrowserIcon({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
   return (
@@ -286,13 +292,18 @@ function LiveBrowserIcon({ threadId }: { threadId: string }) {
       <TooltipTrigger asChild>
         <span
           data-testid={`thread-browser-open-${threadId}`}
-          className="text-muted-foreground flex shrink-0 items-center leading-none"
+          onClick={(e) => {
+            // Ctrl / Cmd-click opens the thread in another window: leave this one's panel alone.
+            if (e.ctrlKey || e.metaKey) return;
+            useBrowserPanelStore.getState().showThreadBrowser(threadId);
+          }}
+          className="text-muted-foreground hover:text-foreground flex shrink-0 cursor-pointer items-center leading-none"
         >
           <Globe className="icon-xs" />
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        {t('thread.browserOpenTooltip', { defaultValue: 'Browser open' })}
+        {t('thread.browserOpenTooltip', { defaultValue: 'Browser open — click to show it' })}
       </TooltipContent>
     </Tooltip>
   );

@@ -272,6 +272,15 @@ function createFactoryPort(
         .andThen((factoryId) => queue.flowDefinition(factoryId, flowName).mapErr(queueFailure));
     },
 
+    async validateFlow(userId, projectId, flowName) {
+      return settings
+        .factoryId(userId, projectId)
+        .mapErr(settingsFailure)
+        .andThen((factoryId) =>
+          queue.validateFlow(factoryId, projectId, flowName).mapErr(queueFailure),
+        );
+    },
+
     async blockers(userId, projectId, issueNumbers) {
       return settings
         .factoryId(userId, projectId)

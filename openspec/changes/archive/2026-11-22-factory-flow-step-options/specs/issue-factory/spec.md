@@ -87,8 +87,10 @@ are saved and to steps that have not started yet.
 
 An agent step that sets `thread: new` SHALL run on a new thread of the enabler, on the same
 runtime as the implementing thread, instead of continuing the implementing thread. Such a step
-SHALL resolve to permission mode `plan`; a flow whose `thread: new` step resolves to any other
-mode SHALL be refused at load. Later steps without `thread: new` SHALL keep continuing the
+SHALL resolve to permission mode `plan` and SHALL start read-only (the runner holds the thread
+to reading, `readOnly`), so it SHALL resolve to a provider that can be held to that (`claude`,
+`codex`); a flow whose `thread: new` step resolves to any other mode or provider SHALL be refused
+at load. Later steps without `thread: new` SHALL keep continuing the
 implementing thread. The new thread SHALL be recorded with the run, stopped with the run, and
 replayed (not started again) when the run resumes.
 

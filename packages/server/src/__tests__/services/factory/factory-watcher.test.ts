@@ -205,6 +205,12 @@ function fakeGithub(
       const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
       return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
     },
+    defaultBranchHead: () => okAsync({ branch: 'main', sha: 'head-sha' }),
+    readFileAt: (_reader: unknown, path: string) => {
+      port.fileReads.push(path);
+      const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
+      return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
+    },
     branchAhead: () => okAsync(script.branchAhead ?? true),
     defaultBranch: () => okAsync('main'),
     branchState: () =>
@@ -376,6 +382,41 @@ describe('factory watcher', () => {
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({ issueNumber: 7, state: 'working', currentStep: 'implement' });
     expect(runs[0]!.threadIds).toEqual(['t-1']);
+  });
+
+  // openspec factory-flow-step-options, 3.4: what ran, and from where.
+  test('a run records its flow source and commit, and the options its agent step ran with', async () => {
+    const factoryId = await enableFactory({ label: 'ready-for-agent' });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    // The flow was the repository's copy, read at the default branch's head.
+    expect(run).toMatchObject({ flowSource: 'repository', flowCommit: 'head-sha' });
+    expect(run!.stepOptions).toEqual([
+      expect.objectContaining({
+        stepId: 'implement',
+        threadId: 't-1',
+        permissionMode: 'autoEdit',
+        thread: 'continue',
+      }),
+    ]);
+    // What the thread was started with is what the run says it ran with.
+    expect(launcher.calls[0]!.body).toMatchObject({
+      provider: run!.stepOptions[0]!.provider,
+      model: run!.stepOptions[0]!.model,
+      permissionMode: 'autoEdit',
+    });
   });
 
   test('a sandbox runtime is not downgraded to a local thread', async () => {

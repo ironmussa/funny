@@ -1,10 +1,12 @@
 import type {
   FactoryFlowDefinition,
+  FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueRun,
   FactoryRun,
   FactorySettings,
+  FactoryStepOverrides,
 } from '@funny/shared/contracts/factory';
 
 import { factoryApi } from '@/lib/api/factory';
@@ -146,6 +148,27 @@ export function factoryFlowDefinitionQuery(projectId: string, flowName: string |
       unwrapResult(factoryApi.getFlowDefinition(projectId, flowName ?? '')),
     staleTime: 5 * 60_000,
     enabled: !!flowName,
+  };
+}
+
+/**
+ * Validate flow: the flow as an admitted run would load it now. Runs only when
+ * asked (`requested`), and again each time it is asked, since the default
+ * branch or the overrides may have changed.
+ */
+export function factoryFlowValidationQuery(
+  projectId: string,
+  flowName: string,
+  requested: boolean,
+  /** The factory's step overrides: the answer resolves with them, so it is asked again on a change. */
+  overrides: FactoryStepOverrides = {},
+) {
+  return {
+    queryKey: ['factory', 'flow-validation', projectId, flowName, overrides] as const,
+    queryFn: (): Promise<FactoryFlowValidation> =>
+      unwrapResult(factoryApi.validateFlow(projectId, flowName)),
+    staleTime: 0,
+    enabled: requested,
   };
 }
 

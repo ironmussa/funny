@@ -51,3 +51,13 @@ export {
   type WorkflowGraphEdgeKind,
   type WorkflowGraphPosition,
 } from './graph.js';
+
+export {
+  resolvePromptFiles,
+  normalizePromptPath,
+  listAgentSteps,
+  type FlowAgentStep,
+  type PromptFileReader,
+  type PromptFileProblem,
+  type PromptFilesResult,
+} from './prompt-files.js';

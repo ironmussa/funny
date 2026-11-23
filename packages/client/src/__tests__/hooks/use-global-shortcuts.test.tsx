@@ -237,17 +237,17 @@ describe('useGlobalShortcuts — Alt+G/F/H/M toggle the right-sidebar panels', (
     expect(useUIStore.getState().rightPaneTab).toBe('files');
   });
 
-  test('Alt+H toggles the share dialog only when the share button is present', () => {
+  test('Alt+H toggles the share dialog only when the share dialog is mounted', () => {
     renderShortcuts();
 
-    // No share button (non-owner / scratch / no thread) → flag stays false.
+    // No share dialog (non-owner / scratch / no thread) → flag stays false.
     pressAlt('h');
     expect(useUIStore.getState().shareDialogOpen).toBe(false);
 
-    // Owner thread renders the header share button → Alt+H toggles the dialog.
-    const btn = document.createElement('button');
-    btn.setAttribute('data-testid', 'header-share-thread');
-    document.body.appendChild(btn);
+    // Owner thread mounts the share dialog's marker → Alt+H toggles the dialog.
+    const marker = document.createElement('span');
+    marker.setAttribute('data-testid', 'share-thread-available');
+    document.body.appendChild(marker);
 
     pressAlt('h');
     expect(useUIStore.getState().shareDialogOpen).toBe(true);

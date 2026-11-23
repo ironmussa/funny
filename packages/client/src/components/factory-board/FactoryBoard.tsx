@@ -66,6 +66,143 @@ function StageLimit({
   );
 }
 
+/** The Done column's title: it folds the column away. */
+function DoneTitle({
+  title,
+  collapsed,
+  onToggle,
+}: {
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const Chevron = collapsed ? ChevronRight : ChevronDown;
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-1"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      data-testid="factory-board-done-toggle"
+    >
+      <Chevron className="icon-xs" />
+      {title}
+    </button>
+  );
+}
+
+/** The Done header's link to the finished runs it leaves to the list. */
+function HiddenDone({ count, onShow }: { count: number; onShow: () => void }) {
+  const { t } = useTranslation();
+  if (count === 0) return null;
+  return (
+    <button
+      type="button"
+      className="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-2 hover:underline"
+      onClick={onShow}
+      data-testid="factory-board-done-hidden"
+    >
+      {t('factoryBoard.doneHidden', '+{{count}} older in the list', { count })}
+    </button>
+  );
+}
+
+/** "Show N more" under a column's cards, when it has more than it shows. */
+function ShowMore({
+  column,
+  hidden,
+  onMore,
+}: {
+  column: FactoryBoardColumnId;
+  hidden: number;
+  onMore: () => void;
+}) {
+  const { t } = useTranslation();
+  if (hidden <= 0) return null;
+  return (
+    <div className="flex justify-center">
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={onMore}
+        data-testid={`factory-board-more-${column}`}
+      >
+        {t('factoryBoard.showMore', 'Show {{count}} more', { count: Math.min(PAGE, hidden) })}
+      </Button>
+    </div>
+  );
+}
+
+interface ColumnProps {
+  id: FactoryBoardColumnId;
+  title: string;
+  cards: FactoryQueueRun[];
+  projectNameById: ReadonlyMap<string, string>;
+  now: number;
+  singleProjectId: string | null;
+  hiddenDone: number;
+  onOpen: (run: FactoryQueueRun, threadId: string) => void;
+  onShowOlderDone: () => void;
+}
+
+/** One stage column: its cards a page at a time, its limit, and for Done the fold and hidden count. */
+function FactoryBoardStage({
+  id,
+  title,
+  cards,
+  projectNameById,
+  now,
+  singleProjectId,
+  hiddenDone,
+  onOpen,
+  onShowOlderDone,
+}: ColumnProps) {
+  const { t } = useTranslation();
+  const [limit, setLimit] = useState(PAGE);
+  const [doneCollapsed, setDoneCollapsed] = useState(false);
+  const isDone = id === 'done';
+  const collapsed = isDone && doneCollapsed;
+  const limitProject = id === 'merge' || id in LIMIT_NODE ? singleProjectId : null;
+  const doneTitle = (
+    <DoneTitle
+      title={title}
+      collapsed={collapsed}
+      onToggle={() => setDoneCollapsed((value) => !value)}
+    />
+  );
+  return (
+    <BoardColumn
+      testId={`factory-board-column-${id}`}
+      title={isDone ? doneTitle : title}
+      count={cards.length}
+      collapsed={collapsed}
+      className={collapsed ? 'w-auto min-w-0 self-start' : undefined}
+      emptyTitle={t('factoryBoard.emptyColumn', 'No runs here')}
+      headerExtra={
+        <>
+          {limitProject && <StageLimit projectId={limitProject} column={id} count={cards.length} />}
+          {isDone && <HiddenDone count={hiddenDone} onShow={onShowOlderDone} />}
+        </>
+      }
+    >
+      {cards.slice(0, limit).map((run) => (
+        <FactoryRunCard
+          key={run.id}
+          run={run}
+          projectName={projectNameById.get(run.projectId)}
+          now={now}
+          onOpen={onOpen}
+        />
+      ))}
+      <ShowMore
+        column={id}
+        hidden={cards.length - limit}
+        onMore={() => setLimit((value) => value + PAGE)}
+      />
+    </BoardColumn>
+  );
+}
+
 interface Props {
   runs: FactoryQueueRun[];
   projectNameById: ReadonlyMap<string, string>;
@@ -77,18 +214,9 @@ interface Props {
   onShowOlderDone: () => void;
 }
 
-export function FactoryBoard({
-  runs,
-  projectNameById,
-  now,
-  singleProjectId,
-  onOpen,
-  onShowOlderDone,
-}: Props) {
+export function FactoryBoard({ runs, now, ...rest }: Props) {
   const { t } = useTranslation();
   const { columns, hiddenDone } = layoutFactoryBoard(runs, now);
-  const [doneCollapsed, setDoneCollapsed] = useState(false);
-  const [shown, setShown] = useState<Partial<Record<FactoryBoardColumnId, number>>>({});
   const titles: Record<FactoryBoardColumnId, string> = {
     queue: t('factoryBoard.column.queue', 'Queue'),
     triage: t('factoryBoard.column.triage', 'Triage'),
@@ -99,88 +227,19 @@ export function FactoryBoard({
     needs_person: t('factoryBoard.column.needsPerson', 'Needs a person'),
     done: t('factoryBoard.column.done', 'Done'),
   };
-
   return (
     <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-3" data-testid="factory-board">
-      {FACTORY_BOARD_COLUMNS.map((id) => {
-        const cards = columns[id];
-        const limit = shown[id] ?? PAGE;
-        const isDone = id === 'done';
-        const collapsed = isDone && doneCollapsed;
-        return (
-          <BoardColumn
-            key={id}
-            testId={`factory-board-column-${id}`}
-            title={
-              isDone ? (
-                <button
-                  type="button"
-                  className="flex items-center gap-1"
-                  onClick={() => setDoneCollapsed((value) => !value)}
-                  aria-expanded={!collapsed}
-                  data-testid="factory-board-done-toggle"
-                >
-                  {collapsed ? (
-                    <ChevronRight className="icon-xs" />
-                  ) : (
-                    <ChevronDown className="icon-xs" />
-                  )}
-                  {titles[id]}
-                </button>
-              ) : (
-                titles[id]
-              )
-            }
-            count={cards.length}
-            collapsed={collapsed}
-            className={collapsed ? 'w-auto min-w-0 self-start' : undefined}
-            emptyTitle={t('factoryBoard.emptyColumn', 'No runs here')}
-            headerExtra={
-              <>
-                {singleProjectId && (id === 'merge' || id in LIMIT_NODE) && (
-                  <StageLimit projectId={singleProjectId} column={id} count={cards.length} />
-                )}
-                {isDone && hiddenDone > 0 && (
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-2 hover:underline"
-                    onClick={onShowOlderDone}
-                    data-testid="factory-board-done-hidden"
-                  >
-                    {t('factoryBoard.doneHidden', '+{{count}} older in the list', {
-                      count: hiddenDone,
-                    })}
-                  </button>
-                )}
-              </>
-            }
-          >
-            {cards.slice(0, limit).map((run) => (
-              <FactoryRunCard
-                key={run.id}
-                run={run}
-                projectName={projectNameById.get(run.projectId)}
-                now={now}
-                onOpen={onOpen}
-              />
-            ))}
-            {cards.length > limit && (
-              <div className="flex justify-center">
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => setShown((prev) => ({ ...prev, [id]: limit + PAGE }))}
-                  data-testid={`factory-board-more-${id}`}
-                >
-                  {t('factoryBoard.showMore', 'Show {{count}} more', {
-                    count: Math.min(PAGE, cards.length - limit),
-                  })}
-                </Button>
-              </div>
-            )}
-          </BoardColumn>
-        );
-      })}
+      {FACTORY_BOARD_COLUMNS.map((id) => (
+        <FactoryBoardStage
+          key={id}
+          id={id}
+          title={titles[id]}
+          cards={columns[id]}
+          now={now}
+          hiddenDone={hiddenDone}
+          {...rest}
+        />
+      ))}
     </div>
   );
 }

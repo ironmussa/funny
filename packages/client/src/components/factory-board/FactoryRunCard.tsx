@@ -19,15 +19,13 @@ import { FactoryRunProgress } from './FactoryRunProgress';
 import { factoryRunWaitingText } from './run-waiting';
 
 /** The issue's page, when the run's pull request tells the repository. */
-export function factoryIssueUrl(
-  run: Pick<FactoryQueueRun, 'prUrl' | 'issueNumber'>,
-): string | null {
+function factoryIssueUrl(run: Pick<FactoryQueueRun, 'prUrl' | 'issueNumber'>): string | null {
   const repo = run.prUrl?.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+/)?.[1];
   return repo ? `https://github.com/${repo}/issues/${run.issueNumber}` : null;
 }
 
 /** The thread a card opens: the implementing one, else the run's latest. */
-export function factoryRunCardThread(
+function factoryRunCardThread(
   run: Pick<FactoryQueueRun, 'threadIds' | 'stepOptions'>,
 ): string | undefined {
   return implementingThreadOf(run) ?? run.threadIds.at(-1);

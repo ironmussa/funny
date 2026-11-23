@@ -34,72 +34,81 @@ function headOf(run: Pick<FactoryRun, 'risk' | 'reviews' | 'regressionProof'>): 
   return run.risk?.headSha ?? run.reviews.at(-1)?.sha ?? run.regressionProof?.headSha ?? null;
 }
 
-export function factoryRunGateChips(
-  t: TFunction,
-  run: Pick<FactoryRun, 'risk' | 'reviews' | 'regressionProof' | 'metrics' | 'state'>,
-): FactoryGateChip[] {
-  const head = headOf(run);
-  const chips: FactoryGateChip[] = [];
+type GateRun = Pick<FactoryRun, 'risk' | 'reviews' | 'regressionProof' | 'metrics' | 'state'>;
 
-  if (run.risk) {
-    const high = run.risk.level === 'high';
-    const chip: FactoryGateChip = {
-      id: 'risk',
-      tone: high ? 'warn' : 'pass',
-      label: high ? t('factory.risk.high', 'High risk') : t('factory.risk.low', 'Low risk'),
-      stale: false,
-    };
-    if (high && run.risk.reasons.length > 0) chip.detail = run.risk.reasons.join('\n');
-    chips.push(chip);
-  }
+function riskChip(t: TFunction, risk: NonNullable<FactoryRun['risk']>): FactoryGateChip {
+  const high = risk.level === 'high';
+  const chip: FactoryGateChip = {
+    id: 'risk',
+    tone: high ? 'warn' : 'pass',
+    label: high ? t('factory.risk.high', 'High risk') : t('factory.risk.low', 'Low risk'),
+    stale: false,
+  };
+  if (high && risk.reasons.length > 0) chip.detail = risk.reasons.join('\n');
+  return chip;
+}
 
+function reviewChip(t: TFunction, run: GateRun, head: string | null): FactoryGateChip | null {
   const review = factoryRunReviewLabel(t, run);
-  const lastReview = run.reviews.at(-1);
-  if (review && lastReview) {
-    chips.push({
-      id: 'review',
-      tone: review.passed ? 'pass' : 'fail',
-      label: review.text,
-      detail: short(lastReview.sha),
-      stale: head !== null && lastReview.sha !== head,
-    });
-  }
+  const last = run.reviews.at(-1);
+  if (!review || !last) return null;
+  return {
+    id: 'review',
+    tone: review.passed ? 'pass' : 'fail',
+    label: review.text,
+    detail: short(last.sha),
+    stale: head !== null && last.sha !== head,
+  };
+}
 
-  const proof = run.regressionProof;
-  if (proof) {
-    const labels = {
-      pass: t('factoryBoard.proof.pass', 'Proof passed'),
-      fail: t('factoryBoard.proof.fail', 'Proof failed'),
-      skipped: t('factoryBoard.proof.skipped', 'No proof needed'),
-    };
-    chips.push({
-      id: 'proof',
-      tone: PROOF_TONE[proof.verdict],
-      label: labels[proof.verdict],
-      detail: proof.finding ?? short(proof.headSha),
-      stale: head !== null && proof.headSha !== head,
-    });
-  }
+function proofChip(
+  t: TFunction,
+  proof: NonNullable<FactoryRun['regressionProof']>,
+  head: string | null,
+): FactoryGateChip {
+  const labels = {
+    pass: t('factoryBoard.proof.pass', 'Proof passed'),
+    fail: t('factoryBoard.proof.fail', 'Proof failed'),
+    skipped: t('factoryBoard.proof.skipped', 'No proof needed'),
+  };
+  return {
+    id: 'proof',
+    tone: PROOF_TONE[proof.verdict],
+    label: labels[proof.verdict],
+    detail: proof.finding ?? short(proof.headSha),
+    stale: head !== null && proof.headSha !== head,
+  };
+}
 
+function ciChip(t: TFunction, run: GateRun): FactoryGateChip | null {
   const { ciRounds, ciRed, conflicts } = run.metrics;
-  if (ciRounds > 0 || run.state === 'waiting_ci') {
-    const troubled = ciRed + conflicts > 0;
-    const chip: FactoryGateChip = {
-      id: 'ci',
-      tone: troubled ? 'warn' : 'neutral',
-      label:
-        run.state === 'waiting_ci'
-          ? t('factoryBoard.ci.running', 'CI running')
-          : t('factoryBoard.ci.rounds', 'CI ×{{count}}', { count: ciRounds }),
-      stale: false,
-    };
-    if (troubled) {
-      chip.detail = t('factoryBoard.ci.detail', '{{red}} red · {{conflicts}} conflicts', {
-        red: ciRed,
-        conflicts,
-      });
-    }
-    chips.push(chip);
+  const running = run.state === 'waiting_ci';
+  if (ciRounds === 0 && !running) return null;
+  const troubled = ciRed + conflicts > 0;
+  const chip: FactoryGateChip = {
+    id: 'ci',
+    tone: troubled ? 'warn' : 'neutral',
+    label: running
+      ? t('factoryBoard.ci.running', 'CI running')
+      : t('factoryBoard.ci.rounds', 'CI ×{{count}}', { count: ciRounds }),
+    stale: false,
+  };
+  if (troubled) {
+    chip.detail = t('factoryBoard.ci.detail', '{{red}} red · {{conflicts}} conflicts', {
+      red: ciRed,
+      conflicts,
+    });
   }
-  return chips;
+  return chip;
+}
+
+export function factoryRunGateChips(t: TFunction, run: GateRun): FactoryGateChip[] {
+  const head = headOf(run);
+  const chips = [
+    run.risk ? riskChip(t, run.risk) : null,
+    reviewChip(t, run, head),
+    run.regressionProof ? proofChip(t, run.regressionProof, head) : null,
+    ciChip(t, run),
+  ];
+  return chips.filter((chip) => chip !== null);
 }

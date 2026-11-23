@@ -85,6 +85,7 @@ import {
   projectAgentDefaults,
   type WatchedFactory,
 } from './factory-settings.js';
+import type { FactoryStepDeps } from './factory-step-runner.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import {
   createThreadWaits,
@@ -138,6 +139,8 @@ export interface FactoryFlowRunsDeps {
   ) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Regression proof start/poll through the enabler's runner. */
   proof?: (userId: string, threadId: string) => FactoryProofDeps;
+  /** Factory steps (a flow's command, integrate) through the enabler's runner. */
+  steps?: (userId: string) => FactoryStepDeps;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /**
@@ -674,6 +677,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
               deps.proof!(scope.userId, threadId).cancelProof?.(threadId, proofId),
           }
         : undefined,
+      steps: deps.steps?.(scope.userId),
+      integrateConfig: flow.value.integrate,
+      flowIntegrates: flow.value.workflow.nodes.some((node) => node.integrate),
       record,
       signal: controller.signal,
       legacyReplay: journaled.value.length === 0,

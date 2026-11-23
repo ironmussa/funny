@@ -193,6 +193,28 @@ export const passingProof: NonNullable<FactoryFlowRunsDeps['proof']> = () => ({
     }),
 });
 
+/** A runner whose factory steps find the branch already has its base (`integrate` is a no-op). */
+export const upToDateSteps: NonNullable<FactoryFlowRunsDeps['steps']> = () => ({
+  startStep: async () => ok({ stepId: 'step-1', state: 'running' }),
+  pollStep: async () =>
+    ok({
+      state: 'done',
+      result: {
+        kind: 'integrate',
+        outcome: 'up-to-date',
+        headBefore: 'sha-head',
+        headAfter: 'sha-head',
+        resolvedPaths: [],
+        regeneratedPaths: [],
+        conflictedPaths: [],
+        baseDiff: '',
+        weave: false,
+        message: 'The branch already contains its base.',
+      },
+    }),
+  pollMs: 1,
+});
+
 /**
  * The built-in `issue-to-merge` flow as a repository copy with one proof rule,
  * so it is proof-ready and its merge step may merge (the built-in has no rules).

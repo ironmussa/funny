@@ -1,0 +1,10 @@
+# What the issue factory's `integrate` step may do besides merging the base in
+# (openspec factory-integration D7). Read from the default branch with the flow.
+#
+# regenerate: a conflicted path matching `paths` is not merged and not sent to
+# an agent: the base's side is taken and `run` rewrites it from the merged
+# sources, in the run's checkout on the runner.
+regenerate:
+  - paths: [bun.lock]
+    run: bun install
+    timeout_ms: 600000

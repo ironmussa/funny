@@ -32,7 +32,7 @@ import {
   clearThreadWorkspace,
   requestThreadWorkspaceCleanup,
 } from '../thread-workspace-cleanup.js';
-import { RUNNER_UNAVAILABLE_PREFIX } from './factory-proof-runner.js';
+import { cancelRunnerJob, pollRunnerJob, startRunnerJob } from './factory-runner-jobs.js';
 
 const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 
@@ -54,92 +54,85 @@ async function postToThread(
 }
 
 /** A runner's JSON error body (`resultToResponse`). */
-const runnerErrorBody = z.object({ error: z.string() });
-
-/** The `error` of a runner's JSON error body, so a refusal says why (a branch mismatch). */
-function runnerErrorText(body: string | null | undefined): string | null {
-  if (!body) return null;
-  const parsed = parseStoredJson(runnerErrorBody, body, 'runner error');
-  return parsed.ok ? parsed.value.error.slice(0, 500) : null;
-}
-
 /** Start a regression proof job on the thread's runner. Returns the proof id. */
-export async function startRegressionProofOnRunner(
+export function startRegressionProofOnRunner(
   ports: RunnerPorts,
   userId: string,
   threadId: string,
   body: Record<string, unknown>,
 ): Promise<Result<{ proofId: string; state: string }, string>> {
-  const sink = authorizedRunnerRequests(ports.requests);
-  const path = `/api/threads/${threadId}/regression-proof`;
-  try {
-    const sent = await withRunnerFor(
-      runnerActor({ userId }),
-      { kind: 'request', path, query: {} },
-      ports.presence,
-      (actor, runner, proof) =>
-        sink.send(actor, runner, proof, {
-          method: 'POST',
-          path,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        }),
-    );
-    if (sent.isErr()) return err(`${RUNNER_UNAVAILABLE_PREFIX}${sent.error.reason}`);
-    if (sent.value.status >= 400) {
-      const reason = runnerErrorText(sent.value.body);
-      return err(`runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`);
-    }
-    const parsed = parseStoredJson(
-      z.object({ proofId: z.string(), state: z.string() }),
-      sent.value.body ?? '{}',
-      'proof start response',
-    );
-    if (!parsed.ok) return err('invalid proof start response');
-    return ok(parsed.value);
-  } catch (error) {
-    return err(error instanceof Error ? error.message : String(error));
-  }
+  return startRunnerJob(
+    ports,
+    userId,
+    `/api/threads/${threadId}/regression-proof`,
+    body,
+    z.object({ proofId: z.string(), state: z.string() }),
+    'proof start response',
+  );
 }
 
 /** Poll a regression proof job on the thread's runner. */
-export async function pollRegressionProofOnRunner(
+export function pollRegressionProofOnRunner(
   ports: RunnerPorts,
   userId: string,
   threadId: string,
   proofId: string,
 ): Promise<Result<{ state: string; result?: unknown }, string>> {
-  const sink = authorizedRunnerRequests(ports.requests);
-  const path = `/api/threads/${threadId}/regression-proof/${proofId}`;
-  try {
-    const sent = await withRunnerFor(
-      runnerActor({ userId }),
-      { kind: 'request', path, query: {} },
-      ports.presence,
-      (actor, runner, proof) =>
-        sink.send(actor, runner, proof, {
-          method: 'GET',
-          path,
-          headers: {},
-          body: null,
-        }),
-    );
-    if (sent.isErr()) return err(`${RUNNER_UNAVAILABLE_PREFIX}${sent.error.reason}`);
-    if (sent.value.status === 404) return err('proof-not-found');
-    if (sent.value.status >= 400) {
-      const reason = runnerErrorText(sent.value.body);
-      return err(`runner answered ${sent.value.status}${reason ? `: ${reason}` : ''}`);
-    }
-    const parsed = parseStoredJson(
-      z.object({ state: z.string(), result: z.unknown().optional() }),
-      sent.value.body ?? '{}',
-      'proof poll response',
-    );
-    if (!parsed.ok) return err('invalid proof poll response');
-    return ok(parsed.value);
-  } catch (error) {
-    return err(error instanceof Error ? error.message : String(error));
-  }
+  return pollRunnerJob(
+    ports,
+    userId,
+    `/api/threads/${threadId}/regression-proof/${proofId}`,
+    'proof-not-found',
+    'proof poll response',
+  );
+}
+
+/** Start a factory step (a command, or integrate) on the thread's runner. Returns the step id. */
+export function startFactoryStepOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  threadId: string,
+  body: Record<string, unknown>,
+): Promise<Result<{ stepId: string; state: string }, string>> {
+  return startRunnerJob(
+    ports,
+    userId,
+    `/api/threads/${threadId}/factory-steps`,
+    body,
+    z.object({ stepId: z.string(), state: z.string() }),
+    'factory step start response',
+  );
+}
+
+/** Poll a factory step on the thread's runner. */
+export function pollFactoryStepOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  threadId: string,
+  stepId: string,
+): Promise<Result<{ state: string; result?: unknown }, string>> {
+  return pollRunnerJob(
+    ports,
+    userId,
+    `/api/threads/${threadId}/factory-steps/${stepId}`,
+    'step-not-found',
+    'factory step poll response',
+  );
+}
+
+/** Stop a factory step on the thread's runner (best effort). */
+export function cancelFactoryStepOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  threadId: string,
+  stepId: string,
+): Promise<void> {
+  return cancelRunnerJob(
+    ports,
+    userId,
+    `/api/threads/${threadId}/factory-steps/${stepId}`,
+    'a factory step',
+  );
 }
 
 /** Stop the running agent threads among `threadIds` (a stopped run). */
@@ -421,36 +414,16 @@ function unsavedWorkOf(body: string | null): UnsavedWork | null {
 }
 
 /** Stop a regression proof job on the thread's runner (best effort: a failure is logged). */
-export async function cancelRegressionProofOnRunner(
+export function cancelRegressionProofOnRunner(
   ports: RunnerPorts,
   userId: string,
   threadId: string,
   proofId: string,
 ): Promise<void> {
-  const sink = authorizedRunnerRequests(ports.requests);
-  const path = `/api/threads/${threadId}/regression-proof/${proofId}`;
-  try {
-    const sent = await withRunnerFor(
-      runnerActor({ userId }),
-      { kind: 'request', path, query: {} },
-      ports.presence,
-      (actor, runner, proof) =>
-        sink.send(actor, runner, proof, { method: 'DELETE', path, headers: {}, body: null }),
-    );
-    if (sent.isErr() || (sent.value.status >= 400 && sent.value.status !== 404)) {
-      log.warn('Issue factory could not stop a regression proof', {
-        namespace: 'factory',
-        threadId,
-        proofId,
-        error: sent.isErr() ? sent.error.reason : `runner answered ${sent.value.status}`,
-      });
-    }
-  } catch (error) {
-    log.warn('Issue factory could not stop a regression proof', {
-      namespace: 'factory',
-      threadId,
-      proofId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  return cancelRunnerJob(
+    ports,
+    userId,
+    `/api/threads/${threadId}/regression-proof/${proofId}`,
+    'a regression proof',
+  );
 }

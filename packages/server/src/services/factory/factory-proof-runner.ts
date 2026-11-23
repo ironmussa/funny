@@ -49,7 +49,7 @@ const PROOF_POLL_MS = 5_000;
 const PROOF_OFFLINE_GRACE_MS = 180_000;
 
 /** The prefix of a request error that never reached the runner. */
-export const RUNNER_UNAVAILABLE_PREFIX = 'runner unavailable: ';
+import { RUNNER_UNAVAILABLE_PREFIX } from './factory-runner-jobs.js';
 
 /** The runner's proof result (`ProofResult` of the runtime). */
 const PROOF_RESULT = z.object({

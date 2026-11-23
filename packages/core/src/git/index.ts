@@ -153,7 +153,7 @@ export {
   type WorktreePreview,
 } from './worktree.js';
 
-export { getWeaveStatus, ensureWeaveConfigured } from './weave.js';
+export { getWeaveStatus, ensureWeaveConfigured, factoryGitConfigEnv } from './weave.js';
 
 export {
   getPRInfo,

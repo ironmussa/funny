@@ -226,6 +226,12 @@ export interface TriageOpts {
   execution?: ActionExecution;
 }
 
+/** Options of an `integrate` step: the host reads what it may run from its own configuration. */
+export interface IntegrateOpts {
+  /** The execution this step belongs to (a resumed run adopts its recorded work). */
+  execution?: ActionExecution;
+}
+
 /**
  * A `review` step: an independent verdict on the run's pull request head. The
  * provider owns the reviewer's thread, permissions, inputs and result format.
@@ -344,6 +350,14 @@ export interface ActionProvider {
    * can send the findings back; `ok: false` when no verdict could be had.
    */
   review?(opts: ReviewOpts): Promise<ActionResult>;
+
+  /**
+   * Merge the base branch into the run's branch without an agent. Resolves
+   * `ok: true` with `metadata.outcome` (`up-to-date`, `merged`, `conflict`)
+   * so a loop can send a conflict on; `ok: false` when git or a regenerator
+   * could not run.
+   */
+  integrate?(opts: IntegrateOpts): Promise<ActionResult>;
 
   /**
    * Request a human approval and block until decided (or timeout).

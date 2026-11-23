@@ -37,6 +37,7 @@ import {
 } from './agent-startup/agent-profile.js';
 import { resolveAgentTooling } from './agent-startup/agent-tooling.js';
 import { shouldForceColdPathRecovery } from './agent-startup/cold-path-guard.js';
+import { withFactoryGitEnv } from './agent-startup/factory-git.js';
 import {
   buildBypassExecutor,
   buildPermissionRuleLookup,
@@ -393,7 +394,10 @@ export class AgentLifecycleManager {
       activeAgentProfile,
       composeAgentEnv(secrets, baseEnv),
     );
-    const agentEnv = withReadOnlyEnv(profiledEnv, readOnly);
+    const agentEnv = withReadOnlyEnv(
+      await withFactoryGitEnv(profiledEnv, thread, readOnly !== null),
+      readOnly,
+    );
 
     await this.launchAgent(
       {

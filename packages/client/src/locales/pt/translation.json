@@ -1093,6 +1093,7 @@
     "close": "Fechar"
   },
   "worktreeSettings": {
+    "detached": "desanexado em {{commit}}",
     "noProject": "Nenhum projeto selecionado. Adicione um projeto primeiro para gerenciar worktrees.",
     "worktreesFor": "Worktrees para:",
     "dismiss": "Dispensar",

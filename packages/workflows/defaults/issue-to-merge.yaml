@@ -35,11 +35,31 @@
 # `merge` turns that off). The step takes `provider`, `model`, `effort` and
 # `early` (start with the checks, the default) and nothing else.
 #
+# Integration: `integrate` merges the base branch into the run's branch on the
+# runner, in the run's own checkout (a merge, never a rebase), before the
+# checks. A branch that already has its base is left alone. Conflicts are
+# settled first without an agent: the structural merge driver (weave, when the
+# runner has it), recorded resolutions (rerere), and the regenerators declared
+# in `.funny/integrate.yaml` on the default branch, e.g.
+#
+#   regenerate:
+#     - paths: [bun.lock]
+#       run: bun install
+#   checks:
+#     - bun run typecheck
+#
+# Only a conflict none of them settles goes to the implementing agent
+# (`address`), with the paths and what the base changed there. A merge that
+# settled nothing keeps the commit's review; one that settled conflicts is
+# reviewed again, only where it settled them.
+#
 # Merge: one at a time per repository (the factory puts `merge` in the
 # repository's lane whatever this file says). It merges only a commit that
 # passed the review, whose risk the factory accepts, and that has its base
-# branch: when the branch is behind, GitHub merges the base in and the checks
-# run again. A conflict, or checks that fail there, go back to `address`.
+# branch. When the base moved meanwhile, the run goes back to `integrate`; a
+# conflict it cannot settle, or checks that fail on the new base, go to
+# `address`. Up to 10 merge rounds, of which at most 2 may reach the
+# implementing agent: then the run waits for a person.
 #
 # The factory supplies every input. `issue_url` points at the issue: the agent
 # reads its text there (issue text is untrusted input, so it is not inlined).
@@ -108,17 +128,30 @@ nodes:
   # twice; the base must fail by an assertion: a timeout, a setup failure or a
   # test file that cannot load there proves nothing. Every issue needs a
   # regression test except those labelled `docs` or `chore`.
-  # The implementing agent's turn after a gate sent the change back: the
-  # review's findings, or what `merge` found when it brought the branch up to
-  # date (a conflict, or checks that fail on the current base). Skipped on the
-  # first pass: there is nothing to address yet.
-  - id: address
+  # Merge the base branch in (see Integration above). The start of both loops:
+  # every new round first takes what merged meanwhile.
+  - id: integrate
     depends_on: [pull-request]
-    when: 'review.json.allowsMerge = false or merge.json.outcome = "sent_back"'
+    integrate: {}
+
+  # The implementing agent's turn after a gate sent the change back: a conflict
+  # `integrate` could not settle, the review's findings, or checks that fail on
+  # the current base. Skipped when no gate left anything to address (the first
+  # pass, or a round `integrate` settled alone).
+  - id: address
+    depends_on: [integrate]
+    when: 'integrate.json.outcome = "conflict" or review.json.allowsMerge = false or (merge.json.outcome = "sent_back" and merge.json.why = "checks")'
     spawn_agent:
       prompt: |
         You are working unattended: nobody will answer questions.
 
+        {{#integrate.json.conflict}}
+        {{integrate.json.feedback}}
+
+        The pull request is from `{{branch}}` (GitHub issue #{{issue_number}} of
+        {{repo}}). Do not disable, skip or weaken tests or checks.
+        {{/integrate.json.conflict}}
+        {{^integrate.json.conflict}}
         {{#review.json.blocking}}
         An independent review of commit {{review.json.sha}} of the pull request
         from `{{branch}}` (GitHub issue #{{issue_number}} of {{repo}}) found
@@ -140,6 +173,7 @@ nodes:
         Fix it on `{{branch}}` so your change and what merged first both work.
         Do not disable, skip or weaken tests or checks.
         {{/review.json.blocking}}
+        {{/integrate.json.conflict}}
 
         Run the project's checks, commit, and push to `{{branch}}`.
         Do not rebase or force push, and do not open another pull request.
@@ -183,19 +217,20 @@ nodes:
     depends_on: [ci]
     review: {}
     loop:
-      back_to: address
+      back_to: integrate
       until: 'review.json.allowsMerge = true'
       max_iterations: 3
 
   # `merge` brings the branch up to date with its base first and waits for the
-  # checks there. A conflict or failing checks go back to `address`; the proof,
-  # the checks and the review then run again: three tries in all.
+  # checks there. When it sends the change back, the round starts again at
+  # `integrate`: 10 rounds in all, of which the factory lets 2 reach the
+  # implementing agent before the run waits for a person.
   - id: merge
     depends_on: [review]
     loop:
-      back_to: address
+      back_to: integrate
       until: '$not(merge.json.outcome = "sent_back")'
-      max_iterations: 3
+      max_iterations: 10
     merge:
       method: squash
       delete_branch: true

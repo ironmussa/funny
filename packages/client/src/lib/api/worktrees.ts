@@ -5,7 +5,8 @@ export const worktreesApi = {
     request<
       Array<{
         path: string;
-        branch: string;
+        /** Absent for a worktree with a detached HEAD. */
+        branch?: string;
         commit: string;
         isMain: boolean;
         lastActivityMs?: number;

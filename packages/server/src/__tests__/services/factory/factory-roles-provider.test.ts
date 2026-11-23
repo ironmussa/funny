@@ -194,6 +194,8 @@ interface ReviewScript {
   slot?: (holder: string) => Promise<() => void>;
   /** What triage stored on the run (its contract). */
   triage?: ProviderDeps['triage'];
+  /** More provider deps (the runner's factory steps, the default branch). */
+  extra?: Partial<ProviderDeps>;
 }
 
 /** A provider whose reviewer threads answer from a script; records what the server did. */
@@ -265,6 +267,7 @@ function reviewing(script: ReviewScript) {
       record: async (input) => {
         recorded.push(input);
       },
+      ...script.extra,
     },
   );
   const stored = () => {
@@ -1211,5 +1214,65 @@ describe('a run with a contract', () => {
       'the contract names a risk: changes the rounding of every invoice',
     );
     expect(recorded.some((input) => input.risk?.level === 'high')).toBe(true);
+  });
+});
+
+describe('the review after integrate', () => {
+  /** A runner whose integrate merged the base into SHA_A, making SHA_B. */
+  const integrated = (settled: { resolvedPaths?: string[]; regeneratedPaths?: string[] }) => ({
+    defaultBranch: () => Promise.resolve(ok('main')),
+    steps: {
+      startStep: async () => ok({ stepId: 's1', state: 'running' }),
+      pollStep: async () =>
+        ok({
+          state: 'done',
+          result: {
+            kind: 'integrate',
+            outcome: 'merged',
+            headBefore: SHA_A,
+            headAfter: SHA_B,
+            resolvedPaths: settled.resolvedPaths ?? [],
+            regeneratedPaths: settled.regeneratedPaths ?? [],
+            conflictedPaths: [],
+            baseDiff: '',
+            weave: true,
+            message: 'merged',
+          },
+        }),
+      pollMs: 1,
+    },
+  });
+  const reviewed = [
+    { sha: SHA_A, verdict: 'pass' as const, findings: [], reviewedAt: '2026-11-22T02:00:00.000Z' },
+  ];
+
+  test('a clean merge of the base keeps the review: no new reviewer', async () => {
+    const { provider, bodies, stored } = reviewing({
+      head: () => SHA_B,
+      says: [],
+      reviews: reviewed,
+      extra: integrated({}),
+    });
+    expect(await provider.integrate!({})).toMatchObject({ ok: true, output: 'merged' });
+    expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
+    expect(bodies).toEqual([]);
+    expect(stored().find((review) => review.sha === SHA_B)).toMatchObject({ carriedFrom: SHA_A });
+  });
+
+  test('a merge that settled conflicts is reviewed again, only where it settled them', async () => {
+    const { provider, bodies } = reviewing({
+      head: () => SHA_B,
+      says: [[passOf(SHA_B)]],
+      reviews: reviewed,
+      extra: integrated({ resolvedPaths: ['src/sum.ts'], regeneratedPaths: ['bun.lock'] }),
+    });
+    await provider.integrate!({});
+    expect(await provider.review!({})).toMatchObject({ ok: true, output: 'pass' });
+    expect(bodies).toHaveLength(1);
+    const prompt = String(bodies[0]!.prompt);
+    expect(prompt).toContain(`merges the base branch into ${SHA_A}`);
+    expect(prompt).toContain('  - src/sum.ts\n  - bun.lock');
+    expect(prompt).toContain('--remerge-diff');
+    expect(prompt).not.toContain('git merge-base origin/HEAD');
   });
 });

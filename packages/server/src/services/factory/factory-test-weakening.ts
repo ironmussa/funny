@@ -36,7 +36,7 @@ export interface TestWeakeningFinding {
 }
 
 /** At most this many findings are reported per change (the first ones). */
-export const MAX_WEAKENING_FINDINGS = 50;
+const MAX_WEAKENING_FINDINGS = 50;
 
 const JS_TEST_FILE = /(^|\/)(__tests__|tests?|specs?|e2e)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
 const PY_TEST_FILE = /(^|\/)(test_[^/]+|[^/]+_test)\.py$|(^|\/)tests?\/.*\.py$/;

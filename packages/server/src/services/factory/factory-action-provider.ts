@@ -357,7 +357,7 @@ const PROOF_NOT_CONFIGURED: ActionResult = {
 };
 
 /** The counters after a reviewer event: a verdict counts as a review, a failing one also as a fail. */
-export function reviewCounted(metrics: FactoryRunMetrics, event: string): FactoryRunMetrics {
+function reviewCounted(metrics: FactoryRunMetrics, event: string): FactoryRunMetrics {
   if (event === 'review_pass') return { ...metrics, reviews: metrics.reviews + 1 };
   if (event === 'review_fail') {
     return { ...metrics, reviews: metrics.reviews + 1, reviewFails: metrics.reviewFails + 1 };

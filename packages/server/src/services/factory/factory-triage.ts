@@ -140,7 +140,7 @@ const RESULT_FORMAT = [
   '```',
 ].join('\n');
 
-export function triagePrompt(input: {
+function triagePrompt(input: {
   repo: string;
   issueNumber: number;
   issueUrl: string | null;

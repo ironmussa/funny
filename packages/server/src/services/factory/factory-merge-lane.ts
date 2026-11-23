@@ -30,7 +30,7 @@ import type { ActionResult } from '@funny/workflows/compiler';
 import type { FactoryPullRequestRef, FactoryPullRequests } from './factory-pull-requests.js';
 
 /** The base is merged in at most this many times in one visit of `merge`. */
-export const MAX_BASE_UPDATES = 5;
+const MAX_BASE_UPDATES = 5;
 
 /** How long GitHub may take to put the update-branch merge commit on the branch. */
 const NEW_HEAD_TIMEOUT_MS = 2 * 60 * 1000;
@@ -93,7 +93,7 @@ const listed = (items: string[], max: number) => {
  * the files both sides changed, and the kinds of file that are not merged by
  * hand (a lockfile is regenerated, a numbered migration is renumbered).
  */
-export function conflictFeedback(input: {
+function conflictFeedback(input: {
   branch: string;
   baseRef: string;
   changes: BaseChanges | null;
@@ -136,7 +136,7 @@ export function conflictFeedback(input: {
 }
 
 /** What the implementing agent is told when the checks fail on the updated branch. */
-export function staleChecksFeedback(baseRef: string, checksError: string): string {
+function staleChecksFeedback(baseRef: string, checksError: string): string {
   return [
     `Your change passed its checks before, but after \`${baseRef}\` was merged into the branch they fail: something that merged first does not work together with your change.`,
     checksError,

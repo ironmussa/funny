@@ -51,7 +51,7 @@ import { parseRoleResult } from './factory-role-results.js';
 export const INCIDENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** At most this many merge commits are read per red commit; older merges stay suspects. */
-export const MAX_MERGE_READS = 10;
+const MAX_MERGE_READS = 10;
 
 /** A sentinel still running after this long is given up on: a person is told. */
 export const SENTINEL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -108,7 +108,7 @@ export interface SentinelDeps {
 }
 
 /** Why a factory on the repository admits nothing while the incident is not closed. */
-export function incidentReason(incident: FactoryIncidentRecord): string {
+function incidentReason(incident: FactoryIncidentRecord): string {
   const where = `the base branch ${incident.baseBranch} of ${incident.repo}`;
   const base = `Incident: ${where} is red (commit ${incident.redSha.slice(0, 12)}) after a factory merge, so no new issue starts.`;
   const result = incident.result;
@@ -141,7 +141,7 @@ const RESULT_FORMAT = [
   '```',
 ].join('\n');
 
-export function sentinelPrompt(input: {
+function sentinelPrompt(input: {
   repo: string;
   baseBranch: string;
   redSha: string;

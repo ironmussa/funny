@@ -286,10 +286,10 @@ function flowGate(
 }
 
 /** How many runs of a factory may be inside a stage at once, unless the flow or the factory says. */
-export const DEFAULT_STAGE_LIMIT = 20;
+const DEFAULT_STAGE_LIMIT = 20;
 
 /** The concurrency group of a stage of one factory (`<node>:<factoryId>`). */
-export const stageGroup = (stage: string, factoryId: string) => `${stage}:${factoryId}`;
+const stageGroup = (stage: string, factoryId: string) => `${stage}:${factoryId}`;
 
 /** Admission times are ordered as whole seconds from here (they fit a 32-bit column). */
 const PRIORITY_EPOCH_MS = Date.parse('2025-01-01T00:00:00.000Z');

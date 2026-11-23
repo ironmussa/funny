@@ -138,7 +138,7 @@ function staleBranchWordingIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
  * `merge` node of a factory flow runs in, one per repository and base branch,
  * shared by every factory on that repository.
  */
-export const MERGE_LANE_GROUP = 'merge:{{inputs.repo}}:{{inputs.base_branch}}';
+const MERGE_LANE_GROUP = 'merge:{{inputs.repo}}:{{inputs.base_branch}}';
 
 /** Whether a rendered concurrency group is a merge lane (its limit is always 1). */
 export const isMergeLane = (group: string) => group.startsWith('merge:');

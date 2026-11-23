@@ -97,6 +97,8 @@ function fakeGithub(script: Script = {}): FakeGithub {
         : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
     branchAhead: () => okAsync(true),
     defaultBranch: () => okAsync('main'),
+    branchState: () => okAsync({ sha: 'base-sha', ci: { kind: 'green' as const } }),
+    revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
     commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {

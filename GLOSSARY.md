@@ -20,6 +20,27 @@ _Avoid_: Agent, factory service
 One attempt by the issue factory to take one issue to a pull request.
 _Avoid_: Run (alone), session, job
 
+**Triage**:
+The first step of a factory run: a read-only agent decides whether the issue can be worked
+unattended, and either writes the run's contract or asks on the issue.
+_Avoid_: Refinement, grooming
+
+**Contract**:
+What a factory run must do, written by triage before any work: acceptance criteria, the
+files it will probably touch and its risks. The implementer works to it and the reviewer
+judges against it.
+_Avoid_: Spec, plan, ticket
+
+**Sentinel**:
+The read-only agent that, when a base branch turns red after a factory merge, names the
+merge that broke it or says it cannot.
+_Avoid_: Watchdog, monitor
+
+**Incident**:
+A base branch that turned red after a factory merge. While it is open, no factory on that
+repository admits issues.
+_Avoid_: Outage, alert
+
 **Implementer**:
 The agent of a factory run that writes the change: it implements the issue, opens the pull
 request and fixes what the gates send back. The only writer of the run's branch.

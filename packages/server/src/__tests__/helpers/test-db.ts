@@ -384,6 +384,28 @@ export function createTestDb() {
     )
   `);
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_incidents (
+      id TEXT PRIMARY KEY,
+      repo TEXT NOT NULL,
+      base_branch TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'open',
+      red_sha TEXT NOT NULL,
+      candidates TEXT NOT NULL,
+      opened_by_factory TEXT NOT NULL,
+      affected_factories TEXT,
+      sentinel_thread_id TEXT,
+      result TEXT,
+      opened_at TEXT NOT NULL,
+      closed_at TEXT,
+      closed_by TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_incidents_one_open
+    ON factory_incidents (repo, base_branch)
+    WHERE state <> 'closed'
+  `);
+  testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
     WHERE state NOT IN ('merged', 'failed', 'stopped')

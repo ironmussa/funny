@@ -13,6 +13,7 @@ interface FactoryMocks {
   runs: FactoryRun[];
   control: Mock<(...args: any[]) => any>;
   empty: Mock<(...args: any[]) => any>;
+  closeIncident: Mock<(...args: any[]) => any>;
   toastError: Mock<(...args: any[]) => any>;
   canSteer: boolean;
   /** Whether the flow's review step resolves to the implementer's provider and model. */
@@ -25,6 +26,7 @@ const mocks = ((): FactoryMocks => ({
   runs: [],
   control: vi.fn(),
   empty: vi.fn(),
+  closeIncident: vi.fn(),
   toastError: vi.fn(),
   canSteer: true,
   sameReviewer: undefined,
@@ -50,6 +52,7 @@ mock.module('@/data/factory/actions', () => ({
   saveFactorySettings: (input: unknown) => mocks.save(input),
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
   emptyFactory: (...args: unknown[]) => mocks.empty(...args),
+  closeFactoryIncident: (...args: unknown[]) => mocks.closeIncident(...args),
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
 mock.module('react-i18next', () => ({
@@ -88,6 +91,7 @@ beforeEach(() => {
   mocks.runs = [];
   mocks.control.mockImplementation(() => okAsync({}));
   mocks.empty.mockImplementation(() => okAsync({ cleared: 0, stopped: 0 }));
+  mocks.closeIncident.mockImplementation(() => okAsync(configured()));
   mocks.save.mockImplementation((input: Record<string, unknown>) =>
     okAsync({ ...configured(), ...input }),
   );
@@ -279,6 +283,91 @@ describe('review and merge settings', () => {
     mocks.sameReviewer = false;
     render(<ProjectFactorySetting projectId="p1" />);
     expect(screen.queryByTestId('settings-factory-same-reviewer')).toBeNull();
+  });
+});
+
+// Change factory-agent-roles, D10: a broken base branch pauses the factory.
+describe('an incident', () => {
+  const incident = (over: Record<string, unknown> = {}) => ({
+    id: 'i1',
+    repo: 'o/r',
+    baseBranch: 'main',
+    state: 'reported' as const,
+    redSha: 'abc123',
+    openedAt: '2026-11-22T12:00:00.000Z',
+    closedAt: null,
+    candidates: [],
+    result: null,
+    ...over,
+  });
+
+  test('is shown with what the factory found, in place of the plain reason', () => {
+    mocks.settings = configured({
+      blockedReason: 'Incident: the base branch main of o/r is red',
+      incident: incident({
+        result: {
+          decision: 'revert',
+          reason: 'It removed the helper.',
+          culpritPrUrl: 'https://github.com/o/r/pull/113',
+          revertPrUrl: 'https://github.com/o/r/pull/900',
+        },
+      }),
+    });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-incident')).toHaveTextContent(
+      'The base branch main of o/r is red after a factory merge',
+    );
+    expect(screen.getByTestId('settings-factory-incident-culprit')).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/pull/113',
+    );
+    expect(screen.getByTestId('settings-factory-incident-revert')).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/pull/900',
+    );
+    expect(screen.queryByTestId('settings-factory-blocked')).toBeNull();
+  });
+
+  test('says so while the factory is still looking, and when it could not name a merge', () => {
+    mocks.settings = configured({ incident: incident({ state: 'investigating' }) });
+    const { unmount } = render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-incident')).toHaveTextContent(
+      'looking for the merge that broke it',
+    );
+    unmount();
+
+    mocks.settings = configured({
+      incident: incident({ result: { decision: 'unknown', reason: 'The test is flaky.' } }),
+    });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-incident-finding')).toHaveTextContent(
+      'could not name the merge that broke it: The test is flaky.',
+    );
+  });
+
+  test('a member closes it, and a refusal is shown', async () => {
+    mocks.settings = configured({ incident: incident() });
+    render(<ProjectFactorySetting projectId="p1" />);
+    fireEvent.click(screen.getByTestId('settings-factory-incident-close'));
+    expect(mocks.closeIncident).toHaveBeenCalledWith('p1');
+
+    mocks.closeIncident.mockImplementation(() =>
+      errAsync({ type: 'NOT_FOUND', message: 'No incident is open for this factory.' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-factory-incident-close')).not.toBeDisabled(),
+    );
+    fireEvent.click(screen.getByTestId('settings-factory-incident-close'));
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalled());
+  });
+
+  test('without an incident the plain reason shows as before', () => {
+    mocks.settings = configured({ blockedReason: 'The runner is offline', incident: null });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-blocked')).toHaveTextContent(
+      'The runner is offline',
+    );
+    expect(screen.queryByTestId('settings-factory-incident')).toBeNull();
   });
 });
 

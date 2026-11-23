@@ -2206,6 +2206,36 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'triage', 'TEXT');
     },
   },
+  {
+    // Change factory-agent-roles, D10: a base branch that turned red after a
+    // factory merge. One incident at a time per repository and base branch:
+    // the partial unique index is what a compare-and-set open relies on.
+    name: '109_factory_incidents',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_incidents (
+          id TEXT PRIMARY KEY,
+          repo TEXT NOT NULL,
+          base_branch TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'open',
+          red_sha TEXT NOT NULL,
+          candidates TEXT NOT NULL,
+          opened_by_factory TEXT NOT NULL,
+          affected_factories TEXT,
+          sentinel_thread_id TEXT,
+          result TEXT,
+          opened_at TEXT NOT NULL,
+          closed_at TEXT,
+          closed_by TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_incidents_one_open
+        ON factory_incidents (repo, base_branch)
+        WHERE state <> 'closed'
+      `);
+    },
+  },
 ];
 
 /**

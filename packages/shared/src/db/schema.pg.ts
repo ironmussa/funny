@@ -370,6 +370,39 @@ export const factoryRuns = pgTable('factory_runs', {
 });
 
 /**
+ * A base branch that turned red after a factory merge (change
+ * factory-agent-roles, D10). At most one not-closed incident per repository
+ * and base branch: the partial unique index `factory_incidents_one_open`
+ * (migration 109) enforces it. Admissions of every factory on the repository
+ * pause while one is open.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryIncidents = pgTable('factory_incidents', {
+  id: text('id').primaryKey(),
+  /** `owner/name`. */
+  repo: text('repo').notNull(),
+  baseBranch: text('base_branch').notNull(),
+  /** `open` → `investigating` → `reported` → `closed` (`factory-incidents.ts`). */
+  state: text('state').notNull().default('open'),
+  /** The red commit of the base branch when the incident opened. */
+  redSha: text('red_sha').notNull(),
+  /** JSON array of the factory merges the sentinel may name. */
+  candidates: text('candidates').notNull(),
+  /** The factory whose tick opened it: it runs the sentinel, as its enabler. */
+  openedByFactory: text('opened_by_factory').notNull(),
+  /** JSON array of the factories whose admissions it paused (they may close it). */
+  affectedFactories: text('affected_factories'),
+  sentinelThreadId: text('sentinel_thread_id'),
+  /** JSON: what the sentinel answered and what was done (`FactoryIncidentResult`). */
+  result: text('result'),
+  openedAt: text('opened_at').notNull(),
+  closedAt: text('closed_at'),
+  /** Who closed it: a user id, or `green` when the base branch recovered. */
+  closedBy: text('closed_by'),
+});
+
+/**
  * The workflow engine's journal on the server (change workflow-dag-engine,
  * D6): one row per node execution of a run, keyed by node, visit path and
  * attempt. A run that starts again replays its rows instead of repeating

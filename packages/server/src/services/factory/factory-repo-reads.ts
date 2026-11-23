@@ -17,6 +17,10 @@ import {
   type GithubCallError,
   type IssueBlocker,
   type RepoGithub,
+  createPullRequestCi,
+  revertPullRequest,
+  type CiState,
+  type RevertPullRequest,
 } from '@funny/core/github-app';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 
@@ -95,6 +99,19 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
       return github
         .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
         .map((meta) => meta.default_branch);
+    },
+
+    /** The commit a branch is at, and the verdict of its checks. */
+    branchState(branch: string): ResultAsync<{ sha: string; ci: CiState }, GithubCallError> {
+      return createPullRequestCi(github).refState(repo, branch);
+    },
+
+    /** Open a pull request that reverts merged pull request `number` (it is not merged here). */
+    revertPullRequest(
+      number: number,
+      text: { title?: string; body?: string },
+    ): ResultAsync<RevertPullRequest, GithubCallError> {
+      return revertPullRequest(github, repo, number, text);
     },
 
     /** Comment on the issue, as the App. */

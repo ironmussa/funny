@@ -94,6 +94,12 @@ export interface FactorySettings {
   stageLimits: Record<string, number>;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
+  /**
+   * The incident that pauses the factory's admissions (its repository's base
+   * branch is red after a factory merge), or null. Absent on answers that do
+   * not look it up.
+   */
+  incident?: FactoryIncident | null;
   updatedAt: string;
 }
 
@@ -483,3 +489,61 @@ export type FactoryTriage = z.infer<typeof factoryTriageSchema>;
 /** The run's contract, when triage wrote one. */
 export const contractOf = (run: { triage: FactoryTriage | null }): FactoryContract | null =>
   run.triage?.decision === 'ready' ? (run.triage.contract ?? null) : null;
+
+/**
+ * The sentinel (change factory-agent-roles, D10): a read-only agent that looks
+ * at a base branch gone red after factory merges and names the merge that
+ * broke it, or says it cannot.
+ */
+export const factorySentinelResultSchema = z.discriminatedUnion('decision', [
+  z.object({
+    decision: z.literal('revert'),
+    /** The number of the pull request whose merge broke the base branch. */
+    culprit: z.number().int().positive(),
+    reason: z.string().trim().min(1).max(2000),
+  }),
+  z.object({
+    /** `escalate`: a person must look; `unknown`: no merge can be named. */
+    decision: z.enum(['escalate', 'unknown']),
+    reason: z.string().trim().min(1).max(2000),
+  }),
+]);
+export type FactorySentinelResult = z.infer<typeof factorySentinelResultSchema>;
+
+/** A factory merge the sentinel may name. */
+export const factoryIncidentCandidateSchema = z.object({
+  issueNumber: z.number().int(),
+  prUrl: z.string(),
+  mergedAt: z.string(),
+  /** The run's enabler: who is told. */
+  userId: z.string(),
+});
+export type FactoryIncidentCandidate = z.infer<typeof factoryIncidentCandidateSchema>;
+
+/** What an incident ended up with. */
+export const factoryIncidentResultSchema = z.object({
+  decision: z.enum(['revert', 'escalate', 'unknown']),
+  reason: z.string(),
+  /** The pull request named as the cause (`revert`). */
+  culpritPrUrl: z.string().optional(),
+  /** The pull request that reverts it, when GitHub could open one. */
+  revertPrUrl: z.string().optional(),
+});
+export type FactoryIncidentResult = z.infer<typeof factoryIncidentResultSchema>;
+
+export type FactoryIncidentState = 'open' | 'investigating' | 'reported' | 'closed';
+
+/** A base branch that turned red after a factory merge: admissions are paused on the repository. */
+export interface FactoryIncident {
+  id: string;
+  /** `owner/name`. */
+  repo: string;
+  baseBranch: string;
+  state: FactoryIncidentState;
+  /** The red commit of the base branch. */
+  redSha: string;
+  openedAt: string;
+  closedAt: string | null;
+  candidates: FactoryIncidentCandidate[];
+  result: FactoryIncidentResult | null;
+}

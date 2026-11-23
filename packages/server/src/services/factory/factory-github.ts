@@ -13,7 +13,13 @@
  * part of a result.
  */
 
-import { createRepoGithub, type GithubCallError, type IssueBlocker } from '@funny/core/github-app';
+import {
+  createRepoGithub,
+  type CiState,
+  type GithubCallError,
+  type IssueBlocker,
+  type RevertPullRequest,
+} from '@funny/core/github-app';
 import { errAsync, ResultAsync } from 'neverthrow';
 
 import { accessCapToken } from '../github-app/access-cap-token.js';
@@ -102,6 +108,17 @@ export interface FactoryGithubPort {
   branchAhead(reader: FactoryRepoReader, branch: string): ResultAsync<boolean, GithubCallError>;
   /** The name of the repository's DEFAULT branch: what a run's worktree starts from. */
   defaultBranch(reader: FactoryRepoReader): ResultAsync<string, GithubCallError>;
+  /** The commit `branch` is at and the verdict of its checks (the base branch after merges). */
+  branchState(
+    reader: FactoryRepoReader,
+    branch: string,
+  ): ResultAsync<{ sha: string; ci: CiState }, GithubCallError>;
+  /** Open a pull request that reverts a merged one. Never merged by the factory. */
+  revertPullRequest(
+    reader: FactoryRepoReader,
+    number: number,
+    text: { title?: string; body?: string },
+  ): ResultAsync<RevertPullRequest, GithubCallError>;
   /** Comment on an issue, as the App. */
   commentOnIssue(
     reader: FactoryRepoReader,
@@ -228,6 +245,8 @@ export function createFactoryGithub(
     branchAhead: (reader, branch) => reads(reader).branchAhead(branch),
     defaultBranch: (reader) => reads(reader).defaultBranch(),
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
+    branchState: (reader, branch) => reads(reader).branchState(branch),
+    revertPullRequest: (reader, number, text) => reads(reader).revertPullRequest(number, text),
 
     pullRequests: createFactoryPullRequests({
       issue,

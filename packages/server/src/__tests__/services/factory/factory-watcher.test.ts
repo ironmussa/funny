@@ -132,6 +132,8 @@ interface GithubScript {
   blockers?: Record<number, IssueBlocker[] | 'unreadable'>;
   /** Issues GitHub reports as closed. */
   closed?: number[];
+  /** The checks of the base branch (default: green). */
+  baseCi?: CiState;
   /** When each issue last changed (GitHub's `updated_at`); an absent one never changed. */
   updated?: Record<number, string>;
   /** Each pull request's state, by number; an absent one is open. */
@@ -200,6 +202,9 @@ function fakeGithub(
     },
     branchAhead: () => okAsync(script.branchAhead ?? true),
     defaultBranch: () => okAsync('main'),
+    branchState: () =>
+      okAsync({ sha: 'base-sha', ci: script.baseCi ?? { kind: 'green' as const } }),
+    revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
     commentOnIssue: (_reader: unknown, issue: number, body: string) => {
       port.comments.push({ issue, body });
       return okAsync(undefined);
@@ -748,6 +753,77 @@ describe('factory watcher', () => {
       );
       await poll.ticks[0]!();
       expect(implementing(launcher)).toEqual(['[Factory] #1 a', '[Factory] #2 b']);
+    });
+  });
+
+  // Change factory-agent-roles, D10: a broken base branch pauses admissions.
+  describe('an incident', () => {
+    const red: CiState = {
+      kind: 'failing',
+      checks: [{ name: 'test', conclusion: 'failure', excerpt: 'expected 3, got 2' }],
+    };
+
+    /** A factory with a run merged just now, and one labelled issue waiting. */
+    async function afterAMerge(script: GithubScript) {
+      const factoryId = await enableFactory();
+      const runs = createFactoryRunsRepository();
+      const merged = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
+      await runs.update(merged.id, {
+        state: 'merged',
+        prUrl: 'https://github.com/acme/repo/pull/9',
+      });
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      const notices: Array<{ userId: string; body: string }> = [];
+      await startWatcherWithProof({
+        ports,
+        github: fakeGithub('acme/repo', [{ number: 2, title: 'b', url: 'u/2' }], script),
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+        notify: async (userId, notice) => notices.push({ userId, body: notice.body }),
+      });
+      const blockedReason = async () =>
+        (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap()?.blockedReason;
+      const sentinels = () =>
+        launcher.calls.filter((call) => /^\[Factory sentinel\]/.test(String(call.body.title)));
+      return { factoryId, poll, launcher, blockedReason, sentinels };
+    }
+
+    test('the base branch red after a merge: no issue is admitted, and a sentinel starts', async () => {
+      const { poll, launcher, blockedReason, sentinels } = await afterAMerge({ baseCi: red });
+      await poll.ticks[0]!();
+
+      expect(launcher.calls.filter(isImplementerLaunch)).toEqual([]);
+      expect(sentinels()).toHaveLength(1);
+      expect(sentinels()[0]!.body).toMatchObject({ permissionMode: 'plan' });
+      expect(await blockedReason()).toContain('Incident: the base branch main of acme/repo is red');
+      // Still paused on the next tick, with the one incident and the one sentinel.
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch)).toEqual([]);
+      expect(sentinels()).toHaveLength(1);
+    });
+
+    test('the base branch green again: the incident closes and the issue is admitted', async () => {
+      const script: GithubScript = { baseCi: red };
+      const { poll, launcher, blockedReason } = await afterAMerge(script);
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch)).toEqual([]);
+
+      script.baseCi = { kind: 'green' };
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch).map((call) => call.body.title)).toEqual([
+        '[Factory] #2 b',
+      ]);
+      expect(await blockedReason()).toBeNull();
+    });
+
+    test('a green base branch after a merge admits as usual', async () => {
+      const { poll, launcher, sentinels } = await afterAMerge({});
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch)).toHaveLength(1);
+      expect(sentinels()).toEqual([]);
     });
   });
 

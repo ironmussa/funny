@@ -29,10 +29,10 @@ import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
 import { contractOf } from '@funny/shared/contracts/factory';
 import type { RegressionProofOpts } from '@funny/workflows/compiler';
 import { and, eq } from 'drizzle-orm';
-import type { Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { projectSandboxSettings } from '../../db/schema.js';
+import { projectSandboxSettings, threads } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
@@ -45,6 +45,7 @@ import {
   type StartThreadInput,
 } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
+import { sendPush } from '../web-push.js';
 import type { FactoryThreadMode } from './factory-action-provider.js';
 import {
   sameWaitReason,
@@ -60,6 +61,10 @@ import {
 } from './factory-flow-runs.js';
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './factory-github.js';
+import {
+  createFactoryIncidentsRepository,
+  type FactoryIncidentsRepository,
+} from './factory-incidents.js';
 import {
   proofAllowsMerge,
   proofCheckOf,
@@ -78,6 +83,7 @@ import {
   type FactoryRunView,
   type RegressionProofRecord,
 } from './factory-runs.js';
+import { createFactorySentinel } from './factory-sentinel.js';
 import {
   disableFactory,
   getWatchedFactory,
@@ -95,7 +101,12 @@ import {
   startRegressionProofOnRunner,
   stopFactoryThreads,
 } from './factory-thread-requests.js';
-import { runsPushedCommits, type ThreadOutcome, type WaitAfter } from './factory-thread-waits.js';
+import {
+  lastThreadMessage,
+  runsPushedCommits,
+  type ThreadOutcome,
+  type WaitAfter,
+} from './factory-thread-waits.js';
 import { busyPathsOf, issueChangedSince, overlappingIssues } from './factory-triage.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
@@ -132,6 +143,8 @@ export interface FactoryWatcherDeps {
   waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
   /** Last assistant message override for tests; defaults to the stored one. */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
+  /** Incidents repository override for tests; defaults to the database's. */
+  incidents?: FactoryIncidentsRepository;
   /** Follow-up override for tests; defaults to a message on the thread's runner, as the enabler. */
   followUp?: (
     userId: string,
@@ -338,13 +351,81 @@ async function fire(id: string): Promise<void> {
   const target = await resolveTarget(factory);
   if (!target) return;
   // Reached the repository as the enabler: nothing blocks the factory (until
-  // the listing or a launch below says otherwise).
-  await reportBlocked(factory.id, null);
+  // the listing or a launch below says otherwise), unless its base branch is
+  // broken after a factory merge: then no factory on the repository admits.
+  const incident = await superviseBase(factory, target.repo, target.mode);
+  await reportBlocked(factory.id, incident);
   await reconcileParked(factory, target.repo);
   await retriageAnswered(factory, target.repo);
   await resumeRuns(factory, target.repo, target.mode);
+  if (incident) return;
   // A paused factory finishes its runs but admits nothing new; its queue waits.
   if (factory.enabled) await admitWork(factory, target.repo, target.mode);
+}
+
+/**
+ * The sentinel's look at the repository's base branch for this tick (change
+ * factory-agent-roles, D10): why the factory admits nothing now, or null.
+ */
+async function superviseBase(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+): Promise<string | null> {
+  if (!runs || !deps) return null;
+  const d = deps;
+  const repository = runs;
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const sentinel = createFactorySentinel(
+    {
+      incidents: d.incidents ?? createFactoryIncidentsRepository(),
+      recentMerges: async (ofRepo, since) => {
+        const merged = await repository.mergedSince(ofRepo, since);
+        if (merged.isErr()) return [];
+        return merged.value.flatMap((run) =>
+          run.prUrl
+            ? [
+                {
+                  issueNumber: run.issueNumber,
+                  prUrl: run.prUrl,
+                  mergedAt: run.completedAt ?? run.startedAt,
+                  userId: run.userId,
+                },
+              ]
+            : [],
+        );
+      },
+      defaultBranch: async () => {
+        const branch = await d.github.defaultBranch(reader);
+        return branch.isOk() ? branch.value : null;
+      },
+      branchState: async (branch) => {
+        const state = await d.github.branchState(reader, branch);
+        return state.isOk() ? state.value : null;
+      },
+      launch: (body) => launchFor(d)({ userId: factory.userId, body }),
+      threadStatus: sentinelThreadStatus,
+      finalMessage: d.lastThreadMessage ?? lastThreadMessage,
+      revert: async (prNumber, text) => {
+        const reverted = await d.github.revertPullRequest(reader, prNumber, text);
+        return reverted.isOk() ? ok({ url: reverted.value.url }) : err(reverted.error);
+      },
+      notify: d.notify ?? sendPush,
+      mode,
+    },
+    factory,
+    repo,
+  );
+  return sentinel.superviseBase();
+}
+
+/** A thread's stored status, or null when it is gone. */
+async function sentinelThreadStatus(threadId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ status: threads.status })
+    .from(threads)
+    .where(eq(threads.id, threadId));
+  return row?.status ?? null;
 }
 
 /**

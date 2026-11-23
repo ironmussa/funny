@@ -146,6 +146,8 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
     __resetDataOwnershipCache();
     // Truncate all tables in reverse dependency order
     const tables = [
+      // No foreign key to a project: nothing else removes its rows.
+      'factory_incidents',
       'project_runner_grants',
       'project_runner_settings',
       'tool_calls',

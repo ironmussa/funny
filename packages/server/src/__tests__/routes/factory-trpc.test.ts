@@ -422,6 +422,77 @@ describe('factory over tRPC', () => {
     expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(0);
   });
 
+  // Change factory-agent-roles, D10: the incident that pauses a factory.
+  describe('incidents', () => {
+    async function openIncident() {
+      await save('alice', { projectId: 'p1', enabled: true });
+      const { createFactorySettingsService } =
+        await import('../../services/factory/factory-settings.js');
+      const { createFactoryIncidentsRepository } =
+        await import('../../services/factory/factory-incidents.js');
+      const factoryId = (
+        await createFactorySettingsService().factoryId('alice', 'p1')
+      )._unsafeUnwrap()!;
+      const incidents = createFactoryIncidentsRepository();
+      const incident = (
+        await incidents.open({
+          repo: 'o/r',
+          baseBranch: 'main',
+          redSha: 'abc123',
+          candidates: [
+            {
+              issueNumber: 12,
+              prUrl: 'https://github.com/o/r/pull/112',
+              mergedAt: '2026-11-22T11:00:00.000Z',
+              userId: 'alice',
+            },
+          ],
+          factoryId,
+        })
+      )._unsafeUnwrap()!;
+      return { incidents, incident };
+    }
+
+    test('the settings carry the incident that pauses the factory, without the server bookkeeping', async () => {
+      expect((await save('alice', { projectId: 'p1', enabled: true })).body.incident).toBeNull();
+      const { incident } = await openIncident();
+      const read = (await query('alice', 'settings', { projectId: 'p1' })).body;
+      expect(read.incident).toMatchObject({
+        id: incident.id,
+        repo: 'o/r',
+        baseBranch: 'main',
+        state: 'open',
+        result: null,
+      });
+      expect(read.incident).not.toHaveProperty('affectedFactories');
+      expect(read.incident).not.toHaveProperty('sentinelThreadId');
+      // A save answers with it too, so the panel keeps showing it.
+      const saved = await save('alice', { projectId: 'p1', enabled: true, maxConcurrent: 3 });
+      expect(saved.body.incident).toMatchObject({ id: incident.id });
+    });
+
+    test('a member closes it and the factory is no longer paused by it', async () => {
+      const { incidents, incident } = await openIncident();
+      const closed = await mutate('alice', 'closeIncident', { projectId: 'p1' });
+      expect(closed).toMatchObject({ status: 200, body: { incident: null } });
+      const stored = (await incidents.get(incident.id))._unsafeUnwrap()!;
+      expect(stored).toMatchObject({ state: 'closed' });
+      // Nothing left to close.
+      expect((await mutate('alice', 'closeIncident', { projectId: 'p1' })).status).toBe(404);
+    });
+
+    test('closing needs steer, and another user cannot close it through their own project', async () => {
+      await openIncident();
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+      expect((await mutate('vic', 'closeIncident', { projectId: 'p1' })).status).toBe(403);
+      expect((await mutate('carol', 'closeIncident', { projectId: 'p1' })).status).toBe(404);
+      // Bob has his own factory, which this incident did not pause.
+      await save('bob', { projectId: 'bob-project', enabled: true });
+      expect((await mutate('bob', 'closeIncident', { projectId: 'bob-project' })).status).toBe(404);
+      expect((await query('alice', 'settings', { projectId: 'p1' })).body.incident).not.toBeNull();
+    });
+  });
+
   test('a send needs a factory, a running one, and a usable input', async () => {
     const send = { projectId: 'p1', issueNumbers: [7], flowName: 'issue-to-merge' };
     expect((await mutate('alice', 'submitIssues', send)).status).toBe(404);

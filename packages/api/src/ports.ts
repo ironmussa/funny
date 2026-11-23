@@ -476,6 +476,12 @@ export interface FactoryPort {
   clearQueue(userId: string, projectId: string): PortResult<FactoryQueueClearResult>;
   /** Clear the queue and stop every run in progress of the caller's factory; audited. */
   stopAll(userId: string, projectId: string): PortResult<FactoryQueueClearResult>;
+  /**
+   * Close the incident that pauses the caller's factory (a broken base
+   * branch), so admissions resume; 404 when there is none. Audited. Answers
+   * the settings as they are afterwards.
+   */
+  closeIncident(userId: string, projectId: string): PortResult<FactorySettings>;
 }
 
 /** The server's authorization decisions that are not about one thread. */

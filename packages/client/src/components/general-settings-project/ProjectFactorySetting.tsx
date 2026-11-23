@@ -17,6 +17,7 @@ import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryMode, FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
+import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
 import { ProjectFactoryMetrics } from './ProjectFactoryMetrics';
 import { ProjectFactoryRuns } from './ProjectFactoryRuns';
@@ -243,7 +244,12 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
         </>
       )}
 
-      {settings?.blockedReason && (
+      {settings?.incident && (
+        <ProjectFactoryIncident projectId={projectId} incident={settings.incident} />
+      )}
+
+      {/* An incident says why itself; any other reason is shown as the watcher wrote it. */}
+      {settings?.blockedReason && !settings.incident && (
         <Alert
           variant="destructive"
           className="mx-4 my-2 w-auto"

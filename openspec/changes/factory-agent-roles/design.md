@@ -306,6 +306,38 @@ The spec delta describes the end state; the change is archived after phase 2.
 _Alternative:_ two changes. Rejected: the requirements share the role and result rules, and
 `factory-integration` already refers to this change's groups.
 
+### D15. What was built differently
+
+Recorded while implementing, so the design and the code can be read together:
+
+- **Read-only roles launch their own thread** (D1). Triage, the reviewer and the sentinel each
+  start a new thread with `permissionMode: plan` and write tools denied, instead of using a
+  generic `thread: new` of `factory-flow-step-options`, which is not implemented. Their
+  instructions are fixed on the server; `prompt_file` arrives with that change. Their threads
+  are not in the run's `threadIds` (which stays the implementing agent's steps): they are kept
+  with the verdicts, the triage and the incident, and `threadsOf` adds them for stop and cleanup.
+- **A run leaves its slot through `requested`, not `queued`** (D4, D5, D11). Here `queued` holds
+  a concurrency slot, and `requested` is the queue state without one that the watcher admits in
+  order. A path hold is `triaging → requested` and a re-triage is `needs_info → requested`.
+- **Path reservation sees one factory** (D5). A run waits for runs of the same factory; two
+  users' factories on one repository do not see each other's likely paths. Their merges are
+  still serialized by the merge lane.
+- **The review limit is a slot the reviewer takes** (D7, D13). The reviewer acquires a
+  `review:<factory>` slot for each review, so an early review waits for a free slot instead of
+  not starting, and the `review` node declares no group. Of the built-in's nodes, `implement`
+  declares its stage group; `address` continues the implementing thread and has none.
+- **Re-triage baseline** (D4). The time a later change is compared with is the issue's own
+  `updated_at` read after the server's comment, so the comment is not taken for an answer. The
+  superseded answer is kept (marked) rather than cleared.
+- **The sentinel runs as the factory that saw the red branch** (D10), not as the enabler of the
+  most recent merge: that factory's tick is the one acting, with its own access. Candidates are
+  the merges of every factory into the repository, found by their pull request URL. Its result
+  is read once (no request to emit it again); an invalid one escalates.
+- **A tick waits for the implementing thread** up to the watcher's limit (`ADMIT_WAIT_MS`, 15 s)
+  while triage runs first.
+- **Not exercised against GitHub itself:** update-branch, the merge queue and the revert are
+  verified with fakes of the API.
+
 ## Risks / Trade-offs
 
 - [The reviewer is also an LLM; a prompt injection in the issue or the diff can make it say

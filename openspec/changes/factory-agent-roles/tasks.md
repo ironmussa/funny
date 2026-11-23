@@ -73,17 +73,17 @@ Delivery is in two phases (design D14). **Phase 1** is groups 1, 2, 5, 6 and 7, 
 
 ## 8. Sentinel
 
-- [ ] 8.4 Add the sentinel result schema (zod) to `@funny/shared/contracts/factory` and the incident table to the migration and both schemas; verify with schema tests and the migrate test
-- [ ] 8.1 Record the base branch check state after factory merges and open one incident per repository and base branch (compare-and-set) when it turns red within 24 h; pause admissions of every factory on the repository; add the incident machine to `docs/architecture/state-machines.md`; verify with watcher tests for red within and after 24 h and a second red not opening a second incident
-- [ ] 8.2 Run the sentinel on a new read-only thread with the candidate merges, failing checks and logs; on a culprit open a revert PR (add revert to `@funny/core/github-app`) and notify its enabler; otherwise Web Push every affected enabler; verify with tests for both results and an invalid result escalating
-- [ ] 8.3 Close the incident on green or by a member (`factory.closeIncident`, `steer`), resuming admissions; show the incident in factory settings; verify with tRPC and component tests
+- [x] 8.4 Add the sentinel result schema (zod) to `@funny/shared/contracts/factory` and the incident table to the migration and both schemas; verify with schema tests and the migrate test
+- [x] 8.1 Record the base branch check state after factory merges and open one incident per repository and base branch (compare-and-set) when it turns red within 24 h; pause admissions of every factory on the repository; add the incident machine to `docs/architecture/state-machines.md`; verify with watcher tests for red within and after 24 h and a second red not opening a second incident
+- [x] 8.2 Run the sentinel on a new read-only thread with the candidate merges, failing checks and logs; on a culprit open a revert PR (add revert to `@funny/core/github-app`) and notify its enabler; otherwise Web Push every affected enabler; verify with tests for both results and an invalid result escalating
+- [x] 8.3 Close the incident on green or by a member (`factory.closeIncident`, `steer`), resuming admissions; show the incident in factory settings; verify with tRPC and component tests
 
 ## 9. Docs and integration
 
-- [ ] 9.1 Update `openwiki/architecture/issue-factory.md` (roles, invariants, loops, early review, merge group, stage limits, sentinel) and add the role names to `GLOSSARY.md`; verify the doc's file references exist
-- [ ] 9.2 Run `bun run lint`, `bun run typecheck` and the pipelines, workflows, server, shared and client test suites; all pass
-- [ ] 9.3 End to end on a test repository with `maxConcurrent: 2`: two issues touching the same file run one after the other, a review failure is fixed and re-reviewed, the second PR is updated and re-checked before merging, and a deliberately breaking merge opens an incident and a revert PR
-- [ ] 9.4 Before archiving, merge this change's MODIFIED `merge` requirement with the text
+- [x] 9.1 Update `openwiki/architecture/issue-factory.md` (roles, invariants, loops, early review, merge group, stage limits, sentinel) and add the role names to `GLOSSARY.md`; verify the doc's file references exist
+- [x] 9.2 Run `bun run lint`, `bun run typecheck` and the pipelines, workflows, server, shared and client test suites; all pass (2026-11-22: server 2402, client 3280, shared 751, core 898 with `--parallel`, workflows 117, pipelines 113; a serial `bun test` of core has two order-dependent failures in `setupWorktree`, in code this change does not touch)
+- [ ] 9.3 End to end on a test repository with `maxConcurrent: 2`: two issues touching the same file run one after the other, a review failure is fixed and re-reviewed, the second PR is updated and re-checked before merging, and a deliberately breaking merge opens an incident and a revert PR. **Pending:** needs a test repository and a deploy; see 9.5 for what to look at first
+- [x] 9.4 Before archiving, merge this change's MODIFIED `merge` requirement with the text
       `factory-quality-gates` left in `openspec/specs/issue-factory/spec.md` (archived
       2026-11-22: the regression proof gate, the published `funny/regression-proof` check and
       the auto-merge pinned to the proved commit), so archiving this change does not drop

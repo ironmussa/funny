@@ -40,6 +40,7 @@ import {
   like,
   notInArray,
   or,
+  sql,
   type SQL,
 } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
@@ -911,6 +912,36 @@ export function createFactoryRunsRepository(
       failureReason: string | null,
     ): ResultAsync<boolean, FactoryRunsError> {
       return updateFromParked(runId, { regressionProof: JSON.stringify(proof), failureReason });
+    },
+
+    /**
+     * The runs of every factory merged since `since` whose pull request is in
+     * `repo` (`owner/name`), newest first, with their enabler: what a broken
+     * base branch may be traced to.
+     */
+    mergedSince(
+      repo: string,
+      since: string,
+    ): ResultAsync<Array<FactoryRunView & { userId: string }>, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ run: factoryRuns, userId: factorySettings.userId })
+          .from(factoryRuns)
+          .innerJoin(factorySettings, eq(factorySettings.id, factoryRuns.factoryId))
+          .where(
+            and(
+              eq(factoryRuns.state, 'merged'),
+              gte(factoryRuns.completedAt, since),
+              // The repository is known in lowercase; GitHub's URL keeps its own case.
+              like(
+                sql`lower(${factoryRuns.prUrl})`,
+                `https://github.com/${repo.toLowerCase()}/pull/%`,
+              ),
+            ),
+          )
+          .orderBy(desc(factoryRuns.completedAt)),
+        storage,
+      ).map((rows) => rows.map(({ run, userId }) => ({ ...toView(run), userId })));
     },
 
     /** One run by its id, or null. */

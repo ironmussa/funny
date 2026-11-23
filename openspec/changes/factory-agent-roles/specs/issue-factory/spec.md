@@ -88,8 +88,8 @@ the triage, on the factory's next tick with a free slot, and SHALL let a member 
 ### Requirement: Runs with overlapping paths do not work at the same time
 
 After triage, the system SHALL NOT start the implementer of a run whose contract's likely paths
-overlap the likely paths of another run of the same repository that is working, fixing,
-reviewing or merging. Such a run SHALL release its slot and wait in the queue, keeping its
+overlap the likely paths of another run of the same factory that is changing files (working,
+with its pull request open or waiting for its checks, fixing, reviewing or merging). Such a run SHALL release its slot and wait in the queue, keeping its
 contract, with a reason naming the run it waits for. A run without a contract SHALL neither hold
 paths nor wait for them.
 
@@ -300,28 +300,90 @@ close, and admissions resume, when the base branch is green again or a member cl
 
 ### Requirement: `merge` integrates a green pull request
 
-A `merge` workflow step SHALL merge the run's pull request only when all of these hold: the
-pull request's head commit has a passing review (unless the step sets `require_review: false`),
-the change's risk class is allowed by the factory's auto-merge setting (`low_risk` by default,
-or `all`), and the pull request's checks are green on a commit that is up to date with the
-current base branch, reached through the repository's merge lane. Only a verdict of the flow's
-own `review` step SHALL count as that review: a check, status, comment or approval that an
-external reviewer (a review bot such as CodeRabbit, or any other app) leaves on the pull request
-is a check like any other and SHALL NOT stand in for it. It MAY delete the working
-branch, and SHALL mark the run merged on success. A `merge` step SHALL NOT merge a pull request
-whose required checks are not green. A run whose review is missing or not passing, or whose risk
-class is not allowed, SHALL park in `waiting_human` with that reason.
+A `merge` workflow step SHALL merge the run's pull request only when all of these hold, checked
+when the step starts and whatever path of the flow led to it: the pull request's head commit has
+a passing review (unless the step sets `require_review: false`), the change's risk class is
+allowed by the factory's auto-merge setting (`low_risk` by default, or `all`), and the pull
+request's checks are green on a commit that is up to date with the current base branch, reached
+through the repository's merge lane. Only a verdict of the flow's own `review` step SHALL count
+as that review: a check, status, comment or approval that an external reviewer (a review bot
+such as CodeRabbit, or any other app) leaves on the pull request is a check like any other and
+SHALL NOT stand in for it. It MAY delete the working branch, and SHALL mark the run merged on
+success. A `merge` step SHALL NOT merge a pull request whose required checks are not green. A
+run whose review is missing or not passing, or whose risk class is not allowed, SHALL park in
+`waiting_human` with that reason.
+
+Unless the step sets `require_regression_proof: false`, `merge` SHALL also require, checked when
+the step starts, a regression proof with verdict `pass` (or `skipped` when no test is required)
+for the commit it merges, whether or not the flow declares a `regression_proof` step. When the
+stored proof is for another commit or there is none (a commit made by bringing the base branch
+in is another commit), `merge` SHALL run the proof on that commit with the flow's
+`regression_proof` configuration before deciding; a flow with no such configuration SHALL get
+the verdict `fail` with the finding that no regression proof is configured. Without an allowed
+verdict it SHALL NOT merge and the run SHALL park in `waiting_human` with the reason. With the
+proof required, `merge` SHALL merge exactly the commit that was proved. When GitHub will not
+merge the pull request directly, `merge` SHALL enable GitHub's auto-merge only if the
+`funny/regression-proof` check is required on the base branch from the deployment's GitHub App;
+otherwise it SHALL NOT enable auto-merge and the run SHALL park with GitHub's reason and how to
+require the check.
+
+With `require_regression_proof: false`, `merge` SHALL need no proof, and flow validation SHALL
+report the setting as a warning. With `require_review: false` as well, `merge` SHALL behave as
+before both gates (directly, or by enabling auto-merge when the repository requires it); with
+the review required, it SHALL merge exactly the reviewed commit.
 
 #### Scenario: A green PR is merged and the run completes
 
-- **WHEN** a `merge` step runs on a PR whose head commit passed review, whose risk class is
-  `low`, and whose checks are green on the current base
-- **THEN** the PR is merged (or GitHub's merge queue merges it) and the run is marked merged
+- **WHEN** a `merge` step runs on a PR whose head commit passed review and has a passing proof,
+  whose risk class is `low`, and whose checks are green on the current base
+- **THEN** that commit is merged (or GitHub's merge queue merges it) and the run is marked merged
 
 #### Scenario: Merge is refused when checks are not green
 
 - **WHEN** a `merge` step runs on a PR whose required checks are not green
 - **THEN** the step does not merge and the run does not reach the merged state
+
+#### Scenario: A CI fix after the proof
+
+- **WHEN** the proof passed on commit A, a CI fix pushed commit B, and `merge` starts with green
+  checks on B
+- **THEN** `merge` runs the proof on B, and merges B only if it passes
+
+#### Scenario: A stale proof that no longer passes
+
+- **WHEN** `merge` runs the proof on the current head commit and its verdict is `fail`
+- **THEN** the step does not merge and the run parks in `waiting_human` with the finding
+
+#### Scenario: A flow without the step does not skip the gate
+
+- **WHEN** a repository flow has a `merge` step, no `regression_proof` step, and does not set
+  `require_regression_proof: false`
+- **THEN** the run does not merge and parks in `waiting_human` saying no regression proof is
+  configured
+
+#### Scenario: An explicit opt-out
+
+- **WHEN** a flow's `merge` step sets `require_regression_proof: false`
+- **THEN** `merge` needs no proof (the review and the risk class still apply), and validating
+  the flow reports a warning about the setting
+
+#### Scenario: No auto-merge where GitHub does not hold the gate
+
+- **WHEN** the proof is required, GitHub will not merge the pull request directly, and the
+  `funny/regression-proof` check is not required on the base branch from the deployment's App
+- **THEN** auto-merge is not enabled, and the run parks in `waiting_human` with GitHub's reason and
+  how to require the check
+
+#### Scenario: Auto-merge where GitHub holds the gate
+
+- **WHEN** the proof is required, GitHub will not merge directly, and the check is required on the
+  base branch from the deployment's App
+- **THEN** auto-merge is enabled for the pull request and the run waits for GitHub to merge
+
+#### Scenario: The head moves between the check and the merge
+
+- **WHEN** a commit is pushed after `merge` verified the proof and before GitHub merges
+- **THEN** the merge of the proved commit is refused by GitHub and the run parks, unmerged
 
 #### Scenario: A high-risk change waits for a person
 

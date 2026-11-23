@@ -162,9 +162,28 @@ serve its root publicly; the server reaches it over the internal gRPC tunnel
 
 ## Notes
 
-- Config-as-Code (`railway.json`) is deprecated by Railway (works until
-  2026-12-01). Migration target is `.railway/railway.ts`
-  (`railway config migrate`). Not urgent.
-- Start commands (set per service in Railway, not in `railway.json`):
+- **Service settings live in `.railway/railway.ts`** (Railway infrastructure as
+  code; Config as Code, `railway.json`, stops working on 2026-12-01). It holds
+  each service's build and start commands, healthcheck, restart policy,
+  replicas and volumes, and the Postgres database. Variables are **unmanaged**:
+  the file never reads or writes them, so secrets stay in Railway. To change a
+  setting, edit the file, then from the repository root (the `railway` SDK is a
+  dev dependency):
+
+  ```bash
+  ( unset RAILWAY_API_TOKEN RAILWAY_TOKEN; . ./.env.railway-token.local
+    railway config plan --environment production      # read-only diff
+    railway config apply --environment production )   # writes the settings, redeploys
+  ```
+
+  Read the plan before applying: it must say `0 to destroy`. `apply` redeploys
+  the changed services from their last source. Railway stores its defaults
+  (`restartPolicyType: ON_FAILURE`, 10 retries) as unset, so the file leaves
+  them out; writing them makes `plan` report a change forever.
+
+- `railway.runner.json` stays: it is the source of the published runner
+  template, and the `funny-runner` service's Railway Config File still points at
+  it with the same values as `.railway/railway.ts`. Change both together.
+- Start commands (in `.railway/railway.ts`):
   `start:railway` = `cd packages/server && bun run start`. The runner service
   runs the runtime entry from the same build.

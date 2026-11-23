@@ -151,6 +151,8 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
   }
 
   return {
+    culpritHold,
+
     /**
      * A member of the leader's batch, by run id, at its pull request's head
      * now (the commit the batch tests); null when it cannot be one.

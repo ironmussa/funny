@@ -50,9 +50,14 @@ function gateBatch(n: number) {
 }
 
 /** A queue whose batch ends with `verdicts`, recording what it wrote on the runs. */
-function fakeQueue(verdicts: Record<string, MemberVerdict>, batchable = true) {
+function fakeQueue(
+  verdicts: Record<string, MemberVerdict>,
+  batchable = true,
+  culprit: string | null = null,
+) {
   const written: string[] = [];
   const queue: FactoryQueuePort = {
+    culpritHold: async () => culprit,
     memberOf: async (runId, holder) => member(Number(runId.slice(1)), holder),
     batchable: async () => batchable,
     lead: async () => ({
@@ -127,6 +132,19 @@ describe('mergeAsBatch', () => {
     const { queue } = fakeQueue({ r1: { kind: 'merged', sha: 'L1' } }, false);
     expect(await mergeAsBatch({ queue, batch, self: member(1, null), gates })).toBeNull();
     expect([...settled.values()]).toEqual([{ status: 'requeued' }, { status: 'requeued' }]);
+  });
+
+  // Found in the E2E: alone, the culprit would take the serial path and merge on its own green checks.
+  test('a leader back unchanged after it was a culprit waits for a person, alone or not', async () => {
+    for (const batchable of [true, false]) {
+      const { batch, settled } = gateBatch(2);
+      const { queue } = fakeQueue({}, batchable, 'commit h1 made a merge queue batch fail before');
+      expect(await mergeAsBatch({ queue, batch, self: member(1, null), gates })).toEqual({
+        kind: 'held',
+        reason: 'commit h1 made a merge queue batch fail before',
+      });
+      expect([...settled.values()]).toEqual([{ status: 'requeued' }, { status: 'requeued' }]);
+    }
   });
 });
 

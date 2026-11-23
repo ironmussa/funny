@@ -14,7 +14,10 @@ const mocks = (() => ({
   getThread: vi.fn(async () => ({ id: 'corrector-1', worktreePath: '/wt/corrector' })),
 }))();
 
-mock.module('@funny/core/git', () => ({ gitRead: mocks.gitRead, gitWrite: vi.fn() }));
+// Keep the rest of the module: bun's mock.module applies to every test file in
+// the worker, and a partial mock breaks the files that import other exports.
+const actualGit = await import('@funny/core/git');
+mock.module('@funny/core/git', () => ({ ...actualGit, gitRead: mocks.gitRead, gitWrite: vi.fn() }));
 mock.module('../../services/pipeline-manager.js', () => ({
   parseReviewVerdict: vi.fn(),
   cleanupReviewerThread: mocks.cleanupReviewerThread,

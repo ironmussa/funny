@@ -165,7 +165,7 @@ const mergeAction = z
 // ── Review action ──────────────────────────────────────────
 
 /** What a `review` step accepts. Everything else about it is the host's. */
-export const REVIEW_FIELDS = ['provider', 'model', 'effort', 'early'] as const;
+const REVIEW_FIELDS = ['provider', 'model', 'effort', 'early'] as const;
 
 /**
  * An independent review of the run's pull request head (the issue factory's
@@ -190,7 +190,7 @@ const reviewAction = z
 // ── Triage action ──────────────────────────────────────────
 
 /** What a `triage` step accepts. Everything else about it is the host's. */
-export const TRIAGE_FIELDS = ['provider', 'model', 'effort'] as const;
+const TRIAGE_FIELDS = ['provider', 'model', 'effort'] as const;
 
 /**
  * Triage of the run's issue before any work (the issue factory's triage

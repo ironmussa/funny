@@ -140,7 +140,7 @@ const RESULT_FORMAT = [
   '```',
 ].join('\n');
 
-export function triagePrompt(input: {
+function triagePrompt(input: {
   repo: string;
   issueNumber: number;
   issueUrl: string | null;
@@ -343,6 +343,41 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     };
   }
 
+  /** The triage thread: one this run already launched, else a new one. */
+  async function startThread(opts: TriageOpts): Promise<Result<string, string>> {
+    const busy = (await deps.busyPaths?.()) ?? [];
+    const found = await deps.findLaunched(titlePrefix, deps.since);
+    const adopted = found && found !== supersededThread ? found : null;
+    if (adopted) return ok(adopted);
+    return launch(
+      opts,
+      busy.flatMap((other) => other.paths),
+    );
+  }
+
+  /** Wait for the triage thread and act on its answer. */
+  async function decide(threadId: string): Promise<ActionResult> {
+    const outcome = await deps.waitThread(threadId, deps.signal);
+    if (deps.signal.aborted) return { ok: false, error: 'The run was stopped.' };
+    if (outcome.status !== 'completed') {
+      return degrade(threadId, `its thread ended ${outcome.status}`);
+    }
+    const result = await resultOf(threadId);
+    if (deps.signal.aborted) return { ok: false, error: 'The run was stopped.' };
+    if (result.isErr()) return degrade(threadId, result.error.reason);
+    const answer = result.value;
+    if (answer.decision === 'needs_info')
+      return askOnIssue('needs_info', answer.questions, threadId);
+    if (answer.decision === 'too_big') return askOnIssue('too_big', answer.parts, threadId);
+    const triage = await keep({
+      decision: 'ready',
+      at: new Date().toISOString(),
+      threadId,
+      contract: answer.contract,
+    });
+    return (await heldForPaths(triage)) ?? proceed(triage);
+  }
+
   return {
     /** What the run knows of its triage now. */
     current: (): FactoryTriage | null => current,
@@ -354,15 +389,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
         if (current.decision === 'ready') await deps.record({ state: 'triaging' });
         return (await heldForPaths(current)) ?? proceed(current);
       }
-      const busy = (await deps.busyPaths?.()) ?? [];
-      const found = await deps.findLaunched(titlePrefix, deps.since);
-      const adopted = found && found !== supersededThread ? found : null;
-      const thread = adopted
-        ? ok(adopted)
-        : await launch(
-            opts,
-            busy.flatMap((other) => other.paths),
-          );
+      const thread = await startThread(opts);
       if (thread.isErr()) {
         // Nothing ran (the runner is unreachable, say): go on without a
         // contract this time, and remember nothing, so a later attempt of the
@@ -374,28 +401,9 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
         });
         return proceed({ decision: 'none', at: new Date().toISOString() });
       }
-      const threadId = thread.value;
       // A triage agent is running: the run is in flight and holds its slot.
       await deps.record({ state: 'triaging' });
-      const outcome = await deps.waitThread(threadId, deps.signal);
-      if (deps.signal.aborted) return { ok: false, error: 'The run was stopped.' };
-      if (outcome.status !== 'completed') {
-        return degrade(threadId, `its thread ended ${outcome.status}`);
-      }
-      const result = await resultOf(threadId);
-      if (deps.signal.aborted) return { ok: false, error: 'The run was stopped.' };
-      if (result.isErr()) return degrade(threadId, result.error.reason);
-      const answer = result.value;
-      if (answer.decision === 'needs_info')
-        return askOnIssue('needs_info', answer.questions, threadId);
-      if (answer.decision === 'too_big') return askOnIssue('too_big', answer.parts, threadId);
-      const triage = await keep({
-        decision: 'ready',
-        at: new Date().toISOString(),
-        threadId,
-        contract: answer.contract,
-      });
-      return (await heldForPaths(triage)) ?? proceed(triage);
+      return decide(thread.value);
     },
   };
 }

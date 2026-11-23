@@ -21,7 +21,7 @@ const LIMITED_STAGES = ['implement', 'review'] as const;
 type LimitedStage = (typeof LIMITED_STAGES)[number];
 
 /** The globs of a comma- or newline-separated list, trimmed, without empties or repeats. */
-export function parsePathList(text: string): string[] {
+function parsePathList(text: string): string[] {
   const paths = text
     .split(/[,\n]/)
     .map((path) => path.trim())
@@ -34,7 +34,7 @@ export function parsePathList(text: string): string[] {
  * sets it, an empty input removes it (the flow's own limit applies again).
  * Null when the text is neither, or changes nothing.
  */
-export function withStageLimit(
+function withStageLimit(
   limits: Record<string, number>,
   stage: string,
   text: string,

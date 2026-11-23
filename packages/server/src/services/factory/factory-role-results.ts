@@ -76,7 +76,7 @@ export function parseRoleResult<Schema extends z.ZodType>(
 }
 
 /** What the re-emit follow-up says. It carries the problem, never the invalid text back. */
-export function reemitPrompt(problem: string): string {
+function reemitPrompt(problem: string): string {
   return [
     `Your final message could not be read as a result: ${problem}.`,
     'Reply with the result again as ONE fenced json block in the format you were given, and nothing after it.',

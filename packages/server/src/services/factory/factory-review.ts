@@ -77,7 +77,7 @@ export interface ReviewedChange {
   risk: FactoryRisk;
 }
 
-export interface ReviewPromptInput {
+interface ReviewPromptInput {
   repo: string;
   issueNumber: number;
   issueUrl: string | null;
@@ -114,7 +114,7 @@ const RESULT_FORMAT = [
  * The reviewer's instructions. Everything here comes from the server: the
  * implementing agent's messages are not an input of this function.
  */
-export function reviewPrompt(input: ReviewPromptInput): string {
+function reviewPrompt(input: ReviewPromptInput): string {
   const others =
     input.otherPullRequests.length > 0
       ? [
@@ -196,7 +196,7 @@ function findingLine(finding: FactoryReviewFinding): string {
 }
 
 /** The findings as the implementing agent gets them: the blocking ones first, then the rest. */
-export function reviewFeedback(verdict: FactoryReviewVerdict): string {
+function reviewFeedback(verdict: FactoryReviewVerdict): string {
   const blocking = blockingReviewFindings(verdict);
   const rest = verdict.findings.filter((finding) => !blocking.includes(finding));
   const parts = [
@@ -245,7 +245,7 @@ export function reviewComment(verdict: FactoryReviewVerdict): string {
 }
 
 /** A stored verdict as the `review` step's result: ok either way, so the loop can act on a fail. */
-export function verdictResult(verdict: FactoryReviewVerdict): ActionResult {
+function verdictResult(verdict: FactoryReviewVerdict): ActionResult {
   const allowsMerge = reviewAllowsMerge(verdict);
   return {
     ok: true,
@@ -592,5 +592,3 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
     },
   };
 }
-
-export type FactoryReviewer = ReturnType<typeof createFactoryReviewer>;

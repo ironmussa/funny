@@ -812,10 +812,24 @@ describe('merge brings the branch up to date with its base first', () => {
       enqueue?: { kind: 'queued' } | { kind: 'head-moved' } | { kind: 'refused'; reason: string };
       state: 'merged' | 'not-queued' | 'closed';
     };
+    /**
+     * The flow proves the regression test: the runner proves the implementing
+     * agent's worktree, which stays at the commit it pushed (SHA_A).
+     */
+    proof?: boolean;
+    /** The pull request's head when the step starts (default SHA_A). */
+    head?: string;
   }
 
+  /** A runner that proves the implementing agent's worktree, which stays at SHA_A. */
+  const workTreeProof: ProviderDeps['proof'] = {
+    startProof: async () => ok({ proofId: 'p1', state: 'running' as const }),
+    pollProof: async () =>
+      ok({ state: 'done' as const, result: { verdict: 'pass', headSha: SHA_A } }),
+  };
+
   function lane(script: LaneScript) {
-    let head = SHA_A;
+    let head = script.head ?? SHA_A;
     const updates: string[] = [];
     const enqueued: string[] = [];
     const merges: Array<{ sha?: string } | undefined> = [];
@@ -868,6 +882,7 @@ describe('merge brings the branch up to date with its base first', () => {
       },
       {
         reviews: script.reviews ?? [reviewedA],
+        proof: script.proof ? workTreeProof : undefined,
         record: async (input) => {
           recorded.push(input);
         },
@@ -881,7 +896,13 @@ describe('merge brings the branch up to date with its base first', () => {
         },
       },
     );
-    const merge = () => provider.merge({ requireRegressionProof: false });
+    const proofConfig = { rules: [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }] };
+    const merge = async () => {
+      if (!script.proof) return provider.merge({ requireRegressionProof: false });
+      const proved = await provider.regressionProof!(proofConfig);
+      if (!proved.ok) return proved;
+      return provider.merge({ regressionProof: proofConfig });
+    };
     const reviews = () => {
       const writes = recorded.flatMap((input) => (input.reviews ? [input.reviews] : []));
       return writes.at(-1) ?? [];
@@ -912,6 +933,52 @@ describe('merge brings the branch up to date with its base first', () => {
       { sha: SHA_A, verdict: 'pass' },
       { sha: SHA_M, verdict: 'pass', carriedFrom: SHA_A },
     ]);
+  });
+
+  // The proof ran on the implementing agent's worktree, which stays at A: proving
+  // the merge commit again only proves A once more, so the proof is carried.
+  test('with a regression proof: the proof of A holds for the merge commit that only brought the base in', async () => {
+    const { merge, merges, recorded } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      proof: true,
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(merges).toMatchObject([{ sha: SHA_M }]);
+    const proofs = recorded.flatMap((input) =>
+      input.regressionProof ? [input.regressionProof] : [],
+    );
+    expect(proofs.at(-1)).toMatchObject({ headSha: SHA_M, carriedFrom: SHA_A, verdict: 'pass' });
+  });
+
+  // Retried or resumed after the lane already updated the branch: nothing is
+  // brought in now, and the proof run again only proves A once more.
+  test('with a regression proof: a run resumed on the merge commit merges it on the proof of A', async () => {
+    const { merge, merges, updates, recorded } = lane({
+      head: SHA_M,
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      reviews: [reviewedA, { ...reviewedA, sha: SHA_M, carriedFrom: SHA_A }],
+      proof: true,
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(updates).toEqual([]);
+    expect(merges).toMatchObject([{ sha: SHA_M }]);
+    const proofs = recorded.flatMap((input) =>
+      input.regressionProof ? [input.regressionProof] : [],
+    );
+    expect(proofs.at(-1)).toMatchObject({ headSha: SHA_M, carriedFrom: SHA_A });
+  });
+
+  test('with a regression proof: a head that is not a base merge of the proved commit is refused', async () => {
+    const { merge, merges } = lane({
+      head: SHA_M,
+      parents: { [SHA_M]: [SHA_A, 'f'.repeat(40)] },
+      reviews: [reviewedA, { ...reviewedA, sha: SHA_M, carriedFrom: SHA_A }],
+      proof: true,
+    });
+    expect(await merge()).toMatchObject({ ok: false });
+    expect(merges).toEqual([]);
   });
 
   test('the base moves again while the checks run: it is merged in again before the merge', async () => {

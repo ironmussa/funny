@@ -24,7 +24,7 @@ export const MAX_LOW_RISK_LINES = 400;
  * Paths that make any change high risk, whatever the factory configures: CI
  * and repository settings, database migrations, and authentication code.
  */
-export const DEFAULT_SENSITIVE_PATHS = [
+const DEFAULT_SENSITIVE_PATHS = [
   '.github/**',
   '**/migrations/**',
   '**/migrate.ts',

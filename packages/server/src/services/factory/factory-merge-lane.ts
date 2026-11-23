@@ -30,7 +30,7 @@ import type { ActionResult } from '@funny/workflows/compiler';
 import type { FactoryPullRequestRef, FactoryPullRequests } from './factory-pull-requests.js';
 
 /** The base is merged in at most this many times in one visit of `merge`. */
-export const MAX_BASE_UPDATES = 5;
+const MAX_BASE_UPDATES = 5;
 
 /** How long GitHub may take to put the update-branch merge commit on the branch. */
 const NEW_HEAD_TIMEOUT_MS = 2 * 60 * 1000;
@@ -93,7 +93,7 @@ const listed = (items: string[], max: number) => {
  * the files both sides changed, and the kinds of file that are not merged by
  * hand (a lockfile is regenerated, a numbered migration is renumbered).
  */
-export function conflictFeedback(input: {
+function conflictFeedback(input: {
   branch: string;
   baseRef: string;
   changes: BaseChanges | null;
@@ -136,7 +136,7 @@ export function conflictFeedback(input: {
 }
 
 /** What the implementing agent is told when the checks fail on the updated branch. */
-export function staleChecksFeedback(baseRef: string, checksError: string): string {
+function staleChecksFeedback(baseRef: string, checksError: string): string {
   return [
     `Your change passed its checks before, but after \`${baseRef}\` was merged into the branch they fail: something that merged first does not work together with your change.`,
     checksError,
@@ -260,7 +260,74 @@ export function createMergeLane(deps: MergeLaneDeps) {
     };
   }
 
+  /**
+   * One round of bringing the pull request up to date: its result, `again` for
+   * another round, or `stop` when it is still behind on the last one.
+   */
+  async function updateOnce(
+    pr: FactoryPullRequestRef,
+    carried: Array<{ from: string; to: string }>,
+    last: boolean,
+  ): Promise<UpToDate | 'again' | 'stop'> {
+    if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
+    const position = await positionOf(pr);
+    if ('error' in position) return { kind: 'failed', error: position.error };
+    const { sha, baseRef, behindBy } = position;
+    if (behindBy === 0) return { kind: 'current', sha, carried };
+    if (last) return 'stop';
+    const step = await mergeBaseIn(pr, baseRef, sha);
+    if ('kind' in step) return step;
+    if ('retry' in step) return 'again';
+    carried.push({ from: sha, to: step.updated });
+    // The checks that were green ran on the old base: wait for them on the new head.
+    return (await checksOnNewHead(pr, baseRef, step.updated)) ?? 'again';
+  }
+
+  /** The pull request's head, its base and how far behind the base it is. */
+  async function positionOf(
+    pr: FactoryPullRequestRef,
+  ): Promise<{ sha: string; baseRef: string; behindBy: number } | { error: string }> {
+    const head = await deps.prs.pullHead(pr);
+    if (head.isErr()) return { error: head.error.message };
+    const { sha, baseRef } = head.value;
+    const distance = await deps.prs.baseDistance(pr, baseRef, sha);
+    if (distance.isErr()) return { error: distance.error.message };
+    return { sha, baseRef, behindBy: distance.value.behindBy };
+  }
+
+  /** The checks of a head just brought up to date: null when green, else why the merge stops. */
+  async function checksOnNewHead(
+    pr: FactoryPullRequestRef,
+    baseRef: string,
+    updated: string,
+  ): Promise<UpToDate | null> {
+    const checks = await deps.waitChecks();
+    if (checks.ok) return null;
+    const verdict = checks.metadata?.verdict;
+    if (verdict === 'conflict') return conflict(pr, baseRef, updated);
+    if (verdict === 'red') {
+      return {
+        kind: 'sent-back',
+        why: 'checks',
+        feedback: staleChecksFeedback(baseRef, checks.error ?? 'The checks failed.'),
+      };
+    }
+    return { kind: 'failed', error: checks.error ?? 'The checks did not pass.' };
+  }
+
   return {
+    /**
+     * Whether `to` is exactly a merge of `from` with a commit of the pull
+     * request's base branch, so it holds what was proved of `from`.
+     */
+    async isBaseMergeOf(from: string, to: string): Promise<boolean> {
+      const pr = deps.pullRequest();
+      if (!pr) return false;
+      const head = await deps.prs.pullHead(pr);
+      if (head.isErr()) return false;
+      return isBaseMerge(pr, head.value.baseRef, from, to);
+    },
+
     /**
      * Where the base branch requires GitHub's merge queue: add the pull request
      * (only while its head is `sha`) and follow it. GitHub tests it on the
@@ -295,33 +362,9 @@ export function createMergeLane(deps: MergeLaneDeps) {
       if (!pr) return { kind: 'failed', error: 'The run has no pull request yet.' };
       const carried: Array<{ from: string; to: string }> = [];
       for (let update = 0; update <= MAX_BASE_UPDATES; update++) {
-        if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
-        const head = await deps.prs.pullHead(pr);
-        if (head.isErr()) return { kind: 'failed', error: head.error.message };
-        const { sha, baseRef } = head.value;
-        const distance = await deps.prs.baseDistance(pr, baseRef, sha);
-        if (distance.isErr()) return { kind: 'failed', error: distance.error.message };
-        if (distance.value.behindBy === 0) return { kind: 'current', sha, carried };
-        if (update === MAX_BASE_UPDATES) break;
-
-        const step = await mergeBaseIn(pr, baseRef, sha);
-        if ('kind' in step) return step;
-        if ('retry' in step) continue;
-        carried.push({ from: sha, to: step.updated });
-
-        // The checks that were green ran on the old base: wait for them on the new head.
-        const checks = await deps.waitChecks();
-        if (checks.ok) continue;
-        const verdict = checks.metadata?.verdict;
-        if (verdict === 'conflict') return conflict(pr, baseRef, step.updated);
-        if (verdict === 'red') {
-          return {
-            kind: 'sent-back',
-            why: 'checks',
-            feedback: staleChecksFeedback(baseRef, checks.error ?? 'The checks failed.'),
-          };
-        }
-        return { kind: 'failed', error: checks.error ?? 'The checks did not pass.' };
+        const step = await updateOnce(pr, carried, update === MAX_BASE_UPDATES);
+        if (step === 'stop') break;
+        if (step !== 'again') return step;
       }
       return {
         kind: 'failed',

@@ -570,14 +570,14 @@ export function PRDetailDialog({
 
           <TabsContent value="conversation" className="mt-0 min-h-0 flex-1">
             <ScrollArea className="h-full">
-              <div className="pr-detail-conversation p-4">
-                <style>
-                  {
-                    '.pr-detail-conversation [data-testid^="pinned-pr-card-"] > div:first-child { display: none; }'
-                  }
-                </style>
+              <div className="p-4">
                 {activeTab === 'conversation' ? (
-                  <PinnedPRCard pr={pr} projectId={projectId} currentUserLogin={currentUserLogin} />
+                  <PinnedPRCard
+                    pr={pr}
+                    projectId={projectId}
+                    currentUserLogin={currentUserLogin}
+                    hideSummary
+                  />
                 ) : null}
               </div>
             </ScrollArea>

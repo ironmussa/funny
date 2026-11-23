@@ -105,6 +105,20 @@ describe('PinnedPRCard', () => {
     expect(screen.getByText('Unlinked Author')).toBeInTheDocument();
   });
 
+  test('hideSummary hides the title line but keeps the PR description', async () => {
+    renderWithProviders(
+      <PinnedPRCard
+        pr={makePR({ body: 'Adds a filter to the settings pages.' })}
+        projectId="project-1"
+        hideSummary
+      />,
+    );
+    await flushAsyncUpdates();
+
+    expect(screen.queryByTestId('pinned-pr-summary-51')).toBeNull();
+    expect(await screen.findByText('Adds a filter to the settings pages.')).toBeVisible();
+  });
+
   test('shows the merge summary and diff link in the header', async () => {
     renderWithProviders(<PinnedPRCard pr={makePR()} projectId="project-1" />);
     await flushAsyncUpdates();

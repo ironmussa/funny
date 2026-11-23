@@ -167,7 +167,7 @@ describe('PRDetailDialog', () => {
       expect(apiMock.githubPRConversation).toHaveBeenCalledWith('project-1', 51);
     });
     expect(screen.getByTestId('pinned-pr-card-51')).toBeInTheDocument();
-    expect(screen.getByTestId('pinned-pr-link-51')).not.toBeVisible();
+    expect(screen.queryByTestId('pinned-pr-link-51')).toBeNull();
     expect(await screen.findByText('Can we verify this path?')).toBeInTheDocument();
   });
 });

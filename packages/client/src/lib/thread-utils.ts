@@ -85,18 +85,6 @@ export const statusConfig: Record<DisplayThreadStatus, StatusGlyphConfig> = {
   },
 };
 
-/** Fill of the dot for statuses whose glyph has no `dotClassName`. */
-const FALLBACK_DOT_CLASS: Partial<Record<DisplayThreadStatus, string>> = {
-  idle: 'bg-gray-400',
-  waiting: 'bg-thread-icon-waiting',
-  stopped: 'bg-thread-icon-failed',
-};
-
-/** The fill of a status dot, for places that always show a dot (never the icon). */
-export function statusDotClassName(status: DisplayThreadStatus): string {
-  return statusConfig[status]?.dotClassName ?? FALLBACK_DOT_CLASS[status] ?? 'bg-gray-400';
-}
-
 /**
  * Compute the displayed status given the DB status + current runner liveness.
  * A `running`/`setting_up` thread on a disconnected runner shows as

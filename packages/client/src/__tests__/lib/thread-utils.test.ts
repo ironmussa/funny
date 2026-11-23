@@ -11,7 +11,6 @@ import {
   getStatusLabels,
   resolveModelLabel,
   shortTimeAgo,
-  statusDotClassName,
 } from '@/lib/thread-utils';
 
 // A mock translation function that returns the key and any interpolation options
@@ -389,18 +388,5 @@ describe('getStatusLabels', () => {
     expect(mockT).toHaveBeenCalledWith('thread.status.idle');
     expect(mockT).toHaveBeenCalledWith('thread.status.completed');
     expect(mockT).toHaveBeenCalledWith('thread.status.failed');
-  });
-});
-
-describe('statusDotClassName', () => {
-  test('uses the glyph dot when the status has one', () => {
-    expect(statusDotClassName('completed')).toBe('bg-thread-dot-completed');
-    expect(statusDotClassName('running')).toContain('status-glyph-blink');
-  });
-
-  test('gives every status a dot, even those whose glyph has none', () => {
-    expect(statusDotClassName('waiting')).toBe('bg-thread-icon-waiting');
-    expect(statusDotClassName('stopped')).toBe('bg-thread-icon-failed');
-    expect(statusDotClassName('idle')).toBe('bg-gray-400');
   });
 });

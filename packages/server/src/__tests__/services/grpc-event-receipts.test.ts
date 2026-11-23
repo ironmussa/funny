@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { createSqliteDatabase, type DatabaseConnection } from '@funny/shared/db/connection';
 
-import { SqlEventReceiptStore } from '../../services/grpc/event-receipts.js';
+import {
+  resolveEventResumeCursors,
+  SqlEventReceiptStore,
+} from '../../services/grpc/event-receipts.js';
 
 describe('SqlEventReceiptStore', () => {
   let connection: DatabaseConnection;
@@ -29,6 +32,71 @@ describe('SqlEventReceiptStore', () => {
       transaction: async (work) => work(),
     });
   }
+
+  test('answers many resume cursors with a fixed number of queries', async () => {
+    const store = createStore();
+    for (const executionId of ['execution-1', 'execution-2']) {
+      const scope = { threadId: 'thread-1', executionId };
+      await store.accept({ runnerId: 'runner-1', scope, sequence: 1n }, async () => {});
+    }
+    await store.accept(
+      {
+        runnerId: 'runner-1',
+        scope: { threadId: 'thread-1', executionId: 'execution-2' },
+        sequence: 2n,
+      },
+      async () => {},
+    );
+    // 1,200 cursors, most of them for executions the server never saw.
+    const requested = Array.from({ length: 1_200 }, (_, index) => ({
+      executionId: `execution-${index}`,
+    }));
+    let lookups = 0;
+    const counting = {
+      highestAcceptedMany: (runnerId: string, executionIds: string[]) => {
+        lookups += 1;
+        return store.highestAcceptedMany(runnerId, executionIds);
+      },
+    };
+
+    const { cursors, dropped } = await resolveEventResumeCursors(counting, 'runner-1', requested);
+
+    expect(lookups).toBe(1);
+    expect(dropped).toBe(0);
+    expect(cursors).toHaveLength(1_200);
+    expect(cursors.slice(0, 3)).toEqual([
+      { executionId: 'execution-0', lastAcceptedSequence: 0n },
+      { executionId: 'execution-1', lastAcceptedSequence: 1n },
+      { executionId: 'execution-2', lastAcceptedSequence: 2n },
+    ]);
+  });
+
+  test("another runner's receipts are not answered", async () => {
+    const store = createStore();
+    const scope = { threadId: 'thread-1', executionId: 'execution-1' };
+    await store.accept({ runnerId: 'runner-1', scope, sequence: 1n }, async () => {});
+
+    expect(await store.highestAcceptedMany('runner-2', ['execution-1'])).toEqual(new Map());
+  });
+
+  test('answers no more resume cursors than the limit', async () => {
+    const requested = [
+      { executionId: 'execution-1' },
+      { executionId: 'execution-1' },
+      { executionId: 'execution-2' },
+      { executionId: 'execution-3' },
+    ];
+
+    const { cursors, dropped } = await resolveEventResumeCursors(
+      createStore(),
+      'runner-1',
+      requested,
+      2,
+    );
+
+    expect(cursors.map((cursor) => cursor.executionId)).toEqual(['execution-1', 'execution-2']);
+    expect(dropped).toBe(1);
+  });
 
   test('persists cumulative receipts and does not reapply duplicate events', async () => {
     const scope = { threadId: 'thread-1', executionId: 'execution-1' };

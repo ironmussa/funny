@@ -1,6 +1,7 @@
 import type { WSEvent } from '@funny/shared';
 import { RunnerCapability } from '@funny/shared/runner-v2/common';
 
+import { log } from '../lib/logger.js';
 import { GrpcEventReplayStore } from './grpc-event-replay-store.js';
 import { GrpcOperationOutbox } from './grpc-operation-outbox.js';
 import { GrpcOperationsAdapter } from './grpc-operations-adapter.js';
@@ -22,6 +23,19 @@ import { RunnerTunnelAdapter } from './runner-tunnel-adapter.js';
 export type { GrpcTerminalCommand };
 
 export type { GrpcControlCommandHandler };
+
+/** The runner's event log, without the executions earlier processes finished. */
+function openEventReplayStore(): GrpcEventReplayStore {
+  const store = new GrpcEventReplayStore();
+  const dropped = store.dropSettledScopes();
+  if (dropped > 0) {
+    log.info('Dropped acknowledged event executions of earlier runner processes', {
+      namespace: 'runner-grpc',
+      dropped,
+    });
+  }
+  return store;
+}
 
 /** Adapts the existing team-client API to one negotiated runner.v2 session. */
 export class GrpcTeamTransport {
@@ -47,7 +61,7 @@ export class GrpcTeamTransport {
   ) {
     this.events = new RunnerEventPublisher(
       { send: (_name, message) => this.client.send('events', message) },
-      options.events ?? new GrpcEventReplayStore(),
+      options.events ?? openEventReplayStore(),
     );
     const onActivated = options.onActivated;
     const onDisconnected = options.onDisconnected;

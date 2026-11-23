@@ -79,16 +79,14 @@ export function ThreadStatusPin({
   );
   const showUnreadDot = isUnread && !isBusy && !showPinRest;
 
-  const statusIcon =
-    activity.activity === 'none' ? (
-      <ThreadStatusIcon
-        threadId={thread.id}
-        displayStatus={displayStatus}
-        withTooltip={showStatusTooltip}
-      />
-    ) : (
-      <ThreadActivityIcon threadId={thread.id} view={activity} withTooltip={showStatusTooltip} />
-    );
+  const statusIcon = (
+    <ThreadStatusGlyph
+      thread={thread}
+      displayStatus={displayStatus}
+      activity={activity}
+      withTooltip={showStatusTooltip}
+    />
+  );
 
   return (
     // inline-flex, not a bare inline span: an inline span ignores `size-3.5`, so
@@ -141,6 +139,54 @@ export function ThreadStatusPin({
         </button>
       )}
     </span>
+  );
+}
+
+/**
+ * A thread's status as every list shows it: its factory activity while a run
+ * works on it, otherwise its display status (runner offline included). Without
+ * the pin and unread affordances of `ThreadStatusPin`. A theme that shows dots
+ * swaps them in inside a `.status-glyph-dots` container.
+ */
+export function ThreadStatusIndicator({
+  thread,
+  withTooltip = false,
+}: {
+  thread: Thread;
+  withTooltip?: boolean;
+}) {
+  const runnerStatus = useRunnerStatusStore((s) => s.status);
+  const displayStatus = getDisplayThreadStatus(thread.status, runnerStatus);
+  const activity = useThreadActivity(thread);
+  return (
+    <ThreadStatusGlyph
+      thread={thread}
+      displayStatus={displayStatus}
+      activity={activity}
+      withTooltip={withTooltip}
+    />
+  );
+}
+
+function ThreadStatusGlyph({
+  thread,
+  displayStatus,
+  activity,
+  withTooltip,
+}: {
+  thread: Thread;
+  displayStatus: DisplayThreadStatus;
+  activity: ThreadActivityView;
+  withTooltip: boolean;
+}) {
+  return activity.activity === 'none' ? (
+    <ThreadStatusIcon
+      threadId={thread.id}
+      displayStatus={displayStatus}
+      withTooltip={withTooltip}
+    />
+  ) : (
+    <ThreadActivityIcon threadId={thread.id} view={activity} withTooltip={withTooltip} />
   );
 }
 

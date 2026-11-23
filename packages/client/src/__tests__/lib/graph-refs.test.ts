@@ -208,6 +208,43 @@ describe('graphNodeForkedFromRefLabels', () => {
 
     expect(labels.get('feature-tip')).toBe('master');
   });
+
+  it('answers through merges, nearest labelled ancestor first', () => {
+    // merge → [left, right]; right's parent is labelled one step sooner than left's.
+    const labels = graphNodeForkedFromRefLabels([
+      { hash: 'merge', refs: [], headBranch: null, parentHashes: ['left', 'right'] },
+      { hash: 'left', refs: [], headBranch: null, parentHashes: ['left-2'] },
+      { hash: 'right', refs: [local('fix/b')], headBranch: null, parentHashes: ['base'] },
+      { hash: 'left-2', refs: [], headBranch: null, parentHashes: ['base'] },
+      { hash: 'base', refs: [local('main')], headBranch: null, parentHashes: [] },
+    ]);
+
+    expect(labels.get('merge')).toBe('fix/b');
+    expect(labels.get('left')).toBe('main');
+    expect(labels.get('right')).toBe('main');
+    expect(labels.has('base')).toBe(false);
+  });
+
+  it('stays linear on a long history with no branch below it', () => {
+    // History pages in 80 commits at a time and this runs on every page. It used
+    // to search every commit's whole ancestry: quadratic, about 800 ms for 2,500
+    // commits of this repository. 20,000 unlabelled commits would take minutes.
+    const count = 20_000;
+    const entries = Array.from({ length: count }, (_, index) => ({
+      hash: `c${index}`,
+      refs: index === 0 ? [local('main')] : [],
+      headBranch: null,
+      parentHashes: index + 1 < count ? [`c${index + 1}`] : [],
+    }));
+
+    const started = performance.now();
+    const labels = graphNodeForkedFromRefLabels(entries);
+
+    // A linear pass takes about a second cold on a busy machine (0.6 s warm);
+    // the quadratic one took minutes, so this bound still tells them apart.
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(labels.size).toBe(0);
+  });
 });
 
 describe('graphNodeParentLabels', () => {

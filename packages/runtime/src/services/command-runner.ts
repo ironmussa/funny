@@ -17,6 +17,7 @@ import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { commandProcessLedger } from './command-process-ledger.js';
 import { getServices } from './service-registry.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -166,6 +167,8 @@ async function startCommandImpl(
 
   activeCommands.set(commandId, entry);
   ensureMetricsTimer();
+  // On disk, so the next runner can stop this command if this one dies without a shutdown.
+  await commandProcessLedger.record({ pid: proc.pid, commandId, label, cwd });
 
   await emitWS(
     'command:status',
@@ -189,6 +192,7 @@ async function startCommandImpl(
     .then(async (exitCode) => {
       log.info(`Command "${label}" exited`, { namespace: 'command-runner', exitCode });
       entry.exited = true;
+      await commandProcessLedger.forget(proc.pid);
 
       // Auto-restart logic: restart on non-zero exit if configured
       if (entry.autoRestart && !entry.manualStop && exitCode !== 0) {
@@ -269,6 +273,7 @@ async function startCommandImpl(
     .catch(async (err) => {
       log.error(`Command "${label}" error`, { namespace: 'command-runner', error: err });
       entry.exited = true;
+      await commandProcessLedger.forget(proc.pid);
       activeCommands.delete(commandId);
       checkMetricsTimer();
       await emitWS(
@@ -334,6 +339,7 @@ export async function stopCommand(commandId: string): Promise<void> {
   }
 
   entry.exited = true;
+  await commandProcessLedger.forget(entry.proc.pid);
   activeCommands.delete(commandId);
   checkMetricsTimer();
 

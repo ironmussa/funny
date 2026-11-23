@@ -7,6 +7,7 @@ import {
   graphRowHeight,
 } from '@/components/commit-graph/graph-entry';
 import { GraphCommitList } from '@/components/commit-graph/GraphCommitList';
+import type { GraphCommitRowSharedProps } from '@/components/commit-graph/GraphCommitRow';
 import { GraphGutterHorizontalScroller } from '@/components/commit-graph/GraphGutterHorizontalScroller';
 import { graphListStatus } from '@/components/commit-graph/GraphListStatus';
 import { GraphToolbar } from '@/components/commit-graph/GraphToolbar';
@@ -143,7 +144,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   }, [displayEntries]);
   const lastWipRowIndex = wipStatus ? Math.max(headIndex, 0) : -1;
 
-  const { scrollRef, virtualizer, virtualItems } = useGraphVirtualizer({
+  const { scrollRef, virtualizer, virtualItems, totalSize } = useGraphVirtualizer({
     displayEntries,
     loadedCount: entries.length,
     // The infinite-scroll sentinel only applies to the full (unfiltered) list;
@@ -185,6 +186,32 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     projectModeId,
     invalidateHistory,
   });
+
+  // Shared by every commit row; its own memo so it keeps its identity while
+  // only the scroll position changes (the rows are memoized on it).
+  // Shared by every commit row (the rows are memoized on it). Built on its own,
+  // outside the list's JSX, so the compiler memoizes it on these values alone
+  // and it keeps its identity while only the scroll position changes.
+  const rowProps: GraphCommitRowSharedProps = {
+    laneCount,
+    gutterWidth,
+    graphViewportWidth,
+    graphScrollLeft: clampedGraphScrollLeft,
+    onGraphGutterWheel: handleGraphGutterWheel,
+    githubBrowseBaseUrl,
+    effectiveThreadId,
+    projectModeId,
+    onAfterAction: refreshLog,
+    onCreateThreadFromBranch: createThreadFromBranch,
+    branchSummaryByName,
+    branchActionInProgress,
+    onPushBranch: pushBranch,
+    onPullCurrentBranch: pullCurrentBranch,
+    onSelectRebaseEvent: setSelectedRebaseEvent,
+    branchColorByLabel: view.branchColorByLabel,
+    searchQuery,
+    threadBranch,
+  };
 
   if (!hasGitContext) {
     return (
@@ -258,29 +285,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
           onRetry: refreshLog,
         }) ?? (
           <GraphCommitList
-            virtualizer={virtualizer}
+            totalSize={totalSize}
             virtualItems={virtualItems}
             view={view}
-            rowProps={{
-              laneCount,
-              gutterWidth,
-              graphViewportWidth,
-              graphScrollLeft: clampedGraphScrollLeft,
-              onGraphGutterWheel: handleGraphGutterWheel,
-              githubBrowseBaseUrl,
-              effectiveThreadId,
-              projectModeId,
-              onAfterAction: refreshLog,
-              onCreateThreadFromBranch: createThreadFromBranch,
-              branchSummaryByName,
-              branchActionInProgress,
-              onPushBranch: pushBranch,
-              onPullCurrentBranch: pullCurrentBranch,
-              onSelectRebaseEvent: setSelectedRebaseEvent,
-              branchColorByLabel: view.branchColorByLabel,
-              searchQuery,
-              threadBranch,
-            }}
+            rowProps={rowProps}
             baseRowH={baseRowH}
             rowHeightFor={rowHeightFor}
             selectedHash={selectedHash}

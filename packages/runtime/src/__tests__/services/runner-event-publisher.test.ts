@@ -4,6 +4,7 @@ import type { WSEvent } from '@funny/shared';
 import { EventDurability } from '@funny/shared/runner-v2/events';
 
 import { GrpcEventReplayStore } from '../../services/grpc-event-replay-store.js';
+import type { RunnerGrpcWireMessage } from '../../services/grpc-runner-client.js';
 import {
   RunnerEventPublisher,
   runnerEventDurability,
@@ -48,6 +49,131 @@ describe('RunnerEventPublisher', () => {
       { threadId: 'thread-1', executionId: 'execution-1' },
       1n,
     );
+  });
+
+  describe('a backlog after a reconnect', () => {
+    const PERMISSION_DENIED = 3;
+
+    /** A store with one unacknowledged event in each of `count` executions. */
+    function backlog(count: number) {
+      const store = new GrpcEventReplayStore(':memory:');
+      for (let index = 0; index < count; index += 1) {
+        store.append({
+          scope: {
+            threadId: `thread-${index}`,
+            executionId: `execution-${String(index).padStart(4, '0')}`,
+          },
+          eventType: 'git:status',
+          data: {},
+          durability: EventDurability.TRANSIENT,
+          occurredAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+        });
+      }
+      return store;
+    }
+
+    function sentScopes(send: ReturnType<typeof vi.fn>) {
+      return send.mock.calls.map(
+        ([, message]) => message.scope as { threadId: string; executionId: string },
+      );
+    }
+
+    test('drops the events the server refuses for good, and keeps a retryable failure', () => {
+      const send = vi.fn(() => true);
+      const store = backlog(2);
+      const publisher = new RunnerEventPublisher({ send }, store);
+      publisher.activated();
+      const [deleted, retried] = sentScopes(send);
+
+      publisher.receiveReceipt({
+        scope: deleted,
+        failure: {
+          code: PERMISSION_DENIED,
+          message: 'event scope is not authorized',
+          retryable: false,
+        },
+      });
+      publisher.receiveReceipt({
+        scope: retried,
+        failure: { code: 9, message: 'runner session is not active', retryable: true },
+      });
+
+      expect(store.pendingScopes().map((scope) => scope.executionId)).toEqual([
+        retried.executionId,
+      ]);
+    });
+
+    test('sends the next executions when the server has answered the first batch', () => {
+      const send = vi.fn(() => true);
+      const store = backlog(130);
+      const publisher = new RunnerEventPublisher({ send }, store);
+
+      publisher.activated();
+      expect(send).toHaveBeenCalledTimes(100);
+
+      const firstBatch = sentScopes(send);
+      for (const scope of firstBatch.slice(0, 99)) {
+        publisher.receiveReceipt({ scope, failure: { code: PERMISSION_DENIED, retryable: false } });
+      }
+      expect(send).toHaveBeenCalledTimes(100);
+      publisher.receiveReceipt({
+        scope: firstBatch[99],
+        accepted: { highestContiguousSequence: '1' },
+      });
+
+      expect(send).toHaveBeenCalledTimes(130);
+      expect(new Set(sentScopes(send).map((scope) => scope.executionId)).size).toBe(130);
+      expect(store.pendingScopes(200)).toHaveLength(30);
+    });
+
+    test('sends every page of an execution with more stored events than one page', () => {
+      const send = vi.fn((_name: 'events', _message: RunnerGrpcWireMessage) => true);
+      const store = new GrpcEventReplayStore(':memory:');
+      const long = { threadId: 'thread-long', executionId: 'execution-long' };
+      const short = { threadId: 'thread-short', executionId: 'execution-short' };
+      for (let index = 0; index < 250; index += 1) {
+        store.append({ scope: long, eventType: 'agent:chunk', data: { index }, durability: 2 });
+      }
+      store.append({ scope: short, eventType: 'agent:chunk', data: {}, durability: 2 });
+      const publisher = new RunnerEventPublisher({ send }, store);
+      const sequencesSent = () =>
+        send.mock.calls
+          .filter(([, message]) => message.scope.executionId === long.executionId)
+          .map(([, message]) => Number(message.sequence));
+      const accept = (sequence: number) =>
+        publisher.receiveReceipt({
+          scope: long,
+          accepted: { highestContiguousSequence: String(sequence) },
+        });
+
+      publisher.activated();
+      expect(sequencesSent()).toHaveLength(100);
+
+      // The page is still in flight: nothing more is sent until its last receipt.
+      for (let sequence = 1; sequence < 100; sequence += 1) accept(sequence);
+      expect(sequencesSent()).toHaveLength(100);
+      accept(100);
+      expect(sequencesSent()).toHaveLength(200);
+      for (let sequence = 101; sequence <= 200; sequence += 1) accept(sequence);
+      for (let sequence = 201; sequence <= 250; sequence += 1) accept(sequence);
+
+      expect(sequencesSent()).toEqual(Array.from({ length: 250 }, (_, index) => index + 1));
+      expect(store.pendingScopes().map((scope) => scope.executionId)).toEqual([short.executionId]);
+    });
+
+    test('an execution is replayed once per session, and again after a reconnect', () => {
+      const send = vi.fn(() => true);
+      const publisher = new RunnerEventPublisher({ send }, backlog(1));
+
+      publisher.activated();
+      const [scope] = sentScopes(send);
+      // Refused for now, but the events stay: nothing else to send in this session.
+      publisher.receiveReceipt({ scope, failure: { code: 13, retryable: false } });
+      expect(send).toHaveBeenCalledTimes(1);
+
+      publisher.activated();
+      expect(send).toHaveBeenCalledTimes(2);
+    });
   });
 
   test('unscoped browser-session events go out as user events once the server enables them', () => {

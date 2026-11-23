@@ -14,7 +14,11 @@ import {
   createControlNegotiationHandler,
   type ControlNegotiationOptions,
 } from './control-negotiation.js';
-import { SqlEventReceiptStore, type EventReceiptStore } from './event-receipts.js';
+import {
+  resolveEventResumeCursors,
+  SqlEventReceiptStore,
+  type EventReceiptStore,
+} from './event-receipts.js';
 import { createEventsHandler, type EventsHandlerOptions } from './events-handler.js';
 import { createOperationsHandler, type OperationsHandlerOptions } from './operations-handler.js';
 import { GrpcRunnerRequestAdapter } from './runner-request-adapter.js';
@@ -411,18 +415,22 @@ export async function startRunnerGrpcEndpoint(
     ? options.controlNegotiation
     : {
         ...options?.controlNegotiation,
-        resolveResumeCursors: async (context, hello) => ({
-          eventCursors: await Promise.all(
-            hello.eventCursors.map(async (cursor) => ({
-              executionId: cursor.executionId,
-              lastAcceptedSequence: await eventReceipts.highestAccepted(
-                context.principal.runnerId,
-                cursor.executionId,
-              ),
-            })),
-          ),
-          terminalCursors: [],
-        }),
+        resolveResumeCursors: async (context, hello) => {
+          const { cursors, dropped } = await resolveEventResumeCursors(
+            eventReceipts,
+            context.principal.runnerId,
+            hello.eventCursors,
+          );
+          if (dropped > 0) {
+            log.warn('Runner hello had more event cursors than the server answers', {
+              namespace: 'runner-grpc',
+              runnerId: context.principal.runnerId,
+              answered: cursors.length,
+              dropped,
+            });
+          }
+          return { eventCursors: cursors, terminalCursors: [] };
+        },
       };
   const handlers = {
     ...defaultHandlers(

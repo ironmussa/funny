@@ -17,7 +17,7 @@
  * - `closed`: the base branch is green again, or a member closed it.
  *
  * At most one incident that is not closed exists per repository and base
- * branch (the partial unique index of migration 109), so opening one is an
+ * branch (the partial unique index of migration 111), so opening one is an
  * insert that the index refuses when another is open. While one is not closed,
  * no factory on that repository admits issues.
  */

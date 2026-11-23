@@ -439,7 +439,7 @@ export function NewThreadInput({
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto h-5 px-1 text-[10px]"
+              className="text-2xs ml-auto h-5 px-1"
               onClick={clearIssueContext}
               data-testid="issue-context-dismiss"
             >

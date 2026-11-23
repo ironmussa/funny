@@ -1,7 +1,12 @@
 import { describe, expect, test, vi } from 'bun:test';
 
 import { buildActivity } from '@/data/activities/testing';
-import { canRetryActivity, retryActivity, type RetryDeps } from '@/lib/activity-retry';
+import {
+  canRestoreActivity,
+  canRetryActivity,
+  retryActivity,
+  type RetryDeps,
+} from '@/lib/activity-retry';
 
 function deps(thread: { id: string; projectId: string } | null = null): RetryDeps {
   return {
@@ -9,6 +14,8 @@ function deps(thread: { id: string; projectId: string } | null = null): RetryDep
     findThread: vi.fn(() => thread),
     openCloneForm: vi.fn(),
     openReviewPane: vi.fn(),
+    openWorktrees: vi.fn(),
+    openPullRequests: vi.fn(),
   };
 }
 
@@ -75,5 +82,102 @@ describe('activity retry', () => {
     expect(canRetryActivity(buildActivity({ status: 'succeeded' }))).toBe(false);
     expect(canRetryActivity(buildActivity({ status: 'interrupted' }))).toBe(true);
     expect(canRetryActivity(buildActivity({ status: 'failed', kind: 'unknown' }))).toBe(false);
+  });
+
+  test('a failed workspace cleanup opens the project worktree list', () => {
+    for (const kind of ['workspace.cleanup', 'workspace.prune']) {
+      const d = deps();
+      const activity = buildActivity({ kind, status: 'failed', projectId: 'p1', input: {} });
+      expect(retryActivity(activity, d)).toBe(true);
+      expect(d.navigate).toHaveBeenCalledWith('/projects/p1');
+      expect(d.openWorktrees).toHaveBeenCalled();
+    }
+  });
+
+  test('a checkout switch and a sandbox provision open the thread, else the project', () => {
+    for (const kind of ['checkout.switch', 'sandbox.provision']) {
+      const withThread = deps({ id: 't1', projectId: 'p1' });
+      const activity = buildActivity({
+        kind,
+        status: 'failed',
+        projectId: 'p1',
+        threadId: 't1',
+        input: {},
+      });
+      retryActivity(activity, withThread);
+      expect(withThread.navigate).toHaveBeenCalledWith('/projects/p1/threads/t1');
+
+      const gone = deps(null);
+      retryActivity(activity, gone);
+      expect(gone.navigate).toHaveBeenCalledWith('/projects/p1');
+    }
+  });
+
+  test('a sandbox stop funny started on its own offers no retry', () => {
+    for (const kind of ['sandbox.stop', 'sandbox.wake', 'sandbox.destroy', 'factory.merge']) {
+      expect(canRetryActivity(buildActivity({ kind, status: 'failed', input: {} }))).toBe(false);
+    }
+  });
+
+  test('an unscheduled automation opens the project automation settings', () => {
+    const d = deps();
+    const activity = buildActivity({
+      kind: 'automation.unscheduled',
+      status: 'failed',
+      projectId: 'p1',
+      input: { automationId: 'a1', schedule: 'x' },
+    });
+    expect(retryActivity(activity, d)).toBe(true);
+    expect(d.navigate).toHaveBeenCalledWith('/projects/p1/settings/automations');
+  });
+
+  test('a failed PR merge opens the pull requests tab; a failed publish only the project', () => {
+    const merge = deps();
+    retryActivity(
+      buildActivity({
+        kind: 'github.write',
+        status: 'failed',
+        projectId: 'p1',
+        input: { action: 'pr-merge', prNumber: 7 },
+      }),
+      merge,
+    );
+    expect(merge.navigate).toHaveBeenCalledWith('/projects/p1');
+    expect(merge.openPullRequests).toHaveBeenCalled();
+
+    const publish = deps();
+    retryActivity(
+      buildActivity({
+        kind: 'github.write',
+        status: 'failed',
+        projectId: 'p1',
+        input: { action: 'repo-publish' },
+      }),
+      publish,
+    );
+    expect(publish.openPullRequests).not.toHaveBeenCalled();
+  });
+
+  test('skips and destructive git commands offer no retry', () => {
+    for (const kind of ['automation.skipped', 'git.destructive']) {
+      expect(canRetryActivity(buildActivity({ kind, status: 'failed', input: {} }))).toBe(false);
+    }
+  });
+
+  test('restore is offered for a recent succeeded activity with a snapshot only', () => {
+    const now = Date.parse('2026-11-22T12:00:00.000Z');
+    const base = {
+      kind: 'git.destructive',
+      status: 'succeeded' as const,
+      resultRef: { snapshot: 'refs/funny/undo/a1' },
+      endedAt: '2026-11-21T12:00:00.000Z',
+      input: { action: 'discard' },
+    };
+    expect(canRestoreActivity(buildActivity(base), now)).toBe(true);
+    expect(canRestoreActivity(buildActivity({ ...base, resultRef: null }), now)).toBe(false);
+    expect(canRestoreActivity(buildActivity({ ...base, status: 'failed' }), now)).toBe(false);
+    expect(
+      canRestoreActivity(buildActivity({ ...base, endedAt: '2026-10-01T12:00:00.000Z' }), now),
+    ).toBe(false);
   });
 });

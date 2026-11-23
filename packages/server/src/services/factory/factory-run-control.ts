@@ -9,9 +9,12 @@
  * - **Stop** a run: it becomes `stopped`, its flow stops in this process and
  *   its running agent threads are stopped on the enabler's runner.
  * - **Retry** a failed or parked run: it goes back in flight on the same
- *   branch and pull request. A completed implement step is kept (its thread
+ *   branch and pull request, when the factory has a free slot (`maxConcurrent`,
+ *   checked in the same step as the write; refused otherwise). A completed implement step is kept (its thread
  *   replays); every later step runs again, so a CI fix loop gets its fixes
  *   back. A "no change" run keeps nothing: a new agent implements the issue.
+ *   The threads a retry does not keep are archived, so the list does not
+ *   show the old failed thread next to the new one with the same title.
  * - **Take over** a run: a member follows up on the run's last agent thread;
  *   when that thread completes again, a failed or parked run goes back in
  *   flight with all its steps replayed, so the flow continues from that step
@@ -29,10 +32,20 @@ import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
-import { createFactoryRunsRepository, threadsOf, type FactoryRunView } from './factory-runs.js';
-import { stopFactoryThreads } from './factory-thread-requests.js';
+import {
+  createFactoryRunsRepository,
+  NO_FREE_SLOT,
+  threadsOf,
+  type FactoryRunView,
+} from './factory-runs.js';
+import { archiveReplacedFactoryThreads, stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
-import { factoryRunnerPorts, pokeFactory, stopFactoryFlow } from './factory-watcher.js';
+import {
+  factoryBrowserEvents,
+  factoryRunnerPorts,
+  pokeFactory,
+  stopFactoryFlow,
+} from './factory-watcher.js';
 
 export type FactoryRunControlError = {
   kind: 'not-found' | 'conflict' | 'storage';
@@ -71,7 +84,7 @@ function reopenRefused(error: { message: string }): FactoryRunControlError {
  * (run #229 was retried four times this way). Its retry starts a new agent.
  */
 async function keptOnRetry(run: FactoryRunView): Promise<string[]> {
-  if (run.failureReason === NO_CHANGE_REASON) return [];
+  if (run.state === 'no_change' || run.failureReason === NO_CHANGE_REASON) return [];
   const first = run.threadIds[0];
   if (!first) return [];
   const [row] = await db
@@ -88,6 +101,20 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
       .get(runId)
       .mapErr(storage)
       .andThen((run) => (run && run.factoryId === factoryId ? okAsync(run) : errAsync(notFound)));
+
+  /** Send a run parked on its issue back to the queue, to be triaged again. */
+  const retriaged = (run: FactoryRunView): ResultAsync<undefined, FactoryRunControlError> =>
+    runs
+      .retriage(run)
+      .mapErr(storage)
+      .andThen((moved) =>
+        moved
+          ? okAsync(undefined)
+          : errAsync<undefined, FactoryRunControlError>({
+              kind: 'conflict',
+              message: 'Only a failed run, or one waiting for you, can be retried.',
+            }),
+      );
 
   /** The run as it is now (after a change). */
   const reread = (runId: string) =>
@@ -130,18 +157,29 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
         .andThen((run) =>
           // A run parked on its issue has done no work to keep: it is triaged again.
           run.state === 'needs_info'
-            ? runs.retriage(run).mapErr(storage)
+            ? retriaged(run)
             : ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
-                runs.reopen(run.id, kept).mapErr(reopenRefused),
+                runs
+                  .reopen(run, kept)
+                  .mapErr(reopenRefused)
+                  .andThen((reopened) => {
+                    if (reopened === 'reopened') {
+                      return ResultAsync.fromSafePromise(
+                        archiveReplacedFactoryThreads(
+                          run.threadIds.filter((id) => !kept.includes(id)),
+                          factoryBrowserEvents(),
+                        ),
+                      );
+                    }
+                    return errAsync<undefined, FactoryRunControlError>({
+                      kind: 'conflict',
+                      message:
+                        reopened === NO_FREE_SLOT
+                          ? 'The factory is already running as many runs as it may at once. Retry when one of them finishes.'
+                          : 'Only a failed run, or one waiting for you, can be retried.',
+                    });
+                  }),
               ),
-        )
-        .andThen((reopened) =>
-          reopened
-            ? okAsync(undefined)
-            : errAsync<undefined, FactoryRunControlError>({
-                kind: 'conflict',
-                message: 'Only a failed run, or one waiting for you, can be retried.',
-              }),
         )
         .andThen(() => {
           wake(factoryId);
@@ -171,9 +209,19 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
   if (found.isErr()) return;
   for (const run of found.value) {
     if (run.threadIds.at(-1) !== threadId || !followedUpAfterParking(run, threadId)) continue;
+    const reopened = await runs.reopen(run, run.threadIds);
+    if (reopened.isOk() && reopened.value === NO_FREE_SLOT) {
+      // The factory is full: the run stays parked, and a later completion of
+      // the member's follow-up (or a Retry) may still take it over.
+      log.info('Issue factory take-over deferred: the factory has no free slot', {
+        namespace: 'factory',
+        runId: run.id,
+        threadId,
+      });
+      continue;
+    }
     forgetOwnerFollowUp(threadId);
-    const reopened = await runs.reopen(run.id, run.threadIds);
-    if (reopened.isOk() && reopened.value) {
+    if (reopened.isOk() && reopened.value === 'reopened') {
       log.info('Issue factory run taken over by a follow-up', {
         namespace: 'factory',
         runId: run.id,

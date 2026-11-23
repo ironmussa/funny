@@ -243,7 +243,7 @@ describe('reopening a run', () => {
     });
     await runs.updateInFlight(run.id, { state: 'failed' });
 
-    expect((await runs.reopen(run.id, ['t-1']))._unsafeUnwrap()).toBe(true);
+    expect((await runs.reopen(run, ['t-1']))._unsafeUnwrap()).toBe('reopened');
     expect((await journal.load(run.id))._unsafeUnwrap()).toEqual([]);
   });
 });

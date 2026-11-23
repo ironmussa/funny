@@ -70,9 +70,18 @@ export interface ThreadState {
     threadId: string,
     permissionMode: PermissionMode,
   ) => Promise<boolean>;
-  deleteThread: (threadId: string, projectId: string) => Promise<void>;
-  /** Delete a scratch thread (no project / no worktree). */
-  deleteScratchThread: (threadId: string) => Promise<void>;
+  /**
+   * Delete a thread. Resolves `true` once the server deleted it; on `false`
+   * the row is back in its lists and an error toast was shown.
+   * `deleteBranch`: the worktree thread's branch goes with its worktree.
+   */
+  deleteThread: (
+    threadId: string,
+    projectId: string,
+    options?: { deleteBranch?: boolean },
+  ) => Promise<boolean>;
+  /** Delete a scratch thread (no project / no worktree). Same result as `deleteThread`. */
+  deleteScratchThread: (threadId: string) => Promise<boolean>;
   /**
    * A thread shared with the current user was revoked by its owner. Drop it
    * locally (sidebar + active view) WITHOUT calling the delete API — the user

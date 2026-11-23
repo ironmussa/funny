@@ -154,7 +154,19 @@ describe('FactoryRunProofCard', () => {
 });
 
 describe('the "no change" outcome', () => {
-  test('is not shown as an error: it points to the explanation on the issue', () => {
+  test('a run that ended with no change is not an error: it points to the explanation on the issue', () => {
+    mocks.run = runOf({ state: 'no_change', currentStep: 'pull-request', failureReason: null });
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    const card = screen.getByTestId('factory-run-no-change-card');
+    expect(card).toHaveTextContent('The agent made no change');
+    expect(card).toHaveTextContent('posted on issue #209');
+    expect(card).toHaveTextContent('marked for triage');
+    expect(screen.queryByTestId('factory-run-failure-card')).toBeNull();
+    // The member may disagree with the agent.
+    expect(screen.getByTestId('factory-run-failure-retry')).toBeInTheDocument();
+  });
+
+  test('a run that committed nothing but left unsaved work says the checkout was kept', () => {
     mocks.run = runOf({
       state: 'waiting_human',
       currentStep: 'pull-request',
@@ -162,8 +174,7 @@ describe('the "no change" outcome', () => {
     });
     render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
     const card = screen.getByTestId('factory-run-no-change-card');
-    expect(card).toHaveTextContent('The agent made no change');
-    expect(card).toHaveTextContent('posted on issue #209');
+    expect(card).toHaveTextContent('left unsaved work in its checkout');
     expect(screen.queryByTestId('factory-run-failure-card')).toBeNull();
     expect(screen.getByTestId('factory-run-failure-retry')).toBeInTheDocument();
   });

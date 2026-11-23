@@ -32,7 +32,7 @@ import { useAutomationRuns, useProjectAutomations } from '@/data/automations/hoo
 import { loadAutomationRuns, loadAutomations } from '@/data/automations/loaders';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { SegmentedControl } from './settings/SegmentedControl';
 
@@ -78,7 +78,7 @@ const defaultForm: FormState = {
 export function AutomationSettings() {
   const navigate = useNavigate();
   const location = useLocation();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -127,13 +127,15 @@ export function AutomationSettings() {
     let automationId: string | null = null;
 
     if (editingId) {
-      await updateAutomation(editingId, {
+      const updated = await updateAutomation(editingId, {
         name: form.name.trim(),
         prompt: form.prompt.trim(),
         schedule: form.schedule,
         model: form.model,
         permissionMode: form.permissionMode,
       });
+      // A refused save (an invalid schedule) keeps the dialog open; the toast says why.
+      if (updated.isErr()) return;
       automationId = editingId;
     } else {
       const created = await createAutomation({
@@ -144,7 +146,8 @@ export function AutomationSettings() {
         model: form.model,
         permissionMode: form.permissionMode,
       });
-      automationId = created.isOk() ? created.value.id : null;
+      if (created.isErr()) return;
+      automationId = created.value.id;
     }
     setDialogOpen(false);
 

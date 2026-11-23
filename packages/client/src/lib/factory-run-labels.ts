@@ -10,6 +10,7 @@ import type { FactoryRun, FactoryWaitReason } from '@/lib/api/factory';
 /** States a run no longer moves out of by itself. */
 export const ENDED_FACTORY_STATES: ReadonlySet<FactoryRun['state']> = new Set([
   'merged',
+  'no_change',
   'failed',
   'stopped',
 ]);
@@ -28,6 +29,7 @@ export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): 
     merging: t('factory.state.merging', 'In the merge lane'),
     waiting_human: t('factory.state.waitingHuman', 'Waiting for you'),
     merged: t('factory.state.merged', 'Merged'),
+    no_change: t('factory.state.noChange', 'No change needed'),
     failed: t('factory.state.failed', 'Failed'),
     stopped: t('factory.state.stopped', 'Stopped'),
   };
@@ -100,11 +102,19 @@ const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
  * Whether the run's pipeline stopped on an error: it failed, or it waits for
  * the member after a failure (the flow's `on_failure` parked it).
  */
-/** The failure reason a run parks with when the agent made no change (no commit, no PR). */
+/**
+ * The reason a run waits for the member with when the agent committed nothing
+ * but left unsaved work in its checkout (kept, and named on the issue).
+ */
 const NO_CHANGE_REASON = 'no change';
 
-/** The agent found nothing to change: the run waits for the member, explained on the issue. */
-export function isFactoryRunNoChange(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
+/** The agent found nothing to change: the run ended, explained on the issue. Not a failure. */
+export function isFactoryRunNoChange(run: Pick<FactoryRun, 'state'>): boolean {
+  return run.state === 'no_change';
+}
+
+/** No commit and no pull request, but unsaved work in the run's checkout: a person looks. */
+export function isFactoryRunUnsavedWork(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
   return run.state === 'waiting_human' && run.failureReason === NO_CHANGE_REASON;
 }
 
@@ -160,6 +170,7 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   requested: 'queue',
   failed: 'failed',
   merged: 'ended',
+  no_change: 'ended',
   stopped: 'ended',
 };
 

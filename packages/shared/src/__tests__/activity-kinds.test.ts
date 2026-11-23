@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import { parseActivityInput, stripUrlCredentials } from '../activities/kinds.js';
+import {
+  ACTIVITY_EFFECTS_MAX,
+  ACTIVITY_EFFECT_TARGET_MAX,
+  ACTIVITY_KINDS,
+  isDestructiveKind,
+  parseActivityEffects,
+  parseActivityInput,
+  recordsOnlyFailures,
+  stripUrlCredentials,
+} from '../activities/kinds.js';
 
 // Built from parts so secret scanners do not read the fixture as a real credential.
 const URL_WITH_CREDENTIALS = ['https://', 'user', ':', 'token', '@github.com/org/repo.git'].join(
@@ -54,5 +63,113 @@ describe('parseActivityInput', () => {
 
   test('refuses an input that does not match its kind', () => {
     expect(parseActivityInput('git.workflow', { action: 'rm -rf' })).toBeNull();
+  });
+});
+
+describe('kind metadata', () => {
+  test('a destructive kind records every run', () => {
+    for (const [kind, spec] of Object.entries(ACTIVITY_KINDS)) {
+      if (spec.destructive)
+        expect({ kind, record: spec.record }).toEqual({ kind, record: 'always' });
+    }
+  });
+
+  test('routine sandbox actions record only failures', () => {
+    expect(recordsOnlyFailures('sandbox.stop')).toBe(true);
+    expect(recordsOnlyFailures('sandbox.wake')).toBe(true);
+    expect(recordsOnlyFailures('workspace.cleanup')).toBe(false);
+    expect(recordsOnlyFailures('nope')).toBe(false);
+  });
+
+  test('destructive marker', () => {
+    expect(isDestructiveKind('workspace.cleanup')).toBe(true);
+    expect(isDestructiveKind('project.clone')).toBe(false);
+    expect(isDestructiveKind('nope')).toBe(false);
+  });
+});
+
+describe('parseActivityInput for the new kinds', () => {
+  const samples: Record<string, Record<string, unknown>> = {
+    'workspace.cleanup': { reason: 'thread-archived', branch: 'b', deleteBranch: true },
+    'workspace.prune': {},
+    'checkout.switch': { fromBranch: 'a', toBranch: 'b', stashed: false, reason: 'merged' },
+    'sandbox.provision': { connectionId: 'conn-1' },
+    'sandbox.stop': { reason: 'idle' },
+    'sandbox.wake': {},
+    'sandbox.destroy': { reason: 'thread-deleted' },
+    'factory.merge': { issueNumber: 3, prNumber: 9 },
+    'factory.disabled': { reason: 'access-lost' },
+    'agents.stopped': { reason: 'runner-binding-changed' },
+    'automation.unscheduled': { automationId: 'a1', schedule: 'every morning' },
+    'automation.skipped': { automationId: 'a1', runningSince: '2026-11-22T10:00:00.000Z' },
+    'github.write': { action: 'pr-merge', prNumber: 7, repo: 'o/r' },
+    'git.destructive': { action: 'discard', paths: ['a.ts', 'b.ts'] },
+    'pipeline.run': { pipelineId: 'pl1', commitSha: 'abc123' },
+  };
+
+  test('every kind has a sample', () => {
+    const declared = Object.keys(ACTIVITY_KINDS).filter(
+      (k) => !['project.clone', 'worktree.setup', 'git.workflow'].includes(k),
+    );
+    expect(Object.keys(samples).sort()).toEqual(declared.sort());
+  });
+
+  for (const [kind, input] of Object.entries(samples)) {
+    test(`${kind} drops undeclared fields`, () => {
+      expect(parseActivityInput(kind, { ...input, token: 'ghp_secret' })).toEqual(input);
+    });
+  }
+
+  test('refuses an unknown cleanup reason', () => {
+    expect(
+      parseActivityInput('workspace.cleanup', { reason: 'because', deleteBranch: false }),
+    ).toBeNull();
+  });
+});
+
+describe('git.destructive input', () => {
+  test('keeps at most 50 paths', () => {
+    const paths = Array.from({ length: 80 }, (_, i) => `f${i}.ts`);
+    const input = parseActivityInput('git.destructive', { action: 'discard', paths });
+    expect(input?.paths).toHaveLength(50);
+  });
+
+  test('refuses an unknown action', () => {
+    expect(parseActivityInput('git.destructive', { action: 'rm-rf' })).toBeNull();
+  });
+});
+
+describe('parseActivityEffects', () => {
+  test('drops unknown effects and extra fields', () => {
+    expect(
+      parseActivityEffects([
+        { effect: 'worktree-removed', target: '/w', extra: 1 },
+        { effect: 'rm-rf', target: '/' },
+        'nope',
+      ]),
+    ).toEqual([{ effect: 'worktree-removed', target: '/w' }]);
+  });
+
+  test('caps the list and each target', () => {
+    const many = Array.from({ length: 30 }, () => ({
+      effect: 'branch-deleted',
+      target: 'x'.repeat(1000),
+    }));
+    const parsed = parseActivityEffects(many);
+    expect(parsed).toHaveLength(ACTIVITY_EFFECTS_MAX);
+    expect(parsed?.[0]?.target).toHaveLength(ACTIVITY_EFFECT_TARGET_MAX);
+  });
+
+  test('keeps the effects of this change', () => {
+    const effects = ['changes-discarded', 'snapshot-saved', 'repo-published'].map((effect) => ({
+      effect,
+      target: 'x',
+    }));
+    expect(parseActivityEffects(effects)).toHaveLength(3);
+  });
+
+  test('anything but a list is null', () => {
+    expect(parseActivityEffects(undefined)).toBeNull();
+    expect(parseActivityEffects({ effect: 'branch-deleted' })).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Migration 107_factory_review_and_merge_policy (change factory-agent-roles):
+ * Migration 109_factory_review_and_merge_policy (change factory-agent-roles):
  * existing factories merge only low-risk changes, and existing runs have no
  * verdict and no risk class.
  */
@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { sql } from 'drizzle-orm';
 
-describe('107_factory_review_and_merge_policy migration', () => {
+describe('109_factory_review_and_merge_policy migration', () => {
   test('adds the review columns and the careful merge policy to existing rows', async () => {
     const { initDatabase } = await import('../../db/index.js');
     await initDatabase({ sqlitePath: ':memory:' });
@@ -17,7 +17,7 @@ describe('107_factory_review_and_merge_policy migration', () => {
     const run = (q: ReturnType<typeof sql>) => db.run(q);
     const all = <T>(q: ReturnType<typeof sql>) => db.all<T>(q);
 
-    // Rewind to the pre-107 shape.
+    // Rewind to the pre-109 shape.
     for (const column of ['review_verdicts', 'risk']) {
       run(sql.raw(`ALTER TABLE factory_runs DROP COLUMN ${column}`));
     }
@@ -34,7 +34,7 @@ describe('107_factory_review_and_merge_policy migration', () => {
       sql`INSERT INTO factory_runs (id, factory_id, issue_number, state, started_at) VALUES ('r', 'f', 7, 'waiting_ci', '2026-01-01')`,
     );
 
-    run(sql`DELETE FROM _migrations WHERE name = '107_factory_review_and_merge_policy'`);
+    run(sql`DELETE FROM _migrations WHERE name = '109_factory_review_and_merge_policy'`);
     await autoMigrate();
 
     expect(

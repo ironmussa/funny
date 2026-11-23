@@ -648,13 +648,29 @@ describe('thread store actions', () => {
         }),
       );
 
-      await useThreadStore.getState().deleteThread('t1', 'p1');
+      const deleted = await useThreadStore.getState().deleteThread('t1', 'p1');
 
+      expect(deleted).toBe(true);
       expect(readThreadIndex().threadsById.t1).toBeUndefined();
       expect(useThreadStore.getState().selectedThreadId).toBeNull();
       expect(useThreadStore.getState().activeThread).toBeNull();
       expect(useThreadStore.getState().threadDataById.t1).toBeUndefined();
-      expect(mockDeleteThread).toHaveBeenCalledWith('t1');
+      expect(mockDeleteThread).toHaveBeenCalledWith('t1', { deleteBranch: false });
+    });
+
+    test('resolves false and keeps the thread when the server refuses', async () => {
+      mockDeleteThread.mockReturnValue(errAsync({ type: 'INTERNAL' as const, message: 'boom' }));
+      useThreadStore.setState(
+        withThreadIndex({
+          ...seedThreads({ p1: [baseThread] }),
+          threadTotalByProject: { p1: 1 },
+        }),
+      );
+
+      const deleted = await useThreadStore.getState().deleteThread('t1', 'p1');
+
+      expect(deleted).toBe(false);
+      expect(readThreadIndex().threadsById.t1).toBeDefined();
     });
 
     test('stops running threads before delete', async () => {
@@ -668,7 +684,7 @@ describe('thread store actions', () => {
       await useThreadStore.getState().deleteThread('t1', 'p1');
 
       expect(mockStopThread).toHaveBeenCalledWith('t1');
-      expect(mockDeleteThread).toHaveBeenCalledWith('t1');
+      expect(mockDeleteThread).toHaveBeenCalledWith('t1', { deleteBranch: false });
     });
   });
 
@@ -700,7 +716,7 @@ describe('thread store actions', () => {
       expect(readThreadIndex().threadsById.s1).toBeUndefined();
       expect(readThreadIndex().scratchThreadIds).toEqual([]);
       expect(readThreadIndex().scratchThreadTotal).toBe(0);
-      expect(mockDeleteThread).toHaveBeenCalledWith('s1');
+      expect(mockDeleteThread).toHaveBeenCalledWith('s1', { deleteBranch: false });
     });
   });
 
@@ -1110,7 +1126,7 @@ describe('thread store actions', () => {
       expect(mockCleanupThreadActor).toHaveBeenCalledWith('t1');
       expect(readThreadIndex().threadsById.t1).toBeUndefined();
       expect(useThreadStore.getState().selectedThreadId).toBeNull();
-      expect(mockDeleteThread).toHaveBeenCalledWith('t1');
+      expect(mockDeleteThread).toHaveBeenCalledWith('t1', { deleteBranch: false });
     });
   });
 

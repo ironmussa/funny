@@ -234,6 +234,15 @@ describe('API Client', () => {
       );
     });
 
+    test('deleteThread asks for the branch to go only when told to', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ ok: true }));
+      await api.deleteThread('t1', { deleteBranch: true });
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/threads/t1?deleteBranch=true'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
     test('archiveThread is the threads.update mutation', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: { data: { archived: true } } }));
 

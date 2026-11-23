@@ -1,8 +1,9 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { Bot, Globe, NotebookPen, type LucideIcon } from 'lucide-react';
+import { Bot, Globe, NotebookPen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GitStatChip } from '@/components/git/GitStatChip';
 import { PRBadge } from '@/components/PRBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
@@ -37,7 +38,7 @@ function CreatedByIcon({ createdBy }: { createdBy?: string | null }) {
 function RuntimeBadge({ thread }: { thread: Thread }) {
   if (thread.runtime === 'remote') {
     return (
-      <span className="bg-status-violet/15 text-status-violet shrink-0 rounded px-1 py-0.5 text-[10px] leading-none font-medium">
+      <span className="bg-status-violet/15 text-status-violet text-2xs shrink-0 rounded px-1 py-0.5 leading-none font-medium">
         Remote
       </span>
     );
@@ -47,7 +48,7 @@ function RuntimeBadge({ thread }: { thread: Thread }) {
     return (
       <span
         data-testid={`thread-item-sandbox-badge-${thread.id}`}
-        className="bg-primary/15 text-primary shrink-0 rounded px-1 py-0.5 text-[10px] leading-none font-medium"
+        className="bg-primary/15 text-primary text-2xs shrink-0 rounded px-1 py-0.5 leading-none font-medium"
       >
         Sandbox
       </span>
@@ -64,7 +65,7 @@ function AgentTemplateBadge({ thread }: { thread: Thread }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none font-medium"
+          className="text-2xs flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 leading-none font-medium"
           style={{
             backgroundColor: color ? `${color}22` : 'hsl(var(--muted))',
             color: color ?? 'hsl(var(--muted-foreground))',
@@ -116,8 +117,8 @@ export function ThreadItemTitleRow({
           prNumber={gitStatus.prNumber}
           prState={gitStatus.prState ?? 'OPEN'}
           prUrl={gitStatus.prUrl}
-          size="compact"
-          className="shrink-0"
+          variant="plain"
+          showExternalIcon={false}
           data-testid={`thread-pr-badge-${thread.id}`}
         />
       ) : null}
@@ -134,37 +135,6 @@ export function ThreadItemTitleRow({
 
 // ── Git state icons (shown in row 1) ─────────────────────────────────
 
-function GitIconChip({
-  testId,
-  className,
-  icon: Icon,
-  count,
-  tooltip,
-}: {
-  testId: string;
-  className: string;
-  icon: LucideIcon;
-  count?: number;
-  tooltip: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn('flex shrink-0 items-center gap-0.5 text-xs leading-none', className)}
-          data-testid={testId}
-        >
-          <Icon className="icon-sm" />
-          {count ? <span className="font-mono">{count}</span> : null}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltip}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 /**
  * Pending work the PR badge cannot show: uncommitted files (with the +/- line
  * counts in the tooltip so rows sharing a working tree don't repeat the same
@@ -180,7 +150,7 @@ function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: G
   return (
     <>
       {dirty && (
-        <GitIconChip
+        <GitStatChip
           testId={`thread-git-dirty-${threadId}`}
           className={dirtyCfg.className}
           icon={dirtyCfg.icon}
@@ -201,7 +171,7 @@ function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: G
         />
       )}
       {unpushed && (
-        <GitIconChip
+        <GitStatChip
           testId={`thread-git-sync-${threadId}`}
           className={unpushedCfg.className}
           icon={unpushedCfg.icon}

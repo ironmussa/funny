@@ -8,8 +8,9 @@ import { useThreadStore } from '@/stores/thread-store';
 
 const mockNavigate = vi.fn();
 const mockEnsureBranch = vi.fn().mockResolvedValue(false);
-const mockDeleteThread = vi.fn().mockResolvedValue(undefined);
-const mockDeleteScratchThread = vi.fn().mockResolvedValue(undefined);
+const mockDeleteThread = vi.fn().mockResolvedValue(true);
+const mockDeleteScratchThread = vi.fn().mockResolvedValue(true);
+const mockToastSuccess = vi.fn();
 
 mock.module('react-i18next', () => ({
   useTranslation: () => ({
@@ -19,7 +20,7 @@ mock.module('react-i18next', () => ({
 }));
 
 mock.module('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: mockToastSuccess, error: vi.fn() },
 }));
 
 mock.module('@/hooks/use-stable-navigate', () => ({
@@ -63,6 +64,8 @@ mock.module('@/lib/api', () => ({
 describe('useSidebarActions — delete selected thread from Activity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDeleteThread.mockResolvedValue(true);
+    mockDeleteScratchThread.mockResolvedValue(true);
     useThreadStore.setState(
       withThreadIndex({
         selectedThreadId: null,
@@ -145,7 +148,7 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
     });
 
     expect(mockNavigate).toHaveBeenCalledWith('/projects/p1');
-    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: undefined });
     expect(mockDeleteScratchThread).not.toHaveBeenCalled();
     expect(callOrder).toEqual(['navigate', 'delete']);
   });
@@ -173,7 +176,36 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: undefined });
+  });
+
+  test('says the thread was deleted only when the delete succeeded', async () => {
+    const threadId = 't3';
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { [threadId]: buildThread({ id: threadId, title: 'Kept' }) },
+        threadIdsByProject: { p1: [threadId] },
+      }),
+    );
+    const { result } = renderHook(() => useSidebarActions());
+
+    // Refused: the store already showed the error and brought the row back.
+    mockDeleteThread.mockResolvedValueOnce(false);
+    act(() => {
+      result.current.handleDeleteThreadFromList(threadId, 'p1', 'Kept', false);
+    });
+    await act(async () => {
+      await result.current.handleDeleteThreadConfirm();
+    });
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.handleDeleteThreadFromList(threadId, 'p1', 'Kept', false);
+    });
+    await act(async () => {
+      await result.current.handleDeleteThreadConfirm();
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith('toast.threadDeleted:Kept');
   });
 
   test('deletes a worktree thread in one request, without a separate worktree removal', async () => {
@@ -209,7 +241,28 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
     });
 
     expect(mockRemoveWorktree).not.toHaveBeenCalled();
-    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: undefined });
+  });
+
+  test("passes the dialog's delete-branch choice to the delete", async () => {
+    const threadId = 'wt2';
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: null,
+        threadsById: {
+          [threadId]: { id: threadId, projectId: 'p1', title: 'x', mode: 'worktree' },
+        },
+        threadIdsByProject: { p1: [threadId] },
+      } as any),
+    );
+    const { result } = renderHook(() => useSidebarActions());
+    act(() => {
+      result.current.handleDeleteThreadFromList(threadId, 'p1', 'x', true);
+    });
+    await act(async () => {
+      await result.current.handleDeleteThreadConfirm({ deleteBranch: true });
+    });
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1', { deleteBranch: true });
   });
 });
 

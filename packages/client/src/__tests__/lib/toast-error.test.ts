@@ -16,6 +16,7 @@ mock.module('sonner', () => ({
 }));
 
 mock.module('@/lib/client-logger', () => ({
+  isClientLogLevelEnabled: () => false,
   createClientLogger: () => ({ warn: logWarnMock }),
 }));
 

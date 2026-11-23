@@ -37,9 +37,10 @@ import {
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { getThreadRoute } from '@/lib/thread-variant';
+import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { BranchPicker } from './SearchablePicker';
 
@@ -133,7 +134,6 @@ function WorktreeCard({
   return (
     <div className={listRowClassName}>
       <div className="flex min-w-0 flex-1 items-start gap-2">
-        <GitFork className="icon-sm text-status-info mt-0.5 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <BranchBadge
@@ -161,12 +161,34 @@ function WorktreeCard({
               </LabelBadge>
             )}
           </div>
-          <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-            <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
-            <span title={worktree.path} className="truncate font-mono">
-              {worktree.path}
-            </span>
-          </div>
+          {readOnly ? (
+            <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+              <FolderOpen className="icon-xs shrink-0 opacity-70" />
+              <span title={worktree.path} className="truncate font-mono">
+                {worktree.path}
+              </span>
+            </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const result = await api.openDirectory({ path: worktree.path });
+                    if (result.isErr()) toastError(result.error);
+                  }}
+                  className="text-muted-foreground hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left text-xs transition-colors"
+                  data-testid={`worktree-open-directory-${worktree.branch}`}
+                >
+                  <FolderOpen className="icon-xs shrink-0 opacity-70" />
+                  <span className="truncate font-mono hover:underline">{worktree.path}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" variant="mono">
+                {worktree.path}
+              </TooltipContent>
+            </Tooltip>
+          )}
           {worktree.commit && (
             <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <GitCommitHorizontal className="icon-xs shrink-0" />
@@ -284,6 +306,64 @@ function WorktreeCreateForm({
   );
 }
 
+/** A failed create, shown under the create form. */
+function CreateError({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="text-destructive flex items-center gap-2 px-3 pb-2 text-xs"
+      data-testid="worktree-settings-create-error"
+    >
+      <AlertCircle className="icon-sm shrink-0" />
+      <span className="min-w-0 flex-1">{message}</span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="shrink-0 underline"
+        data-testid="worktree-settings-create-error-dismiss"
+      >
+        {t('worktreeSettings.dismiss')}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * What the list shows while it has no worktrees: loading, a failed load in
+ * place of the list, or that there are none. A refresh keeps a loaded list on
+ * screen; the button's icon shows it is loading.
+ */
+function EmptyWorktreeList({ loading, loadError }: { loading: boolean; loadError: string | null }) {
+  const { t } = useTranslation();
+  if (loading) {
+    return (
+      <LoadingState
+        testId="worktree-settings-loading"
+        label={t('worktreeSettings.loadingWorktrees')}
+      />
+    );
+  }
+  if (loadError) {
+    return (
+      <EmptyState
+        icon={GitFork}
+        title={t('worktreeSettings.loadFailed', 'Could not load worktrees')}
+        description={loadError}
+        className="flex-1"
+        testId="worktree-settings-load-error"
+      />
+    );
+  }
+  return (
+    <EmptyState
+      icon={GitFork}
+      title={t('worktreeSettings.noWorktrees')}
+      className="flex-1"
+      testId="worktree-settings-empty"
+    />
+  );
+}
+
 export function WorktreeSettings({
   projectId,
   activePath,
@@ -295,10 +375,13 @@ export function WorktreeSettings({
 }) {
   const { t } = useTranslation();
   const projects = useProjects();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  /** The worktree list could not be read (e.g. the runner is offline). */
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /** Creating a worktree failed; shown under the create form. */
   const [error, setError] = useState<string | null>(null);
   const [removingPath, setRemovingPath] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<WorktreeInfo | null>(null);
@@ -322,11 +405,11 @@ export function WorktreeSettings({
   const loadWorktrees = useCallback(async () => {
     if (!project) return;
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const result = await api.listWorktrees(project.id);
       if (result.isOk()) setWorktrees(result.value);
-      else setError(result.error.message);
+      else setLoadError(result.error.message);
     } finally {
       setLoading(false);
     }
@@ -343,8 +426,9 @@ export function WorktreeSettings({
         setBaseBranch((prev) => prev || data.defaultBranch || data.branches[0]);
       }
     } else {
+      // Only the create form uses the branches; the list's own load error
+      // already says when the runner cannot be reached.
       console.error('Failed to load branches:', result.error);
-      setError(result.error.message || 'Failed to load branches');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
   }, [project?.id]);
@@ -409,17 +493,6 @@ export function WorktreeSettings({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col text-xs">
-      {/* Error banner */}
-      {error && (
-        <div className="bg-destructive/10 text-destructive flex items-center gap-2 rounded-md px-3 py-2 text-xs">
-          <AlertCircle className="icon-sm shrink-0" />
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto text-xs underline">
-            {t('worktreeSettings.dismiss')}
-          </button>
-        </div>
-      )}
-
       {/* Worktree list */}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-sidebar-border flex shrink-0 items-center gap-1 border-b px-2 py-1">
@@ -481,20 +554,12 @@ export function WorktreeSettings({
                 onCreate={handleCreate}
               />
             )}
+            {!readOnly && showCreate && error && (
+              <CreateError message={error} onDismiss={() => setError(null)} />
+            )}
 
-            {/* A refresh keeps the list on screen; the button's icon shows it is loading. */}
-            {loading && worktrees.length === 0 ? (
-              <LoadingState
-                testId="worktree-settings-loading"
-                label={t('worktreeSettings.loadingWorktrees')}
-              />
-            ) : worktrees.length === 0 ? (
-              <EmptyState
-                icon={GitFork}
-                title={t('worktreeSettings.noWorktrees')}
-                className="flex-1"
-                testId="worktree-settings-empty"
-              />
+            {worktrees.length === 0 ? (
+              <EmptyWorktreeList loading={loading} loadError={loadError} />
             ) : (
               <div className="divide-sidebar-border flex flex-col divide-y">
                 {worktrees.map((wt) => (

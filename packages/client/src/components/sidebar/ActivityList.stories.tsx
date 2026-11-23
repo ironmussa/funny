@@ -44,6 +44,37 @@ const succeeded = buildActivity({
   endedAt: '2026-11-20T09:30:00.000Z',
 });
 
+const automaticCleanup = buildActivity({
+  id: 'automatic-cleanup',
+  kind: 'workspace.cleanup',
+  title: 'Clean up worktree feature-login',
+  status: 'failed',
+  origin: 'implicit',
+  error: 'Failed to delete branch feature-login: checked out in another worktree',
+  input: { reason: 'thread-archived', branch: 'feature-login', deleteBranch: true },
+  effects: [
+    { effect: 'command-stopped', target: 'bun run dev' },
+    { effect: 'worktree-removed', target: '/home/me/.funny/worktrees/acme/feature-login' },
+  ],
+  endedAt: '2026-11-20T09:50:00.000Z',
+});
+
+const discard = buildActivity({
+  id: 'discard',
+  kind: 'git.destructive',
+  title: 'Discard changes to 3 files',
+  status: 'succeeded',
+  input: { action: 'discard', paths: ['src/a.ts', 'src/b.ts', 'README.md'] },
+  effects: [
+    { effect: 'changes-discarded', target: 'src/a.ts' },
+    { effect: 'changes-discarded', target: 'src/b.ts' },
+    { effect: 'changes-discarded', target: 'README.md' },
+    { effect: 'snapshot-saved', target: 'refs/funny/undo/discard' },
+  ],
+  resultRef: { snapshot: 'refs/funny/undo/discard' },
+  endedAt: '2026-11-20T09:55:00.000Z',
+});
+
 const meta = {
   title: 'Sidebar/ActivityList',
   component: ActivityList,
@@ -93,4 +124,12 @@ export const Mixed: Story = {
 
 export const Empty: Story = {
   args: { activities: [] },
+};
+
+export const AutomaticCleanup: Story = {
+  args: { activities: [automaticCleanup, succeeded] },
+};
+
+export const RestorableDiscard: Story = {
+  args: { activities: [discard, succeeded], canRestore: (a) => a.id === 'discard' },
 };

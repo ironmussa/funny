@@ -131,7 +131,7 @@ export function SubItemsList({
         <div
           key={item.label}
           className={cn(
-            'flex items-center gap-1.5 text-[11px]',
+            'flex items-center gap-1.5 text-compact',
             item.status === 'completed' && 'text-muted-foreground',
             item.status === 'running' && 'text-foreground',
             item.status === 'failed' && 'text-destructive',
@@ -148,7 +148,7 @@ export function SubItemsList({
             {item.label}
           </span>
           {item.error && (
-            <pre className="bg-destructive/5 text-destructive/80 mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
+            <pre className="bg-destructive/5 text-destructive/80 text-compact mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono wrap-break-word whitespace-pre-wrap">
               {stripAnsi(item.error)}
             </pre>
           )}
@@ -234,7 +234,7 @@ export function GitProgressModal({
                       {step.label}
                     </span>
                     {stepElapsed != null && (
-                      <span className="text-muted-foreground/60 shrink-0 text-[10px] tabular-nums">
+                      <span className="text-muted-foreground/60 text-2xs shrink-0 tabular-nums">
                         {formatElapsed(stepElapsed)}
                       </span>
                     )}
@@ -244,7 +244,7 @@ export function GitProgressModal({
                       href={step.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-primary mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
+                      className="text-primary text-compact mt-0.5 flex items-center gap-1 hover:underline"
                       data-testid="git-progress-pr-link"
                     >
                       <ExternalLink className="icon-xs" />
@@ -255,7 +255,7 @@ export function GitProgressModal({
                     <SubItemsList subItems={step.subItems} parentStatus={step.status} />
                   )}
                   {step.error && !(step.subItems && step.subItems.length > 0) && (
-                    <pre className="bg-destructive/5 text-destructive/80 mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
+                    <pre className="bg-destructive/5 text-destructive/80 text-compact mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono wrap-break-word whitespace-pre-wrap">
                       {stripAnsi(step.error)}
                     </pre>
                   )}
@@ -265,7 +265,7 @@ export function GitProgressModal({
           })}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <span className="text-muted-foreground/50 text-[10px] tabular-nums">
+          <span className="text-muted-foreground/50 text-2xs tabular-nums">
             {formatElapsed(totalElapsed)}
           </span>
           {showButton && (

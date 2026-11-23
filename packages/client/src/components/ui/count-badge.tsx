@@ -16,7 +16,7 @@ export function CountBadge({ count, className, ...props }: CountBadgeProps) {
   return (
     <span
       className={cn(
-        'absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] leading-none font-bold tabular-nums text-white',
+        'absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-2xs leading-none font-bold tabular-nums text-white',
         className,
       )}
       data-testid={props['data-testid']}

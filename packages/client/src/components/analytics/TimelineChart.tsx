@@ -33,7 +33,7 @@ const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
   backgroundColor: 'hsl(var(--popover))',
   border: '1px solid hsl(var(--border))',
   borderRadius: '6px',
-  fontSize: '12px',
+  fontSize: '0.75rem',
   color: 'hsl(var(--foreground))',
 };
 
@@ -165,19 +165,19 @@ export function TimelineChart({
           dataKey="date"
           tickFormatter={formatDate}
           stroke="hsl(var(--muted-foreground))"
-          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: '0.6875rem' }}
           tickLine={false}
           axisLine={false}
         />
         <YAxis
           stroke="hsl(var(--muted-foreground))"
-          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: '0.6875rem' }}
           tickLine={false}
           axisLine={false}
           allowDecimals={false}
         />
         <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} labelFormatter={formatDate} />
-        <Legend wrapperStyle={{ fontSize: '12px' }} />
+        <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
         <Bar
           dataKey="created"
           fill="#3b82f6"

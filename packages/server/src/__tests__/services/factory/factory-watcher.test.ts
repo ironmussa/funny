@@ -142,6 +142,8 @@ interface GithubScript {
   branchPrs?: Record<string, { number: number; url: string }>;
   /** Whether the run's branch has commits the default branch does not (default true). */
   branchAhead?: boolean;
+  /** A "no change" cleanup finds unsaved work in the run's worktree and keeps it. */
+  unsavedWork?: boolean;
   /** The pull request's head now (default `sha-head`, auto-merge off). */
   head?: { sha: string; autoMerge: boolean };
   /** GitHub does not answer for issues. */
@@ -156,6 +158,8 @@ type FakeGithub = FactoryGithubPort & {
   fileReads: string[];
   merges: number;
   comments: Array<{ issue: number; body: string }>;
+  /** Label swaps on issues (a run that ended with no change). */
+  relabels: Array<{ issue: number; remove?: string; add: string }>;
   checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
 };
@@ -172,6 +176,7 @@ function fakeGithub(
     fileReads: [],
     merges: 0,
     comments: [],
+    relabels: [],
     checks: [],
     prLookups: [],
     resolveRepo: async () => repo,
@@ -205,6 +210,10 @@ function fakeGithub(
     branchState: () =>
       okAsync({ sha: 'base-sha', ci: script.baseCi ?? { kind: 'green' as const } }),
     revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
+    relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add: string }) => {
+      port.relabels.push({ issue, ...labels });
+      return okAsync(undefined);
+    },
     commentOnIssue: (_reader: unknown, issue: number, body: string) => {
       port.comments.push({ issue, body });
       return okAsync(undefined);
@@ -1031,7 +1040,16 @@ describe('factory flow', () => {
       },
       cleanupUnchanged: async (userId, threadIds) => {
         cleanups.push({ userId, threadIds });
-        return [];
+        return script.unsavedWork
+          ? [
+              {
+                threadId: 't-1',
+                worktreePath: '/wt/t-1',
+                dirtyFileCount: 3,
+                unpushedCommitCount: 0,
+              },
+            ]
+          : [];
       },
       notify: async (_userId, notice) => notices.push(notice),
       followUp: async (_userId, threadId, content, expectedBranch) => {
@@ -1195,22 +1213,59 @@ describe('factory flow', () => {
     await eventually(factoryId, (r) => r.state === 'failed');
   });
 
-  test('an agent that made no commit parks the run as "no change", says so on the issue and cleans up', async () => {
-    const { factoryId, github, cleanups, poll, launcher } = await runFlow(
+  // Issue #236: an index issue with nothing to change stayed "waiting for you"
+  // at the pull-request step, as if its run had failed.
+  test('an agent that rightly changed nothing ends the run as no_change and hands the issue back', async () => {
+    const { factoryId, github, cleanups, poll, launcher, notices } = await runFlow(
       { pr: false, branchAhead: false },
       finishedThreads('completed'),
     );
-    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
-    expect(run.failureReason).toBe('no change');
+    const run = await eventually(factoryId, (r) => r.state === 'no_change');
+    expect(run.failureReason).toBeNull();
     expect(run.currentStep).toBe('pull-request');
+    expect(run.completedAt).not.toBeNull();
     expect(github.comments).toHaveLength(1);
     expect(github.comments[0]!.issue).toBe(7);
     expect(github.comments[0]!.body).toStartWith(NO_CHANGE_LINE);
     expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
     expect(github.merges).toBe(0);
+    // Out of the label queue and marked for a person; nobody is told to act.
+    expect(github.relabels).toEqual([{ issue: 7, remove: 'ready-for-agent', add: 'needs-triage' }]);
+    expect(notices).toEqual([]);
+    // Even if the label stayed, a later tick does not admit the issue again.
+    await poll.ticks[0]!();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(launcher.calls).toHaveLength(1);
+    const all = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(all).toHaveLength(1);
+  });
+
+  test('a "no change" run that left unsaved work waits for a person and keeps its label', async () => {
+    const { factoryId, github, poll, launcher } = await runFlow(
+      { pr: false, branchAhead: false, unsavedWork: true },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.failureReason).toBe('no change');
+    expect(run.currentStep).toBe('pull-request');
+    expect(github.comments[0]!.body).toContain('/wt/t-1');
+    expect(github.relabels).toEqual([]);
     // Parked, it still holds its issue: a later tick does not admit it again.
     await poll.ticks[0]!();
     expect(launcher.calls).toHaveLength(1);
+  });
+
+  test('a run that ended as no_change can be retried with a new agent', async () => {
+    const { factoryId, launcher } = await runFlow(
+      { pr: false, branchAhead: false },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'no_change');
+
+    const retried = await createFactoryRunControl().retry(factoryId, run.id);
+
+    expect(retried._unsafeUnwrap()).toMatchObject({ state: 'queued', threadIds: [] });
+    await eventually(factoryId, () => launcher.calls.length === 2);
   });
 
   // Issue #343: the factory thread shows the run's step chain and why it
@@ -1755,6 +1810,7 @@ describe('factory operator controls', () => {
       runsPushedCommits?: (threadId: string) => Promise<boolean>;
     } = {},
   ) {
+    const recorded: Array<{ spec: any; outcome: any }> = [];
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', opts.issues ?? issue7, opts.github);
@@ -1771,10 +1827,15 @@ describe('factory operator controls', () => {
         cleanups.push({ userId, threadIds });
       },
       notify: async () => undefined,
+      activities: {
+        recordServerActivity: async (spec, outcome) => {
+          recorded.push({ spec, outcome });
+        },
+      },
       proof: opts.proof ?? passingProof,
       runsPushedCommits: opts.runsPushedCommits,
     });
-    return { poll, launcher, github, cleanups };
+    return { poll, launcher, github, cleanups, recorded };
   }
 
   /** A run that parked a minute ago (its `completedAt` is when it parked). */
@@ -2197,12 +2258,23 @@ describe('factory operator controls', () => {
   test("losing the enabler's access stops their open runs too", async () => {
     const factoryId = await enableFactory();
     const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
-    const { poll } = await watch({ checkAccess: async () => false });
+    const { poll, recorded } = await watch({ checkAccess: async () => false });
 
     await poll.ticks[0]!();
 
     const [after] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
     expect(after).toMatchObject({ id: run.id, state: 'stopped' });
+    // The enabler sees why the factory went off (track-funny-actions).
+    expect(recorded.map((r) => r.spec)).toContainEqual(
+      expect.objectContaining({ kind: 'factory.disabled', userId: 'alice', origin: 'system' }),
+    );
+  });
+
+  test('a factory whose enabler keeps access records no factory.disabled', async () => {
+    await enableFactory();
+    const { poll, recorded } = await watch({ checkAccess: async () => true });
+    await poll.ticks[0]!();
+    expect(recorded.some((r) => r.spec.kind === 'factory.disabled')).toBe(false);
   });
 
   test('stopping a run ends it and its flow does not go on', async () => {
@@ -2280,6 +2352,46 @@ describe('factory operator controls', () => {
     expect(launcher.calls).toHaveLength(1);
   });
 
+  // Runs #228 / #229: a retry that started a new agent left the old failed
+  // thread in the list under the same title, so deleting "the" run's thread
+  // seemed to do nothing.
+  test('a retry archives the threads it does not keep', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-old', projectId: 'p1', userId: 'alice', status: 'failed' });
+    seedThread(testDb.db, { id: 't-busy', projectId: 'p1', userId: 'alice', status: 'running' });
+    const run = await seedRun(factoryId, 'failed', ['t-old', 't-busy']);
+    await watch({ issues: [], waitThread: finishedThreads('completed') });
+
+    (await createFactoryRunControl().retry(factoryId, run.id))._unsafeUnwrap();
+
+    const archived = (id: string) =>
+      (
+        testDb.sqlite.query('SELECT archived FROM threads WHERE id = ?').get(id) as {
+          archived: number;
+        }
+      ).archived;
+    expect(archived('t-old')).toBe(1);
+    // A thread a member is still running is not taken from them.
+    expect(archived('t-busy')).toBe(0);
+  });
+
+  test('a retry that keeps the implement thread leaves it in the list', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-ok', projectId: 'p1', userId: 'alice', status: 'completed' });
+    seedThread(testDb.db, { id: 't-fix', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const run = await seedRun(factoryId, 'waiting_human', ['t-ok', 't-fix']);
+
+    (await createFactoryRunControl().retry(factoryId, run.id))._unsafeUnwrap();
+
+    const rows = testDb.sqlite
+      .query("SELECT id, archived FROM threads WHERE id IN ('t-ok', 't-fix') ORDER BY id")
+      .all();
+    expect(rows).toEqual([
+      { id: 't-fix', archived: 1 },
+      { id: 't-ok', archived: 0 },
+    ]);
+  });
+
   test('only a failed or waiting run can be retried', async () => {
     const factoryId = await enableFactory();
     const run = await seedRun(factoryId, 'merged', []);
@@ -2354,5 +2466,145 @@ describe('factory operator controls', () => {
     await onFactoryThreadTerminal('t-a', 'completed');
     const after = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
     expect(after!.state).toBe('waiting_human');
+  });
+});
+
+// Issue #328: `maxConcurrent` is checked in the same step as the write that
+// puts a run in flight, so a Retry or take-over racing an admission cannot
+// push the factory over its cap.
+describe('factory capacity between admission and run controls (#328)', () => {
+  const runsRepo = () => createFactoryRunsRepository();
+
+  const inFlightCount = async (factoryId: string) =>
+    (await runsRepo().countActive(factoryId))._unsafeUnwrap();
+
+  async function seedParked(factoryId: string, issueNumber: number, threadId: string) {
+    const run = (
+      await runsRepo().start({ factoryId, issueNumber, threadIds: [threadId], state: 'working' })
+    )._unsafeUnwrap();
+    await runsRepo().update(run.id, { state: 'waiting_human' });
+    return (await runsRepo().get(run.id))._unsafeUnwrap()!;
+  }
+
+  /** A watcher whose GitHub reads of `issue` first run `during` (the member's click). */
+  async function watchWithHook(
+    issues: FactoryIssue[],
+    issue: number,
+    during: () => Promise<unknown>,
+  ) {
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    const github = fakeGithub('o/r', issues);
+    const { getIssue, issueBlockers } = github;
+    const hooked = <T>(number: number, read: () => ResultAsync<T, any>) =>
+      number === issue ? ResultAsync.fromSafePromise(during()).andThen(read) : read();
+    github.getIssue = (reader, number) => hooked(number, () => getIssue(reader, number));
+    github.issueBlockers = (reader, number) => hooked(number, () => issueBlockers(reader, number));
+    await startWatcherWithProof({
+      ports,
+      github,
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+      notify: async () => undefined,
+    });
+    return { poll, launcher };
+  }
+
+  test('a Retry during a queued admission takes the slot; the admission is refused', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 1, mode: 'manual' });
+    const parked = await seedParked(factoryId, 1, 't-p');
+    const queued = (
+      await runsRepo().enqueue({ factoryId, issueNumbers: [2], flowName: 'issue-to-merge' })
+    )._unsafeUnwrap().queued[0]!;
+    let retried: Awaited<ReturnType<ReturnType<typeof createFactoryRunControl>['retry']>> | null =
+      null;
+    const { poll, launcher } = await watchWithHook([], 2, async () => {
+      retried ??= await createFactoryRunControl().retry(factoryId, parked.id);
+    });
+
+    await poll.ticks[0]!();
+
+    expect(retried!.isOk()).toBe(true);
+    expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.state).toBe('queued');
+    expect((await runsRepo().get(queued.id))._unsafeUnwrap()!.state).toBe('requested');
+    expect(launcher.calls).toHaveLength(0);
+    expect(await inFlightCount(factoryId)).toBe(1);
+  });
+
+  test('a Retry during a label admission takes the slot; no second run starts', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 1 });
+    const parked = await seedParked(factoryId, 1, 't-p');
+    let retried = false;
+    const { poll, launcher } = await watchWithHook(
+      [{ number: 3, title: 'c', url: 'u/3' }],
+      3,
+      async () => {
+        if (retried) return;
+        retried = true;
+        (await createFactoryRunControl().retry(factoryId, parked.id))._unsafeUnwrap();
+      },
+    );
+
+    await poll.ticks[0]!();
+
+    expect(retried).toBe(true);
+    expect(launcher.calls).toHaveLength(0);
+    const all = (await runsRepo().list(factoryId))._unsafeUnwrap();
+    expect(all.map((r) => r.issueNumber)).toEqual([1]);
+    expect(await inFlightCount(factoryId)).toBe(1);
+  });
+
+  test('a Retry on a full factory is refused and the run stays parked', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 1 });
+    (await runsRepo().start({ factoryId, issueNumber: 1, state: 'working' }))._unsafeUnwrap();
+    const failed = (
+      await runsRepo().start({ factoryId, issueNumber: 2, state: 'failed' })
+    )._unsafeUnwrap();
+
+    const retried = await createFactoryRunControl().retry(factoryId, failed.id);
+
+    expect(retried.isErr() && retried.error.kind).toBe('conflict');
+    expect(retried.isErr() && retried.error.message).toContain('as many runs as it may');
+    expect((await runsRepo().get(failed.id))._unsafeUnwrap()!.state).toBe('failed');
+    expect(await inFlightCount(factoryId)).toBe(1);
+  });
+
+  test('a take-over on a full factory waits: the run stays parked until a slot frees', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 1 });
+    const working = (
+      await runsRepo().start({ factoryId, issueNumber: 1, state: 'working' })
+    )._unsafeUnwrap();
+    const parked = await seedParked(factoryId, 2, 't-take');
+    testDb.sqlite
+      .query('UPDATE factory_runs SET completed_at = ? WHERE id = ?')
+      .run(new Date(Date.now() - 60_000).toISOString(), parked.id);
+    noteOwnerFollowUp('t-take');
+
+    await onFactoryThreadTerminal('t-take', 'completed');
+
+    expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.state).toBe('waiting_human');
+    expect(await inFlightCount(factoryId)).toBe(1);
+
+    // The working run ends; the follow-up's next completion takes the run over.
+    await runsRepo().update(working.id, { state: 'merged' });
+    await onFactoryThreadTerminal('t-take', 'completed');
+    expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.state).toBe('queued');
+  });
+
+  test('concurrent Retries never put more runs in flight than maxConcurrent', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 2 });
+    const failed = await Promise.all(
+      [1, 2, 3, 4].map(async (issueNumber) =>
+        (await runsRepo().start({ factoryId, issueNumber, state: 'failed' }))._unsafeUnwrap(),
+      ),
+    );
+    const control = createFactoryRunControl();
+
+    const results = await Promise.all(failed.map((run) => control.retry(factoryId, run.id)));
+
+    expect(results.filter((r) => r.isOk())).toHaveLength(2);
+    expect(await inFlightCount(factoryId)).toBe(2);
   });
 });

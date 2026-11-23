@@ -24,11 +24,13 @@
  *     untouched; its files are shared with the fork (same worktree).
  */
 
-import { ResultAsync } from 'neverthrow';
+import { badRequest, internal } from '@funny/shared/errors';
+import { err, ok, ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
 import { restoreGitCheckpoint, type GitCheckpointRestoreResult } from '../git-checkpoints.js';
+import { rewindTracked } from '../git-destructive.js';
 import { getServices } from '../service-registry.js';
 import { canDoGitOps } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
@@ -81,7 +83,7 @@ async function resolveAnchor(params: {
     throw new ThreadServiceError('Thread not found', 404);
   }
   const provider = (source as any).provider ?? 'claude';
-  if (!canDoGitOps({ isScratch: !!(source as any).isScratch })) {
+  if (!canDoGitOps(source)) {
     throw new ThreadServiceError('Rewind is unavailable for scratch threads', 400);
   }
   if (!(source as any).fileCheckpointingEnabled) {
@@ -120,17 +122,42 @@ async function resolveAnchor(params: {
   };
 }
 
-/** Restore the checkpoint captured for `messageId`, or throw a 400 when there is none. */
+/**
+ * Restore the checkpoint captured for `messageId`, or throw a 400 when there
+ * is none. The files it replaces are saved first as an undo snapshot and the
+ * rewind is recorded as a `git.destructive` activity
+ * (track-user-and-scheduled-actions, design D5).
+ */
 async function restoreCheckpointOrThrow(params: {
+  /** The checkpoint's thread (the source thread, for a fork). */
   threadId: string;
   messageId: string;
   cwd: string;
+  /** Who rewinds, and the thread the activity concerns. */
+  userId: string;
+  activityThreadId: string;
+  projectId: string | null;
 }): Promise<GitCheckpointRestoreResult> {
-  const rewindResult = await restoreGitCheckpoint(params);
-  if (!rewindResult.canRewind) {
-    throw new ThreadServiceError(rewindResult.error ?? 'No Git checkpoint available', 400);
+  const { threadId, messageId, cwd } = params;
+  const result = await rewindTracked(
+    { userId: params.userId, cwd, threadId: params.activityThreadId, projectId: params.projectId },
+    messageId,
+    () =>
+      ResultAsync.fromPromise(restoreGitCheckpoint({ threadId, messageId, cwd }), (e) =>
+        internal(String(e)),
+      ).andThen((restored) =>
+        restored.canRewind
+          ? ok(restored)
+          : err(badRequest(restored.error ?? 'No Git checkpoint available')),
+      ),
+  );
+  if (result.isErr()) {
+    throw new ThreadServiceError(
+      result.error.message,
+      result.error.type === 'INTERNAL' ? 500 : 400,
+    );
   }
-  return rewindResult;
+  return result.value;
 }
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -155,6 +182,9 @@ async function rewindCodeImpl(params: RewindCodeParams): Promise<RewindCodeResul
       threadId: params.threadId,
       messageId: params.messageId,
       cwd: anchor.cwd,
+      userId: params.userId,
+      activityThreadId: params.threadId,
+      projectId: anchor.sourceThread.projectId || null,
     });
 
     // 2. Truncate the DB transcript and drop the provider session. The next
@@ -228,6 +258,9 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
       threadId: params.sourceThreadId,
       messageId: params.messageId,
       cwd: newCwd,
+      userId: params.userId,
+      activityThreadId: (newThread as { id: string }).id,
+      projectId: anchor.sourceThread.projectId || null,
     });
 
     log.info('Thread forked and code rewound', {

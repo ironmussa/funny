@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -36,10 +36,10 @@ export function PRCreateThreadButton({
           }}
           data-testid={`pr-create-thread-${prNumber}`}
         >
-          <MessageSquarePlus className="icon-sm" />
+          <Plus className="icon-sm" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
+      <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>
   );
 }

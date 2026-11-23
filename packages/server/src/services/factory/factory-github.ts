@@ -106,6 +106,12 @@ export interface FactoryGithubPort {
   ): ResultAsync<FactoryPullRequestFound | null, GithubCallError>;
   /** Whether `branch` has commits the DEFAULT branch does not (none when it is absent). */
   branchAhead(reader: FactoryRepoReader, branch: string): ResultAsync<boolean, GithubCallError>;
+  /** Swap an issue's label (see `relabelIssue` in `factory-repo-reads.ts`). */
+  relabelIssue(
+    reader: FactoryRepoReader,
+    issueNumber: number,
+    labels: { remove?: string; add: string },
+  ): ResultAsync<void, GithubCallError>;
   /** The name of the repository's DEFAULT branch: what a run's worktree starts from. */
   defaultBranch(reader: FactoryRepoReader): ResultAsync<string, GithubCallError>;
   /** The commit `branch` is at and the verdict of its checks (the base branch after merges). */
@@ -244,6 +250,7 @@ export function createFactoryGithub(
     findPullRequest: (reader, branch, state) => reads(reader).findPullRequest(branch, state),
     branchAhead: (reader, branch) => reads(reader).branchAhead(branch),
     defaultBranch: (reader) => reads(reader).defaultBranch(),
+    relabelIssue: (reader, issueNumber, labels) => reads(reader).relabelIssue(issueNumber, labels),
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
     branchState: (reader, branch) => reads(reader).branchState(branch),
     revertPullRequest: (reader, number, text) => reads(reader).revertPullRequest(number, text),

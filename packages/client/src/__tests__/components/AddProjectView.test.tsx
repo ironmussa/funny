@@ -5,6 +5,7 @@ import { err, ok } from 'neverthrow';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { AddProjectView } from '@/components/AddProjectView';
+import { useProjectStore } from '@/stores/project-store';
 
 interface AddProjectMocks {
   createProject: Mock<(...args: any[]) => any>;
@@ -24,9 +25,6 @@ const mocks = ((): AddProjectMocks => ({
   orgId: null,
 }))();
 mock.module('@/lib/api', () => ({ api: mocks }));
-mock.module('@/stores/app-store', () => ({
-  useAppStore: (select: (s: typeof mocks) => unknown) => select(mocks),
-}));
 mock.module('@/stores/auth-store', () => ({
   useAuthStore: { getState: () => ({ activeOrgId: mocks.orgId }) },
 }));
@@ -60,8 +58,13 @@ beforeEach(() => {
   mocks.orgId = null;
   mocks.createProject.mockResolvedValue(err({ type: 'CONFLICT', message: 'Already exists' }));
   mocks.loadProjects.mockResolvedValue(undefined);
+  useProjectStore.setState({ loadProjects: mocks.loadProjects });
 });
-afterEach(cleanup);
+const realLoadProjects = useProjectStore.getState().loadProjects;
+afterEach(() => {
+  cleanup();
+  useProjectStore.setState({ loadProjects: realLoadProjects });
+});
 test('offers to open the existing project after refreshing the list', async () => {
   mocks.listProjects.mockResolvedValue(ok([{ id: 'p1', name: 'Broncos', path: '/repos/broncos' }]));
   submit();

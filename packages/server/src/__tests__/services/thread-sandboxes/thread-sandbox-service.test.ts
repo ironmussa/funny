@@ -59,6 +59,8 @@ interface Setup {
   service: ReturnType<typeof createThreadSandboxService>;
   issued: string[];
   removedRunners: string[];
+  /** The `sandbox.provision` activities: spec, steps and outcome. */
+  activities: Array<{ spec: { kind: string; userId: string }; steps: string[]; outcome?: string }>;
 }
 
 function setup(
@@ -91,6 +93,7 @@ function setup(
   const issued: string[] = [];
   const checkouts: Setup['checkouts'] = [];
   const removedRunners: string[] = [];
+  const activities: Setup['activities'] = [];
   // The runner "connects" once the start command ran in the sandbox.
   const started = () => provider.commands.some((c) => c.command.includes('systemctl restart'));
   const service = createThreadSandboxService({
@@ -123,8 +126,26 @@ function setup(
     removeRunner: async (runnerId) => {
       removedRunners.push(runnerId);
     },
+    activities: {
+      trackServerActivity: async (spec, run) => {
+        const entry: Setup['activities'][number] = { spec, steps: [] };
+        activities.push(entry);
+        const result = await run({
+          id: 'a1',
+          step: (label) => entry.steps.push(label),
+          effect: () => {},
+          succeed: () => {},
+          fail: () => {},
+          settled: async () => {},
+        });
+        entry.outcome = result.isOk()
+          ? 'succeeded'
+          : `failed: ${String((result.error as { message?: string }).message)}`;
+        return result;
+      },
+    },
   });
-  return { provider, store, service, issued, checkouts, removedRunners };
+  return { provider, store, service, issued, checkouts, removedRunners, activities };
 }
 
 const input = { userId: 'alice', threadId: 't-1', connectionId: 'conn-1' };
@@ -199,6 +220,27 @@ describe('thread sandbox provisioning', () => {
     // Background build kicked off for the next thread.
     await Bun.sleep(5);
     expect(provider.templateBuilds).toHaveLength(1);
+  });
+
+  test('provisioning is a sandbox.provision activity of the owner, a step per phase', async () => {
+    const { service, activities } = setup({ templates: [] });
+    expectOk(await service.provision(input));
+    expect(activities).toHaveLength(1);
+    expect(activities[0]!.spec).toMatchObject({ kind: 'sandbox.provision', userId: 'alice' });
+    expect(activities[0]!.steps).toEqual([
+      'Creating the machine',
+      'Installing the runner',
+      'Connecting the runner',
+      'Checking out the project',
+    ]);
+    expect(activities[0]!.outcome).toBe('succeeded');
+  });
+
+  test('a failed provisioning fails its activity at the step it reached', async () => {
+    const { service, activities } = setup({ templates: [build.version], runnerConnects: false });
+    await service.provision(input);
+    expect(activities[0]!.steps.at(-1)).toBe('Connecting the runner');
+    expect(activities[0]!.outcome).toContain('failed');
   });
 
   test('a runner that never connects fails the thread and destroys the machine', async () => {

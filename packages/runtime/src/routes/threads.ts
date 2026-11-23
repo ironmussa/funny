@@ -55,8 +55,12 @@ import {
   convertToWorktreeSchema,
   validate,
 } from '../validation/schemas.js';
+import { threadWorkspaceRoutes } from './thread-workspace.js';
 
 export const threadRoutes = new Hono<HonoEnv>();
+
+// DELETE /api/threads/:id/scratch — removes a deleted scratch thread's directory.
+threadRoutes.route('/', threadWorkspaceRoutes);
 
 type SendMessageBody = z.infer<typeof sendMessageSchema>;
 

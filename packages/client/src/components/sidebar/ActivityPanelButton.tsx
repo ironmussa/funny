@@ -3,6 +3,7 @@ import { Activity as ActivityIcon, CircleStop } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
@@ -17,14 +18,18 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { clearFinishedActivities, dismissActivity } from '@/data/activities/actions';
+import {
+  clearFinishedActivities,
+  dismissActivity,
+  restoreActivitySnapshot,
+} from '@/data/activities/actions';
 import { useActivities, useActivityCounts, useActivityProgress } from '@/data/activities/hooks';
 import { loadActivities } from '@/data/activities/loaders';
 import { cancelJob, cancelWatcher } from '@/data/background/actions';
 import { useJobsById, useWatchersById } from '@/data/background/hooks';
 import { loadJobs, loadWatchers } from '@/data/background/loaders';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
-import { canRetryActivity, retryActivity } from '@/lib/activity-retry';
+import { canRestoreActivity, canRetryActivity, retryActivity } from '@/lib/activity-retry';
 import { openJobLogTerminal } from '@/lib/open-terminal-tab';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -42,7 +47,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { ActivityList } from './ActivityList';
 
 /** Compact pill used for status chips in the background-activity panel. */
-const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-[9px] leading-none font-medium';
+const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-3xs leading-none font-medium';
 
 function statusLabel(w: Watcher): string {
   switch (w.status) {
@@ -478,6 +483,16 @@ function openRetryTarget(activity: Activity, navigate: (path: string) => void): 
       useUIStore.getState().setAddProjectOpen(true);
     },
     openReviewPane: () => useUIStore.getState().setReviewPaneOpen(true),
+    openWorktrees: () => {
+      const ui = useUIStore.getState();
+      ui.setReviewSubTab('worktrees');
+      ui.setReviewPaneOpen(true);
+    },
+    openPullRequests: () => {
+      const ui = useUIStore.getState();
+      ui.setReviewSubTab('prs');
+      ui.setReviewPaneOpen(true);
+    },
   });
 }
 
@@ -551,22 +566,57 @@ function ActivityTab({ now, onClose }: { now: number; onClose: () => void }) {
   const activities = useActivities();
   const progress = useActivityProgress();
   const runnerOffline = useRunnerStatusStore((s) => s.status === 'offline');
+  const { t } = useTranslation();
   const retry = (activity: Activity) => {
     if (openRetryTarget(activity, navigate)) onClose();
   };
+  // Restore (track-user-and-scheduled-actions): confirm, then put the snapshot back.
+  const [restoring, setRestoring] = useState<Activity | null>(null);
+  const [goneSnapshots, setGoneSnapshots] = useState<ReadonlySet<string>>(() => new Set());
+  const confirmRestore = async () => {
+    const activity = restoring;
+    if (!activity) return;
+    setRestoring(null);
+    const result = await restoreActivitySnapshot(activity);
+    if (result.isOk()) {
+      toast.success(t('activity.restored'));
+    } else if (result.error.type === 'NOT_FOUND') {
+      setGoneSnapshots((gone) => new Set(gone).add(activity.id));
+      toast.error(t('activity.snapshotGone'));
+    } else {
+      toast.error(t('activity.restoreFailed'), { description: result.error.message });
+    }
+  };
   return (
-    <ScrollArea className={cn('max-h-96', activities.length > 6 && 'h-96')}>
-      <ActivityList
-        activities={activities}
-        progress={progress}
-        runnerOffline={runnerOffline}
-        now={now}
-        canRetry={canRetryActivity}
-        onRetry={retry}
-        onDismiss={(activity) => void dismissActivity(activity.id)}
-        onClearFinished={() => void clearFinishedActivities()}
+    <>
+      <ScrollArea className={cn('max-h-96', activities.length > 6 && 'h-96')}>
+        <ActivityList
+          activities={activities}
+          progress={progress}
+          runnerOffline={runnerOffline}
+          now={now}
+          canRetry={canRetryActivity}
+          onRetry={retry}
+          canRestore={(activity) =>
+            !goneSnapshots.has(activity.id) && canRestoreActivity(activity, now)
+          }
+          onRestore={setRestoring}
+          onDismiss={(activity) => void dismissActivity(activity.id)}
+          onClearFinished={() => void clearFinishedActivities()}
+        />
+      </ScrollArea>
+      <ConfirmDialog
+        open={!!restoring}
+        onOpenChange={(open) => {
+          if (!open) setRestoring(null);
+        }}
+        title={t('activity.restoreTitle')}
+        description={t('activity.restoreDescription', { title: restoring?.title ?? '' })}
+        confirmLabel={t('activity.restore')}
+        onCancel={() => setRestoring(null)}
+        onConfirm={() => void confirmRestore()}
       />
-    </ScrollArea>
+    </>
   );
 }
 

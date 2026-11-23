@@ -76,7 +76,7 @@ export const WAKE_GRACE_MS = 2 * 60 * 1000;
  * or one ended after the thread's last finish less than `graceMs` ago (its wake
  * is starting). The grace bounds a wake that failed to start the agent.
  */
-export function awaitsWake(
+function awaitsWake(
   thread: Pick<ThreadRecord, 'completedAt'>,
   sources: WakeSource[],
   now: number,

@@ -28,6 +28,7 @@ import { db } from '../../db/index.js';
 import { automations, automationRuns, threads } from '../../db/schema.js';
 import { authorizer } from '../../lib/server-authorizer.js';
 import {
+  parseAutomationSchedule,
   rescheduleAutomation,
   runAutomation,
   unscheduleAutomation,
@@ -127,6 +128,18 @@ function buildAutomationUpdates(
 
 const notFound = () => err(failure(404, 'Not found'));
 
+/**
+ * A schedule the scheduler could not run is refused on save, so an automation
+ * never sits enabled without running (track-user-and-scheduled-actions, D1).
+ */
+function invalidSchedule(schedule: string) {
+  const reason = parseAutomationSchedule(schedule);
+  if (!reason) return null;
+  // `friendlyMessage` is what the client's save toast shows.
+  const message = `"${schedule}" is not a valid cron schedule: ${reason}`;
+  return failure(400, message, message);
+}
+
 export const automationsPort: AutomationsPort = {
   async inbox(userId, query) {
     const conditions: ReturnType<typeof eq>[] = [
@@ -178,6 +191,8 @@ export const automationsPort: AutomationsPort = {
   async create(userId, data) {
     const visible = await requireVisibleProject(userId, data.projectId);
     if (visible.isErr()) return err(visible.error);
+    const invalid = invalidSchedule(data.schedule);
+    if (invalid) return err(invalid);
 
     const id = nanoid();
     const now = new Date().toISOString();
@@ -210,6 +225,8 @@ export const automationsPort: AutomationsPort = {
     if (!(await canMoveToProject(userId, existing.projectId, fields.projectId))) {
       return err(failure(404, 'Project not found'));
     }
+    const invalid = fields.schedule === undefined ? null : invalidSchedule(fields.schedule);
+    if (invalid) return err(invalid);
 
     const updates = buildAutomationUpdates(fields, enabled);
     if (Object.keys(updates).length > 0) {

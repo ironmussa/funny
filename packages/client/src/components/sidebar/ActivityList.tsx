@@ -1,7 +1,18 @@
 import type { Activity } from '@funny/shared';
-import { CircleAlert, CircleCheck, CircleSlash, Loader2, RotateCcw, X } from 'lucide-react';
+import { isDestructiveKind } from '@funny/shared/activities';
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleSlash,
+  Loader2,
+  RotateCcw,
+  TriangleAlert,
+  Undo2,
+  X,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -10,7 +21,9 @@ import { cn } from '@/lib/utils';
 
 /**
  * The Activity tab of the sidebar footer panel (track-background-activities):
- * the user's clones, worktree setups and git workflows. Rows come ordered
+ * the user's clones, worktree setups and git workflows, and what funny did on
+ * its own (track-funny-actions): those carry an "Automatic" badge, a
+ * destructive kind is marked, and a finished row lists its effects. Rows come ordered
  * (running first, then finished newest first) from `useActivities`.
  */
 
@@ -22,6 +35,9 @@ export interface ActivityListProps {
   now: number;
   canRetry: (activity: Activity) => boolean;
   onRetry: (activity: Activity) => void;
+  /** Whether the row offers Restore (an undo snapshot it can still put back). */
+  canRestore?: (activity: Activity) => boolean;
+  onRestore?: (activity: Activity) => void;
   onDismiss: (activity: Activity) => void;
   onClearFinished: () => void;
 }
@@ -54,6 +70,45 @@ function activityDetail(
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
+/**
+ * The effects of a row, one line per distinct effect and target; repeats (two
+ * terminals named zsh) are counted.
+ */
+function groupEffects(effects: NonNullable<Activity['effects']>) {
+  const groups = new Map<string, { effect: string; target: string; count: number }>();
+  for (const { effect, target } of effects) {
+    const key = `${effect}:${target}`;
+    const group = groups.get(key);
+    if (group) group.count += 1;
+    else groups.set(key, { effect, target, count: 1 });
+  }
+  return [...groups.entries()];
+}
+
+/** What a finished activity removed, stopped or changed. */
+function EffectsList({ activity }: { activity: Activity }) {
+  const { t } = useTranslation();
+  if (activity.status === 'running' || !activity.effects?.length) return null;
+  return (
+    <ul
+      className="text-muted-foreground mt-0.5 flex flex-col text-xs"
+      data-testid={`activity-item-effects-${activity.id}`}
+    >
+      {groupEffects(activity.effects).map(([key, { effect, target, count }]) => (
+        <li
+          key={key}
+          className="truncate"
+          title={target}
+          data-testid={`activity-item-effect-${activity.id}-${effect}`}
+        >
+          {t(`activity.effects.${effect}`)}: {target}
+          {count > 1 ? ` ×${count}` : ''}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function RowAction({
   label,
   testId,
@@ -84,6 +139,55 @@ function RowAction({
   );
 }
 
+/** Retry, restore and dismiss for one row. */
+function RowActions({
+  activityId,
+  canRetry,
+  onRetry,
+  canRestore,
+  onRestore,
+  dismissable,
+  onDismiss,
+}: {
+  activityId: string;
+  canRetry: boolean;
+  onRetry: () => void;
+  canRestore: boolean;
+  onRestore: () => void;
+  dismissable: boolean;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      {canRetry ? (
+        <RowAction
+          label={t('activity.retry')}
+          testId={`activity-item-retry-${activityId}`}
+          icon={RotateCcw}
+          onClick={onRetry}
+        />
+      ) : null}
+      {canRestore ? (
+        <RowAction
+          label={t('activity.restore')}
+          testId={`activity-item-restore-${activityId}`}
+          icon={Undo2}
+          onClick={onRestore}
+        />
+      ) : null}
+      {dismissable ? (
+        <RowAction
+          label={t('activity.dismiss')}
+          testId={`activity-item-dismiss-${activityId}`}
+          icon={X}
+          onClick={onDismiss}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function ActivityRow({
   activity,
   percent,
@@ -91,6 +195,8 @@ function ActivityRow({
   now,
   canRetry,
   onRetry,
+  canRestore,
+  onRestore,
   onDismiss,
 }: {
   activity: Activity;
@@ -99,6 +205,8 @@ function ActivityRow({
   now: number;
   canRetry: boolean;
   onRetry: () => void;
+  canRestore: boolean;
+  onRestore: () => void;
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
@@ -120,7 +228,28 @@ function ActivityRow({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
+          {isDestructiveKind(activity.kind) ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TriangleAlert
+                  className="icon-sm text-status-pending shrink-0"
+                  aria-label={t('activity.destructive')}
+                  data-testid={`activity-item-destructive-${activity.id}`}
+                />
+              </TooltipTrigger>
+              <TooltipContent>{t('activity.destructive')}</TooltipContent>
+            </Tooltip>
+          ) : null}
           <span className="truncate text-sm font-medium">{activity.title}</span>
+          {activity.origin !== 'user' ? (
+            <Badge
+              variant="outline"
+              className="shrink-0 px-1 py-0 text-xs font-normal"
+              data-testid={`activity-item-automatic-${activity.id}`}
+            >
+              {t('activity.automatic')}
+            </Badge>
+          ) : null}
           <span className="text-muted-foreground ml-auto shrink-0 text-xs">{when}</span>
         </div>
         {detail ? (
@@ -135,25 +264,17 @@ function ActivityRow({
             {detail}
           </p>
         ) : null}
+        <EffectsList activity={activity} />
       </div>
-      <div className="flex shrink-0 items-center gap-0.5">
-        {canRetry ? (
-          <RowAction
-            label={t('activity.retry')}
-            testId={`activity-item-retry-${activity.id}`}
-            icon={RotateCcw}
-            onClick={onRetry}
-          />
-        ) : null}
-        {dismissable ? (
-          <RowAction
-            label={t('activity.dismiss')}
-            testId={`activity-item-dismiss-${activity.id}`}
-            icon={X}
-            onClick={onDismiss}
-          />
-        ) : null}
-      </div>
+      <RowActions
+        activityId={activity.id}
+        canRetry={canRetry}
+        onRetry={onRetry}
+        canRestore={canRestore}
+        onRestore={onRestore}
+        dismissable={dismissable}
+        onDismiss={onDismiss}
+      />
     </div>
   );
 }
@@ -165,6 +286,8 @@ export function ActivityList({
   now,
   canRetry,
   onRetry,
+  canRestore = () => false,
+  onRestore = () => {},
   onDismiss,
   onClearFinished,
 }: ActivityListProps) {
@@ -193,6 +316,8 @@ export function ActivityList({
           now={now}
           canRetry={canRetry(activity)}
           onRetry={() => onRetry(activity)}
+          canRestore={canRestore(activity)}
+          onRestore={() => onRestore(activity)}
           onDismiss={() => onDismiss(activity)}
         />
       ))}

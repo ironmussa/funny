@@ -104,6 +104,6 @@ test('pruneOrphanWorktrees deletes nothing when the worktree list cannot be read
   renameSync(resolve(repoPath, '.git', 'objects'), resolve(repoPath, '.git', 'objects.moved'));
 
   const pruned = await pruneOrphanWorktrees(repoPath);
-  expect(pruned._unsafeUnwrap()).toBe(0);
+  expect(pruned._unsafeUnwrap()).toEqual([]);
   expect(existsSync(resolve(livePath, 'work.txt'))).toBe(true);
 });

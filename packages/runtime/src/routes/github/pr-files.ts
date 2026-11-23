@@ -1,8 +1,9 @@
 import { getRemoteUrl } from '@funny/core/git';
 import type { PRFile, PRCommit } from '@funny/shared';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
+import { recordedGithubWrite } from '../../services/github-write-activity.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
 import {
@@ -200,6 +201,30 @@ prFileRoutes.post('/pr-revert-file', async (c) => {
   if (access instanceof Response) return access;
   const { owner, repo, token } = access;
 
+  // Recorded as a `github.write` activity (track-user-and-scheduled-actions).
+  return recordedGithubWrite(
+    {
+      userId: c.get('userId') as string,
+      projectId,
+      title: `Revert ${filePath} in ${owner}/${repo}#${prNumber}`,
+      input: {
+        action: 'pr-revert-file',
+        prNumber: Number(prNumber),
+        filePath,
+        repo: `${owner}/${repo}`,
+      },
+      effectsOf: () => [{ effect: 'file-reverted', target: filePath }],
+      resultRefOf: () => ({ prUrl: `https://github.com/${owner}/${repo}/pull/${prNumber}` }),
+    },
+    () => revertPullRequestFile(c, { owner, repo, token, prNumber, filePath }),
+  );
+});
+
+async function revertPullRequestFile(
+  c: Context<HonoEnv>,
+  args: { owner: string; repo: string; token: string; prNumber: number | string; filePath: string },
+): Promise<Response> {
+  const { owner, repo, token, prNumber, filePath } = args;
   try {
     // 1. Get the PR to know the base and head branches
     const prRes = await githubApiFetch(`/repos/${owner}/${repo}/pulls/${prNumber}`, token);
@@ -219,84 +244,87 @@ prFileRoutes.post('/pr-revert-file', async (c) => {
       token,
     );
 
-    if (baseFileRes.status === 404) {
-      // File doesn't exist in base branch — it was added in the PR.
-      // To "revert" means to delete it from the head branch.
-      // First get the file's SHA on the head branch
-      const headFileRes = await githubApiFetch(
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${headRef}`,
-        token,
-      );
-      if (!headFileRes.ok) {
-        return c.json({ error: 'File not found on head branch' }, 404);
-      }
-      const headFileData = (await headFileRes.json()) as any;
-
-      const deleteRes = await githubApiFetch(
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`,
-        token,
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: `revert: remove ${filePath} (not in base branch)`,
-            sha: headFileData.sha,
-            branch: headRef,
-          }),
-        },
-      );
-      if (!deleteRes.ok) {
-        const errBody = (await deleteRes.json().catch(() => ({}))) as any;
-        return c.json(
-          { error: errBody.message || `Failed to delete file: ${deleteRes.status}` },
-          502,
-        );
-      }
-      return c.json({ ok: true, action: 'deleted' });
-    }
-
+    // A file the base branch does not have was added in the PR: reverting
+    // deletes it from the head branch. Otherwise it gets the base version.
+    const file = { owner, repo, token, filePath, headRef };
+    if (baseFileRes.status === 404) return deleteAddedFile(c, file);
     if (!baseFileRes.ok) {
       return c.json({ error: `Failed to fetch base file: ${baseFileRes.status}` }, 502);
     }
     const baseFileData = (await baseFileRes.json()) as any;
-    const baseContent = baseFileData.content; // base64-encoded
-
-    // 3. Get the current file SHA on the head branch (required for update)
-    const headFileRes = await githubApiFetch(
-      `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${headRef}`,
-      token,
-    );
-    if (!headFileRes.ok) {
-      return c.json({ error: `Failed to fetch head file: ${headFileRes.status}` }, 502);
-    }
-    const headFileData = (await headFileRes.json()) as any;
-
-    // 4. Update the file on the head branch with the base content
-    const updateRes = await githubApiFetch(
-      `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`,
-      token,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `revert: restore ${filePath} to ${baseRef}`,
-          content: baseContent,
-          sha: headFileData.sha,
-          branch: headRef,
-        }),
-      },
-    );
-
-    if (!updateRes.ok) {
-      const errBody = (await updateRes.json().catch(() => ({}))) as any;
-      return c.json(
-        { error: errBody.message || `Failed to update file: ${updateRes.status}` },
-        502,
-      );
-    }
-
-    return c.json({ ok: true, action: 'reverted' });
+    return restoreBaseFile(c, file, baseRef, baseFileData.content);
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }
-});
+}
+
+interface PullRequestFile {
+  owner: string;
+  repo: string;
+  token: string;
+  filePath: string;
+  headRef: string;
+}
+
+/** The file's blob sha on the head branch (GitHub needs it to change the file), or a response. */
+async function headFileSha(c: Context<HonoEnv>, f: PullRequestFile): Promise<string | Response> {
+  const res = await githubApiFetch(
+    `/repos/${f.owner}/${f.repo}/contents/${encodeURIComponent(f.filePath)}?ref=${f.headRef}`,
+    f.token,
+  );
+  if (res.status === 404) return c.json({ error: 'File not found on head branch' }, 404);
+  if (!res.ok) return c.json({ error: `Failed to fetch head file: ${res.status}` }, 502);
+  return ((await res.json()) as any).sha;
+}
+
+/** Write the file on the head branch (`method` PUT to update, DELETE to remove). */
+async function writeHeadFile(
+  c: Context<HonoEnv>,
+  f: PullRequestFile,
+  method: 'PUT' | 'DELETE',
+  body: Record<string, unknown>,
+  action: 'deleted' | 'reverted',
+): Promise<Response> {
+  const sha = await headFileSha(c, f);
+  if (typeof sha !== 'string') return sha;
+  const res = await githubApiFetch(
+    `/repos/${f.owner}/${f.repo}/contents/${encodeURIComponent(f.filePath)}`,
+    f.token,
+    {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, sha, branch: f.headRef }),
+    },
+  );
+  if (!res.ok) {
+    const errBody = (await res.json().catch(() => ({}))) as any;
+    const verb = method === 'DELETE' ? 'delete' : 'update';
+    return c.json({ error: errBody.message || `Failed to ${verb} file: ${res.status}` }, 502);
+  }
+  return c.json({ ok: true, action });
+}
+
+function deleteAddedFile(c: Context<HonoEnv>, f: PullRequestFile): Promise<Response> {
+  return writeHeadFile(
+    c,
+    f,
+    'DELETE',
+    { message: `revert: remove ${f.filePath} (not in base branch)` },
+    'deleted',
+  );
+}
+
+function restoreBaseFile(
+  c: Context<HonoEnv>,
+  f: PullRequestFile,
+  baseRef: string,
+  content: string,
+): Promise<Response> {
+  return writeHeadFile(
+    c,
+    f,
+    'PUT',
+    { message: `revert: restore ${f.filePath} to ${baseRef}`, content },
+    'reverted',
+  );
+}

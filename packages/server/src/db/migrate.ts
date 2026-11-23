@@ -2185,10 +2185,32 @@ const migrations: Migration[] = [
     },
   },
   {
+    // track-funny-actions (design D4): who started an activity and what it
+    // changed. Existing rows read as user-started with no effects.
+    name: '107_activities_origin_effects',
+    async up() {
+      await ctx().addColumn('activities', 'origin', 'TEXT NOT NULL', "'user'");
+      await ctx().addColumn('activities', 'effects', 'TEXT');
+    },
+  },
+  {
+    // A run that ended with no change (`no_change`) is over: it must not hold
+    // its issue in the one-active-run index, or the issue could not be sent again.
+    name: '108_factory_runs_no_change_ends_a_run',
+    async up() {
+      await ctx().exec(sql`DROP INDEX IF EXISTS factory_runs_one_active_per_issue`);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+        ON factory_runs (factory_id, issue_number)
+        WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')
+      `);
+    },
+  },
+  {
     // Change factory-agent-roles, phase 1: the review verdicts and risk class of
     // a run, and the factory's merge policy and stage limits. The new run
     // states (`reviewing`, `merging`) need no column: `state` is free text.
-    name: '107_factory_review_and_merge_policy',
+    name: '109_factory_review_and_merge_policy',
     async up() {
       await ctx().addColumn('factory_runs', 'review_verdicts', 'TEXT');
       await ctx().addColumn('factory_runs', 'risk', 'TEXT');
@@ -2201,7 +2223,7 @@ const migrations: Migration[] = [
     // Change factory-agent-roles, phase 2: what triage decided about a run's
     // issue (its contract, or what it asked). The new run states (`triaging`,
     // `needs_info`) need no column.
-    name: '108_factory_runs_triage',
+    name: '110_factory_runs_triage',
     async up() {
       await ctx().addColumn('factory_runs', 'triage', 'TEXT');
     },
@@ -2210,7 +2232,7 @@ const migrations: Migration[] = [
     // Change factory-agent-roles, D10: a base branch that turned red after a
     // factory merge. One incident at a time per repository and base branch:
     // the partial unique index is what a compare-and-set open relies on.
-    name: '109_factory_incidents',
+    name: '111_factory_incidents',
     async up() {
       await ctx().exec(sql`
         CREATE TABLE IF NOT EXISTS factory_incidents (

@@ -13,11 +13,16 @@ import { createMockIo } from '../helpers/socketio-test-mocks.js';
 const online = new Set<string>();
 const port = createActivitiesPort({ isAvailable: async (id) => online.has(id) });
 
-async function seed(id: string, userId: string, status: 'running' | 'succeeded' | 'failed') {
+async function seed(
+  id: string,
+  userId: string,
+  status: 'running' | 'succeeded' | 'failed',
+  runnerId: string | null = 'r1',
+) {
   await repos.activities().insert({
     id,
     userId,
-    runnerId: 'r1',
+    runnerId,
     kind: 'project.clone',
     projectId: null,
     threadId: null,
@@ -75,6 +80,21 @@ describe('activities port', () => {
     await seed('run', 'alice', 'running');
     expect((await port.dismiss('alice', 'run'))._unsafeUnwrap()).toEqual({ ids: ['run'] });
     expect(await repos.activities().getById('run')).toBeUndefined();
+  });
+
+  test('a running server row (no runner) answers 409', async () => {
+    await seed('srv', 'alice', 'running', null);
+    expect((await port.dismiss('alice', 'srv'))._unsafeUnwrapErr().status).toBe(409);
+    expect(await repos.activities().getById('srv')).toBeDefined();
+  });
+
+  test('a server row stuck running for over 30 minutes can be dismissed', async () => {
+    await seed('stuck', 'alice', 'running', null);
+    const later = createActivitiesPort(
+      { isAvailable: async () => true },
+      () => Date.now() + 31 * 60_000,
+    );
+    expect((await later.dismiss('alice', 'stuck'))._unsafeUnwrap()).toEqual({ ids: ['stuck'] });
   });
 
   test('dismissing a finished row broadcasts activity:removed to the owner', async () => {

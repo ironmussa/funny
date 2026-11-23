@@ -124,8 +124,14 @@ export const MERGE_HOLD_REASONS = {
   highRisk: 'high risk',
 } as const;
 
-/** Why a run that ended without a commit or a pull request waits for a person. */
+/**
+ * Why a run without a commit or a pull request waits for a person: its checkout
+ * held unsaved work, so the agent may not have meant "nothing to change".
+ */
 export const NO_CHANGE_REASON = 'no change';
+
+/** The label an issue gets when its run ended with no change: a person decides what is next. */
+export const NO_CHANGE_TRIAGE_LABEL = 'needs-triage';
 
 /** The fixed first line of the issue comment a "no change" run posts. */
 export const NO_CHANGE_LINE = 'The issue factory made no change for this issue. The agent said:';
@@ -226,6 +232,12 @@ export interface FactoryActionProviderDeps {
     FactoryGithubPort,
     'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
   >;
+  /**
+   * Hand the issue back to a person after a run that ended with no change:
+   * take it out of the factory's label queue and mark it for triage. Best
+   * effort; the run ends with no change either way.
+   */
+  releaseIssue?: () => Promise<void>;
   /**
    * The repository's default branch. A worktree run starts from the remote's
    * copy of it, so the pull request holds the agent's commits only: not the
@@ -828,12 +840,18 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
   /**
    * The agent pushed no commit and opened no pull request: say so on the issue
-   * with its explanation, remove the run's checkout, and leave the run for a
-   * person (`no change`). Not ok, so the flow stops here.
+   * with its explanation and remove the run's checkout. Not ok, so the flow
+   * stops here.
+   *
+   * With nothing left behind, the agent decided there is nothing to change: the
+   * run ends as `no_change` (not a failure) and the issue goes back to a person
+   * for triage. The issue is not closed: "nothing to change" is the agent's
+   * opinion (an index issue is not done; a bug may not really be fixed).
    *
    * A checkout with uncommitted files or unpushed commits is kept and named in
-   * the comment: the agent may have stopped before committing (issue #229 lost
-   * 85 edited files this way).
+   * the comment, and the run waits for a person (`waiting_human`, reason `no
+   * change`): the agent may have stopped before committing (issue #229 lost 85
+   * edited files this way).
    */
   async function noChange(): Promise<ActionResult> {
     const threadId = threadIds[0];
@@ -851,7 +869,13 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         error: commented.error.message,
       });
     }
-    await deps.record({ state: 'waiting_human', failureReason: NO_CHANGE_REASON });
+    if (kept.length > 0) {
+      await deps.record({ state: 'waiting_human', failureReason: NO_CHANGE_REASON });
+    } else {
+      await deps.releaseIssue?.();
+      // The step stays recorded: the run's step chain shows how far it went.
+      await deps.record({ state: 'no_change', failureReason: null });
+    }
     await count(metrics, { event: 'no_change' });
     return {
       ok: false,

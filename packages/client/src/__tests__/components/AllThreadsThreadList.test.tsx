@@ -110,9 +110,9 @@ function makeList(
 function expectThreadHighlighted(threadId: string, highlighted: boolean) {
   const row = screen.getByTestId(`thread-item-${threadId}`).parentElement;
   if (highlighted) {
-    expect(row?.className).toContain('bg-accent text-foreground');
+    expect(row?.className).toContain('bg-sidebar-selected text-foreground');
   } else {
-    expect(row?.className).not.toContain('bg-accent text-foreground');
+    expect(row?.className).not.toContain('bg-sidebar-selected text-foreground');
   }
 }
 

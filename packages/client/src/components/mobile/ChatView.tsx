@@ -13,7 +13,6 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { useQueuedCount } from '@/data/queue/hooks';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
-import { useAppStore } from '@/stores/app-store';
 import {
   useCompactionEvents,
   useThreadEvents,
@@ -38,7 +37,7 @@ interface Props {
 
 export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   const { t } = useTranslation();
-  const selectThread = useAppStore((s) => s.selectThread);
+  const selectThread = useThreadStore((s) => s.selectThread);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const activeThread = useThreadSelector((th) => th);

@@ -12,6 +12,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { timeAgo } from '@/lib/thread-utils';
+import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -55,7 +56,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
     );
     const activity = selectActivityThreads(loadedThreads);
     const enriched: EnrichedThread[] = activity.threads.map((thread) => {
-      if (thread.isScratch) {
+      if (isScratch(thread)) {
         return {
           ...thread,
           projectName: _t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' }),

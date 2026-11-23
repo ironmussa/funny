@@ -117,6 +117,11 @@ interface PinnedPRCardProps {
   /** Called after a successful merge so the parent can refresh the PR list. */
   onMerged?: (prNumber: number) => void;
   onCreateThreadForBranch?: (branch: string) => void;
+  /**
+   * Hide the title / meta / actions line, for a host that already shows them
+   * (the PR detail dialog's header). The description and the conversation stay.
+   */
+  hideSummary?: boolean;
 }
 
 type MergeMethod = 'squash' | 'merge' | 'rebase';
@@ -143,7 +148,7 @@ function ReactionBar({
           key={key}
           variant="outline"
           size="xs"
-          className="h-5 gap-1 px-1.5 text-[10px]"
+          className="text-2xs h-5 gap-1 px-1.5"
           disabled={disabled}
           onClick={() => onReact(key)}
           data-testid={`${testIdBase}-reaction-${key}`}
@@ -244,6 +249,7 @@ export function PinnedPRCard({
   currentUserLogin,
   onMerged,
   onCreateThreadForBranch,
+  hideSummary = false,
 }: PinnedPRCardProps) {
   const { t } = useTranslation();
   const now = useMinuteTick();
@@ -487,7 +493,7 @@ export function PinnedPRCard({
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="h-3.5 px-1 text-[9px]">
+            <Badge variant="outline" className="text-3xs h-3.5 px-1">
               {c.author_association}
             </Badge>
           )}
@@ -556,7 +562,7 @@ export function PinnedPRCard({
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="h-3.5 px-1 text-[9px]">
+            <Badge variant="outline" className="text-3xs h-3.5 px-1">
               {c.author_association}
             </Badge>
           )}
@@ -640,7 +646,7 @@ export function PinnedPRCard({
           <Badge
             variant="outline"
             className={cn(
-              'h-3.5 px-1 text-[9px]',
+              'h-3.5 px-1 text-3xs',
               rv.state === 'APPROVED' && 'text-status-success border-status-success/40',
               rv.state === 'CHANGES_REQUESTED' && 'text-status-error border-status-error/40',
               (rv.state === 'COMMENTED' || rv.state === 'DISMISSED' || rv.state === 'PENDING') &&
@@ -698,114 +704,116 @@ export function PinnedPRCard({
     >
       {/* Header with PR body */}
       <div className="flex flex-col gap-2">
-        <div className="flex items-start gap-2">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex items-baseline gap-1.5">
-              <PRBadge
-                prNumber={pr.number}
-                prState={isMerged ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN'}
-                prUrl={pr.html_url}
-                size="xxs"
-                data-testid={`pinned-pr-link-${pr.number}`}
-              />
-              <span className="text-sm font-semibold">{pr.title}</span>
+        {!hideSummary && (
+          <div className="flex items-start gap-2" data-testid={`pinned-pr-summary-${pr.number}`}>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex items-baseline gap-1.5">
+                <PRBadge
+                  prNumber={pr.number}
+                  prState={isMerged ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN'}
+                  prUrl={pr.html_url}
+                  size="xxs"
+                  data-testid={`pinned-pr-link-${pr.number}`}
+                />
+                <span className="text-sm font-semibold">{pr.title}</span>
+              </div>
+              <PRMergeLine pr={pr} data-testid={`pinned-pr-merge-line-${pr.number}`} />
+              <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
+                {pr.user && (
+                  <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
+                )}
+                {pr.user ? <span>&middot;</span> : null}
+                <span>
+                  {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at, now)}
+                </span>
+                {lastCommitAuthor ? (
+                  <>
+                    <span>&middot;</span>
+                    <span>{t('review.pullRequests.lastCommitBy', 'Last commit by')}</span>
+                    <AuthorBadge
+                      name={lastCommitAuthor.name}
+                      avatarUrl={lastCommitAuthor.avatarUrl}
+                      size="xs"
+                    />
+                  </>
+                ) : null}
+                {pr.draft ? (
+                  <>
+                    <span>&middot;</span>
+                    <Badge variant="outline" className="text-3xs h-3.5 px-1 py-0 leading-none">
+                      {t('review.pullRequests.draft', 'Draft')}
+                    </Badge>
+                  </>
+                ) : null}
+              </div>
             </div>
-            <PRMergeLine pr={pr} data-testid={`pinned-pr-merge-line-${pr.number}`} />
-            <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
-              {pr.user && (
-                <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
-              )}
-              {pr.user ? <span>&middot;</span> : null}
-              <span>
-                {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at, now)}
-              </span>
-              {lastCommitAuthor ? (
-                <>
-                  <span>&middot;</span>
-                  <span>{t('review.pullRequests.lastCommitBy', 'Last commit by')}</span>
-                  <AuthorBadge
-                    name={lastCommitAuthor.name}
-                    avatarUrl={lastCommitAuthor.avatarUrl}
+            {canMerge && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
                     size="xs"
-                  />
-                </>
-              ) : null}
-              {pr.draft ? (
-                <>
-                  <span>&middot;</span>
-                  <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] leading-none">
-                    {t('review.pullRequests.draft', 'Draft')}
-                  </Badge>
-                </>
-              ) : null}
-            </div>
-          </div>
-          {canMerge && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="xs"
-                  className="shrink-0 gap-1"
-                  disabled={merging}
-                  data-testid={`pinned-pr-merge-${pr.number}`}
-                >
-                  {merging ? (
-                    <Loader2 className="icon-xs animate-spin" />
-                  ) : (
-                    <GitMerge className="icon-xs" />
-                  )}
-                  {t('review.pullRequests.merge', 'Merge')}
-                  <ChevronDown className="icon-xs" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  {t('review.pullRequests.mergeMethod', 'Merge method')}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {mergeMethods.map(({ method, label, hint }) => (
-                  <DropdownMenuItem
-                    key={method}
-                    onSelect={() => handleMerge(method)}
-                    className="flex flex-col items-start gap-0.5"
-                    data-testid={`pinned-pr-merge-${method}-${pr.number}`}
+                    className="shrink-0 gap-1"
+                    disabled={merging}
+                    data-testid={`pinned-pr-merge-${pr.number}`}
                   >
-                    <span className="text-xs font-medium">{label}</span>
-                    <span className="text-muted-foreground text-[10px]">{hint}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {onCreateThreadForBranch && (
-            <PRCreateThreadButton
-              prNumber={pr.number}
-              branch={pr.head.ref}
-              onCreateThread={onCreateThreadForBranch}
-            />
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                asChild
-                className="text-muted-foreground shrink-0"
-                data-testid={`pinned-pr-open-github-${pr.number}`}
-              >
-                <a
-                  href={pr.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open pull request ${pr.number} on GitHub`}
+                    {merging ? (
+                      <Loader2 className="icon-xs animate-spin" />
+                    ) : (
+                      <GitMerge className="icon-xs" />
+                    )}
+                    {t('review.pullRequests.merge', 'Merge')}
+                    <ChevronDown className="icon-xs" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    {t('review.pullRequests.mergeMethod', 'Merge method')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {mergeMethods.map(({ method, label, hint }) => (
+                    <DropdownMenuItem
+                      key={method}
+                      onSelect={() => handleMerge(method)}
+                      className="flex flex-col items-start gap-0.5"
+                      data-testid={`pinned-pr-merge-${method}-${pr.number}`}
+                    >
+                      <span className="text-xs font-medium">{label}</span>
+                      <span className="text-muted-foreground text-2xs">{hint}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {onCreateThreadForBranch && (
+              <PRCreateThreadButton
+                prNumber={pr.number}
+                branch={pr.head.ref}
+                onCreateThread={onCreateThreadForBranch}
+              />
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  asChild
+                  className="text-muted-foreground shrink-0"
+                  data-testid={`pinned-pr-open-github-${pr.number}`}
                 >
-                  <ExternalLink className="icon-xs" />
-                </a>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Open on GitHub</TooltipContent>
-          </Tooltip>
-        </div>
+                  <a
+                    href={pr.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open pull request ${pr.number} on GitHub`}
+                  >
+                    <ExternalLink className="icon-xs" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Open on GitHub</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
         {pr.body && (
           <div className="border-border bg-background rounded-md border p-2">
             <MarkdownBody body={pr.body} />
@@ -826,10 +834,24 @@ export function PinnedPRCard({
         </div>
       )}
 
+      {/* Conversation comments (bots post their summaries here, right under the description) */}
+      {!loading && conversation && conversation.comments.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium tracking-wide uppercase">
+            <MessageSquare className="size-3" />
+            <span>
+              {t('review.pullRequests.conversation', 'Conversation')} (
+              {conversation.comments.length})
+            </span>
+          </div>
+          <div className="flex flex-col gap-2">{conversation.comments.map(renderIssueComment)}</div>
+        </div>
+      )}
+
       {/* Review threads */}
       {!loading && threads.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
+          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium tracking-wide uppercase">
             <MessageSquare className="size-3" />
             <span>
               {t('review.pullRequests.reviewThreads', 'Review threads')} ({threads.length}
@@ -841,7 +863,7 @@ export function PinnedPRCard({
               <div key={filePath} className="flex flex-col gap-1.5">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="text-muted-foreground truncate font-mono text-[10px]">
+                    <div className="text-muted-foreground text-2xs truncate font-mono">
                       {filePath}
                     </div>
                   </TooltipTrigger>
@@ -860,7 +882,7 @@ export function PinnedPRCard({
                       )}
                       data-testid={`pinned-pr-thread-${th.id}`}
                     >
-                      <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
+                      <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
                         {th.is_resolved ? (
                           <CheckCircle2 className="text-status-success size-3" />
                         ) : (
@@ -875,7 +897,7 @@ export function PinnedPRCard({
                           <Button
                             variant="ghost"
                             size="xs"
-                            className="h-5 gap-1 px-1.5 text-[10px]"
+                            className="text-2xs h-5 gap-1 px-1.5"
                             disabled={resolving}
                             onClick={() => handleResolve(th)}
                             data-testid={`pinned-pr-thread-resolve-${th.id}`}
@@ -941,7 +963,7 @@ export function PinnedPRCard({
                           <Button
                             variant="ghost"
                             size="xs"
-                            className="h-5 gap-1 px-1.5 text-[10px]"
+                            className="text-2xs h-5 gap-1 px-1.5"
                             onClick={() => {
                               setReplyForThread(th.id);
                               setReplyBody('');
@@ -965,7 +987,7 @@ export function PinnedPRCard({
       {/* Reviews */}
       {!loading && conversation && conversation.reviews.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
+          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium tracking-wide uppercase">
             <ThumbsUp className="size-3" />
             <span>
               {t('review.pullRequests.reviews', 'Reviews')} ({conversation.reviews.length})
@@ -975,19 +997,9 @@ export function PinnedPRCard({
         </div>
       )}
 
-      {/* Conversation comments */}
+      {/* New comment */}
       {!loading && conversation && (
         <div className="flex flex-col gap-2">
-          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
-            <MessageSquare className="size-3" />
-            <span>
-              {t('review.pullRequests.conversation', 'Conversation')} (
-              {conversation.comments.length})
-            </span>
-          </div>
-          <div className="flex flex-col gap-2">{conversation.comments.map(renderIssueComment)}</div>
-
-          {/* New comment */}
           <div className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2">
             <textarea
               className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"

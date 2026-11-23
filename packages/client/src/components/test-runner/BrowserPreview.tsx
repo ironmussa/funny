@@ -302,7 +302,7 @@ export function BrowserPreview({
 
           {/* Action counter */}
           {hasActions && (
-            <span className="text-muted-foreground ml-1 text-[10px] tabular-nums">
+            <span className="text-muted-foreground text-2xs ml-1 tabular-nums">
               {activeIndex >= 0 ? activeIndex + 1 : '-'} / {actions.length}
             </span>
           )}
@@ -310,7 +310,7 @@ export function BrowserPreview({
           {/* Live indicator */}
           {isViewingHistorical && (
             <button
-              className="bg-muted text-muted-foreground hover:bg-muted/80 ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium"
+              className="bg-muted text-muted-foreground hover:bg-muted/80 text-2xs ml-2 rounded px-1.5 py-0.5 font-medium"
               onClick={() => {
                 setSelectedActionIndex(-1);
                 setHoveredActionIndex(-1);

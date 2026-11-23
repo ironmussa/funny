@@ -30,9 +30,9 @@ import type { YamlPipelineContext } from '@funny/workflows/compiler';
 
 import { log } from '../lib/logger.js';
 import { loadPipelines, type LoadedPipeline } from '../pipelines/yaml-loader.js';
+import { beginActivity, type ActivityHandle } from './activity-tracker.js';
 import { BUILTIN_AGENTS, resolveAgent, resolveBuiltinAgentByName } from './agent-registry.js';
 import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
-import { projectSearchRegistry } from './project-search-registry.js';
 import { getServices } from './service-registry.js';
 import * as tm from './thread-manager.js';
 
@@ -213,6 +213,39 @@ function nodeToRunStatus(nodeName: string, kind: string): PipelineRunStatus {
   }
 }
 
+/**
+ * Mirror one pipeline state change onto the run's activity (track-pipeline-
+ * runs, design D1): the stage as a step, each new fix commit as an effect,
+ * and the outcome.
+ */
+function recordRunProgress(
+  activity: ActivityHandle,
+  change: PipelineStateChange<YamlPipelineContext>,
+  run: { commits: Set<string>; ended: boolean },
+): void {
+  if (run.ended) return;
+  if (change.kind === 'entering') {
+    activity.step(stepLabel(nodeToStageType(change.nodeName), change.iteration));
+  }
+  const fixSha = change.ctx?.outputs?.['commit-fix']?.json?.sha;
+  if (typeof fixSha === 'string' && fixSha && !run.commits.has(fixSha)) {
+    run.commits.add(fixSha);
+    activity.effect('commit-created', fixSha.slice(0, 12));
+  }
+  if (change.kind !== 'terminal') return;
+  // The engine can report more than one terminal state; the first one ends the run.
+  run.ended = true;
+  if (change.outcome === 'completed') activity.succeed();
+  else
+    activity.fail(change.outcome === 'cancelled' ? 'Cancelled' : change.error || 'Pipeline failed');
+}
+
+/** The activity step for a stage (the review loop has one reviewer and one fixer stage). */
+function stepLabel(stage: PipelineStageType, iteration: number): string {
+  const round = iteration > 1 ? ` (round ${iteration})` : '';
+  return stage === 'corrector' ? `Fixing the findings${round}` : `Reviewing${round}`;
+}
+
 function nodeToStageType(nodeName: string): PipelineStageType {
   switch (nodeName) {
     case 'fix':
@@ -264,6 +297,19 @@ export async function startPipelineRun(opts: {
     maxIterations: pipeline.maxIterations,
     commitSha,
   });
+
+  // The run as one activity of the thread (track-pipeline-runs, design D1):
+  // it follows from the commit, so it is `implicit`.
+  const activity = beginActivity({
+    kind: 'pipeline.run',
+    userId,
+    projectId,
+    threadId,
+    title: `Review pipeline on ${commitSha ? commitSha.slice(0, 12) : 'the latest commit'}`,
+    input: { pipelineId: pipeline.id, commitSha },
+    origin: 'implicit',
+  });
+  const runProgress = { commits: new Set<string>(), ended: false };
 
   emitPipelineEvent(userId, {
     type: 'pipeline:run_started',
@@ -348,6 +394,7 @@ export async function startPipelineRun(opts: {
   // State change callback — persist to DB + emit WS
   const onStateChange = async (change: PipelineStateChange<YamlPipelineContext>) => {
     const { kind, nodeName, ctx, iteration } = change;
+    recordRunProgress(activity, change, runProgress);
 
     if (kind === 'entering' || kind === 'completed') {
       const dbStatus = nodeToRunStatus(nodeName, kind);
@@ -434,6 +481,7 @@ export async function startPipelineRun(opts: {
     maxIterations: pipeline.maxIterations,
   })
     .catch((err) => {
+      activity.fail(String(err));
       log.error('Pipeline: unexpected error', {
         namespace: 'pipeline',
         runId,
@@ -467,33 +515,26 @@ export async function cleanupReviewerThread(
   if (!project) return;
 
   if (reviewerThread.worktreePath && reviewerThread.mode === 'worktree') {
-    const { removeWorktree, removeBranch } = await import('@funny/core/git');
-    await projectSearchRegistry.invalidate(reviewerThread.worktreePath).match(
-      () => undefined,
-      (error) =>
-        log.warn('Pipeline: failed to dispose reviewer search index', {
-          namespace: 'pipeline',
-          error: error.message,
-        }),
-    );
-    await removeWorktree(project.path, reviewerThread.worktreePath).match(
+    // Recorded cleanup (services/workspace-cleanup.ts); best effort here.
+    const { cleanupWorkspace } = await import('./workspace-cleanup.js');
+    await cleanupWorkspace({
+      userId: reviewerThread.userId,
+      projectId,
+      projectPath: project.path,
+      threadId: reviewerThreadId,
+      worktreePath: reviewerThread.worktreePath,
+      branch: reviewerThread.branch ?? null,
+      deleteBranch: !!reviewerThread.branch,
+      reason: 'review-finished',
+      origin: 'system',
+    }).match(
       () => undefined,
       (e) =>
-        log.warn('Pipeline: failed to remove reviewer worktree', {
+        log.warn('Pipeline: failed to clean up reviewer worktree', {
           namespace: 'pipeline',
-          error: String(e),
+          error: e.message,
         }),
     );
-    if (reviewerThread.branch) {
-      await removeBranch(project.path, reviewerThread.branch).match(
-        () => undefined,
-        (e) =>
-          log.warn('Pipeline: failed to remove reviewer branch', {
-            namespace: 'pipeline',
-            error: String(e),
-          }),
-      );
-    }
   }
 
   await tm.updateThread(reviewerThreadId, {

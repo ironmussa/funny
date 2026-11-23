@@ -21,7 +21,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { db } from '../db/index.js';
-import { inviteLinks } from '../db/schema.js';
+import { inviteLinks, user as userTable } from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { auth } from '../lib/auth.js';
 import { log } from '../lib/logger.js';
@@ -526,9 +526,13 @@ inviteLinkRoutes.post('/accept', async (c) => {
   }
 
   try {
-    // Get user info
-    const allUsers = await orgApi().listUsers({ query: { limit: 1000 } });
-    const user = (allUsers as any)?.users?.find((u: any) => u.id === userId);
+    // Read the caller's row directly: Better Auth's `admin.listUsers` needs an
+    // admin session, so for anyone else it threw and every accept failed with
+    // 500 (issue #234, hidden by the auth mock).
+    const [user] = await db
+      .select({ id: userTable.id })
+      .from(userTable)
+      .where(eq(userTable.id, userId as string));
     if (!user) {
       await releaseInviteSlot(link.id);
       return c.json({ error: 'User not found' }, 404);

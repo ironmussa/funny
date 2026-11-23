@@ -13,7 +13,7 @@ import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { useMobileViewport } from '@/hooks/use-mobile-viewport';
 import { useWS } from '@/hooks/use-ws';
 import { TOAST_DURATION } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 
 const AddProjectView = lazy(() =>
@@ -32,7 +32,7 @@ export function MobilePage() {
     setSearchCaseSensitive,
   } = useMobileNavigation(ready);
 
-  const loadProjects = useAppStore((s) => s.loadProjects);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
   const projects = useProjects();
 
   useWS();

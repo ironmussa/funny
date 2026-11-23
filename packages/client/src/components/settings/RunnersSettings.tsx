@@ -227,7 +227,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             <Badge
               variant="outline"
               className={cn(
-                'h-4 px-1.5 text-[10px]',
+                'h-4 px-1.5 text-2xs',
                 runner.status === 'online' && 'text-status-success',
                 runner.status === 'busy' && 'text-status-warning',
                 runner.status !== 'online' && runner.status !== 'busy' && 'text-muted-foreground',

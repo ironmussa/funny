@@ -172,7 +172,7 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
                 setOpenRegionId(a.id);
               }}
             >
-              <span className="bg-primary text-primary-foreground m-0.5 inline-flex size-5 items-center justify-center rounded-full text-[10px] font-semibold">
+              <span className="bg-primary text-primary-foreground text-2xs m-0.5 inline-flex size-5 items-center justify-center rounded-full font-semibold">
                 {index}
               </span>
             </button>

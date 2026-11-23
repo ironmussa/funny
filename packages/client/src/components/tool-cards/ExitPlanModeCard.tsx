@@ -436,7 +436,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
           <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
         )}
         {displayTime && (
-          <span className="text-muted-foreground/50 text-[10px] tabular-nums">{displayTime}</span>
+          <span className="text-muted-foreground/50 text-2xs tabular-nums">{displayTime}</span>
         )}
         <span className="ml-auto flex items-center gap-1.5">
           {submitted && (

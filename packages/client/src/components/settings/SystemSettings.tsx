@@ -26,7 +26,7 @@ interface NativeGitInfo {
 }
 
 const ansiConverter = createAnsiConverter({
-  fg: '#abb2bf',
+  fg: 'hsl(var(--foreground))',
   bg: 'transparent',
   newline: true,
 });
@@ -103,7 +103,7 @@ export function SystemSettings() {
                 <Badge
                   variant="outline"
                   className={cn(
-                    'h-5 px-2 text-[10px]',
+                    'h-5 px-2 text-2xs',
                     isActive
                       ? 'border-status-success/30 text-status-success'
                       : nativeGit.disabled
@@ -236,7 +236,7 @@ export function SystemSettings() {
           {/* Build output log */}
           {buildOutput && (
             <div className="mt-3">
-              <ScrollArea className="border-border h-64 rounded border bg-[#1e1e2e]">
+              <ScrollArea className="border-border bg-muted h-64 rounded border">
                 <div
                   ref={scrollRef}
                   className="h-full overflow-y-auto p-3 font-mono text-xs leading-relaxed"
@@ -281,7 +281,7 @@ function BuildIdentityCard() {
             <p className="settings-row-title">Build</p>
             <Badge
               variant="outline"
-              className="h-5 px-2 font-mono text-[10px]"
+              className="text-2xs h-5 px-2 font-mono"
               data-testid="system-build-number"
             >
               {/* Canonical identity = short commit SHA. Identical in local and
@@ -291,7 +291,7 @@ function BuildIdentityCard() {
             {BUILD_INFO.dirty && (
               <Badge
                 variant="outline"
-                className="border-status-warning/30 text-status-warning h-5 px-2 text-[10px]"
+                className="border-status-warning/30 text-status-warning text-2xs h-5 px-2"
               >
                 dirty
               </Badge>

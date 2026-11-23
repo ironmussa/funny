@@ -113,14 +113,14 @@ const sizeConfig = {
     arrow: 6,
     height: 'h-[15px]',
     padding: 'px-1.5 py-0',
-    text: 'text-[10px] leading-[15px]',
+    text: 'text-2xs leading-[15px]',
     icon: ICON_SIZE['2xs'],
   },
   md: {
     arrow: 10,
     height: 'min-h-6',
     padding: 'px-2 py-0.5',
-    text: 'text-[11px] leading-4',
+    text: 'text-compact leading-4',
     icon: ICON_SIZE.xs,
   },
 } as const;

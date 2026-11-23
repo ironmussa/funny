@@ -35,10 +35,14 @@
   --font-mono-explorer: var(--font-mono-explorer);
 
   /* Small text steps in rem, so they follow the font size setting (Settings > Appearance
-     sets the root font size). Use these instead of text-[9px] / text-[10px] / text-[11px]. */
-  --text-3xs: 0.5625rem;
-  --text-2xs: 0.625rem;
-  --text-compact: 0.6875rem;
+     sets the root font size). Use these instead of pixel sizes (8px / 9px / 10px / 11px):
+     scripts/fitness/check-client-styling.ts fails on text-[Npx].
+     Measured against the DEFAULT root size (14px, FONT_SIZE_VALUES in settings-store),
+     not the browser's 16px: at the default setting they are exactly 8 / 9 / 10 / 11px. */
+  --text-4xs: calc(8rem / 14);
+  --text-3xs: calc(9rem / 14);
+  --text-2xs: calc(10rem / 14);
+  --text-compact: calc(11rem / 14);
 
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
@@ -63,6 +67,21 @@
   --color-thread-title: var(--thread-title, currentColor);
   --color-thread-icon-running: var(--thread-icon-running, var(--color-gray-400));
   --color-thread-icon-completed: var(--thread-icon-completed, var(--color-gray-400));
+  --color-thread-icon-waiting: var(--thread-icon-waiting, var(--color-yellow-400));
+  --color-thread-icon-failed: var(--thread-icon-failed, var(--color-red-400));
+  --color-thread-icon-interrupted: var(--thread-icon-interrupted, var(--color-orange-400));
+  /* Status dots (Minimal's sidebar): small, so they take a stronger color than
+     the icon of the same status. */
+  --color-thread-dot-running: var(--thread-dot-running, var(--color-gray-400));
+  --color-thread-dot-completed: var(--thread-dot-completed, var(--color-thread-icon-completed));
+  --color-thread-dot-failed: var(--thread-dot-failed, var(--color-thread-icon-failed));
+  --color-thread-dot-interrupted: var(
+    --thread-dot-interrupted,
+    var(--color-thread-icon-interrupted)
+  );
+  --color-git-icon-unpushed: var(--git-icon-unpushed, var(--color-blue-400));
+  --color-git-icon-pushed: var(--git-icon-pushed, var(--color-green-500));
+  --color-git-icon-merged: var(--git-icon-merged, var(--color-purple-400));
 
   --color-diff-added: hsl(var(--diff-added));
   --color-diff-removed: hsl(var(--diff-removed));
@@ -96,6 +115,9 @@
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
+  /* The selected thread row in the sidebar. Defaults to --accent; a theme
+     whose accent barely stands out from its sidebar sets --sidebar-selected. */
+  --color-sidebar-selected: hsl(var(--sidebar-selected, var(--accent)));
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -313,7 +335,7 @@ mark.md-search-match[data-active='true'] {
 }
 
 @utility thread-timestamp {
-  @apply shrink-0 text-[10px] leading-4 whitespace-nowrap tabular-nums;
+  @apply text-2xs shrink-0 leading-4 whitespace-nowrap tabular-nums;
 }
 
 @utility icon-2xs {
@@ -332,7 +354,7 @@ mark.md-search-match[data-active='true'] {
 }
 
 @utility icon-xs {
-  /* 10px — pairs with text-[10px] */
+  /* 10px — pairs with text-2xs */
   width: 0.75rem;
   height: 0.75rem;
 }
@@ -487,6 +509,10 @@ mark.md-search-match[data-active='true'] {
     /* Git diff colors — always green/red regardless of theme */
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Search / annotation match highlight — the same in every theme */
+    --search-highlight: #ffe500;
+    --search-highlight-current: #ff8a00;
 
     /* Terminal ANSI colors (light default) */
     --terminal-black: #000000;
@@ -918,6 +944,7 @@ mark.md-search-match[data-active='true'] {
     --sidebar-primary-foreground: 0 0% 4%;
     --sidebar-accent: 0 0% 8%;
     --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-selected: 0 0% 14%;
     --sidebar-border: 0 0% 13%;
     --sidebar-ring: 0 0% 40%;
 
@@ -963,21 +990,66 @@ mark.md-search-match[data-active='true'] {
     --destructive: 0 72% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --status-success: 142 65% 55%;
-    --status-error: 0 80% 64%;
-    --status-warning: 38 92% 56%;
-    --status-info: 213 90% 66%;
-    --status-pending: 48 95% 58%;
-    --status-interrupted: 25 90% 58%;
+    /* Status colors are the pastels of the chip palette (`PALETTE` in
+       components/ui/project-chip.tsx), so icons match the chips. */
+    --status-success: 113 38% 74%; /* #A8D5A2 */
+    --status-error: 0 78% 80%; /* #F4A4A4 */
+    --status-warning: 42 90% 76%; /* #F9D98C */
+    --status-info: 206 70% 70%; /* #7CB9E8 */
+    --status-pending: 48 90% 76%;
+    --status-interrupted: 29 91% 73%; /* #F9B97C */
     --status-neutral: 0 0% 50%;
-    --status-violet: 263 85% 74%;
+    --status-violet: 270 48% 76%; /* #C3A6E0 */
 
     --tool-card-border-color: transparent;
     --thread-title: hsl(var(--foreground));
     --thread-icon-running: hsl(var(--status-info));
     --thread-icon-completed: hsl(var(--status-success));
+    --thread-icon-waiting: hsl(var(--status-warning));
+    --thread-icon-failed: hsl(var(--status-error));
+    --thread-icon-interrupted: hsl(var(--status-interrupted));
+    --git-icon-unpushed: hsl(var(--status-info));
+    --git-icon-pushed: hsl(var(--status-success));
+    --git-icon-merged: hsl(var(--status-violet));
+    --thread-dot-running: hsl(0 0% 62%);
+    --thread-dot-completed: hsl(138 62% 56%);
+    --thread-dot-failed: hsl(0 88% 66%);
+    --thread-dot-interrupted: hsl(30 95% 58%);
 
     --powerline-variant: plain;
+  }
+
+  /* Status glyphs (`StatusGlyph` in ThreadStatusPin.tsx): a status with a dot
+     renders both the icon and the dot. The dot stays hidden unless a theme
+     swaps it in; Minimal does inside sidebar thread rows (`.status-glyph-dots`)
+     for running (a blinking gray dot), completed, failed and interrupted /
+     runner offline. */
+  .status-glyph-dot {
+    display: none;
+  }
+  .theme-minimal .status-glyph-dots .status-glyph-icon {
+    display: none;
+  }
+  .theme-minimal .status-glyph-dots .status-glyph-dot {
+    display: block;
+  }
+  /* The running dot blinks in place of the spinner. */
+  .status-glyph-blink {
+    animation: status-glyph-blink 1.2s ease-in-out infinite;
+  }
+  @keyframes status-glyph-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.2;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .status-glyph-blink {
+      animation: none;
+    }
   }
 
   /* ── Sunrise (Warm Light) ──────────────────────────────────── */
@@ -1678,6 +1750,11 @@ mark.md-search-match[data-active='true'] {
    so a single class handles both color schemes.
    ─────────────────────────────────────────────────────────────────────────── */
 .dockview-theme-funny {
+  /* Stacking of dockview's popovers (the tab overflow list, tab context menus).
+     Every built-in dockview theme sets it; without it the popover's z-index is
+     invalid, falls back to auto, and the list opens hidden under the tab strip. */
+  --dv-overlay-z-index: 999;
+
   /* Panel content + tab bar surfaces */
   --dv-group-view-background-color: hsl(var(--background));
   --dv-tabs-and-actions-container-background-color: hsl(var(--sidebar-background));
@@ -1710,8 +1787,8 @@ mark.md-search-match[data-active='true'] {
 
   /* Tab strip sizing — compact, matches the previous Radix tab look. */
   --dv-tabs-and-actions-container-height: 30px;
-  --dv-tabs-and-actions-container-font-size: 11px;
-  --dv-tab-font-size: 11px;
+  --dv-tabs-and-actions-container-font-size: var(--text-compact);
+  --dv-tab-font-size: var(--text-compact);
 
   /* Scrollbar inside the tab overflow list */
   --dv-tabs-container-scrollbar-color: hsl(var(--muted-foreground));

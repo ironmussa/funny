@@ -1,5 +1,5 @@
 /**
- * Migration 109_factory_incidents (change factory-agent-roles, D10): the
+ * Migration 111_factory_incidents (change factory-agent-roles, D10): the
  * incidents table and the index that allows one incident that is not closed
  * per repository and base branch.
  */
@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { sql } from 'drizzle-orm';
 
-describe('109_factory_incidents migration', () => {
+describe('111_factory_incidents migration', () => {
   test('creates the table, and refuses a second open incident for the same base branch', async () => {
     const { initDatabase } = await import('../../db/index.js');
     await initDatabase({ sqlitePath: ':memory:' });
@@ -19,7 +19,7 @@ describe('109_factory_incidents migration', () => {
 
     // Rewind and run it again: it is what creates the table.
     run(sql`DROP TABLE factory_incidents`);
-    run(sql`DELETE FROM _migrations WHERE name = '109_factory_incidents'`);
+    run(sql`DELETE FROM _migrations WHERE name = '111_factory_incidents'`);
     await autoMigrate();
 
     const insert = (id: string, branch: string, state: string) =>

@@ -525,8 +525,12 @@ describe('factory action provider "no change" outcome', () => {
     const comments: string[] = [];
     const records: Array<Record<string, unknown>> = [];
     let removed = 0;
+    let released = 0;
     const { provider } = providerWith({
       threadIds: ['t1'],
+      releaseIssue: async () => {
+        released++;
+      },
       lastThreadMessage: async () => 'The bug is already fixed on main.',
       removeUnchangedWorktrees: async () => {
         removed++;
@@ -561,25 +565,33 @@ describe('factory action provider "no change" outcome', () => {
         records.push({ ...input });
       },
     });
-    return { provider, comments, records, removed: () => removed };
+    return { provider, comments, records, removed: () => removed, released: () => released };
   }
 
-  test('no pull request and no commits: comment, clean up, wait for a person, stop the flow', async () => {
-    const { provider, comments, records, removed } = noPr(okAsync<boolean, GithubCallError>(false));
+  // Issue #236 (an index issue): the agent rightly changed nothing, and the run
+  // stayed "waiting for you" at the pull-request step as if it had failed.
+  test('no pull request, no commits, nothing left behind: comment, clean up, end as no_change', async () => {
+    const { provider, comments, records, removed, released } = noPr(
+      okAsync<boolean, GithubCallError>(false),
+    );
     const result = await provider.createPr({ cwd: '', title: 'Fix it' });
     expect(result.ok).toBe(false);
     expect(result.metadata).toMatchObject({ outcome: 'no_change' });
     expect(comments).toEqual([`${NO_CHANGE_LINE}\n\nThe bug is already fixed on main.`]);
     expect(removed()).toBe(1);
-    expect(records).toContainEqual({ state: 'waiting_human', failureReason: 'no change' });
+    // The issue goes back to a person, and the run is over without a failure.
+    expect(released()).toBe(1);
+    expect(records).toContainEqual({ state: 'no_change', failureReason: null });
+    expect(records).not.toContainEqual(expect.objectContaining({ state: 'waiting_human' }));
   });
 
   // Issue #229: the agent ended its turn before committing; the cleanup removed
   // its 85 edited files. The checkout is kept and the comment says where it is.
-  test('a checkout with uncommitted work is kept and named in the comment', async () => {
-    const { provider, comments, records } = noPr(okAsync<boolean, GithubCallError>(false), [
-      { threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 85, unpushedCommitCount: 1 },
-    ]);
+  test('a checkout with uncommitted work is kept, named in the comment, and waits for a person', async () => {
+    const { provider, comments, records, released } = noPr(
+      okAsync<boolean, GithubCallError>(false),
+      [{ threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 85, unpushedCommitCount: 1 }],
+    );
     const result = await provider.createPr({ cwd: '', title: 'Fix it' });
     expect(result.metadata).toMatchObject({ outcome: 'no_change' });
     expect(comments).toHaveLength(1);
@@ -587,6 +599,8 @@ describe('factory action provider "no change" outcome', () => {
     expect(comments[0]).toContain('85 uncommitted file(s) and 1 unpushed commit(s)');
     expect(comments[0]).toContain('/srv/wt/t1');
     expect(records).toContainEqual({ state: 'waiting_human', failureReason: 'no change' });
+    // Still in the factory's hands: its label stays.
+    expect(released()).toBe(0);
   });
 
   test('no pull request but commits ahead: the agent did not open one (an error, no comment)', async () => {

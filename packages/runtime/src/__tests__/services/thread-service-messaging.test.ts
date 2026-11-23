@@ -50,8 +50,8 @@ mock.module('../../lib/logger.js', () => ({
 }));
 
 mock.module('../../services/agent-runner-control.js', () => ({
-  startAgent: vi.fn(async () => undefined),
-  stopAgent: vi.fn(async () => undefined),
+  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
+  stopAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
   isAgentRunning: vi.fn(() => false),
   getSupportedSlashCommands: vi.fn((): any => undefined),
   getPendingPermission: vi.fn((): any => undefined),
@@ -95,6 +95,7 @@ mock.module('../../services/service-registry.js', () => ({
   }),
 }));
 
+import { internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
 import { errAsync, ok, okAsync } from 'neverthrow';
 
@@ -1391,7 +1392,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
   });
 
   test('logs but does not fail when background startAgent rejects', async () => {
-    mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
+    mocked(startAgent).mockReturnValueOnce(errAsync(internal('spawn failed')));
     mocks.tm.getThread.mockResolvedValue({
       id: 't-running',
       userId: 'u-1',
@@ -1732,7 +1733,7 @@ describe('approveToolCall', () => {
   });
 
   test('propagates startAgent failures as a 500 error', async () => {
-    mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
+    mocked(startAgent).mockReturnValueOnce(errAsync(internal('spawn failed')));
     const result = await approveToolCall({
       threadId: 't-1',
       userId: 'u-1',

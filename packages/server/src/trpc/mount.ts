@@ -39,7 +39,11 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
   return {
     automations: automationsPort,
     pipelines: pipelinesPort,
-    threads: createThreadsPort(c.env?.browserEvents),
+    threads: createThreadsPort(c.env?.browserEvents, {
+      runnerPorts: c.env?.runnerRequests
+        ? { requests: c.env.runnerRequests, presence: c.env.runnerPresence }
+        : undefined,
+    }),
     profile: profilePort,
     settings: settingsPort,
     agentTemplates: agentTemplatesPort,

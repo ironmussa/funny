@@ -1,4 +1,4 @@
-import type { ActivityResultRef } from '@funny/shared';
+import type { ActivityEffect, ActivityOrigin, ActivityResultRef } from '@funny/shared';
 /**
  * @domain subdomain: Activities
  * @domain subdomain-type: supporting
@@ -12,6 +12,9 @@ import type { ActivityResultRef } from '@funny/shared';
  * - `trackActivity(spec, run)` wraps an operation that returns a `Result`; an
  *   `err` or a throw ends the activity `failed` with the message.
  * - `beginActivity(spec)` is the imperative form for code that ends elsewhere.
+ * - `recordActivity(spec, outcome)` records an action that completed at once,
+ *   as one finished row (track-funny-actions, design D6). A kind declared
+ *   `on-failure` sends nothing when it succeeded.
  *
  * Reporting never blocks or fails the operation: reports of one activity are
  * sent in order in the background, a refused or failed report is logged, and
@@ -22,7 +25,11 @@ import type { ActivityResultRef } from '@funny/shared';
  * To add a kind: declare it in `@funny/shared/activities`, wrap the operation
  * here, and add its retry target in the client's `lib/activity-retry.ts`.
  */
-import type { ActivityKind } from '@funny/shared/activities';
+import {
+  ACTIVITY_EFFECTS_MAX,
+  type ActivityKind,
+  recordsOnlyFailures,
+} from '@funny/shared/activities';
 import { Effect, Schedule } from 'effect';
 import type { Result } from 'neverthrow';
 
@@ -40,7 +47,13 @@ export interface ActivitySpec {
   title: string;
   /** Recorded after the server strips it to the kind's declared fields. */
   input: Record<string, unknown>;
+  /** Who started it (default `user`); written once, never changed. */
+  origin?: ActivityOrigin;
 }
+
+export type ActivityOutcome =
+  | { ok: true; effects?: ActivityEffect[]; resultRef?: ActivityResultRef }
+  | { ok: false; error: string; effects?: ActivityEffect[] };
 
 export interface ActivityHandle {
   readonly id: string;
@@ -50,6 +63,8 @@ export interface ActivityHandle {
   progress(percent: number): void;
   /** What the operation produced, reported with its success. */
   result(ref: ActivityResultRef): void;
+  /** Records one thing the operation changed; sent with the next report. */
+  effect(effect: ActivityEffect['effect'], target: string): void;
   succeed(ref?: ActivityResultRef): void;
   fail(error: string): void;
 }
@@ -123,9 +138,12 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
   }
 
   /** The terminal report: retried with backoff on transport errors, never on a refusal. */
-  function sendTerminal(payload: Record<string, unknown>): Promise<void> {
+  function sendTerminal(
+    payload: Record<string, unknown>,
+    eventType = 'data:activity_update',
+  ): Promise<void> {
     const attempt = Effect.tryPromise({
-      try: () => reporter.request('data:activity_update', payload),
+      try: () => reporter.request(eventType, payload),
       catch: (error) => error,
     });
     const program = Effect.retry(attempt, {
@@ -172,6 +190,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
       threadId: spec.threadId ?? undefined,
       title: spec.title,
       input: spec.input,
+      origin: spec.origin ?? 'user',
     });
     const enqueue = (report: () => Promise<void>) => {
       chain = chain.then(report);
@@ -179,13 +198,24 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
     };
 
     let resultRef: ActivityResultRef | undefined;
+    const effects: ActivityEffect[] = [];
+    let effectsSent = 0;
     let lastStep: string | null = null;
     let lastProgressAt = 0;
     let ended = false;
 
-    const end = (patch: Record<string, unknown>) => {
+    /** The whole effects list rides on a report when it grew since the last one. */
+    const withEffects = (patch: Record<string, unknown>) => {
+      if (effects.length === effectsSent) return patch;
+      effectsSent = effects.length;
+      return { ...patch, effects: [...effects] };
+    };
+
+    const end = (rawPatch: Record<string, unknown>) => {
       if (ended) return;
       ended = true;
+      // The terminal report is the one that must land: it carries the whole list.
+      const patch = effects.length > 0 ? { ...rawPatch, effects: [...effects] } : rawPatch;
       const done = enqueue(() => sendTerminal({ id, patch })).finally(() => {
         live.delete(id);
         pendingTerminal.delete(done);
@@ -198,7 +228,12 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
       step(label) {
         if (ended || !label || label === lastStep) return;
         lastStep = label;
-        void enqueue(() => send('data:activity_update', { id, patch: { step: label } }));
+        const patch = withEffects({ step: label });
+        void enqueue(() => send('data:activity_update', { id, patch }));
+      },
+      effect(effect, target) {
+        if (ended || effects.length >= ACTIVITY_EFFECTS_MAX) return;
+        effects.push({ effect, target });
       },
       progress(percent) {
         if (ended || !Number.isFinite(percent)) return;
@@ -253,6 +288,32 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
     }
   }
 
+  /**
+   * Records an action that completed at once as one finished activity. It is
+   * the only write, so it gets the terminal retry; it never joins the live set.
+   */
+  function recordActivity(spec: ActivitySpec, outcome: ActivityOutcome): Promise<void> {
+    if (outcome.ok && recordsOnlyFailures(spec.kind)) return Promise.resolve();
+    const payload: Record<string, unknown> = {
+      id: spec.id ?? newId(),
+      kind: spec.kind,
+      projectId: spec.projectId ?? undefined,
+      threadId: spec.threadId ?? undefined,
+      title: spec.title,
+      input: spec.input,
+      origin: spec.origin ?? 'user',
+      status: outcome.ok ? 'succeeded' : 'failed',
+    };
+    if (outcome.effects?.length) payload.effects = outcome.effects.slice(0, ACTIVITY_EFFECTS_MAX);
+    if (outcome.ok && outcome.resultRef) payload.resultRef = outcome.resultRef;
+    if (!outcome.ok) payload.error = outcome.error || 'Failed';
+    const done = sendTerminal(payload, 'data:activity_start').finally(() => {
+      pendingTerminal.delete(done);
+    });
+    pendingTerminal.add(done);
+    return done;
+  }
+
   /** Sends the ids still running; the server interrupts this runner's others. */
   function reconcile(): Promise<void> {
     return send('data:activity_reconcile', { liveIds: [...live] });
@@ -261,6 +322,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
   return {
     beginActivity,
     trackActivity,
+    recordActivity,
     reconcile,
     liveIds: () => [...live],
     /** Resolves once every terminal report has landed or given up (tests, shutdown). */
@@ -276,4 +338,5 @@ const tracker = createActivityTracker();
 
 export const beginActivity = tracker.beginActivity;
 export const trackActivity = tracker.trackActivity;
+export const recordActivity = tracker.recordActivity;
 export const reconcileActivities = tracker.reconcile;

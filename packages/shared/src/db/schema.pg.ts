@@ -373,7 +373,7 @@ export const factoryRuns = pgTable('factory_runs', {
  * A base branch that turned red after a factory merge (change
  * factory-agent-roles, D10). At most one not-closed incident per repository
  * and base branch: the partial unique index `factory_incidents_one_open`
- * (migration 109) enforces it. Admissions of every factory on the repository
+ * (migration 111) enforces it. Admissions of every factory on the repository
  * pause while one is open.
  */
 // Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
@@ -534,6 +534,10 @@ export const activities = pgTable(
     input: text('input').notNull().default('{}'),
     // JSON `ActivityResultRef`.
     resultRef: text('result_ref'),
+    // `user` | `implicit` | `system` (track-funny-actions, design D4).
+    origin: text('origin').notNull().default('user'),
+    // JSON array of `ActivityEffect`.
+    effects: text('effects'),
     startedAt: text('started_at').notNull(),
     endedAt: text('ended_at'),
     updatedAt: text('updated_at').notNull(),

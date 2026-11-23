@@ -125,6 +125,35 @@ mock.module('@funny/core/git', () => {
 });
 
 const actualRoutesGitHelpers = { ...(await import('../../routes/git/helpers.js')) };
+// Destructive commands save an undo snapshot first (track-user-and-scheduled-
+// actions); its own steps are covered by git-undo.test.ts. Here the wrappers
+// pass straight through to the command and record what they were given.
+const destructiveCalls: Array<{ action: string; target: unknown; arg: unknown }> = [];
+const destructiveMocks = {
+  revert: vi.fn(() => okAsync(undefined)),
+  resetHard: vi.fn(() => okAsync('HEAD is now at abc')),
+};
+mock.module('../../services/git-destructive.js', () => ({
+  threadTarget: async (userId: string, threadId: string, cwd: string) => ({
+    userId,
+    threadId,
+    cwd,
+    projectId: 'p1',
+  }),
+  discardTracked: (target: unknown, paths: unknown, run: () => unknown) => {
+    destructiveCalls.push({ action: 'discard', target, arg: paths });
+    return run();
+  },
+  resetHardTracked: (target: unknown, hash: unknown, run: () => unknown) => {
+    destructiveCalls.push({ action: 'reset-hard', target, arg: hash });
+    return run();
+  },
+  stashDropTracked: (target: unknown, stashIndex: unknown, run: () => unknown) => {
+    destructiveCalls.push({ action: 'stash-drop', target, arg: stashIndex });
+    return run();
+  },
+}));
+
 mock.module('../../routes/git/helpers.js', () => {
   const actual = actualRoutesGitHelpers;
   return {
@@ -158,6 +187,8 @@ mock.module('../../services/git-service.js', () => {
     stashChanges: mocks.gitServiceStash,
     popStash: mocks.gitServicePopStash,
     dropStash: mocks.gitServiceDropStash,
+    revert: destructiveMocks.revert,
+    resetHard: destructiveMocks.resetHard,
     resolveIdentity,
     // Thread routes resolve identity via the thread's project; delegate so
     // tests that stub resolveIdentity cover both paths.
@@ -1755,6 +1786,55 @@ describe('gitRoutes (mounted)', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, output: 'dropped stash@{0}' });
     expect(mocks.gitServiceDropStash).toHaveBeenCalledWith('t1', 'user-1', '/wt/thread', 0);
+    // Through the recorded, undoable wrapper.
+    expect(destructiveCalls.at(-1)).toEqual({
+      action: 'stash-drop',
+      target: { userId: 'user-1', threadId: 't1', cwd: '/wt/thread', projectId: 'p1' },
+      arg: 0,
+    });
+  });
+
+  test('POST /api/git/:threadId/revert discards through the undoable wrapper', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+    });
+    const res = await makeApp().request('/api/git/t1/revert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths: ['src/a.ts'] }),
+    });
+    expect(res.status).toBe(200);
+    expect(destructiveCalls.at(-1)).toMatchObject({ action: 'discard', arg: ['src/a.ts'] });
+    expect(destructiveMocks.revert).toHaveBeenCalledWith('t1', 'user-1', '/wt/thread', [
+      'src/a.ts',
+    ]);
+  });
+
+  test('POST /api/git/:threadId/reset-hard resets through the undoable wrapper', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+    });
+    const res = await makeApp().request('/api/git/t1/reset-hard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: 'abcdef1' }),
+    });
+    expect(res.status).toBe(200);
+    expect(destructiveCalls.at(-1)).toMatchObject({ action: 'reset-hard', arg: 'abcdef1' });
+    expect(destructiveMocks.resetHard).toHaveBeenCalledWith(
+      't1',
+      'user-1',
+      '/wt/thread',
+      'abcdef1',
+    );
   });
 
   test('GET /api/git/:threadId/stash/list returns entries for thread cwd', async () => {

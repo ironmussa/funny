@@ -272,6 +272,7 @@ function SearchablePickerContent({
           autoComplete="off"
           className={cn(
             'h-auto w-full rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0',
+            // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
             mobile && 'min-h-[48px] text-[16px]',
           )}
         />
@@ -346,7 +347,7 @@ function SearchablePickerContent({
                           className="truncate font-mono font-medium"
                         />
                         {item.badge && (
-                          <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[9px] leading-none">
+                          <span className="bg-muted text-muted-foreground text-3xs rounded px-1 py-0.5 leading-none">
                             {item.badge}
                           </span>
                         )}
@@ -586,6 +587,7 @@ export function BranchPicker({
           data-testid={suffixTestId(testId, '-new-input')}
           className={cn(
             'text-foreground h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs shadow-none focus-visible:ring-0',
+            // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
             mobile && 'min-h-[48px] text-[16px]',
           )}
         />

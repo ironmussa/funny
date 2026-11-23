@@ -438,7 +438,7 @@ function useThreadItemState({
     effectiveGitStatus,
     rowHandlers,
     rowClassName: isSelected
-      ? 'bg-accent text-foreground'
+      ? 'bg-sidebar-selected text-foreground'
       : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
     handlePin: onPin ? () => onPin() : undefined,
     handleRename: onRename ? renameDialog.openDialog : undefined,
@@ -491,7 +491,8 @@ export const ThreadItem = memo(function ThreadItem({
   return (
     <div className={cn('group/thread w-full flex items-stretch rounded-md min-w-0', rowClassName)}>
       {/* Keep the pin beside the selection button so interactive elements are never nested. */}
-      <div className="shrink-0 py-2 pl-2">
+      {/* `status-glyph-dots`: themes that opt in (Minimal) show dots here instead of icons. */}
+      <div className="status-glyph-dots shrink-0 py-2 pl-2">
         <ThreadStatusPin thread={thread} onPin={handlePin} hoverGroup="thread" showStatusTooltip />
       </div>
 

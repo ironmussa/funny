@@ -16,6 +16,7 @@ import {
 } from '@funny/core/git';
 import { Hono } from 'hono';
 
+import { discardTracked, resetHardTracked, threadTarget } from '../../services/git-destructive.js';
 import {
   stage as gitServiceStage,
   unstage as gitServiceUnstage,
@@ -131,7 +132,10 @@ stageRoutes.post('/project/:projectId/revert', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const pathCheck = validateFilePaths(cwd, parsed.value.paths);
   if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
-  const result = await revertFiles(cwd, parsed.value.paths);
+  const paths = parsed.value.paths;
+  const result = await discardTracked({ userId, cwd, projectId }, paths, () =>
+    revertFiles(cwd, paths),
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true });
@@ -199,7 +203,11 @@ stageRoutes.post('/project/:projectId/reset-hard', async (c) => {
   const parsed = validate(resetHardSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceResetHard(projectId, userId, cwdResult.value, parsed.value.hash);
+  const cwd = cwdResult.value;
+  const hash = parsed.value.hash;
+  const result = await resetHardTracked({ userId, cwd, projectId }, hash, () =>
+    gitServiceResetHard(projectId, userId, cwd, hash),
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -379,7 +387,10 @@ stageRoutes.post('/:threadId/revert', async (c) => {
   const pathCheck = validateFilePaths(cwd, parsed.value.paths);
   if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
 
-  const result = await gitServiceRevert(threadId, userId, cwd, parsed.value.paths);
+  const paths = parsed.value.paths;
+  const result = await discardTracked(await threadTarget(userId, threadId, cwd), paths, () =>
+    gitServiceRevert(threadId, userId, cwd, paths),
+  );
   if (result.isErr()) return resultToResponse(c, result);
 
   await invalidateGitStatusCache(threadId);
@@ -472,7 +483,11 @@ stageRoutes.post('/:threadId/reset-hard', async (c) => {
   const parsed = validate(resetHardSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceResetHard(threadId, userId, cwdResult.value, parsed.value.hash);
+  const cwd = cwdResult.value;
+  const hash = parsed.value.hash;
+  const result = await resetHardTracked(await threadTarget(userId, threadId, cwd), hash, () =>
+    gitServiceResetHard(threadId, userId, cwd, hash),
+  );
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });

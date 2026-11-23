@@ -61,6 +61,7 @@ import {
   type FactoryProofDeps,
   type FactoryRunScope,
   type FactoryThreadMode,
+  NO_CHANGE_TRIAGE_LABEL,
 } from './factory-action-provider.js';
 import {
   isMergeLane,
@@ -158,6 +159,8 @@ interface FlowTrace {
    * end changes nothing about it.
    */
   held: boolean;
+  /** A step ended the run itself (`no_change`): nothing is left to settle. */
+  ended: boolean;
 }
 
 /** Note what a recorded update means for the flow's end; whether it recorded an agent thread. */
@@ -165,6 +168,7 @@ function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
   if (input.prUrl) trace.prOpen = true;
   if (input.state === 'waiting_human') trace.parked = true;
   if (input.state === 'needs_info') trace.held = true;
+  if (input.state === 'no_change') trace.ended = true;
   if (!input.threadIds) return false;
   trace.agentsRan = true;
   return true;
@@ -424,6 +428,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const { run } = job;
     // Triage parked it on its issue or sent it back to the queue: nothing to settle.
     if (trace.held) return;
+    // The step wrote the run's end: not a failure, and nobody is waited for.
+    if (trace.ended) return;
     if (!trace.agentsRan && !wasReopened(job)) return dropUnstarted(job, error);
     if (trace.parked) {
       await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
@@ -456,7 +462,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       factoryId: job.factory.id,
       runId: run.id,
       issue: run.issueNumber,
-      outcome,
+      outcome: trace.ended ? 'no_change' : outcome,
       error,
     });
   }
@@ -480,6 +486,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       held: false,
       step: null,
       parked: false,
+      ended: false,
     };
     if (trace.agentsRan) agentStarted();
 
@@ -596,6 +603,21 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         const entered = await deps.runs.enterStage(job.run.id, stage);
         // Stopped or parked elsewhere: stop driving it.
         if (entered.isOk() && !entered.value) controller.abort();
+      },
+      releaseIssue: async () => {
+        const relabelled = await deps.github.relabelIssue(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+          { remove: job.factory.label || undefined, add: NO_CHANGE_TRIAGE_LABEL },
+        );
+        if (relabelled.isErr()) {
+          log.warn('Issue factory could not relabel an issue that ended with no change', {
+            namespace: 'factory',
+            runId: job.run.id,
+            issue: scope.issueNumber,
+            error: relabelled.error.message,
+          });
+        }
       },
       lastThreadMessage: deps.lastThreadMessage ?? lastThreadMessage,
       removeUnchangedWorktrees: async () => {

@@ -19,6 +19,28 @@ export function createTestDb() {
   // ── Shared tables ──────────────────────────────────────────
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS activities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      runner_id TEXT,
+      kind TEXT NOT NULL,
+      project_id TEXT,
+      thread_id TEXT,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      step TEXT,
+      error TEXT,
+      input TEXT NOT NULL DEFAULT '{}',
+      result_ref TEXT,
+      origin TEXT NOT NULL DEFAULT 'user',
+      effects TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -408,7 +430,7 @@ export function createTestDb() {
   testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
-    WHERE state NOT IN ('merged', 'failed', 'stopped')
+    WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')
   `);
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS workflow_node_executions (

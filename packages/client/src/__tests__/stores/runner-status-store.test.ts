@@ -13,6 +13,7 @@
 import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
 mock.module('@/lib/client-logger', () => ({
+  isClientLogLevelEnabled: () => false,
   createClientLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 

@@ -1121,6 +1121,7 @@
     "creating": "Creating...",
     "loadingWorktrees": "Loading worktrees...",
     "noWorktrees": "No worktrees found. Create one to get started.",
+    "loadFailed": "Could not load worktrees",
     "openThread": "Open thread: {{title}}"
   },
   "common": {
@@ -1745,6 +1746,7 @@
       "merging": "Merging",
       "waitingHuman": "Waiting for you",
       "merged": "Merged",
+      "noChange": "No change needed",
       "failed": "Failed",
       "stopped": "Stopped"
     },
@@ -1812,7 +1814,8 @@
     },
     "noChange": {
       "title": "The agent made no change",
-      "body": "It opened no pull request and committed nothing. Its explanation is posted on issue #{{issue}}: close the issue, or retry the run."
+      "body": "It opened no pull request and committed nothing. Its explanation is posted on issue #{{issue}}, now marked for triage: close the issue, or retry the run.",
+      "unsavedBody": "It opened no pull request and committed nothing, but left unsaved work in its checkout, which was kept (its path is on issue #{{issue}}). Follow up on this thread to have it commit and open the pull request, or retry the run."
     }
   },
   "projectSecrets": {
@@ -1873,7 +1876,38 @@
     "dismiss": "Dismiss",
     "clearFinished": "Clear finished",
     "failedToast": "{{title}} failed",
-    "openPanel": "View"
+    "openPanel": "View",
+    "automatic": "Automatic",
+    "destructive": "Removes or changes things on disk or on GitHub",
+    "effects": {
+      "worktree-removed": "Worktree removed",
+      "branch-deleted": "Branch deleted",
+      "command-stopped": "Command stopped",
+      "terminal-closed": "Terminal closed",
+      "directory-removed": "Folder removed",
+      "branch-checked-out": "Branch checked out",
+      "changes-stashed": "Changes stashed",
+      "sandbox-stopped": "Sandbox stopped",
+      "sandbox-destroyed": "Sandbox destroyed",
+      "pr-merged": "Pull request merged",
+      "remote-branch-deleted": "Remote branch deleted",
+      "agent-stopped": "Agent stopped",
+      "factory-disabled": "Factory turned off",
+      "repo-published": "Repository published",
+      "file-reverted": "File reverted",
+      "changes-discarded": "Changes discarded",
+      "commits-reset": "Reset",
+      "stash-dropped": "Stash dropped",
+      "code-rewound": "Code rewound",
+      "snapshot-saved": "Snapshot saved",
+      "commit-created": "Commit created"
+    },
+    "restore": "Restore",
+    "restored": "Restored. The previous state was saved as a new snapshot.",
+    "snapshotGone": "This snapshot no longer exists on the runner.",
+    "restoreFailed": "Could not restore",
+    "restoreTitle": "Restore this snapshot?",
+    "restoreDescription": "Puts back what “{{title}}” removed. The current state is saved first, so this can be undone too."
   },
   "factoryView": {
     "title": "Factory queue",

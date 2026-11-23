@@ -266,7 +266,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
               {status.error && innerEvents.length === 0 && (
                 <div className="px-3 py-1.5">
                   <ScrollArea className="bg-destructive/5 max-h-40 rounded">
-                    <pre className="text-destructive/80 p-2 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
+                    <pre className="text-destructive/80 text-compact p-2 font-mono wrap-break-word whitespace-pre-wrap">
                       {status.error}
                     </pre>
                   </ScrollArea>

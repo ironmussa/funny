@@ -8,7 +8,12 @@ import {
   useThreadActivity,
   type ThreadActivityView,
 } from '@/hooks/use-thread-activity';
-import { getDisplayThreadStatus, statusConfig, type DisplayThreadStatus } from '@/lib/thread-utils';
+import {
+  getDisplayThreadStatus,
+  statusConfig,
+  type DisplayThreadStatus,
+  type StatusGlyphConfig,
+} from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { isThreadUnread, useThreadReadStore } from '@/stores/thread-read-store';
@@ -154,7 +159,6 @@ function ThreadStatusIcon({
 }) {
   const { t } = useTranslation();
   const cfg = statusConfig[displayStatus] ?? statusConfig.pending;
-  const StatusIcon = cfg.icon;
   const glyph =
     displayStatus === 'stopped' ? (
       <span
@@ -162,7 +166,7 @@ function ThreadStatusIcon({
         data-testid={`thread-stopped-dot-${threadId}`}
       />
     ) : (
-      <StatusIcon className={cn('icon-sm', cfg.className)} />
+      <StatusGlyph cfg={cfg} />
     );
   if (!withTooltip) return glyph;
   const label =
@@ -180,14 +184,49 @@ function ThreadStatusIcon({
 }
 
 /**
+ * A status icon, plus the dot a theme may show in its place when the status has
+ * one (`dotClassName`). Both render; `.status-glyph-dots` in globals.css picks
+ * which one is visible, so no component has to know the active theme.
+ */
+function StatusGlyph({
+  cfg,
+  testId,
+  activity,
+}: {
+  cfg: StatusGlyphConfig;
+  testId?: string;
+  activity?: string;
+}) {
+  const Icon = cfg.icon;
+  if (!cfg.dotClassName) {
+    return (
+      <Icon
+        // oxlint-disable-next-line shadcn/require-static-classes -- the color comes from statusConfig (one entry per status)
+        className={cn('icon-sm', cfg.className)}
+        data-testid={testId}
+        data-activity={activity}
+      />
+    );
+  }
+  return (
+    <span className="inline-flex items-center justify-center">
+      <Icon
+        // oxlint-disable-next-line shadcn/require-static-classes -- the color comes from statusConfig (one entry per status)
+        className={cn('status-glyph-icon icon-sm', cfg.className)}
+        data-testid={testId}
+        data-activity={activity}
+      />
+      <span className={cn('status-glyph-dot size-2 rounded-full', cfg.dotClassName)} />
+    </span>
+  );
+}
+
+/**
  * How a thread's factory activity reads: a spinner in the info tone while the
  * run works (apart from the agent's own), a clock while it waits for the
  * member, and the thread's own error icon once its pipeline stopped on an error.
  */
-const ACTIVITY_GLYPH: Record<
-  Exclude<ThreadActivityView['activity'], 'none'>,
-  { icon: typeof Clock; className: string }
-> = {
+const ACTIVITY_GLYPH: Record<Exclude<ThreadActivityView['activity'], 'none'>, StatusGlyphConfig> = {
   factory: { icon: Loader2, className: 'text-status-info animate-spin' },
   'factory-attention': { icon: Clock, className: 'text-status-warning' },
   'factory-failed': statusConfig.failed,
@@ -210,12 +249,11 @@ function ThreadActivityIcon({
   const { t } = useTranslation();
   if (view.activity === 'none') return null;
   const activityCfg = ACTIVITY_GLYPH[view.activity];
-  const ActivityIcon = activityCfg.icon;
   const glyph = (
-    <ActivityIcon
-      className={cn('icon-sm', activityCfg.className)}
-      data-testid={`thread-factory-activity-${threadId}`}
-      data-activity={view.activity}
+    <StatusGlyph
+      cfg={activityCfg}
+      testId={`thread-factory-activity-${threadId}`}
+      activity={view.activity}
     />
   );
   const label = threadActivityTooltip(t, view);

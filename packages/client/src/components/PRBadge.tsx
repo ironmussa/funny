@@ -1,16 +1,22 @@
-import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { GIT_STAT_CHIP_CLASS, GIT_STAT_ICON_CLASS } from '@/components/git/GitStatChip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PR_STATE_ICON, PR_STATE_TEXT_CLASS, type PRState } from '@/lib/git-icons';
 import { cn } from '@/lib/utils';
 
 export interface PRBadgeProps {
   prNumber: number;
-  prState?: 'OPEN' | 'MERGED' | 'CLOSED';
+  prState?: PRState;
   prUrl?: string;
   /** "sm" for large displays, "xs" for lists, "compact" for powerline rows, "xxs" for compact headers */
   size?: 'sm' | 'xs' | 'compact' | 'xxs';
-  variant?: 'default' | 'inverse';
+  /**
+   * "plain" drops the border and fill and takes the git stat chip layout (size is
+   * ignored), so the PR lines up with the changes / commits chips in a row.
+   */
+  variant?: 'default' | 'inverse' | 'plain';
   showExternalIcon?: boolean;
   className?: string;
   'data-testid'?: string;
@@ -41,13 +47,6 @@ const STATE_CLASS = {
     'border-violet-300/70 bg-violet-50 text-violet-700 hover:border-violet-400 hover:text-violet-800 dark:border-violet-400/35 dark:bg-violet-400/15 dark:text-violet-200 dark:hover:border-violet-300/60 dark:hover:text-violet-100',
   CLOSED:
     'border-rose-300/70 bg-rose-50 text-rose-700 hover:border-rose-400 hover:text-rose-800 dark:border-rose-400/35 dark:bg-rose-400/15 dark:text-rose-200 dark:hover:border-rose-300/60 dark:hover:text-rose-100',
-} as const;
-
-/** The state's glyph, as GitHub shows it: a merged PR is not an open one in violet. */
-const STATE_ICON = {
-  OPEN: GitPullRequest,
-  MERGED: GitMerge,
-  CLOSED: GitPullRequestClosed,
 } as const;
 
 /**
@@ -81,25 +80,35 @@ export function PRBadge({
             number: prNumber,
             defaultValue: `PR #${prNumber} (closed)`,
           });
-  const badgeClassName = cn(
-    'inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
-    config.badge,
-    variant === 'inverse'
-      ? 'border-background/20 bg-background/20 text-background/70 hover:text-background'
-      : STATE_CLASS[prState],
-    !prUrl && 'cursor-default',
-    className,
-  );
-  const StateIcon = STATE_ICON[prState];
+  const plain = variant === 'plain';
+  const iconClassName = plain ? GIT_STAT_ICON_CLASS : config.icon;
+  const badgeClassName = plain
+    ? cn(
+        GIT_STAT_CHIP_CLASS,
+        'rounded-sm hover:underline focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
+        PR_STATE_TEXT_CLASS[prState],
+        !prUrl && 'cursor-default',
+        className,
+      )
+    : cn(
+        'inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
+        config.badge,
+        variant === 'inverse'
+          ? 'border-background/20 bg-background/20 text-background/70 hover:text-background'
+          : STATE_CLASS[prState],
+        !prUrl && 'cursor-default',
+        className,
+      );
+  const StateIcon = PR_STATE_ICON[prState];
   const content = (
     <>
       <StateIcon
-        className={config.icon}
+        className={iconClassName}
         aria-hidden="true"
         data-testid={props['data-testid'] ? `${props['data-testid']}-icon-${prState}` : undefined}
       />
-      <span>#{prNumber}</span>
-      {showExternalIcon ? <ExternalLink className={config.icon} aria-hidden="true" /> : null}
+      <span className={cn(plain && 'font-mono')}>#{prNumber}</span>
+      {showExternalIcon ? <ExternalLink className={iconClassName} aria-hidden="true" /> : null}
     </>
   );
 

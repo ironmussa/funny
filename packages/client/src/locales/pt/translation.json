@@ -1105,6 +1105,7 @@
     "creating": "Criando...",
     "loadingWorktrees": "Carregando worktrees...",
     "noWorktrees": "Nenhum worktree encontrado. Crie um para começar.",
+    "loadFailed": "Não foi possível carregar os worktrees",
     "openThread": "Abrir thread: {{title}}"
   },
   "common": {
@@ -1704,6 +1705,7 @@
       "merging": "Fazendo merge",
       "waitingHuman": "Aguardando você",
       "merged": "Merged",
+      "noChange": "Sem alterações necessárias",
       "failed": "Falhou",
       "stopped": "Parada"
     },
@@ -1771,7 +1773,8 @@
     },
     "noChange": {
       "title": "O agente não fez nenhuma alteração",
-      "body": "Não abriu um pull request nem fez commits. A explicação dele está publicada na issue #{{issue}}: feche a issue ou tente o run de novo."
+      "body": "Não abriu nenhum pull request nem fez commits. A explicação está na issue #{{issue}}, agora marcada para triagem: feche a issue ou tente o run novamente.",
+      "unsavedBody": "Não abriu nenhum pull request nem fez commits, mas deixou trabalho não salvo no checkout, que foi mantido (o caminho está na issue #{{issue}}). Escreva nesta thread para que faça o commit e abra o pull request, ou tente o run novamente."
     }
   },
   "projectSecrets": {
@@ -1832,7 +1835,38 @@
     "dismiss": "Descartar",
     "clearFinished": "Limpar concluídas",
     "failedToast": "Falhou: {{title}}",
-    "openPanel": "Ver"
+    "openPanel": "Ver",
+    "automatic": "Automático",
+    "destructive": "Remove ou altera coisas no disco ou no GitHub",
+    "effects": {
+      "worktree-removed": "Worktree removido",
+      "branch-deleted": "Branch excluído",
+      "command-stopped": "Comando interrompido",
+      "terminal-closed": "Terminal fechado",
+      "directory-removed": "Pasta removida",
+      "branch-checked-out": "Branch ativado",
+      "changes-stashed": "Alterações guardadas no stash",
+      "sandbox-stopped": "Sandbox parado",
+      "sandbox-destroyed": "Sandbox destruído",
+      "pr-merged": "Pull request mesclado",
+      "remote-branch-deleted": "Branch remoto excluído",
+      "agent-stopped": "Agente interrompido",
+      "factory-disabled": "Factory desativada",
+      "repo-published": "Repositório publicado",
+      "file-reverted": "Arquivo revertido",
+      "changes-discarded": "Alterações descartadas",
+      "commits-reset": "Reset",
+      "stash-dropped": "Stash removido",
+      "code-rewound": "Código rebobinado",
+      "snapshot-saved": "Snapshot salvo",
+      "commit-created": "Commit criado"
+    },
+    "restore": "Restaurar",
+    "restored": "Restaurado. O estado anterior foi salvo como um novo snapshot.",
+    "snapshotGone": "Este snapshot não existe mais no runner.",
+    "restoreFailed": "Não foi possível restaurar",
+    "restoreTitle": "Restaurar este snapshot?",
+    "restoreDescription": "Devolve o que “{{title}}” removeu. O estado atual é salvo antes, então isso também pode ser desfeito."
   },
   "factoryView": {
     "title": "Fila da factory",

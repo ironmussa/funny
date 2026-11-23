@@ -22,6 +22,15 @@ afterEach(() => {
 });
 
 describe('markdown img', () => {
+  test('an <img> with an explicit size stays inline at that size, not in the image card', () => {
+    // CodeRabbit's severity icons: <img src="…/amber-16.svg" width="16" height="16">.
+    render(createElement(Img, { src: 'https://x.com/amber-16.svg', width: '16', height: '16' }));
+    const img = getByTestIdOfType('markdown-inline-image', HTMLImageElement);
+    expect(img.getAttribute('width')).toBe('16');
+    expect(img.getAttribute('height')).toBe('16');
+    expect(screen.queryByTestId('markdown-image-expand')).toBeNull();
+  });
+
   test('rewrites a local file path through /api/files/raw', () => {
     render(createElement(Img, { src: '/home/u/out.png', alt: 'shot' }));
     const img = getByTestIdOfType('markdown-image', HTMLImageElement);

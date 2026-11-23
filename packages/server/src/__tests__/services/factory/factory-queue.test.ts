@@ -99,6 +99,7 @@ function fakeGithub(script: Script = {}): FakeGithub {
     defaultBranch: () => okAsync('main'),
     branchState: () => okAsync({ sha: 'base-sha', ci: { kind: 'green' as const } }),
     revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
+    relabelIssue: () => okAsync(undefined),
     commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {

@@ -70,6 +70,7 @@ import type {
   GithubAppStatus,
   StartGithubAppManifestBody,
 } from '@funny/shared/contracts/github-app';
+import type { JobListPage } from '@funny/shared/contracts/jobs';
 import type {
   CreatedPersonalToken,
   CreatePersonalTokenBody,
@@ -263,7 +264,8 @@ export interface ActivitiesPort {
 
 export interface JobsPort {
   /** Cancel and log reads stay REST: the runner owns the process and the logfile. */
-  list(userId: string): PortResult<Job[]>;
+  /** One page of the caller's jobs, newest first. */
+  list(userId: string, page: JobListPage): PortResult<Job[]>;
 }
 
 export interface DesignsPort {

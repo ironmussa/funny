@@ -1119,6 +1119,7 @@
     "creating": "Creando...",
     "loadingWorktrees": "Cargando worktrees...",
     "noWorktrees": "No se encontraron worktrees. Crea uno para comenzar.",
+    "loadFailed": "No se pudieron cargar los worktrees",
     "openThread": "Abrir hilo: {{title}}"
   },
   "common": {
@@ -1738,6 +1739,7 @@
       "merging": "Haciendo merge",
       "waitingHuman": "Te espera",
       "merged": "Merged",
+      "noChange": "Sin cambios necesarios",
       "failed": "Falló",
       "stopped": "Detenida"
     },
@@ -1805,7 +1807,8 @@
     },
     "noChange": {
       "title": "El agente no hizo ningún cambio",
-      "body": "No abrió un pull request ni hizo commits. Su explicación está publicada en el issue #{{issue}}: cierra el issue o reintenta el run."
+      "body": "No abrió ningún pull request ni hizo commits. Su explicación está en el issue #{{issue}}, que quedó marcado para revisión: cierra el issue o reintenta el run.",
+      "unsavedBody": "No abrió ningún pull request ni hizo commits, pero dejó trabajo sin guardar en su checkout, que se conservó (la ruta está en el issue #{{issue}}). Escribe en este hilo para que haga commit y abra el pull request, o reintenta el run."
     }
   },
   "projectSecrets": {
@@ -1866,7 +1869,38 @@
     "dismiss": "Descartar",
     "clearFinished": "Limpiar terminadas",
     "failedToast": "Falló: {{title}}",
-    "openPanel": "Ver"
+    "openPanel": "Ver",
+    "automatic": "Automático",
+    "destructive": "Elimina o cambia cosas en disco o en GitHub",
+    "effects": {
+      "worktree-removed": "Worktree eliminado",
+      "branch-deleted": "Rama borrada",
+      "command-stopped": "Comando detenido",
+      "terminal-closed": "Terminal cerrada",
+      "directory-removed": "Carpeta eliminada",
+      "branch-checked-out": "Rama activada",
+      "changes-stashed": "Cambios guardados en stash",
+      "sandbox-stopped": "Sandbox detenido",
+      "sandbox-destroyed": "Sandbox destruido",
+      "pr-merged": "Pull request fusionado",
+      "remote-branch-deleted": "Rama remota borrada",
+      "agent-stopped": "Agente detenido",
+      "factory-disabled": "Factory desactivada",
+      "repo-published": "Repositorio publicado",
+      "file-reverted": "Archivo revertido",
+      "changes-discarded": "Cambios descartados",
+      "commits-reset": "Reset",
+      "stash-dropped": "Stash eliminado",
+      "code-rewound": "Código rebobinado",
+      "snapshot-saved": "Snapshot guardado",
+      "commit-created": "Commit creado"
+    },
+    "restore": "Restaurar",
+    "restored": "Restaurado. El estado anterior se guardó como un nuevo snapshot.",
+    "snapshotGone": "Este snapshot ya no existe en el runner.",
+    "restoreFailed": "No se pudo restaurar",
+    "restoreTitle": "¿Restaurar este snapshot?",
+    "restoreDescription": "Devuelve lo que eliminó «{{title}}». Primero se guarda el estado actual, así que también se puede deshacer."
   },
   "factoryView": {
     "title": "Cola del factory",

@@ -26,6 +26,7 @@ import {
   resolveIdentity,
   resolveThreadIdentity,
 } from '../../services/git-service.js';
+import { recordedGithubWrite } from '../../services/github-write-activity.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThreadCwd } from '../../utils/route-helpers.js';
@@ -150,15 +151,35 @@ remoteRoutes.post('/project/:projectId/publish', async (c) => {
   const parsed = validate(publishRepoSchema, await c.req.json());
   if (parsed.isErr()) return resultToResponse(c, parsed);
   log.info('git.publish', { namespace: 'git', projectId, repoName: parsed.value.name });
-  const result = await publishRepo(cwdResult.value, parsed.value, {
-    GH_TOKEN: identity.githubToken,
-  });
-  if (result.isErr()) {
-    log.error('git.publish.failed', { namespace: 'git', projectId, error: String(result.error) });
-    return resultToResponse(c, result);
-  }
-  _gitStatusCache.delete(projectId);
-  return c.json({ ok: true, repoUrl: result.value });
+  const token = identity.githubToken;
+  // Recorded as a `github.write` activity (track-user-and-scheduled-actions).
+  return recordedGithubWrite(
+    {
+      userId,
+      projectId,
+      title: `Publish ${parsed.value.name} to GitHub`,
+      input: { action: 'repo-publish', repo: parsed.value.name },
+      effectsOf: (body) => [
+        {
+          effect: 'repo-published',
+          target: typeof body.repoUrl === 'string' ? body.repoUrl : parsed.value.name,
+        },
+      ],
+    },
+    async () => {
+      const result = await publishRepo(cwdResult.value, parsed.value, { GH_TOKEN: token });
+      if (result.isErr()) {
+        log.error('git.publish.failed', {
+          namespace: 'git',
+          projectId,
+          error: String(result.error),
+        });
+        return resultToResponse(c, result);
+      }
+      _gitStatusCache.delete(projectId);
+      return c.json({ ok: true, repoUrl: result.value });
+    },
+  );
 });
 
 // POST /api/git/project/:projectId/pull

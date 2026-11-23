@@ -106,38 +106,51 @@ describe('StashTab other branches', () => {
     createdAt: Date.now(),
   };
 
-  test('lists stashes from other branches under their branch name', () => {
+  test('lists every stash in one list, marking the current branch with a chip', () => {
+    const mine = { index: 'stash@{0}', message: 'On main: wip', createdAt: Date.now() };
+    const theirs = { ...other, index: 'stash@{1}' };
     renderStash({
-      stashEntries: [other],
-      filteredStashEntries: [],
-      otherBranchStashGroups: [{ branch: 'feat/x', entries: [other] }],
+      stashEntries: [mine, theirs],
+      filteredStashEntries: [mine],
+      otherBranchStashGroups: [{ branch: 'feat/x', entries: [theirs] }],
     });
 
-    expect(screen.getByTestId('stash-current-branch-empty')).toHaveTextContent(
-      'No stashed changes on main',
-    );
-    const group = screen.getByTestId('stash-branch-group-feat/x');
-    expect(group).toHaveTextContent('feat/x');
-    expect(group).toContainElement(screen.getByTestId('stash-entry-0'));
+    const list = screen.getByTestId('stash-list');
+    expect(list).toContainElement(screen.getByTestId('stash-entry-0'));
+    expect(list).toContainElement(screen.getByTestId('stash-entry-1'));
+    // Each row names its branch; only the checked-out one is Current.
+    expect(screen.getByTestId('stash-branch-0')).toHaveTextContent('main');
+    expect(screen.getByTestId('stash-current-0')).toHaveTextContent('Current');
+    expect(screen.getByTestId('stash-branch-1')).toHaveTextContent('feat/x');
+    expect(screen.queryByTestId('stash-current-1')).not.toBeInTheDocument();
+    // git's "On <branch>:" prefix is dropped from the title, since the row shows the branch.
+    expect(screen.getByTestId('stash-entry-0')).toHaveTextContent('wip');
+    expect(screen.getByTestId('stash-entry-0')).not.toHaveTextContent('On main:');
+    expect(screen.queryByText('Other branches')).not.toBeInTheDocument();
   });
 
   test('cannot pop a stash made on another branch, even the latest', () => {
+    const onPop = vi.fn(async () => {});
     renderStash({
+      handleStashPop: onPop,
       stashEntries: [other],
       filteredStashEntries: [],
       otherBranchStashGroups: [{ branch: 'feat/x', entries: [other] }],
     });
 
     const pop = screen.getByTestId('stash-pop-0');
-    expect(pop).toBeDisabled();
+    // Blocked, not disabled: it keeps its color and its tooltip explains why.
+    expect(pop).toHaveAttribute('aria-disabled', 'true');
     expect(pop).toHaveAccessibleName('Made on feat/x: switch to that branch to pop it');
+    fireEvent.click(pop);
+    expect(onPop).not.toHaveBeenCalled();
     expect(screen.getByTestId('stash-drop-0')).toBeEnabled();
   });
 
   test('shows the plain empty state when there are no stashes at all', () => {
     renderStash({ stashEntries: [], filteredStashEntries: [] });
 
-    expect(screen.queryByTestId('stash-other-branches')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stash-list')).not.toBeInTheDocument();
     expect(screen.getByText('No stashed changes on main')).toBeInTheDocument();
   });
 });

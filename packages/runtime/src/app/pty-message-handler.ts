@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve, sep } from 'path';
 
 import { getWorktreeBasePaths } from '@funny/core/git';
+import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../lib/logger.js';
 import * as ptyManager from '../services/pty-manager.js';
@@ -115,7 +116,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
         } catch (mkErr) {
           log.error('PTY spawn failed: scratch dir mkdir error', {
             namespace: 'ws',
-            error: mkErr instanceof Error ? mkErr.message : String(mkErr),
+            error: errorMessage(mkErr),
             cwd,
             ptyId: data.id,
           });
@@ -135,7 +136,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
       } catch (err) {
         log.error('PTY spawn failed: scratch thread lookup error', {
           namespace: 'ws',
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
           scratchThreadId,
           userId,
         });

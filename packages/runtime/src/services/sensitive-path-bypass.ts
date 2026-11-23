@@ -15,6 +15,7 @@ import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import { errorMessage } from '@funny/shared/errors';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 import { log } from '../lib/logger.js';
@@ -163,10 +164,10 @@ async function runBash(command: string, cwd: string | undefined): Promise<Bypass
     child.on('error', (err) => {
       log.warn('sensitive bypass Bash spawn error', {
         namespace: NAMESPACE,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       resolve({
-        output: `Error executing command: ${err instanceof Error ? err.message : String(err)}`,
+        output: `Error executing command: ${errorMessage(err)}`,
       });
     });
   });

@@ -1,4 +1,5 @@
 import type { AgentProvider } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../../lib/logger.js';
 import type { RuntimeThreadRecord } from '../server-interfaces.js';
@@ -129,7 +130,7 @@ export async function resolveAgentTemplate(
       namespace: 'agent',
       threadId: input.threadId,
       templateId: thread.agentTemplateId,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
   }
   return out;

@@ -10,6 +10,7 @@
 
 import { timingSafeEqual } from 'crypto';
 
+import { errorMessage } from '@funny/shared/errors';
 import type { Context, Next } from 'hono';
 
 import { audit } from '../lib/audit.js';
@@ -291,7 +292,7 @@ async function bindLoopbackRunnerUser(
   } catch (err) {
     log.error('Failed to resolve loopback runner userId', {
       namespace: 'auth',
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     return c.json({ error: 'Failed to resolve userId for runner' }, 500);
   }

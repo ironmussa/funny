@@ -457,18 +457,10 @@ function Inspector({
 }) {
   const action = useMemo(() => (node ? actionOf(node) : null), [node]);
   const sourceKeys = [action, node?.loop, node?.retry];
-  const [actionSource, setActionSource] = useResettableState(
-    JSON.stringify(action?.value ?? {}, null, 2),
-    sourceKeys,
-  );
-  const [retrySource, setRetrySource] = useResettableState(
-    node?.retry ? JSON.stringify(node.retry, null, 2) : '',
-    sourceKeys,
-  );
-  const [loopSource, setLoopSource] = useResettableState(
-    node?.loop ? JSON.stringify(node.loop, null, 2) : '',
-    sourceKeys,
-  );
+  const initial = inspectorSources(node, action);
+  const [actionSource, setActionSource] = useResettableState(initial.action, sourceKeys);
+  const [retrySource, setRetrySource] = useResettableState(initial.retry, sourceKeys);
+  const [loopSource, setLoopSource] = useResettableState(initial.loop, sourceKeys);
 
   if (!node || !workflow || !action) {
     return (
@@ -692,6 +684,19 @@ function applyGraph(
   const { nodes, edges } = decorateGraph(graph, runStates, filter);
   setNodes(nodes);
   setEdges(edges);
+}
+
+/** The JSON text the inspector's editors start from for a node. */
+function inspectorSources(
+  node: ParsedNode | null,
+  action: { value: unknown } | null,
+): { action: string; retry: string; loop: string } {
+  const pretty = (value: unknown) => JSON.stringify(value, null, 2);
+  return {
+    action: pretty(action?.value ?? {}),
+    retry: node?.retry ? pretty(node.retry) : '',
+    loop: node?.loop ? pretty(node.loop) : '',
+  };
 }
 
 function actionOf(node: ParsedNode): { type: keyof ParsedNode; value: unknown } {

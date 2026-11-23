@@ -22,6 +22,7 @@
  */
 
 import type { Watcher, WatcherStatus, WSEvent } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
@@ -139,14 +140,14 @@ async function scanOnce(): Promise<void> {
         log.error('Watcher fire failed', {
           namespace: NS,
           watcherId: w.id,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
       });
     }
   } catch (err) {
     log.error('Watcher scan failed', {
       namespace: NS,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
   } finally {
     scanning = false;
@@ -182,7 +183,7 @@ async function rearmScanner(): Promise<void> {
   } catch (err) {
     log.error('Failed to re-arm watcher scanner', {
       namespace: NS,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     armScannerAt(Date.now() + SCAN_RETRY_MS);
   }

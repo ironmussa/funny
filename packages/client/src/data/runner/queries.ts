@@ -1,3 +1,4 @@
+import { errorMessage } from '@funny/shared/errors';
 import { DYNAMIC_MODEL_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 
 import {
@@ -29,7 +30,7 @@ const log = createClientLogger('runner-queries');
 function warnAndRethrow(what: string) {
   return (error: unknown): never => {
     log.warn(`failed to load ${what}`, {
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
     throw error;
   };

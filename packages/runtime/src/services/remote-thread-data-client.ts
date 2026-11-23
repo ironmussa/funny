@@ -1,3 +1,4 @@
+import { errorMessage } from '@funny/shared/errors';
 import type { DataInsertMessage, DataInsertToolCall } from '@funny/shared/runner-protocol';
 
 import { log } from '../lib/logger.js';
@@ -216,7 +217,7 @@ class RemoteThreadDataClient {
       log.warn('Failed to persist debounced message update over gRPC', {
         namespace: 'runner',
         messageId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
     });
   }

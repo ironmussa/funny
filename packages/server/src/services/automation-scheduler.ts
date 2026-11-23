@@ -19,6 +19,7 @@
  * @domain layer: application
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import { AUTOMATION_DISALLOWED_TOOLS } from '@funny/shared/models';
 import { Cron } from 'croner';
 import { and, asc, eq, gte, lt } from 'drizzle-orm';
@@ -159,7 +160,7 @@ async function schedule(automation: Automation): Promise<void> {
   try {
     job = (deps.createJob ?? createCronJob)(automation.schedule, () => tick(automation.id));
   } catch (e) {
-    const reason = e instanceof Error ? e.message : String(e);
+    const reason = errorMessage(e);
     log.warn('Invalid automation schedule — not scheduled', {
       namespace: 'automation',
       automationId: automation.id,

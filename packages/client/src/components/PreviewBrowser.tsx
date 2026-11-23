@@ -18,14 +18,20 @@ interface PreviewTab {
 
 const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
+/** The selected tab, or the last open tab when the selected one was closed. */
+function resolveActiveTabId(tabs: PreviewTab[], selectedTabId: string | null): string | null {
+  if (selectedTabId && !tabs.some((t) => t.commandId === selectedTabId)) return lastTabId(tabs);
+  return selectedTabId;
+}
+
+function lastTabId(tabs: PreviewTab[]): string | null {
+  return tabs.at(-1)?.commandId ?? null;
+}
+
 export function PreviewBrowser() {
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
   const [selectedTabId, setActiveTabId] = useState<string | null>(null);
-  // A selected tab that was closed falls back to the last open tab.
-  const activeTabId =
-    selectedTabId && !tabs.some((t) => t.commandId === selectedTabId)
-      ? (tabs[tabs.length - 1]?.commandId ?? null)
-      : selectedTabId;
+  const activeTabId = resolveActiveTabId(tabs, selectedTabId);
   const [iframeKey, setIframeKey] = useState(0);
 
   const activeTab = tabs.find((t) => t.commandId === activeTabId);

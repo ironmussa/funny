@@ -27,6 +27,11 @@ export interface CreateDesignDialogProps {
   projectName: string;
 }
 
+/** What the dialog shows when the design could not be created. */
+function createFailureMessage(error: { friendlyMessage?: string; message?: string }): string {
+  return error.friendlyMessage ?? error.message ?? 'Failed to create design';
+}
+
 export function CreateDesignDialog({
   open,
   onOpenChange,
@@ -59,9 +64,7 @@ export function CreateDesignDialog({
       const created = await api.createDesign(projectId, payload);
       if (created.isErr()) {
         log.error('createDesign failed', { projectId, type: payload.type, error: created.error });
-        setError(
-          created.error.friendlyMessage ?? created.error.message ?? 'Failed to create design',
-        );
+        setError(createFailureMessage(created.error));
         return;
       }
 

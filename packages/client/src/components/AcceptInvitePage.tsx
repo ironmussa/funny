@@ -1,3 +1,5 @@
+import type { SafeUser } from '@funny/shared';
+import { errorMessage as caughtMessage } from '@funny/shared/errors';
 import { CheckCircle2, Loader2, XCircle, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -15,6 +17,53 @@ interface Props {
 }
 
 type Step = 'verifying' | 'register' | 'accepting' | 'success' | 'already' | 'error';
+
+/** The user fields the sign-in response carries. */
+interface SignedInUser {
+  id: string;
+  username?: string;
+  name?: string;
+  role?: SafeUser['role'];
+}
+
+/** The form's message for a failed login: the error's own text, else a generic one. */
+function loginFailure(message: string | undefined): string {
+  return message || 'Login failed';
+}
+
+/** Signs in, and answers the error to show or the signed-in user. */
+async function attemptLogin(
+  username: string,
+  password: string,
+): Promise<{ error: string } | { user: SignedInUser | undefined }> {
+  try {
+    const result = await authClient.signIn.username({ username, password });
+    if (result.error) return { error: loginFailure(result.error.message) };
+    // SAFETY: better-auth's username plugin returns the user row with these fields.
+    return { user: result.data?.user as SignedInUser | undefined };
+  } catch (err) {
+    return { error: loginFailure(caughtMessage(err)) };
+  }
+}
+
+/** Puts the signed-in user in the auth store; a response without a user changes nothing. */
+function storeSignedInUser(u: SignedInUser | undefined): void {
+  if (!u) return;
+  useAuthStore.setState({
+    isAuthenticated: true,
+    user: {
+      id: u.id,
+      username: firstName(u.username, u.name, 'user'),
+      displayName: firstName(u.name, u.username, 'User'),
+      role: u.role || 'user',
+    },
+  });
+}
+
+/** The first non-empty name, else the last argument. */
+function firstName(...names: Array<string | undefined>): string {
+  return names.find(Boolean) ?? '';
+}
 
 function continueToApp() {
   window.location.href = '/';
@@ -125,39 +174,18 @@ export function AcceptInvitePage({ token }: Props) {
 
     await withCleanup(
       async () => {
-        try {
-          const result = await authClient.signIn.username({
-            username,
-            password,
-          });
-
-          if (submissionIdRef.current !== submissionId) return;
-
-          if (result.error) {
-            setFormError(result.error.message || 'Login failed');
-            return;
-          }
-
-          const u = result.data?.user as any;
-          if (u) {
-            useAuthStore.setState({
-              isAuthenticated: true,
-              user: {
-                id: u.id,
-                username: u.username || u.name || 'user',
-                displayName: u.name || u.username || 'User',
-                role: u.role || 'user',
-              },
-            });
-          }
-
-          // Now accept the invite
-          await acceptInvite();
-        } catch (err: any) {
-          if (submissionIdRef.current === submissionId) {
-            setFormError(err.message || 'Login failed');
-          }
+        const outcome = await attemptLogin(username, password);
+        if (submissionIdRef.current !== submissionId) return;
+        if ('error' in outcome) {
+          setFormError(outcome.error);
+          return;
         }
+        storeSignedInUser(outcome.user);
+        // Now accept the invite
+        await acceptInvite().catch((err: unknown) => {
+          if (submissionIdRef.current === submissionId)
+            setFormError(loginFailure(caughtMessage(err)));
+        });
       },
       () => {
         // The current submission owns this flag; the cleanup covers every exit path.

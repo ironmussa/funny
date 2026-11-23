@@ -9,6 +9,7 @@
  */
 
 import { failure, type ProjectRunnersPort } from '@funny/api';
+import { errorMessage } from '@funny/shared/errors';
 import { and, eq, inArray } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 
@@ -96,7 +97,7 @@ export async function stopProjectSessionsOnRunners(
             projectId,
             runnerId: runner.value,
             threadId: t.id,
-            error: e instanceof Error ? e.message : String(e),
+            error: errorMessage(e),
           });
         }
       },

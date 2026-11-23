@@ -17,6 +17,7 @@ import { SubscriptionRequestSchema } from '@funny/shared/browser-v1/events';
 import { InteractiveEnvelopeSchema } from '@funny/shared/browser-v1/interactive';
 import { NegotiationRequestSchema } from '@funny/shared/browser-v1/negotiation';
 import { OperationRequestSchema } from '@funny/shared/browser-v1/operations';
+import { errorMessage } from '@funny/shared/errors';
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
@@ -318,7 +319,7 @@ function connect() {
         });
       } catch (err) {
         wsLog.warn('pty:list RPC failed', {
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage(err),
         });
         useTerminalStore.getState().markSessionsChecked();
       } finally {

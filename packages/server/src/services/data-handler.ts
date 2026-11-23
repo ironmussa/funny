@@ -10,6 +10,8 @@
  * back the response (with generated IDs for inserts).
  */
 
+import { errorMessage } from '@funny/shared/errors';
+
 import { repos } from '../db/repos.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
@@ -119,12 +121,12 @@ export async function handleDataMessageWithAck(
       namespace: 'data-handler',
       runnerId,
       type: data?.type,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
     return {
       type: 'data:ack',
       success: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     };
   }
 }

@@ -28,6 +28,7 @@ import {
   loadProviderExtensions,
 } from '@funny/core/agents';
 import type { Project, WSEvent } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 
 import { DATA_DIR } from '../lib/data-dir.js';
@@ -229,7 +230,7 @@ async function applyPersistedBuiltinProviders(): Promise<void> {
   } catch (err) {
     log.warn('Failed to restore persisted built-in providers', {
       namespace: 'runner',
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage(err),
     });
   }
 }

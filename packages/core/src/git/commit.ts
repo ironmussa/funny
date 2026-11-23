@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync }
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { processError, type DomainError } from '@funny/shared/errors';
+import { processError, type DomainError, errorMessage } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import { git, type GitIdentityOptions } from './base.js';
@@ -114,8 +114,7 @@ export function runHookCommand(
         }
       }
     })(),
-    (e: unknown) =>
-      processError((e instanceof Error ? e.message : String(e)) || 'Hook command failed', 1, ''),
+    (e: unknown) => processError(errorMessage(e) || 'Hook command failed', 1, ''),
   );
 }
 

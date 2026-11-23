@@ -21,6 +21,7 @@
  *   `@funny/shared/auth/forwarded-identity`.
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -215,7 +216,7 @@ async function relay(
     log.warn('gRPC tunnel request failed', {
       namespace: 'proxy',
       runnerId,
-      error: tunnelErr instanceof Error ? tunnelErr.message : String(tunnelErr),
+      error: errorMessage(tunnelErr),
     });
     return c.json({ error: 'Runner tunnel unavailable.' }, 502);
   }
@@ -447,7 +448,7 @@ async function handleOAuthCallback(
       log.warn('MCP OAuth callback tunnel failed', {
         namespace: 'proxy',
         runnerId: runner.value,
-        error: e instanceof Error ? e.message : String(e),
+        error: errorMessage(e),
       });
       return oauthCallbackPage(c, false, 'Runner did not respond', 502);
     }

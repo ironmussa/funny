@@ -2,6 +2,7 @@ import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 
 import { getNativeGit } from '@funny/core/git';
+import { errorMessage } from '@funny/shared/errors';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 import {
   getDefaultModel,
@@ -11,7 +12,7 @@ import {
   PROVIDER_KEY_REGISTRY,
 } from '@funny/shared/models';
 import { getManifest } from '@funny/shared/provider-manifests';
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
@@ -283,7 +284,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   // scoped: the persisted source of truth is FUNNY_PROVIDERS, so a toggle is
   // reset on runner restart (persistence is deferred — lean-core §6.2). The
   // change is advertised to the server on the next heartbeat.
-  const toggleBuiltin = async (c: any, enable: boolean) => {
+  const toggleBuiltin = async (c: Context<HonoEnv>, enable: boolean) => {
     const userId = c.get('userId');
     if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
     let body: { id?: string };
@@ -312,7 +313,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       log.warn('Failed to persist built-in provider selection', {
         namespace: 'provider-install',
         id: body.id,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
     }
     log.info(`built-in provider ${enable ? 'enabled' : 'disabled'}`, {

@@ -117,7 +117,8 @@ export function NewThreadInput({
   // One-shot: capture the prefill at mount time, then clear it from the store
   // so it doesn't bleed into the next compose. The captured value is what
   // gets passed to PromptInput as initialPrompt.
-  const initialPrefillRef = useRef(composePrefillPrompt);
+  // Captured once: the store entry is cleared right after mount.
+  const [initialPrefill] = useState(composePrefillPrompt);
   const clearComposePrefill = useStableCallback(() => {
     if (composePrefillPrompt !== null) setComposePrefillPrompt(null);
   });
@@ -456,16 +457,14 @@ export function NewThreadInput({
           </div>
         )}
         <PromptInput
-          key={composePromptKey(effectiveProjectId, !!issueContext, initialPrefillRef.current)}
+          key={composePromptKey(effectiveProjectId, !!issueContext, initialPrefill)}
           onSubmit={handleCreate}
           loading={creating}
           isNewThread
           showBacklog
           newThreadContextBar={contextBar}
           projectId={effectiveProjectId || undefined}
-          initialPrompt={
-            issueContext?.prompt ?? initialPrefillRef.current ?? restoredPrompt ?? undefined
-          }
+          initialPrompt={issueContext?.prompt ?? initialPrefill ?? restoredPrompt ?? undefined}
           onContentChange={handleContentChange}
           onWorktreeModeChange={setIsWorktreeMode}
           onProviderChange={setMcpProvider}

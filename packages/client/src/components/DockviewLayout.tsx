@@ -265,14 +265,16 @@ export function DockviewLayout({
   const apiRef = useRef<DockviewApi | null>(null);
 
   // ── Persistence: load stored sizes once on mount ──
-  const storedLeftWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_LEFT_WIDTH));
-  const storedRightWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_RIGHT_WIDTH));
-  const storedBottomHeight = useRef<number | null>(readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT));
-  const storedBrowserWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_BROWSER_WIDTH));
-  const initialRightWidthRef = useRef(storedRightWidth.current ?? initialRightWidth);
-  const initialBottomHeightRef = useRef(storedBottomHeight.current ?? initialBottomHeight);
-  const initialBrowserWidthRef = useRef(storedBrowserWidth.current ?? initialBrowserWidth);
-  const initialLeftWidthResolved = storedLeftWidth.current ?? initialLeftWidth;
+  const [stored] = useState(() => ({
+    leftWidth: readStoredSize(STORAGE_KEY_LEFT_WIDTH),
+    rightWidth: readStoredSize(STORAGE_KEY_RIGHT_WIDTH),
+    bottomHeight: readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT),
+    browserWidth: readStoredSize(STORAGE_KEY_BROWSER_WIDTH),
+  }));
+  const initialRightWidthRef = useRef(stored.rightWidth ?? initialRightWidth);
+  const initialBottomHeightRef = useRef(stored.bottomHeight ?? initialBottomHeight);
+  const initialBrowserWidthRef = useRef(stored.browserWidth ?? initialBrowserWidth);
+  const initialLeftWidthResolved = stored.leftWidth ?? initialLeftWidth;
 
   // ── Latest-prop refs so callbacks/effects don't need to re-create ──
   const isTabbedRight = !!(rightTabs && rightTabs.length > 0);
@@ -296,9 +298,9 @@ export function DockviewLayout({
   const bottomLeftActionsRef = useRef(bottomLeftActions);
   const bottomRightActionsRef = useRef(bottomRightActions);
   useLayoutEffect(() => {
-    initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
-    initialBottomHeightRef.current = storedBottomHeight.current ?? initialBottomHeight;
-    initialBrowserWidthRef.current = storedBrowserWidth.current ?? initialBrowserWidth;
+    initialRightWidthRef.current = stored.rightWidth ?? initialRightWidth;
+    initialBottomHeightRef.current = stored.bottomHeight ?? initialBottomHeight;
+    initialBrowserWidthRef.current = stored.browserWidth ?? initialBrowserWidth;
     rightTabsRef.current = rightTabs;
     onActiveRightTabChangeRef.current = onActiveRightTabChange;
     activeRightTabRef.current = activeRightTab;
@@ -331,6 +333,9 @@ export function DockviewLayout({
     onBottomTabsReorder,
     onBrowserClose,
     rightTabs,
+    stored.bottomHeight,
+    stored.browserWidth,
+    stored.rightWidth,
   ]);
   const bottomHeaderActions = useMemo(
     () => ({

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useLayoutEffect } from 'react';
 
 import { PipelineProgressBanner } from '@/components/PipelineProgressBanner';
 import { type MessageStreamHandle } from '@/components/thread/MessageStream';
@@ -20,6 +20,12 @@ export function ThreadChatView({ activeThread }: Props) {
   const stableMessages = useThreadMessages();
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const streamRef = useRef<MessageStreamHandle>(null);
+  // The stream's scroll viewport, for the timeline's scroll sync. Kept current after every
+  // render so the timeline reads the element that is mounted now.
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    messagesScrollRef.current = streamRef.current?.scrollViewport ?? null;
+  });
   const [visibleMessageId, setVisibleMessageId] = useState<string | null>(null);
 
   const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose, handleSearchClear } =
@@ -92,6 +98,8 @@ export function ThreadChatView({ activeThread }: Props) {
         />
         {timelineVisible && stableMessages && stableMessages.length > 0 && (
           <PromptTimeline
+            // Remount per thread so the scroll sync attaches to that thread's viewport.
+            key={activeThread.id}
             messages={stableMessages}
             activeMessageId={
               visibleMessageId ??
@@ -99,7 +107,7 @@ export function ThreadChatView({ activeThread }: Props) {
               stableMessages.filter((m) => m.role === 'user' && m.content?.trim()).at(-1)?.id
             }
             threadStatus={activeThread.status}
-            messagesScrollRef={{ current: streamRef.current?.scrollViewport ?? null }}
+            messagesScrollRef={messagesScrollRef}
             onScrollToMessage={(msgId, toolCallId) => {
               const targetId = toolCallId || msgId;
               const selector = toolCallId

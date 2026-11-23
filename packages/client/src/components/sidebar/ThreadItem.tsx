@@ -11,7 +11,7 @@ import {
   GitBranch,
   Factory,
 } from 'lucide-react';
-import { useState, memo, useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useState, memo, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
@@ -351,12 +351,9 @@ function useThreadRowHandlers(
  * transient undefined gaps (e.g. thread selection race conditions).
  */
 function useStickyGitStatus(gitStatus?: GitStatusInfo) {
-  const lastGitStatusRef = useRef(gitStatus);
-  const effectiveGitStatus = gitStatus ?? lastGitStatusRef.current;
-  useLayoutEffect(() => {
-    if (gitStatus) lastGitStatusRef.current = gitStatus;
-  }, [gitStatus]);
-  return effectiveGitStatus;
+  const [lastGitStatus, setLastGitStatus] = useState(gitStatus);
+  if (gitStatus && gitStatus !== lastGitStatus) setLastGitStatus(gitStatus);
+  return gitStatus ?? lastGitStatus;
 }
 
 interface ThreadItemTrailingProps {

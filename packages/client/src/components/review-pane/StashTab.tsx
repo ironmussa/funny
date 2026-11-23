@@ -5,8 +5,10 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { FileTree } from '@/components/FileTree';
 import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -101,51 +103,30 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
     <div className="flex min-h-0 flex-1 flex-col">
       {toolbar}
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
-        {filteredStashEntries.length > 0 ? (
-          <div className="divide-sidebar-border flex flex-col divide-y">
-            {filteredStashEntries.map((entry) => (
-              <StashRow key={entry.index} entry={entry} {...rowProps} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            fill={false}
-            className="py-6"
-            icon={Archive}
-            title={noStashesTitle}
-            testId="stash-current-branch-empty"
-          />
-        )}
-
-        {otherBranchStashGroups.length > 0 && (
-          <div className="flex flex-col" data-testid="stash-other-branches">
-            <div className="text-muted-foreground border-sidebar-border border-y px-3 py-1.5 text-xs font-medium">
-              {t('review.stashOtherBranches', 'Other branches')}
-            </div>
-            {otherBranchStashGroups.map((group) => (
-              <div
-                key={group.branch}
-                className="flex flex-col"
-                data-testid={`stash-branch-group-${group.branch}`}
-              >
-                <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 px-3 pt-2 pb-1 text-xs">
-                  <BranchBadge branch={group.branch} variant="plain" />
-                  <span className="shrink-0">({group.entries.length})</span>
-                </div>
-                <div className="divide-sidebar-border flex flex-col divide-y">
-                  {group.entries.map((entry) => (
-                    <StashRow
-                      key={entry.index}
-                      entry={entry}
-                      otherBranch={group.branch}
-                      {...rowProps}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* One list: this branch's stashes first (marked Current), then the
+            other branches' — each row names its branch, like the worktrees. */}
+        <div className="divide-sidebar-border flex flex-col divide-y" data-testid="stash-list">
+          {filteredStashEntries.map((entry) => (
+            <StashRow
+              key={entry.index}
+              entry={entry}
+              branch={currentBranch}
+              current
+              {...rowProps}
+            />
+          ))}
+          {otherBranchStashGroups.flatMap((group) =>
+            group.entries.map((entry) => (
+              <StashRow
+                key={entry.index}
+                entry={entry}
+                branch={group.branch}
+                otherBranch={group.branch}
+                {...rowProps}
+              />
+            )),
+          )}
+        </div>
       </ScrollArea>
 
       {/* Stash detail dialog */}
@@ -296,12 +277,19 @@ function StashToolbar({
   );
 }
 
+/** The stash message without git's "On <branch>:" / "WIP on <branch>:" prefix: the row shows the branch itself. */
+function stashTitle(message: string): string {
+  return message.replace(/^(?:WIP )?[Oo]n [^:]+:\s*/, '') || message;
+}
+
 /**
  * One stash in the list: opens its detail; pop (latest only, and only on the
  * branch it was made on) and drop appear on hover.
  */
 function StashRow({
   entry,
+  branch,
+  current = false,
   otherBranch,
   now,
   isAgentRunning,
@@ -312,6 +300,10 @@ function StashRow({
   onRequestDrop,
 }: {
   entry: UseStashStateResult['filteredStashEntries'][number];
+  /** The branch the stash was made on (shown on the row). */
+  branch?: string;
+  /** The stash was made on the checked-out branch: shows the Current chip. */
+  current?: boolean;
   /** Set when the stash was made on another branch: popping it here is refused. */
   otherBranch?: string;
   now: number;
@@ -341,23 +333,40 @@ function StashRow({
       <Archive className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className={cn(listRowTitleClassName, 'line-clamp-2 break-words')}>
-          {entry.message}
+          {stashTitle(entry.message)}
         </span>
-        <span className="text-muted-foreground text-xs">{timeAgo(entry.createdAt, t, now)}</span>
+        <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+          {branch && (
+            <BranchBadge
+              branch={branch}
+              variant="plain"
+              className="min-w-0 font-mono"
+              data-testid={`stash-branch-${idx}`}
+            />
+          )}
+          {current && (
+            <LabelBadge tone="success" data-testid={`stash-current-${idx}`}>
+              {t('review.stashCurrentBranch', 'Current')}
+            </LabelBadge>
+          )}
+          <span className="shrink-0">{timeAgo(entry.createdAt, t, now)}</span>
+        </div>
       </div>
-      <StashPopButton
-        idx={idx}
-        otherBranch={otherBranch}
-        busy={stashPopInProgress}
-        disabled={stashPopInProgress || isAgentRunning || idx !== '0' || !!otherBranch}
-        onPop={onPop}
-      />
-      <StashDropButton
-        idx={idx}
-        dropping={stashDropInProgress === idx}
-        disabled={!!stashDropInProgress || isAgentRunning}
-        onRequestDrop={onRequestDrop}
-      />
+      <ButtonGroup data-testid={`stash-actions-${idx}`}>
+        <StashPopButton
+          idx={idx}
+          otherBranch={otherBranch}
+          busy={stashPopInProgress}
+          disabled={stashPopInProgress || isAgentRunning}
+          onPop={onPop}
+        />
+        <StashDropButton
+          idx={idx}
+          dropping={stashDropInProgress === idx}
+          disabled={!!stashDropInProgress || isAgentRunning}
+          onRequestDrop={onRequestDrop}
+        />
+      </ButtonGroup>
     </div>
   );
 }
@@ -377,6 +386,11 @@ function StashPopButton({
   onPop: () => void;
 }) {
   const { t } = useTranslation();
+  // A stash that cannot be popped here (made on another branch, or not the
+  // latest) keeps the row's icon color and stays hoverable, so its tooltip can
+  // say why; `aria-disabled` blocks the click. A real `disabled` would dim it
+  // and, through `pointer-events-none`, hide that tooltip.
+  const blocked = !!otherBranch || idx !== '0';
   const label = otherBranch
     ? t('review.popStashOtherBranch', {
         branch: otherBranch,
@@ -396,9 +410,10 @@ function StashPopButton({
           className={cn(listRowActionClassName, busy && idx === '0' && listRowActionBusyClassName)}
           onClick={(e) => {
             e.stopPropagation();
-            onPop();
+            if (!blocked) onPop();
           }}
           disabled={disabled}
+          aria-disabled={blocked || undefined}
           data-testid={`stash-pop-${idx}`}
         >
           {busy && idx === '0' ? (
@@ -408,7 +423,7 @@ function StashPopButton({
           )}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
+      <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>
   );
 }
@@ -450,7 +465,7 @@ function StashDropButton({
           {dropping ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">{t('review.dropStash', 'Discard stash')}</TooltipContent>
+      <TooltipContent side="top">{t('review.dropStash', 'Discard stash')}</TooltipContent>
     </Tooltip>
   );
 }

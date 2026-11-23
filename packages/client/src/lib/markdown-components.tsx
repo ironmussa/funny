@@ -145,11 +145,39 @@ function HighlightedCode({ code, language }: { code: string; language: string })
  * `MarkdownImageCard`, which adds the Mermaid-style chrome — a bordered card
  * with a filename header and a hover toolbar (zoom %, in/out, 1:1, expand).
  */
-export function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
+export function MarkdownImage({
+  src,
+  alt,
+  title,
+  width,
+  height,
+}: {
+  src?: string;
+  alt?: string;
+  title?: string;
+  width?: number | string;
+  height?: number | string;
+}) {
   // Proxied `/api/files/raw` URL immediately, upgraded to a signed direct-runner
   // URL (transport C) when the runner supports it. Falls back silently otherwise.
   const { src: resolved, onError: onMediaError } = useResolvedMediaSrc(src);
   if (!resolved) return null;
+  // An HTML <img> the author sized itself (CodeRabbit's 16px severity icons in
+  // PR comments) is inline content, not a picture to inspect: keep its size
+  // instead of blowing it up into the 360px zoomable card.
+  if (width !== undefined || height !== undefined) {
+    return (
+      <img
+        src={resolved}
+        alt={alt ?? ''}
+        title={title}
+        width={width}
+        height={height}
+        className="inline-block align-middle"
+        data-testid="markdown-inline-image"
+      />
+    );
+  }
   const isLocal = !!src && !isExternalUrl(src);
   if (isLocal && !IMAGE_EXTS.has(getFileExtension(src).toLowerCase())) {
     const viz = getVisualizerForFileExt(getFileExtension(src));
@@ -174,7 +202,9 @@ export function MarkdownImage({ src, alt, title }: { src?: string; alt?: string;
 }
 
 export const baseMarkdownComponents = {
-  img: ({ src, alt, title }: any) => <MarkdownImage src={src} alt={alt} title={title} />,
+  img: ({ src, alt, title, width, height }: any) => (
+    <MarkdownImage src={src} alt={alt} title={title} width={width} height={height} />
+  ),
   table: ({ children }: any) => (
     <div className="overflow-x-auto">
       <table>{children}</table>

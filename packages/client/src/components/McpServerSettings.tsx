@@ -48,6 +48,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { openClaudeSettingsInEditor } from '@/lib/claude-settings';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface RecommendedServer {
@@ -438,18 +439,15 @@ export function McpServerSettings() {
 
   const loadServers = useCallback(async () => {
     if (!projectPath) return;
-    setLoading(true);
-    setError(null);
-    try {
+    return whilePending(setLoading, async () => {
+      setError(null);
       const result = await api.listMcpServers(projectPath, selectedProvider, projectId);
       if (result.isOk()) {
         setServers(result.value.servers);
       } else {
         setError(result.error.message);
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectPath, projectId, selectedProvider]);
 
   // Load servers when projectPath changes (track previous to avoid duplicate calls)

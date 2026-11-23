@@ -22,7 +22,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
-import { whilePending } from '@/lib/while-pending';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface Member {
@@ -97,17 +97,22 @@ export function TeamMembers() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadMembers = useCallback(async () => {
-    try {
-      const res = await authClient.organization.listMembers();
-      if (res.data) {
-        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-        setMembers(res.data as unknown as Member[]);
-      }
-    } catch (err) {
-      console.error('[TeamMembers] Failed to load members:', err);
-    } finally {
-      setLoading(false);
-    }
+    return withCleanup(
+      async () => {
+        try {
+          const res = await authClient.organization.listMembers();
+          if (res.data) {
+            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+            setMembers(res.data as unknown as Member[]);
+          }
+        } catch (err) {
+          console.error('[TeamMembers] Failed to load members:', err);
+        }
+      },
+      () => {
+        setLoading(false);
+      },
+    );
   }, []);
 
   const loadInvitations = useCallback(async () => {

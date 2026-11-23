@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 
 const log = createClientLogger('create-design-dialog');
 
@@ -53,9 +54,8 @@ export function CreateDesignDialog({
   };
 
   const submit = async (payload: Parameters<typeof api.createDesign>[1]): Promise<void> => {
-    setSubmitting(true);
-    setError(null);
-    try {
+    return whilePending(setSubmitting, async () => {
+      setError(null);
       const created = await api.createDesign(projectId, payload);
       if (created.isErr()) {
         log.error('createDesign failed', { projectId, type: payload.type, error: created.error });
@@ -82,9 +82,7 @@ export function CreateDesignDialog({
       );
       resetAndClose();
       navigate(buildPath(`/projects/${projectId}/designs/${design.id}`));
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   const handleCreatePrototype = () =>

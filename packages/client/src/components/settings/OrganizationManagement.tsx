@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
-import { whilePending } from '@/lib/while-pending';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface OrgEntry {
@@ -47,46 +47,51 @@ export function OrganizationManagement() {
   const loadProjects = useProjectStore((s) => s.loadProjects);
 
   const loadOrgs = useCallback(async () => {
-    try {
-      const session = await authClient.getSession();
-      setActiveOrgId(activeOrganizationIdFromSession(session.data));
+    return withCleanup(
+      async () => {
+        try {
+          const session = await authClient.getSession();
+          setActiveOrgId(activeOrganizationIdFromSession(session.data));
 
-      const res = await authClient.organization.list();
-      if (res.data) {
-        setOrgs(
-          res.data.map((o: any) => ({
-            id: o.id,
-            name: o.name,
-            slug: o.slug,
-            createdAt: o.createdAt || '',
-          })),
-        );
-        // Build membership map (orgId -> role)
-        const memberMap = new Map<string, string>();
-        const currentUserId = session.data?.user?.id;
-        const fulls = await Promise.all(
-          res.data.map((org) =>
-            authClient.organization
-              .getFullOrganization({ query: { organizationId: (org as any).id } })
-              .catch(() => null),
-          ),
-        );
-        for (let i = 0; i < res.data.length; i++) {
-          const full = fulls[i];
-          if (full?.data) {
-            const me = (full.data as any).members?.find((m: any) => m.userId === currentUserId);
-            if (me) {
-              memberMap.set((res.data[i] as any).id, me.role);
+          const res = await authClient.organization.list();
+          if (res.data) {
+            setOrgs(
+              res.data.map((o: any) => ({
+                id: o.id,
+                name: o.name,
+                slug: o.slug,
+                createdAt: o.createdAt || '',
+              })),
+            );
+            // Build membership map (orgId -> role)
+            const memberMap = new Map<string, string>();
+            const currentUserId = session.data?.user?.id;
+            const fulls = await Promise.all(
+              res.data.map((org) =>
+                authClient.organization
+                  .getFullOrganization({ query: { organizationId: (org as any).id } })
+                  .catch(() => null),
+              ),
+            );
+            for (let i = 0; i < res.data.length; i++) {
+              const full = fulls[i];
+              if (full?.data) {
+                const me = (full.data as any).members?.find((m: any) => m.userId === currentUserId);
+                if (me) {
+                  memberMap.set((res.data[i] as any).id, me.role);
+                }
+              }
             }
+            setMemberships(memberMap);
           }
+        } catch (err) {
+          console.error('[OrganizationManagement] Failed to load orgs:', err);
         }
-        setMemberships(memberMap);
-      }
-    } catch (err) {
-      console.error('[OrganizationManagement] Failed to load orgs:', err);
-    } finally {
-      setLoading(false);
-    }
+      },
+      () => {
+        setLoading(false);
+      },
+    );
   }, []);
 
   useEffect(() => {

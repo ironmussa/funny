@@ -13,6 +13,7 @@ import { useGitStatusMaps } from '@/data/git-status/hooks';
 import { statusBranchKeyForThread } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
+import { withCleanup } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -42,24 +43,27 @@ export function ArchivedThreadsSettings() {
     async (p: number, s: string) => {
       if (p === 1) setLoading(true);
       else setLoadingMore(true);
-      try {
-        const result = await api.listArchivedThreads({
-          page: p,
-          limit: PAGE_SIZE,
-          search: s || undefined,
-          projectId: selectedProjectId || undefined,
-        });
-        if (result.isOk()) {
-          setTotal(result.value.total);
-          setThreads((prev) =>
-            p === 1 ? result.value.threads : [...prev, ...result.value.threads],
-          );
-        }
-        // silently ignore errors
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
+      return withCleanup(
+        async () => {
+          const result = await api.listArchivedThreads({
+            page: p,
+            limit: PAGE_SIZE,
+            search: s || undefined,
+            projectId: selectedProjectId || undefined,
+          });
+          if (result.isOk()) {
+            setTotal(result.value.total);
+            setThreads((prev) =>
+              p === 1 ? result.value.threads : [...prev, ...result.value.threads],
+            );
+          }
+          // silently ignore errors
+        },
+        () => {
+          setLoading(false);
+          setLoadingMore(false);
+        },
+      );
     },
     [selectedProjectId],
   );

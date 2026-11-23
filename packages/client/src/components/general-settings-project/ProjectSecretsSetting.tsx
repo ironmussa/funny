@@ -37,7 +37,7 @@ import { useProjectSecrets } from '@/data/project-secrets/hooks';
 import { useCanManageProject, useCanSteerProject } from '@/data/projects/hooks';
 import type { ProjectSecretSummary } from '@/lib/api/project-secrets';
 import { toastError } from '@/lib/toast-error';
-import { whilePending } from '@/lib/while-pending';
+import { whilePending, withCleanup } from '@/lib/while-pending';
 
 type Scope = ProjectSecretSummary['scope'];
 
@@ -411,19 +411,15 @@ function SecretDialog({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSave) return;
-    setSaving(true);
-    let result;
-    try {
-      result = await setProjectSecret({
+    const result = await whilePending(setSaving, () =>
+      setProjectSecret({
         projectId,
         scope,
         name,
         allowInSandbox,
         ...(value !== '' && { value }),
-      });
-    } finally {
-      setSaving(false);
-    }
+      }),
+    );
     if (result.isErr()) {
       // The typed value stays so it can be sent again.
       toastError(result.error, 'projectSecrets');
@@ -549,13 +545,16 @@ export function ProjectSecretsSetting({ projectId }: { projectId: string }) {
   const confirmDelete = async () => {
     if (!deleting) return;
     setBusy(true);
-    try {
-      const result = await deleteProjectSecret(projectId, deleting.id);
-      if (result.isErr()) toastError(result.error, 'projectSecrets');
-    } finally {
-      setBusy(false);
-      setDeleting(null);
-    }
+    return withCleanup(
+      async () => {
+        const result = await deleteProjectSecret(projectId, deleting.id);
+        if (result.isErr()) toastError(result.error, 'projectSecrets');
+      },
+      () => {
+        setBusy(false);
+        setDeleting(null);
+      },
+    );
   };
 
   const listProps = {

@@ -73,9 +73,11 @@ const existing = {
     'react/globals': 'error',
     'react/hooks': 'error',
     'react/immutability': 'error',
-    'react/incompatible-library': 'warn',
+    // Only reports that React Compiler skips a component using TanStack
+    // Virtual's useVirtualizer; nothing to fix without changing the library.
+    'react/incompatible-library': 'off',
     'react/invariant': 'error',
-    'react/memo-dependencies': 'warn',
+    'react/memo-dependencies': 'error',
     'react/no-deriving-state-in-effects': 'error',
     'react/preserve-manual-memoization': 'error',
     'react/purity': 'error',

@@ -21,6 +21,7 @@ import { usePRDetail } from '@/data/pull-requests/hooks';
 import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { withCleanup } from '@/lib/while-pending';
 
 import { DiffStats } from './DiffStats';
 import { FileTree } from './FileTree';
@@ -364,33 +365,36 @@ export function PRDetailDialog({
     const loadData = async () => {
       setLoadingFiles(true);
       setLoadingCommits(true);
-      try {
-        const [filesResult, commitsResult] = await Promise.all([
-          api.githubPRFiles(projectId, prNumber),
-          api.githubPRCommits(projectId, prNumber),
-        ]);
-        if (cancelled) return;
+      return withCleanup(
+        async () => {
+          const [filesResult, commitsResult] = await Promise.all([
+            api.githubPRFiles(projectId, prNumber),
+            api.githubPRCommits(projectId, prNumber),
+          ]);
+          if (cancelled) return;
 
-        if (filesResult.isOk()) {
-          setFiles(filesResult.value.files);
-          if (filesResult.value.files.length > 0) {
-            setSelectedFile(filesResult.value.files[0].filename);
+          if (filesResult.isOk()) {
+            setFiles(filesResult.value.files);
+            if (filesResult.value.files.length > 0) {
+              setSelectedFile(filesResult.value.files[0].filename);
+            }
+          } else {
+            log.error('Failed to fetch PR files', { error: filesResult.error });
+            setError(filesResult.error.message || 'Failed to load PR files');
           }
-        } else {
-          log.error('Failed to fetch PR files', { error: filesResult.error });
-          setError(filesResult.error.message || 'Failed to load PR files');
-        }
 
-        if (commitsResult.isOk()) setCommits(commitsResult.value.commits);
-        else log.error('Failed to fetch PR commits', { error: commitsResult.error });
-      } finally {
-        if (!cancelled) {
-          // Effect cleanup flips cancelled, so only the mounted request clears these flags.
-          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
-          setLoadingFiles(false);
-          setLoadingCommits(false);
-        }
-      }
+          if (commitsResult.isOk()) setCommits(commitsResult.value.commits);
+          else log.error('Failed to fetch PR commits', { error: commitsResult.error });
+        },
+        () => {
+          if (!cancelled) {
+            // Effect cleanup flips cancelled, so only the mounted request clears these flags.
+            // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
+            setLoadingFiles(false);
+            setLoadingCommits(false);
+          }
+        },
+      );
     };
 
     loadData();

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { setVisibleInterval } from '@/lib/visible-interval';
+import { withCleanup } from '@/lib/while-pending';
 import { useReviewPaneStore } from '@/stores/review-pane-store';
 import { useThreadId, useThreadStatus } from '@/stores/thread-context';
 
@@ -144,24 +145,29 @@ export function useThreadChangedFiles(enabled: boolean = true) {
     let cancelled = false;
     const timer = setTimeout(async () => {
       setLoading(true);
-      try {
-        const result = await api.getDiffSummary(threadId);
-        if (!cancelled && result.isOk()) {
-          const filtered = result.value.files.filter((file) => {
-            for (const path of touchedPaths) {
-              if (path.endsWith(`/${file.path}`) || path === file.path) return true;
+      return withCleanup(
+        async () => {
+          try {
+            const result = await api.getDiffSummary(threadId);
+            if (!cancelled && result.isOk()) {
+              const filtered = result.value.files.filter((file) => {
+                for (const path of touchedPaths) {
+                  if (path.endsWith(`/${file.path}`) || path === file.path) return true;
+                }
+                return false;
+              });
+              setFiles(filtered);
             }
-            return false;
-          });
-          setFiles(filtered);
-        }
-      } catch {
-        // Keep the previous file list when the refresh fails.
-      } finally {
-        // Cleanup owns cancelled, so only the live timer request clears loading.
-        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
-        if (!cancelled) setLoading(false);
-      }
+          } catch {
+            // Keep the previous file list when the refresh fails.
+          }
+        },
+        () => {
+          // Cleanup owns cancelled, so only the live timer request clears loading.
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
+          if (!cancelled) setLoading(false);
+        },
+      );
     }, 300);
 
     return () => {

@@ -23,6 +23,8 @@ import { createPortal } from 'react-dom';
 import { isLightTheme } from '@/lib/theme';
 import 'dockview-react/dist/styles/dockview.css';
 
+import { withCleanupSync } from '@/lib/while-pending';
+
 import { useAnimatedPanelToggle } from './dockview/use-animated-panel-toggle';
 import type { RightTabSpec } from './DockviewLayout';
 
@@ -200,40 +202,43 @@ export function CenterDockview({
       const desiredWidth = widthOverride ?? initialRightWidthRef.current;
       const tabs = rightTabsRef.current;
       isMutatingRightRef.current = true;
-      try {
-        if (tabs && tabs.length > 0) {
-          for (let i = 0; i < tabs.length; i++) {
-            const tab = tabs[i];
-            api.addPanel({
-              id: rightPanelId(tab.id),
-              component: 'right-tab',
-              tabComponent: 'right-tab',
-              title: tab.title,
-              params: { hostId: rightPanelId(tab.id) },
-              position:
-                i === 0
-                  ? { direction: 'right' }
-                  : { direction: 'within', referencePanel: rightPanelId(tabs[0].id) },
-              initialWidth: i === 0 ? desiredWidth : undefined,
-              renderer: 'always',
+      return withCleanupSync(
+        () => {
+          if (tabs && tabs.length > 0) {
+            for (let i = 0; i < tabs.length; i++) {
+              const tab = tabs[i];
+              api.addPanel({
+                id: rightPanelId(tab.id),
+                component: 'right-tab',
+                tabComponent: 'right-tab',
+                title: tab.title,
+                params: { hostId: rightPanelId(tab.id) },
+                position:
+                  i === 0
+                    ? { direction: 'right' }
+                    : { direction: 'within', referencePanel: rightPanelId(tabs[0].id) },
+                initialWidth: i === 0 ? desiredWidth : undefined,
+                renderer: 'always',
+              });
+            }
+            const desired = activeRightTabRef.current ?? tabs[0].id;
+            const target = api.getPanel(rightPanelId(desired));
+            target?.api.setActive();
+          } else if (hasStandaloneRight) {
+            const panel = api.addPanel({
+              id: PANEL_RIGHT,
+              component: PANEL_RIGHT,
+              title: 'Right',
+              position: { direction: 'right' },
+              initialWidth: desiredWidth,
             });
+            hidePanelHeader(panel);
           }
-          const desired = activeRightTabRef.current ?? tabs[0].id;
-          const target = api.getPanel(rightPanelId(desired));
-          target?.api.setActive();
-        } else if (hasStandaloneRight) {
-          const panel = api.addPanel({
-            id: PANEL_RIGHT,
-            component: PANEL_RIGHT,
-            title: 'Right',
-            position: { direction: 'right' },
-            initialWidth: desiredWidth,
-          });
-          hidePanelHeader(panel);
-        }
-      } finally {
-        isMutatingRightRef.current = false;
-      }
+        },
+        () => {
+          isMutatingRightRef.current = false;
+        },
+      );
     },
     [hasStandaloneRight],
   );
@@ -247,14 +252,17 @@ export function CenterDockview({
 
   const removeRightPanels = useCallback((api: DockviewApi) => {
     isMutatingRightRef.current = true;
-    try {
-      const ids = api.panels.filter((p) => isRightPanelId(p.id)).map((p) => p.id);
-      for (const id of ids) {
-        api.getPanel(id)?.api.close();
-      }
-    } finally {
-      isMutatingRightRef.current = false;
-    }
+    return withCleanupSync(
+      () => {
+        const ids = api.panels.filter((p) => isRightPanelId(p.id)).map((p) => p.id);
+        for (const id of ids) {
+          api.getPanel(id)?.api.close();
+        }
+      },
+      () => {
+        isMutatingRightRef.current = false;
+      },
+    );
   }, []);
 
   const buildDefaultLayout = useCallback(

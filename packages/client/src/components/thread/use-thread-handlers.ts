@@ -94,34 +94,31 @@ export function useThreadHandlers(refs: Refs) {
 
       const toolPermissions = useSettingsStore.getState().toolPermissions;
 
-      setSendingSafely(true);
-      if (threadIsRunning && followUpMode === 'interrupt') {
-        toast.info(t('thread.interruptingAgent'));
-      }
-      if (threadIsRunning && followUpMode === 'steer') {
-        toast.info(t('thread.steeringAgent'));
-      }
-      if (!threadIsRunning) {
-        useThreadStore
-          .getState()
-          .appendOptimisticMessage(
-            thread.id,
-            prompt,
-            images,
-            opts.model as any,
-            opts.mode as any,
-            opts.fileReferences,
-            opts.effort as any,
-          );
-      }
-      try {
+      return whilePending(setSendingSafely, async () => {
+        if (threadIsRunning && followUpMode === 'interrupt') {
+          toast.info(t('thread.interruptingAgent'));
+        }
+        if (threadIsRunning && followUpMode === 'steer') {
+          toast.info(t('thread.steeringAgent'));
+        }
+        if (!threadIsRunning) {
+          useThreadStore
+            .getState()
+            .appendOptimisticMessage(
+              thread.id,
+              prompt,
+              images,
+              opts.model as any,
+              opts.mode as any,
+              opts.fileReferences,
+              opts.effort as any,
+            );
+        }
         requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
         const payload = buildSendMessagePayload(opts, toolPermissions);
         const result = await api.sendMessage(thread.id, prompt, payload, images);
         handleSendResult(result, thread.id, { rollbackOnQueue: !threadIsRunning }, t);
-      } finally {
-        setSendingSafely(false);
-      }
+      });
     },
     [refs, setSendingSafely, t],
   );

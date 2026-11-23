@@ -47,6 +47,11 @@ interface TestDetailTabsProps {
 }
 
 /** Resolve a CSS variable (HSL) to a string for ansi-to-html. */
+/** The theme colors ANSI output is drawn with, read again after a theme switch. */
+function readAnsiColors(): { fg: string; bg: string } {
+  return { fg: getCssVar('--foreground'), bg: getCssVar('--background') };
+}
+
 function getCssVar(name: string): string {
   const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return raw ? `hsl(${raw})` : '#1b1b1b';
@@ -123,23 +128,19 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
 
   // Observe the <html> class attribute to detect theme changes so the ANSI
   // converter re-creates with fresh CSS variable values after a theme switch.
-  const [themeKey, setThemeKey] = useState(() => document.documentElement.className);
+  const [ansiColors, setAnsiColors] = useState(readAnsiColors);
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setThemeKey(document.documentElement.className);
+      setAnsiColors(readAnsiColors());
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
 
-  const ansiConverter = useMemo(() => {
-    void themeKey;
-    return createAnsiConverter({
-      fg: getCssVar('--foreground'),
-      bg: getCssVar('--background'),
-      newline: false,
-    });
-  }, [themeKey]);
+  const ansiConverter = useMemo(
+    () => createAnsiConverter({ ...ansiColors, newline: false }),
+    [ansiColors],
+  );
   const keyedOutputLines = useMemo(
     () =>
       withStableOccurrenceKeys(

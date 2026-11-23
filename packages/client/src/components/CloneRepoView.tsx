@@ -30,6 +30,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { withCleanup } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -181,12 +182,12 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     return () => window.removeEventListener('clone:progress', handler);
   }, []);
 
-  const loadGhUser = async () => {
+  const loadGhUser = useCallback(async () => {
     const result = await api.githubUser();
     if (result.isOk()) {
       setGhUser(result.value);
     }
-  };
+  }, []);
 
   const checkConnection = useCallback(async () => {
     const result = await api.githubStatus();
@@ -205,7 +206,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
       // API call itself failed (network error, server down, etc.)
       setView('error');
     }
-  }, []);
+  }, [loadGhUser]);
 
   // Check initial connection status
   useEffect(() => {
@@ -226,24 +227,27 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     loadingRef.current = true;
     setLoadingRepos(true);
     log.debug('github repo search', { page: pageNum, query: searchQuery, append });
-    try {
-      const result = await api.githubRepos({
-        page: pageNum,
-        per_page: 30,
-        sort: 'updated',
-        search: searchQuery || undefined,
-      });
-      if (fetchId !== fetchIdRef.current) return;
-      if (result.isOk()) {
-        setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
-        setHasMore(result.value.hasMore);
-      }
-    } finally {
-      if (fetchId === fetchIdRef.current) {
-        loadingRef.current = false;
-        setLoadingRepos(false);
-      }
-    }
+    return withCleanup(
+      async () => {
+        const result = await api.githubRepos({
+          page: pageNum,
+          per_page: 30,
+          sort: 'updated',
+          search: searchQuery || undefined,
+        });
+        if (fetchId !== fetchIdRef.current) return;
+        if (result.isOk()) {
+          setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
+          setHasMore(result.value.hasMore);
+        }
+      },
+      () => {
+        if (fetchId === fetchIdRef.current) {
+          loadingRef.current = false;
+          setLoadingRepos(false);
+        }
+      },
+    );
   }, []);
 
   // Debounce the search input to avoid firing a GitHub search on every keystroke.

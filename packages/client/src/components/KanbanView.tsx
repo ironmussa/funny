@@ -37,6 +37,7 @@ import { stageConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn, resolveThreadBranch } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -373,19 +374,16 @@ export function KanbanView({
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
-    setDeleteLoading(true);
-    const { threadId, projectId: threadProjectId, title } = deleteConfirm;
-    const wasSelected = selectedThreadId === threadId;
-    try {
+    return whilePending(setDeleteLoading, async () => {
+      const { threadId, projectId: threadProjectId, title } = deleteConfirm;
+      const wasSelected = selectedThreadId === threadId;
       const deleted = await deleteThread(threadId, threadProjectId);
       setDeleteConfirm(null);
       // A refused delete already brought the card back with an error toast.
       if (!deleted) return;
       toast.success(t('toast.threadDeleted', { title }));
       if (wasSelected) navigate(buildPath(`/projects/${threadProjectId}`));
-    } finally {
-      setDeleteLoading(false);
-    }
+    });
   }, [deleteConfirm, selectedThreadId, deleteThread, navigate, t]);
 
   const handleMergeWarningConfirm = useCallback(() => {

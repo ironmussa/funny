@@ -275,9 +275,8 @@ export function PinnedPRCard({
   const [resolvingNodeId, setResolvingNodeId] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+    return whilePending(setLoading, async () => {
+      setError(null);
       const [threadsRes, convRes] = await Promise.all([
         api.githubPRThreads(projectId, pr.number),
         api.githubPRConversation(projectId, pr.number),
@@ -293,9 +292,7 @@ export function PinnedPRCard({
               : 'Failed to load PR data',
         );
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectId, pr.number]);
 
   useEffect(() => {

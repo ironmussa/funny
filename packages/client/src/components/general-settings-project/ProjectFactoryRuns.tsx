@@ -8,6 +8,7 @@
  * removes them and "Stop all" also stops the runs in progress, after a
  * confirmation.
  */
+import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -35,7 +36,7 @@ import { ProjectFactoryRunFlow } from './ProjectFactoryRunFlow';
 
 function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
   const { t } = useTranslation();
-  const lastThread = run.threadIds.at(-1);
+  const lastThread = implementingThreadOf(run);
   const review = factoryRunReviewLabel(t, run);
   const contract = factoryRunContractLabel(t, run);
   const parked =

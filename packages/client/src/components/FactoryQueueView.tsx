@@ -7,6 +7,7 @@
  * with its thread's status icon); a row opens the run's last agent thread, and
  * carries the run's controls (PR, retry, stop).
  */
+import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 import { Clock, Factory } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -52,7 +53,7 @@ function runDetail(t: TFunction, run: FactoryQueueRun): string | null {
 const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now }: RowProps) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
-  const lastThreadId = run.threadIds.at(-1);
+  const lastThreadId = implementingThreadOf(run);
   const thread = useThreadById(lastThreadId);
   const title =
     thread?.title ||

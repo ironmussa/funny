@@ -201,6 +201,24 @@ export const factoryStepOptionsRecordSchema = z.object({
 export type FactoryStepOptionsRecord = z.infer<typeof factoryStepOptionsRecordSchema>;
 
 /**
+ * The run's implementing thread as it stands: the last thread a step of the
+ * run continued, never one a `thread: new` step started (a read-only thread of
+ * its own). What a member opens and follows up on to take the run over.
+ */
+export function implementingThreadOf(
+  run: Pick<FactoryRun, 'threadIds' | 'stepOptions'>,
+): string | undefined {
+  const own = new Set(
+    run.stepOptions.filter((step) => step.thread === 'new').map((step) => step.threadId),
+  );
+  for (let index = run.threadIds.length - 1; index >= 0; index -= 1) {
+    const threadId = run.threadIds[index]!;
+    if (!own.has(threadId)) return threadId;
+  }
+  return undefined;
+}
+
+/**
  * What a member may set for one agent step of their factory's flow: the
  * provider, model and effort, never the permission mode or tool lists (those
  * stay in the reviewed flow file). Strict, so a client cannot slip one in.

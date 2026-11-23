@@ -186,6 +186,33 @@ describe('Worktrees sidebar', () => {
     expect(link).toHaveClass('text-thread-title', 'text-sm');
   });
 
+  test("shows a worktree's thread status with the sidebar's glyph, without the unread dot", async () => {
+    seedProjectThreads({
+      p2: [
+        buildThread({
+          id: 't-stopped',
+          projectId: 'p2',
+          status: 'stopped',
+          worktreePath: '/second/feature',
+        }),
+        buildThread({
+          id: 't-done',
+          projectId: 'p2',
+          status: 'completed',
+          // Finished and never opened: the sidebar shows it as unread.
+          completedAt: new Date().toISOString(),
+          worktreePath: '/second/feature',
+        }),
+      ],
+    });
+    renderWithProviders(<WorktreesPanel />);
+
+    const stopped = await screen.findByTestId('worktree-thread-status-t-stopped');
+    expect(within(stopped).getByTestId('thread-stopped-dot-t-stopped')).toBeInTheDocument();
+    expect(stopped).toHaveClass('status-glyph-dots');
+    expect(screen.queryByTestId('thread-unread-dot-t-done')).not.toBeInTheDocument();
+  });
+
   test('removes worktrees from project settings', () => {
     const items = buildSettingsItems({ selectedProjectId: 'p1', isProjectAdmin: true });
     expect(items.map((item) => item.id)).not.toContain('worktrees');

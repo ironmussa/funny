@@ -107,9 +107,9 @@ export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }
   return (
     <div
       data-testid="provider-error-card"
-      className="border-status-warning/20 bg-status-warning/5 space-y-2.5 rounded-lg border p-3"
+      className="border-status-error/20 bg-status-error/5 space-y-2.5 rounded-lg border p-3"
     >
-      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
+      <div className="text-status-error/80 flex items-center gap-2 text-xs">
         <AlertTriangle className="icon-sm" />
         {t('thread.providerErrorWaiting', 'The provider returned an error. Retry when ready.')}
       </div>

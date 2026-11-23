@@ -263,39 +263,148 @@ function graphNodeBranchContextLabels(
   return labelsByHash;
 }
 
+/** What the "forked from" search reads about one loaded commit, computed once. */
+interface ForkSearchNode {
+  /** The commit's ref label, or null when it carries no branch. */
+  label: string | null;
+  identities: ReadonlySet<string>;
+  /** Parents that are loaded, in order, without repeats. */
+  parents: string[];
+}
+
+function forkSearchNodes(entries: readonly GraphNodeParentRefEntry[]): Map<string, ForkSearchNode> {
+  const loaded = new Set(entries.map((entry) => entry.hash));
+  const nodes = new Map<string, ForkSearchNode>();
+  for (const entry of entries) {
+    const refs = foldGraphRefs(entry.refs, entry.headBranch);
+    nodes.set(entry.hash, {
+      label: graphNodeRefLabel(refs),
+      identities: graphNodeBranchIdentities(refs),
+      parents: [...new Set(entry.parentHashes ?? [])].filter((hash) => loaded.has(hash)),
+    });
+  }
+  return nodes;
+}
+
+/**
+ * Whether each commit has a branch-labelled ancestor among the loaded ones. A
+ * search can skip a commit that has neither a label nor such an ancestor: nothing
+ * it could reach would answer.
+ */
+function labelledAncestorFlags(nodes: ReadonlyMap<string, ForkSearchNode>): Map<string, boolean> {
+  const flags = new Map<string, boolean>();
+  for (const start of nodes.keys()) {
+    if (flags.has(start)) continue;
+    // Iterative post-order: a commit is decided once all its parents are.
+    const stack: string[] = [start];
+    while (stack.length > 0) {
+      const hash = stack[stack.length - 1];
+      if (flags.has(hash)) {
+        stack.pop();
+        continue;
+      }
+      const node = nodes.get(hash)!;
+      const pending = node.parents.filter((parent) => !flags.has(parent));
+      if (pending.length > 0) {
+        stack.push(...pending);
+        continue;
+      }
+      stack.pop();
+      flags.set(
+        hash,
+        node.parents.some((parent) => nodes.get(parent)!.label !== null || flags.get(parent)!),
+      );
+    }
+  }
+  return flags;
+}
+
+/**
+ * Breadth-first from `start`'s parents (in their order), the label of the first
+ * ancestor with a branch label that shares no branch identity with `own`.
+ */
+function searchForkedFrom(
+  start: ForkSearchNode,
+  own: ReadonlySet<string>,
+  nodes: ReadonlyMap<string, ForkSearchNode>,
+  hasLabelledAncestor: ReadonlyMap<string, boolean>,
+): string | null {
+  const queue = [...start.parents];
+  const seen = new Set<string>();
+  for (let head = 0; head < queue.length; head += 1) {
+    const hash = queue[head];
+    if (seen.has(hash)) continue;
+    seen.add(hash);
+    const node = nodes.get(hash)!;
+    if (node.label && !hasSharedIdentity(own, node.identities)) return node.label;
+    for (const parent of node.parents) {
+      const next = nodes.get(parent)!;
+      if (next.label !== null || hasLabelledAncestor.get(parent)) queue.push(parent);
+    }
+  }
+  return null;
+}
+
+const NO_IDENTITIES: ReadonlySet<string> = new Set();
+
+/**
+ * Commit hash → the label of the branch it forked from: the nearest ancestor
+ * (breadth first, parents in order) with a branch label that is not one of the
+ * commit's own branches.
+ *
+ * Linear in the loaded history for the common case. A commit with no branch of
+ * its own and one parent answers with that parent's label, or else with the
+ * parent's own answer (the same search, one step further), so a chain is walked
+ * once rather than once per commit; a search skips the commits that cannot lead
+ * to a label. History pages in 80 commits at a time and this runs on every page.
+ */
 export function graphNodeForkedFromRefLabels(
   entries: readonly GraphNodeParentRefEntry[],
 ): Map<string, string> {
-  const entriesByHash = new Map(entries.map((entry) => [entry.hash, entry]));
-  const labels = new Map<string, string>();
+  const nodes = forkSearchNodes(entries);
+  const hasLabelledAncestor = labelledAncestorFlags(nodes);
+  // The answer for a commit with no branch identities of its own.
+  const plainAnswers = new Map<string, string | null>();
 
-  for (const entry of entries) {
-    const ownIdentities = graphNodeBranchIdentities(foldGraphRefs(entry.refs, entry.headBranch));
-    const queue = [...(entry.parentHashes ?? [])];
-    const seen = new Set<string>();
-
-    while (queue.length > 0) {
-      const parentHash = queue.shift()!;
-      if (seen.has(parentHash)) continue;
-      seen.add(parentHash);
-
-      const parent = entriesByHash.get(parentHash);
-      if (!parent) continue;
-
-      const parentRefs = foldGraphRefs(parent.refs, parent.headBranch);
-      const parentLabel = graphNodeRefLabel(parentRefs);
-      if (parentLabel) {
-        const parentIdentities = graphNodeBranchIdentities(parentRefs);
-        if (!hasSharedIdentity(ownIdentities, parentIdentities)) {
-          labels.set(entry.hash, parentLabel);
-          break;
-        }
+  const plainAnswer = (start: string): string | null => {
+    // Walk down a single-parent chain to the first commit whose answer is known
+    // or direct, then fill the chain back in.
+    const chain: string[] = [];
+    let hash = start;
+    let answer: string | null | undefined;
+    while (answer === undefined) {
+      const known = plainAnswers.get(hash);
+      if (known !== undefined) {
+        answer = known;
+        break;
       }
-
-      queue.push(...(parent.parentHashes ?? []));
+      const node = nodes.get(hash)!;
+      if (node.parents.length !== 1) {
+        answer = searchForkedFrom(node, NO_IDENTITIES, nodes, hasLabelledAncestor);
+        plainAnswers.set(hash, answer);
+        break;
+      }
+      chain.push(hash);
+      const parent = nodes.get(node.parents[0])!;
+      if (parent.label) {
+        answer = parent.label;
+        break;
+      }
+      hash = node.parents[0];
     }
-  }
+    for (const link of chain) plainAnswers.set(link, answer);
+    return answer;
+  };
 
+  const labels = new Map<string, string>();
+  for (const entry of entries) {
+    const node = nodes.get(entry.hash)!;
+    const label =
+      node.identities.size === 0
+        ? plainAnswer(entry.hash)
+        : searchForkedFrom(node, node.identities, nodes, hasLabelledAncestor);
+    if (label) labels.set(entry.hash, label);
+  }
   return labels;
 }
 

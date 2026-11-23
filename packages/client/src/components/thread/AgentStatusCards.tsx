@@ -90,10 +90,11 @@ const RESULT_STYLE = {
     card: 'border-status-interrupted/20 bg-status-interrupted/5',
     text: 'text-status-interrupted/80',
   },
+  // An error reads red, the color of the failed thread's dot in the sidebar.
   failed: {
     Icon: AlertTriangle,
-    card: 'border-status-interrupted/20 bg-status-interrupted/5',
-    text: 'text-status-interrupted/80',
+    card: 'border-status-error/20 bg-status-error/5',
+    text: 'text-status-error/80',
   },
 };
 
@@ -175,7 +176,10 @@ export function AgentResultCard({
         </div>
       </div>
       {!isSuccess && error && (
-        <pre className="text-status-interrupted/80 text-2xs overflow-x-auto pl-7 font-mono whitespace-pre-wrap">
+        <pre
+          // oxlint-disable-next-line shadcn/require-static-classes -- style.text comes from a static RESULT_STYLE map
+          className={cn('text-2xs overflow-x-auto pl-7 font-mono whitespace-pre-wrap', style.text)}
+        >
           {error}
         </pre>
       )}

@@ -1,9 +1,11 @@
-import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
+import type { VirtualItem } from '@tanstack/react-virtual';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GraphEntry } from '@/components/commit-graph/graph-entry';
 import {
   GraphCommitRow,
+  type GraphCommitRowOwnProps,
   type GraphCommitRowSharedProps,
 } from '@/components/commit-graph/GraphCommitRow';
 import {
@@ -12,10 +14,49 @@ import {
 } from '@/components/commit-graph/RebaseCopyLinksOverlay';
 import type { GraphView } from '@/components/commit-graph/use-graph-view';
 import { LoadingState } from '@/components/ui/loading-state';
+import type { GitRebaseReflogEventDTO } from '@/lib/api/git';
+
+const NO_REBASE_EVENTS: GitRebaseReflogEventDTO[] = [];
+
+/**
+ * One commit row, memoized on what it shows. The virtualizer re-renders the
+ * list synchronously on every scroll event; rows already on screen must not
+ * re-render then, or the list falls behind the scroll and shows blank space
+ * until it catches up. So every prop here is a value or a reference that
+ * stays the same while only the scroll position changes (no per-render
+ * objects or closures).
+ */
+const GraphCommitListRow = memo(function GraphCommitListRow({
+  shared,
+  onSelectHash,
+  ...own
+}: Omit<GraphCommitRowOwnProps, 'onSelect'> & {
+  shared: GraphCommitRowSharedProps;
+  onSelectHash: (hash: string | null) => void;
+}) {
+  const row: GraphCommitRowOwnProps = {
+    ...own,
+    onSelect: () => onSelectHash(own.selected ? null : own.entry.hash),
+  };
+  return <GraphCommitRow shared={shared} row={row} />;
+});
+
+/** The parts of the graph view the list reads. */
+export type GraphCommitListView = Pick<
+  GraphView,
+  | 'displayEntries'
+  | 'layout'
+  | 'rebaseCopyLinks'
+  | 'rebaseEventsByHash'
+  | 'forkedFromRefLabelByHash'
+  | 'rebaseParentRefLabelByHash'
+  | 'parentLabelByHash'
+  | 'inferredUnpulled'
+>;
 
 /** The virtualized commit rows, the rebase-copy links over them and the load-more sentinel. */
 export function GraphCommitList({
-  virtualizer,
+  totalSize,
   virtualItems,
   view,
   rowProps,
@@ -29,9 +70,10 @@ export function GraphCommitList({
   unpulled,
   lastWipRowIndex,
 }: {
-  virtualizer: Pick<Virtualizer<HTMLDivElement, Element>, 'getTotalSize'>;
+  /** The virtualizer's total height, read in its hook (see useGraphVirtualizer). */
+  totalSize: number;
   virtualItems: VirtualItem[];
-  view: GraphView;
+  view: GraphCommitListView;
   rowProps: GraphCommitRowSharedProps;
   baseRowH: number;
   rowHeightFor: (entry: GraphEntry) => number;
@@ -48,7 +90,7 @@ export function GraphCommitList({
   return (
     <div
       style={{
-        height: virtualizer.getTotalSize(),
+        height: totalSize,
         width: '100%',
         position: 'relative',
       }}
@@ -89,28 +131,27 @@ export function GraphCommitList({
         }
         const entry = displayEntries[virtualRow.index];
         return (
-          <GraphCommitRow
+          <GraphCommitListRow
             key={entry.hash}
             shared={rowProps}
-            row={{
-              entry,
-              graphRow: layout.rows[virtualRow.index],
-              selected: selectedHash === entry.hash,
-              avatarUrl: githubAvatarBySha.get(entry.hash) ?? avatarByEmail.get(entry.authorEmail),
-              committerAvatarUrl: avatarByEmail.get(entry.committerEmail),
-              rebaseEvents: view.rebaseEventsByHash.get(entry.hash) ?? [],
-              forkedFromRefLabel:
-                view.forkedFromRefLabelByHash.get(entry.hash) ??
-                view.rebaseParentRefLabelByHash.get(entry.hash) ??
-                null,
-              parentLabel: view.parentLabelByHash.get(entry.hash) ?? null,
-              unpushed: unpushed.has(entry.hash),
-              unpulled: unpulled.has(entry.hash) || view.inferredUnpulled.has(entry.hash),
-              connectToWip: virtualRow.index <= lastWipRowIndex,
-              transform: virtualRow.start,
-              rowHeight: rowHeightFor(entry),
-              onSelect: () => onSelectHash(selectedHash === entry.hash ? null : entry.hash),
-            }}
+            onSelectHash={onSelectHash}
+            entry={entry}
+            graphRow={layout.rows[virtualRow.index]}
+            selected={selectedHash === entry.hash}
+            avatarUrl={githubAvatarBySha.get(entry.hash) ?? avatarByEmail.get(entry.authorEmail)}
+            committerAvatarUrl={avatarByEmail.get(entry.committerEmail)}
+            rebaseEvents={view.rebaseEventsByHash.get(entry.hash) ?? NO_REBASE_EVENTS}
+            forkedFromRefLabel={
+              view.forkedFromRefLabelByHash.get(entry.hash) ??
+              view.rebaseParentRefLabelByHash.get(entry.hash) ??
+              null
+            }
+            parentLabel={view.parentLabelByHash.get(entry.hash) ?? null}
+            unpushed={unpushed.has(entry.hash)}
+            unpulled={unpulled.has(entry.hash) || view.inferredUnpulled.has(entry.hash)}
+            connectToWip={virtualRow.index <= lastWipRowIndex}
+            transform={virtualRow.start}
+            rowHeight={rowHeightFor(entry)}
           />
         );
       })}

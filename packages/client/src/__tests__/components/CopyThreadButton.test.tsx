@@ -165,6 +165,19 @@ describe('completed thread actions', () => {
     expect(card).not.toHaveClass('opacity-0');
   });
 
+  test('shows a failed run and its error in the error color, a stopped one in its own', () => {
+    const { unmount } = render(
+      <AgentResultCard status="failed" cost={0} duration={0} error="Boom" />,
+    );
+    expect(screen.getByTestId('agent-result-card')).toHaveClass('border-status-error/20');
+    expect(screen.getByText('Boom')).toHaveClass('text-status-error/80');
+    unmount();
+
+    render(<AgentResultCard status="stopped" cost={0} duration={0} error="Halted" />);
+    expect(screen.getByTestId('agent-result-card')).toHaveClass('border-status-interrupted/20');
+    expect(screen.getByText('Halted')).toHaveClass('text-status-interrupted/80');
+  });
+
   test('keeps a stopped turn visible with its stop time', () => {
     render(
       <AgentResultCard

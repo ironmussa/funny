@@ -18,6 +18,7 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
+import { ThreadStatusIndicator } from '@/components/thread/ThreadStatusPin';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -33,7 +34,6 @@ import {
   listRowClassName,
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
-import { getStatusLabels, statusDotClassName } from '@/lib/thread-utils';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
@@ -88,7 +88,6 @@ export function groupThreadsByWorktree(
 function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
-  const statusLabels = getStatusLabels(t);
   return (
     <div className="flex min-w-0 flex-col gap-0.5" data-testid="worktree-threads">
       {threads.map((thread) => {
@@ -107,16 +106,13 @@ function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
             className="text-thread-title flex min-w-0 items-center gap-1.5 text-sm leading-tight hover:underline"
             data-testid={`worktree-thread-link-${thread.id}`}
           >
-            <span className="flex size-3 shrink-0 items-center justify-center">
-              <span
-                role="img"
-                aria-label={statusLabels[thread.status]}
-                title={statusLabels[thread.status]}
-                // oxlint-disable-next-line shadcn/require-static-classes -- the color comes from statusConfig (one entry per status)
-                className={cn('size-2 rounded-full', statusDotClassName(thread.status))}
-                data-testid={`worktree-thread-status-${thread.id}`}
-                data-status={thread.status}
-              />
+            {/* The sidebar's status glyph (`status-glyph-dots`: a dot theme shows dots here too). */}
+            <span
+              className="status-glyph-dots flex size-3.5 shrink-0 items-center justify-center"
+              data-testid={`worktree-thread-status-${thread.id}`}
+              data-status={thread.status}
+            >
+              <ThreadStatusIndicator thread={thread} withTooltip />
             </span>
             {/* The sidebar's title rendering: capitalized, attachments and commands as chips. */}
             <ThreadTitle

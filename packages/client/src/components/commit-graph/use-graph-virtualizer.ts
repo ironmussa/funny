@@ -7,6 +7,11 @@ import type { GraphEntry } from '@/components/commit-graph/graph-entry';
  * The virtualizer over the displayed commit rows (plus the load-more sentinel
  * row), re-measured when the row heights change, paging in more history as
  * the sentinel comes into view.
+ *
+ * Opted out of the React Compiler: the virtualizer is one stable object whose
+ * getters (`getVirtualItems`, `getTotalSize`) change on every scroll, so a
+ * compiled memo keyed on the object would keep returning stale values. The
+ * list reads `virtualItems` / `totalSize` from here, never off the instance.
  */
 export function useGraphVirtualizer({
   displayEntries,
@@ -26,6 +31,7 @@ export function useGraphVirtualizer({
   rowHeightFor: (entry: GraphEntry) => number;
   loadMore: () => void;
 }) {
+  'use no memo';
   const scrollRef = useRef<HTMLDivElement>(null);
   const rowCount = displayEntries.length + (showSentinel ? 1 : 0);
   const virtualizer = useVirtualizer({
@@ -44,11 +50,12 @@ export function useGraphVirtualizer({
   }, [baseRowH, refsRowH, virtualizer]);
 
   const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
   const lastIndex = virtualItems[virtualItems.length - 1]?.index;
   useEffect(() => {
     if (!showSentinel || lastIndex === undefined) return;
     if (lastIndex >= loadedCount - 5) loadMore();
   }, [lastIndex, loadedCount, showSentinel, loadMore]);
 
-  return { scrollRef, virtualizer, virtualItems };
+  return { scrollRef, virtualizer, virtualItems, totalSize };
 }

@@ -236,7 +236,17 @@ const existing = {
         // An empty `@utility` would declare them, but it breaks the Tailwind build.
         // Layout classes (flex-1, shrink-0, w-full, margins) place a component in its
         // parent and do not restyle it, which is the baseline @shadcn/lint documents.
-        'shadcn/no-restyle': ['warn', { allow: ['layout'] }],
+        'shadcn/no-restyle': [
+          'warn',
+          {
+            allow: ['layout'],
+            contracts: [
+              // A text helper that only marks the matches: the text it wraps takes
+              // the size, weight and color of wherever it is shown.
+              { pattern: '^HighlightText$', allow: ['layout', 'typography', 'color'] },
+            ],
+          },
+        ],
         'shadcn/no-unknown-classes': [
           'error',
           { allow: ['dv-funny-right-tab', 'pr-detail-conversation'] },

@@ -27,7 +27,7 @@ export const threadWorkspaceRoutes = new Hono<HonoEnv>();
 
 threadWorkspaceRoutes.delete('/:id/scratch', async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   if (!ID_RE.test(id) || !userId || !ID_RE.test(userId)) {
     return resultToResponse(c, err(badRequest('Invalid thread id')));
   }

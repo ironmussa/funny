@@ -37,7 +37,7 @@ import { resolveRunner } from '../services/runner-resolver.js';
 export const mediaRoutes = new Hono<ServerEnv>();
 
 mediaRoutes.post('/sign', async (c) => {
-  const userId = c.get('userId') as string | undefined;
+  const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
   let body: { path?: unknown };

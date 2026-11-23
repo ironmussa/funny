@@ -208,7 +208,7 @@ function submoduleFileHandler(scope: DiffScope) {
 
 // GET /api/git/project/:projectId/diff/summary
 diffRoutes.get('/project/:projectId/diff/summary', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireProjectCwdFromContext(c);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const projectId = c.req.param('projectId');
@@ -231,7 +231,7 @@ diffRoutes.get('/project/:projectId/diff/file', fileDiffHandler(projectScope));
 
 // GET /api/git/:threadId/diff/summary
 diffRoutes.get('/:threadId/diff/summary', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireSteerableThreadCwdFromContext(c);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const threadId = c.req.param('threadId');

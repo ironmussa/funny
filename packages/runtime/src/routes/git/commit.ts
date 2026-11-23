@@ -35,7 +35,7 @@ export const commitRoutes = new Hono<HonoEnv>();
 // POST /api/git/project/:projectId/commit
 commitRoutes.post('/project/:projectId/commit', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -64,7 +64,7 @@ commitRoutes.post('/project/:projectId/commit', async (c) => {
 // Runs a single pre-commit hook command by index for per-hook progress tracking
 commitRoutes.post('/project/:projectId/run-hook-command', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -84,7 +84,7 @@ commitRoutes.post('/project/:projectId/run-hook-command', async (c) => {
 
 // POST /api/git/project/:projectId/generate-commit-message
 commitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const projectId = c.req.param('projectId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
@@ -158,7 +158,7 @@ commitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
 
 // POST /api/git/project/:projectId/gitignore
 commitRoutes.post('/project/:projectId/gitignore', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -176,7 +176,7 @@ commitRoutes.post('/project/:projectId/gitignore', async (c) => {
 // POST /api/git/:threadId/commit
 commitRoutes.post('/:threadId/commit', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
@@ -207,7 +207,7 @@ commitRoutes.post('/:threadId/commit', async (c) => {
 // Runs a single pre-commit hook command by index for per-hook progress tracking
 commitRoutes.post('/:threadId/run-hook-command', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -236,7 +236,7 @@ commitRoutes.post('/:threadId/run-hook-command', async (c) => {
 
 // POST /api/git/:threadId/generate-commit-message
 commitRoutes.post('/:threadId/generate-commit-message', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadId = c.req.param('threadId');
   const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
@@ -321,7 +321,7 @@ commitRoutes.post('/:threadId/generate-commit-message', async (c) => {
 
 // POST /api/git/:threadId/gitignore
 commitRoutes.post('/:threadId/gitignore', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;

@@ -79,7 +79,7 @@ async function recordCheckedOutBranch(
 export const sandboxCheckoutRoutes = new Hono<HonoEnv>();
 
 sandboxCheckoutRoutes.post('/:id/sandbox/checkout', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadId = c.req.param('id');
   const parsed = validate(checkoutSchema, await c.req.json().catch(() => null));
   if (parsed.isErr()) return resultToResponse(c, parsed);

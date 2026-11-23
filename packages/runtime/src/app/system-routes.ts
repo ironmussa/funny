@@ -46,7 +46,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.get('/api/system/claude-code/external-sessions', async (c) => {
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
     const projectId = c.req.query('projectId') ?? null;
@@ -60,7 +60,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.get('/api/system/claude-code/external-sessions/:sessionId', async (c) => {
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
     const sessionId = c.req.param('sessionId');
@@ -72,7 +72,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.post('/api/system/claude-code/external-sessions/:sessionId/import', async (c) => {
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
     const sessionId = c.req.param('sessionId');
@@ -94,7 +94,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.post('/api/system/claude-code/external-sessions/:sessionId/dismiss', async (c) => {
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
     const sessionId = c.req.param('sessionId');
@@ -211,7 +211,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   const providerExtDir = () => join(DATA_DIR, 'extensions');
 
   app.post('/api/system/providers/install', async (c) => {
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
     let body: { git?: string; path?: string; ref?: string; subdir?: string };
     try {
@@ -257,7 +257,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.post('/api/system/providers/remove', async (c) => {
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
     let body: { id?: string };
     try {
@@ -284,7 +284,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   // reset on runner restart (persistence is deferred — lean-core §6.2). The
   // change is advertised to the server on the next heartbeat.
   const toggleBuiltin = async (c: any, enable: boolean) => {
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get('userId');
     if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
     let body: { id?: string };
     try {
@@ -382,7 +382,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   let nativeGitBuildInProgress = false;
   app.post('/api/system/build-native-git', async (c) => {
-    const userId = c.get('userId') as string;
+    const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
     if (nativeGitBuildInProgress) {

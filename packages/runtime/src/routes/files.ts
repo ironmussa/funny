@@ -186,7 +186,7 @@ app.get('/read', async (c) => {
     return c.json({ error: 'path is required' }, 400);
   }
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 
@@ -239,7 +239,7 @@ app.get('/blame', async (c) => {
     return c.json({ error: 'path is required' }, 400);
   }
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 
@@ -267,7 +267,7 @@ app.get('/history', async (c) => {
     return c.json({ error: 'path is required' }, 400);
   }
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 
@@ -299,7 +299,7 @@ app.post('/write', async (c) => {
     return c.json({ error: 'content is required' }, 400);
   }
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 
@@ -516,7 +516,7 @@ app.get('/raw', async (c) => {
     return c.json({ error: 'path is required' }, 400);
   }
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 

@@ -27,7 +27,7 @@ export const undoRoutes = new Hono<HonoEnv>();
 
 undoRoutes.post('/project/:projectId/undo/:activityId', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireProjectCwd(projectId, userId, c.get('organizationId'));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await restoreTracked(
@@ -41,7 +41,7 @@ undoRoutes.post('/project/:projectId/undo/:activityId', async (c) => {
 
 undoRoutes.post('/:threadId/undo/:activityId', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   if (isAgentRunning(threadId)) {

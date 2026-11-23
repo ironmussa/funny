@@ -238,7 +238,7 @@ async function resolveBodyPath(
 // Open directory in file explorer
 app.post('/open-directory', async (c) => {
   const body = await c.req.json<{ path?: string; threadId?: string }>();
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const resolved = await resolveBodyPath(body, userId);
   if (resolved instanceof Response) return resolved;
   const dirPath = resolved;
@@ -274,7 +274,7 @@ app.post('/open-in-editor', async (c) => {
   const { path: dirPath, editor } = await c.req.json<{ path: string; editor: string }>();
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
   if (!editor) return c.json({ error: 'editor is required' }, 400);
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;
@@ -392,7 +392,7 @@ app.get('/files', async (c) => {
   const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
   if (dirPathOrRes instanceof Response) return dirPathOrRes;
   const dirPath = dirPathOrRes;
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;
@@ -435,7 +435,7 @@ app.get('/symbols', async (c) => {
   const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
   if (dirPathOrRes instanceof Response) return dirPathOrRes;
   const dirPath = dirPathOrRes;
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;
@@ -459,7 +459,7 @@ app.get('/symbols', async (c) => {
 app.post('/symbols/index', async (c) => {
   const { path: dirPath } = await c.req.json<{ path: string }>();
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;

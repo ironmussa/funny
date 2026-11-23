@@ -50,7 +50,7 @@ export const stageRoutes = new Hono<HonoEnv>();
 // POST /api/git/project/:projectId/stage
 stageRoutes.post('/project/:projectId/stage', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -69,7 +69,7 @@ stageRoutes.post('/project/:projectId/stage', async (c) => {
 // POST /api/git/project/:projectId/unstage
 stageRoutes.post('/project/:projectId/unstage', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -88,7 +88,7 @@ stageRoutes.post('/project/:projectId/unstage', async (c) => {
 // POST /api/git/project/:projectId/stage-patch — partial (line-level) staging
 stageRoutes.post('/project/:projectId/stage-patch', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -105,7 +105,7 @@ stageRoutes.post('/project/:projectId/stage-patch', async (c) => {
 // POST /api/git/project/:projectId/unstage-patch — partial (line-level) unstaging
 stageRoutes.post('/project/:projectId/unstage-patch', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -122,7 +122,7 @@ stageRoutes.post('/project/:projectId/unstage-patch', async (c) => {
 // POST /api/git/project/:projectId/revert
 stageRoutes.post('/project/:projectId/revert', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -144,7 +144,7 @@ stageRoutes.post('/project/:projectId/revert', async (c) => {
 // POST /api/git/project/:projectId/checkout-commit
 stageRoutes.post('/project/:projectId/checkout-commit', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -171,7 +171,7 @@ stageRoutes.post('/project/:projectId/checkout-commit', async (c) => {
 // POST /api/git/project/:projectId/revert-commit
 stageRoutes.post('/project/:projectId/revert-commit', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -194,7 +194,7 @@ stageRoutes.post('/project/:projectId/revert-commit', async (c) => {
 // POST /api/git/project/:projectId/reset-hard
 stageRoutes.post('/project/:projectId/reset-hard', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -216,7 +216,7 @@ stageRoutes.post('/project/:projectId/reset-hard', async (c) => {
 // POST /api/git/project/:projectId/cherry-pick
 stageRoutes.post('/project/:projectId/cherry-pick', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -233,7 +233,7 @@ stageRoutes.post('/project/:projectId/cherry-pick', async (c) => {
 // POST /api/git/project/:projectId/create-branch
 stageRoutes.post('/project/:projectId/create-branch', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -256,7 +256,7 @@ stageRoutes.post('/project/:projectId/create-branch', async (c) => {
 // POST /api/git/project/:projectId/conflict/resolve
 stageRoutes.post('/project/:projectId/conflict/resolve', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -280,7 +280,7 @@ stageRoutes.post('/project/:projectId/conflict/resolve', async (c) => {
 // POST /api/git/project/:projectId/reset-soft
 stageRoutes.post('/project/:projectId/reset-soft', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -293,7 +293,7 @@ stageRoutes.post('/project/:projectId/reset-soft', async (c) => {
 // POST /api/git/:threadId/stage
 stageRoutes.post('/:threadId/stage', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
@@ -315,7 +315,7 @@ stageRoutes.post('/:threadId/stage', async (c) => {
 // POST /api/git/:threadId/unstage
 stageRoutes.post('/:threadId/unstage', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
@@ -337,7 +337,7 @@ stageRoutes.post('/:threadId/unstage', async (c) => {
 // POST /api/git/:threadId/stage-patch — partial (line-level) staging
 stageRoutes.post('/:threadId/stage-patch', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
@@ -356,7 +356,7 @@ stageRoutes.post('/:threadId/stage-patch', async (c) => {
 // POST /api/git/:threadId/unstage-patch — partial (line-level) unstaging
 stageRoutes.post('/:threadId/unstage-patch', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
@@ -375,7 +375,7 @@ stageRoutes.post('/:threadId/unstage-patch', async (c) => {
 // POST /api/git/:threadId/revert
 stageRoutes.post('/:threadId/revert', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
@@ -400,7 +400,7 @@ stageRoutes.post('/:threadId/revert', async (c) => {
 // POST /api/git/:threadId/conflict/resolve
 stageRoutes.post('/:threadId/conflict/resolve', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
@@ -427,7 +427,7 @@ stageRoutes.post('/:threadId/conflict/resolve', async (c) => {
 // POST /api/git/:threadId/reset-soft
 stageRoutes.post('/:threadId/reset-soft', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
@@ -440,7 +440,7 @@ stageRoutes.post('/:threadId/reset-soft', async (c) => {
 // POST /api/git/:threadId/checkout-commit
 stageRoutes.post('/:threadId/checkout-commit', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
@@ -458,7 +458,7 @@ stageRoutes.post('/:threadId/checkout-commit', async (c) => {
 // POST /api/git/:threadId/revert-commit
 stageRoutes.post('/:threadId/revert-commit', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
@@ -475,7 +475,7 @@ stageRoutes.post('/:threadId/revert-commit', async (c) => {
 // POST /api/git/:threadId/reset-hard
 stageRoutes.post('/:threadId/reset-hard', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
@@ -496,7 +496,7 @@ stageRoutes.post('/:threadId/reset-hard', async (c) => {
 // POST /api/git/:threadId/cherry-pick
 stageRoutes.post('/:threadId/cherry-pick', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
@@ -512,7 +512,7 @@ stageRoutes.post('/:threadId/cherry-pick', async (c) => {
 // POST /api/git/:threadId/create-branch
 stageRoutes.post('/:threadId/create-branch', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 

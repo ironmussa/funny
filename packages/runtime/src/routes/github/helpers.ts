@@ -356,7 +356,7 @@ export async function githubRepoFor(
 ): Promise<GithubRepoAccess | Response> {
   const ctx = await resolveGithubProjectContext(
     projectId,
-    c.get('userId') as string,
+    c.get('userId'),
     c.get('organizationId'),
   );
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as ContentfulStatusCode);

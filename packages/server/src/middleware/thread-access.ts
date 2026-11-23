@@ -128,11 +128,7 @@ export function createThreadAccess(
 export function threadAccessMiddlewareFrom(access: ThreadAccess): ThreadAccessMiddleware {
   function make(level: ThreadAccessLevel): MiddlewareHandler<ServerEnv> {
     return async (c, next) => {
-      const thread = await access.authorize(
-        level,
-        c.req.param('id') ?? '',
-        c.get('userId') as string,
-      );
+      const thread = await access.authorize(level, c.req.param('id') ?? '', c.get('userId'));
       if (!thread) return c.json({ error: 'Thread not found' }, 404);
       c.set('thread', thread);
       return next();

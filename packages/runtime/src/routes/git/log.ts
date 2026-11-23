@@ -394,7 +394,7 @@ async function mergedBranchRefs(
 
 // GET /api/git/project/:projectId/log
 logRoutes.get('/project/:projectId/log', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const projectId = c.req.param('projectId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
@@ -413,7 +413,7 @@ logRoutes.get('/project/:projectId/log', async (c) => {
 
 // GET /api/git/project/:projectId/graph-log — topology-aware log (parents + refs)
 logRoutes.get('/project/:projectId/graph-log', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const projectId = c.req.param('projectId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
@@ -448,7 +448,7 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
 
 // GET /api/git/project/:projectId/reflog-events — local rebase operation markers
 logRoutes.get('/project/:projectId/reflog-events', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const projectId = c.req.param('projectId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
@@ -462,7 +462,7 @@ logRoutes.get('/project/:projectId/reflog-events', async (c) => {
 
 // GET /api/git/project/:projectId/commit/:hash/files
 logRoutes.get('/project/:projectId/commit/:hash/files', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -478,7 +478,7 @@ logRoutes.get('/project/:projectId/commit/:hash/files', async (c) => {
 
 // GET /api/git/project/:projectId/commit/:hash/diff
 logRoutes.get('/project/:projectId/commit/:hash/diff', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -502,7 +502,7 @@ logRoutes.get('/project/:projectId/commit/:hash/diff', async (c) => {
 
 // GET /api/git/project/:projectId/commit/:hash/body
 logRoutes.get('/project/:projectId/commit/:hash/body', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -520,7 +520,7 @@ logRoutes.get('/project/:projectId/commit/:hash/body', async (c) => {
 
 // GET /api/git/:threadId/log
 logRoutes.get('/:threadId/log', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadId = c.req.param('threadId');
   const steer = steerFromContext(c);
   const threadResult = await requireThread(threadId, userId, steer);
@@ -546,7 +546,7 @@ logRoutes.get('/:threadId/log', async (c) => {
 
 // GET /api/git/:threadId/graph-log — topology-aware log (parents + refs)
 logRoutes.get('/:threadId/graph-log', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadId = c.req.param('threadId');
   const steer = steerFromContext(c);
   const threadResult = await requireThread(threadId, userId, steer);
@@ -590,7 +590,7 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
 
 // GET /api/git/:threadId/reflog-events — local rebase operation markers
 logRoutes.get('/:threadId/reflog-events', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadId = c.req.param('threadId');
   const steer = steerFromContext(c);
   const threadResult = await requireThread(threadId, userId, steer);
@@ -607,7 +607,7 @@ logRoutes.get('/:threadId/reflog-events', async (c) => {
 
 // GET /api/git/:threadId/commit/:hash/files
 logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await fetchLogSpanned(
@@ -622,7 +622,7 @@ logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
 
 // GET /api/git/:threadId/commit/:hash/diff
 logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const filePath = c.req.query('path');
@@ -645,7 +645,7 @@ logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
 
 // GET /api/git/:threadId/commit/:hash/body
 logRoutes.get('/:threadId/commit/:hash/body', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await fetchLogSpanned(

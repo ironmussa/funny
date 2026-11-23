@@ -101,7 +101,7 @@ userRoutes.get('/search', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
   if (q.length < MIN_USER_SEARCH_LENGTH) return c.json<UserSearchResult[]>([]);
 
-  const callerId = c.get('userId') as string;
+  const callerId = c.get('userId');
   const isAdmin = c.get('userRole') === 'admin';
 
   const match = or(

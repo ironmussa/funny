@@ -83,7 +83,7 @@ statusRoutes.get('/status', async (c) => {
   const cached = getCachedScope(projectId, scopeKey);
   if (cached) return c.json(cached.data);
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const projectResult = await requireProject(
     projectId,
     userId,
@@ -523,7 +523,7 @@ async function computeBulkStatus(
 
 // GET /api/git/project/:projectId/status
 statusRoutes.get('/project/:projectId/status', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const projectId = c.req.param('projectId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
@@ -577,7 +577,7 @@ function statusWithPR(
 // GET /api/git/:threadId/status
 statusRoutes.get('/:threadId/status', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   // Steer-share delegation (thread-sharing-steer): a verified `steer` grant
   // authorizes a non-owner sharee for read-only git. The working directory must

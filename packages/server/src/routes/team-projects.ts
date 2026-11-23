@@ -28,7 +28,7 @@ teamProjectRoutes.get('/', async (c) => {
   const organizationId = c.get('organizationId');
   if (!organizationId) return c.json([], 200);
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const port = createProjectsPort(c.get('organizationName'));
   return answerJson(c, port.list({ userId, organizationId }, {}));
 });
@@ -52,7 +52,7 @@ teamProjectRoutes.post('/', requirePermission('project', 'create'), async (c) =>
   // inherit `viewer` through `team_projects`). Only someone who already manages
   // the project — the owner or a project admin — may make that decision; the
   // org-level `project:create` permission alone is not enough.
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   if (!(await authorizer.authorize(userId, 'project', body.projectId, 'manage'))) {
     audit({
       action: 'authz.cross_tenant_refused',

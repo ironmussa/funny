@@ -44,7 +44,7 @@ export const remoteRoutes = new Hono<HonoEnv>();
 // POST /api/git/project/:projectId/push
 remoteRoutes.post('/project/:projectId/push', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -62,7 +62,7 @@ remoteRoutes.post('/project/:projectId/push', async (c) => {
 // POST /api/git/project/:projectId/push-branch — push a specific local branch.
 remoteRoutes.post('/project/:projectId/push-branch', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -83,7 +83,7 @@ remoteRoutes.post('/project/:projectId/push-branch', async (c) => {
 // GET /api/git/project/:projectId/remote-url
 remoteRoutes.get('/project/:projectId/remote-url', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -99,7 +99,7 @@ remoteRoutes.get('/project/:projectId/remote-url', async (c) => {
 // locally with no remote configured (GitHub Desktop-style "add remote").
 remoteRoutes.post('/project/:projectId/remote', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -122,7 +122,7 @@ remoteRoutes.post('/project/:projectId/remote', async (c) => {
 // GET /api/git/project/:projectId/gh-orgs
 remoteRoutes.get('/project/:projectId/gh-orgs', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -140,7 +140,7 @@ remoteRoutes.get('/project/:projectId/gh-orgs', async (c) => {
 // POST /api/git/project/:projectId/publish
 remoteRoutes.post('/project/:projectId/publish', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -185,7 +185,7 @@ remoteRoutes.post('/project/:projectId/publish', async (c) => {
 // POST /api/git/project/:projectId/pull
 remoteRoutes.post('/project/:projectId/pull', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -205,7 +205,7 @@ remoteRoutes.post('/project/:projectId/pull', async (c) => {
 // POST /api/git/project/:projectId/fetch
 remoteRoutes.post('/project/:projectId/fetch', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -221,7 +221,7 @@ remoteRoutes.post('/project/:projectId/fetch', async (c) => {
 // POST /api/git/:threadId/push
 remoteRoutes.post('/:threadId/push', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
@@ -240,7 +240,7 @@ remoteRoutes.post('/:threadId/push', async (c) => {
 // POST /api/git/:threadId/push-branch — push a specific local branch.
 remoteRoutes.post('/:threadId/push-branch', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const parsed = validate(pushBranchSchema, await c.req.json().catch(() => ({})));
@@ -255,7 +255,7 @@ remoteRoutes.post('/:threadId/push-branch', async (c) => {
 // POST /api/git/:threadId/pull
 remoteRoutes.post('/:threadId/pull', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const raw = await c.req.json().catch(() => ({}));
@@ -272,7 +272,7 @@ remoteRoutes.post('/:threadId/pull', async (c) => {
 // POST /api/git/:threadId/fetch
 remoteRoutes.post('/:threadId/fetch', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const identity = await resolveThreadIdentity(userId, threadId);

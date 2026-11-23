@@ -43,7 +43,7 @@ function isSingleDirName(name: string): boolean {
 // ── GET /repos — list repos with optional search ───────────
 
 repoRoutes.get('/repos', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const resolved = await resolveGithubToken(userId);
   if (!resolved) {
     return c.json({ error: 'Not connected to GitHub' }, 401);
@@ -338,7 +338,7 @@ async function runClone(
  * it can match events that arrive before this response.
  */
 repoRoutes.post('/clone', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const raw = await c.req.json();
   const parsed = validate(cloneRepoSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);

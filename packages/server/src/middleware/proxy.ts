@@ -328,7 +328,7 @@ async function retryAfterSandboxWake(
  * Hono handler that proxies the request to the appropriate runner.
  */
 async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): Promise<Response> {
-  const userId = c.get('userId') as string | undefined;
+  const userId = c.get('userId');
 
   const url = new URL(c.req.url);
   const path = url.pathname;

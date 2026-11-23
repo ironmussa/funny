@@ -41,7 +41,7 @@ async function readRequiredTargetBranch(c: {
 // POST /api/git/:threadId/pr
 workflowRoutes.post('/:threadId/pr', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
@@ -68,7 +68,7 @@ workflowRoutes.post('/:threadId/pr', async (c) => {
 // POST /api/git/:threadId/merge
 workflowRoutes.post('/:threadId/merge', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
@@ -99,7 +99,7 @@ workflowRoutes.post('/:threadId/merge', async (c) => {
 // POST /api/git/:threadId/merge-current-into
 workflowRoutes.post('/:threadId/merge-current-into', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const cwdResult = await requireThreadCwd(threadId, userId);
@@ -131,7 +131,7 @@ workflowRoutes.post('/:threadId/merge-current-into', async (c) => {
 // POST /api/git/:threadId/rebase-current-onto
 workflowRoutes.post('/:threadId/rebase-current-onto', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const cwdResult = await requireThreadCwd(threadId, userId);
@@ -163,7 +163,7 @@ workflowRoutes.post('/:threadId/rebase-current-onto', async (c) => {
 // POST /api/git/:threadId/workflow — orchestrate multi-step git workflow
 workflowRoutes.post('/:threadId/workflow', async (c) => {
   const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
@@ -204,7 +204,7 @@ workflowRoutes.post('/:threadId/workflow', async (c) => {
 // POST /api/git/project/:projectId/workflow — project-scoped workflow
 workflowRoutes.post('/project/:projectId/workflow', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -246,7 +246,7 @@ workflowRoutes.post('/project/:projectId/workflow', async (c) => {
 // POST /api/git/project/:projectId/merge-current-into
 workflowRoutes.post('/project/:projectId/merge-current-into', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
@@ -277,7 +277,7 @@ workflowRoutes.post('/project/:projectId/merge-current-into', async (c) => {
 // POST /api/git/project/:projectId/rebase-current-onto
 workflowRoutes.post('/project/:projectId/rebase-current-onto', async (c) => {
   const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);

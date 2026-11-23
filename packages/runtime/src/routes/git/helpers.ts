@@ -164,7 +164,7 @@ export function requireProjectCwdFromContext(
 ): Promise<Result<string, DomainError>> {
   return requireProjectCwd(
     c.req.param('projectId') as string,
-    c.get('userId') as string,
+    c.get('userId'),
     c.get('organizationId'),
   );
 }
@@ -177,11 +177,7 @@ export function requireProjectCwdFromContext(
 export function requireSteerableThreadCwdFromContext(
   c: Context<HonoEnv>,
 ): Promise<Result<string, DomainError>> {
-  return requireThreadCwd(
-    c.req.param('threadId') as string,
-    c.get('userId') as string,
-    steerFromContext(c),
-  );
+  return requireThreadCwd(c.req.param('threadId') as string, c.get('userId'), steerFromContext(c));
 }
 
 /**

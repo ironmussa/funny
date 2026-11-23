@@ -279,6 +279,9 @@ function ActivityRow({
   );
 }
 
+const cannotRestore = () => false;
+const ignoreRestore = () => {};
+
 export function ActivityList({
   activities,
   progress,
@@ -286,8 +289,8 @@ export function ActivityList({
   now,
   canRetry,
   onRetry,
-  canRestore = () => false,
-  onRestore = () => {},
+  canRestore = cannotRestore,
+  onRestore = ignoreRestore,
   onDismiss,
   onClearFinished,
 }: ActivityListProps) {

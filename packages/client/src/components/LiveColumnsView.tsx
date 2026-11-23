@@ -102,7 +102,7 @@ export function LiveColumnsView() {
   // data to show.
   useEffect(() => {
     if (gridSelectedThreadId) fetchForThread(gridSelectedThreadId);
-  }, [gridSelectedThreadId, fetchForThread]);
+  }, [gridSelectedThreadId]);
   // Tracks cells where the user has pre-selected a project (via the header
   // "+") but hasn't typed a prompt yet. The EmptyGridCell uses this to skip
   // the project picker and jump straight to the prompt input — same flow as

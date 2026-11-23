@@ -49,6 +49,27 @@ function swapDraftOnThreadChange(
 }
 
 /** Re-focuses the editor on thread switch and whenever the agent goes idle. */
+/**
+ * Saves the draft when the prompt unmounts. It reads the refs' values at
+ * unmount on purpose: the thread, attachments and submitted flag that are
+ * current then, not the ones from when the effect ran.
+ */
+function saveDraftOnUnmount(
+  editor: PromptEditorHandle | null,
+  refs: {
+    hasSubmittedRef: MutableRefObject<boolean>;
+    threadIdRef: MutableRefObject<string | undefined>;
+    attachmentsRef: RefObject<PromptAttachmentsHandle | null>;
+  },
+  setEditorDraft: ReturnType<typeof useDraftStore.getState>['setEditorDraft'],
+) {
+  if (refs.hasSubmittedRef.current) return;
+  const threadId = refs.threadIdRef.current;
+  const editorJSON = threadId ? editor?.getJSON() : undefined;
+  const images = refs.attachmentsRef.current?.getImages() ?? [];
+  if (threadId && editorJSON) setEditorDraft(threadId, editorJSON, images);
+}
+
 function useEditorAutoFocus(
   editorRef: RefObject<PromptEditorHandle | null>,
   threadId: string | undefined,
@@ -117,14 +138,9 @@ export function usePromptDraft({
   }, [effectiveThreadId]);
 
   useEffect(() => {
-    const editorRefCurrent = editorRef.current;
-    return () => {
-      if (hasSubmittedRef.current) return;
-      const threadId = threadIdRef.current;
-      const editorJSON = threadId ? editorRefCurrent?.getJSON() : undefined;
-      const images = attachmentsRef.current?.getImages() ?? [];
-      if (threadId && editorJSON) setEditorDraft(threadId, editorJSON, images);
-    };
+    const editor = editorRef.current;
+    return () =>
+      saveDraftOnUnmount(editor, { hasSubmittedRef, threadIdRef, attachmentsRef }, setEditorDraft);
   }, [setEditorDraft, editorRef, attachmentsRef, threadIdRef]);
 
   useEditorAutoFocus(editorRef, effectiveThreadId, running, loading);

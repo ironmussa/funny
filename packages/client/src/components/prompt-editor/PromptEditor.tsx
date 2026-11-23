@@ -644,6 +644,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     suggestionType,
     workflows,
     workflowsLoading,
+    suggestionItemsRef,
+    suggestionTypeRef,
+    suggestionQueryRef,
+    suggestionIndexRef,
   ]);
 
   // Track the trigger position so we can read the full query (@ to next space/EOL)
@@ -682,16 +686,19 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     }
   }, []);
 
-  const applySuggestionItems = useCallback((items: SuggestionItem[]) => {
-    const previousItems = suggestionItemsRef.current;
-    const changed =
-      previousItems.length !== items.length ||
-      previousItems.some((item, index) => item.id !== items[index]?.id);
+  const applySuggestionItems = useCallback(
+    (items: SuggestionItem[]) => {
+      const previousItems = suggestionItemsRef.current;
+      const changed =
+        previousItems.length !== items.length ||
+        previousItems.some((item, index) => item.id !== items[index]?.id);
 
-    suggestionItemsRef.current = items;
-    setSuggestionItems(items);
-    if (changed) setSuggestionIndex(0);
-  }, []);
+      suggestionItemsRef.current = items;
+      setSuggestionItems(items);
+      if (changed) setSuggestionIndex(0);
+    },
+    [suggestionItemsRef],
+  );
 
   // Every trigger (@, /, #, >>) renders the same popup off one shared
   // `suggestionType`/`suggestionIndex` pair, and more than one TipTap suggestion
@@ -728,7 +735,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         }
         return false;
       },
-    [],
+    [suggestionItemsRef, suggestionTypeRef, suggestionIndexRef],
   );
 
   // ── File suggestion config ──
@@ -841,6 +848,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     sdkSlashCommands,
     commandProvider,
     applySuggestionItems,
+    suggestionQueryRef,
   ]);
 
   const slashSuggestion = useCallback(
@@ -920,7 +928,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         query: suggestionQueryRef.current,
       }),
     );
-  }, [suggestionType, workflows, workflowsLoading, applySuggestionItems]);
+  }, [suggestionType, workflows, workflowsLoading, applySuggestionItems, suggestionQueryRef]);
 
   const workflowSuggestion = useCallback(
     () => ({

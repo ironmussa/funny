@@ -18,7 +18,6 @@ import {
   sweepTempWorktrees,
   TEMP_WORKTREE_PREFIX,
 } from '../git/temp-worktree.js';
-import { getWorktreeBasePath } from '../git/worktree.js';
 
 const dirs: string[] = [];
 

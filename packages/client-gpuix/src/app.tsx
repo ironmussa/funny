@@ -160,11 +160,12 @@ export const NativeFileTreeDock = memo(function NativeFileTreeDock({
       [threadId],
     ),
   );
+  const projectId = thread?.projectId;
   const project = useStoreValue(
     application.navigationState,
     useCallback(
-      (navigation) => (thread?.projectId ? navigation.projectsById[thread.projectId] : undefined),
-      [thread?.projectId],
+      (navigation) => (projectId ? navigation.projectsById[projectId] : undefined),
+      [projectId],
     ),
   );
   const gitStatus = useStoreValue(

@@ -1369,9 +1369,11 @@ describe('factory flow', () => {
     });
 
     test('a merge that opts out of the proof is admitted without rules', async () => {
-      const optOut = proofReadyFlowFiles()
-        ['.funny/workflows/issue-to-merge.yaml']!.replace(/      rules:\n.*\n.*\n/, '')
-        .replace('    merge:', '    merge:\n      require_regression_proof: false');
+      const flowFiles = proofReadyFlowFiles();
+      const optOut = flowFiles['.funny/workflows/issue-to-merge.yaml']!.replace(
+        /      rules:\n.*\n.*\n/,
+        '',
+      ).replace('    merge:', '    merge:\n      require_regression_proof: false');
       expect(optOut).not.toContain('    regression_proof:\n      rules:');
       const { factoryId } = await runFlow(
         { files: { '.funny/workflows/issue-to-merge.yaml': optOut } },

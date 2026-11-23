@@ -2,7 +2,6 @@ import {
   createApiClient,
   createEndpointPolicy,
   validateRemoteOrigin,
-  type ApiClientError,
   type ClientCancellation,
 } from '@funny/client-core';
 import type { DomainError } from '@funny/shared/errors';

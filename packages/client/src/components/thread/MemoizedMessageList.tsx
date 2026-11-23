@@ -379,6 +379,7 @@ export const MemoizedMessageList = memo(
       listScrollMargin,
       measuredRowBottomCache,
       rowBottomKey,
+      setMeasuredContentBottom,
       threadId,
       virtualRowsSignature,
     ]);

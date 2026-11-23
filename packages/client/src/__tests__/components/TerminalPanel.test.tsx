@@ -72,7 +72,9 @@ class FakeFitAddon {
     return { cols: 100, rows: 30 };
   }
 }
-class FakeAddon {}
+class FakeAddon {
+  dispose() {}
+}
 mock.module('@/components/terminal/xterm-utils', () => ({
   isTauri: false,
   getXtermModules: () =>

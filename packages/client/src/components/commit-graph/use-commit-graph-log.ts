@@ -264,13 +264,24 @@ export function useCommitGraphLog({
         loadingRef.current = false;
       }
     },
-    [hasGitContext, effectiveThreadId, projectModeId, branchScope, t, pageSink],
+    [
+      hasGitContext,
+      effectiveThreadId,
+      projectModeId,
+      branchScope,
+      t,
+      pageSink,
+      loadingRef,
+      abortRef,
+      setLogLoading,
+      setLogErrorMessage,
+    ],
   );
 
   const loadMore = useCallback(() => {
     if (!hasMore || loadingRef.current) return;
     loadLog(loadedLogSkipRef.current, true);
-  }, [hasMore, loadLog]);
+  }, [hasMore, loadLog, loadingRef, loadedLogSkipRef]);
 
   // Keep the graph in sync with new commits / refs.
   const invalidateHistory = useGitHistoryAutoRefresh({
@@ -287,7 +298,7 @@ export function useCommitGraphLog({
   const loadFilteredHistory = useCallback(async () => {
     if (!hasMoreRef.current || loadingRef.current) return;
     await pageWhileFiltering(loadLog, wantsFilteredHistory, hasMoreRef, loadedLogSkipRef);
-  }, [loadLog, wantsFilteredHistory]);
+  }, [loadLog, wantsFilteredHistory, loadingRef, hasMoreRef, loadedLogSkipRef]);
 
   const updateSearchQuery = useCallback(
     (nextQuery: string) => {
@@ -316,7 +327,7 @@ export function useCommitGraphLog({
   const refreshLog = useCallback(() => {
     loadedRef.current = true;
     loadLog(0, false);
-  }, [loadLog]);
+  }, [loadLog, loadedRef]);
 
   // (Re)load whenever the context (thread/project or all-branches toggle) changes.
   useEffect(() => {
@@ -349,7 +360,7 @@ export function useCommitGraphLog({
       // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- first reveal intentionally triggers the initial graph fetch once.
       loadLog(0, false);
     }
-  }, [visible, hasGitContext, loadLog]);
+  }, [visible, hasGitContext, loadLog, loadedRef]);
 
   return {
     entries,

@@ -682,6 +682,15 @@ function parseQueryString(url: string): [string, string][] {
   }
 }
 
+/** Pretty-prints a JSON body; anything else is shown raw. */
+function formatBody(postData: string): string {
+  try {
+    return JSON.stringify(JSON.parse(postData), null, 2);
+  } catch {
+    return postData;
+  }
+}
+
 function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
   const [queryOpen, setQueryOpen] = useState(true);
   const [bodyOpen, setBodyOpen] = useState(true);
@@ -696,13 +705,7 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
   // Format body with line numbers
   const bodyLines = useMemo(() => {
     if (!entry.postData) return [];
-    let text = entry.postData;
-    try {
-      text = JSON.stringify(JSON.parse(entry.postData), null, 2);
-    } catch {
-      // not JSON, show raw
-    }
-    return withStableOccurrenceKeys(text.split('\n'), (line) => line);
+    return withStableOccurrenceKeys(formatBody(entry.postData).split('\n'), (line) => line);
   }, [entry.postData]);
 
   if (queryParams.length === 0 && !hasBody) {

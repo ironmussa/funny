@@ -72,12 +72,12 @@ const existing = {
     'react/exhaustive-effect-dependencies': 'warn',
     'react/globals': 'error',
     'react/hooks': 'error',
-    'react/immutability': 'warn',
+    'react/immutability': 'error',
     'react/incompatible-library': 'warn',
-    'react/invariant': 'warn',
+    'react/invariant': 'error',
     'react/memo-dependencies': 'warn',
     'react/no-deriving-state-in-effects': 'error',
-    'react/preserve-manual-memoization': 'warn',
+    'react/preserve-manual-memoization': 'error',
     'react/purity': 'error',
     'react/refs': 'warn',
     'react/rule-suppression': 'warn',
@@ -89,12 +89,19 @@ const existing = {
     'react/unsupported-syntax': 'error',
     'react/use-memo': 'error',
     'react/void-use-memo': 'error',
-    'no-unused-vars': 'warn',
+    'no-unused-vars': 'error',
     'no-shadow': 'off',
     'no-await-in-loop': 'off',
     'no-constant-condition': 'warn',
     'no-constant-binary-expression': 'warn',
-    'react-hooks/exhaustive-deps': 'warn',
+    'react-hooks/exhaustive-deps': 'error',
+    // Written for Express, whose router drops a rejected promise. Hono awaits
+    // its handlers and middleware (a middleware must be async to await next()).
+    'oxc/no-async-endpoint-handlers': 'off',
+    // 'suspicious' rules the repo is clean of, so a new finding fails.
+    'no-unexpected-multiline': 'error',
+    'typescript/no-extraneous-class': 'error',
+    'react/no-object-type-as-default-prop': 'error',
     // Bun 1.4.6 hoists vi.mock above imports and top-level variables (1.4.4 does
     // not), so the same test would mean two things. mock.module is never hoisted.
     'no-restricted-properties': [

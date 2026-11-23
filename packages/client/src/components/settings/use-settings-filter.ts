@@ -25,15 +25,12 @@ export interface SettingsNavPage extends FilterPage {
 export function useSettingsTranslators(): { t: Translate; tEn: Translate } {
   const { t, i18n } = useTranslation();
   return useMemo(() => {
-    // Created on first use: every indexed row calls this hook, and with an
-    // empty filter nothing needs the English text.
-    let en: ReturnType<typeof i18n.getFixedT> | undefined;
+    // getFixedT only binds a language; it loads nothing, so making it for
+    // every indexed row is cheap even when no filter needs the English text.
+    const en = i18n.getFixedT('en');
     return {
       t: (key, defaultValue) => String(t(key, { defaultValue })),
-      tEn: (key, defaultValue) => {
-        if (!en) en = i18n.getFixedT('en');
-        return String(en(key, { defaultValue }));
-      },
+      tEn: (key, defaultValue) => String(en(key, { defaultValue })),
     };
   }, [t, i18n]);
 }

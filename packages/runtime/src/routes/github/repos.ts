@@ -6,7 +6,7 @@ import { cloneRepository } from '@funny/core/git';
 import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
 import { stripUrlCredentials } from '@funny/shared/activities';
 import { retryAsync } from '@funny/shared/async';
-import { badRequest, conflict, processError } from '@funny/shared/errors';
+import { badRequest, conflict } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 

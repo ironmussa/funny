@@ -4,7 +4,6 @@ import { EventEmitter } from 'node:events';
 import { fromJson } from '@bufbuild/protobuf';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { OperationsRequestSchema } from '@funny/shared/runner-v2/operations';
-import { waitFor } from '@funny/test-kit';
 
 import { GrpcEventReplayStore } from '../../services/grpc-event-replay-store.js';
 import { GrpcOperationOutbox } from '../../services/grpc-operation-outbox.js';

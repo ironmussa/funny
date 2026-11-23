@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { Hono } from 'hono';

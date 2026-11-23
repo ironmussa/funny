@@ -239,6 +239,8 @@ export function NewThreadInput({
       onCreated,
       setReviewPaneOpen,
       t,
+      submittedPromptRef,
+      submittedMetadataRef,
     ],
   );
 
@@ -361,6 +363,10 @@ export function NewThreadInput({
       newThreadIsScratch,
       onCreated,
       t,
+      setSubmittedPrompt,
+      setSubmittedMetadata,
+      submittedPromptRef,
+      submittedMetadataRef,
     ],
   );
 

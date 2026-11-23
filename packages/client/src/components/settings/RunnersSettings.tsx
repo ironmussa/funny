@@ -44,12 +44,6 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-function statusColor(status: RunnerInfo['status']) {
-  if (status === 'online') return 'text-status-success';
-  if (status === 'busy') return 'text-status-warning';
-  return 'text-muted-foreground';
-}
-
 function statusLabel(status: RunnerInfo['status']) {
   if (status === 'online') return 'Online';
   if (status === 'busy') return 'Busy';

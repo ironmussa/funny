@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
  * preserving funny's provider-agnostic IAgentProcess event contract.
  */
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
 import { promisify } from 'util';
 
@@ -35,7 +35,8 @@ import { getFullContextFileDiff, gitRead } from '../git/index.js';
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 import { CodexAppServer, codexReviewTarget } from './codex-app-server.js';
 import { codexMcpSettings } from './codex-mcp.js';
-import type { CLIMessage } from './types.js';
+import { codexReadOnlyOverrides } from './read-only.js';
+import type { ClaudeProcessOptions, CLIMessage } from './types.js';
 
 const dlog = createDebugLogger('codex-sdk');
 const execFileAsync = promisify(execFile);
@@ -127,9 +128,10 @@ export class CodexSDKProcess extends BaseAgentProcess {
         show_raw_agent_reasoning: true,
         ...mcp.config,
       },
+      configOverrides: readOnlyCodexOverrides(this.options),
     });
 
-    const sandboxOptions = resolveCodexSandboxOptions(requestedPermissionMode);
+    const sandboxOptions = codexThreadSandbox(this.options, requestedPermissionMode);
     const additionalDirectories =
       sandboxOptions.sandboxMode === 'workspace-write'
         ? await resolveCodexSandboxWritableDirectories(this.options.cwd)
@@ -236,6 +238,9 @@ export class CodexSDKProcess extends BaseAgentProcess {
 
   // fallow-ignore-next-line complexity
   private async runCommand(name: string, args: string, signal: AbortSignal): Promise<string> {
+    // Its commands start an app-server thread outside the read-only profile.
+    if (this.options.readOnly)
+      throw new Error('This thread may only read: commands are not available.');
     if (!Object.hasOwn(CODEX_COMMANDS, name)) {
       throw new Error(
         CODEX_UNSUPPORTED_COMMANDS.has(name)
@@ -782,6 +787,27 @@ function rewriteDiffPaths(diff: string, filePath: string, deleted: boolean): str
       return line;
     })
     .join('\n');
+}
+
+/**
+ * A read-only agent's `--config` overrides (`codexReadOnlyOverrides`): its
+ * permission profile and a shell without credentials. None for another agent.
+ */
+function readOnlyCodexOverrides(options: ClaudeProcessOptions): string[] | undefined {
+  if (!options.readOnly) return undefined;
+  return codexReadOnlyOverrides(homedir(), options.readOnlyHiddenPaths ?? []);
+}
+
+/**
+ * The sandbox a Codex thread asks for. A read-only agent asks for none: its
+ * permission profile (`default_permissions`) holds it, and a `--sandbox` flag
+ * would make Codex ignore that profile.
+ */
+function codexThreadSandbox(
+  options: ClaudeProcessOptions,
+  permissionMode: string | undefined,
+): Partial<ReturnType<typeof resolveCodexSandboxOptions>> {
+  return options.readOnly ? {} : resolveCodexSandboxOptions(permissionMode);
 }
 
 /**

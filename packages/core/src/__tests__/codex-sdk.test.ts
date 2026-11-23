@@ -722,3 +722,100 @@ function git(cwd: string, args: string[]): void {
 function gitOutput(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
+
+// A read-only Codex agent: Codex's `read-only` sandbox reads every file, so a
+// permission profile hides the credentials and funny's data, and the thread
+// must not pass `--sandbox` too (Codex then ignores the profile).
+describe('a read-only Codex agent', () => {
+  /** Run the agent against a fixture `codex` that records its arguments. */
+  async function argvOf(extra: Record<string, unknown>): Promise<string[]> {
+    const dir = await mkdtemp(join(tmpdir(), 'funny-codex-ro-'));
+    const binary = join(dir, 'codex-fixture.mjs');
+    const argvFile = join(dir, 'argv.json');
+    const previous = process.env.CODEX_BINARY_PATH;
+    try {
+      await writeFile(
+        binary,
+        `#!/usr/bin/env node
+require('fs').writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+process.stdin.resume();
+process.stdin.on('end', () => {
+  console.log(JSON.stringify({ type: 'thread.started', thread_id: 'ro-thread' }));
+  console.log(JSON.stringify({ type: 'turn.started' }));
+  console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } }));
+});
+`.replace("require('fs')", "(await import('fs'))"),
+      );
+      await chmod(binary, 0o755);
+      process.env.CODEX_BINARY_PATH = binary;
+      const agent = new CodexSDKProcess({ ...options, ...extra });
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Codex fixture timed out')), 5_000);
+        agent.on('message', (message) => {
+          if (message.type !== 'result') return;
+          clearTimeout(timeout);
+          resolve();
+        });
+        agent.start();
+      });
+      return JSON.parse(await Bun.file(argvFile).text()) as string[];
+    } finally {
+      if (previous === undefined) delete process.env.CODEX_BINARY_PATH;
+      else process.env.CODEX_BINARY_PATH = previous;
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  test('runs in a permission profile that hides the credentials, without --sandbox', async () => {
+    const argv = await argvOf({
+      readOnly: true,
+      permissionMode: 'plan',
+      originalPermissionMode: 'plan',
+      readOnlyHiddenPaths: ['/srv/funny-data'],
+    });
+    expect(argv).not.toContain('--sandbox');
+    expect(argv).toContain('default_permissions="funny_read_only"');
+    expect(argv).toContain('permissions.funny_read_only.extends=":read-only"');
+    const filesystem = argv.find((arg) =>
+      arg.startsWith('permissions.funny_read_only.filesystem='),
+    );
+    expect(filesystem).toContain('"/srv/funny-data" = "none"');
+    expect(filesystem).toContain('/.funny" = "none"');
+    expect(filesystem).toContain('/.config/gh" = "none"');
+    expect(argv.find((arg) => arg.startsWith('shell_environment_policy.exclude='))).toContain(
+      '"GH_TOKEN"',
+    );
+  });
+
+  test('another agent keeps its sandbox flag and no profile', async () => {
+    const argv = await argvOf({ permissionMode: 'plan', originalPermissionMode: 'plan' });
+    expect(argv[argv.indexOf('--sandbox') + 1]).toBe('read-only');
+    expect(argv.some((arg) => arg.startsWith('default_permissions='))).toBe(false);
+  });
+
+  test('refuses slash commands, which start a thread outside the profile', async () => {
+    const agent = new CodexSDKProcess({
+      ...options,
+      prompt: '/review',
+      readOnly: true,
+      env: { CODEX_BINARY_PATH: '/nonexistent-codex-command-test' },
+    });
+    const messages: CLIMessage[] = [];
+    agent.on('message', (message) => messages.push(message));
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Command timed out')), 5000);
+      agent.on('message', (message) => {
+        if (message.type !== 'result') return;
+        clearTimeout(timeout);
+        resolve();
+      });
+      agent.start();
+    });
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: 'result',
+        errors: [expect.stringContaining('may only read')],
+      }),
+    );
+  });
+});

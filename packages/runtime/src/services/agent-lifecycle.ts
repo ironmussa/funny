@@ -26,7 +26,6 @@ import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
 import { ResultAsync } from 'neverthrow';
 
-import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
 import { stripInlineReferencedContent } from '../utils/file-mentions.js';
@@ -44,9 +43,8 @@ import {
 } from './agent-startup/permission-hooks.js';
 import { ensureLazyCwd, syncWorktreeProjectAssets } from './agent-startup/prepare-workspace.js';
 import { composeAgentEnv, loadProjectSecrets } from './agent-startup/project-secrets.js';
-import { fetchForReadOnlyAgent, logReadOnlySandboxMode } from './agent-startup/read-only-fetch.js';
+import { prepareReadOnlyStart, withReadOnlyEnv } from './agent-startup/read-only-fetch.js';
 import { recoverThreadContext } from './agent-startup/recover-context.js';
-import { existingRoleInputsDir } from './agent-startup/role-inputs.js';
 import { buildSystemPrefix, projectInstructionsBlock } from './agent-startup/system-prefix.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { captureGitCheckpoint } from './git-checkpoints.js';
@@ -56,7 +54,6 @@ import { getServices } from './service-registry.js';
 import {
   canDoGitOps,
   hasLazyCwd,
-  isReadOnlyThread,
   receivesProjectSecrets,
   resolveThreadCwd,
   tmpAssetsPathFor,
@@ -388,12 +385,7 @@ export class AgentLifecycleManager {
     // Resolve per-user API keys and git identity for agent subprocesses.
     // git and gh in a sandbox use the thread's GitHub App token, renewed in place.
     await prepareAgentGithub(threadId);
-    // A read-only agent has no network: the runner fetches for it.
-    const readOnly = !!thread && isReadOnlyThread(thread);
-    if (readOnly && thread && canDoGitOps(thread)) {
-      await fetchForReadOnlyAgent({ threadId, cwd, userId, projectId: thread.projectId });
-    }
-    if (readOnly && provider === 'claude') await logReadOnlySandboxMode(threadId);
+    const readOnly = await prepareReadOnlyStart({ thread, threadId, cwd, userId, provider });
     const secrets = await this.loadThreadSecrets(threadId, thread);
     const baseEnv = await buildAgentEnv({ threadId, userId, provider, assetsDir });
     const profiledEnv = await this.applyAgentProfile(
@@ -401,9 +393,7 @@ export class AgentLifecycleManager {
       activeAgentProfile,
       composeAgentEnv(secrets, baseEnv),
     );
-    // A read-only agent finds its inputs (the issue's text) here; nothing else writes this name.
-    const roleInputs = readOnly ? existingRoleInputsDir(threadId) : null;
-    const agentEnv = roleInputs ? { ...profiledEnv, FUNNY_ROLE_INPUTS: roleInputs } : profiledEnv;
+    const agentEnv = withReadOnlyEnv(profiledEnv, readOnly);
 
     await this.launchAgent(
       {
@@ -422,9 +412,7 @@ export class AgentLifecycleManager {
         env: agentEnv,
         effort: req.effort,
         ...projectRunFlags(project),
-        readOnly,
-        readOnlyRoots: roleInputs ? [roleInputs] : undefined,
-        readOnlyHiddenPaths: readOnly ? [DATA_DIR] : undefined,
+        ...readOnly?.options,
         steer: !!req.steer,
         builtinSkillsDisabled: tooling.builtinSkillsDisabled,
         customSkillPaths: tooling.customSkillPaths,

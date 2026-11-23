@@ -36,8 +36,8 @@ import { err, ok, type Result } from 'neverthrow';
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import type { FactoryRunScope } from './factory-action-provider.js';
-import { issueInputs, issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
-import { contractText, REVIEWER_DISALLOWED_TOOLS } from './factory-review.js';
+import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
+import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
 import { readRoleResult } from './factory-role-results.js';
 import type { UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -233,32 +233,16 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     const base = await deps.worktreeBase();
     if ('error' in base) return err(base.error);
     const issue = (await deps.issueText?.()) ?? null;
-    const launched = await deps.launch({
-      projectId: scope.projectId,
-      title: `${titlePrefix}${scope.issueTitle}`.slice(0, 200),
-      mode: scope.mode,
-      ...base,
-      source: 'factory',
-      // Fixed by the server: a new thread that cannot write (see the reviewer's).
-      readOnly: true,
-      permissionMode: 'plan',
-      disallowedTools: [...REVIEWER_DISALLOWED_TOOLS],
-      provider: opts.provider ?? undefined,
-      model: opts.model ?? undefined,
-      effort: opts.effort ?? undefined,
-      ...issueInputs(scope.issueNumber, issue),
-      prompt: triagePrompt({
-        repo: scope.repo,
-        issueNumber: scope.issueNumber,
-        issueUrl: deps.issueUrl,
-        issue,
-        busyPaths,
-      }),
+    const prompt = triagePrompt({
+      repo: scope.repo,
+      issueNumber: scope.issueNumber,
+      issueUrl: deps.issueUrl,
+      issue,
+      busyPaths,
     });
-    if (launched.isErr()) return err(launched.error.message);
-    return launched.value.threadId
-      ? ok(launched.value.threadId)
-      : err('the runner returned no thread');
+    const title = `${titlePrefix}${scope.issueTitle}`;
+    const body = readOnlyRoleLaunch({ scope, title, base, opts, issue, prompt });
+    return launchedThread(await deps.launch(body));
   }
 
   /** The triage agent's validated answer, asking once more on its thread when it is invalid. */

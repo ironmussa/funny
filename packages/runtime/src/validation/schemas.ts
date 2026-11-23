@@ -303,14 +303,21 @@ export const createThreadSchema = z
         path: ['mode'],
       });
     }
-    if (data.roleInputs && !data.readOnly) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'role inputs are only for read-only threads',
-        path: ['roleInputs'],
-      });
-    }
+    refuseRoleInputsWithoutReadOnly(data, ctx);
   });
+
+/** Role inputs are what a read-only agent reads besides its checkout: nothing else gets them. */
+function refuseRoleInputsWithoutReadOnly(
+  data: { roleInputs?: Record<string, string>; readOnly?: boolean },
+  ctx: z.RefinementCtx,
+): void {
+  if (!data.roleInputs || data.readOnly) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'role inputs are only for read-only threads',
+    path: ['roleInputs'],
+  });
+}
 
 export const createIdleThreadSchema = z.object({
   projectId: z.string().min(1),

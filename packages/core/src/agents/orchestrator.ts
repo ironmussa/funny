@@ -26,6 +26,63 @@ import {
 import type { IAgentProcess, IAgentProcessFactory } from './interfaces.js';
 import type { CLIMessage } from './types.js';
 
+// ── Read-only agents ──────────────────────────────────────────────
+
+/** Only these providers have a sandbox that holds a read-only agent to it. */
+function assertReadOnlyProvider(provider: AgentProvider, readOnly: boolean | undefined): void {
+  if (readOnly !== true || READ_ONLY_PROVIDERS.includes(provider)) return;
+  throw new Error(
+    `This thread may only read, and ${provider} cannot be held to that: use ${READ_ONLY_PROVIDERS.join(' or ')}.`,
+  );
+}
+
+/**
+ * The process options of an agent, held to reading when the caller asks
+ * (`StartAgentOptions.readOnly`), on a provider that can hold it.
+ */
+function holdToReadingWhenAsked<O extends { provider: AgentProvider }>(
+  opts: O,
+  input: Pick<StartAgentOptions, 'readOnly' | 'readOnlyRoots' | 'readOnlyHiddenPaths'>,
+): O | ReturnType<typeof holdToReading<O>> {
+  return input.readOnly === true ? holdToReading(opts, input) : opts;
+}
+
+/**
+ * The permission mode a resumed agent runs in: `plan` becomes `acceptEdits`
+ * after the user approved the plan, but a read-only agent has no plan to
+ * approve and stays as it is.
+ */
+function resumePermissionOf(
+  provider: AgentProvider,
+  opts: { permissionMode?: string; readOnly?: boolean },
+): string | undefined {
+  if (opts.readOnly) return opts.permissionMode;
+  return resolveResumePermissionMode(provider, opts.permissionMode);
+}
+
+/**
+ * The process options of a read-only agent (`ClaudeProcessOptions.readOnly`):
+ * `plan` is what Codex maps to its read-only sandbox (Claude holds the agent
+ * to its own sandbox instead), only the reading tools, and no MCP server,
+ * since one could write or start threads (the checks tool is one of them).
+ */
+function holdToReading<O extends { provider: AgentProvider }>(
+  opts: O,
+  input: Pick<StartAgentOptions, 'readOnlyRoots' | 'readOnlyHiddenPaths'>,
+) {
+  return {
+    ...opts,
+    permissionMode: resolvePermissionMode(opts.provider, 'plan'),
+    originalPermissionMode: 'plan' as PermissionMode,
+    allowedTools: [...READ_ONLY_AGENT_TOOLS],
+    mcpServers: undefined,
+    redirectChecks: false,
+    readOnly: true,
+    readOnlyRoots: input.readOnlyRoots,
+    readOnlyHiddenPaths: input.readOnlyHiddenPaths,
+  };
+}
+
 // ── Types ─────────────────────────────────────────────────────────
 
 export interface StartAgentOptions {
@@ -310,13 +367,8 @@ export class AgentOrchestrator extends EventEmitter {
       bypassExecutor,
       steer,
     } = options;
-    const readOnly = options.readOnly === true;
-    if (readOnly && !READ_ONLY_PROVIDERS.includes(provider)) {
-      // Only these providers have a sandbox that holds a read-only agent to it.
-      throw new Error(
-        `This thread may only read, and ${provider} cannot be held to that: use ${READ_ONLY_PROVIDERS.join(' or ')}.`,
-      );
-    }
+    // Before anything else: a provider that cannot hold the agent to reading does not start.
+    assertReadOnlyProvider(provider, options.readOnly);
 
     dlog.info('startAgent', {
       threadId,
@@ -428,46 +480,36 @@ export class AgentOrchestrator extends EventEmitter {
 
     // Resolve model ID and permission mode via registry
     const resolvedModel = resolveModelId(provider, model);
-    // Read-only: `plan` is what Codex maps to its read-only sandbox; Claude
-    // ignores the mode and holds the agent to its own sandbox instead.
-    const requestedMode: PermissionMode = readOnly ? 'plan' : permissionMode;
-    const effectivePermissionMode = resolvePermissionMode(provider, requestedMode);
+    const effectivePermissionMode = resolvePermissionMode(provider, permissionMode);
 
     // Build shared process options
     // In ask mode, restrict to read-only tools regardless of caller-provided lists
     const isAskMode = permissionMode === 'ask';
-    const effectiveAllowedTools = readOnly
-      ? [...READ_ONLY_AGENT_TOOLS]
-      : isAskMode
-        ? getAskModeTools()
-        : (allowedTools ?? getDefaultAllowedTools(provider));
+    const effectiveAllowedTools = isAskMode
+      ? getAskModeTools()
+      : (allowedTools ?? getDefaultAllowedTools(provider));
     const effectiveDisallowedTools = isAskMode
       ? ['Edit', 'Write', 'Bash', 'NotebookEdit', 'TodoWrite']
       : disallowedTools;
-    const processOpts = {
+    const fullOpts = {
       threadId,
       prompt: effectivePrompt,
       cwd,
       model: resolvedModel,
       permissionMode: effectivePermissionMode,
-      originalPermissionMode: requestedMode,
+      originalPermissionMode: permissionMode,
       allowedTools: effectiveAllowedTools,
       disallowedTools: effectiveDisallowedTools,
       maxTurns,
       images,
       provider,
-      // A read-only agent gets no MCP server: one could write or start threads.
-      mcpServers: readOnly ? undefined : mcpServers,
+      mcpServers,
       spawnClaudeCodeProcess,
       systemPrefix,
       env,
       effort,
       fastMode,
-      // The checks tool is an MCP tool, which a read-only agent does not get.
-      redirectChecks: readOnly ? false : redirectChecks,
-      readOnly,
-      readOnlyRoots: readOnly ? options.readOnlyRoots : undefined,
-      readOnlyHiddenPaths: readOnly ? options.readOnlyHiddenPaths : undefined,
+      redirectChecks,
       steerable,
       builtinSkillsDisabled,
       customSkillPaths,
@@ -475,6 +517,7 @@ export class AgentOrchestrator extends EventEmitter {
       permissionRuleLookup,
       bypassExecutor,
     };
+    const processOpts = holdToReadingWhenAsked(fullOpts, options);
 
     dlog.info('processOpts systemPrefix', {
       threadId,
@@ -488,9 +531,7 @@ export class AgentOrchestrator extends EventEmitter {
       // execute after the user approved the plan.  Without this, the resumed
       // session stays in plan mode and immediately calls ExitPlanMode again.
       // A read-only agent stays read-only on resume: there is no plan to approve.
-      const resumePermission = readOnly
-        ? processOpts.permissionMode
-        : resolveResumePermissionMode(provider, processOpts.permissionMode);
+      const resumePermission = resumePermissionOf(provider, processOpts);
       if (resumePermission !== processOpts.permissionMode) {
         dlog.info('Downgrading permissionMode for resume', {
           threadId,

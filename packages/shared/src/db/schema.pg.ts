@@ -111,6 +111,8 @@ export const designs = pgTable('designs', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
 export const threads = pgTable('threads', {
   id: text('id').primaryKey(),
   /** Nullable for scratch threads (no project). */

@@ -30,7 +30,7 @@ const cut = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max)}\n[… cut: ${text.length - max} more characters]` : text;
 
 /** The role input that carries the issue's text. */
-export const ISSUE_INPUT = 'issue.md';
+const ISSUE_INPUT = 'issue.md';
 
 /** The issue as the Markdown file the agent reads. */
 export function issueMarkdown(issueNumber: number, issue: FactoryIssueText): string {

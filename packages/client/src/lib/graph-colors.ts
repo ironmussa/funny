@@ -52,5 +52,22 @@ export function graphLanePastel(index: number): string {
  * of whatever lane it lands on. Feed it to `graphLanePastel()`.
  */
 export function graphColorKey(identifier: string): number {
-  return stringHash(identifier);
+  if (DEFAULT_BRANCH_NAMES.has(identifier)) return DEFAULT_BRANCH_COLOR_KEY;
+  const key = stringHash(identifier);
+  // The default branch's blue is reserved: a name that hashes onto it moves to the next slot.
+  return key % GRAPH_LANE_HSL.length === DEFAULT_BRANCH_COLOR_KEY ? key + 1 : key;
+}
+
+/** The usual default branch names: they always get the same blue, in every repository. */
+const DEFAULT_BRANCH_NAMES: ReadonlySet<string> = new Set(['main', 'master']);
+
+/** Slot of the light blue in `GRAPH_LANE_HSL`, kept for the default branch. */
+const DEFAULT_BRANCH_COLOR_KEY = 0;
+
+/**
+ * The color of a branch everywhere in the UI: the same one its chip, node and
+ * line get in the History graph, keyed on the branch name alone.
+ */
+export function branchColor(branch: string): string {
+  return graphLanePastel(graphColorKey(branch));
 }

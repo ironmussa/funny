@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +50,49 @@ const STATE_CLASS = {
     'border-rose-300/70 bg-rose-50 text-rose-700 hover:border-rose-400 hover:text-rose-800 dark:border-rose-400/35 dark:bg-rose-400/15 dark:text-rose-200 dark:hover:border-rose-300/60 dark:hover:text-rose-100',
 } as const;
 
+function prTooltipLabel(t: TFunction, prState: PRState, prNumber: number): string {
+  if (prState === 'OPEN') {
+    return t('thread.prOpen', { number: prNumber, defaultValue: `PR #${prNumber}` });
+  }
+  if (prState === 'MERGED') {
+    return t('thread.prMerged', { number: prNumber, defaultValue: `PR #${prNumber} (merged)` });
+  }
+  return t('thread.prClosed', { number: prNumber, defaultValue: `PR #${prNumber} (closed)` });
+}
+
+function prBadgeClassName({
+  variant,
+  prState,
+  size,
+  linked,
+  className,
+}: {
+  variant: NonNullable<PRBadgeProps['variant']>;
+  prState: PRState;
+  size: NonNullable<PRBadgeProps['size']>;
+  linked: boolean;
+  className?: string;
+}): string {
+  if (variant === 'plain') {
+    return cn(
+      GIT_STAT_CHIP_CLASS,
+      'rounded-sm hover:underline focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
+      PR_STATE_TEXT_CLASS[prState],
+      !linked && 'cursor-default',
+      className,
+    );
+  }
+  return cn(
+    'inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
+    SIZE_CLASS[size].badge,
+    variant === 'inverse'
+      ? 'border-background/20 bg-background/20 text-background/70 hover:text-background'
+      : STATE_CLASS[prState],
+    !linked && 'cursor-default',
+    className,
+  );
+}
+
 /**
  * Standardized PR number badge/link.
  * State is exposed in the tooltip and soft color so it reads consistently
@@ -67,38 +111,10 @@ export function PRBadge({
   const { t } = useTranslation();
   const config = SIZE_CLASS[size];
 
-  const tooltipLabel =
-    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-    prState === 'OPEN'
-      ? t('thread.prOpen', { number: prNumber, defaultValue: `PR #${prNumber}` })
-      : prState === 'MERGED'
-        ? t('thread.prMerged', {
-            number: prNumber,
-            defaultValue: `PR #${prNumber} (merged)`,
-          })
-        : t('thread.prClosed', {
-            number: prNumber,
-            defaultValue: `PR #${prNumber} (closed)`,
-          });
+  const tooltipLabel = prTooltipLabel(t, prState, prNumber);
   const plain = variant === 'plain';
   const iconClassName = plain ? GIT_STAT_ICON_CLASS : config.icon;
-  const badgeClassName = plain
-    ? cn(
-        GIT_STAT_CHIP_CLASS,
-        'rounded-sm hover:underline focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
-        PR_STATE_TEXT_CLASS[prState],
-        !prUrl && 'cursor-default',
-        className,
-      )
-    : cn(
-        'inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
-        config.badge,
-        variant === 'inverse'
-          ? 'border-background/20 bg-background/20 text-background/70 hover:text-background'
-          : STATE_CLASS[prState],
-        !prUrl && 'cursor-default',
-        className,
-      );
+  const badgeClassName = prBadgeClassName({ variant, prState, size, linked: !!prUrl, className });
   const StateIcon = PR_STATE_ICON[prState];
   const content = (
     <>

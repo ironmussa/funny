@@ -151,41 +151,48 @@ function loweredThresholds(
   return findings;
 }
 
-function fileFindings(file: PullRequestFile): TestWeakeningFinding[] {
-  const findings: TestWeakeningFinding[] = [];
+/** A test file deleted, or renamed to a path no test runner picks up. */
+function removedTestFile(file: PullRequestFile): TestWeakeningFinding | null {
+  const before = file.previousPath ?? file.path;
+  if (!isTestFile(before)) return null;
+  if (file.status !== 'removed' && isTestFile(file.path)) return null;
+  return {
+    kind: 'test-file-removed',
+    path: before,
+    detail: file.status === 'removed' ? 'test file deleted' : `renamed to ${file.path}`,
+  };
+}
+
+/** What the diff of a test file or a coverage config weakens. */
+function patchFindings(file: PullRequestFile): TestWeakeningFinding[] {
   const path = file.path;
-  const before = file.previousPath ?? path;
-  if (CI_WORKFLOW.test(path) || CI_WORKFLOW.test(before)) {
-    findings.push({ kind: 'ci-workflow', path, detail: `${file.status} CI workflow` });
-  }
-  const wasTest = isTestFile(before);
   const isTest = isTestFile(path);
-  if (wasTest && (file.status === 'removed' || !isTest)) {
-    // Deleted, or renamed to a path no test runner picks up.
-    findings.push({
-      kind: 'test-file-removed',
-      path: before,
-      detail: file.status === 'removed' ? 'test file deleted' : `renamed to ${path}`,
-    });
-    return findings;
-  }
   const config = COVERAGE_CONFIG.test(path);
-  if (!isTest && !config) return findings;
+  if (!isTest && !config) return [];
   if (file.patch === undefined) {
     // Nothing to read: a rename without changes is fine, anything else was not checked.
-    if (isTest && file.additions + file.deletions > 0) {
-      findings.push({
-        kind: 'test-change-unreadable',
-        path,
-        detail: 'GitHub gave no diff for this test file',
-      });
-    }
-    return findings;
+    if (!isTest || file.additions + file.deletions === 0) return [];
+    return [
+      { kind: 'test-change-unreadable', path, detail: 'GitHub gave no diff for this test file' },
+    ];
   }
   const { added, removed } = changedLines(file.patch);
-  if (isTest) findings.push(...removedTests(path, added, removed), ...markers(path, added));
-  if (config) findings.push(...loweredThresholds(path, added, removed));
-  return findings;
+  return [
+    ...(isTest ? [...removedTests(path, added, removed), ...markers(path, added)] : []),
+    ...(config ? loweredThresholds(path, added, removed) : []),
+  ];
+}
+
+function fileFindings(file: PullRequestFile): TestWeakeningFinding[] {
+  const path = file.path;
+  const before = file.previousPath ?? path;
+  const findings: TestWeakeningFinding[] =
+    CI_WORKFLOW.test(path) || CI_WORKFLOW.test(before)
+      ? [{ kind: 'ci-workflow', path, detail: `${file.status} CI workflow` }]
+      : [];
+  const removedFile = removedTestFile(file);
+  if (removedFile) return [...findings, removedFile];
+  return [...findings, ...patchFindings(file)];
 }
 
 /** What the change does to the tests and CI, in file order, the first `MAX_WEAKENING_FINDINGS`. */

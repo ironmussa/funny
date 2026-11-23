@@ -71,6 +71,12 @@ export interface SentinelFactory {
   projectId: string;
 }
 
+/** A commit and its checks. */
+interface BaseBranchState {
+  sha: string;
+  ci: CiState;
+}
+
 export interface SentinelDeps {
   incidents: FactoryIncidentsRepository;
   /** The factory merges into `repo` since `since`, of every factory, newest first. */
@@ -78,7 +84,7 @@ export interface SentinelDeps {
   /** The repository's default branch (the base the factory merges into), or null when unreadable. */
   defaultBranch(): Promise<string | null>;
   /** The commit `branch` is at and its checks, or null when unreadable. */
-  branchState(branch: string): Promise<{ sha: string; ci: CiState } | null>;
+  branchState(branch: string): Promise<BaseBranchState | null>;
   /** The commit merged pull request `prNumber` made and its checks, or null when unreadable. */
   mergeState(prNumber: number): Promise<{ sha: string; ci: CiState } | null>;
   /**
@@ -372,31 +378,29 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     return suspects;
   }
 
-  /** The incident of the base branch, opening one when it just turned red after a merge. */
-  async function watch(baseBranch: string): Promise<FactoryIncidentRecord | null> {
-    const active = await deps.incidents.active(repo, baseBranch);
-    if (active.isErr()) return null;
-    const incident = active.value;
-    // Without an incident, only a recent factory merge makes the branch worth reading.
-    const merges = incident ? [] : await mergesToWatch(baseBranch);
-    if (!incident && merges.length === 0) return null;
-    const state = await deps.branchState(baseBranch);
-    if (!state) return incident;
-
-    if (incident) {
-      if (state.ci.kind === 'green') {
-        const closed = await deps.incidents.close(incident.id, 'green');
-        if (closed.isOk() && closed.value) count('incident_closed_green');
-        return null;
-      }
-      await deps.incidents.noteAffected(incident, factory.id);
-      if (incident.state === 'investigating' && incident.openedByFactory === factory.id) {
-        await collect(incident);
-      }
-      return incident;
+  /** An incident already open: close it on green, else keep collecting. */
+  async function follow(
+    incident: FactoryIncidentRecord,
+    state: BaseBranchState,
+  ): Promise<FactoryIncidentRecord | null> {
+    if (state.ci.kind === 'green') {
+      const closed = await deps.incidents.close(incident.id, 'green');
+      if (closed.isOk() && closed.value) count('incident_closed_green');
+      return null;
     }
+    await deps.incidents.noteAffected(incident, factory.id);
+    if (incident.state === 'investigating' && incident.openedByFactory === factory.id) {
+      await collect(incident);
+    }
+    return incident;
+  }
 
-    if (state.ci.kind !== 'failing') return null;
+  /** A red base branch after factory merges: open its incident unless a later commit broke it. */
+  async function openFor(
+    baseBranch: string,
+    state: BaseBranchState,
+    merges: FactoryIncidentCandidate[],
+  ): Promise<FactoryIncidentRecord | null> {
     const clearedKey = `${repo}#${baseBranch}#${state.sha}#${merges[0]?.prUrl ?? ''}`;
     if (deps.cleared?.has(clearedKey)) return null;
     const suspects = await suspectsOf(merges);
@@ -423,13 +427,7 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
       factoryId: factory.id,
     });
     if (opened.isErr()) return null;
-    if (!opened.value) {
-      // Another factory's tick opened it first: this one is paused by it too.
-      const theirs = await deps.incidents.active(repo, baseBranch);
-      if (theirs.isErr() || !theirs.value) return null;
-      await deps.incidents.noteAffected(theirs.value, factory.id);
-      return theirs.value;
-    }
+    if (!opened.value) return joinTheirs(baseBranch);
     count('incident_opened');
     log.warn('Issue factory incident: a base branch is red after a factory merge', {
       namespace: 'factory',
@@ -441,6 +439,29 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     });
     await investigate(opened.value, state.ci);
     return opened.value;
+  }
+
+  /** Another factory's tick opened the incident first: this one is paused by it too. */
+  async function joinTheirs(baseBranch: string): Promise<FactoryIncidentRecord | null> {
+    const theirs = await deps.incidents.active(repo, baseBranch);
+    if (theirs.isErr() || !theirs.value) return null;
+    await deps.incidents.noteAffected(theirs.value, factory.id);
+    return theirs.value;
+  }
+
+  /** The incident of the base branch, opening one when it just turned red after a merge. */
+  async function watch(baseBranch: string): Promise<FactoryIncidentRecord | null> {
+    const active = await deps.incidents.active(repo, baseBranch);
+    if (active.isErr()) return null;
+    const incident = active.value;
+    // Without an incident, only a recent factory merge makes the branch worth reading.
+    const merges = incident ? [] : await mergesToWatch(baseBranch);
+    if (!incident && merges.length === 0) return null;
+    const state = await deps.branchState(baseBranch);
+    if (!state) return incident;
+    if (incident) return follow(incident, state);
+    if (state.ci.kind !== 'failing') return null;
+    return openFor(baseBranch, state, merges);
   }
 
   return {

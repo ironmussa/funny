@@ -260,6 +260,38 @@ export function createMergeLane(deps: MergeLaneDeps) {
     };
   }
 
+  /** The pull request's head, its base and how far behind the base it is. */
+  async function positionOf(
+    pr: FactoryPullRequestRef,
+  ): Promise<{ sha: string; baseRef: string; behindBy: number } | { error: string }> {
+    const head = await deps.prs.pullHead(pr);
+    if (head.isErr()) return { error: head.error.message };
+    const { sha, baseRef } = head.value;
+    const distance = await deps.prs.baseDistance(pr, baseRef, sha);
+    if (distance.isErr()) return { error: distance.error.message };
+    return { sha, baseRef, behindBy: distance.value.behindBy };
+  }
+
+  /** The checks of a head just brought up to date: null when green, else why the merge stops. */
+  async function checksOnNewHead(
+    pr: FactoryPullRequestRef,
+    baseRef: string,
+    updated: string,
+  ): Promise<UpToDate | null> {
+    const checks = await deps.waitChecks();
+    if (checks.ok) return null;
+    const verdict = checks.metadata?.verdict;
+    if (verdict === 'conflict') return conflict(pr, baseRef, updated);
+    if (verdict === 'red') {
+      return {
+        kind: 'sent-back',
+        why: 'checks',
+        feedback: staleChecksFeedback(baseRef, checks.error ?? 'The checks failed.'),
+      };
+    }
+    return { kind: 'failed', error: checks.error ?? 'The checks did not pass.' };
+  }
+
   return {
     /**
      * Where the base branch requires GitHub's merge queue: add the pull request
@@ -296,12 +328,10 @@ export function createMergeLane(deps: MergeLaneDeps) {
       const carried: Array<{ from: string; to: string }> = [];
       for (let update = 0; update <= MAX_BASE_UPDATES; update++) {
         if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
-        const head = await deps.prs.pullHead(pr);
-        if (head.isErr()) return { kind: 'failed', error: head.error.message };
-        const { sha, baseRef } = head.value;
-        const distance = await deps.prs.baseDistance(pr, baseRef, sha);
-        if (distance.isErr()) return { kind: 'failed', error: distance.error.message };
-        if (distance.value.behindBy === 0) return { kind: 'current', sha, carried };
+        const position = await positionOf(pr);
+        if ('error' in position) return { kind: 'failed', error: position.error };
+        const { sha, baseRef, behindBy } = position;
+        if (behindBy === 0) return { kind: 'current', sha, carried };
         if (update === MAX_BASE_UPDATES) break;
 
         const step = await mergeBaseIn(pr, baseRef, sha);
@@ -310,18 +340,8 @@ export function createMergeLane(deps: MergeLaneDeps) {
         carried.push({ from: sha, to: step.updated });
 
         // The checks that were green ran on the old base: wait for them on the new head.
-        const checks = await deps.waitChecks();
-        if (checks.ok) continue;
-        const verdict = checks.metadata?.verdict;
-        if (verdict === 'conflict') return conflict(pr, baseRef, step.updated);
-        if (verdict === 'red') {
-          return {
-            kind: 'sent-back',
-            why: 'checks',
-            feedback: staleChecksFeedback(baseRef, checks.error ?? 'The checks failed.'),
-          };
-        }
-        return { kind: 'failed', error: checks.error ?? 'The checks did not pass.' };
+        const refused = await checksOnNewHead(pr, baseRef, step.updated);
+        if (refused) return refused;
       }
       return {
         kind: 'failed',

@@ -108,7 +108,6 @@ export function createTestDb() {
       agent_profile_name TEXT,
       agent_profile_provider TEXT,
       file_checkpointing_enabled INTEGER NOT NULL DEFAULT 0,
-      scheduler_managed INTEGER NOT NULL DEFAULT 0,
       is_scratch INTEGER NOT NULL DEFAULT 0,
       read_only INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -637,29 +636,6 @@ export function createTestDb() {
       local_path TEXT,
       joined_at TEXT NOT NULL,
       PRIMARY KEY (project_id, user_id)
-    )
-  `);
-
-  testDb.run(sql`
-    CREATE TABLE IF NOT EXISTS scheduler_runs (
-      thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
-      pipeline_run_id TEXT,
-      attempt INTEGER NOT NULL DEFAULT 0,
-      next_retry_at_ms INTEGER,
-      last_event_at_ms INTEGER NOT NULL,
-      last_error TEXT,
-      claimed_at_ms INTEGER NOT NULL,
-      user_id TEXT NOT NULL,
-      tokens_total INTEGER NOT NULL DEFAULT 0,
-      updated_at_ms INTEGER NOT NULL
-    )
-  `);
-
-  testDb.run(sql`
-    CREATE TABLE IF NOT EXISTS thread_dependencies (
-      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-      blocked_by TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-      PRIMARY KEY (thread_id, blocked_by)
     )
   `);
 

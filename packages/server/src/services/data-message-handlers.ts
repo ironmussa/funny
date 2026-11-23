@@ -46,7 +46,6 @@ const RUNNER_IMMUTABLE_THREAD_FIELDS = new Set([
   'externalRequestId',
   'parentThreadId',
   'runnerId',
-  'schedulerManaged',
   'createdAt',
 ]);
 

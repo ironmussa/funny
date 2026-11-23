@@ -54,10 +54,6 @@ const OWNERS: Record<string, { files: string[]; why: string }> = {
     ],
     why: 'finishRunningRun and the stale sweep compare-and-set on running',
   },
-  schedulerRuns: {
-    files: [],
-    why: 'no writer: the thread scheduler was removed, the table is only declared',
-  },
   pendingPermissionRequests: {
     files: ['packages/shared/src/repositories/pending-permission-repository.ts'],
     why: 'compare-and-set on status = active',

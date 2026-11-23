@@ -21,17 +21,22 @@ import { listHooks } from '../../services/project-hooks-service.js';
 import * as tm from '../../services/thread-manager.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThread, requireThreadCwd, requireProject } from '../../utils/route-helpers.js';
+import { requireThread, requireProject } from '../../utils/route-helpers.js';
 import { readBody } from '../../validation/request.js';
 import {
-  validate,
   commitSchema,
   generateCommitMessageSchema,
   gitignoreSchema,
   runHookCommandSchema,
 } from '../../validation/schemas.js';
-import { withProjectCheckout, withThreadCheckout } from './checkout-route.js';
-import { gitStatusCache, invalidateGitStatusCache } from './helpers.js';
+import {
+  onBothCheckouts,
+  threadGitMutation,
+  traced,
+  withProjectCheckout,
+  withThreadCheckout,
+} from './checkout-route.js';
+import { gitStatusCache } from './helpers.js';
 
 export const commitRoutes = new Hono<HonoEnv>();
 
@@ -61,18 +66,7 @@ commitRoutes.post('/project/:projectId/commit', (c) =>
 // POST /api/git/project/:projectId/run-hook-command
 // Runs a single pre-commit hook command by index for per-hook progress tracking
 commitRoutes.post('/project/:projectId/run-hook-command', (c) =>
-  withProjectCheckout(c, async ({ cwd }) => {
-    const parsed = await readBody(c, runHookCommandSchema);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-    const { hookIndex } = parsed.value;
-    const hooks = listHooks(cwd, 'pre-commit').filter((h) => h.enabled);
-    if (hookIndex >= hooks.length) {
-      return resultToResponse(c, err(badRequest(`Invalid hookIndex: ${hookIndex}`)));
-    }
-    const hookResult = await runHookCommand(cwd, hooks[hookIndex].command);
-    if (hookResult.isErr()) return resultToResponse(c, hookResult);
-    return c.json(hookResult.value);
-  }),
+  withProjectCheckout(c, ({ cwd }) => runPreCommitHook(c, cwd, cwd)),
 );
 
 // POST /api/git/project/:projectId/generate-commit-message
@@ -80,69 +74,36 @@ commitRoutes.post('/project/:projectId/generate-commit-message', (c) =>
   withProjectCheckout(c, ({ projectId, cwd }) => answerCommitMessage(c, cwd, projectId)),
 );
 
-// POST /api/git/project/:projectId/gitignore
-commitRoutes.post('/project/:projectId/gitignore', (c) =>
-  withProjectCheckout(c, async ({ cwd }) => {
-    const parsed = await readBody(c, gitignoreSchema);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-    for (const p of parsed.value) {
-      const result = addToGitignore(cwd, p);
-      if (result.isErr()) return resultToResponse(c, result);
-    }
-    return c.json({ ok: true });
-  }),
-);
+// POST /api/git/(project/:projectId | :threadId)/gitignore
+onBothCheckouts(commitRoutes, 'POST', '/gitignore', async (c, { cwd }) => {
+  const parsed = await readBody(c, gitignoreSchema);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  for (const p of parsed.value) {
+    const result = addToGitignore(cwd, p);
+    if (result.isErr()) return resultToResponse(c, result);
+  }
+  return c.json({ ok: true });
+});
 
 // POST /api/git/:threadId/commit
 commitRoutes.post('/:threadId/commit', (c) =>
-  withThreadCheckout(c, async ({ threadId, userId, cwd }) => {
-    const parsed = await readBody(c, commitSchema);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-
-    const span = requestSpan(c, 'git.commit', { threadId });
-    const result = await gitServiceCommit(
-      threadId,
-      userId,
-      cwd,
-      parsed.value.message,
-      parsed.value.amend,
-      parsed.value.noVerify,
-    );
-    if (result.isErr()) {
-      span.end('error', result.error.message);
-      return resultToResponse(c, result);
-    }
-    await invalidateGitStatusCache(threadId);
-    span.end('ok');
-    return c.json({ ok: true, output: result.value.output, sha: result.value.sha });
+  threadGitMutation(c, {
+    body: commitSchema,
+    run: ({ threadId, userId, cwd }, { message, amend, noVerify }) =>
+      traced(c, 'git.commit', { threadId }, () =>
+        gitServiceCommit(threadId, userId, cwd, message, amend, noVerify),
+      ),
+    respond: ({ output, sha }) => ({ output, sha }),
   }),
 );
 
 // POST /api/git/:threadId/run-hook-command
 // Runs a single pre-commit hook command by index for per-hook progress tracking
 commitRoutes.post('/:threadId/run-hook-command', (c) =>
-  withThreadCheckout(c, async ({ threadId, userId, cwd }) => {
-    const orgId = c.get('organizationId');
-    const parsed = await readBody(c, runHookCommandSchema);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-    const { hookIndex } = parsed.value;
-    // Look up the project path for hook config (worktree cwd may differ from project root)
-    const thread = await tm.getThread(threadId);
-    const projectId = thread?.projectId;
-    let hookCwd = cwd;
-    if (projectId) {
-      const project = await requireProject(projectId, userId, orgId);
-      if (project.isOk()) hookCwd = project.value.path;
-    }
-    const hooks = listHooks(hookCwd, 'pre-commit').filter((h) => h.enabled);
-    if (hookIndex >= hooks.length) {
-      return resultToResponse(c, err(badRequest(`Invalid hookIndex: ${hookIndex}`)));
-    }
+  withThreadCheckout(c, async ({ threadId, userId, cwd }) =>
     // Run the hook command in the thread's working directory (not the project root)
-    const hookResult = await runHookCommand(cwd, hooks[hookIndex].command);
-    if (hookResult.isErr()) return resultToResponse(c, hookResult);
-    return c.json(hookResult.value);
-  }),
+    runPreCommitHook(c, await hooksDirOf(threadId, userId, c.get('organizationId'), cwd), cwd),
+  ),
 );
 
 // POST /api/git/:threadId/generate-commit-message
@@ -154,22 +115,41 @@ commitRoutes.post('/:threadId/generate-commit-message', (c) =>
   }),
 );
 
-// POST /api/git/:threadId/gitignore
-commitRoutes.post('/:threadId/gitignore', async (c) => {
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
+// ── Pre-commit hooks (shared by the project and thread routes) ────────────
 
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(gitignoreSchema, raw);
+/**
+ * Where a thread's hook config lives: its project's root, since a worktree
+ * checkout may differ from it; the checkout itself when there is no project.
+ */
+async function hooksDirOf(
+  threadId: string,
+  userId: string,
+  orgId: string | null,
+  cwd: string,
+): Promise<string> {
+  const projectId = (await tm.getThread(threadId))?.projectId;
+  if (!projectId) return cwd;
+  const project = await requireProject(projectId, userId, orgId);
+  return project.isOk() ? project.value.path : cwd;
+}
+
+/** Runs the body's `hookIndex`-th enabled pre-commit hook of `hooksDir`, in `cwd`. */
+async function runPreCommitHook(
+  c: Context<HonoEnv>,
+  hooksDir: string,
+  cwd: string,
+): Promise<Response> {
+  const parsed = await readBody(c, runHookCommandSchema);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  for (const p of parsed.value) {
-    const result = addToGitignore(cwd, p);
-    if (result.isErr()) return resultToResponse(c, result);
+  const { hookIndex } = parsed.value;
+  const hooks = listHooks(hooksDir, 'pre-commit').filter((h) => h.enabled);
+  if (hookIndex >= hooks.length) {
+    return resultToResponse(c, err(badRequest(`Invalid hookIndex: ${hookIndex}`)));
   }
-  return c.json({ ok: true });
-});
+  const hookResult = await runHookCommand(cwd, hooks[hookIndex].command);
+  if (hookResult.isErr()) return resultToResponse(c, hookResult);
+  return c.json(hookResult.value);
+}
 
 // ── Commit message generation (shared by the project and thread routes) ────
 

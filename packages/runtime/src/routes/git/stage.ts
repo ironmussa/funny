@@ -15,6 +15,7 @@ import {
   resetSoft,
 } from '@funny/core/git';
 import { Hono } from 'hono';
+import type { z } from 'zod';
 
 import { discardTracked, resetHardTracked, threadTarget } from '../../services/git-destructive.js';
 import {
@@ -39,7 +40,7 @@ import {
   cherryPickSchema,
   createBranchSchema,
 } from '../../validation/schemas.js';
-import { okOnly, projectGitMutation, threadGitMutation } from './checkout-route.js';
+import { okOnly, projectGitMutation, threadGitMutation, type GitTarget } from './checkout-route.js';
 
 export const stageRoutes = new Hono<HonoEnv>();
 
@@ -48,6 +49,27 @@ const conflictPath = (body: { filePath: string }) => [body.filePath];
 const conflictResult = (value: { remainingConflicts: unknown }) => ({
   remainingConflicts: value.remainingConflicts,
 });
+
+// The operations that are the same on a project and on a thread checkout.
+const stagePatchMutation = {
+  body: stagePatchSchema,
+  run: ({ cwd }: GitTarget, { patch }: { patch: string }) => stagePatch(cwd, patch),
+  respond: okOnly,
+};
+const unstagePatchMutation = {
+  body: stagePatchSchema,
+  run: ({ cwd }: GitTarget, { patch }: { patch: string }) => unstagePatch(cwd, patch),
+  respond: okOnly,
+};
+const resolveConflictMutation = {
+  body: resolveConflictSchema,
+  paths: conflictPath,
+  run: (
+    { cwd }: GitTarget,
+    { filePath, blockIndex, resolution }: z.infer<typeof resolveConflictSchema>,
+  ) => resolveFileConflict(cwd, filePath, blockIndex, resolution),
+  respond: conflictResult,
+};
 
 // ── Project checkout (/project/:projectId) ──────────────────────────────────
 
@@ -73,20 +95,12 @@ stageRoutes.post('/project/:projectId/unstage', (c) =>
 
 // POST /api/git/project/:projectId/stage-patch — partial (line-level) staging
 stageRoutes.post('/project/:projectId/stage-patch', (c) =>
-  projectGitMutation(c, {
-    body: stagePatchSchema,
-    run: ({ cwd }, { patch }) => stagePatch(cwd, patch),
-    respond: okOnly,
-  }),
+  projectGitMutation(c, stagePatchMutation),
 );
 
 // POST /api/git/project/:projectId/unstage-patch — partial (line-level) unstaging
 stageRoutes.post('/project/:projectId/unstage-patch', (c) =>
-  projectGitMutation(c, {
-    body: stagePatchSchema,
-    run: ({ cwd }, { patch }) => unstagePatch(cwd, patch),
-    respond: okOnly,
-  }),
+  projectGitMutation(c, unstagePatchMutation),
 );
 
 // POST /api/git/project/:projectId/revert
@@ -152,13 +166,7 @@ stageRoutes.post('/project/:projectId/create-branch', (c) =>
 
 // POST /api/git/project/:projectId/conflict/resolve
 stageRoutes.post('/project/:projectId/conflict/resolve', (c) =>
-  projectGitMutation(c, {
-    body: resolveConflictSchema,
-    paths: conflictPath,
-    run: ({ cwd }, { filePath, blockIndex, resolution }) =>
-      resolveFileConflict(cwd, filePath, blockIndex, resolution),
-    respond: conflictResult,
-  }),
+  projectGitMutation(c, resolveConflictMutation),
 );
 
 // POST /api/git/project/:projectId/reset-soft
@@ -189,22 +197,10 @@ stageRoutes.post('/:threadId/unstage', (c) =>
 );
 
 // POST /api/git/:threadId/stage-patch — partial (line-level) staging
-stageRoutes.post('/:threadId/stage-patch', (c) =>
-  threadGitMutation(c, {
-    body: stagePatchSchema,
-    run: ({ cwd }, { patch }) => stagePatch(cwd, patch),
-    respond: okOnly,
-  }),
-);
+stageRoutes.post('/:threadId/stage-patch', (c) => threadGitMutation(c, stagePatchMutation));
 
 // POST /api/git/:threadId/unstage-patch — partial (line-level) unstaging
-stageRoutes.post('/:threadId/unstage-patch', (c) =>
-  threadGitMutation(c, {
-    body: stagePatchSchema,
-    run: ({ cwd }, { patch }) => unstagePatch(cwd, patch),
-    respond: okOnly,
-  }),
-);
+stageRoutes.post('/:threadId/unstage-patch', (c) => threadGitMutation(c, unstagePatchMutation));
 
 // POST /api/git/:threadId/revert
 stageRoutes.post('/:threadId/revert', (c) =>
@@ -221,13 +217,7 @@ stageRoutes.post('/:threadId/revert', (c) =>
 
 // POST /api/git/:threadId/conflict/resolve
 stageRoutes.post('/:threadId/conflict/resolve', (c) =>
-  threadGitMutation(c, {
-    body: resolveConflictSchema,
-    paths: conflictPath,
-    run: ({ cwd }, { filePath, blockIndex, resolution }) =>
-      resolveFileConflict(cwd, filePath, blockIndex, resolution),
-    respond: conflictResult,
-  }),
+  threadGitMutation(c, resolveConflictMutation),
 );
 
 // POST /api/git/:threadId/reset-soft

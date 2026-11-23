@@ -20,7 +20,7 @@ import { validateFilePaths } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
-import { readBody } from '../../validation/request.js';
+import { readBody, requirePathQuery } from '../../validation/request.js';
 import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 /** Who asks, and the checkout the operation runs in. */
@@ -160,11 +160,26 @@ export async function threadGitMutation<Body = undefined, Value = unknown>(
   );
 }
 
+/** Answers `{ diff }` for the required `?path=` file, computed by `op` inside a span. */
+export async function answerPathDiff(
+  c: Context<HonoEnv>,
+  spanName: string,
+  attributes: Record<string, unknown>,
+  op: (filePath: string) => PromiseLike<Result<string, DomainError>>,
+): Promise<Response> {
+  const filePath = requirePathQuery(c);
+  if (filePath.isErr()) return resultToResponse(c, filePath);
+  const result = await traced(c, spanName, { ...attributes, path: filePath.value }, () =>
+    op(filePath.value),
+  );
+  return result.isErr() ? resultToResponse(c, result) : c.json({ diff: result.value });
+}
+
 /** Runs `op` inside a request span that ends with the result's outcome. */
 export async function traced<Value>(
   c: Context<HonoEnv>,
   name: string,
-  attributes: Record<string, string>,
+  attributes: Record<string, unknown>,
   op: () => PromiseLike<Result<Value, DomainError>>,
 ): Promise<Result<Value, DomainError>> {
   const span = requestSpan(c, name, attributes);

@@ -15,12 +15,14 @@
 import { mkdirSync } from 'node:fs';
 
 import { badRequest, notFound, forbidden, type DomainError } from '@funny/shared/errors';
+import type { Context } from 'hono';
 import { ok, err, type Result } from 'neverthrow';
 
 import type { IProjectRepository } from '../services/server-interfaces.js';
 import { getServices } from '../services/service-registry.js';
 import { hasLazyCwd, resolveThreadCwd } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
+import type { HonoEnv } from '../types/hono-env.js';
 
 /** Check that a thread belongs to the requesting user */
 function checkOwnership(thread: { userId: string }, userId: string): Result<void, DomainError> {
@@ -136,6 +138,11 @@ export async function requireProject(
     if (isTeam) return ok(project);
   }
   return err(forbidden('Access denied'));
+}
+
+/** The project `projectId` for the requesting user and organization. */
+export function requireCallerProject(c: Context<HonoEnv>, projectId: string) {
+  return requireProject(projectId, c.get('userId'), c.get('organizationId') ?? undefined);
 }
 
 /**

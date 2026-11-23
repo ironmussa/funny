@@ -1,4 +1,4 @@
-import { validationErr, type DomainError } from '@funny/shared/errors';
+import { badRequest, validationErr, type DomainError } from '@funny/shared/errors';
 import type { Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 import { z, type ZodTypeAny } from 'zod';
@@ -34,6 +34,12 @@ export async function readBody<Body>(
   // SAFETY: a route without a body schema declares Body = undefined (the default).
   if (!schema) return ok(undefined as Body);
   return validate(schema, await c.req.json().catch(() => ({})));
+}
+
+/** The required `?path=` query parameter. */
+export function requirePathQuery(c: Context): Result<string, DomainError> {
+  const path = c.req.query('path');
+  return path ? ok(path) : err(badRequest('Missing required query parameter: path'));
 }
 
 /** Parse and validate Hono query parameters at the route boundary. */

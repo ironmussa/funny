@@ -34,6 +34,15 @@ import { invalidateGitStatusCache } from './helpers.js';
 
 export const workflowRoutes = new Hono<HonoEnv>();
 
+/** The route's `:threadId` thread, for the caller (no steer sharee). */
+async function threadOfRoute(c: Context<HonoEnv>) {
+  // SAFETY: only used on routes whose path declares :threadId.
+  const threadId = c.req.param('threadId') as string;
+  const userId = c.get('userId');
+  const thread = await requireThread(threadId, userId);
+  return thread.map((row) => ({ threadId, userId, thread: row }));
+}
+
 type BranchMove = typeof mergeCurrentBranchInto;
 
 /** The checkout whose current branch a merge or rebase moves. */
@@ -132,32 +141,19 @@ workflowRoutes.post('/:threadId/pr', (c) =>
 
 // POST /api/git/:threadId/merge
 workflowRoutes.post('/:threadId/merge', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(threadId, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const routeThread = await threadOfRoute(c);
+  if (routeThread.isErr()) return resultToResponse(c, routeThread);
+  const { threadId, userId } = routeThread.value;
 
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(mergeSchema, raw);
+  const parsed = await readBody(c, mergeSchema);
   if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { targetBranch, push, cleanup } = parsed.value;
 
-  const span = requestSpan(c, 'git.merge', {
-    threadId,
-    targetBranch: parsed.value.targetBranch,
-  });
-  const result = await gitServiceMerge({
-    threadId,
-    userId,
-    targetBranch: parsed.value.targetBranch,
-    push: parsed.value.push,
-    cleanup: parsed.value.cleanup,
-  });
-  if (result.isErr()) {
-    span.end('error', result.error.message);
-    return resultToResponse(c, result);
-  }
+  const result = await traced(c, 'git.merge', { threadId, targetBranch }, () =>
+    gitServiceMerge({ threadId, userId, targetBranch, push, cleanup }),
+  );
+  if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
-  span.end('ok');
   return c.json({ ok: true, output: result.value });
 });
 
@@ -173,11 +169,9 @@ workflowRoutes.post('/:threadId/rebase-current-onto', (c) =>
 
 // POST /api/git/:threadId/workflow — orchestrate multi-step git workflow
 workflowRoutes.post('/:threadId/workflow', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(threadId, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  const thread = threadResult.value;
+  const routeThread = await threadOfRoute(c);
+  if (routeThread.isErr()) return resultToResponse(c, routeThread);
+  const { threadId, userId, thread } = routeThread.value;
 
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);

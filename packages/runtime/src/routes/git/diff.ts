@@ -24,6 +24,7 @@ import * as tm from '../../services/thread-manager.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
+import { traced } from './checkout-route.js';
 import {
   requireGitWorkingTree,
   requireProjectCwdFromContext,
@@ -263,11 +264,8 @@ diffRoutes.get('/:threadId/diff', async (c) => {
   const cwd = cwdResult.value;
   const notWorkTree = await rejectNonWorkTree(c, cwd);
   if (notWorkTree) return notWorkTree;
-  const span = requestSpan(c, 'git.diff', { threadId: c.req.param('threadId') });
-  const diffResult = await getDiff(cwd);
-  span.end(
-    diffResult.isOk() ? 'ok' : 'error',
-    diffResult.isErr() ? diffResult.error.message : undefined,
+  const diffResult = await traced(c, 'git.diff', { threadId: c.req.param('threadId') }, () =>
+    getDiff(cwd),
   );
   if (diffResult.isErr()) return resultToResponse(c, diffResult);
   return c.json(diffResult.value);

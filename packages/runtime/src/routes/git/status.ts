@@ -28,12 +28,13 @@ import type { HonoEnv } from '../../types/hono-env.js';
 import { computeBranchKey } from '../../utils/git-status-helpers.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import {
-  requireThread,
-  requireProject,
-  steerFromContext,
   isSteerGrantFor,
+  requireCallerProject,
+  requireProject,
+  requireThread,
+  steerFromContext,
 } from '../../utils/route-helpers.js';
-import { withProjectCheckout } from './checkout-route.js';
+import { traced, withProjectCheckout } from './checkout-route.js';
 import {
   gitStatusCache,
   GIT_STATUS_CACHE_TTL_MS,
@@ -84,11 +85,7 @@ statusRoutes.get('/status', async (c) => {
   if (cached) return c.json(cached.data);
 
   const userId = c.get('userId');
-  const projectResult = await requireProject(
-    projectId,
-    userId,
-    c.get('organizationId') ?? undefined,
-  );
+  const projectResult = await requireCallerProject(c, projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
@@ -541,13 +538,10 @@ statusRoutes.get('/project/:projectId/status', (c) =>
       });
     });
 
-    const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
-    const summaryResult = await getStatusSummary(cwd, undefined, undefined, {
-      onChanged: notifyStatusChanged(userId, projectId),
-    });
-    statusSpan.end(
-      summaryResult.isOk() ? 'ok' : 'error',
-      summaryResult.isErr() ? summaryResult.error.message : undefined,
+    const summaryResult = await traced(c, 'git.status_summary', { projectId }, () =>
+      getStatusSummary(cwd, undefined, undefined, {
+        onChanged: notifyStatusChanged(userId, projectId),
+      }),
     );
     if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
     const summary = summaryResult.value;
@@ -640,13 +634,10 @@ statusRoutes.get('/:threadId/status', async (c) => {
   const project = projectResult.value;
 
   const cwd = thread.worktreePath || project.path;
-  const summarySpan = requestSpan(c, 'git.status_summary', { threadId });
-  const summaryResult = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path, {
-    onChanged: notifyStatusChanged(userId, thread.projectId, threadId),
-  });
-  summarySpan.end(
-    summaryResult.isOk() ? 'ok' : 'error',
-    summaryResult.isErr() ? summaryResult.error.message : undefined,
+  const summaryResult = await traced(c, 'git.status_summary', { threadId }, () =>
+    getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path, {
+      onChanged: notifyStatusChanged(userId, thread.projectId, threadId),
+    }),
   );
   if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
   const summary = summaryResult.value;

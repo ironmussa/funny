@@ -35,6 +35,44 @@ import { readCargoVersion } from '../utils/rust-toolchain.js';
  * Pulled out of app.ts so the bootstrap file doesn't need cargo detection,
  * fs/path, provider-detection, claude-binary, or shared/models utilities.
  */
+/** 401 for a request with no signed-in user; null when there is one. */
+function refuseAnonymous(c: Context<HonoEnv>): Response | null {
+  return c.get('userId') ? null : c.json({ ok: false, error: 'Unauthorized' }, 401);
+}
+
+/** The JSON body, or a 400 when it does not parse. */
+async function readJsonOrRefuse<Body>(c: Context<HonoEnv>): Promise<Body | Response> {
+  try {
+    return await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: 'invalid body' }, 400);
+  }
+}
+
+function isProviderId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0;
+}
+
+/** The body's provider `id` for a signed-in caller, or the response refusing the request. */
+async function providerIdFrom(c: Context<HonoEnv>): Promise<string | Response> {
+  const refused = refuseAnonymous(c);
+  if (refused) return refused;
+  const body = await readJsonOrRefuse<{ id?: unknown }>(c);
+  if (body instanceof Response) return body;
+  return isProviderId(body.id) ? body.id : c.json({ ok: false, error: 'id required' }, 400);
+}
+
+/** Runs `handler` for the route's `:sessionId` when a user is signed in. */
+async function withExternalSession(
+  c: Context<HonoEnv>,
+  handler: (route: { sessionId: string; userId: string }) => Response | Promise<Response>,
+): Promise<Response> {
+  const userId = c.get('userId');
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+  // SAFETY: only used on routes whose path declares :sessionId.
+  return handler({ sessionId: c.req.param('sessionId') as string, userId });
+}
+
 export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/health', (c) => {
     return c.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -60,52 +98,47 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     return c.json({ sessions: [], syncedThreadIds: result.threadIds });
   });
 
-  app.get('/api/system/claude-code/external-sessions/:sessionId', async (c) => {
-    const userId = c.get('userId');
-    if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+  app.get('/api/system/claude-code/external-sessions/:sessionId', (c) =>
+    withExternalSession(c, async ({ sessionId }) => {
+      const { readExternalClaudeTranscript } =
+        await import('../services/external-claude-sessions.js');
+      const transcript = await readExternalClaudeTranscript(sessionId);
+      if (!transcript) return c.json({ error: 'External Claude Code session not found' }, 404);
+      return c.json({ transcript });
+    }),
+  );
 
-    const sessionId = c.req.param('sessionId');
-    const { readExternalClaudeTranscript } =
-      await import('../services/external-claude-sessions.js');
-    const transcript = await readExternalClaudeTranscript(sessionId);
-    if (!transcript) return c.json({ error: 'External Claude Code session not found' }, 404);
-    return c.json({ transcript });
-  });
+  app.post('/api/system/claude-code/external-sessions/:sessionId/import', (c) =>
+    withExternalSession(c, async ({ sessionId, userId }) => {
+      const body = (await c.req.json().catch(() => ({}))) as {
+        projectId?: unknown;
+      };
+      const projectId = typeof body.projectId === 'string' ? body.projectId : null;
+      const { importExternalClaudeSession } =
+        await import('../services/external-claude-sessions.js');
+      const result = await importExternalClaudeSession({
+        sessionId,
+        userId,
+        projectId,
+      });
+      if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404);
+      return c.json({
+        imported: result.imported,
+        thread: result.thread,
+      });
+    }),
+  );
 
-  app.post('/api/system/claude-code/external-sessions/:sessionId/import', async (c) => {
-    const userId = c.get('userId');
-    if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-    const sessionId = c.req.param('sessionId');
-    const body = (await c.req.json().catch(() => ({}))) as {
-      projectId?: unknown;
-    };
-    const projectId = typeof body.projectId === 'string' ? body.projectId : null;
-    const { importExternalClaudeSession } = await import('../services/external-claude-sessions.js');
-    const result = await importExternalClaudeSession({
-      sessionId,
-      userId,
-      projectId,
-    });
-    if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404);
-    return c.json({
-      imported: result.imported,
-      thread: result.thread,
-    });
-  });
-
-  app.post('/api/system/claude-code/external-sessions/:sessionId/dismiss', async (c) => {
-    const userId = c.get('userId');
-    if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-    const sessionId = c.req.param('sessionId');
-    const { dismissExternalClaudeSession } =
-      await import('../services/external-claude-sessions.js');
-    if (!dismissExternalClaudeSession(sessionId)) {
-      return c.json({ error: 'Invalid Claude Code session ID' }, 400);
-    }
-    return c.json({ ok: true });
-  });
+  app.post('/api/system/claude-code/external-sessions/:sessionId/dismiss', (c) =>
+    withExternalSession(c, async ({ sessionId }) => {
+      const { dismissExternalClaudeSession } =
+        await import('../services/external-claude-sessions.js');
+      if (!dismissExternalClaudeSession(sessionId)) {
+        return c.json({ error: 'Invalid Claude Code session ID' }, 400);
+      }
+      return c.json({ ok: true });
+    }),
+  );
 
   // Dynamic model discovery. Pi uses its native SDK; dynamic ACP providers use
   // manifest-driven ACP probing. The `:provider` param keeps existing URLs
@@ -212,14 +245,16 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   const providerExtDir = () => join(DATA_DIR, 'extensions');
 
   app.post('/api/system/providers/install', async (c) => {
-    const userId = c.get('userId');
-    if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-    let body: { git?: string; path?: string; ref?: string; subdir?: string };
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ ok: false, error: 'invalid body' }, 400);
-    }
+    const refused = refuseAnonymous(c);
+    if (refused) return refused;
+    const raw = await readJsonOrRefuse<{
+      git?: string;
+      path?: string;
+      ref?: string;
+      subdir?: string;
+    }>(c);
+    if (raw instanceof Response) return raw;
+    const body = raw;
     const agents = await import('@funny/core/agents');
     let result;
     if (typeof body.git === 'string' && body.git.trim()) {
@@ -258,17 +293,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.post('/api/system/providers/remove', async (c) => {
-    const userId = c.get('userId');
-    if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-    let body: { id?: string };
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ ok: false, error: 'invalid body' }, 400);
-    }
-    if (typeof body.id !== 'string' || !body.id) {
-      return c.json({ ok: false, error: 'id required' }, 400);
-    }
+    const id = await providerIdFrom(c);
+    if (id instanceof Response) return id;
+    const body = { id };
     const agents = await import('@funny/core/agents');
     const res = agents.removeProviderExtensionById(providerExtDir(), body.id);
     if (!res.ok) return c.json({ ok: false, error: res.error }, 400);
@@ -285,17 +312,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   // reset on runner restart (persistence is deferred — lean-core §6.2). The
   // change is advertised to the server on the next heartbeat.
   const toggleBuiltin = async (c: Context<HonoEnv>, enable: boolean) => {
-    const userId = c.get('userId');
-    if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-    let body: { id?: string };
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ ok: false, error: 'invalid body' }, 400);
-    }
-    if (typeof body.id !== 'string' || !body.id) {
-      return c.json({ ok: false, error: 'id required' }, 400);
-    }
+    const id = await providerIdFrom(c);
+    if (id instanceof Response) return id;
+    const body = { id };
     const agents = await import('@funny/core/agents');
     const ok = enable
       ? agents.enableBuiltinProvider(body.id)

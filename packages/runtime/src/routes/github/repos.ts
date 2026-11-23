@@ -19,7 +19,7 @@ import { redactGithubToken } from '../../utils/github-clone-url.js';
 import { requirePickerPath } from '../../utils/path-scope.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { validate, cloneRepoSchema } from '../../validation/schemas.js';
-import { githubApiFetch, resolveGithubToken } from './helpers.js';
+import { githubApiFetch, requireGithubToken, resolveGithubToken } from './helpers.js';
 import { readPaging, readRepoSort } from './query.js';
 
 export const repoRoutes = new Hono<HonoEnv>();
@@ -43,12 +43,8 @@ function isSingleDirName(name: string): boolean {
 // ── GET /repos — list repos with optional search ───────────
 
 repoRoutes.get('/repos', async (c) => {
-  const userId = c.get('userId');
-  const resolved = await resolveGithubToken(userId);
-  if (!resolved) {
-    return c.json({ error: 'Not connected to GitHub' }, 401);
-  }
-  const token = resolved.token;
+  const token = await requireGithubToken(c);
+  if (token instanceof Response) return token;
 
   const { page, perPage } = readPaging(c, 30);
   const search = c.req.query('search') || '';

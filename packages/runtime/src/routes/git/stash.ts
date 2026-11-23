@@ -29,6 +29,7 @@ import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { stashSchema } from '../../validation/schemas.js';
 import {
+  answerPathDiff,
   onBothCheckouts,
   projectGitMutation,
   threadGitMutation,
@@ -68,18 +69,14 @@ onBothCheckouts(stashRoutes, 'GET', '/stash/show/:stashIndex', async (c, { cwd, 
 });
 
 // GET /api/git/(project/:projectId | :threadId)/stash/:stashIndex/diff?path=...
-onBothCheckouts(stashRoutes, 'GET', '/stash/:stashIndex/diff', async (c, { cwd, ids }) => {
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
-  }
-  const attributes = { ...ids, stashIndex: c.req.param('stashIndex') ?? '', path: filePath };
-  const result = await traced(c, 'git.stash_diff', attributes, () =>
-    stashFileDiff(cwd, stashRefOf(c), filePath),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ diff: result.value });
-});
+onBothCheckouts(stashRoutes, 'GET', '/stash/:stashIndex/diff', (c, { cwd, ids }) =>
+  answerPathDiff(
+    c,
+    'git.stash_diff',
+    { ...ids, stashIndex: c.req.param('stashIndex') ?? '' },
+    (filePath) => stashFileDiff(cwd, stashRefOf(c), filePath),
+  ),
+);
 
 // ── Project checkout (/project/:projectId) ──────────────────────────────────
 

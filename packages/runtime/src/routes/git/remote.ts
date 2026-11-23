@@ -49,6 +49,11 @@ export const remoteRoutes = new Hono<HonoEnv>();
 
 // A push or pull moves HEAD and the origin ref: also drop the core cwd-keyed
 // summary cache (1s TTL), or an immediate status read returns a stale count.
+/** The GitHub token the caller's identity carries for the project, if any. */
+async function githubTokenOf(userId: string, projectId: string): Promise<string | undefined> {
+  return (await resolveIdentity(userId, projectId))?.githubToken;
+}
+
 const dropStatusSummary = ({ cwd }: { cwd: string }) => invalidateStatusCache(cwd);
 
 // ── Project checkout (/project/:projectId) ──────────────────────────────────
@@ -105,8 +110,7 @@ remoteRoutes.post('/project/:projectId/remote', (c) =>
 // GET /api/git/project/:projectId/gh-orgs
 remoteRoutes.get('/project/:projectId/gh-orgs', (c) =>
   withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
-    const identity = await resolveIdentity(userId, projectId);
-    const token = identity?.githubToken;
+    const token = await githubTokenOf(userId, projectId);
     if (!token) return c.json({ orgs: [] });
     const result = await traced(c, 'github.orgs', { projectId }, () =>
       listGitHubOrgs(cwd, { GH_TOKEN: token }),
@@ -119,8 +123,7 @@ remoteRoutes.get('/project/:projectId/gh-orgs', (c) =>
 // POST /api/git/project/:projectId/publish
 remoteRoutes.post('/project/:projectId/publish', (c) =>
   withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
-    const identity = await resolveIdentity(userId, projectId);
-    const token = identity?.githubToken;
+    const token = await githubTokenOf(userId, projectId);
     if (!token) {
       return c.json({ error: 'GitHub token required. Set one in Settings > Profile.' }, 400);
     }

@@ -9,6 +9,7 @@ import {
   DEVICE_CODE_URL,
   getClientId,
   githubApiFetch,
+  requireGithubToken,
   resolveGithubToken,
 } from './helpers.js';
 
@@ -161,13 +162,10 @@ authRoutes.delete('/oauth/disconnect', async (c) => {
 // ── GET /user — get authenticated GitHub user ──────────────
 
 authRoutes.get('/user', async (c) => {
-  const userId = c.get('userId');
-  const resolved = await resolveGithubToken(userId);
-  if (!resolved) {
-    return c.json({ error: 'Not connected to GitHub' }, 401);
-  }
+  const token = await requireGithubToken(c);
+  if (token instanceof Response) return token;
 
-  const res = await githubApiFetch('/user', resolved.token);
+  const res = await githubApiFetch('/user', token);
   if (!res.ok) {
     return c.json({ error: 'Failed to fetch GitHub user' }, 502);
   }

@@ -136,6 +136,19 @@ async function withThread(
   return handler({ id, userId, thread: thread.value });
 }
 
+/** Answers a failed thread operation: logs it, ends its span as an error, maps it to HTTP. */
+function failThreadOp(
+  c: Context<HonoEnv>,
+  span: { end: (status: 'ok' | 'error', message?: string) => void },
+  message: string,
+  threadId: string,
+  error: { message: string },
+) {
+  log.error(message, { namespace: 'agent', threadId, error: error.message });
+  span.end('error', error.message);
+  return handleServiceError(c, error);
+}
+
 function handleServiceError(c: any, error: unknown) {
   return resultToResponse(c, err(toDomainError(error)));
 }
@@ -224,15 +237,7 @@ threadRoutes.post('/:id/message', async (c) => {
 
   const span = requestSpan(c, 'thread.send_message', { threadId: id });
   const result = await sendMessage({ ...body, threadId: id, userId });
-  if (result.isErr()) {
-    log.error('Failed to send message', {
-      namespace: 'agent',
-      threadId: id,
-      error: result.error.message,
-    });
-    span.end('error', result.error.message);
-    return handleServiceError(c, result.error);
-  }
+  if (result.isErr()) return failThreadOp(c, span, 'Failed to send message', id, result.error);
   span.end('ok');
   return c.json(result.value);
 });
@@ -283,15 +288,7 @@ threadRoutes.post('/:id/fork', (c) =>
       title: parsed.value.title,
       userId,
     });
-    if (result.isErr()) {
-      log.error('Failed to fork thread', {
-        namespace: 'agent',
-        threadId: id,
-        error: result.error.message,
-      });
-      span.end('error', result.error.message);
-      return handleServiceError(c, result.error);
-    }
+    if (result.isErr()) return failThreadOp(c, span, 'Failed to fork thread', id, result.error);
     metric('threads.forked', 1, { type: 'sum' });
     span.end('ok');
     return c.json(result.value, 201);
@@ -310,15 +307,7 @@ threadRoutes.post('/:id/rewind', (c) =>
       messageId: parsed.value.messageId,
       userId,
     });
-    if (result.isErr()) {
-      log.error('Failed to rewind thread', {
-        namespace: 'agent',
-        threadId: id,
-        error: result.error.message,
-      });
-      span.end('error', result.error.message);
-      return handleServiceError(c, result.error);
-    }
+    if (result.isErr()) return failThreadOp(c, span, 'Failed to rewind thread', id, result.error);
     span.end('ok');
     return c.json(result.value);
   }),
@@ -337,15 +326,8 @@ threadRoutes.post('/:id/fork-and-rewind', (c) =>
       title: parsed.value.title,
       userId,
     });
-    if (result.isErr()) {
-      log.error('Failed to fork-and-rewind thread', {
-        namespace: 'agent',
-        threadId: id,
-        error: result.error.message,
-      });
-      span.end('error', result.error.message);
-      return handleServiceError(c, result.error);
-    }
+    if (result.isErr())
+      return failThreadOp(c, span, 'Failed to fork-and-rewind thread', id, result.error);
     span.end('ok');
     return c.json(result.value, 201);
   }),

@@ -392,6 +392,12 @@ export interface ResolvedToken {
  *
  * The CLI token is NOT persisted — it is resolved fresh each time.
  */
+/** The caller's GitHub token, or the 401 saying they have not connected GitHub. */
+export async function requireGithubToken(c: Context<HonoEnv>): Promise<string | Response> {
+  const resolved = await resolveGithubToken(c.get('userId'));
+  return resolved ? resolved.token : c.json({ error: 'Not connected to GitHub' }, 401);
+}
+
 export async function resolveGithubToken(userId: string): Promise<ResolvedToken | null> {
   const profileToken = await getServices().profile.getGithubToken(userId);
   if (profileToken) {

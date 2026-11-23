@@ -21,21 +21,29 @@ import {
   type GitGraphLogEntry,
   type GraphRef,
 } from '@funny/core/git';
-import { badRequest, type DomainError } from '@funny/shared/errors';
+import { type DomainError } from '@funny/shared/errors';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
-import { err, type Result, type ResultAsync } from 'neverthrow';
+import { type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { resolveIdentity, resolveThreadIdentity } from '../../services/git-service.js';
+import type { RuntimeThreadRecord } from '../../services/server-interfaces.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, steerFromContext } from '../../utils/route-helpers.js';
 import { parseQuery, queryBoolean } from '../../validation/request.js';
 import { gitRefSchema, validate } from '../../validation/schemas.js';
-import { onBothCheckouts, withProjectCheckout, withThreadCheckout } from './checkout-route.js';
+import {
+  answerPathDiff,
+  onBothCheckouts,
+  traced,
+  type ThreadGitTarget,
+  withProjectCheckout,
+  withThreadCheckout,
+} from './checkout-route.js';
 import { getCachedPR, getLastKnownPR, requireGitWorkingTree, schedulePRLookup } from './helpers.js';
 
 export const logRoutes = new Hono<HonoEnv>();
@@ -99,19 +107,6 @@ export function buildLogPayload<E extends { hash: string }>(
   const unpushedHashes = trimmed.filter((e) => unpushedSet.has(e.hash)).map((e) => e.hash);
   const unpulledHashes = trimmed.filter((e) => unpulledSet.has(e.hash)).map((e) => e.hash);
   return { entries: trimmed, hasMore, unpushedHashes, unpulledHashes };
-}
-
-/** Run a Result-returning log fetch inside a request span, recording ok/error on the span. */
-async function fetchLogSpanned<T>(
-  c: Context<HonoEnv>,
-  spanName: string,
-  attrs: Record<string, unknown>,
-  run: () => ResultAsync<T, DomainError>,
-): Promise<Result<T, DomainError>> {
-  const span = requestSpan(c, spanName, attrs);
-  const r = await run();
-  span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
-  return r;
 }
 
 /**
@@ -401,7 +396,7 @@ async function answerLog(
 ): Promise<Response> {
   const { limit, skip } = parseLogPaging(c);
   const [result, unpushedSet, unpulledSet] = await Promise.all([
-    fetchLogSpanned(c, 'git.log', ids, () => getLog(cwd, limit + 1, baseBranch, skip)),
+    traced(c, 'git.log', ids, () => getLog(cwd, limit + 1, baseBranch, skip)),
     fetchUnpushedSpanned(c, cwd, ids),
     fetchUnpulledSpanned(c, cwd, ids),
   ]);
@@ -421,7 +416,7 @@ async function answerGraphLog(
   const all = c.req.query('all') !== 'false';
   const excludeRefs = await mergedBranchRefs(c, cwd, ghEnv, audience);
   const [result, unpushedSet, unpulledSet] = await Promise.all([
-    fetchLogSpanned(c, 'git.graph_log', ids, () =>
+    traced(c, 'git.graph_log', ids, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all, excludeRefs }),
     ),
     fetchUnpushedSpanned(c, cwd, ids),
@@ -438,6 +433,29 @@ async function answerGraphLog(
     audience,
   );
   return c.json({ ...payload, entries });
+}
+
+/** The thread whose history the caller (or a steer sharee) reads, with a checked-out work tree. */
+async function readableThread(c: Context<HonoEnv>, threadId: string, userId: string, cwd: string) {
+  const thread = await requireThread(threadId, userId, steerFromContext(c));
+  if (thread.isErr()) return thread;
+  return (await requireGitWorkingTree(cwd)).map(() => thread.value);
+}
+
+/** Runs `handler` on the route's thread when its history is readable (steer sharees included). */
+function withReadableThread(
+  c: Context<HonoEnv>,
+  handler: (target: ThreadGitTarget, thread: RuntimeThreadRecord) => Response | Promise<Response>,
+): Promise<Response> {
+  return withThreadCheckout(
+    c,
+    async (target) => {
+      const thread = await readableThread(c, target.threadId, target.userId, target.cwd);
+      if (thread.isErr()) return resultToResponse(c, thread);
+      return handler(target, thread.value);
+    },
+    { steerable: true },
+  );
 }
 
 // ─── Project-scoped routes ──────────────────────────────
@@ -465,35 +483,19 @@ logRoutes.get('/project/:projectId/graph-log', (c) =>
 
 // GET /api/git/:threadId/log
 logRoutes.get('/:threadId/log', (c) =>
-  withThreadCheckout(
-    c,
-    async ({ threadId, userId, cwd }) => {
-      const thread = await requireThread(threadId, userId, steerFromContext(c));
-      if (thread.isErr()) return resultToResponse(c, thread);
-      const workTreeResult = await requireGitWorkingTree(cwd);
-      if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
-      const all = c.req.query('all') === 'true';
-      return answerLog(c, cwd, { threadId }, all ? undefined : thread.value.baseBranch);
-    },
-    { steerable: true },
-  ),
+  withReadableThread(c, ({ threadId, cwd }, thread) => {
+    const all = c.req.query('all') === 'true';
+    return answerLog(c, cwd, { threadId }, all ? undefined : thread.baseBranch);
+  }),
 );
 
 // GET /api/git/:threadId/graph-log — topology-aware log (parents + refs)
 logRoutes.get('/:threadId/graph-log', (c) =>
-  withThreadCheckout(
-    c,
-    async ({ threadId, userId, cwd }) => {
-      const thread = await requireThread(threadId, userId, steerFromContext(c));
-      if (thread.isErr()) return resultToResponse(c, thread);
-      const workTreeResult = await requireGitWorkingTree(cwd);
-      if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
-      const ghEnv = githubEnvOf(await resolveThreadIdentity(userId, threadId));
-      const audience = { userId, projectId: thread.value.projectId, threadId };
-      return answerGraphLog(c, cwd, { threadId }, ghEnv, audience);
-    },
-    { steerable: true },
-  ),
+  withReadableThread(c, async ({ threadId, userId, cwd }, thread) => {
+    const ghEnv = githubEnvOf(await resolveThreadIdentity(userId, threadId));
+    const audience = { userId, projectId: thread.projectId, threadId };
+    return answerGraphLog(c, cwd, { threadId }, ghEnv, audience);
+  }),
 );
 
 // ─── Commit reads, the same on a project and on a thread checkout ───────────
@@ -506,9 +508,7 @@ onBothCheckouts(
   'GET',
   '/reflog-events',
   async (c, { cwd, ids }) => {
-    const result = await fetchLogSpanned(c, 'git.reflog_events', ids, () =>
-      getRebaseReflogEvents(cwd),
-    );
+    const result = await traced(c, 'git.reflog_events', ids, () => getRebaseReflogEvents(cwd));
     if (result.isErr()) return resultToResponse(c, result);
     return c.json({ events: result.value });
   },
@@ -522,7 +522,7 @@ onBothCheckouts(
   '/commit/:hash/files',
   async (c, { cwd, ids }) => {
     const hash = commitHash(c);
-    const result = await fetchLogSpanned(c, 'git.commit_files', { ...ids, hash }, () =>
+    const result = await traced(c, 'git.commit_files', { ...ids, hash }, () =>
       getCommitFiles(cwd, hash),
     );
     if (result.isErr()) return resultToResponse(c, result);
@@ -536,20 +536,11 @@ onBothCheckouts(
   logRoutes,
   'GET',
   '/commit/:hash/diff',
-  async (c, { cwd, ids }) => {
-    const filePath = c.req.query('path');
-    if (!filePath) {
-      return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
-    }
+  (c, { cwd, ids }) => {
     const hash = commitHash(c);
-    const result = await fetchLogSpanned(
-      c,
-      'git.commit_diff',
-      { ...ids, hash, path: filePath },
-      () => getCommitFileDiff(cwd, hash, filePath),
+    return answerPathDiff(c, 'git.commit_diff', { ...ids, hash }, (filePath) =>
+      getCommitFileDiff(cwd, hash, filePath),
     );
-    if (result.isErr()) return resultToResponse(c, result);
-    return c.json({ diff: result.value });
   },
   { steerable: true },
 );
@@ -561,7 +552,7 @@ onBothCheckouts(
   '/commit/:hash/body',
   async (c, { cwd, ids }) => {
     const hash = commitHash(c);
-    const result = await fetchLogSpanned(c, 'git.commit_body', { ...ids, hash }, () =>
+    const result = await traced(c, 'git.commit_body', { ...ids, hash }, () =>
       getCommitBody(cwd, hash),
     );
     if (result.isErr()) return resultToResponse(c, result);

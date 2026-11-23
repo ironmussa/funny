@@ -176,6 +176,25 @@ const BINARY_EXTENSIONS = [
   '.eot',
 ];
 
+/**
+ * `filePath` resolved once through realpath, when it is still inside `scope`
+ * (a symlink cannot escape it); otherwise the response refusing it.
+ */
+async function canonicalInScope(
+  c: Context<HonoEnv>,
+  filePath: string,
+  scope: ProjectScope,
+): Promise<string | Response> {
+  const canon = await canonicalize(filePath, false);
+  if (!canon.ok) {
+    return resultToResponse(
+      c,
+      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
+    );
+  }
+  return isInScope(canon.canonical, scope) ? canon.canonical : deny();
+}
+
 /** Runs `handler` with the `?path=` file and its project scope, or refuses the request. */
 async function withScopedFile(
   c: Context<HonoEnv>,
@@ -200,15 +219,9 @@ function withCanonicalFile(
   handler: (canonical: string, filePath: string) => Response | Promise<Response>,
 ): Promise<Response> {
   return withScopedFile(c, async (filePath, scope) => {
-    const canon = await canonicalize(filePath, false);
-    if (!canon.ok) {
-      return resultToResponse(
-        c,
-        err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
-      );
-    }
-    if (!isInScope(canon.canonical, scope)) return deny();
-    return handler(canon.canonical, filePath);
+    const canonical = await canonicalInScope(c, filePath, scope);
+    if (canonical instanceof Response) return canonical;
+    return handler(canonical, filePath);
   });
 }
 
@@ -427,14 +440,9 @@ async function streamRawFile(
   filePath: string,
   scope: ProjectScope,
 ): Promise<Response> {
-  const canon = await canonicalize(filePath, false);
-  if (!canon.ok) {
-    return resultToResponse(
-      c,
-      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
-    );
-  }
-  if (!isInScope(canon.canonical, scope)) return deny();
+  const canonicalPath = await canonicalInScope(c, filePath, scope);
+  if (canonicalPath instanceof Response) return canonicalPath;
+  const canon = { canonical: canonicalPath };
 
   const statsResult = await ResultAsync.fromPromise(stat(canon.canonical), (e: any) =>
     e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),

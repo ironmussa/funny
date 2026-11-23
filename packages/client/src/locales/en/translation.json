@@ -1745,7 +1745,7 @@
     "stopAll": "Stop all",
     "stopAllTitle": "Stop the factory?",
     "stopAllDesc": "This clears the queue and stops every run in progress and its agent threads.",
-    "runs": "Factory runs",
+    "stopAllProjectsDesc": "This clears the queue and stops every run in progress and its agent threads, in {{count}} projects.",
     "state": {
       "requested": "In queue",
       "queued": "Queued",

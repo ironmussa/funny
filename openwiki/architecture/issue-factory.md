@@ -14,9 +14,10 @@ Specs: `openspec/specs/issue-factory/spec.md`. Changes: `openspec/changes/issue-
 dependencies).
 
 All code is in `packages/server/src/services/factory/`. The client part is the factory row in a
-project's settings (`components/general-settings-project/ProjectFactorySetting.tsx`,
-`ProjectFactoryRuns.tsx`, data in `data/factory/`) and the factory view (`/factory`,
-`components/FactoryQueueView.tsx`), served over the `factory` tRPC group. See
+project's settings (`components/general-settings-project/ProjectFactorySetting.tsx`, the
+configuration only; data in `data/factory/`) and the factory view (`/factory`,
+`components/FactoryQueueView.tsx`: the runs, their controls, Clear queue / Stop all and the
+integration figures), served over the `factory` tRPC group. See
 [The factory view](#the-factory-view).
 
 > Not to be confused with `packages/orchestrator`, the standalone issue factory that runs flows
@@ -357,6 +358,15 @@ The search, project and state filters and the **Active** filter (hides `merged`,
   Merge says one at a time per repository. Across projects there is no shared limit, so only counts
   show.
 - The column layout is `components/board/BoardColumn.tsx`, shared with the thread kanban.
+- **Clear queue / Stop all** (`components/factory-board/FactoryQueueActions.tsx`) sit in the
+  toolbar and act on the projects the project filter keeps (every project with runs when it keeps
+  all): one `clearQueue` / `stopAll` per project that has something to clear or stop. Stop all asks
+  for a confirmation first.
+- **Integration figures** (`FactoryIntegrationStats.tsx`, folded under the header): merge rate,
+  time in the queue and to merge, CI rounds, red rounds, conflicts, agent fixes and merge queue
+  batches, from `summarizeFactoryRuns` (`data/factory/metrics.ts`) over the filtered runs of the
+  last 14 days (the view lists runs that ended within 14 days). The project settings no longer
+  list runs or figures.
 - **Run detail panel** (openspec `factory-run-detail`, `components/factory-board/run-detail/`): a
   board card, or a list row's details button, opens a side panel named by the `run` search
   parameter (`/factory?run=<id>`, `use-selected-factory-run.ts`), so it can be linked; an id that

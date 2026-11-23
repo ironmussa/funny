@@ -1704,7 +1704,7 @@
     "stopAll": "Parar tudo",
     "stopAllTitle": "Parar o factory?",
     "stopAllDesc": "Esvazia a fila e para todas as runs em andamento e suas threads de agente.",
-    "runs": "Runs do factory",
+    "stopAllProjectsDesc": "Esvazia a fila e para todas as runs em andamento e suas threads de agente, em {{count}} projetos.",
     "state": {
       "requested": "Na fila",
       "queued": "Aguardando",

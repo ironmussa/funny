@@ -1738,7 +1738,7 @@
     "stopAll": "Detener todo",
     "stopAllTitle": "¿Detener el factory?",
     "stopAllDesc": "Vacía la cola y detiene todas las runs en curso y sus threads de agente.",
-    "runs": "Runs del factory",
+    "stopAllProjectsDesc": "Vacía la cola y detiene todas las runs en curso y sus threads de agente, en {{count}} proyectos.",
     "state": {
       "requested": "En cola",
       "queued": "En espera",

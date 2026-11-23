@@ -45,6 +45,7 @@ import {
   passingProof,
   passingReview,
   proofReadyFlowFiles,
+  upToDateSteps,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
@@ -63,7 +64,12 @@ const ports = unusedRunnerPorts();
 
 const _origStartWatcher = startFactoryWatcher;
 const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
-  _origStartWatcher({ proof: passingProof, lastThreadMessage: passingReview, ...d });
+  _origStartWatcher({
+    proof: passingProof,
+    steps: upToDateSteps,
+    lastThreadMessage: passingReview,
+    ...d,
+  });
 
 /** Fake poll: captures each factory's tick so the test can fire it. */
 function fakePoll() {
@@ -1322,6 +1328,7 @@ describe('factory flow', () => {
       'triage',
       'implement',
       'pull-request',
+      'integrate',
       'address',
       'regression-proof',
       'ci',
@@ -1386,6 +1393,7 @@ describe('factory flow', () => {
       'triage',
       'implement',
       'pull-request',
+      'integrate',
       'address',
       'regression-proof',
       'ci',
@@ -1878,6 +1886,7 @@ describe('factory operator controls', () => {
         },
       },
       proof: opts.proof ?? passingProof,
+      steps: upToDateSteps,
       runsPushedCommits: opts.runsPushedCommits,
     });
     return { poll, launcher, github, cleanups, recorded };

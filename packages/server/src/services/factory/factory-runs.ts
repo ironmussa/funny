@@ -73,6 +73,7 @@ const METRICS_SCHEMA = z.object({
   integrateRounds: z.number().int().nonnegative().default(0),
   conflictsResolvedWithoutLlm: z.number().int().nonnegative().default(0),
   conflictsSentToAgent: z.number().int().nonnegative().default(0),
+  mergeRoundsToAgent: z.number().int().nonnegative().default(0),
 });
 
 const WAIT_REASON_SCHEMA = z.object({

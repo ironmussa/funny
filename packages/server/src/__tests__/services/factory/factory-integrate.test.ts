@@ -7,10 +7,16 @@ import { describe, expect, test } from 'bun:test';
 
 import { EMPTY_FACTORY_RUN_METRICS, type FactoryRunMetrics } from '@funny/shared/contracts/factory';
 import { EMPTY_INTEGRATE_CONFIG, type IntegrateConfig } from '@funny/workflows';
-import { ok } from 'neverthrow';
+import { ok, okAsync } from 'neverthrow';
 
+import {
+  createFactoryActionProvider,
+  MAX_MERGE_ROUNDS_TO_AGENT,
+  MERGE_HOLD_REASONS,
+} from '../../../services/factory/factory-action-provider.js';
 import { loadFactoryFlow, type FactoryFlowError } from '../../../services/factory/factory-flow.js';
 import { createFactoryIntegrate } from '../../../services/factory/factory-integrate.js';
+import type { UpdateRunInput } from '../../../services/factory/factory-runs.js';
 import type { FactoryStepDeps } from '../../../services/factory/factory-step-runner.js';
 
 const integrateResult = (over: Record<string, unknown> = {}) => ({
@@ -53,6 +59,7 @@ function setup(result: Record<string, unknown>, config: IntegrateConfig = EMPTY_
     carry: async (from, to) => {
       carried.push([from, to]);
     },
+    toImplementer: async () => null,
   });
   return { integration, started, carried, metrics: () => metrics };
 }
@@ -173,5 +180,74 @@ nodes:
         message: expect.any(String),
       },
     ]);
+  });
+});
+
+describe('the merge rounds that reach the implementer (3.4c)', () => {
+  /** A provider whose runner reports a real conflict at every integration. */
+  function conflicting(flowIntegrates = true) {
+    const recorded: UpdateRunInput[] = [];
+    const steps: FactoryStepDeps = {
+      startStep: async () => ok({ stepId: 's1', state: 'running' }),
+      pollStep: async () =>
+        ok({
+          state: 'done',
+          result: integrateResult({ outcome: 'conflict', conflictedPaths: ['src/a.ts'] }),
+        }),
+      pollMs: 1,
+    };
+    const provider = createFactoryActionProvider({
+      scope: {
+        runId: 'r1',
+        userId: 'alice',
+        projectId: 'p1',
+        repo: 'o/r',
+        mode: 'local',
+        issueNumber: 7,
+        issueTitle: 'Fix it',
+        branch: 'factory/issue-7-r1',
+      },
+      threadIds: ['impl'],
+      prUrl: null,
+      launchStartedAt: null,
+      findLaunched: async () => null,
+      launch: async () => ok({ thread: { id: 't' }, threadId: 't', runnerId: 'r' }),
+      waitThread: async () => ({ status: 'completed' as const, output: 'done' }),
+      steps,
+      flowIntegrates,
+      defaultBranch: () => Promise.resolve(ok('main')),
+      github: {
+        branchAhead: () => okAsync(true),
+        commentOnIssue: () => okAsync(undefined),
+        findPullRequest: () => okAsync(null),
+        pullRequests: {} as never,
+      },
+      record: async (input) => {
+        recorded.push(input);
+      },
+      signal: new AbortController().signal,
+    });
+    return { provider, recorded };
+  }
+
+  test('two conflicts reach the implementer; the third parks the run for a person', async () => {
+    const { provider, recorded } = conflicting();
+    expect(await provider.integrate!({})).toMatchObject({ ok: true, output: 'conflict' });
+    expect(await provider.integrate!({})).toMatchObject({ ok: true, output: 'conflict' });
+    const third = await provider.integrate!({});
+    expect(third).toMatchObject({
+      ok: false,
+      metadata: { outcome: 'held', reason: MERGE_HOLD_REASONS.mergeRounds },
+    });
+    expect(recorded).toContainEqual(
+      expect.objectContaining({ state: 'waiting_human', failureReason: 'merge rounds spent' }),
+    );
+    expect(
+      recorded.flatMap((input) => (input.metrics ? [input.metrics] : [])).at(-1),
+    ).toMatchObject({
+      mergeRoundsToAgent: MAX_MERGE_ROUNDS_TO_AGENT,
+      conflictsSentToAgent: 2,
+      integrateRounds: 3,
+    });
   });
 });

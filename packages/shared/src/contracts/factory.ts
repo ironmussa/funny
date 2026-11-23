@@ -321,6 +321,11 @@ export interface FactoryRunMetrics {
   conflictsResolvedWithoutLlm: number;
   /** Integrations whose conflicts went to the implementing agent. */
   conflictsSentToAgent: number;
+  /**
+   * Merge rounds that reached the implementing agent (an integration conflict,
+   * or checks failing on the current base); the run waits for a person after two.
+   */
+  mergeRoundsToAgent: number;
 }
 
 export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
@@ -337,6 +342,7 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
   integrateRounds: 0,
   conflictsResolvedWithoutLlm: 0,
   conflictsSentToAgent: 0,
+  mergeRoundsToAgent: 0,
 };
 
 export type FactoryRunSource = 'manual' | 'label';

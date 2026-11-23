@@ -53,6 +53,11 @@ export interface FactoryIntegrateDeps {
   count(next: FactoryRunMetrics, attributes: Record<string, string>): Promise<void>;
   /** The merge only brought the base in: the review and proof of `from` hold for `to`. */
   carry(from: string, to: string): Promise<void>;
+  /**
+   * A conflict is about to go to the implementing agent: counts the round, or
+   * returns the result that parks the run when its merge rounds are spent.
+   */
+  toImplementer(): Promise<ActionResult | null>;
 }
 
 /** The whole integrate step may run for at most an hour (the runner refuses more). */
@@ -82,7 +87,8 @@ export function createFactoryIntegrate(deps: FactoryIntegrateDeps) {
   /** Merge commits this run made, by sha, with what they settled. */
   const integrations = new Map<string, IntegrationScope>();
 
-  async function counted(result: IntegrateStepResult): Promise<void> {
+  /** Count the round; `parked`: its conflict did not go to the agent, the run waits for a person. */
+  async function counted(result: IntegrateStepResult, parked: boolean): Promise<void> {
     if (result.outcome === 'up-to-date' || result.outcome === 'failed') return;
     const metrics = deps.metrics();
     const settled =
@@ -94,7 +100,7 @@ export function createFactoryIntegrate(deps: FactoryIntegrateDeps) {
         integrateRounds: metrics.integrateRounds + 1,
         conflictsResolvedWithoutLlm: metrics.conflictsResolvedWithoutLlm + (settled ? 1 : 0),
         conflictsSentToAgent:
-          metrics.conflictsSentToAgent + (result.outcome === 'conflict' ? 1 : 0),
+          metrics.conflictsSentToAgent + (result.outcome === 'conflict' && !parked ? 1 : 0),
       },
       { event: `integrate_${result.outcome}` },
     );
@@ -110,9 +116,14 @@ export function createFactoryIntegrate(deps: FactoryIntegrateDeps) {
       regeneratedPaths: result.regeneratedPaths,
       conflictedPaths: result.conflictedPaths,
       weave: result.weave,
+      // For templates: a section that shows only when the implementer must resolve it.
+      conflict: result.outcome === 'conflict',
     };
     if (result.outcome === 'failed') return { ok: false, error: result.message, metadata };
     if (result.outcome === 'conflict') {
+      const parked = await deps.toImplementer();
+      await counted(result, parked !== null);
+      if (parked) return parked;
       const feedback = conflictFeedback(result, base);
       return { ok: true, output: 'conflict', metadata: { ...metadata, feedback } };
     }
@@ -163,7 +174,7 @@ export function createFactoryIntegrate(deps: FactoryIntegrateDeps) {
         return { ok: false, error: `integrate could not run: ${run.why}` };
       if (run.result.kind !== 'integrate')
         return { ok: false, error: 'integrate: unexpected result.' };
-      await counted(run.result);
+      if (run.result.outcome !== 'conflict') await counted(run.result, false);
       return resultOf(run.result, base.value);
     },
   };

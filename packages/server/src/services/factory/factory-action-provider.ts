@@ -135,7 +135,12 @@ export const MERGE_HOLD_REASONS = {
   reviewFailed: 'review failed',
   /** The change is high risk and the factory merges only low-risk changes. */
   highRisk: 'high risk',
+  /** Its merge rounds that reached the implementing agent are spent. */
+  mergeRounds: 'merge rounds spent',
 } as const;
+
+/** Merge rounds that may reach the implementing agent before the run waits for a person. */
+export const MAX_MERGE_ROUNDS_TO_AGENT = 2;
 
 /**
  * Why a run without a commit or a pull request waits for a person: its checkout
@@ -220,6 +225,11 @@ export interface FactoryActionProviderDeps {
   steps?: FactoryStepDeps;
   /** `.funny/integrate.yaml` as the flow was loaded with it: what `integrate` regenerates and checks. */
   integrateConfig?: IntegrateConfig;
+  /**
+   * The flow has an `integrate` step: a conflict `merge` sends back goes to it
+   * first, so only the conflicts it cannot settle reach the implementing agent.
+   */
+  flowIntegrates?: boolean;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
   /**
@@ -959,6 +969,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       await reviewer.carry(from, to);
       await carryProof(from, to);
     },
+    toImplementer: () => mergeRoundToImplementer(),
   });
 
   /** The enabler reads the repository: the App token capped by their access. */
@@ -1154,8 +1165,32 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return null;
   }
 
+  /**
+   * A merge round is about to reach the implementing agent: count it, or park
+   * the run when it already had its rounds (three agent fixes of one merge
+   * rarely converge, and every round costs a full CI and review).
+   */
+  async function mergeRoundToImplementer(): Promise<ActionResult | null> {
+    if (metrics.mergeRoundsToAgent >= MAX_MERGE_ROUNDS_TO_AGENT) {
+      return holdMerge(
+        MERGE_HOLD_REASONS.mergeRounds,
+        `Not merged: ${MAX_MERGE_ROUNDS_TO_AGENT} rounds of fixes by the agent did not get the change to merge with its base. A person has to look at it.`,
+      );
+    }
+    await count(
+      { ...metrics, mergeRoundsToAgent: metrics.mergeRoundsToAgent + 1 },
+      { event: 'merge_round_to_agent' },
+    );
+    return null;
+  }
+
   /** `merge` sent the change back to the implementing agent: ok, so the flow's loop can act. */
   async function sentBack(why: 'conflict' | 'checks', feedback: string): Promise<ActionResult> {
+    // A conflict goes to the flow's integrate step first, which may settle it alone.
+    if (why === 'checks' || !deps.flowIntegrates) {
+      const parked = await mergeRoundToImplementer();
+      if (parked) return parked;
+    }
     await count(
       { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
       { event: `merge_sent_back_${why}` },

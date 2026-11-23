@@ -48,12 +48,12 @@ beforeEach(async () => {
     mode: 'sqlite',
     close: async () => testDb.sqlite.close(),
   });
-  instanceA.__resetRunnerScopeCache();
+  instanceA.resetRunnerScopeCache();
   instanceB = await freshInstance();
   // These tests read on B right after a change on A; the version memo has
   // its own tests below.
-  instanceA.__setRunnerPolicyVersionSyncWindowMs(0);
-  instanceB.__setRunnerPolicyVersionSyncWindowMs(0);
+  instanceA.setRunnerPolicyVersionSyncWindowMs(0);
+  instanceB.setRunnerPolicyVersionSyncWindowMs(0);
   seedProject(testDb.db, { id: 'p1', userId: 'alice', path: '/srv/p1' });
   runner('r-pinned', 'dedicated');
   runner('r-other', 'dedicated');
@@ -133,8 +133,8 @@ describe('runner policy version memo (issue #217)', () => {
 
   beforeEach(() => {
     setSystemTime(new Date('2026-01-01T00:00:00Z'));
-    instanceA.__setRunnerPolicyVersionSyncWindowMs(WINDOW_MS);
-    instanceB.__setRunnerPolicyVersionSyncWindowMs(WINDOW_MS);
+    instanceA.setRunnerPolicyVersionSyncWindowMs(WINDOW_MS);
+    instanceB.setRunnerPolicyVersionSyncWindowMs(WINDOW_MS);
   });
 
   function advance(ms: number) {

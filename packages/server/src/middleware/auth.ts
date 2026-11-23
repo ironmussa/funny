@@ -32,16 +32,16 @@ const PUBLIC_PATHS = new Set([
 const PUBLIC_PREFIXES = ['/api/invite-links/verify/', '/api/invite-links/register'];
 
 // Auth instance — set at startup via setAuthInstance()
-let _auth: any = null;
+let authSingleton: any = null;
 
 /** Set the Better Auth instance used by middleware. Called once at startup. */
 export function setAuthInstance(auth: any): void {
-  _auth = auth;
+  authSingleton = auth;
 }
 
 /** Test-only: reset cached auth so mocked lib/auth.js is picked up again. */
 export function resetAuthInstanceForTests(): void {
-  _auth = null;
+  authSingleton = null;
 }
 
 /** Sentinel returned by an auth step that authenticated the request (or let it through). */
@@ -298,12 +298,12 @@ async function bindLoopbackRunnerUser(
 }
 
 async function getAuth(): Promise<any> {
-  if (!_auth) {
+  if (!authSingleton) {
     // Fallback: import from server's auth module (team mode)
     const { auth } = await import('../lib/auth.js');
-    _auth = auth;
+    authSingleton = auth;
   }
-  return _auth;
+  return authSingleton;
 }
 
 // ── Better Auth session ────────────────────────────────────────
@@ -490,13 +490,13 @@ export function requirePermission(resource: string, action: string) {
     const orgId = c.get('organizationId');
     if (!orgId) return next();
 
-    if (!_auth) {
+    if (!authSingleton) {
       const { auth } = await import('../lib/auth.js');
-      _auth = auth;
+      authSingleton = auth;
     }
 
     try {
-      const hasPermission = await _auth.api.hasPermission({
+      const hasPermission = await authSingleton.api.hasPermission({
         headers: c.req.raw.headers,
         body: {
           permissions: {

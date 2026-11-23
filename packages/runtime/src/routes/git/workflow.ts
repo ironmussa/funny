@@ -22,7 +22,7 @@ import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd } from '../../utils/route-helpers.js';
 import { validate, mergeSchema, createPRSchema, workflowSchema } from '../../validation/schemas.js';
-import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const workflowRoutes = new Hono<HonoEnv>();
 
@@ -269,7 +269,7 @@ workflowRoutes.post('/project/:projectId/merge-current-into', async (c) => {
     span.end('error', result.error.message);
     return resultToResponse(c, result);
   }
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   span.end('ok');
   return c.json({ ok: true, output: result.value });
 });
@@ -300,7 +300,7 @@ workflowRoutes.post('/project/:projectId/rebase-current-onto', async (c) => {
     span.end('error', result.error.message);
     return resultToResponse(c, result);
   }
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   span.end('ok');
   return c.json({ ok: true, output: result.value });
 });

@@ -16,17 +16,17 @@
 
 import type { RuntimeServiceProvider } from './service-provider.js';
 
-let _services: RuntimeServiceProvider | null = null;
+let registeredServices: RuntimeServiceProvider | null = null;
 
 /**
  * Inject the service provider. Must be called once during init().
  * Throws if called more than once (indicates a wiring bug).
  */
 export function setServices(services: RuntimeServiceProvider): void {
-  if (_services) {
+  if (registeredServices) {
     throw new Error('RuntimeServiceProvider has already been set — double init detected');
   }
-  _services = services;
+  registeredServices = services;
 }
 
 /**
@@ -34,18 +34,18 @@ export function setServices(services: RuntimeServiceProvider): void {
  * Throws if called before setServices() (indicates missing wiring).
  */
 export function getServices(): RuntimeServiceProvider {
-  if (!_services) {
+  if (!registeredServices) {
     throw new Error(
       'RuntimeServiceProvider has not been set. ' +
         'Ensure initRuntime() is called during runtime bootstrap before handling requests.',
     );
   }
-  return _services;
+  return registeredServices;
 }
 
 /**
  * Reset the service provider (for testing only).
  */
 export function resetServices(): void {
-  _services = null;
+  registeredServices = null;
 }

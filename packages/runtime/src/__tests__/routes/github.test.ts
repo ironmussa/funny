@@ -3,7 +3,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { Hono } from 'hono';
 
-import { _resetGithubCache } from '../../routes/github/github-cache.js';
+import { resetGithubCache } from '../../routes/github/github-cache.js';
 import { fetchRepoIssues, parseGithubOwnerRepo } from '../../routes/github/helpers.js';
 import { prRoutes } from '../../routes/github/prs.js';
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -90,7 +90,7 @@ describe('GitHub Routes', () => {
     // githubApiFetch caches successful GETs in module state, so several tests
     // here share a token+path. Clear it between tests to avoid cross-test bleed.
     beforeEach(() => {
-      _resetGithubCache();
+      resetGithubCache();
     });
 
     afterEach(() => {

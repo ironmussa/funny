@@ -62,9 +62,9 @@ let testDb: ReturnType<typeof createTestDb>;
 
 const ports = unusedRunnerPorts();
 
-const _origStartWatcher = startFactoryWatcher;
+const originalStartWatcher = startFactoryWatcher;
 const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
-  _origStartWatcher({
+  originalStartWatcher({
     proof: passingProof,
     steps: upToDateSteps,
     lastThreadMessage: passingReview,

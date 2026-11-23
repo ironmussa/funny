@@ -116,7 +116,7 @@ const existing = {
     // Only names we do not choose are allowed; our own private members use `#x`
     // or a plain name instead of a leading underscore.
     'no-underscore-dangle': [
-      'warn',
+      'error',
       {
         allow: [
           // neverthrow's test-only unwrappers.
@@ -172,6 +172,15 @@ const existing = {
           '__FUNNY_REACT_JSX_RUNTIME__',
           '__FUNNY_MARKDOWN_WASM_BENCHMARK__',
           '__playwright_ws_instances',
+          '__testKitProbe',
+          // Names set by others: Vue 2's component options, tRPC's router
+          // definition, the tool name some ACP agents send, and the wire field
+          // a Socket.IO client without acks uses to get its reply.
+          '_componentTag',
+          '_def',
+          '_toolName',
+          '_TOOLNAME',
+          '_requestId',
         ],
       },
     ],

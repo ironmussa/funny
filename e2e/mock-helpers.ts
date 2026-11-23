@@ -4,9 +4,9 @@ import type { Page, Request, Route } from '@playwright/test';
 /*  Mock data factories                                                */
 /* ------------------------------------------------------------------ */
 
-let _idCounter = 0;
+let idCounter = 0;
 function mockId() {
-  return `mock-${Date.now()}-${++_idCounter}`;
+  return `mock-${Date.now()}-${++idCounter}`;
 }
 
 export function mockMessage(

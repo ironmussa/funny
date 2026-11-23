@@ -714,14 +714,6 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Original' });
 
-      const originalMsg = testDb.db
-        .select()
-        .from(testDb.schema.messages)
-        .where(eq(testDb.schema.messages.id, 'm1'))
-        .get();
-      const _originalTimestamp = originalMsg!.timestamp;
-
-      // Small delay so timestamps differ
       updateMessage('m1', 'Updated content');
 
       const updated = testDb.db
@@ -938,7 +930,7 @@ describe('ThreadManager', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
-      const _c1 = insertComment({
+      insertComment({
         threadId: 't1',
         userId: 'u1',
         source: 'user',

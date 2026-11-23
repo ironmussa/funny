@@ -28,7 +28,7 @@ import {
   gitignoreSchema,
   runHookCommandSchema,
 } from '../../validation/schemas.js';
-import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const commitRoutes = new Hono<HonoEnv>();
 
@@ -52,7 +52,7 @@ commitRoutes.post('/project/:projectId/commit', async (c) => {
     parsed.value.noVerify,
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   // Best-effort SHA capture for scheduler / automation consumers.
   const sha = await gitRead(['rev-parse', 'HEAD'], { cwd, reject: false })
     .then((r) => (r.exitCode === 0 ? r.stdout.trim() : undefined))

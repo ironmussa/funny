@@ -31,7 +31,7 @@ import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThreadCwd } from '../../utils/route-helpers.js';
 import { stashSchema, validate } from '../../validation/schemas.js';
-import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const stashRoutes = new Hono<HonoEnv>();
 
@@ -113,7 +113,7 @@ stashRoutes.post('/project/:projectId/stash', async (c) => {
       ? await stashFiles(cwdResult.value, files.value)
       : await stash(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -126,7 +126,7 @@ stashRoutes.post('/project/:projectId/stash/pop', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await stashPop(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -146,7 +146,7 @@ stashRoutes.post('/project/:projectId/stash/drop/:stashIndex', async (c) => {
     stashDrop(cwd, `stash@{${stashIndex}}`),
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 

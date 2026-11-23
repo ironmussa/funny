@@ -34,7 +34,7 @@ import {
   isSteerGrantFor,
 } from '../../utils/route-helpers.js';
 import {
-  _gitStatusCache,
+  gitStatusCache,
   GIT_STATUS_CACHE_TTL_MS,
   countUnpushedCommits,
   emitPRUpdateForThread,
@@ -65,7 +65,7 @@ function parseThreadScope(raw: string | undefined): Set<string> | null {
 }
 
 function getCachedScope(projectId: string, scopeKey: string) {
-  const cached = _gitStatusCache.get(projectId);
+  const cached = gitStatusCache.get(projectId);
   if (!cached || (cached.scope ?? '') !== scopeKey) return undefined;
   return Date.now() - cached.ts < GIT_STATUS_CACHE_TTL_MS ? cached : undefined;
 }
@@ -507,7 +507,7 @@ async function computeBulkStatus(
   ].map(attachPR);
 
   const response = { statuses };
-  _gitStatusCache.set(projectId, { data: response, ts: Date.now(), scope: scopeKey });
+  gitStatusCache.set(projectId, { data: response, ts: Date.now(), scope: scopeKey });
 
   schedulePRRefreshes({
     projectPath: project.path,

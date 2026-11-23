@@ -82,7 +82,7 @@ test.describe('6. Prompt Input — Agent States (mocked)', () => {
 
     await approveBtn.click();
 
-    const _response = await approvePromise;
+    await approvePromise;
     // Response may or may not arrive depending on server state, but click should not crash
   });
 
@@ -107,7 +107,7 @@ test.describe('6. Prompt Input — Agent States (mocked)', () => {
 
     await denyBtn.click();
 
-    const _response = await denyPromise;
+    await denyPromise;
     // Verify click didn't crash
   });
 
@@ -121,7 +121,6 @@ test.describe('6. Prompt Input — Agent States (mocked)', () => {
 
     // When waiting without a specific reason, WaitingActions shows accept/reject + text input
     const acceptBtn = page.getByTestId('waiting-accept');
-    const _rejectBtn = page.getByTestId('waiting-reject');
     const textInput = page.getByTestId('waiting-response-input');
     const sendBtn = page.getByTestId('waiting-send');
 
@@ -151,7 +150,6 @@ test.describe('6. Prompt Input — Agent States (mocked)', () => {
 
     // While running, stop button should be visible instead of send
     const stopBtn = page.getByTestId('prompt-stop');
-    const _sendBtn = page.getByTestId('prompt-send');
 
     if (await stopBtn.isVisible().catch(() => false)) {
       // Send should be hidden or replaced by stop

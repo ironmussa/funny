@@ -22,10 +22,10 @@ import { log } from '../lib/logger.js';
 import { db, dbDialect } from './index.js';
 
 // Lazily create context — db may not be ready at import time
-let _ctx: ReturnType<typeof createMigrationContext> | null = null;
+let migrationContext: ReturnType<typeof createMigrationContext> | null = null;
 function ctx() {
-  if (!_ctx) _ctx = createMigrationContext(db, dbDialect);
-  return _ctx;
+  if (!migrationContext) migrationContext = createMigrationContext(db, dbDialect);
+  return migrationContext;
 }
 
 const migrations: Migration[] = [

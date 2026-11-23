@@ -8,11 +8,11 @@ import { eq } from 'drizzle-orm';
 
 import { setIO } from '../../services/browser-events.js';
 import { handleDataMessageWithAck } from '../../services/data-handler.js';
-import { __resetDataOwnershipCache } from '../../services/data-ownership.js';
-import { __resetDataScopeCache } from '../../services/data-scope.js';
+import { resetDataOwnershipCache } from '../../services/data-ownership.js';
+import { resetDataScopeCache } from '../../services/data-scope.js';
 import { SqlOperationIdempotencyStore } from '../../services/grpc/operation-idempotency.js';
 import { upsertProfile } from '../../services/profile-service.js';
-import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache } from '../../services/runner-scope.js';
 import { createMockIo } from '../helpers/socketio-test-mocks.js';
 import {
   seedProject,
@@ -68,9 +68,9 @@ describe('data-handler handleDataMessageWithAck', () => {
         // ignore
       }
     }
-    __resetRunnerScopeCache();
-    __resetDataScopeCache();
-    __resetDataOwnershipCache();
+    resetRunnerScopeCache();
+    resetDataScopeCache();
+    resetDataOwnershipCache();
     // The authenticated runner sending every request below (a general runner).
     seedRunner(db, { id: 'runner-1', userId: 'user-1', token: 'token-runner-1' });
     seedProject(db, { id: 'p1', userId: 'user-1', path: '/tmp/repo' });

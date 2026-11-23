@@ -196,7 +196,7 @@ interface SettingsState {
   useInternalEditor: boolean;
   terminalShell: TerminalShell;
   availableShells: DetectedShell[];
-  _shellsLoaded: boolean;
+  shellsLoaded: boolean;
   toolPermissions: Record<string, ToolPermission>;
   fontSize: FontSize;
   notificationsEnabled: boolean;
@@ -249,7 +249,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   useInternalEditor: false,
   terminalShell: 'default' as TerminalShell,
   availableShells: [],
-  _shellsLoaded: false,
+  shellsLoaded: false,
   toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
   fontSize: initialPreferences.fontSize,
   notificationsEnabled: initialPreferences.notificationsEnabled,
@@ -307,10 +307,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     portablePreferences.getState().setHiddenPromptModels(hiddenModels);
   },
   fetchAvailableShells: async () => {
-    if (get()._shellsLoaded) return;
+    if (get().shellsLoaded) return;
     const result = await systemApi.getAvailableShells();
     if (result.isOk()) {
-      set({ availableShells: result.value.shells, _shellsLoaded: true });
+      set({ availableShells: result.value.shells, shellsLoaded: true });
     }
   },
   setToolPermission: (toolName, permission) =>

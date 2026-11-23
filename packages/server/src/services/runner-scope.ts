@@ -254,7 +254,7 @@ export async function runnersDeleted(runnerIds: string[]): Promise<void> {
 }
 
 /** Test helper. */
-export function __resetRunnerScopeCache() {
+export function resetRunnerScopeCache() {
   runnerCache.clear();
   policyCache.clear();
   sandboxByThreadCache.clear();
@@ -265,7 +265,7 @@ export function __resetRunnerScopeCache() {
 }
 
 /** Test helper: how long a version read is reused (0 = query on every read). */
-export function __setRunnerPolicyVersionSyncWindowMs(ms: number) {
+export function setRunnerPolicyVersionSyncWindowMs(ms: number) {
   versionSyncWindowMs = ms;
   lastVersionSync = null;
 }

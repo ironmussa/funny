@@ -43,7 +43,7 @@ import { eq } from 'drizzle-orm';
 import * as ownershipProof from '../../modules/threads/domain/proofs/thread-owned-by.js';
 import * as runnerManager from '../../services/runner-manager.js';
 import * as runnerResolver from '../../services/runner-resolver.js';
-import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
 import { buildProjectRunnerMatch } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
@@ -83,7 +83,7 @@ describe('Thread routes — runner proxy', () => {
 
   beforeEach(() => {
     t.cleanup();
-    __resetRunnerScopeCache();
+    resetRunnerScopeCache();
     effects.length = 0;
     // Resolution is mocked below, but the authorized sink still certifies the
     // chosen runner against `runners` and `runner-scope`, so the rows must exist.

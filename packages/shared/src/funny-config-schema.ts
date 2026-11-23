@@ -37,5 +37,5 @@ export const funnyProjectConfigSchema = z
 
 export type ValidatedFunnyProjectConfig = z.infer<typeof funnyProjectConfigSchema>;
 
-const _assertSchemaMatchesContract: FunnyProjectConfig = {} as ValidatedFunnyProjectConfig;
-void _assertSchemaMatchesContract;
+// Compile-time only: fails to type-check if the schema drifts from the contract.
+void ({} as ValidatedFunnyProjectConfig satisfies FunnyProjectConfig);

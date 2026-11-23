@@ -5,7 +5,7 @@ import { okAsync } from 'neverthrow';
 
 import { systemApi } from '@/lib/api/system';
 import {
-  __resetVisualizerRegistry,
+  resetVisualizerRegistry,
   registerVisualizer,
   type VisualizerPlugin,
 } from '@/lib/visualizer-registry';
@@ -14,7 +14,7 @@ import { useInternalEditorStore } from '@/stores/internal-editor-store';
 const NOOP: VisualizerPlugin['Component'] = () => null;
 
 beforeEach(() => {
-  __resetVisualizerRegistry();
+  resetVisualizerRegistry();
   useInternalEditorStore.getState().closeEditor();
 });
 

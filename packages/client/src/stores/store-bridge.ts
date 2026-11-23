@@ -15,17 +15,17 @@ import { isProjectListed, readThreadRow } from '@/data/threads/read';
 
 type LazyRef<T> = { current: StoreApi<T> | null };
 
-const _projectStoreRef: LazyRef<any> = { current: null };
-const _threadStoreRef: LazyRef<any> = { current: null };
+const projectStoreRef: LazyRef<any> = { current: null };
+const threadStoreRef: LazyRef<any> = { current: null };
 
 /** Called by project-store during creation to register itself */
 export function registerProjectStore(store: StoreApi<any>): void {
-  _projectStoreRef.current = store;
+  projectStoreRef.current = store;
 }
 
 /** Called by thread-store during creation to register itself */
 export function registerThreadStore(store: StoreApi<any>): void {
-  _threadStoreRef.current = store;
+  threadStoreRef.current = store;
 }
 
 // ── Project → Git Status operations ──────────────────────────
@@ -51,7 +51,7 @@ export function findThreadById(threadId: string): any | null {
   if (fromRows) return fromRows;
   // activeThread is loaded with messages so it may exist before its row is
   // listed (race during selectThread). Return it so predicates still work.
-  const active = _threadStoreRef.current?.getState().activeThread;
+  const active = threadStoreRef.current?.getState().activeThread;
   if (active?.id === threadId) return active;
   return null;
 }
@@ -60,7 +60,7 @@ export function findThreadById(threadId: string): any | null {
 
 /** Load threads for a project if not already loaded */
 export function ensureThreadsLoaded(projectId: string): void {
-  const store = _threadStoreRef.current;
+  const store = threadStoreRef.current;
   if (!store) return;
   if (!isProjectListed(projectId)) {
     store.getState().loadThreadsForProject(projectId);
@@ -69,7 +69,7 @@ export function ensureThreadsLoaded(projectId: string): void {
 
 /** Clear threads for a deleted project */
 export function clearProjectThreads(projectId: string): void {
-  const store = _threadStoreRef.current;
+  const store = threadStoreRef.current;
   if (!store) return;
   store.getState().clearProjectThreads(projectId);
 }
@@ -78,7 +78,7 @@ export function clearProjectThreads(projectId: string): void {
 
 /** Expand a project in the sidebar (used when navigating to a thread) */
 export function expandProject(projectId: string): void {
-  const store = _projectStoreRef.current;
+  const store = projectStoreRef.current;
   if (!store) return;
   const state = store.getState();
   if (!state.expandedProjects.has(projectId)) {
@@ -90,7 +90,7 @@ export function expandProject(projectId: string): void {
 
 /** Set the selected project ID */
 export function selectProject(projectId: string): void {
-  const store = _projectStoreRef.current;
+  const store = projectStoreRef.current;
   if (!store) return;
   store.setState({ selectedProjectId: projectId });
 }

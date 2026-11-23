@@ -21,7 +21,7 @@ import { restoreTracked, threadTarget } from '../../services/git-destructive.js'
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThreadCwd } from '../../utils/route-helpers.js';
-import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const undoRoutes = new Hono<HonoEnv>();
 
@@ -35,7 +35,7 @@ undoRoutes.post('/project/:projectId/undo/:activityId', async (c) => {
     c.req.param('activityId'),
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, snapshot: result.value.ref });
 });
 

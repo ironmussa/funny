@@ -20,7 +20,7 @@ const mocks = (() => ({
 
 mock.module('../../routes/git/helpers.js', () => ({
   requireProjectCwd: async () => ok(mocks.cwd),
-  _gitStatusCache: new Map(),
+  gitStatusCache: new Map(),
   invalidateGitStatusCache: async () => undefined,
 }));
 mock.module('../../utils/route-helpers.js', () => ({

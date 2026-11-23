@@ -38,7 +38,7 @@ function rosterFor(threadId: string): Viewer[] {
 }
 
 /** Test-only: clear the module-level presence roster between cases. */
-export function __resetPresenceForTests(): void {
+export function resetPresenceForTests(): void {
   presenceByThread.clear();
   presenceRevisionByThread.clear();
 }

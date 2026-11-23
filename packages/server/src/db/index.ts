@@ -49,13 +49,13 @@ export type { AppDatabase };
  */
 export let dbDialect: DbDialect = process.env.DATABASE_URL ? 'pg' : 'sqlite';
 
-let _provider: DatabaseProvider | null = null;
+let providerInstance: DatabaseProvider | null = null;
 const transactionContext = new AsyncLocalStorage<any>();
-/** Per-async-context provider (one connection per request), read before `_provider`. */
+/** Per-async-context provider (one connection per request), read before `providerInstance`. */
 const requestDatabase = new AsyncLocalStorage<DatabaseProvider>();
 
 function activeProvider(): DatabaseProvider {
-  const provider = requestDatabase.getStore() ?? _provider;
+  const provider = requestDatabase.getStore() ?? providerInstance;
   if (!provider) {
     throw new Error('Database not initialized. Call initDatabase() at startup.');
   }
@@ -64,7 +64,7 @@ function activeProvider(): DatabaseProvider {
 
 /** Install the process-wide provider (and its dialect). */
 export function useDatabaseProvider(provider: DatabaseProvider): void {
-  _provider = provider;
+  providerInstance = provider;
   dbDialect = provider.dialect;
 }
 
@@ -81,10 +81,6 @@ export function runWithDatabase<T>(provider: DatabaseProvider, work: () => T): T
   }
   return requestDatabase.run(provider, work);
 }
-
-// Legacy compat — kept so `setConnection()` callers
-// (middleware/auth.ts, server/index.ts) continue to work.
-let _legacyConnection: DatabaseConnection | null = null;
 
 // ── Initialization ───────────────────────────────────────────────
 
@@ -119,9 +115,7 @@ export function initDatabase(options?: {
         }
       }
     }
-    // Use the legacy wrapper so _legacyConnection stays populated
     const connection = createSqliteDatabase({ mode: 'sqlite', path: dbPath, log });
-    _legacyConnection = connection;
     useDatabaseProvider({
       db: connection.db,
       schema: connection.schema,
@@ -159,7 +153,6 @@ export { schema };
 
 /** Set a pre-existing connection (e.g. shared from runtime). */
 export function setConnection(conn: DatabaseConnection): void {
-  _legacyConnection = conn;
   useDatabaseProvider({
     db: conn.db,
     schema: conn.schema,
@@ -170,15 +163,14 @@ export function setConnection(conn: DatabaseConnection): void {
 }
 
 export async function closeDatabase(): Promise<void> {
-  if (_provider) {
-    await _provider.close();
+  if (providerInstance) {
+    await providerInstance.close();
   }
 }
 
 /** Test-only: drop singleton refs after closing an in-memory DB. */
 export function resetDatabaseForTests(): void {
-  _provider = null;
-  _legacyConnection = null;
+  providerInstance = null;
   dbDialect = process.env.DATABASE_URL ? 'pg' : 'sqlite';
 }
 

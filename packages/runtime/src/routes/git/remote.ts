@@ -37,7 +37,7 @@ import {
   pushBranchSchema,
   setRemoteSchema,
 } from '../../validation/schemas.js';
-import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const remoteRoutes = new Hono<HonoEnv>();
 
@@ -55,7 +55,7 @@ remoteRoutes.post('/project/:projectId/push', async (c) => {
   // cwd-keyed summary cache (1s TTL) — otherwise an immediate post-push
   // status recompute can return a stale unpushed count.
   invalidateStatusCache(cwdResult.value);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -76,7 +76,7 @@ remoteRoutes.post('/project/:projectId/push-branch', async (c) => {
   );
   if (result.isErr()) return resultToResponse(c, result);
   invalidateStatusCache(cwdResult.value);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -115,7 +115,7 @@ remoteRoutes.post('/project/:projectId/remote', async (c) => {
     });
     return resultToResponse(c, result);
   }
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
 
@@ -176,7 +176,7 @@ remoteRoutes.post('/project/:projectId/publish', async (c) => {
         });
         return resultToResponse(c, result);
       }
-      _gitStatusCache.delete(projectId);
+      gitStatusCache.delete(projectId);
       return c.json({ ok: true, repoUrl: result.value });
     },
   );
@@ -198,7 +198,7 @@ remoteRoutes.post('/project/:projectId/pull', async (c) => {
   // Pull advanced HEAD and the origin ref — drop the stale cwd-keyed summary so
   // the unpulled badge clears on the very next status read instead of lingering.
   invalidateStatusCache(cwdResult.value);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 

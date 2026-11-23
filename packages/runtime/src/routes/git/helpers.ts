@@ -26,7 +26,7 @@ import { requireWorkingDirectory } from '../../utils/working-directory.js';
 
 // In-memory cache for bulk git status to avoid spawning excessive git processes.
 export { GIT_STATUS_CACHE_TTL_MS };
-export const _gitStatusCache = gitStatusCache;
+export { gitStatusCache };
 
 // The per-branch PR info cache lives in services/pr-info-cache.ts so the
 // `git:changed` status path shares it with these routes.

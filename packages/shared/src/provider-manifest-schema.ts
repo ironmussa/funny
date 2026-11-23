@@ -11,7 +11,7 @@
  * is a reviewed core change, not a manifest.
  *
  * The schema mirrors the frozen `ProviderManifest` contract; the
- * `_assertAssignable` checks below keep the two in sync at compile time.
+ * `satisfies` checks below keep the two in sync at compile time.
  */
 
 import { z } from 'zod';
@@ -165,10 +165,8 @@ export type FunnyProviderFile = z.infer<typeof funnyProviderFileSchema>;
 // ── Contract sync guards (compile-time only) ──────────────────────────────
 // Keep the zod schema and the frozen `ProviderManifest` contract in lockstep:
 // if either drifts, one of these assignments fails to type-check.
-const _assertSchemaMatchesContract: ProviderManifest = {} as ValidatedProviderManifest;
-const _assertContractMatchesSchema: ValidatedProviderManifest = {} as ProviderManifest;
-void _assertSchemaMatchesContract;
-void _assertContractMatchesSchema;
+void ({} as ValidatedProviderManifest satisfies ProviderManifest);
+void ({} as ProviderManifest satisfies ValidatedProviderManifest);
 
 /**
  * Parse + validate an unknown value as a `funny.provider.json` file. Never

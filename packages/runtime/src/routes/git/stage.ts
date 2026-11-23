@@ -43,7 +43,7 @@ import {
   cherryPickSchema,
   createBranchSchema,
 } from '../../validation/schemas.js';
-import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const stageRoutes = new Hono<HonoEnv>();
 
@@ -62,7 +62,7 @@ stageRoutes.post('/project/:projectId/stage', async (c) => {
   if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
   const result = await stageFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
 
@@ -81,7 +81,7 @@ stageRoutes.post('/project/:projectId/unstage', async (c) => {
   if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
   const result = await unstageFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
 
@@ -98,7 +98,7 @@ stageRoutes.post('/project/:projectId/stage-patch', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const result = await stagePatch(cwd, parsed.value.patch);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
 
@@ -115,7 +115,7 @@ stageRoutes.post('/project/:projectId/unstage-patch', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const result = await unstagePatch(cwd, parsed.value.patch);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
 
@@ -137,7 +137,7 @@ stageRoutes.post('/project/:projectId/revert', async (c) => {
     revertFiles(cwd, paths),
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
 
@@ -164,7 +164,7 @@ stageRoutes.post('/project/:projectId/checkout-commit', async (c) => {
     parsed.value.hash,
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -187,7 +187,7 @@ stageRoutes.post('/project/:projectId/revert-commit', async (c) => {
     parsed.value.hash,
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -209,7 +209,7 @@ stageRoutes.post('/project/:projectId/reset-hard', async (c) => {
     gitServiceResetHard(projectId, userId, cwd, hash),
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -226,7 +226,7 @@ stageRoutes.post('/project/:projectId/cherry-pick', async (c) => {
 
   const result = await gitServiceCherryPick(projectId, userId, cwdResult.value, parsed.value.hash);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -249,7 +249,7 @@ stageRoutes.post('/project/:projectId/create-branch', async (c) => {
     parsed.value.startPoint,
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -273,7 +273,7 @@ stageRoutes.post('/project/:projectId/conflict/resolve', async (c) => {
     parsed.value.resolution,
   );
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, remainingConflicts: result.value.remainingConflicts });
 });
 
@@ -286,7 +286,7 @@ stageRoutes.post('/project/:projectId/reset-soft', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await resetSoft(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
+  gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
 

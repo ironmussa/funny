@@ -11,7 +11,7 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 process.env.BETTER_AUTH_SECRET = 'test-auth-secret';
 
 const { RunnerGrpcSessionRegistry } = await import('../../services/grpc/session-registry.js');
-const { __resetRunnerScopeCache } = await import('../../services/runner-scope.js');
+const { resetRunnerScopeCache } = await import('../../services/runner-scope.js');
 const { requestScratchCleanup, requestThreadWorkspaceCleanup } =
   await import('../../services/thread-workspace-cleanup.js');
 const { FakeRunnerRequestPort } = await import('../helpers/runner-port-fakes.js');
@@ -55,7 +55,7 @@ const THREAD = {
 beforeEach(async () => {
   presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
   requests = new FakeRunnerRequestPort();
-  __resetRunnerScopeCache();
+  resetRunnerScopeCache();
   testDb = createTestDb();
   const { setConnection } = await import('../../db/index.js');
   setConnection({

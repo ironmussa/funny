@@ -29,7 +29,7 @@ function seedStores({
       { id: 'zsh', label: 'Zsh', path: '/bin/zsh' },
       { id: 'fish', label: 'Fish', path: '/usr/bin/fish' },
     ],
-    _shellsLoaded: true,
+    shellsLoaded: true,
   });
   useUIStore.setState({
     generalSettingsOpen: true,

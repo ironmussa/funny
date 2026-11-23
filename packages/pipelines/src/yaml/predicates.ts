@@ -38,7 +38,7 @@ export class PredicateError extends Error {
 export function compilePredicate(expression: string): CompiledPredicate {
   try {
     const compiled = jsonata(expression);
-    return { __jsonata: compiled, expression };
+    return { evaluator: compiled, expression };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new PredicateError(`Failed to compile predicate: ${message}`, expression);
@@ -47,7 +47,7 @@ export function compilePredicate(expression: string): CompiledPredicate {
 
 export interface CompiledPredicate {
   /** Internal JSONata expression handle. Don't access directly. */
-  __jsonata: ReturnType<typeof jsonata>;
+  evaluator: ReturnType<typeof jsonata>;
   /** Original source for error messages. */
   expression: string;
 }
@@ -71,7 +71,7 @@ export async function evaluatePredicate(
   const compiled = typeof predicate === 'string' ? compilePredicate(predicate) : predicate;
 
   try {
-    const result = await compiled.__jsonata.evaluate(scope);
+    const result = await compiled.evaluator.evaluate(scope);
     return toBoolean(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

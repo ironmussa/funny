@@ -59,17 +59,17 @@ function pruneSignedCache(): void {
 }
 
 /** Test seam: clear the latched flag + cache between cases. */
-export function __resetDirectMediaForTests(): void {
+export function resetDirectMediaForTests(): void {
   directMediaDisabled = false;
   signedCache.clear();
 }
 
-export function __cacheSignedMediaForTests(path: string, url: string): void {
+export function cacheSignedMediaForTests(path: string, url: string): void {
   signedCache.set(path, url);
   pruneSignedCache();
 }
 
-export function __hasSignedMediaForTests(path: string): boolean {
+export function hasSignedMediaForTests(path: string): boolean {
   return signedCache.has(path);
 }
 

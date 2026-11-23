@@ -25,7 +25,7 @@ describe('API Client', () => {
   beforeEach(() => {
     mockFetch.mockReset();
     // Reset circuit breaker so error tests don't affect subsequent tests
-    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, cooldownTimer: null });
   });
 
   test('sends HTTP failure details to the Abbacchio client logger', async () => {

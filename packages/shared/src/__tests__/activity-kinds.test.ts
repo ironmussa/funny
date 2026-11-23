@@ -104,6 +104,7 @@ describe('parseActivityInput for the new kinds', () => {
     'automation.skipped': { automationId: 'a1', runningSince: '2026-11-22T10:00:00.000Z' },
     'github.write': { action: 'pr-merge', prNumber: 7, repo: 'o/r' },
     'git.destructive': { action: 'discard', paths: ['a.ts', 'b.ts'] },
+    'pipeline.run': { pipelineId: 'pl1', commitSha: 'abc123' },
   };
 
   test('every kind has a sample', () => {

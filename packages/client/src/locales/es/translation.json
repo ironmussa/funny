@@ -1875,7 +1875,8 @@
       "commits-reset": "Reset",
       "stash-dropped": "Stash eliminado",
       "code-rewound": "Código rebobinado",
-      "snapshot-saved": "Snapshot guardado"
+      "snapshot-saved": "Snapshot guardado",
+      "commit-created": "Commit creado"
     },
     "restore": "Restaurar",
     "restored": "Restaurado. El estado anterior se guardó como un nuevo snapshot.",

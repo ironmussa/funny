@@ -1882,7 +1882,8 @@
       "commits-reset": "Reset",
       "stash-dropped": "Stash dropped",
       "code-rewound": "Code rewound",
-      "snapshot-saved": "Snapshot saved"
+      "snapshot-saved": "Snapshot saved",
+      "commit-created": "Commit created"
     },
     "restore": "Restore",
     "restored": "Restored. The previous state was saved as a new snapshot.",

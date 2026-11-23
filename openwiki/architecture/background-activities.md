@@ -60,6 +60,11 @@ file revert in a PR, repository publish), destructive git commands (`git.destruc
 (`automation.unscheduled` for a stored schedule that does not parse — new ones are refused on save —
 and `automation.skipped`, recorded once per run that is still running).
 
+A review pipeline run started by a commit (`pipeline-manager.ts` `startPipelineRun`) is one
+`pipeline.run` activity (openspec `track-pipeline-runs`): a step per stage, the fix commits as
+`commit-created` effects, failed when cancelled. The git workflow's review-fix loop removes each
+corrector's worktree once it has read its patch, as it does for the reviewer.
+
 ### Undo snapshots
 
 Before a destructive git command the runner saves what it is about to remove
@@ -75,7 +80,9 @@ Before a destructive git command the runner saves what it is about to remove
   route `POST /api/git/{project/:projectId | :threadId}/undo/:activityId` saves the current state
   as a new snapshot first, then puts the old one back; `404 snapshot-gone` once pruned, `409`
   while the thread's agent runs.
-- Snapshots older than 30 days are pruned whenever a new one is saved. `refs/funny/*` is not pushed
+- Snapshots older than 30 days are pruned whenever a new one is saved. Rewind checkpoints
+  (`git-checkpoints.ts`) are dated commits too and pruned the same way; a thread's workspace cleanup
+  removes its checkpoints, including the undated ones saved before checkpoints had a date. `refs/funny/*` is not pushed
   with a branch; `git push --mirror` would push it (funny never runs it).
 
 ### Server-run activities

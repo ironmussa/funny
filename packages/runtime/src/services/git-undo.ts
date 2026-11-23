@@ -27,21 +27,18 @@ import { err, errAsync, ok, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { recordActivity as defaultRecordActivity, type ActivitySpec } from './activity-tracker.js';
-import { restoreWorktreeTrees, snapshotWorktreeTrees } from './git-checkpoints.js';
+import {
+  pruneDatedRefs,
+  restoreWorktreeTrees,
+  SNAPSHOT_IDENTITY,
+  snapshotWorktreeTrees,
+} from './git-checkpoints.js';
 
 const UNDO_REF_PREFIX = 'refs/funny/undo';
 const UNDO_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60_000;
 
 const ACTIVITY_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const HEAD_LINE = /^head ([0-9a-f]{40,64})$/m;
-
-/** The commit identity of a snapshot: snapshots are never pushed, so it need not be the user's. */
-const SNAPSHOT_IDENTITY = {
-  GIT_AUTHOR_NAME: 'funny',
-  GIT_AUTHOR_EMAIL: 'funny@localhost',
-  GIT_COMMITTER_NAME: 'funny',
-  GIT_COMMITTER_EMAIL: 'funny@localhost',
-};
 
 export type UndoSnapshotKind = 'worktree' | 'stash';
 
@@ -182,25 +179,13 @@ export function pruneUndoSnapshots(
   now: () => number = Date.now,
 ): ResultAsync<number, DomainError> {
   return ResultAsync.fromPromise(
-    (async () => {
-      const listed = await git(cwd, [
-        'for-each-ref',
-        UNDO_REF_PREFIX,
-        '--format=%(refname) %(objecttype) %(committerdate:unix)',
-      ]);
-      const cutoff = (now() - maxAgeMs) / 1000;
-      let removed = 0;
-      for (const line of listed.split('\n').filter(Boolean)) {
-        const [name, type, date] = line.split(' ');
-        // An `-index` ref is a tree with no date: it goes with its snapshot.
-        if (!name || type !== 'commit' || name.endsWith('-index')) continue;
-        if (Number(date) >= cutoff) continue;
-        await git(cwd, ['update-ref', '-d', name]);
-        await tryGit(cwd, ['update-ref', '-d', `${name}-index`]);
-        removed++;
-      }
-      return removed;
-    })(),
+    pruneDatedRefs({
+      cwd,
+      prefix: UNDO_REF_PREFIX,
+      cutoffMs: now() - maxAgeMs,
+      // An `-index` ref is a tree with no date: it goes with its snapshot.
+      siblingOf: (name) => (name.endsWith('-index') ? null : `${name}-index`),
+    }),
     (error) => internal(`Could not prune undo snapshots: ${messageOf(error)}`),
   );
 }

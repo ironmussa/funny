@@ -32,7 +32,11 @@ mock.module('../../services/agent-runner-control.js', () => ({
 mock.module('../../services/thread-manager.js', () => ({
   getThread: async (id: string) => ({ id, projectId: 'p1' }),
 }));
+// The rest of the tracker stays real: modules loaded with the routes import
+// `trackActivity` from it, and a mock without it fails them at link time.
+const actualActivityTracker = await import('../../services/activity-tracker.js');
 mock.module('../../services/activity-tracker.js', () => ({
+  ...actualActivityTracker,
   recordActivity: vi.fn(async (spec: any, outcome: any) => {
     mocks.recorded.push({ spec, outcome });
   }),

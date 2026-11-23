@@ -32,6 +32,7 @@ import {
 } from '../github-app/token-issuer.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { createSandboxRunnerCalls } from '../thread-sandboxes/sandbox-runner-calls.js';
+import type { FactoryIssueText } from './factory-issue-text.js';
 import { createFactoryPullRequests, type FactoryPullRequests } from './factory-pull-requests.js';
 import {
   createFactoryRepoReads,
@@ -119,6 +120,11 @@ export interface FactoryGithubPort {
     reader: FactoryRepoReader,
     branch: string,
   ): ResultAsync<{ sha: string; ci: CiState }, GithubCallError>;
+  /** An issue's title, body and comments, for a read-only role (it has no network). */
+  issueText(
+    reader: FactoryRepoReader,
+    issueNumber: number,
+  ): ResultAsync<FactoryIssueText, GithubCallError>;
   /**
    * The commit merged pull request `number` made on its base branch and the
    * verdict of that commit's checks, or null when it is not merged.
@@ -262,6 +268,7 @@ export function createFactoryGithub(
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
     branchState: (reader, branch) => reads(reader).branchState(branch),
     mergeCommitState: (reader, number) => reads(reader).mergeCommitState(number),
+    issueText: (reader, issueNumber) => reads(reader).issueText(issueNumber),
     revertPullRequest: (reader, number, text) => reads(reader).revertPullRequest(number, text),
 
     pullRequests: createFactoryPullRequests({

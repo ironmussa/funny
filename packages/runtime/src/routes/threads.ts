@@ -19,7 +19,9 @@ import type { z } from 'zod';
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
 import { requestSpan } from '../middleware/tracing.js';
+import { writeRoleInputs } from '../services/agent-startup/role-inputs.js';
 import { getServices } from '../services/service-registry.js';
+import { isReadOnlyThread } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import { createIdleThread, createAndStartThread } from '../services/thread-service/create.js';
 import { checkExpectedBranch } from '../services/thread-service/expected-branch.js';
@@ -197,7 +199,12 @@ threadRoutes.post('/:id/message', async (c) => {
     });
     return resultToResponse(c, onBranch);
   }
-  const body = isSteerDelegation ? pickSteerMessageFields(message) : message;
+  const { roleInputs, ...rest } = message;
+  // Only the owner's message to a read-only thread brings them (a sandbox's first message).
+  if (roleInputs && !isSteerDelegation && isReadOnlyThread(threadResult.value)) {
+    await writeRoleInputs(id, roleInputs);
+  }
+  const body = isSteerDelegation ? pickSteerMessageFields(rest) : rest;
 
   const span = requestSpan(c, 'thread.send_message', { threadId: id });
   const result = await sendMessage({ ...body, threadId: id, userId });

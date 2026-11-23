@@ -24,6 +24,8 @@ import {
 } from '@funny/core/github-app';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 
+import type { FactoryIssueText } from './factory-issue-text.js';
+
 /** An issue as the factory admits it (`FactoryIssue`), with what a send checks. */
 export interface RepoIssue {
   number: number;
@@ -79,6 +81,29 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
           updatedAt: raw.updated_at,
           labels: labelNames(raw.labels),
         }));
+    },
+
+    /** An issue's title, body and comments (the newest 100), for a role with no network. */
+    issueText(issueNumber: number): ResultAsync<FactoryIssueText, GithubCallError> {
+      const base = `/repos/${repo}/issues/${issueNumber}`;
+      return github
+        .json<{ title: string; body?: string | null }>(repo, 'GET', base)
+        .andThen((issue) =>
+          github
+            .json<Array<{ body?: string | null; user?: { login?: string } | null }>>(
+              repo,
+              'GET',
+              `${base}/comments?per_page=100`,
+            )
+            .map((comments) => ({
+              title: issue.title,
+              body: issue.body ?? '',
+              comments: comments.map((comment) => ({
+                author: comment.user?.login ?? 'unknown',
+                body: comment.body ?? '',
+              })),
+            })),
+        );
     },
 
     /**

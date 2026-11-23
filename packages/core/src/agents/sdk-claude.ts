@@ -408,6 +408,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         homedir(),
         mode,
         process.getuid?.() ?? 0,
+        this.options.readOnlyHiddenPaths ?? [],
       );
       dlog.info('Read-only agent sandbox', { mode, cwd: this.options.cwd });
     }
@@ -851,7 +852,10 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // Read-only: decided here, before any saved rule (an "always allow" or the
     // sensitive-path executor would act outside the sandbox).
     if (this.options.readOnly) {
-      const denial = readOnlyDenial(toolName, input.tool_input);
+      const denial = readOnlyDenial(toolName, input.tool_input, [
+        this.options.cwd,
+        ...(this.options.readOnlyRoots ?? []),
+      ]);
       if (denial === null) {
         return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } };
       }

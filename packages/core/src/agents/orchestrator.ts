@@ -57,6 +57,8 @@ export interface StartAgentOptions {
   redirectChecks?: boolean;
   /** The agent may only read (see `ClaudeProcessOptions.readOnly`). Claude and Codex only. */
   readOnly?: boolean;
+  readOnlyRoots?: string[];
+  readOnlyHiddenPaths?: string[];
   /**
    * Run the Claude process in persistent streaming-input mode so later prompts
    * can steer the live turn instead of respawning. Set when followUpMode ===
@@ -464,6 +466,8 @@ export class AgentOrchestrator extends EventEmitter {
       // The checks tool is an MCP tool, which a read-only agent does not get.
       redirectChecks: readOnly ? false : redirectChecks,
       readOnly,
+      readOnlyRoots: readOnly ? options.readOnlyRoots : undefined,
+      readOnlyHiddenPaths: readOnly ? options.readOnlyHiddenPaths : undefined,
       steerable,
       builtinSkillsDisabled,
       customSkillPaths,

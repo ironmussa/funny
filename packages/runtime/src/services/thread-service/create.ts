@@ -15,6 +15,7 @@
 
 import { ResultAsync } from 'neverthrow';
 
+import { writeRoleInputs } from '../agent-startup/role-inputs.js';
 import { resolveProjectThreadContext, type CreateAndStartThreadParams } from './create-context.js';
 import { createLocalThread } from './create-local.js';
 import { createAndStartScratchThread } from './create-scratch.js';
@@ -39,6 +40,8 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
     return createAndStartScratchThread(params);
   }
   const ctx = await resolveProjectThreadContext(params);
+  // Before the agent can start: it reads them at its first turn.
+  if (params.readOnly && params.roleInputs) await writeRoleInputs(ctx.threadId, params.roleInputs);
 
   const shellCommand = extractShellEscapeCommand(params.prompt);
   if (shellCommand !== null) {

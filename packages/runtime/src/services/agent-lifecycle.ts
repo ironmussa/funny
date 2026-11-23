@@ -26,6 +26,7 @@ import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
 import { ResultAsync } from 'neverthrow';
 
+import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
 import { stripInlineReferencedContent } from '../utils/file-mentions.js';
@@ -45,6 +46,7 @@ import { ensureLazyCwd, syncWorktreeProjectAssets } from './agent-startup/prepar
 import { composeAgentEnv, loadProjectSecrets } from './agent-startup/project-secrets.js';
 import { fetchForReadOnlyAgent, logReadOnlySandboxMode } from './agent-startup/read-only-fetch.js';
 import { recoverThreadContext } from './agent-startup/recover-context.js';
+import { existingRoleInputsDir } from './agent-startup/role-inputs.js';
 import { buildSystemPrefix, projectInstructionsBlock } from './agent-startup/system-prefix.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { captureGitCheckpoint } from './git-checkpoints.js';
@@ -394,11 +396,14 @@ export class AgentLifecycleManager {
     if (readOnly && provider === 'claude') await logReadOnlySandboxMode(threadId);
     const secrets = await this.loadThreadSecrets(threadId, thread);
     const baseEnv = await buildAgentEnv({ threadId, userId, provider, assetsDir });
-    const agentEnv = await this.applyAgentProfile(
+    const profiledEnv = await this.applyAgentProfile(
       threadId,
       activeAgentProfile,
       composeAgentEnv(secrets, baseEnv),
     );
+    // A read-only agent finds its inputs (the issue's text) here; nothing else writes this name.
+    const roleInputs = readOnly ? existingRoleInputsDir(threadId) : null;
+    const agentEnv = roleInputs ? { ...profiledEnv, FUNNY_ROLE_INPUTS: roleInputs } : profiledEnv;
 
     await this.launchAgent(
       {
@@ -418,6 +423,8 @@ export class AgentLifecycleManager {
         effort: req.effort,
         ...projectRunFlags(project),
         readOnly,
+        readOnlyRoots: roleInputs ? [roleInputs] : undefined,
+        readOnlyHiddenPaths: readOnly ? [DATA_DIR] : undefined,
         steer: !!req.steer,
         builtinSkillsDisabled: tooling.builtinSkillsDisabled,
         customSkillPaths: tooling.customSkillPaths,

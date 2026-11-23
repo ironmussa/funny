@@ -29,7 +29,8 @@
  * `.claude/settings.json` is the change's author's, and its hooks would run
  * outside the sandbox).
  */
-import { join } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
 import { READ_ONLY_AGENT_TOOLS } from '@funny/shared/models';
@@ -51,8 +52,20 @@ const CREDENTIAL_ENV_VARS = [
   'SSH_AUTH_SOCK',
 ];
 
-/** Files under the home directory that hold git and GitHub credentials. */
-const CREDENTIAL_FILES = ['.config/gh', '.git-credentials', '.ssh', '.netrc'];
+/**
+ * Files under the home directory a sandboxed command never reads: git and
+ * GitHub credentials, funny's own data (database, keyring, auth secret) and
+ * the agent providers' logins.
+ */
+const CREDENTIAL_FILES = [
+  '.config/gh',
+  '.git-credentials',
+  '.ssh',
+  '.netrc',
+  '.funny',
+  '.claude/.credentials.json',
+  '.codex/auth.json',
+];
 
 export type ReadOnlySandboxMode = 'strict' | 'socket-denylist';
 
@@ -75,6 +88,8 @@ export function readOnlySandboxSettings(
   home: string,
   mode: ReadOnlySandboxMode = 'strict',
   uid = 0,
+  /** More paths a command never reads (funny's data folder when it is not `~/.funny`). */
+  hidden: readonly string[] = [],
 ): NonNullable<Options['sandbox']> {
   const denylist = mode === 'socket-denylist';
   return {
@@ -90,7 +105,10 @@ export function readOnlySandboxSettings(
       : { allowedDomains: [], strictAllowlist: true },
     credentials: {
       envVars: CREDENTIAL_ENV_VARS.map((name) => ({ name, mode: 'deny' as const })),
-      files: CREDENTIAL_FILES.map((path) => ({ path: join(home, path), mode: 'deny' as const })),
+      files: [...CREDENTIAL_FILES.map((path) => join(home, path)), ...hidden].map((path) => ({
+        path,
+        mode: 'deny' as const,
+      })),
     },
   };
 }
@@ -152,14 +170,67 @@ async function probeNestedUserNamespace(): Promise<boolean> {
 
 const ALLOWED = new Set(READ_ONLY_AGENT_TOOLS);
 
-/** Why a read-only agent may not make this call, or null when it may. */
-export function readOnlyDenial(toolName: string, toolInput: unknown): string | null {
+/** Where a reading tool looks: its file or folder, or the static start of an absolute pattern. */
+function targetsOf(toolName: string, input: Record<string, unknown>, cwd: string): string[] {
+  const str = (value: unknown) => (typeof value === 'string' && value.length > 0 ? value : null);
+  if (toolName === 'Read') return [str(input.file_path) ?? ''];
+  if (toolName !== 'Glob' && toolName !== 'Grep') return [];
+  const targets = [str(input.path) ?? cwd];
+  const pattern = toolName === 'Glob' ? str(input.pattern) : str(input.glob);
+  if (pattern && isAbsolute(pattern)) {
+    const start = pattern.search(/[*?[{]/);
+    targets.push(start === -1 ? pattern : dirname(pattern.slice(0, start) + 'x'));
+  }
+  return targets;
+}
+
+/** A path with its symlinks resolved, as far as it exists (a link inside the checkout can point out). */
+function realOf(path: string): string {
+  const missing: string[] = [];
+  let current = path;
+  for (;;) {
+    try {
+      return join(realpathSync(current), ...missing.reverse());
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return path;
+      missing.push(current.slice(parent.length + 1));
+      current = parent;
+    }
+  }
+}
+
+const inside = (path: string, root: string) => {
+  const rel = relative(root, path);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+};
+
+/** Why a read-only agent may not make this call, or null when it may. */ /** Why a read-only agent may not make this call, or null when it may. */
+export function readOnlyDenial(
+  toolName: string,
+  toolInput: unknown,
+  /** The checkout first, then any other folder its reading tools may read (role inputs). */
+  roots: readonly string[],
+): string | null {
   if (!ALLOWED.has(toolName)) {
     return `This thread may only read: ${toolName} is not available. Use ${READ_ONLY_AGENT_TOOLS.join(', ')}.`;
   }
-  const input = toolInput as { dangerouslyDisableSandbox?: unknown } | null;
-  if (toolName === 'Bash' && input?.dangerouslyDisableSandbox) {
+  const input = (toolInput && typeof toolInput === 'object' ? toolInput : {}) as Record<
+    string,
+    unknown
+  >;
+  if (toolName === 'Bash' && input.dangerouslyDisableSandbox) {
     return 'This thread may only read: commands run in the sandbox, without network or writes.';
+  }
+  // Read, Glob and Grep run in the agent's own process, outside the sandbox:
+  // they may read only the checkout and the role's inputs.
+  const [cwd = '/'] = roots;
+  const realRoots = roots.map(realOf);
+  for (const target of targetsOf(toolName, input, cwd)) {
+    const real = realOf(resolve(cwd, target));
+    if (!realRoots.some((root) => inside(real, root))) {
+      return `This thread may only read its checkout: ${target || '(no path)'} is outside it.`;
+    }
   }
   return null;
 }

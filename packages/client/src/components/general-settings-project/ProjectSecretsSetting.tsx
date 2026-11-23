@@ -82,7 +82,7 @@ function SecretRow({
       data-testid={`settings-secret-row-${key}`}
     >
       <div className="min-w-0">
-        <p className="text-foreground flex flex-wrap items-center gap-2 text-sm font-medium">
+        <div className="text-foreground flex flex-wrap items-center gap-2 text-sm font-medium">
           <span className="font-mono break-all">{secret.name}</span>
           {overridden && (
             <Badge variant="outline" data-testid={`settings-secret-override-${key}`}>
@@ -91,7 +91,7 @@ function SecretRow({
                 : t('projectSecrets.overriddenByYours', 'Overridden by yours')}
             </Badge>
           )}
-        </p>
+        </div>
         <p className="text-muted-foreground mt-0.5 text-xs">
           {t('projectSecrets.updatedOn', 'Updated {{date}}', {
             date: formatDate(secret.updatedAt),

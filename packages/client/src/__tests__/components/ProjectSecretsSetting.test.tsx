@@ -230,6 +230,10 @@ describe('ProjectSecretsSetting', () => {
       'Overrides shared',
     );
     expect(screen.queryByTestId('settings-secret-override-project-OTHER')).toBeNull();
+    // The badge is a <div>: inside a <p> it is invalid HTML (a hydration error).
+    expect(
+      screen.getByTestId('settings-secret-override-project-DATABASE_URL').closest('p'),
+    ).toBeNull();
   });
 
   test('deleting says what changes, and names the shared fallback for an override', async () => {

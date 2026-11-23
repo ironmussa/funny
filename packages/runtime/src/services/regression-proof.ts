@@ -410,6 +410,17 @@ async function planProof(
     };
   }
 
+  // Without the placeholder the command would run the whole suite, not the
+  // changed tests: that proves nothing about them.
+  const unfilled = request.rules.find((rule) => !rule.command.includes('{{files}}'));
+  if (unfilled) {
+    return {
+      outcome: failed(`Rule command has no {{files}} placeholder: ${unfilled.command}`, {
+        baseSha,
+      }),
+    };
+  }
+
   const activeRules = [...assignFilesToRules(changedResult.value, request.rules)].flatMap(
     ([rule, files]) =>
       files.length > 0

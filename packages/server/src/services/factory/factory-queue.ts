@@ -37,6 +37,7 @@ import { validateSecretName } from '@funny/shared/project-secrets';
 import { err, errAsync, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
+import { scheduleProblem } from '../schedules.js';
 import {
   FACTORY_FLOW_INPUTS,
   formatFactoryFlowProblems,
@@ -61,7 +62,6 @@ import {
 } from './factory-settings.js';
 import {
   createFactoryTriggersRepository,
-  scheduleProblem,
   type FactoryTriggersRepository,
   type SaveTriggerInput,
 } from './factory-triggers.js';

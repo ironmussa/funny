@@ -12,12 +12,12 @@
  */
 
 import type { FactoryTrigger } from '@funny/shared/contracts/factory';
-import { Cron } from 'croner';
 import { and, asc, eq, isNotNull, lte } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { factoryTriggers } from '../../db/schema.js';
+import { nextOccurrence } from '../schedules.js';
 import { parseStoredInputs } from './factory-runs.js';
 
 export type FactoryTriggersError = { kind: 'storage'; message: string };
@@ -38,30 +38,6 @@ const toTrigger = (row: Row): FactoryTrigger => ({
   enabled: row.enabled === 1,
   nextRunAt: row.nextRunAt ?? null,
 });
-
-/** Why `pattern` is not a schedule that can run, or null when it is. */
-export function scheduleProblem(pattern: string): string | null {
-  try {
-    const cron = new Cron(pattern, { paused: true });
-    const next = cron.nextRun();
-    cron.stop();
-    return next ? null : 'The schedule never occurs.';
-  } catch (error) {
-    return error instanceof Error ? error.message : String(error);
-  }
-}
-
-/** The first occurrence of `pattern` after `from`, or null when there is none. */
-function nextOccurrence(pattern: string, from: Date): string | null {
-  try {
-    const cron = new Cron(pattern, { paused: true });
-    const next = cron.nextRun(from);
-    cron.stop();
-    return next ? next.toISOString() : null;
-  } catch {
-    return null;
-  }
-}
 
 /** An occurrence older than this when its tick comes was missed: it is not run late. */
 export const MISSED_OCCURRENCE_MS = 5 * 60 * 1000;

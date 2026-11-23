@@ -20,7 +20,7 @@ import { isAgentRunning } from '../../services/agent-runner-control.js';
 import { restoreTracked, threadTarget } from '../../services/git-destructive.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThreadCwd } from '../../utils/route-helpers.js';
+import { withThreadCheckout } from './checkout-route.js';
 import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const undoRoutes = new Hono<HonoEnv>();
@@ -39,20 +39,18 @@ undoRoutes.post('/project/:projectId/undo/:activityId', async (c) => {
   return c.json({ ok: true, snapshot: result.value.ref });
 });
 
-undoRoutes.post('/:threadId/undo/:activityId', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  if (isAgentRunning(threadId)) {
-    return resultToResponse(
-      c,
-      err(conflict('Stop the agent before restoring: it is using this worktree')),
-    );
-  }
-  const target = await threadTarget(userId, threadId, cwdResult.value);
-  const result = await restoreTracked(target, c.req.param('activityId'));
-  if (result.isErr()) return resultToResponse(c, result);
-  await invalidateGitStatusCache(threadId);
-  return c.json({ ok: true, snapshot: result.value.ref });
-});
+undoRoutes.post('/:threadId/undo/:activityId', (c) =>
+  withThreadCheckout(c, async ({ threadId, userId, cwd }) => {
+    if (isAgentRunning(threadId)) {
+      return resultToResponse(
+        c,
+        err(conflict('Stop the agent before restoring: it is using this worktree')),
+      );
+    }
+    const target = await threadTarget(userId, threadId, cwd);
+    const result = await restoreTracked(target, c.req.param('activityId'));
+    if (result.isErr()) return resultToResponse(c, result);
+    await invalidateGitStatusCache(threadId);
+    return c.json({ ok: true, snapshot: result.value.ref });
+  }),
+);

@@ -33,6 +33,7 @@ import {
   steerFromContext,
   isSteerGrantFor,
 } from '../../utils/route-helpers.js';
+import { withProjectCheckout } from './checkout-route.js';
 import {
   gitStatusCache,
   GIT_STATUS_CACHE_TTL_MS,
@@ -40,7 +41,6 @@ import {
   emitPRUpdateForThread,
   getCachedPR,
   notifyStatusChanged,
-  requireProjectCwd,
   scheduleBackgroundFetch,
   schedulePRLookup,
 } from './helpers.js';
@@ -522,45 +522,41 @@ async function computeBulkStatus(
 }
 
 // GET /api/git/project/:projectId/status
-statusRoutes.get('/project/:projectId/status', async (c) => {
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const projectId = c.req.param('projectId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  if (!existsSync(cwd)) {
-    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
-  }
+statusRoutes.get('/project/:projectId/status', (c) =>
+  withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
+    if (!existsSync(cwd)) {
+      return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
+    }
 
-  // Background fetch so unpulledCommitCount is fresh on next request. On
-  // completion, hint the client to re-fetch the project status (the project-mode
-  // slice uses `fetchProjectStatus`, not the WS `git:status` path) so incoming
-  // commits surface without a second manual refresh.
-  const identity = await resolveIdentity(userId, projectId);
-  scheduleBackgroundFetch(projectId, cwd, identity ?? undefined, undefined, () => {
-    wsBroker.emitToUser(userId, {
-      type: 'git:refs-updated',
-      threadId: '',
-      data: { projectId },
+    // Background fetch so unpulledCommitCount is fresh on next request. On
+    // completion, hint the client to re-fetch the project status (the project-mode
+    // slice uses `fetchProjectStatus`, not the WS `git:status` path) so incoming
+    // commits surface without a second manual refresh.
+    const identity = await resolveIdentity(userId, projectId);
+    scheduleBackgroundFetch(projectId, cwd, identity ?? undefined, undefined, () => {
+      wsBroker.emitToUser(userId, {
+        type: 'git:refs-updated',
+        threadId: '',
+        data: { projectId },
+      });
     });
-  });
 
-  const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
-  const summaryResult = await getStatusSummary(cwd, undefined, undefined, {
-    onChanged: notifyStatusChanged(userId, projectId),
-  });
-  statusSpan.end(
-    summaryResult.isOk() ? 'ok' : 'error',
-    summaryResult.isErr() ? summaryResult.error.message : undefined,
-  );
-  if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
-  const summary = summaryResult.value;
-  return c.json({
-    state: deriveGitSyncState(summary),
-    ...summary,
-  });
-});
+    const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
+    const summaryResult = await getStatusSummary(cwd, undefined, undefined, {
+      onChanged: notifyStatusChanged(userId, projectId),
+    });
+    statusSpan.end(
+      summaryResult.isOk() ? 'ok' : 'error',
+      summaryResult.isErr() ? summaryResult.error.message : undefined,
+    );
+    if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
+    const summary = summaryResult.value;
+    return c.json({
+      state: deriveGitSyncState(summary),
+      ...summary,
+    });
+  }),
+);
 
 function statusWithPR(
   baseStatus: Record<string, unknown>,

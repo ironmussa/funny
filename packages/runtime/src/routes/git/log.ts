@@ -32,16 +32,11 @@ import { resolveIdentity, resolveThreadIdentity } from '../../services/git-servi
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
+import { requireThread, steerFromContext } from '../../utils/route-helpers.js';
 import { parseQuery, queryBoolean } from '../../validation/request.js';
 import { gitRefSchema, validate } from '../../validation/schemas.js';
-import {
-  getCachedPR,
-  getLastKnownPR,
-  requireGitWorkingTree,
-  requireProjectCwd,
-  schedulePRLookup,
-} from './helpers.js';
+import { onBothCheckouts, withProjectCheckout, withThreadCheckout } from './checkout-route.js';
+import { getCachedPR, getLastKnownPR, requireGitWorkingTree, schedulePRLookup } from './helpers.js';
 
 export const logRoutes = new Hono<HonoEnv>();
 
@@ -390,190 +385,47 @@ async function mergedBranchRefs(
   );
 }
 
-// ─── Project-scoped routes ──────────────────────────────
+// ─── Log and graph-log, shared by the project and thread routes ───────────
 
-// GET /api/git/project/:projectId/log
-logRoutes.get('/project/:projectId/log', async (c) => {
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const projectId = c.req.param('projectId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  const workTreeResult = await requireGitWorkingTree(cwd);
-  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
+type LogIds = { projectId: string } | { threadId: string };
+
+const githubEnvOf = (identity: { githubToken?: string } | undefined) =>
+  identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+
+/** The paged log of `cwd` (from `baseBranch` when given) with its unpushed/unpulled marks. */
+async function answerLog(
+  c: Context<HonoEnv>,
+  cwd: string,
+  ids: LogIds,
+  baseBranch: string | null | undefined,
+): Promise<Response> {
   const { limit, skip } = parseLogPaging(c);
   const [result, unpushedSet, unpulledSet] = await Promise.all([
-    fetchLogSpanned(c, 'git.log', { projectId }, () => getLog(cwd, limit + 1, undefined, skip)),
-    fetchUnpushedSpanned(c, cwd, { projectId }),
-    fetchUnpulledSpanned(c, cwd, { projectId }),
+    fetchLogSpanned(c, 'git.log', ids, () => getLog(cwd, limit + 1, baseBranch, skip)),
+    fetchUnpushedSpanned(c, cwd, ids),
+    fetchUnpulledSpanned(c, cwd, ids),
   ]);
   return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
-});
+}
 
-// GET /api/git/project/:projectId/graph-log — topology-aware log (parents + refs)
-logRoutes.get('/project/:projectId/graph-log', async (c) => {
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const projectId = c.req.param('projectId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  const workTreeResult = await requireGitWorkingTree(cwd);
-  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
-  const { limit, skip } = parseLogPaging(c);
-  const all = c.req.query('all') !== 'false';
-  const identity = await resolveIdentity(userId, projectId);
-  const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-  const excludeRefs = await mergedBranchRefs(c, cwd, ghEnv, { userId, projectId, threadId: '' });
-  const [result, unpushedSet, unpulledSet] = await Promise.all([
-    fetchLogSpanned(c, 'git.graph_log', { projectId }, () =>
-      getGraphLog(cwd, { limit: limit + 1, skip, all, excludeRefs }),
-    ),
-    fetchUnpushedSpanned(c, cwd, { projectId }),
-    fetchUnpulledSpanned(c, cwd, { projectId }),
-  ]);
-  if (result.isErr()) return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
-  const payload = buildLogPayload(result.value, unpushedSet, unpulledSet, limit);
-  const entries = await enrichGraphRefsWithPullRequests(
-    c,
-    cwd,
-    payload.entries,
-    { projectId },
-    ghEnv,
-    { userId, projectId, threadId: '' },
-  );
-  return c.json({ ...payload, entries });
-});
-
-// GET /api/git/project/:projectId/reflog-events — local rebase operation markers
-logRoutes.get('/project/:projectId/reflog-events', async (c) => {
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const projectId = c.req.param('projectId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await fetchLogSpanned(c, 'git.reflog_events', { projectId }, () =>
-    getRebaseReflogEvents(cwdResult.value),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ events: result.value });
-});
-
-// GET /api/git/project/:projectId/commit/:hash/files
-logRoutes.get('/project/:projectId/commit/:hash/files', async (c) => {
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await fetchLogSpanned(
-    c,
-    'git.commit_files',
-    { projectId: c.req.param('projectId'), hash: c.req.param('hash') },
-    () => getCommitFiles(cwdResult.value, c.req.param('hash')),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ files: result.value });
-});
-
-// GET /api/git/project/:projectId/commit/:hash/diff
-logRoutes.get('/project/:projectId/commit/:hash/diff', async (c) => {
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
-  }
-  const result = await fetchLogSpanned(
-    c,
-    'git.commit_diff',
-    {
-      projectId: c.req.param('projectId'),
-      hash: c.req.param('hash'),
-      path: filePath,
-    },
-    () => getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ diff: result.value });
-});
-
-// GET /api/git/project/:projectId/commit/:hash/body
-logRoutes.get('/project/:projectId/commit/:hash/body', async (c) => {
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await fetchLogSpanned(
-    c,
-    'git.commit_body',
-    { projectId: c.req.param('projectId'), hash: c.req.param('hash') },
-    () => getCommitBody(cwdResult.value, c.req.param('hash')),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ body: result.value });
-});
-
-// ─── Thread-scoped routes ───────────────────────────────
-
-// GET /api/git/:threadId/log
-logRoutes.get('/:threadId/log', async (c) => {
-  const userId = c.get('userId');
-  const threadId = c.req.param('threadId');
-  const steer = steerFromContext(c);
-  const threadResult = await requireThread(threadId, userId, steer);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  const thread = threadResult.value;
-
-  const cwdResult = await requireThreadCwd(threadId, userId, steer);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  const workTreeResult = await requireGitWorkingTree(cwd);
-  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
-
-  const { limit, skip } = parseLogPaging(c);
-  const all = c.req.query('all') === 'true';
-  const baseBranch = all ? undefined : thread.baseBranch;
-  const [result, unpushedSet, unpulledSet] = await Promise.all([
-    fetchLogSpanned(c, 'git.log', { threadId }, () => getLog(cwd, limit + 1, baseBranch, skip)),
-    fetchUnpushedSpanned(c, cwd, { threadId }),
-    fetchUnpulledSpanned(c, cwd, { threadId }),
-  ]);
-  return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
-});
-
-// GET /api/git/:threadId/graph-log — topology-aware log (parents + refs)
-logRoutes.get('/:threadId/graph-log', async (c) => {
-  const userId = c.get('userId');
-  const threadId = c.req.param('threadId');
-  const steer = steerFromContext(c);
-  const threadResult = await requireThread(threadId, userId, steer);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-
-  const cwdResult = await requireThreadCwd(threadId, userId, steer);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  const workTreeResult = await requireGitWorkingTree(cwd);
-  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
-
+/** The topology-aware log of `cwd`, its branch refs annotated with their cached PRs. */
+async function answerGraphLog(
+  c: Context<HonoEnv>,
+  cwd: string,
+  ids: LogIds,
+  ghEnv: Record<string, string> | undefined,
+  audience: GraphPRAudience,
+): Promise<Response> {
   const { limit, skip } = parseLogPaging(c);
   // Graph view defaults to all refs so divergent branches show; opt out with all=false.
   const all = c.req.query('all') !== 'false';
-  const identity = await resolveThreadIdentity(userId, threadId);
-  const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-  const excludeRefs = await mergedBranchRefs(c, cwd, ghEnv, {
-    userId,
-    projectId: threadResult.value.projectId,
-    threadId,
-  });
+  const excludeRefs = await mergedBranchRefs(c, cwd, ghEnv, audience);
   const [result, unpushedSet, unpulledSet] = await Promise.all([
-    fetchLogSpanned(c, 'git.graph_log', { threadId }, () =>
+    fetchLogSpanned(c, 'git.graph_log', ids, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all, excludeRefs }),
     ),
-    fetchUnpushedSpanned(c, cwd, { threadId }),
-    fetchUnpulledSpanned(c, cwd, { threadId }),
+    fetchUnpushedSpanned(c, cwd, ids),
+    fetchUnpulledSpanned(c, cwd, ids),
   ]);
   if (result.isErr()) return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
   const payload = buildLogPayload(result.value, unpushedSet, unpulledSet, limit);
@@ -581,79 +433,139 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
     c,
     cwd,
     payload.entries,
-    { threadId },
+    ids,
     ghEnv,
-    { userId, projectId: threadResult.value.projectId, threadId },
+    audience,
   );
   return c.json({ ...payload, entries });
-});
+}
 
-// GET /api/git/:threadId/reflog-events — local rebase operation markers
-logRoutes.get('/:threadId/reflog-events', async (c) => {
-  const userId = c.get('userId');
-  const threadId = c.req.param('threadId');
-  const steer = steerFromContext(c);
-  const threadResult = await requireThread(threadId, userId, steer);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+// ─── Project-scoped routes ──────────────────────────────
 
-  const cwdResult = await requireThreadCwd(threadId, userId, steer);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await fetchLogSpanned(c, 'git.reflog_events', { threadId }, () =>
-    getRebaseReflogEvents(cwdResult.value),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ events: result.value });
-});
+// GET /api/git/project/:projectId/log
+logRoutes.get('/project/:projectId/log', (c) =>
+  withProjectCheckout(c, async ({ projectId, cwd }) => {
+    const workTreeResult = await requireGitWorkingTree(cwd);
+    if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
+    return answerLog(c, cwd, { projectId }, undefined);
+  }),
+);
 
-// GET /api/git/:threadId/commit/:hash/files
-logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await fetchLogSpanned(
+// GET /api/git/project/:projectId/graph-log — topology-aware log (parents + refs)
+logRoutes.get('/project/:projectId/graph-log', (c) =>
+  withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
+    const workTreeResult = await requireGitWorkingTree(cwd);
+    if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
+    const ghEnv = githubEnvOf(await resolveIdentity(userId, projectId));
+    return answerGraphLog(c, cwd, { projectId }, ghEnv, { userId, projectId, threadId: '' });
+  }),
+);
+
+// ─── Thread-scoped routes (on the steer allow-list) ─────
+
+// GET /api/git/:threadId/log
+logRoutes.get('/:threadId/log', (c) =>
+  withThreadCheckout(
     c,
-    'git.commit_files',
-    { threadId: c.req.param('threadId'), hash: c.req.param('hash') },
-    () => getCommitFiles(cwdResult.value, c.req.param('hash')),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ files: result.value });
-});
-
-// GET /api/git/:threadId/commit/:hash/diff
-logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
-  }
-  const result = await fetchLogSpanned(
-    c,
-    'git.commit_diff',
-    {
-      threadId: c.req.param('threadId'),
-      hash: c.req.param('hash'),
-      path: filePath,
+    async ({ threadId, userId, cwd }) => {
+      const thread = await requireThread(threadId, userId, steerFromContext(c));
+      if (thread.isErr()) return resultToResponse(c, thread);
+      const workTreeResult = await requireGitWorkingTree(cwd);
+      if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
+      const all = c.req.query('all') === 'true';
+      return answerLog(c, cwd, { threadId }, all ? undefined : thread.value.baseBranch);
     },
-    () => getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ diff: result.value });
-});
+    { steerable: true },
+  ),
+);
 
-// GET /api/git/:threadId/commit/:hash/body
-logRoutes.get('/:threadId/commit/:hash/body', async (c) => {
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await fetchLogSpanned(
+// GET /api/git/:threadId/graph-log — topology-aware log (parents + refs)
+logRoutes.get('/:threadId/graph-log', (c) =>
+  withThreadCheckout(
     c,
-    'git.commit_body',
-    { threadId: c.req.param('threadId'), hash: c.req.param('hash') },
-    () => getCommitBody(cwdResult.value, c.req.param('hash')),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ body: result.value });
-});
+    async ({ threadId, userId, cwd }) => {
+      const thread = await requireThread(threadId, userId, steerFromContext(c));
+      if (thread.isErr()) return resultToResponse(c, thread);
+      const workTreeResult = await requireGitWorkingTree(cwd);
+      if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
+      const ghEnv = githubEnvOf(await resolveThreadIdentity(userId, threadId));
+      const audience = { userId, projectId: thread.value.projectId, threadId };
+      return answerGraphLog(c, cwd, { threadId }, ghEnv, audience);
+    },
+    { steerable: true },
+  ),
+);
+
+// ─── Commit reads, the same on a project and on a thread checkout ───────────
+
+const commitHash = (c: Context<HonoEnv>) => c.req.param('hash') ?? '';
+
+// GET /api/git/(project/:projectId | :threadId)/reflog-events — local rebase operation markers
+onBothCheckouts(
+  logRoutes,
+  'GET',
+  '/reflog-events',
+  async (c, { cwd, ids }) => {
+    const result = await fetchLogSpanned(c, 'git.reflog_events', ids, () =>
+      getRebaseReflogEvents(cwd),
+    );
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ events: result.value });
+  },
+  { steerable: true },
+);
+
+// GET /api/git/(project/:projectId | :threadId)/commit/:hash/files
+onBothCheckouts(
+  logRoutes,
+  'GET',
+  '/commit/:hash/files',
+  async (c, { cwd, ids }) => {
+    const hash = commitHash(c);
+    const result = await fetchLogSpanned(c, 'git.commit_files', { ...ids, hash }, () =>
+      getCommitFiles(cwd, hash),
+    );
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ files: result.value });
+  },
+  { steerable: true },
+);
+
+// GET /api/git/(project/:projectId | :threadId)/commit/:hash/diff
+onBothCheckouts(
+  logRoutes,
+  'GET',
+  '/commit/:hash/diff',
+  async (c, { cwd, ids }) => {
+    const filePath = c.req.query('path');
+    if (!filePath) {
+      return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
+    }
+    const hash = commitHash(c);
+    const result = await fetchLogSpanned(
+      c,
+      'git.commit_diff',
+      { ...ids, hash, path: filePath },
+      () => getCommitFileDiff(cwd, hash, filePath),
+    );
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ diff: result.value });
+  },
+  { steerable: true },
+);
+
+// GET /api/git/(project/:projectId | :threadId)/commit/:hash/body
+onBothCheckouts(
+  logRoutes,
+  'GET',
+  '/commit/:hash/body',
+  async (c, { cwd, ids }) => {
+    const hash = commitHash(c);
+    const result = await fetchLogSpanned(c, 'git.commit_body', { ...ids, hash }, () =>
+      getCommitBody(cwd, hash),
+    );
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ body: result.value });
+  },
+  { steerable: true },
+);

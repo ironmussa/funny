@@ -17,7 +17,6 @@ import {
 import { Hono } from 'hono';
 
 import { log } from '../../lib/logger.js';
-import { requestSpan } from '../../middleware/tracing.js';
 import { gitRuntimeService } from '../../services/git-runtime-service.js';
 import {
   pushChanges as gitServicePush,
@@ -29,7 +28,6 @@ import {
 import { recordedGithubWrite } from '../../services/github-write-activity.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThreadCwd } from '../../utils/route-helpers.js';
 import {
   validate,
   publishRepoSchema,
@@ -37,249 +35,188 @@ import {
   pushBranchSchema,
   setRemoteSchema,
 } from '../../validation/schemas.js';
-import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import {
+  okOnly,
+  projectGitMutation,
+  threadGitMutation,
+  traced,
+  withProjectCheckout,
+  withThreadCheckout,
+} from './checkout-route.js';
+import { gitStatusCache } from './helpers.js';
 
 export const remoteRoutes = new Hono<HonoEnv>();
 
+// A push or pull moves HEAD and the origin ref: also drop the core cwd-keyed
+// summary cache (1s TTL), or an immediate status read returns a stale count.
+const dropStatusSummary = ({ cwd }: { cwd: string }) => invalidateStatusCache(cwd);
+
+// ── Project checkout (/project/:projectId) ──────────────────────────────────
+
 // POST /api/git/project/:projectId/push
-remoteRoutes.post('/project/:projectId/push', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId, projectId);
-  const result = await push(cwdResult.value, identity);
-  if (result.isErr()) return resultToResponse(c, result);
-  // Invalidate BOTH caches: the bulk per-project HTTP cache AND the core
-  // cwd-keyed summary cache (1s TTL) — otherwise an immediate post-push
-  // status recompute can return a stale unpushed count.
-  invalidateStatusCache(cwdResult.value);
-  gitStatusCache.delete(projectId);
-  return c.json({ ok: true, output: result.value });
-});
+remoteRoutes.post('/project/:projectId/push', (c) =>
+  projectGitMutation(c, {
+    run: async ({ projectId, userId, cwd }) => push(cwd, await resolveIdentity(userId, projectId)),
+    after: dropStatusSummary,
+  }),
+);
 
 // POST /api/git/project/:projectId/push-branch — push a specific local branch.
-remoteRoutes.post('/project/:projectId/push-branch', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const parsed = validate(pushBranchSchema, await c.req.json().catch(() => ({})));
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-  const result = await gitServicePushBranch(
-    projectId,
-    userId,
-    cwdResult.value,
-    parsed.value.branch,
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  invalidateStatusCache(cwdResult.value);
-  gitStatusCache.delete(projectId);
-  return c.json({ ok: true, output: result.value });
-});
+remoteRoutes.post('/project/:projectId/push-branch', (c) =>
+  projectGitMutation(c, {
+    body: pushBranchSchema,
+    run: ({ projectId, userId, cwd }, { branch }) =>
+      gitServicePushBranch(projectId, userId, cwd, branch),
+    after: dropStatusSummary,
+  }),
+);
 
 // GET /api/git/project/:projectId/remote-url
-remoteRoutes.get('/project/:projectId/remote-url', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const span = requestSpan(c, 'git.remote_url', { projectId });
-  const result = await getRemoteUrl(cwdResult.value);
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ remoteUrl: result.value });
-});
+remoteRoutes.get('/project/:projectId/remote-url', (c) =>
+  withProjectCheckout(c, async ({ projectId, cwd }) => {
+    const result = await traced(c, 'git.remote_url', { projectId }, () => getRemoteUrl(cwd));
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ remoteUrl: result.value });
+  }),
+);
 
 // POST /api/git/project/:projectId/remote
 // Add or update the `origin` remote for a project that was initialized
 // locally with no remote configured (GitHub Desktop-style "add remote").
-remoteRoutes.post('/project/:projectId/remote', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const parsed = validate(setRemoteSchema, await c.req.json().catch(() => ({})));
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-  log.info('git.setOrigin', { namespace: 'git', projectId });
-  const result = await setOrigin(cwdResult.value, parsed.value.url);
-  if (result.isErr()) {
-    log.error('git.setOrigin.failed', {
-      namespace: 'git',
-      projectId,
-      error: String(result.error),
-    });
-    return resultToResponse(c, result);
-  }
-  gitStatusCache.delete(projectId);
-  return c.json({ ok: true });
-});
-
-// GET /api/git/project/:projectId/gh-orgs
-remoteRoutes.get('/project/:projectId/gh-orgs', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId, projectId);
-  if (!identity?.githubToken) {
-    return c.json({ orgs: [] });
-  }
-  const span = requestSpan(c, 'github.orgs', { projectId });
-  const result = await listGitHubOrgs(cwdResult.value, { GH_TOKEN: identity.githubToken });
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ orgs: result.value });
-});
-
-// POST /api/git/project/:projectId/publish
-remoteRoutes.post('/project/:projectId/publish', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId, projectId);
-  if (!identity?.githubToken) {
-    return c.json({ error: 'GitHub token required. Set one in Settings > Profile.' }, 400);
-  }
-  const parsed = validate(publishRepoSchema, await c.req.json());
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-  log.info('git.publish', { namespace: 'git', projectId, repoName: parsed.value.name });
-  const token = identity.githubToken;
-  // Recorded as a `github.write` activity (track-user-and-scheduled-actions).
-  return recordedGithubWrite(
-    {
-      userId,
-      projectId,
-      title: `Publish ${parsed.value.name} to GitHub`,
-      input: { action: 'repo-publish', repo: parsed.value.name },
-      effectsOf: (body) => [
-        {
-          effect: 'repo-published',
-          target: typeof body.repoUrl === 'string' ? body.repoUrl : parsed.value.name,
-        },
-      ],
-    },
-    async () => {
-      const result = await publishRepo(cwdResult.value, parsed.value, { GH_TOKEN: token });
+remoteRoutes.post('/project/:projectId/remote', (c) =>
+  projectGitMutation(c, {
+    body: setRemoteSchema,
+    run: async ({ projectId, cwd }, { url }) => {
+      log.info('git.setOrigin', { namespace: 'git', projectId });
+      const result = await setOrigin(cwd, url);
       if (result.isErr()) {
-        log.error('git.publish.failed', {
+        log.error('git.setOrigin.failed', {
           namespace: 'git',
           projectId,
           error: String(result.error),
         });
-        return resultToResponse(c, result);
       }
-      gitStatusCache.delete(projectId);
-      return c.json({ ok: true, repoUrl: result.value });
+      return result;
     },
-  );
-});
+    respond: okOnly,
+  }),
+);
+
+// GET /api/git/project/:projectId/gh-orgs
+remoteRoutes.get('/project/:projectId/gh-orgs', (c) =>
+  withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
+    const identity = await resolveIdentity(userId, projectId);
+    const token = identity?.githubToken;
+    if (!token) return c.json({ orgs: [] });
+    const result = await traced(c, 'github.orgs', { projectId }, () =>
+      listGitHubOrgs(cwd, { GH_TOKEN: token }),
+    );
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ orgs: result.value });
+  }),
+);
+
+// POST /api/git/project/:projectId/publish
+remoteRoutes.post('/project/:projectId/publish', (c) =>
+  withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
+    const identity = await resolveIdentity(userId, projectId);
+    const token = identity?.githubToken;
+    if (!token) {
+      return c.json({ error: 'GitHub token required. Set one in Settings > Profile.' }, 400);
+    }
+    const parsed = validate(publishRepoSchema, await c.req.json());
+    if (parsed.isErr()) return resultToResponse(c, parsed);
+    const repo = parsed.value;
+    log.info('git.publish', { namespace: 'git', projectId, repoName: repo.name });
+    // Recorded as a `github.write` activity (track-user-and-scheduled-actions).
+    return recordedGithubWrite(
+      {
+        userId,
+        projectId,
+        title: `Publish ${repo.name} to GitHub`,
+        input: { action: 'repo-publish', repo: repo.name },
+        effectsOf: (body) => [
+          {
+            effect: 'repo-published',
+            target: typeof body.repoUrl === 'string' ? body.repoUrl : repo.name,
+          },
+        ],
+      },
+      async () => {
+        const result = await publishRepo(cwd, repo, { GH_TOKEN: token });
+        if (result.isErr()) {
+          log.error('git.publish.failed', {
+            namespace: 'git',
+            projectId,
+            error: String(result.error),
+          });
+          return resultToResponse(c, result);
+        }
+        gitStatusCache.delete(projectId);
+        return c.json({ ok: true, repoUrl: result.value });
+      },
+    );
+  }),
+);
 
 // POST /api/git/project/:projectId/pull
-remoteRoutes.post('/project/:projectId/pull', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(pullSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-  const identity = await resolveIdentity(userId, projectId);
-  const result = await pull(cwdResult.value, parsed.value.strategy, identity);
-  if (result.isErr()) return resultToResponse(c, result);
-  // Pull advanced HEAD and the origin ref — drop the stale cwd-keyed summary so
-  // the unpulled badge clears on the very next status read instead of lingering.
-  invalidateStatusCache(cwdResult.value);
-  gitStatusCache.delete(projectId);
-  return c.json({ ok: true, output: result.value });
-});
+remoteRoutes.post('/project/:projectId/pull', (c) =>
+  projectGitMutation(c, {
+    body: pullSchema,
+    run: async ({ projectId, userId, cwd }, { strategy }) =>
+      pull(cwd, strategy, await resolveIdentity(userId, projectId)),
+    // Pull advanced HEAD and the origin ref: the unpulled badge clears on the next read.
+    after: dropStatusSummary,
+  }),
+);
 
 // POST /api/git/project/:projectId/fetch
-remoteRoutes.post('/project/:projectId/fetch', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId');
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId, projectId);
-  const result = await gitRuntimeService.fetchProject(projectId, {
-    cwd: cwdResult.value,
-    identity,
-  });
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ ok: true });
-});
+remoteRoutes.post('/project/:projectId/fetch', (c) =>
+  withProjectCheckout(c, async ({ projectId, userId, cwd }) => {
+    const identity = await resolveIdentity(userId, projectId);
+    const result = await gitRuntimeService.fetchProject(projectId, { cwd, identity });
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ ok: true });
+  }),
+);
+
+// ── Thread checkout (/:threadId) ────────────────────────────────────────────
 
 // POST /api/git/:threadId/push
-remoteRoutes.post('/:threadId/push', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-
-  const span = requestSpan(c, 'git.push', { threadId });
-  const result = await gitServicePush(threadId, userId, cwdResult.value);
-  if (result.isErr()) {
-    span.end('error', result.error.message);
-    return resultToResponse(c, result);
-  }
-  invalidateStatusCache(cwdResult.value);
-  await invalidateGitStatusCache(threadId);
-  span.end('ok');
-  return c.json({ ok: true, output: result.value });
-});
+remoteRoutes.post('/:threadId/push', (c) =>
+  threadGitMutation(c, {
+    run: ({ threadId, userId, cwd }) =>
+      traced(c, 'git.push', { threadId }, () => gitServicePush(threadId, userId, cwd)),
+    after: dropStatusSummary,
+  }),
+);
 
 // POST /api/git/:threadId/push-branch — push a specific local branch.
-remoteRoutes.post('/:threadId/push-branch', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const parsed = validate(pushBranchSchema, await c.req.json().catch(() => ({})));
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-  const result = await gitServicePushBranch(threadId, userId, cwdResult.value, parsed.value.branch);
-  if (result.isErr()) return resultToResponse(c, result);
-  invalidateStatusCache(cwdResult.value);
-  await invalidateGitStatusCache(threadId);
-  return c.json({ ok: true, output: result.value });
-});
+remoteRoutes.post('/:threadId/push-branch', (c) =>
+  threadGitMutation(c, {
+    body: pushBranchSchema,
+    run: ({ threadId, userId, cwd }, { branch }) =>
+      gitServicePushBranch(threadId, userId, cwd, branch),
+    after: dropStatusSummary,
+  }),
+);
 
 // POST /api/git/:threadId/pull
-remoteRoutes.post('/:threadId/pull', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(pullSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-
-  const result = await gitServicePull(threadId, userId, cwdResult.value, parsed.value.strategy);
-  if (result.isErr()) return resultToResponse(c, result);
-  invalidateStatusCache(cwdResult.value);
-  await invalidateGitStatusCache(threadId);
-  return c.json({ ok: true, output: result.value });
-});
+remoteRoutes.post('/:threadId/pull', (c) =>
+  threadGitMutation(c, {
+    body: pullSchema,
+    run: ({ threadId, userId, cwd }, { strategy }) =>
+      gitServicePull(threadId, userId, cwd, strategy),
+    after: dropStatusSummary,
+  }),
+);
 
 // POST /api/git/:threadId/fetch
-remoteRoutes.post('/:threadId/fetch', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId');
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveThreadIdentity(userId, threadId);
-  const result = await gitRuntimeService.fetchThread(threadId, {
-    cwd: cwdResult.value,
-    identity,
-  });
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ ok: true });
-});
+remoteRoutes.post('/:threadId/fetch', (c) =>
+  withThreadCheckout(c, async ({ threadId, userId, cwd }) => {
+    const identity = await resolveThreadIdentity(userId, threadId);
+    const result = await gitRuntimeService.fetchThread(threadId, { cwd, identity });
+    if (result.isErr()) return resultToResponse(c, result);
+    return c.json({ ok: true });
+  }),
+);

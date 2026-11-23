@@ -1,6 +1,13 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { GitStatusInfo, Thread, ThreadStage } from '@funny/shared';
-import { Archive, FolderOpenDot, MoreVertical, Square, Terminal, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  FolderOpenDot,
+  MoreVertical,
+  Square,
+  Terminal,
+  Trash2,
+} from 'lucide-react';
 import { memo, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +42,7 @@ interface Props {
   onDelete: (thread: Thread) => void;
   onArchive?: (thread: Thread) => void;
   search?: string;
+  caseSensitive?: boolean;
   ghost?: boolean;
   contentSnippet?: string;
   projectId?: string;
@@ -49,6 +57,7 @@ export const KanbanCard = memo(function KanbanCard({
   onDelete,
   onArchive,
   search,
+  caseSensitive,
   ghost,
   contentSnippet,
   projectId,
@@ -109,7 +118,13 @@ export const KanbanCard = memo(function KanbanCard({
       onClick={() => {
         if (!isDragging) {
           startTransition(() => {
-            setKanbanContext({ projectId, search, threadId: thread.id, viewMode: 'board' });
+            setKanbanContext({
+              projectId,
+              search,
+              caseSensitive,
+              threadId: thread.id,
+              viewMode: 'board',
+            });
             navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
           });
         }
@@ -117,7 +132,13 @@ export const KanbanCard = memo(function KanbanCard({
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && event.key === 'Enter' && !isDragging) {
           startTransition(() => {
-            setKanbanContext({ projectId, search, threadId: thread.id, viewMode: 'board' });
+            setKanbanContext({
+              projectId,
+              search,
+              caseSensitive,
+              threadId: thread.id,
+              viewMode: 'board',
+            });
             navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
           });
         }

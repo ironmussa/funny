@@ -115,7 +115,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
         } catch (mkErr) {
           log.error('PTY spawn failed: scratch dir mkdir error', {
             namespace: 'ws',
-            error: (mkErr as Error).message,
+            error: mkErr instanceof Error ? mkErr.message : String(mkErr),
             cwd,
             ptyId: data.id,
           });
@@ -135,7 +135,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
       } catch (err) {
         log.error('PTY spawn failed: scratch thread lookup error', {
           namespace: 'ws',
-          error: (err as Error).message,
+          error: err instanceof Error ? err.message : String(err),
           scratchThreadId,
           userId,
         });

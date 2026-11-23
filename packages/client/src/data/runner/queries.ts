@@ -28,7 +28,9 @@ const log = createClientLogger('runner-queries');
 
 function warnAndRethrow(what: string) {
   return (error: unknown): never => {
-    log.warn(`failed to load ${what}`, { error: (error as Error).message });
+    log.warn(`failed to load ${what}`, {
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   };
 }

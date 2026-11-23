@@ -138,7 +138,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   rehydrateWatchers().catch((err) => {
     log.error('Failed to rehydrate git watchers', {
       namespace: 'server',
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
   });
 
@@ -155,7 +155,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   autoResumeStaleThreads().catch((err) => {
     log.error('Failed to auto-resume stale threads', {
       namespace: 'server',
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
   });
 }
@@ -234,7 +234,7 @@ async function autoResumeStaleThreads(): Promise<void> {
       log.error('Failed to auto-resume thread', {
         namespace: 'server',
         threadId: thread.id,
-        error: (err as Error).message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }

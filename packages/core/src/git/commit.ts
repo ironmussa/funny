@@ -114,7 +114,8 @@ export function runHookCommand(
         }
       }
     })(),
-    (e: unknown) => processError((e as Error).message || 'Hook command failed', 1, ''),
+    (e: unknown) =>
+      processError((e instanceof Error ? e.message : String(e)) || 'Hook command failed', 1, ''),
   );
 }
 

@@ -215,7 +215,7 @@ async function relay(
     log.warn('gRPC tunnel request failed', {
       namespace: 'proxy',
       runnerId,
-      error: (tunnelErr as Error).message,
+      error: tunnelErr instanceof Error ? tunnelErr.message : String(tunnelErr),
     });
     return c.json({ error: 'Runner tunnel unavailable.' }, 502);
   }
@@ -447,7 +447,7 @@ async function handleOAuthCallback(
       log.warn('MCP OAuth callback tunnel failed', {
         namespace: 'proxy',
         runnerId: runner.value,
-        error: (e as Error).message,
+        error: e instanceof Error ? e.message : String(e),
       });
       return oauthCallbackPage(c, false, 'Runner did not respond', 502);
     }

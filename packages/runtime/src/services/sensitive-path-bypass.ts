@@ -163,9 +163,11 @@ async function runBash(command: string, cwd: string | undefined): Promise<Bypass
     child.on('error', (err) => {
       log.warn('sensitive bypass Bash spawn error', {
         namespace: NAMESPACE,
-        error: (err as Error).message,
+        error: err instanceof Error ? err.message : String(err),
       });
-      resolve({ output: `Error executing command: ${(err as Error).message}` });
+      resolve({
+        output: `Error executing command: ${err instanceof Error ? err.message : String(err)}`,
+      });
     });
   });
 }

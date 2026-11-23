@@ -256,7 +256,7 @@ export async function restoreGitCheckpoint(params: {
     return {
       canRewind: false,
       filesChanged: [],
-      error: `Failed to restore Git checkpoint: ${(err as Error).message}`,
+      error: `Failed to restore Git checkpoint: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }

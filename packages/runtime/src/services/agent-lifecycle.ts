@@ -654,7 +654,7 @@ export class AgentLifecycleManager {
         namespace: 'agent',
         threadId,
         cwd,
-        error: (err as Error).message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }

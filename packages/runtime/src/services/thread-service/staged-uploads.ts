@@ -99,7 +99,7 @@ export function stageUpload(params: StageUploadParams): ResultAsync<StagedUpload
     log.error('stageUpload failed', {
       namespace: 'thread-service',
       userId: params.userId,
-      error: (e as Error).message,
+      error: e instanceof Error ? e.message : String(e),
     });
     return internal('Upload failed');
   }).andThen((r) => r);
@@ -168,7 +168,7 @@ export function adoptStagedUploads(
     log.error('adoptStagedUploads failed', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (e as Error).message,
+      error: e instanceof Error ? e.message : String(e),
     });
     return internal('Failed to attach uploaded files');
   }).andThen((r) => r);
@@ -191,7 +191,8 @@ export function releaseStagedUploads(
         ),
       );
     })(),
-    (e) => internal(`Failed to release staged uploads: ${(e as Error).message}`),
+    (e) =>
+      internal(`Failed to release staged uploads: ${e instanceof Error ? e.message : String(e)}`),
   );
 }
 
@@ -215,6 +216,6 @@ export function copyThreadUploads(
       if (prepared.isErr()) throw new Error(prepared.error.message);
       await cp(source, join(toCwd, rel), { recursive: true });
     })(),
-    (e) => internal(`Failed to copy uploads: ${(e as Error).message}`),
+    (e) => internal(`Failed to copy uploads: ${e instanceof Error ? e.message : String(e)}`),
   );
 }

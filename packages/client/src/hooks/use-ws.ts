@@ -317,7 +317,9 @@ function connect() {
           count: sessions.length,
         });
       } catch (err) {
-        wsLog.warn('pty:list RPC failed', { error: (err as Error).message });
+        wsLog.warn('pty:list RPC failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
         useTerminalStore.getState().markSessionsChecked();
       } finally {
         inflight = false;

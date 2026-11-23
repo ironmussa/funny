@@ -114,7 +114,7 @@ export class IdleReaper {
         log.error('Idle reap failed', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: err instanceof Error ? err.message : String(err),
         });
       }
     }

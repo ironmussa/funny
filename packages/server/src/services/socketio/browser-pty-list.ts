@@ -60,7 +60,11 @@ export function setupBrowserPtyListRpc(
         });
         ack({ status: 'ok', sessions: sessions as any });
       } catch (err) {
-        ack({ status: 'error', sessions: [], error: (err as Error).message });
+        ack({
+          status: 'error',
+          sessions: [],
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     },
   });

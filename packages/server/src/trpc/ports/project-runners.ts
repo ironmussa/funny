@@ -96,7 +96,7 @@ export async function stopProjectSessionsOnRunners(
             projectId,
             runnerId: runner.value,
             threadId: t.id,
-            error: (e as Error).message,
+            error: e instanceof Error ? e.message : String(e),
           });
         }
       },

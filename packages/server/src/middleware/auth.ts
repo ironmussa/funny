@@ -291,7 +291,7 @@ async function bindLoopbackRunnerUser(
   } catch (err) {
     log.error('Failed to resolve loopback runner userId', {
       namespace: 'auth',
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
     return c.json({ error: 'Failed to resolve userId for runner' }, 500);
   }

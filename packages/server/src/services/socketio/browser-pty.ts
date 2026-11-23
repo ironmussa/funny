@@ -163,7 +163,7 @@ export function setupBrowserPtyHandlers(
           event: eventName,
           userId,
           projectId,
-          error: (e as Error).message,
+          error: e instanceof Error ? e.message : String(e),
         });
         noRunner();
       }

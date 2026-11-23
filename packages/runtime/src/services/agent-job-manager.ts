@@ -182,14 +182,17 @@ async function scanOnce(): Promise<void> {
         log.error('Job completion handling failed', {
           namespace: NS,
           jobId: job.id,
-          error: (err as Error).message,
+          error: err instanceof Error ? err.message : String(err),
         }),
       );
     }
   } catch (err) {
     // A transient repository error must not permanently disable monitoring.
     hasRunningJobs = true;
-    log.error('Job scan failed', { namespace: NS, error: (err as Error).message });
+    log.error('Job scan failed', {
+      namespace: NS,
+      error: err instanceof Error ? err.message : String(err),
+    });
   } finally {
     scanning = false;
     if (hasRunningJobs || scanRequested) armScanner();
@@ -231,7 +234,7 @@ async function onTerminal(job: Job, status: JobStatus, exitCode: number | null):
     log.error('Job wake failed to start agent', {
       namespace: NS,
       jobId: job.id,
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
   });
 }

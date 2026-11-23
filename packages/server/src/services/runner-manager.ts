@@ -44,7 +44,7 @@ async function onRunnersDeleted(runnerIds: string[]): Promise<void> {
       log.warn('Failed to interrupt the activities of a deleted runner', {
         namespace: 'activities',
         runnerId,
-        error: (error as Error).message,
+        error: error instanceof Error ? error.message : String(error),
       }),
     );
   }

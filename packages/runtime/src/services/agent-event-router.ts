@@ -118,7 +118,7 @@ export class AgentEventRouter {
           log.error('Unhandled error in agent:message handler', {
             namespace: 'agent',
             threadId,
-            error: (err as Error).message,
+            error: err instanceof Error ? err.message : String(err),
           });
         });
       this.messageQueues.set(threadId, next);
@@ -134,7 +134,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:error handler', {
           namespace: 'agent',
           threadId,
-          error: (innerErr as Error).message,
+          error: innerErr instanceof Error ? innerErr.message : String(innerErr),
         });
       });
     });
@@ -147,7 +147,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:unexpected-exit handler', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: err instanceof Error ? err.message : String(err),
         });
       });
     });
@@ -181,7 +181,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:stopped handler', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: err instanceof Error ? err.message : String(err),
         });
       });
     });
@@ -197,7 +197,7 @@ export class AgentEventRouter {
         log.error('Unhandled error in agent:session-cleared handler', {
           namespace: 'agent',
           threadId,
-          error: (err as Error).message,
+          error: err instanceof Error ? err.message : String(err),
         });
       });
     });

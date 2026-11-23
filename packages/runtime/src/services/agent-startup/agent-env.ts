@@ -70,7 +70,7 @@ function prepareAssetsDirEnv(threadId: string, userId: string, assetsDir?: strin
       namespace: 'media',
       threadId,
       userId,
-      error: (assetsErr as Error).message,
+      error: assetsErr instanceof Error ? assetsErr.message : String(assetsErr),
     });
     return {};
   }

@@ -133,7 +133,7 @@ function clearLocal(change: { runnerId?: string; projectId?: string }) {
     } catch (e) {
       log.warn('Runner scope listener failed', {
         namespace: 'runner-scope',
-        error: (e as Error).message,
+        error: e instanceof Error ? e.message : String(e),
       });
     }
   }
@@ -196,7 +196,7 @@ async function readRunnerPolicyVersion(): Promise<number> {
   } catch (error) {
     log.warn('Runner policy version unavailable — routing caches bypassed', {
       namespace: 'runner-scope',
-      error: (error as Error).message,
+      error: error instanceof Error ? error.message : String(error),
     });
     clearLocal({});
     knownVersion = -1;
@@ -240,7 +240,7 @@ async function invalidateRunnerScope(change: { runnerId?: string; projectId?: st
     // Other instances keep their caches until the TTL: make that loud.
     log.error('Runner policy version bump failed — other instances may serve stale routing', {
       namespace: 'runner-scope',
-      error: (error as Error).message,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 }

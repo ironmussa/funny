@@ -18,7 +18,7 @@ export function syncWorktreeProjectAssets(
       threadId,
       projectPath,
       worktreePath,
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 }
@@ -41,7 +41,7 @@ export function ensureLazyCwd(threadId: string, userId: string, cwd: string): vo
       namespace: 'scratch-threads',
       threadId,
       cwd,
-      error: (mkErr as Error).message,
+      error: mkErr instanceof Error ? mkErr.message : String(mkErr),
     });
     throw mkErr;
   }

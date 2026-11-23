@@ -119,8 +119,12 @@ export async function handleDataMessageWithAck(
       namespace: 'data-handler',
       runnerId,
       type: data?.type,
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
-    return { type: 'data:ack', success: false, error: (err as Error).message };
+    return {
+      type: 'data:ack',
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }

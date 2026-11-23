@@ -66,7 +66,9 @@ export class RunnerControlDispatcher {
             correlationId,
             failure: {
               code: cancelled ? FailureCode.CANCELLED : FailureCode.INTERNAL,
-              message: cancelled ? 'runner command cancelled' : String((error as Error).message),
+              message: cancelled
+                ? 'runner command cancelled'
+                : String(error instanceof Error ? error.message : String(error)),
               retryable: false,
             },
           },

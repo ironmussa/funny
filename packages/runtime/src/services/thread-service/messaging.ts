@@ -694,7 +694,7 @@ async function resolvePendingInteractiveToolCall(
     log.warn('sendMessage: failed to resolve pending interactive tool call (continuing)', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
   }
   return effectivePermission;

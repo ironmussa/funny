@@ -229,7 +229,7 @@ async function applyPersistedBuiltinProviders(): Promise<void> {
   } catch (err) {
     log.warn('Failed to restore persisted built-in providers', {
       namespace: 'runner',
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 }

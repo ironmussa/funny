@@ -159,7 +159,7 @@ async function schedule(automation: Automation): Promise<void> {
   try {
     job = (deps.createJob ?? createCronJob)(automation.schedule, () => tick(automation.id));
   } catch (e) {
-    const reason = (e as Error).message;
+    const reason = e instanceof Error ? e.message : String(e);
     log.warn('Invalid automation schedule — not scheduled', {
       namespace: 'automation',
       automationId: automation.id,

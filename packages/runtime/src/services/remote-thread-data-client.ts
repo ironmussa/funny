@@ -216,7 +216,7 @@ class RemoteThreadDataClient {
       log.warn('Failed to persist debounced message update over gRPC', {
         namespace: 'runner',
         messageId,
-        error: (error as Error).message,
+        error: error instanceof Error ? error.message : String(error),
       });
     });
   }

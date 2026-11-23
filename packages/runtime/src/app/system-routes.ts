@@ -312,7 +312,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       log.warn('Failed to persist built-in provider selection', {
         namespace: 'provider-install',
         id: body.id,
-        error: (err as Error).message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
     log.info(`built-in provider ${enable ? 'enabled' : 'disabled'}`, {

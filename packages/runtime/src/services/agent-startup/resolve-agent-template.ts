@@ -129,7 +129,7 @@ export async function resolveAgentTemplate(
       namespace: 'agent',
       threadId: input.threadId,
       templateId: thread.agentTemplateId,
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
   }
   return out;

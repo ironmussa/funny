@@ -139,12 +139,15 @@ async function scanOnce(): Promise<void> {
         log.error('Watcher fire failed', {
           namespace: NS,
           watcherId: w.id,
-          error: (err as Error).message,
+          error: err instanceof Error ? err.message : String(err),
         });
       });
     }
   } catch (err) {
-    log.error('Watcher scan failed', { namespace: NS, error: (err as Error).message });
+    log.error('Watcher scan failed', {
+      namespace: NS,
+      error: err instanceof Error ? err.message : String(err),
+    });
   } finally {
     scanning = false;
     void rearmScanner();
@@ -179,7 +182,7 @@ async function rearmScanner(): Promise<void> {
   } catch (err) {
     log.error('Failed to re-arm watcher scanner', {
       namespace: NS,
-      error: (err as Error).message,
+      error: err instanceof Error ? err.message : String(err),
     });
     armScannerAt(Date.now() + SCAN_RETRY_MS);
   }

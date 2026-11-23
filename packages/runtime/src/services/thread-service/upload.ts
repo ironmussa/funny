@@ -109,7 +109,7 @@ export function uploadFile(params: UploadFileParams): ResultAsync<UploadFileResu
     log.error('uploadFile failed', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (e as Error).message,
+      error: e instanceof Error ? e.message : String(e),
     });
     return internal('Upload failed');
   }).andThen((r) => r);
@@ -140,7 +140,7 @@ async function uploadFileImpl(
     log.error('uploadFile write failed', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      error: (e as Error).message,
+      error: e instanceof Error ? e.message : String(e),
     });
     return err(internal('Failed to write upload'));
   }

@@ -157,6 +157,7 @@ describe('a green batch', () => {
     const { host, outcome, batches } = await lead(3, { refuse: new Set([2]) });
     expect(kinds(outcome.verdicts)).toEqual({ r1: 'merged', r2: 'requeued', r3: 'requeued' });
     expect(host.merged.map((m) => m.number)).toEqual([1]);
+    expect(outcome.result.partialLanding).toBe(true);
     expect((await batches.active('o/r', 'main'))._unsafeUnwrap()).toBeNull();
   });
 

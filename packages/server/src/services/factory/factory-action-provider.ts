@@ -71,6 +71,7 @@ import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
 import { createFactoryIntegrate } from './factory-integrate.js';
 import type { FactoryIssueText } from './factory-issue-text.js';
+import { mergeAsBatch } from './factory-merge-batch.js';
 import { createMergeLane } from './factory-merge-lane.js';
 import {
   proofAllowsMerge,
@@ -82,6 +83,7 @@ import {
   type ProofResultBody,
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
+import type { FactoryQueuePort } from './factory-queue-port.js';
 import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
 import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
@@ -137,6 +139,8 @@ export const MERGE_HOLD_REASONS = {
   highRisk: 'high risk',
   /** Its merge rounds that reached the implementing agent are spent. */
   mergeRounds: 'merge rounds spent',
+  /** The merge queue found it may not merge the commit its batch tested, or could not test it. */
+  queue: 'merge queue',
 } as const;
 
 /** Merge rounds that may reach the implementing agent before the run waits for a person. */
@@ -223,6 +227,12 @@ export interface FactoryActionProviderDeps {
   proof?: FactoryProofDeps;
   /** Factory steps (a flow's command, integrate) start/poll through the runner. */
   steps?: FactoryStepDeps;
+  /**
+   * The merge queue (openspec factory-integration D2): when `merge` leads a
+   * batch of the merge group, the members are tested and merged with it.
+   * Absent: every merge takes the serial path.
+   */
+  queue?: FactoryQueuePort;
   /** `.funny/integrate.yaml` as the flow was loaded with it: what `integrate` regenerates and checks. */
   integrateConfig?: IntegrateConfig;
   /**
@@ -1263,6 +1273,42 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
    * review and has a passing proof of that exact commit, pinned to it. Runs
    * the flow's proof when none is held.
    */
+  /**
+   * Lead the batch the gate gathered for this `merge`, when there is one and
+   * the base branch allows it: the leader's result, or null for the serial
+   * path (no batch, or the batch left this run to it).
+   */
+  async function asBatchLeader(opts: MergeOpts, baseBranch: string): Promise<ActionResult | null> {
+    const batch = opts.execution?.batch;
+    if (!batch || batch.members.length === 0 || !deps.queue) return null;
+    const self = await deps.queue.memberOf(scope.runId, null, { repo: scope.repo, baseBranch });
+    if (!self) {
+      for (const member of batch.members) batch.settle(member.holder, { status: 'requeued' });
+      return null;
+    }
+    const verdict = await mergeAsBatch({
+      queue: deps.queue,
+      batch,
+      self,
+      gates: {
+        requireReview: opts.requireReview !== false,
+        requireRegressionProof: opts.requireRegressionProof !== false,
+      },
+    });
+    if (!verdict || verdict.kind === 'requeued') return null;
+    if (verdict.kind === 'sent_back') return sentBack(verdict.why, verdict.feedback);
+    if (verdict.kind === 'held') {
+      return holdMerge(MERGE_HOLD_REASONS.queue, `Not merged: ${verdict.reason}.`);
+    }
+    await deps.record({ state: 'merged', currentStep: null });
+    await deps.queue.deleteMergedBranch(self);
+    return {
+      ok: true,
+      output: 'merged',
+      metadata: { outcome: 'merged', sha: verdict.sha, batched: true },
+    };
+  }
+
   async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
     await enterStage('merge');
     const pr = pullRequest();
@@ -1273,6 +1319,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     }
     const held = await mergeHeld(opts, head.value.sha);
     if (held) return held;
+    const batched = await asBatchLeader(opts, head.value.baseRef);
+    if (batched) return batched;
 
     // Where the base branch requires GitHub's merge queue, GitHub tests the
     // change on the current base and merges it: the factory enqueues and follows.

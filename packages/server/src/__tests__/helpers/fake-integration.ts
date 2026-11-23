@@ -4,10 +4,17 @@
  * a commit's CI from what it contains (a culprit, two members that clash, a
  * flake). Records every merge and with whose token it was made.
  */
-import type { CiState, IntegrationProvider, MergeRefResult } from '@funny/core/github-app';
+import type {
+  BranchRules,
+  CiState,
+  IntegrationProvider,
+  MergeRefResult,
+} from '@funny/core/github-app';
 import { okAsync } from 'neverthrow';
 
 export interface FakeHostOptions {
+  /** The base branch's rules (default: nothing required, up to date unknown). */
+  rules?(): BranchRules;
   /** CI of a commit by its content (the merged heads, sorted); default green. */
   ci?(content: string[], times: number): 'green' | 'red' | 'none' | 'pending';
   /** Heads that do not merge onto anything but the bare base. */
@@ -62,7 +69,8 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
     },
     as(userId) {
       const provider: IntegrationProvider = {
-        branchRules: () => okAsync({ mergeQueue: false, requiredChecks: [], upToDate: null }),
+        branchRules: () =>
+          okAsync(options.rules?.() ?? { mergeQueue: false, requiredChecks: [], upToDate: null }),
         branchHead: (_repo, branch) => okAsync(branches.get(branch) ?? 'B0'),
         setBranch(_repo, name, sha) {
           branches.set(name, sha);

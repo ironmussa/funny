@@ -299,6 +299,7 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   sensitivePaths: [],
   stageLimits: {},
   stepOverrides: {},
+  batch: { size: 5, waitSeconds: 60 },
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

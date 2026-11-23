@@ -75,6 +75,7 @@ export const WithIncident: Story = {
       sensitivePaths: [],
       stageLimits: {},
       stepOverrides: {},
+      batch: { size: 5, waitSeconds: 60 },
       blockedReason: null,
       updatedAt: ago(1),
       incident: {

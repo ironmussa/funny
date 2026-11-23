@@ -100,6 +100,8 @@ export const batchResultSchema = z.object({
   requeued: z.array(z.string()).default([]),
   /** A red that turned green on the same tree. */
   flake: z.boolean().default(false),
+  /** A merge was refused after earlier members landed (D3): the base holds an untested prefix. */
+  partialLanding: z.boolean().default(false),
 });
 export type FactoryBatchResult = z.infer<typeof batchResultSchema>;
 

@@ -316,7 +316,13 @@ async function enableFactory(
 ) {
   const settings = createFactorySettingsService();
   // Most tests admit labelled issues: automatic mode unless a test says otherwise.
-  const saved = await settings.save('alice', 'p1', { enabled: true, mode: 'automatic', ...opts });
+  // One merge at a time: the batched merge queue has its own tests.
+  const saved = await settings.save('alice', 'p1', {
+    enabled: true,
+    mode: 'automatic',
+    batch: { size: 1, waitSeconds: 0 },
+    ...opts,
+  });
   if (saved.isErr()) throw new Error(saved.error.message);
   const factoryId = await settings.factoryId('alice', 'p1');
   if (factoryId.isErr() || !factoryId.value) throw new Error('no factory id');

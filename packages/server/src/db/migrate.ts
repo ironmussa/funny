@@ -2330,6 +2330,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Change factory-integration, D2: each factory's batch size and wait for
+    // the merge queue. Null reads as the defaults (5 pull requests, 60 s).
+    name: '115_factory_batch_settings',
+    async up() {
+      await ctx().addColumn('factory_settings', 'batch_size', 'INTEGER');
+      await ctx().addColumn('factory_settings', 'batch_wait_ms', 'INTEGER');
+    },
+  },
 ];
 
 /**

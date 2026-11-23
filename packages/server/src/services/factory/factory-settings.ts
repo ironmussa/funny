@@ -13,10 +13,12 @@
  * theirs. Runs are stored separately (`factory-runs`).
  */
 import {
+  DEFAULT_FACTORY_BATCH,
   factoryStepOverridesSchema,
   MAX_SENSITIVE_PATHS,
   MERGE_STAGE,
   type FactoryAutoMerge,
+  type FactoryBatchSettings,
   type FactoryMode,
   type FactoryStepOverrides,
 } from '@funny/shared/contracts/factory';
@@ -48,6 +50,8 @@ export interface FactorySettingsView {
   stageLimits: Record<string, number>;
   /** Provider / model / effort per agent step id, over the flow's own. */
   stepOverrides: FactoryStepOverrides;
+  /** The merge queue's batch size and wait. */
+  batch: FactoryBatchSettings;
   /** Why the factory cannot make progress now, or null. */
   blockedReason: string | null;
   updatedAt: string;
@@ -70,9 +74,21 @@ export interface SaveFactorySettingsInput {
   sensitivePaths?: string[];
   stageLimits?: Record<string, number>;
   stepOverrides?: FactoryStepOverrides;
+  batch?: FactoryBatchSettings;
 }
 
 type Row = typeof factorySettings.$inferSelect;
+
+/** The stored batch settings, or the defaults where a column is null. */
+function batchOf(row: Row): FactoryBatchSettings {
+  return {
+    size: row.batchSize ?? DEFAULT_FACTORY_BATCH.size,
+    waitSeconds:
+      row.batchWaitMs === null
+        ? DEFAULT_FACTORY_BATCH.waitSeconds
+        : Math.round(row.batchWaitMs / 1000),
+  };
+}
 
 const storage = (error: unknown): FactorySettingsError => ({
   kind: 'storage',
@@ -142,6 +158,7 @@ const toView = (row: Row): FactorySettingsView => ({
   sensitivePaths: sensitivePathsOf(row),
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
+  batch: batchOf(row),
   blockedReason: row.blockedReason ?? null,
   updatedAt: row.updatedAt,
 });
@@ -216,6 +233,7 @@ const DEFAULTS = {
   sensitivePaths: [] as string[],
   stageLimits: {} as Record<string, number>,
   stepOverrides: {} as FactoryStepOverrides,
+  batch: DEFAULT_FACTORY_BATCH,
 };
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */
@@ -241,6 +259,8 @@ function buildRow(
     sensitivePaths: JSON.stringify(input.sensitivePaths ?? base.sensitivePaths),
     stageLimits: JSON.stringify(input.stageLimits ?? base.stageLimits),
     stepOverrides: JSON.stringify(input.stepOverrides ?? base.stepOverrides),
+    batchSize: (input.batch ?? base.batch).size,
+    batchWaitMs: (input.batch ?? base.batch).waitSeconds * 1000,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -268,6 +288,8 @@ export interface WatchedFactory {
   stageLimits: Record<string, number>;
   /** Provider / model / effort per agent step id (read again at every agent step). */
   stepOverrides: FactoryStepOverrides;
+  /** The merge queue's batch size and wait. */
+  batch: FactoryBatchSettings;
 }
 
 const toEnabled = (row: Row): WatchedFactory => ({
@@ -283,6 +305,7 @@ const toEnabled = (row: Row): WatchedFactory => ({
   sensitivePaths: sensitivePathsOf(row),
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
+  batch: batchOf(row),
 });
 
 /**
@@ -381,6 +404,7 @@ export function createFactorySettingsService(
       ...(input.sensitivePaths !== undefined && { sensitivePaths: row.sensitivePaths }),
       ...(input.stageLimits !== undefined && { stageLimits: row.stageLimits }),
       ...(input.stepOverrides !== undefined && { stepOverrides: row.stepOverrides }),
+      ...(input.batch !== undefined && { batchSize: row.batchSize, batchWaitMs: row.batchWaitMs }),
     };
     return ResultAsync.fromPromise(
       db

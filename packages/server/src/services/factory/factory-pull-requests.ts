@@ -18,6 +18,7 @@ import {
   baseDistance,
   commentReview,
   commitParents,
+  createGithubIntegration,
   createPullRequestCi,
   createRepoCheckOps,
   createRepoGithub,
@@ -34,6 +35,7 @@ import {
   type CiState,
   type EnqueueResult,
   type GithubCallError,
+  type IntegrationProvider,
   type MergeMethod,
   type MergeQueueState,
   type PullRequestFiles,
@@ -137,6 +139,12 @@ export function prNumberOf(url: string | null): number | null {
 }
 
 export interface FactoryPullRequests {
+  /**
+   * The merge queue's host for one enabler (openspec factory-integration D4):
+   * every call uses the App token capped by that user's access, for writing.
+   * Absent (tests): no batch queue; `merge` takes the serial path.
+   */
+  integrationFor?(owner: { userId: string; projectId: string }): IntegrationProvider;
   /** With `required`, only those checks count (see `PullRequestCi.ciState`). */
   ciState(
     pr: FactoryPullRequestRef,
@@ -406,6 +414,8 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
       });
 
   return {
+    integrationFor: (owner) =>
+      createGithubIntegration(repoGithubFor({ ...owner, repo: '', number: 0 }, 'write')),
     ciState(pr, required) {
       return pullRequestsFor(pr, 'read').ciState(pr.repo, pr.number, required).mapErr(callError);
     },

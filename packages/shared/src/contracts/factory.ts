@@ -55,6 +55,20 @@ export const MAX_SENSITIVE_PATHS = 50;
 /** The stage whose limit (one per repository and base branch) no setting changes. */
 export const MERGE_STAGE = 'merge';
 
+/**
+ * The merge queue's batches (openspec factory-integration D2): how many ready
+ * pull requests one batch tests together (1: one at a time), and how long it
+ * waits to gather them.
+ */
+export const factoryBatchSchema = z
+  .object({
+    size: z.number().int().min(1).max(10),
+    waitSeconds: z.number().int().min(0).max(600),
+  })
+  .strict();
+export type FactoryBatchSettings = z.infer<typeof factoryBatchSchema>;
+export const DEFAULT_FACTORY_BATCH: FactoryBatchSettings = { size: 5, waitSeconds: 60 };
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,
@@ -74,6 +88,7 @@ export const saveFactorySettingsInput = z
       .optional(),
     /** Provider / model / effort per agent step id; never a permission mode or tool list. */
     stepOverrides: z.lazy(() => factoryStepOverridesSchema).optional(),
+    batch: factoryBatchSchema.optional(),
   })
   .strict();
 
@@ -96,6 +111,8 @@ export interface FactorySettings {
   stageLimits: Record<string, number>;
   /** Provider / model / effort per agent step id, over the flow's own (openspec factory-flow-step-options). */
   stepOverrides: FactoryStepOverrides;
+  /** The merge queue's batch size and wait. */
+  batch: FactoryBatchSettings;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**

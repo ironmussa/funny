@@ -294,6 +294,9 @@ export const factorySettings = sqliteTable(
     sensitivePaths: text('sensitive_paths'),
     /** JSON object: runs inside a flow node at once, per node id. */
     stageLimits: text('stage_limits'),
+    /** The merge queue's batch size (null: 5) and wait in ms (null: 60 000). */
+    batchSize: integer('batch_size'),
+    batchWaitMs: integer('batch_wait_ms'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),

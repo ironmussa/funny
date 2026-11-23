@@ -76,6 +76,7 @@ describe('factory batches', () => {
       culprits: [],
       requeued: [],
       flake: false,
+      partialLanding: false,
     };
     expect((await batches.move(id, 'merged', { result }))._unsafeUnwrap()).toBe(true);
     const ended = (await batches.get(id))._unsafeUnwrap()!;

@@ -221,6 +221,8 @@ async function setUp(
     maxConcurrent: opts.maxConcurrent,
     flowName: opts.flowName,
     stepOverrides: opts.stepOverrides,
+    // One merge at a time: the batched merge queue has its own tests.
+    batch: { size: 1, waitSeconds: 0 },
   });
   if (saved.isErr()) throw new Error(saved.error.message);
   const factoryId = (await settings.factoryId('alice', 'p1'))._unsafeUnwrap()!;

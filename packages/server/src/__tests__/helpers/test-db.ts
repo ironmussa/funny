@@ -366,6 +366,8 @@ export function createTestDb() {
       auto_merge TEXT NOT NULL DEFAULT 'low_risk',
       sensitive_paths TEXT,
       stage_limits TEXT,
+      batch_size INTEGER,
+      batch_wait_ms INTEGER,
       step_overrides TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL

@@ -28,6 +28,7 @@ import {
 interface Progress {
   verdicts: Map<string, MemberVerdict>;
   flake: boolean;
+  partialLanding: boolean;
 }
 
 const conflictFeedback = (member: QueueMember, others: QueueMember[]) =>
@@ -49,6 +50,7 @@ function resultOf(progress: Progress, summary: string): FactoryBatchResult {
     ),
     requeued: by('requeued'),
     flake: progress.flake,
+    partialLanding: progress.partialLanding,
   };
 }
 
@@ -105,6 +107,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
       });
       return;
     }
+    progress.partialLanding = landed.length > 0;
     if (landed.length === 0) {
       decide(progress, refused.member, {
         kind: 'held',
@@ -310,7 +313,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
   return {
     /** Lead the batch of `members` (the leader first, then the queue order). */
     async lead(members: QueueMember[]): Promise<BatchOutcome> {
-      const progress: Progress = { verdicts: new Map(), flake: false };
+      const progress: Progress = { verdicts: new Map(), flake: false, partialLanding: false };
       let remaining = await eligible(members, progress);
       if (remaining.length === 0)
         return { verdicts: progress.verdicts, result: resultOf(progress, 'No member may merge.') };

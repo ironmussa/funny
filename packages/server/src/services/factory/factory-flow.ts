@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 
 import type { GithubCallError } from '@funny/core/github-app';
 import type { PipelineDefinition } from '@funny/pipelines';
-import type { FactoryFlowDefinition } from '@funny/shared/contracts/factory';
+import type { FactoryBatchSettings, FactoryFlowDefinition } from '@funny/shared/contracts/factory';
 import {
   EMPTY_INTEGRATE_CONFIG,
   formatParseError,
@@ -91,6 +91,8 @@ export function flowReadsOf(
 
 /** What a factory adds to the flow it loads: its step overrides and the project's agent defaults. */
 export interface FactoryFlowContext {
+  /** The factory's merge queue batches: the `merge` group batches when its size is over 1. */
+  batch?: FactoryBatchSettings;
   overrides?: StepOverrides;
   project?: ProjectAgentDefaults;
 }
@@ -213,11 +215,17 @@ export const isMergeLane = (group: string) => group.startsWith('merge:');
  * it declares (or none): a repository flow cannot merge two pull requests of
  * one repository at once. A batch policy the node declares is kept.
  */
-function withMergeLane(workflow: ParsedWorkflow): ParsedWorkflow {
+function withMergeLane(workflow: ParsedWorkflow, batch?: FactoryBatchSettings): ParsedWorkflow {
   const nodes = workflow.nodes.map((node) => {
     if (!node.merge) return node;
     const concurrency: NonNullable<FlowNode['concurrency']> = { group: MERGE_LANE_GROUP, limit: 1 };
-    if (node.concurrency?.batch) concurrency.batch = node.concurrency.batch;
+    // The factory's batch setting decides (size 1: one at a time); without
+    // one (a flow read for Validate flow), the flow's own batch, if any.
+    if (batch) {
+      if (batch.size > 1) concurrency.batch = { max: batch.size, wait: batch.waitSeconds * 1000 };
+    } else if (node.concurrency?.batch) {
+      concurrency.batch = node.concurrency.batch;
+    }
     return { ...node, concurrency };
   });
   return { ...workflow, nodes };
@@ -260,7 +268,7 @@ async function compile(
       source,
       commit: found.commit,
       workflow,
-      pipeline: compileYamlPipeline(withMergeLane(workflow)),
+      pipeline: compileYamlPipeline(withMergeLane(workflow, context.batch)),
       warnings:
         source === 'repository'
           ? [...parsed.warnings, ...staleBranchWordingIssues(workflow)]

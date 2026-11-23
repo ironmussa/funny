@@ -64,6 +64,10 @@ import {
   NO_CHANGE_TRIAGE_LABEL,
 } from './factory-action-provider.js';
 import {
+  createFactoryBatchesRepository,
+  type FactoryBatchesRepository,
+} from './factory-batches.js';
+import {
   isMergeLane,
   flowReadsOf,
   loadFactoryFlow,
@@ -72,6 +76,7 @@ import {
   type FactoryFlowError,
 } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
+import { createFactoryQueuePort, type FactoryQueuePort } from './factory-queue-port.js';
 import {
   factoryRunBranch,
   REOPENED_STEP,
@@ -122,6 +127,8 @@ export interface FactoryFlowRunsDeps {
     /** The step's agent options, carried on the message body. */
     options?: Record<string, unknown>,
   ) => Promise<Result<void, string>>;
+  /** The merge queue's batches (tests); default: the database's. */
+  batches?: FactoryBatchesRepository;
   /** Record why the factory cannot make progress (a run that could not start). */
   reportBlocked?: (factoryId: string, reason: string) => Promise<void>;
   /** Stop the enabler's threads (one a launch started after its run was stopped). */
@@ -483,6 +490,32 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     });
   }
 
+  /**
+   * The merge queue for a run's `merge` step (openspec factory-integration
+   * D2): absent where the GitHub side cannot build per-enabler providers.
+   * A member that lands is recorded merged on its own run, and its threads'
+   * worktrees are cleaned up as its own flow would.
+   */
+  function queueFor(signal: AbortSignal): FactoryQueuePort | undefined {
+    const integrationFor = deps.github.pullRequests.integrationFor;
+    if (!integrationFor) return undefined;
+    const run = async (runId: string) => (await deps.runs.get(runId)).unwrapOr(null);
+    return createFactoryQueuePort({
+      batches: deps.batches ?? createFactoryBatchesRepository(),
+      run,
+      factory: getWatchedFactory,
+      record: async (runId, input) => {
+        const live = await deps.runs.updateInFlight(runId, input);
+        if (!live.isOk() || !live.value || input.state !== 'merged' || !deps.cleanupMerged) return;
+        const merged = await run(runId);
+        const factory = merged ? await getWatchedFactory(merged.factoryId) : null;
+        if (merged && factory) await deps.cleanupMerged(factory.userId, threadsOf(merged));
+      },
+      integrationFor: (owner) => integrationFor(owner),
+      signal,
+    });
+  }
+
   async function execute(
     job: FactoryRunJob,
     controller: AbortController,
@@ -492,6 +525,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const flow = await loadFlow(job, {
       project: projectDefaults,
       overrides: job.factory.stepOverrides,
+      batch: job.factory.batch,
     });
     if (flow.isErr()) {
       await flowUnavailable(job, flow.error);
@@ -586,6 +620,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           }
         : undefined,
       github: deps.github,
+      queue: queueFor(controller.signal),
       defaultBranch: () =>
         deps.github.defaultBranch({
           repo: scope.repo,

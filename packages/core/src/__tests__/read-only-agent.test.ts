@@ -16,6 +16,7 @@ import {
   readOnlyDenial,
   readOnlySandboxSettings,
   resetReadOnlySandboxMode,
+  withSettingsHooksOff,
 } from '../agents/read-only.js';
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';
 
@@ -198,5 +199,17 @@ describe('the pre-tool hook of a read-only Claude agent', () => {
     expect(decision.hookSpecificOutput.permissionDecision).toBe('allow');
     expect(lookups).toBe(0);
     expect(bypasses).toBe(0);
+  });
+});
+
+describe('withSettingsHooksOff', () => {
+  test("turns the settings files' hooks off and keeps the other flag settings", () => {
+    expect(withSettingsHooksOff({ fastMode: true })).toEqual({
+      fastMode: true,
+      disableAllHooks: true,
+    });
+    expect(withSettingsHooksOff(undefined)).toEqual({ disableAllHooks: true });
+    // A settings file path is not an object of flag settings: replaced.
+    expect(withSettingsHooksOff('/tmp/settings.json')).toEqual({ disableAllHooks: true });
   });
 });

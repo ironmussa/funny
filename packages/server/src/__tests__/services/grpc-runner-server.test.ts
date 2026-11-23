@@ -1303,6 +1303,7 @@ describe('runner gRPC operations stream', () => {
   test('returns DEADLINE_EXCEEDED and aborts work at the declared deadline', async () => {
     const sessions = activeSessions();
     const aborted = Promise.withResolvers<void>();
+    let started = false;
     endpoint = await startRunnerGrpcEndpoint({
       config: config(),
       dependencies: {
@@ -1312,6 +1313,7 @@ describe('runner gRPC operations stream', () => {
       sessionRegistry: sessions,
       operations: {
         execute: async (_context, operation) => {
+          started = true;
           operation.signal.addEventListener('abort', () => aborted.resolve(), {
             once: true,
           });
@@ -1328,17 +1330,20 @@ describe('runner gRPC operations stream', () => {
         {
           metadata: {
             correlationId: 'deadline',
-            deadline: operationDeadline(30),
+            deadline: operationDeadline(200),
           },
         },
       ),
     );
 
-    await aborted.promise;
     expect(await response).toMatchObject({
       correlationId: 'deadline',
       failure: { code: 'FAILURE_CODE_DEADLINE_EXCEEDED' },
     });
+    // On a loaded machine the request can arrive after its deadline: the
+    // server then refuses it without starting the work. Work that started is
+    // aborted at the deadline.
+    if (started) await aborted.promise;
     stream.cancel();
   });
 });

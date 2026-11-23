@@ -202,6 +202,11 @@ interface ToolbarProps {
   onCaseSensitiveChange: (caseSensitive: boolean) => void;
   stateFilter: Set<string>;
   onStateFilterChange: (states: Set<string>) => void;
+  projectFilter: Set<string>;
+  onProjectFilterChange: (projectIds: Set<string>) => void;
+  /** The projects that have runs, by name. */
+  projectOptions: { value: string; label: string }[];
+  projectCounts: Record<string, number>;
   /** How many runs the filters keep, of how many. */
   shown: number;
   total: number;
@@ -215,16 +220,20 @@ function FactoryQueueToolbar({
   onCaseSensitiveChange,
   stateFilter,
   onStateFilterChange,
+  projectFilter,
+  onProjectFilterChange,
+  projectOptions,
+  projectCounts,
   shown,
   total,
   stateCounts,
 }: ToolbarProps) {
   const { t } = useTranslation();
-  const toggleState = (state: string) => {
-    const next = new Set(stateFilter);
-    if (next.has(state)) next.delete(state);
-    else next.add(state);
-    onStateFilterChange(next);
+  const toggle = (selected: Set<string>, value: string, onChange: (next: Set<string>) => void) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next);
   };
   const searching = search.trim() !== '';
 
@@ -247,6 +256,15 @@ function FactoryQueueToolbar({
       <div className="bg-border h-4 w-px" />
 
       <FilterDropdown
+        testId="factory-view-project-filter"
+        label={t('allThreads.filterProject')}
+        options={projectOptions}
+        selected={projectFilter}
+        onToggle={(projectId) => toggle(projectFilter, projectId, onProjectFilterChange)}
+        counts={projectCounts}
+      />
+
+      <FilterDropdown
         testId="factory-view-status-filter"
         label={t('allThreads.filterStatus')}
         options={STATE_ORDER.map((state) => ({
@@ -254,15 +272,18 @@ function FactoryQueueToolbar({
           label: factoryRunStateLabel(t, state),
         }))}
         selected={stateFilter}
-        onToggle={toggleState}
+        onToggle={(state) => toggle(stateFilter, state, onStateFilterChange)}
         counts={stateCounts}
       />
 
-      {stateFilter.size > 0 && (
+      {(stateFilter.size > 0 || projectFilter.size > 0) && (
         <button
           type="button"
           data-testid="factory-view-clear-filters"
-          onClick={() => onStateFilterChange(new Set())}
+          onClick={() => {
+            onStateFilterChange(new Set());
+            onProjectFilterChange(new Set());
+          }}
           className="text-muted-foreground hover:text-foreground px-2 py-1 text-xs whitespace-nowrap transition-colors"
         >
           {t('allThreads.clearFilters')}
@@ -279,6 +300,7 @@ export function FactoryQueueView() {
   const [search, setSearch] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [stateFilter, setStateFilter] = useState<Set<string>>(() => new Set());
+  const [projectFilter, setProjectFilter] = useState<Set<string>>(() => new Set());
 
   const projectNameById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
@@ -291,11 +313,32 @@ export function FactoryQueueView() {
     return counts;
   }, [runs]);
 
+  const projectCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const run of runs ?? []) counts[run.projectId] = (counts[run.projectId] ?? 0) + 1;
+    return counts;
+  }, [runs]);
+
+  // Only the projects that have runs, so every option keeps at least one row.
+  const projectOptions = useMemo(
+    () =>
+      Object.keys(projectCounts)
+        .map((id) => ({ value: id, label: projectNameById.get(id) ?? id }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [projectCounts, projectNameById],
+  );
+
   const filtered = useMemo(
     () =>
       runs &&
-      filterFactoryRuns(runs, { search, caseSensitive, states: stateFilter, projectNameById }),
-    [runs, search, caseSensitive, stateFilter, projectNameById],
+      filterFactoryRuns(runs, {
+        search,
+        caseSensitive,
+        states: stateFilter,
+        projectIds: projectFilter,
+        projectNameById,
+      }),
+    [runs, search, caseSensitive, stateFilter, projectFilter, projectNameById],
   );
 
   return (
@@ -308,6 +351,10 @@ export function FactoryQueueView() {
         onCaseSensitiveChange={setCaseSensitive}
         stateFilter={stateFilter}
         onStateFilterChange={setStateFilter}
+        projectFilter={projectFilter}
+        onProjectFilterChange={setProjectFilter}
+        projectOptions={projectOptions}
+        projectCounts={projectCounts}
         shown={filtered?.length ?? 0}
         total={runs?.length ?? 0}
         stateCounts={stateCounts}

@@ -81,11 +81,15 @@ describe('filterFactoryRuns (the factory view)', () => {
     ['p1', 'Funny'],
     ['p2', 'Other'],
   ]);
-  const ids = (search: string, opts: { caseSensitive?: boolean; states?: string[] } = {}) =>
+  const ids = (
+    search: string,
+    opts: { caseSensitive?: boolean; states?: string[]; projectIds?: string[] } = {},
+  ) =>
     filterFactoryRuns(runs, {
       search,
       caseSensitive: opts.caseSensitive ?? false,
       states: new Set(opts.states ?? []),
+      projectIds: new Set(opts.projectIds ?? []),
       projectNameById,
     }).map((run) => run.id);
 
@@ -102,5 +106,11 @@ describe('filterFactoryRuns (the factory view)', () => {
 
   test('keeps only the chosen states', () => {
     expect(ids('', { states: ['merged', 'requested'] })).toEqual(['c', 'a']);
+  });
+
+  test('keeps only the chosen projects, combined with the other filters', () => {
+    expect(ids('', { projectIds: ['p2'] })).toEqual(['b']);
+    expect(ids('', { projectIds: ['p1', 'p2'] })).toEqual(['b', 'c', 'a']);
+    expect(ids('', { projectIds: ['p1'], states: ['merged'] })).toEqual(['a']);
   });
 });

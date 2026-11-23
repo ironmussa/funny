@@ -302,10 +302,17 @@ export class GrpcEventReplayStore {
     };
   }
 
+  /**
+   * The executions with events the server has not acknowledged. An execution
+   * whose events are all acknowledged has nothing to resume, and there is one
+   * per thread per runner start, so sending them all makes the hello grow
+   * without bound.
+   */
   resumeCursors(): Array<{ executionId: string; lastAcceptedSequence: bigint }> {
     return this.database
       .query<Pick<ScopeRow, 'execution_id' | 'acknowledged_sequence'>, []>(
         `SELECT execution_id, acknowledged_sequence FROM grpc_event_scopes
+         WHERE acknowledged_sequence < next_sequence - 1
          ORDER BY execution_id ASC`,
       )
       .all()
@@ -313,6 +320,30 @@ export class GrpcEventReplayStore {
         executionId: row.execution_id,
         lastAcceptedSequence: BigInt(row.acknowledged_sequence),
       }));
+  }
+
+  /**
+   * Delete the executions of an earlier runner process whose events are all
+   * acknowledged, and return how many. Call it once when the process starts,
+   * before any event is appended: execution IDs are kept in memory, so a new
+   * process never appends to an old execution, but this process still appends
+   * to its own after they are acknowledged.
+   */
+  dropSettledScopes(): number {
+    return this.database.transaction(() => {
+      this.database.exec(
+        `DELETE FROM grpc_event_replay
+         WHERE EXISTS (
+           SELECT 1 FROM grpc_event_scopes AS scope
+           WHERE scope.thread_id = grpc_event_replay.thread_id
+             AND scope.execution_id = grpc_event_replay.execution_id
+             AND scope.acknowledged_sequence >= scope.next_sequence - 1
+         )`,
+      );
+      return this.database
+        .query('DELETE FROM grpc_event_scopes WHERE acknowledged_sequence >= next_sequence - 1')
+        .run().changes;
+    })();
   }
 
   /**

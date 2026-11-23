@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
-import { db, dbGet, dbRun, withDatabaseTransaction } from '../../db/index.js';
+import { db, dbAll, dbGet, dbRun, withDatabaseTransaction } from '../../db/index.js';
 import { runnerEventReceipts } from '../../db/schema.js';
 
 export interface EventScopeIdentity {
@@ -27,6 +27,8 @@ export interface AcceptInput {
 
 export interface EventReceiptStore {
   highestAccepted(runnerId: string, executionId: string): Promise<bigint>;
+  /** The receipt of each execution that has one; an execution with none is absent. */
+  highestAcceptedMany(runnerId: string, executionIds: string[]): Promise<Map<string, bigint>>;
   accept(input: AcceptInput, apply: () => Promise<void>): Promise<EventAcceptance>;
   resynchronize(
     input: {
@@ -41,6 +43,45 @@ export interface EventReceiptStore {
 interface ReceiptRow {
   threadId: string;
   highestContiguousSequence: string;
+}
+
+/**
+ * Resume cursors the server answers in one runner hello. The runner sends a
+ * cursor only for an execution with events it has not seen acknowledged, so a
+ * longer list is a runner from before that rule or a hostile one.
+ */
+export const MAX_RESUME_EVENT_CURSORS = 10_000;
+
+/** Executions per lookup query, under SQLite's bound-parameter limit. */
+const RECEIPT_LOOKUP_BATCH = 500;
+
+export interface EventResumeCursor {
+  executionId: string;
+  lastAcceptedSequence: bigint;
+}
+
+/**
+ * The server's receipt for each execution the runner asks about in its hello.
+ * A fixed number of queries whatever the count: one lookup per cursor kept the
+ * server's event loop busy for minutes on a hello with 600,000 cursors, longer
+ * than the runner waits, so the runner never connected.
+ */
+export async function resolveEventResumeCursors(
+  receipts: Pick<EventReceiptStore, 'highestAcceptedMany'>,
+  runnerId: string,
+  requested: ReadonlyArray<{ executionId: string }>,
+  limit = MAX_RESUME_EVENT_CURSORS,
+): Promise<{ cursors: EventResumeCursor[]; dropped: number }> {
+  const executionIds = [...new Set(requested.map((cursor) => cursor.executionId))];
+  const answered = executionIds.slice(0, limit);
+  const highest = await receipts.highestAcceptedMany(runnerId, answered);
+  return {
+    cursors: answered.map((executionId) => ({
+      executionId,
+      lastAcceptedSequence: highest.get(executionId) ?? 0n,
+    })),
+    dropped: executionIds.length - answered.length,
+  };
 }
 
 /** Upper bound on executions whose last receipt is kept in memory. */
@@ -95,6 +136,36 @@ export class SqlEventReceiptStore implements EventReceiptStore {
         ),
     );
     return record ? BigInt(record.highestContiguousSequence) : 0n;
+  }
+
+  async highestAcceptedMany(
+    runnerId: string,
+    executionIds: string[],
+  ): Promise<Map<string, bigint>> {
+    const highest = new Map<string, bigint>();
+    for (let start = 0; start < executionIds.length; start += RECEIPT_LOOKUP_BATCH) {
+      const rows = await dbAll<
+        Pick<ReceiptRow, 'highestContiguousSequence'> & { executionId: string }
+      >(
+        this.database
+          .select({
+            executionId: runnerEventReceipts.executionId,
+            highestContiguousSequence: runnerEventReceipts.highestContiguousSequence,
+          })
+          .from(runnerEventReceipts)
+          .where(
+            and(
+              eq(runnerEventReceipts.runnerId, runnerId),
+              inArray(
+                runnerEventReceipts.executionId,
+                executionIds.slice(start, start + RECEIPT_LOOKUP_BATCH),
+              ),
+            ),
+          ),
+      );
+      for (const row of rows) highest.set(row.executionId, BigInt(row.highestContiguousSequence));
+    }
+    return highest;
   }
 
   async accept(input: AcceptInput, apply: () => Promise<void>): Promise<EventAcceptance> {

@@ -55,6 +55,18 @@ class MemoryEventReceipts implements EventReceiptStore {
     return this.accepted.get(`${runnerId}\0${executionId}`)?.sequence ?? 0n;
   }
 
+  async highestAcceptedMany(
+    runnerId: string,
+    executionIds: string[],
+  ): Promise<Map<string, bigint>> {
+    const highest = new Map<string, bigint>();
+    for (const executionId of executionIds) {
+      const sequence = await this.highestAccepted(runnerId, executionId);
+      if (sequence > 0n) highest.set(executionId, sequence);
+    }
+    return highest;
+  }
+
   async accept(
     input: { runnerId: string; scope: EventScopeIdentity; sequence: bigint },
     apply: () => Promise<void>,

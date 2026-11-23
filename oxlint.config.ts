@@ -63,6 +63,8 @@ const existing = {
     'oxc/no-accumulating-spread': 'error',
     ...severity('anti-slop', ANTI_SLOP_ERROR, 'error'),
     ...severity('anti-slop', ANTI_SLOP_WARN, 'warn'),
+    // A `typeof` inside a `value is T` guard is the decoder the rule asks for.
+    'anti-slop/no-runtime-typeof': ['warn', { allowInTypeGuards: true }],
     ...severity('anti-slop', ANTI_SLOP_OFF, 'off'),
     ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_ERROR, 'error'),
     ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_WARN, 'warn'),
@@ -269,12 +271,20 @@ const existing = {
       rules: severity('shadcn', [...SHADCN_ERROR, ...SHADCN_WARN, ...SHADCN_OFF], 'off'),
     },
     {
-      files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*'],
+      files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*', 'packages/test-kit/**'],
       rules: {
         // Tests cast fixtures and mocks to the type under test on purpose; a
         // `SAFETY:` note on each cast says nothing the test does not already show.
         // Production code keeps the rule.
         'anti-slop/require-safety-comment-for-type-assertion': 'off',
+        // These rules ask for external input to be parsed at its I/O boundary. A
+        // test has none: it builds loose fixtures and mocks and asserts on values
+        // directly (`typeof` in an expect, `Record<string, unknown>` payloads).
+        'anti-slop/no-unsafe-dictionary-type': 'off',
+        'anti-slop/no-runtime-typeof': 'off',
+        'anti-slop/no-unknown-parameters': 'off',
+        'anti-slop/no-unknown-returns': 'off',
+        'anti-slop/no-known-value-widening': 'off',
         'no-constant-condition': 'off',
         'no-constant-binary-expression': 'off',
         'max-lines': 'off',

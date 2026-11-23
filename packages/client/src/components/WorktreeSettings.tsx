@@ -38,6 +38,7 @@ import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 import { BranchPicker } from './SearchablePicker';
@@ -454,23 +455,21 @@ export function WorktreeSettings({
     [worktrees, projectThreads],
   );
 
+  // The project object is derived on every render; its id is what the loaders follow.
+  const activeProjectId = project?.id;
   const loadWorktrees = useCallback(async () => {
-    if (!project) return;
-    setLoading(true);
+    if (activeProjectId === undefined) return;
     setLoadError(null);
-    try {
-      const result = await api.listWorktrees(project.id);
+    await whilePending(setLoading, async () => {
+      const result = await api.listWorktrees(activeProjectId);
       if (result.isOk()) setWorktrees(result.value);
       else setLoadError(result.error.message);
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
-  }, [project?.id]);
+    });
+  }, [activeProjectId]);
 
   const loadBranches = useCallback(async () => {
-    if (!project) return;
-    const result = await api.listBranches(project.id);
+    if (activeProjectId === undefined) return;
+    const result = await api.listBranches(activeProjectId);
     if (result.isOk()) {
       const data = result.value;
       setBranches(data.branches);
@@ -482,8 +481,7 @@ export function WorktreeSettings({
       // already says when the runner cannot be reached.
       console.error('Failed to load branches:', result.error);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
-  }, [project?.id]);
+  }, [activeProjectId]);
 
   useEffect(() => {
     loadWorktrees();

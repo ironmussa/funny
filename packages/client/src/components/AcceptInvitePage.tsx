@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
+import { withCleanup } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface Props {
@@ -35,9 +37,20 @@ export function AcceptInvitePage({ token }: Props) {
   const [isLoginMode, setIsLoginMode] = useState(false);
   const submissionIdRef = useRef(0);
 
+  const acceptInvite = useCallback(async () => {
+    setStep('accepting');
+    const result = await api.acceptInviteLink(token);
+    if (result.isOk()) {
+      setStep(result.value.alreadyMember ? 'already' : 'success');
+    } else {
+      setStep('error');
+      setErrorMessage(result.error.message || 'Failed to join organization');
+    }
+  }, [token]);
+
   // Verify the token on mount
-  useEffect(() => {
-    api.verifyInviteLink(token).then((result) => {
+  const onVerified = useStableCallback(
+    (result: Awaited<ReturnType<typeof api.verifyInviteLink>>) => {
       if (result.isOk()) {
         setOrgName(result.value.organizationName);
         setRole(result.value.role);
@@ -51,20 +64,11 @@ export function AcceptInvitePage({ token }: Props) {
         setStep('error');
         setErrorMessage(result.error.message || 'Invalid or expired invite link');
       }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  const acceptInvite = useCallback(async () => {
-    setStep('accepting');
-    const result = await api.acceptInviteLink(token);
-    if (result.isOk()) {
-      setStep(result.value.alreadyMember ? 'already' : 'success');
-    } else {
-      setStep('error');
-      setErrorMessage(result.error.message || 'Failed to join organization');
-    }
-  }, [token]);
+    },
+  );
+  useEffect(() => {
+    api.verifyInviteLink(token).then((result) => onVerified(result));
+  }, [token, onVerified]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,43 +76,45 @@ export function AcceptInvitePage({ token }: Props) {
     setFormError('');
     setFormLoading(true);
 
-    try {
-      // Register + join org via server-side endpoint (bypasses disableSignUp)
-      const result = await api.registerViaInvite({
-        token,
-        username,
-        password,
-        displayName: displayName || undefined,
-      });
+    await withCleanup(
+      async () => {
+        try {
+          // Register + join org via server-side endpoint (bypasses disableSignUp)
+          const result = await api.registerViaInvite({
+            token,
+            username,
+            password,
+            displayName: displayName || undefined,
+          });
 
-      if (submissionIdRef.current !== submissionId) return;
+          if (submissionIdRef.current !== submissionId) return;
 
-      if (result.isOk()) {
-        const { user } = result.value;
-        useAuthStore.setState({
-          isAuthenticated: true,
-          user: {
-            id: user.id,
-            username: user.username,
-            displayName: user.displayName,
-            role: 'user',
-          },
-        });
-        setStep('success');
-      } else {
-        setFormError(result.error.message || 'Registration failed');
-      }
-    } catch (err: any) {
-      if (submissionIdRef.current === submissionId) {
-        setFormError(err.message || 'Registration failed');
-      }
-    } finally {
-      if (submissionIdRef.current === submissionId) {
-        // The current submission owns this flag, and finally covers every exit path.
-        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
-        setFormLoading(false);
-      }
-    }
+          if (result.isOk()) {
+            const { user } = result.value;
+            useAuthStore.setState({
+              isAuthenticated: true,
+              user: {
+                id: user.id,
+                username: user.username,
+                displayName: user.displayName,
+                role: 'user',
+              },
+            });
+            setStep('success');
+          } else {
+            setFormError(result.error.message || 'Registration failed');
+          }
+        } catch (err: any) {
+          if (submissionIdRef.current === submissionId) {
+            setFormError(err.message || 'Registration failed');
+          }
+        }
+      },
+      () => {
+        // The current submission owns this flag; the cleanup covers every exit path.
+        if (submissionIdRef.current === submissionId) setFormLoading(false);
+      },
+    );
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -117,45 +123,47 @@ export function AcceptInvitePage({ token }: Props) {
     setFormError('');
     setFormLoading(true);
 
-    try {
-      const result = await authClient.signIn.username({
-        username,
-        password,
-      });
+    await withCleanup(
+      async () => {
+        try {
+          const result = await authClient.signIn.username({
+            username,
+            password,
+          });
 
-      if (submissionIdRef.current !== submissionId) return;
+          if (submissionIdRef.current !== submissionId) return;
 
-      if (result.error) {
-        setFormError(result.error.message || 'Login failed');
-        return;
-      }
+          if (result.error) {
+            setFormError(result.error.message || 'Login failed');
+            return;
+          }
 
-      const u = result.data?.user as any;
-      if (u) {
-        useAuthStore.setState({
-          isAuthenticated: true,
-          user: {
-            id: u.id,
-            username: u.username || u.name || 'user',
-            displayName: u.name || u.username || 'User',
-            role: u.role || 'user',
-          },
-        });
-      }
+          const u = result.data?.user as any;
+          if (u) {
+            useAuthStore.setState({
+              isAuthenticated: true,
+              user: {
+                id: u.id,
+                username: u.username || u.name || 'user',
+                displayName: u.name || u.username || 'User',
+                role: u.role || 'user',
+              },
+            });
+          }
 
-      // Now accept the invite
-      await acceptInvite();
-    } catch (err: any) {
-      if (submissionIdRef.current === submissionId) {
-        setFormError(err.message || 'Login failed');
-      }
-    } finally {
-      if (submissionIdRef.current === submissionId) {
-        // The current submission owns this flag, and finally covers every exit path.
-        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
-        setFormLoading(false);
-      }
-    }
+          // Now accept the invite
+          await acceptInvite();
+        } catch (err: any) {
+          if (submissionIdRef.current === submissionId) {
+            setFormError(err.message || 'Login failed');
+          }
+        }
+      },
+      () => {
+        // The current submission owns this flag; the cleanup covers every exit path.
+        if (submissionIdRef.current === submissionId) setFormLoading(false);
+      },
+    );
   };
 
   return (

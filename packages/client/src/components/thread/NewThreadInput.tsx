@@ -10,10 +10,12 @@ import { Button } from '@/components/ui/button';
 import { useProjects } from '@/data/projects/hooks';
 import { useProjectThreadMode } from '@/data/runner/hooks';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
+import { whilePending } from '@/lib/while-pending';
 import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -116,11 +118,13 @@ export function NewThreadInput({
   // so it doesn't bleed into the next compose. The captured value is what
   // gets passed to PromptInput as initialPrompt.
   const initialPrefillRef = useRef(composePrefillPrompt);
-  useEffect(() => {
+  const clearComposePrefill = useStableCallback(() => {
     if (composePrefillPrompt !== null) setComposePrefillPrompt(null);
-    // Run once at mount; do NOT re-run when the store value flips back to null.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  // Run once at mount; do NOT re-run when the store value flips back to null.
+  useEffect(() => {
+    clearComposePrefill();
+  }, [clearComposePrefill]);
   const cancelNewThreadGlobal = useUIStore((s) => s.cancelNewThread);
   const cancelNewThread = onCancel ?? cancelNewThreadGlobal;
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
@@ -130,9 +134,12 @@ export function NewThreadInput({
   // ── Project path (for AvailableMcpServers) ──
   const [mcpProvider, setMcpProvider] = useState(defaultProvider);
 
-  useEffect(() => {
+  // Follow the default provider when it changes, without an extra effect pass.
+  const [seenDefaultProvider, setSeenDefaultProvider] = useState(defaultProvider);
+  if (seenDefaultProvider !== defaultProvider) {
+    setSeenDefaultProvider(defaultProvider);
     setMcpProvider(defaultProvider);
-  }, [defaultProvider]);
+  }
 
   // ── Worktree preview ──
   const [previewBranch, setPreviewBranch] = useState<string | null>(null);
@@ -274,7 +281,8 @@ export function NewThreadInput({
         toast.error(workflowParse.error);
         return false;
       }
-      if (workflowParse.invocation) {
+      const { invocation } = workflowParse;
+      if (invocation) {
         if (newThreadIsScratch || !effectiveProjectId) {
           toast.error('Workflows require a project thread.');
           return false;
@@ -283,12 +291,8 @@ export function NewThreadInput({
         setRestoredPrompt(null);
         setSubmittedPrompt(prompt);
         submittedPromptRef.current = prompt;
-        setWorkflowSubmitting(true);
-
-        const workflowPrompt =
-          workflowParse.invocation.prompt ??
-          `Run workflow ${workflowParse.invocation.workflowName}`;
-        try {
+        return whilePending(setWorkflowSubmitting, async () => {
+          const workflowPrompt = invocation.prompt ?? `Run workflow ${invocation.workflowName}`;
           // react-doctor-disable-line react-hooks-js/todo — pre-existing; React Compiler limitation
           const createResult = await api.createIdleThread({
             projectId: effectiveProjectId,
@@ -306,9 +310,9 @@ export function NewThreadInput({
             return false;
           }
 
-          const runResult = await api.runWorkflow(workflowParse.invocation.workflowName, {
+          const runResult = await api.runWorkflow(invocation.workflowName, {
             threadId: createResult.value.id,
-            ...buildWorkflowRunBody(workflowParse.invocation, {
+            ...buildWorkflowRunBody(invocation, {
               fileReferences: opts.fileReferences,
               symbolReferences: opts.symbolReferences,
             }),
@@ -319,9 +323,7 @@ export function NewThreadInput({
 
           await handleThreadCreated(createResult.value.id, 'normal', createResult.value);
           return true;
-        } finally {
-          setWorkflowSubmitting(false);
-        }
+        });
       }
 
       // Reset restored-prompt before the call so the field clears if it succeeds.

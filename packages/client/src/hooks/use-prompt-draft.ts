@@ -2,6 +2,7 @@ import { useEffect, useRef, type MutableRefObject, type RefObject } from 'react'
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import type { PromptAttachmentsHandle } from '@/components/prompt-input/use-prompt-attachments';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { useDraftStore } from '@/stores/draft-store';
 
 type Draft = ReturnType<typeof useDraftStore.getState>['drafts'][string];
@@ -116,7 +117,7 @@ export function usePromptDraft({
   const prevThreadIdRef = useRef<string | null | undefined>(null);
   const hasSubmittedRef = useRef(false);
 
-  useEffect(() => {
+  const swapDraft = useStableCallback(() => {
     const prevId = prevThreadIdRef.current;
     prevThreadIdRef.current = effectiveThreadId;
     const editor = editorRef.current;
@@ -134,8 +135,10 @@ export function usePromptDraft({
       initialPromptProp,
     );
     stopRecordingRef.current();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveThreadId]);
+  });
+  useEffect(() => {
+    swapDraft();
+  }, [effectiveThreadId, swapDraft]);
 
   useEffect(() => {
     const editor = editorRef.current;

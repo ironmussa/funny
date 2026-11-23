@@ -461,7 +461,6 @@ export function MonacoEditorDialog({
       monacoMatchesRef.current = [];
     }
     // Intentionally only react to view changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
   }, [inCodeView]);
 
   const goToNextMatch = useCallback(() => {

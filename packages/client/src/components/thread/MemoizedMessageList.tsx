@@ -607,7 +607,6 @@ export const MemoizedMessageList = memo(
       const ro = new ResizeObserver(measure);
       ro.observe(el);
       return () => ro.disconnect();
-      // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
     }, [candidateSectionUserId]);
 
     // Smooth section handoff: as the next section's user card scrolls up to

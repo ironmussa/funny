@@ -2,6 +2,7 @@ import type { Project } from '@funny/shared';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -93,11 +94,10 @@ function useFollowUpBranches({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNewThread, selectedProjectId]);
 
   // Update selection when the active thread's base branch changes (no network call)
-  useEffect(() => {
+  const syncSelectedBranch = useStableCallback(() => {
     if (isNewThread || !selectedProjectId) return;
     const cache = followUpBranchCacheRef.current;
     const next =
@@ -108,8 +108,10 @@ function useFollowUpBranches({
         cache,
       );
     if (next !== undefined) setFollowUpSelectedBranch(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNewThread, selectedProjectId, activeThreadBaseBranch]);
+  });
+  useEffect(() => {
+    syncSelectedBranch();
+  }, [isNewThread, selectedProjectId, activeThreadBaseBranch, syncSelectedBranch]);
 
   return {
     followUpBranches,

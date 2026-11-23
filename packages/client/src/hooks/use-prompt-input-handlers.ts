@@ -63,8 +63,7 @@ function usePromptInputHandlers({
     } else {
       toast.success(t('prompt.compactRequested', 'Compaction requested'));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t]);
+  }, [t, threadIdRef]);
 
   const wrappedOnSubmit = useCallback(
     async (prompt: string, opts: SubmitOpts, images?: ImageAttachment[]) => {
@@ -77,8 +76,7 @@ function usePromptInputHandlers({
       }
       return result;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [threadIdRef, hasSubmittedRef],
   );
 
   return { handleEditorChange, handleEditorPaste, handleCompact, wrappedOnSubmit };

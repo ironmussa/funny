@@ -313,7 +313,7 @@ export function PlanReviewDialog({
               onAddEmoji={onAddEmoji}
               onRemoveComment={onRemoveComment}
               active={open && !isEditing}
-              highlightDeps={[open]}
+              highlightKey={open}
               highlightDelay={50}
             >
               <div className={PROSE_CLASSES}>

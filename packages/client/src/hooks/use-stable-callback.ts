@@ -14,6 +14,11 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
  * });
  * // `onClick` identity is stable across re-renders
  * ```
+ *
+ * Also use it where `useEffectEvent` would fit (an effect that fires on one
+ * value but reads the latest of others), listing the result as a dependency.
+ * React 19.2.7 does not update an effect event inside a `memo()` or
+ * `forwardRef` component, so the event there reads the previous render.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {

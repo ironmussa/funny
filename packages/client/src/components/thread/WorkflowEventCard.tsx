@@ -92,12 +92,12 @@ const HooksEventCard = memo(function HooksEventCard({
   // Collect error output from failed hooks
   const errorOutput = useMemo(() => {
     const errors: string[] = [];
-    for (const hook of hooks) {
+    const memoHooks: typeof hooks = metadata.hooks ?? [];
+    for (const hook of memoHooks) {
       if (hook.status === 'failed' && hook.error) errors.push(hook.error);
     }
     if (errors.length === 0) return null;
     return ansiConverter.toHtml(errors.join('\n'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metadata.hooks]);
 
   const hasError = hasFailed && errorOutput;

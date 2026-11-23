@@ -312,6 +312,8 @@ async function dispatchGithubNode(
   }
   if (yamlNode.review) return githubOutput(yamlNode, 'review', await review(yamlNode, ctx, scope));
   if (yamlNode.triage) return githubOutput(yamlNode, 'triage', await triage(yamlNode, ctx, scope));
+  if (yamlNode.integrate)
+    return githubOutput(yamlNode, 'integrate', await integrate(yamlNode, ctx));
   return null;
 }
 
@@ -376,6 +378,13 @@ function triage(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: TemplateS
     effort: opts.effort,
     execution: ctx.execution,
   });
+}
+
+function integrate(yamlNode: ParsedNode, ctx: YamlPipelineContext) {
+  if (!ctx.provider.integrate) {
+    throw new Error(`integrate[${yamlNode.id}]: the provider does not support this action`);
+  }
+  return ctx.provider.integrate({ execution: ctx.execution });
 }
 
 function review(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: TemplateScope) {

@@ -1,8 +1,9 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { Bot, Globe, NotebookPen, type LucideIcon } from 'lucide-react';
+import { Bot, Globe, NotebookPen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GitStatChip } from '@/components/git/GitStatChip';
 import { PRBadge } from '@/components/PRBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
@@ -116,8 +117,8 @@ export function ThreadItemTitleRow({
           prNumber={gitStatus.prNumber}
           prState={gitStatus.prState ?? 'OPEN'}
           prUrl={gitStatus.prUrl}
-          size="compact"
-          className="shrink-0"
+          variant="plain"
+          showExternalIcon={false}
           data-testid={`thread-pr-badge-${thread.id}`}
         />
       ) : null}
@@ -134,37 +135,6 @@ export function ThreadItemTitleRow({
 
 // ── Git state icons (shown in row 1) ─────────────────────────────────
 
-function GitIconChip({
-  testId,
-  className,
-  icon: Icon,
-  count,
-  tooltip,
-}: {
-  testId: string;
-  className: string;
-  icon: LucideIcon;
-  count?: number;
-  tooltip: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn('flex shrink-0 items-center gap-0.5 text-xs leading-none', className)}
-          data-testid={testId}
-        >
-          <Icon className="icon-sm" />
-          {count ? <span className="font-mono">{count}</span> : null}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltip}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 /**
  * Pending work the PR badge cannot show: uncommitted files (with the +/- line
  * counts in the tooltip so rows sharing a working tree don't repeat the same
@@ -180,7 +150,7 @@ function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: G
   return (
     <>
       {dirty && (
-        <GitIconChip
+        <GitStatChip
           testId={`thread-git-dirty-${threadId}`}
           className={dirtyCfg.className}
           icon={dirtyCfg.icon}
@@ -201,7 +171,7 @@ function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: G
         />
       )}
       {unpushed && (
-        <GitIconChip
+        <GitStatChip
           testId={`thread-git-sync-${threadId}`}
           className={unpushedCfg.className}
           icon={unpushedCfg.icon}

@@ -24,4 +24,4 @@
 ## 5. Verification
 
 - [x] 5.1 Run `bun run lint`, `bun run typecheck`, the client suite, the factory stories and `bunx fallow audit --base origin/master`; all pass.
-- [ ] 5.2 Check the panel and header in Storybook in light and dark themes and at the smallest and largest font sizes.
+- [x] 5.2 Check the panel and header in Storybook in light and dark themes and at the smallest and largest font sizes.

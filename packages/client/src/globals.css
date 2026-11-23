@@ -36,11 +36,13 @@
 
   /* Small text steps in rem, so they follow the font size setting (Settings > Appearance
      sets the root font size). Use these instead of pixel sizes (8px / 9px / 10px / 11px):
-     scripts/fitness/check-client-styling.ts fails on text-[Npx]. */
-  --text-4xs: 0.5rem;
-  --text-3xs: 0.5625rem;
-  --text-2xs: 0.625rem;
-  --text-compact: 0.6875rem;
+     scripts/fitness/check-client-styling.ts fails on text-[Npx].
+     Measured against the DEFAULT root size (14px, FONT_SIZE_VALUES in settings-store),
+     not the browser's 16px: at the default setting they are exactly 8 / 9 / 10 / 11px. */
+  --text-4xs: calc(8rem / 14);
+  --text-3xs: calc(9rem / 14);
+  --text-2xs: calc(10rem / 14);
+  --text-compact: calc(11rem / 14);
 
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
@@ -1776,8 +1778,8 @@ mark.md-search-match[data-active='true'] {
 
   /* Tab strip sizing — compact, matches the previous Radix tab look. */
   --dv-tabs-and-actions-container-height: 30px;
-  --dv-tabs-and-actions-container-font-size: 0.6875rem;
-  --dv-tab-font-size: 0.6875rem;
+  --dv-tabs-and-actions-container-font-size: var(--text-compact);
+  --dv-tab-font-size: var(--text-compact);
 
   /* Scrollbar inside the tab overflow list */
   --dv-tabs-container-scrollbar-color: hsl(var(--muted-foreground));

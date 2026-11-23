@@ -19,4 +19,4 @@
 ## 4. Verification
 
 - [x] 4.1 Run `bun run lint`, `bun run typecheck`, the server factory tests, the client suite, the factory stories and `bunx fallow audit --base origin/master`; all pass.
-- [ ] 4.2 Check the card, headers and timeline in Storybook in light and dark themes and at the smallest and largest font sizes.
+- [x] 4.2 Check the card, headers and timeline in Storybook in light and dark themes and at the smallest and largest font sizes.

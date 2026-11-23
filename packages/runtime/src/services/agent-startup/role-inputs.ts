@@ -15,6 +15,8 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { isReadOnlyThread } from '../thread-context.js';
+
 const THREAD_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** File name → text (validated by `createThreadSchema.roleInputs`). */
@@ -41,4 +43,19 @@ export async function writeRoleInputs(threadId: string, inputs: RoleInputs): Pro
 export function existingRoleInputsDir(threadId: string): string | null {
   const dir = roleInputsDirFor(threadId);
   return dir && existsSync(dir) ? dir : null;
+}
+
+/**
+ * The role inputs a message brings (a sandbox thread's first message, whose
+ * row the server creates): written only from the owner, and only for a
+ * read-only thread.
+ */
+export async function adoptRoleInputs(
+  thread: { readOnly?: number | boolean | null },
+  threadId: string,
+  inputs: RoleInputs | undefined,
+  fromOwner: boolean,
+): Promise<void> {
+  if (!inputs || !fromOwner || !isReadOnlyThread(thread)) return;
+  await writeRoleInputs(threadId, inputs);
 }

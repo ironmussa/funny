@@ -159,6 +159,33 @@ mock.module('../../services/thread-event-bus.js', () => ({
     removeListener: vi.fn(),
   },
 }));
+// A run is recorded as a `pipeline.run` activity (track-pipeline-runs).
+const activityCalls = {
+  begun: [] as any[],
+  steps: [] as string[],
+  effects: [] as Array<[string, string]>,
+  succeeded: 0,
+  failed: [] as string[],
+};
+mock.module('../../services/activity-tracker.js', () => ({
+  beginActivity: (spec: any) => {
+    activityCalls.begun.push(spec);
+    return {
+      id: 'act-1',
+      step: (label: string) => activityCalls.steps.push(label),
+      progress: () => {},
+      result: () => {},
+      effect: (effect: string, target: string) => activityCalls.effects.push([effect, target]),
+      succeed: () => {
+        activityCalls.succeeded++;
+      },
+      fail: (error: string) => activityCalls.failed.push(error),
+    };
+  },
+  trackActivity: async (_spec: unknown, run: (a: unknown) => unknown) => run({}),
+  recordActivity: async () => undefined,
+}));
+
 // Mock git-pipelines.ts — startPipelineRun lazy-imports reviewFixSubPipeline from it.
 // Provide a trivial pipeline that completes immediately.
 mock.module('../../services/git-pipelines.js', () => {
@@ -219,6 +246,53 @@ describe('Pipeline Orchestration', () => {
   // ══════════════════════════════════════════════════════════
 
   describe('startPipelineRun', () => {
+    beforeEach(() => {
+      activityCalls.begun.length = 0;
+      activityCalls.steps.length = 0;
+      activityCalls.effects.length = 0;
+      activityCalls.succeeded = 0;
+      activityCalls.failed.length = 0;
+    });
+
+    test('a run is one automatic pipeline.run activity of the thread', async () => {
+      await startPipelineRun({
+        pipeline: makePipeline(),
+        threadId: 'thread-1',
+        userId: 'user-1',
+        projectId: 'proj-1',
+        commitSha: 'abc123',
+        cwd: '/tmp/repo',
+      });
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(activityCalls.begun).toEqual([
+        expect.objectContaining({
+          kind: 'pipeline.run',
+          userId: 'user-1',
+          projectId: 'proj-1',
+          threadId: 'thread-1',
+          origin: 'implicit',
+          input: { pipelineId: 'pipe-1', commitSha: 'abc123' },
+        }),
+      ]);
+      // The run ended (completed or failed): the activity is not left running.
+      expect(activityCalls.succeeded + activityCalls.failed.length).toBe(1);
+    });
+
+    test('a pipeline commit starts no activity', async () => {
+      await startPipelineRun({
+        pipeline: makePipeline(),
+        threadId: 'thread-1',
+        userId: 'user-1',
+        projectId: 'proj-1',
+        commitSha: 'sha456',
+        cwd: '/tmp/repo',
+        isPipelineCommit: true,
+        pipelineRunId: 'existing-run',
+      });
+      expect(activityCalls.begun).toHaveLength(0);
+    });
+
     test('emits pipeline:run_started WS event', async () => {
       const pipeline = makePipeline();
 
@@ -300,6 +374,9 @@ describe('Pipeline Orchestration', () => {
 
       await new Promise((r) => setTimeout(r, 150));
       expect(cancelPipelineRun('run-1')).toBe(false);
+      // A cancelled run ends its activity failed.
+      expect(activityCalls.succeeded).toBe(0);
+      expect(activityCalls.failed).toHaveLength(1);
     });
   });
 

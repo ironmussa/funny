@@ -58,6 +58,10 @@ function setup(overrides: Partial<WorkspaceCleanupDeps> = {}) {
       calls.push('rm');
     },
     pathExists: () => true,
+    removeThreadCheckpoints: async (_projectPath: string, threadId: string) => {
+      calls.push(`checkpoints:${threadId}`);
+      return 0;
+    },
     trackActivity: tracker.trackActivity,
     recordActivity: tracker.recordActivity,
     ...overrides,
@@ -90,6 +94,7 @@ describe('cleanupWorkspace', () => {
       'invalidate',
       'remove-worktree',
       'remove-branch',
+      'checkpoints:t1',
     ]);
     expect(reports[0].payload).toMatchObject({
       kind: 'workspace.cleanup',
@@ -134,7 +139,7 @@ describe('cleanupWorkspace', () => {
     const result = await cleanup.cleanupWorkspace(REQUEST);
     await tracker.flush();
     expect(result.isOk()).toBe(true);
-    expect(calls).toEqual(['remove-branch']);
+    expect(calls).toEqual(['remove-branch', 'checkpoints:t1']);
     expect(terminal()).toEqual({
       status: 'succeeded',
       effects: [{ effect: 'branch-deleted', target: 'feature' }],

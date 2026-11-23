@@ -3,6 +3,19 @@
 Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its tasks 1.7 and 3.4), and
 `factory-agent-roles` groups 6–7 (review gate, `merge` node, `address` loop).
 
+**Phases (2026-11-23).** Both prerequisites are archived. The change ships in two phases:
+
+- **Phase 1, conflicts resolved without an agent:** group 2 (`run_command`), group 3 (`integrate`,
+  regenerators, loop budget, review freshness; not 3.5), 6.2 for the integrate counters
+  (`integrateRounds`, `conflictsResolvedWithoutLlm`, `conflictsSentToAgent`), 6.3 for what phase 1
+  ships, 7.1, and the parts of 7.2 that do not need the queue (adjacent imports merge without the
+  implementer, a lockfile conflict is regenerated). The serial merge lane of `factory-agent-roles`
+  stays the merge path.
+- **Phase 2, the batched queue:** group 1 (integration provider), group 4 (queue, bisection),
+  3.5 (`regenerate:` on `merge`, a loop back to an arbitrary node),
+  group 5 (early integration, stacking), 6.1 (readiness), the queue counters of 6.2, and the rest
+  of 7.2.
+
 ## 1. Integration provider
 
 - [ ] 1.1 Add `IntegrationProvider` to `@funny/core` (`branchRules`, `createBranch`, `mergeRefInto`, `mergePullRequest`, `checks`, `deleteBranch`, `enqueueInHostQueue`, `pullRequestMergeability`) returning `ResultAsync`; verify with unit tests over a fake

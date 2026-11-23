@@ -162,3 +162,44 @@ export function ensureWeaveConfigured(projectPath: string): ResultAsync<WeaveSta
     (error) => internal(`Failed to configure Weave: ${String(error)}`),
   );
 }
+
+/**
+ * Git configuration for a factory run's processes, carried in their
+ * environment (`GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`)
+ * so nothing is written to the repository: a worktree's `.git/config` and
+ * `info/attributes` belong to the common git dir, which the user's own checkout
+ * shares. `rerere` records and replays conflict resolutions; when weave-driver
+ * is installed it is the merge driver for the languages it handles, through an
+ * attributes file funny owns in `dir`.
+ */
+export function factoryGitConfigEnv(
+  dir: string,
+): ResultAsync<{ env: Record<string, string>; weave: boolean }, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const entries: Array<[string, string]> = [
+        ['rerere.enabled', 'true'],
+        ['rerere.autoUpdate', 'true'],
+      ];
+      const weave = await isWeaveInstalled();
+      if (weave) {
+        mkdirSync(dir, { recursive: true });
+        const attributesFile = join(dir, 'weave.gitattributes');
+        const lines = WEAVE_EXTENSIONS.map((ext) => `${ext} merge=${WEAVE_DRIVER_NAME}`);
+        writeFileSync(attributesFile, `${lines.join('\n')}\n`);
+        entries.push(
+          [`merge.${WEAVE_DRIVER_NAME}.name`, 'Weave semantic merge driver'],
+          [`merge.${WEAVE_DRIVER_NAME}.driver`, WEAVE_DRIVER_CMD],
+          ['core.attributesFile', attributesFile],
+        );
+      }
+      const env: Record<string, string> = { GIT_CONFIG_COUNT: String(entries.length) };
+      entries.forEach(([key, value], index) => {
+        env[`GIT_CONFIG_KEY_${index}`] = key;
+        env[`GIT_CONFIG_VALUE_${index}`] = value;
+      });
+      return { env, weave };
+    })(),
+    (error) => internal(`Failed to prepare the factory git configuration: ${String(error)}`),
+  );
+}

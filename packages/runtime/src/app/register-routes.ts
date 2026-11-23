@@ -4,6 +4,7 @@ import { mutationRateLimit } from '../middleware/rate-limit.js';
 import browseRoutes from '../routes/browse.js';
 import { browserSessionRoutes } from '../routes/browser-session.js';
 import { designProjectRoutes } from '../routes/designs.js';
+import { factoryStepRoutes } from '../routes/factory-steps.js';
 import filesRoutes from '../routes/files.js';
 import { gitRoutes } from '../routes/git.js';
 import { githubRoutes } from '../routes/github.js';
@@ -39,6 +40,7 @@ export function registerRoutes(app: Hono<HonoEnv>): void {
   app.route('/api/projects', projectRoutes);
   app.route('/api/threads', sandboxCheckoutRoutes);
   app.route('/api/threads', regressionProofRoutes);
+  app.route('/api/threads', factoryStepRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/uploads', uploadRoutes);
   app.route('/api/git', gitRoutes);

@@ -1,4 +1,4 @@
-import { FlaskConical, FolderTree, GitCompare, Globe, MessageSquare, Terminal } from 'lucide-react';
+import { FlaskConical, FolderTree, GitCompare, Globe, Terminal } from 'lucide-react';
 import { memo, startTransition, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
@@ -12,7 +12,7 @@ import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import * as variant from '@/lib/thread-variant';
-import { cn, resolveThreadBranch } from '@/lib/utils';
+import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -28,7 +28,7 @@ import {
 } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
-import { ShareThreadButton } from './ShareThreadButton';
+import { ShareThreadDialog } from './ShareThreadDialog';
 import { StartupCommandsPopover } from './StartupCommandsPopover';
 
 export interface ThreadHeaderActionsProps {
@@ -40,9 +40,20 @@ export interface ThreadHeaderActionsProps {
   trailing?: ReactNode;
 }
 
+/** The comments pane toggle, shown as an item of the "More actions" menu. */
+export interface CommentsMenuAction {
+  active: boolean;
+  count: number;
+  onToggle: () => void;
+}
+
 interface MoreActionsRenderArgs {
   isScratchThread: boolean;
   onOpenInEditor: (editor: Editor) => Promise<void>;
+  /** Absent when the thread cannot show comments. */
+  comments?: CommentsMenuAction;
+  /** Whether the user can share the thread: they own it and it is a project thread. */
+  canShare: boolean;
 }
 
 interface ThreadHeaderActionsBaseProps extends Omit<ThreadHeaderActionsProps, 'hideTimeline'> {
@@ -192,52 +203,6 @@ function BrowserToggleButton({
   );
 }
 
-function CommentsToggleButton({
-  active,
-  commentCount,
-  onClick,
-}: {
-  active: boolean;
-  commentCount: number;
-  onClick: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClick}
-          data-testid="header-toggle-comments"
-          className={cn(
-            'relative',
-            active
-              ? 'text-foreground'
-              : commentCount > 0
-                ? 'text-status-info'
-                : 'text-muted-foreground',
-          )}
-        >
-          <MessageSquare className="icon-base" />
-          {commentCount > 0 && (
-            <span
-              className="bg-status-info text-3xs absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 leading-none font-medium text-white"
-              data-testid="comments-badge"
-            >
-              {commentCount > 99 ? '99+' : commentCount}
-            </span>
-          )}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <ShortcutHint label={t('comments.title', 'Comments')} keys={['Alt', 'M']} />
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 /**
  * The right-side cluster of thread action icons. Store reads stay here so the
  * same component can be mounted under any thread context.
@@ -271,6 +236,9 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
       ),
   );
   const activeThreadIsScratch = useThreadSelector((thread) => variant.isScratch(thread));
+  const isThreadOwner = useThreadSelector(
+    (thread) => !!selfUserId && thread?.userId === selfUserId,
+  );
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjects();
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
@@ -325,6 +293,8 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
   const reviewPanelActive = reviewPaneOpen && rightPaneTab === 'review';
   const filesPanelActive = reviewPaneOpen && rightPaneTab === 'files';
   const commentsPanelActive = reviewPaneOpen && rightPaneTab === 'comments';
+  // Sharing is owner-only and not for scratch threads.
+  const canShare = !!activeThreadId && !!projectId && !activeThreadIsScratch && isThreadOwner;
 
   return (
     <div className="flex shrink-0 items-center gap-2">
@@ -399,25 +369,25 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
         </HeaderActionButton>
       )}
       <BrowserToggleButton threadId={activeThreadId} projectId={projectId} />
-      {activeThreadId && canShowComments && (
-        <CommentsToggleButton
-          active={commentsPanelActive}
-          commentCount={commentCount}
-          onClick={() =>
-            startTransition(() => {
-              setCommentsPaneOpen(!commentsPanelActive);
-              updatePanelParam(commentsPanelActive ? null : 'comments');
-            })
-          }
-        />
-      )}
-      {activeThreadId && projectId && !activeThreadIsScratch && (
-        <ShareThreadButton threadId={activeThreadId} projectId={projectId} />
+      {canShare && activeThreadId && projectId && (
+        <ShareThreadDialog threadId={activeThreadId} projectId={projectId} />
       )}
       {activeThreadId &&
         renderMoreActions?.({
           isScratchThread: activeThreadIsScratch,
           onOpenInEditor: handleOpenInEditor,
+          comments: canShowComments
+            ? {
+                active: commentsPanelActive,
+                count: commentCount,
+                onToggle: () =>
+                  startTransition(() => {
+                    setCommentsPaneOpen(!commentsPanelActive);
+                    updatePanelParam(commentsPanelActive ? null : 'comments');
+                  }),
+              }
+            : undefined,
+          canShare,
         })}
       {trailing}
     </div>

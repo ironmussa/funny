@@ -8,9 +8,11 @@ import {
   EllipsisVertical,
   GitBranch,
   GitFork,
+  MessageSquare,
   Milestone,
   Pin,
   PinOff,
+  Share2,
   Trash2,
 } from 'lucide-react';
 import { memo, startTransition } from 'react';
@@ -33,14 +35,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { stageConfig } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 import type { Editor } from '@/stores/settings-store';
+import { useUIStore } from '@/stores/ui-store';
 
+import type { CommentsMenuAction } from './ThreadHeaderActions';
 import { useMoreActionsMenu } from './use-more-actions-menu';
 
 interface Props {
   hideTimeline?: boolean;
   onOpenInEditor?: (editor: Editor) => void;
   onViewOnBoard?: () => void;
+  comments?: CommentsMenuAction;
+  canShare?: boolean;
 }
 
 type Menu = ReturnType<typeof useMoreActionsMenu>;
@@ -58,13 +65,18 @@ function MenuItems({
   menu,
   onOpenInEditor,
   onViewOnBoard,
+  comments,
+  canShare = false,
 }: {
   hideTimeline?: boolean;
   menu: Menu;
   onOpenInEditor?: (editor: Editor) => void;
   onViewOnBoard?: () => void;
+  comments?: CommentsMenuAction;
+  canShare?: boolean;
 }) {
   const { t } = useTranslation();
+  const setShareDialogOpen = useUIStore((s) => s.setShareDialogOpen);
   const {
     threadId,
     threadStage,
@@ -159,6 +171,46 @@ function MenuItems({
           <Milestone className={`icon-base mr-2 ${timelineVisible ? 'text-primary' : ''}`} />
           {t('thread.toggleTimeline', 'Toggle Timeline')}
         </DropdownMenuItem>
+      )}
+      {(comments || canShare) && (
+        <>
+          <DropdownMenuSeparator />
+          {comments && (
+            <DropdownMenuItem
+              data-testid="header-menu-toggle-comments"
+              onClick={comments.onToggle}
+              className="cursor-pointer"
+            >
+              <MessageSquare
+                className={cn(
+                  'icon-base mr-2',
+                  comments.active ? 'text-primary' : comments.count > 0 && 'text-status-info',
+                )}
+              />
+              {t('comments.title', 'Comments')}
+              {comments.count > 0 && (
+                <span
+                  className="bg-status-info text-3xs ml-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 leading-none font-medium text-white"
+                  data-testid="comments-badge"
+                >
+                  {comments.count > 99 ? '99+' : comments.count}
+                </span>
+              )}
+              <span className="text-muted-foreground ml-auto pl-4 text-xs">Alt+M</span>
+            </DropdownMenuItem>
+          )}
+          {canShare && (
+            <DropdownMenuItem
+              data-testid="header-menu-share"
+              onClick={() => setShareDialogOpen(true)}
+              className="cursor-pointer"
+            >
+              <Share2 className="icon-base mr-2" />
+              {t('thread.share', 'Share thread')}
+              <span className="text-muted-foreground ml-auto pl-4 text-xs">Alt+H</span>
+            </DropdownMenuItem>
+          )}
+        </>
       )}
       <DropdownMenuSeparator />
       <DropdownMenuItem
@@ -257,6 +309,8 @@ export const MoreActionsMenu = memo(function MoreActionsMenu({
   hideTimeline = false,
   onOpenInEditor,
   onViewOnBoard,
+  comments,
+  canShare,
 }: Props) {
   const { t } = useTranslation();
   const menu = useMoreActionsMenu();
@@ -298,6 +352,8 @@ export const MoreActionsMenu = memo(function MoreActionsMenu({
             menu={menu}
             onOpenInEditor={onOpenInEditor}
             onViewOnBoard={onViewOnBoard}
+            comments={comments}
+            canShare={canShare}
           />
         </DropdownMenuContent>
       </DropdownMenu>

@@ -312,9 +312,9 @@ export function ProjectCollaborators() {
                     to strip their row. Members can't remove themselves here. */}
                 {!isOwner && !isSelf && (
                   <Button
-                    variant="muted"
+                    variant="muted-destructive"
                     size="icon"
-                    className="hover:text-destructive size-7 shrink-0"
+                    className="size-7 shrink-0"
                     onClick={() => handleRemove(m)}
                     data-testid={`collaborators-remove-${m.userId}`}
                     aria-label="Remove collaborator"

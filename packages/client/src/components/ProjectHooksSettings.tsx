@@ -201,10 +201,9 @@ function HookItem({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="muted"
+                variant="muted-destructive"
                 size="icon-xs"
                 onClick={() => onDelete(hook)}
-                className="hover:text-status-error"
                 data-testid={`hook-delete-${key}`}
               >
                 <Trash2 className="icon-xs" />

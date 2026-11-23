@@ -205,9 +205,9 @@ export function UserManagement() {
             </div>
             {user.id !== currentUser?.id && (
               <Button
-                variant="ghost"
+                variant="ghost-destructive"
                 size="sm"
-                className="text-destructive hover:text-destructive text-xs"
+                className="text-xs"
                 onClick={() => handleRemove(user.id)}
               >
                 {t('common.delete')}

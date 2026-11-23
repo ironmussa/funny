@@ -170,13 +170,12 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="muted"
+            variant="muted-destructive"
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-clear-all"
             onClick={clearAllAnnotations}
             disabled={!hasAnnotations}
-            className="hover:text-destructive"
           >
             <Trash2 className="icon-base" />
           </Button>

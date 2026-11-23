@@ -345,9 +345,8 @@ export function CommitDetailDialog({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="ghost"
+                        variant="ghost-destructive"
                         size="xs"
-                        className="text-destructive hover:text-destructive"
                         onClick={() => selectedHash && request('reset', selectedHash)}
                         disabled={inProgress}
                         data-testid="commit-reset-btn"

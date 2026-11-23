@@ -460,9 +460,9 @@ export function TeamMembers() {
                   </SelectContent>
                 </Select>
                 <Button
-                  variant="muted"
+                  variant="muted-destructive"
                   size="icon"
-                  className="hover:text-destructive size-8"
+                  className="size-8"
                   onClick={() => setRemoveConfirm(member)}
                   disabled={isLastOwner}
                   data-testid={`team-member-remove-${member.userId}`}
@@ -493,9 +493,9 @@ export function TeamMembers() {
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">{inv.role}</Badge>
                   <Button
-                    variant="muted"
+                    variant="muted-destructive"
                     size="icon"
-                    className="hover:text-destructive size-7"
+                    className="size-7"
                     onClick={() => handleCancelInvitation(inv.id)}
                     data-testid={`team-invitation-cancel-${inv.id}`}
                   >

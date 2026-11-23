@@ -285,10 +285,9 @@ export function AutomationSettings() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="muted"
+                        variant="muted-destructive"
                         size="icon-sm"
                         onClick={() => handleDelete(a)}
-                        className="hover:text-status-error"
                       >
                         <Trash2 className="icon-sm" />
                       </Button>

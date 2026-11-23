@@ -267,9 +267,9 @@ export function OrganizationManagement() {
                   )}
                   {isOwner && (
                     <Button
-                      variant="muted"
+                      variant="muted-destructive"
                       size="icon"
-                      className="hover:text-destructive size-8"
+                      className="size-8"
                       onClick={() => setDeleteConfirm(org)}
                       data-testid={`org-delete-${org.id}`}
                     >

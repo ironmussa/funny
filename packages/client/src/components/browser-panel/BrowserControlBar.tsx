@@ -90,11 +90,10 @@ function SessionActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="muted"
+            variant="muted-destructive"
             size="icon-xs"
             aria-label="Stop browser"
             onClick={() => void endBrowserSession()}
-            className="hover:text-destructive"
             data-testid="browser-panel-stop"
           >
             <Square className="icon-xs" />

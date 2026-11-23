@@ -18,6 +18,10 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         // Toolbar and row actions: a ghost button that stays quiet until hovered.
         muted: 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+        // Row actions that remove something: quiet until hovered, then red.
+        'muted-destructive': 'text-muted-foreground hover:bg-accent hover:text-status-error',
+        // A text action that destroys something (delete, discard).
+        'ghost-destructive': 'text-destructive hover:bg-accent hover:text-destructive',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       // Field heights / padding / text come from the shared control scale so a

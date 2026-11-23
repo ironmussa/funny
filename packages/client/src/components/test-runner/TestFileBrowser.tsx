@@ -450,9 +450,9 @@ function TreeItem({
           <Button
             aria-label={`Stop ${node.name}`}
             data-testid={`test-stop-${node.path}`}
-            variant="ghost"
+            variant="ghost-destructive"
             size="icon"
-            className="text-destructive hover:text-destructive size-5 opacity-100"
+            className="size-5 opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               onStop();

@@ -276,4 +276,30 @@ describe('browser panel thread sessions', () => {
     store().setSessionController('thread:t1', 'agent');
     expect(store().tool).toBe('browse');
   });
+  describe('showThreadBrowser (sidebar browser icon)', () => {
+    test('on another thread, the panel opens with that thread when it becomes active', async () => {
+      store().syncActiveThread('t2');
+      store().showThreadBrowser('t1');
+      // The panel keeps following t2 until the user is on t1.
+      expect(store().open).toBe(false);
+
+      store().syncActiveThread('t1');
+      expect(store().open).toBe(true);
+      await waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
+    });
+
+    test('on the thread the panel follows, it opens the panel at once', async () => {
+      store().syncActiveThread('t1');
+      store().showThreadBrowser('t1');
+      expect(store().open).toBe(true);
+      await waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
+    });
+
+    test('leaves an open panel open', () => {
+      store().syncActiveThread('t1');
+      store().togglePanel();
+      store().showThreadBrowser('t1');
+      expect(store().open).toBe(true);
+    });
+  });
 });

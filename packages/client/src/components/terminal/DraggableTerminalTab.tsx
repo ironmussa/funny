@@ -9,7 +9,7 @@ import {
   dropTargetForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { X } from 'lucide-react';
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -20,6 +20,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { cn } from '@/lib/utils';
 import type { TerminalTab } from '@/stores/terminal-store';
 
@@ -70,7 +71,7 @@ export function DraggableTerminalTab({
     setIsEditing(false);
   }, [tab.label]);
 
-  const onOutsidePointerDown = useEffectEvent((event: PointerEvent) => {
+  const onOutsidePointerDown = useStableCallback((event: PointerEvent) => {
     const input = inputRef.current;
     if (!input) return;
     if (event.target instanceof Node && input.contains(event.target)) return;
@@ -82,7 +83,7 @@ export function DraggableTerminalTab({
     const handlePointerDown = (event: PointerEvent) => onOutsidePointerDown(event);
     document.addEventListener('pointerdown', handlePointerDown, true);
     return () => document.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [isEditing]);
+  }, [isEditing, onOutsidePointerDown]);
 
   useEffect(() => {
     const el = ref.current;

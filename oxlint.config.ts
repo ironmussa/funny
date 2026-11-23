@@ -233,6 +233,16 @@ const existing = {
           'error',
           { allow: ['dv-funny-right-tab', 'pr-detail-conversation'] },
         ],
+        // React 19.2.7 does not update an effect event inside a memo() or
+        // forwardRef component, so it reads the previous render there.
+        'no-restricted-syntax': [
+          'error',
+          {
+            selector:
+              "ImportSpecifier[imported.name='useEffectEvent'], MemberExpression[property.name='useEffectEvent']",
+            message: 'Use useStableCallback from @/hooks/use-stable-callback instead.',
+          },
+        ],
       },
     },
     {

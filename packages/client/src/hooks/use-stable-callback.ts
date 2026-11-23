@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useCallback, useInsertionEffect, useRef } from 'react';
 
 /**
  * Returns a referentially-stable callback that always invokes the latest
@@ -23,7 +23,9 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
   const ref = useRef(fn);
-  useLayoutEffect(() => {
+  // An insertion effect runs before every layout effect of the commit, so a
+  // child's layout effect that calls the callback also gets the latest `fn`.
+  useInsertionEffect(() => {
     ref.current = fn;
   }, [fn]);
 

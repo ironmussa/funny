@@ -11,7 +11,7 @@ import {
   LogOut,
   Settings,
 } from 'lucide-react';
-import { useState, useEffect, useEffectEvent, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
@@ -142,7 +143,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
 
   // The runner answers as soon as the clone starts; its last `clone:progress`
   // event says whether the project was created.
-  const finishClone = useEffectEvent(async (data: WSCloneProgressData) => {
+  const finishClone = useStableCallback(async (data: WSCloneProgressData) => {
     activeCloneIdRef.current = null;
     setIsCloning(false);
     if (data.status === 'failed') {
@@ -180,7 +181,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     };
     window.addEventListener('clone:progress', handler);
     return () => window.removeEventListener('clone:progress', handler);
-  }, []);
+  }, [finishClone]);
 
   const loadGhUser = useCallback(async () => {
     const result = await api.githubUser();

@@ -1,13 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import {
   applyDragRange,
   selectionStateOf,
@@ -266,7 +259,7 @@ export function useDiffKeyboardShortcuts({
   /** Called on Escape when the search bar is not open */
   onIdleEscape?: () => void;
 }) {
-  const onKey = useEffectEvent((e: KeyboardEvent) => {
+  const onKey = useStableCallback((e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f' && canOpenSearch) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -288,7 +281,7 @@ export function useDiffKeyboardShortcuts({
     const handler = (e: KeyboardEvent) => onKey(e);
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [enabled]);
+  }, [enabled, onKey]);
 }
 
 /* ── Line selection for partial staging ── */

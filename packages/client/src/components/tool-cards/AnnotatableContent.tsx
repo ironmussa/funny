@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useEffectEvent, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { cn } from '@/lib/utils';
 
 import {
@@ -67,7 +68,7 @@ export function AnnotatableContent({
     window.getSelection()?.removeAllRanges();
   }, []);
 
-  const onOutsideMouseDown = useEffectEvent((e: MouseEvent) => {
+  const onOutsideMouseDown = useStableCallback((e: MouseEvent) => {
     const popover = document.querySelector('[data-testid="plan-selection-popover"]');
     if (popover && popover.contains(e.target as Node)) return;
     clearSelection();
@@ -84,7 +85,7 @@ export function AnnotatableContent({
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
     };
-  }, [selection]);
+  }, [selection, onOutsideMouseDown]);
 
   // ── Highlight annotations + track positions ──
   const [annotationPositions, setAnnotationPositions] = useState<AnnotationPosition[]>([]);

@@ -1,12 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  type RefObject,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react';
+
+import { useStableCallback } from '@/hooks/use-stable-callback';
 
 import type { MemoizedMessageListHandle } from './MemoizedMessageList';
 import {
@@ -64,7 +58,7 @@ export function useThreadSwitchResizeRestore({
   scrollViewportRef: RefObject<HTMLDivElement | null>;
   threadId: string;
 }) {
-  const applyThreadScrollPositionEvent = useEffectEvent(applyThreadScrollPosition);
+  const applyThreadScrollPositionEvent = useStableCallback(applyThreadScrollPosition);
 
   // After a thread switch the virtualized list measures its real row heights
   // over several frames. While the switch is settling, keep the saved position
@@ -93,7 +87,13 @@ export function useThreadSwitchResizeRestore({
       clearTimeout(stopTimer);
       ro.disconnect();
     };
-  }, [contentStackRef, isSettlingThread, scrollViewportRef, threadId]);
+  }, [
+    contentStackRef,
+    isSettlingThread,
+    scrollViewportRef,
+    threadId,
+    applyThreadScrollPositionEvent,
+  ]);
 }
 
 export function useViewportScrollListeners({
@@ -211,7 +211,7 @@ export function useVisibleMessageObserver({
   threadId: string;
   userHasScrolledUpRef: RefObject<boolean>;
 }) {
-  const onVisibleMessageChangeEvent = useEffectEvent((id: string) => {
+  const onVisibleMessageChangeEvent = useStableCallback((id: string) => {
     onVisibleMessageChange?.(id);
   });
 
@@ -253,7 +253,14 @@ export function useVisibleMessageObserver({
       mo.disconnect();
       clearTimeout(debounceTimer);
     };
-  }, [compact, onVisibleMessageChange, scrollViewportRef, threadId, userHasScrolledUpRef]);
+  }, [
+    compact,
+    onVisibleMessageChange,
+    scrollViewportRef,
+    threadId,
+    userHasScrolledUpRef,
+    onVisibleMessageChangeEvent,
+  ]);
 }
 
 export function useThreadLayoutScrollEffect({
@@ -397,7 +404,7 @@ function useFillUnderflowedViewport({
   // retrying on every loadingMore flip would hammer the API in a loop.
   const attemptedWindowRef = useRef<string | null>(null);
 
-  const fill = useEffectEvent(() => {
+  const fill = useStableCallback(() => {
     const viewport = scrollViewportRef.current;
     if (!viewport || !pagination || pagination.loadingMore) return;
     if (!needsMoreContent(viewport)) return;
@@ -417,7 +424,7 @@ function useFillUnderflowedViewport({
     // Measure after the list has laid out the newly rendered rows.
     const raf = requestAnimationFrame(() => fill());
     return () => cancelAnimationFrame(raf);
-  }, [threadId, firstMessageId, lastMessageId, hasMore, hasMoreAfter, loadingMore]);
+  }, [threadId, firstMessageId, lastMessageId, hasMore, hasMoreAfter, loadingMore, fill]);
 }
 
 function usePaginationScrollEffects({

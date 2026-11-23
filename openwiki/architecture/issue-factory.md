@@ -15,7 +15,9 @@ dependencies).
 
 All code is in `packages/server/src/services/factory/`. The client part is the factory row in a
 project's settings (`components/general-settings-project/ProjectFactorySetting.tsx`,
-`ProjectFactoryRuns.tsx`, data in `data/factory/`), served over the `factory` tRPC group.
+`ProjectFactoryRuns.tsx`, data in `data/factory/`) and the factory view (`/factory`,
+`components/FactoryQueueView.tsx`), served over the `factory` tRPC group. See
+[The factory view](#the-factory-view).
 
 > Not to be confused with `packages/orchestrator`, the standalone issue factory that runs flows
 > in its own workspaces with local git. It shares the GitHub logic (`@funny/core/github-app`)
@@ -266,6 +268,34 @@ reads the role's prose as a decision:
   in the enabler's name. The note is in memory; after a restart use Retry.
 - **Lost access**: if the enabler loses `steer`, the factory is turned off and their open runs are
   stopped (`factory.disabled_access_lost` audit).
+
+## The factory view
+
+`/factory` lists every run of the caller's factories, as a list (the default) or a board
+(openspec `factory-pipeline-board`; the choice is kept in localStorage, `funny:factory-view-layout`).
+The search, project and state filters and the **Active** filter (hides `merged`, `no_change`,
+`stopped`) apply to both.
+
+- **Columns** (`components/factory-board/board-columns.ts`) come from the run's `state`, never from
+  its thread's stage (which folds every active step into `in_progress`): Queue (`requested`,
+  `queued`), Triage, Implementing (`working`, `fixing`), PR · Proof · CI (`pr_open`, `waiting_ci`),
+  Review, Merge, Needs a person (`needs_info`, `waiting_human`, `failed`, `no_change`, and any state
+  the client does not know) and Done (`merged`, `stopped`, only the last 24 hours; older ones are
+  counted and left to the list).
+- **Read-only**: there is no drag and drop. Only the server moves a run; the card carries the same
+  PR / Retry / Stop controls as the list row.
+- **Card**: the flow strip is `factoryRunSteps` (`lib/factory-run-labels.ts`) plus the review round
+  and each agent step's provider / model / effort from `stepOptions`; the gate chips
+  (`run-gates.ts`) are risk, the latest review (`factoryRunReviewLabel`), the regression proof and
+  CI rounds, greyed when they are for an older commit than the head; the waiting line
+  (`run-waiting.ts`) is the queue's `waitReason`, triage's questions, or the reason the server
+  recorded in `failureReason` when the run parked or failed.
+- **Limits**: with exactly one project selected, the Implementing and Review headers show the count
+  against that factory's `stageLimits.implement` / `stageLimits.review` (else `maxConcurrent`), and
+  Merge says one at a time per repository. Across projects there is no shared limit, so only counts
+  show.
+- The column layout is `components/board/BoardColumn.tsx`, shared with the thread kanban.
+- Time per stage is not shown: runs do not record when each step started and ended.
 
 ## Security boundaries
 

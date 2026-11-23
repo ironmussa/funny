@@ -278,16 +278,6 @@ export interface FactoryQueueRun extends FactoryRun {
   projectId: string;
 }
 
-/** A run of the caller's factories as the factory view lists it: with its project. */
-export interface FactoryQueueRun extends FactoryRun {
-  projectId: string;
-}
-
-/** A run of the caller's factories as the factory view lists it: with its project. */
-export interface FactoryQueueRun extends FactoryRun {
-  projectId: string;
-}
-
 /**
  * Counters of one run's integration, written as the run goes. They measure
  * how much integrating costs (CI rounds, conflicts, agent fixes) so a factory

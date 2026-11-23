@@ -5,15 +5,17 @@
  * (merged or stopped). Laid out like the
  * global search view (search bar and a status filter on top, one row per run
  * with its thread's status icon); a row opens the run's last agent thread, and
- * carries the run's controls (PR, retry, stop).
+ * carries the run's controls (PR, retry, stop). The board layout (openspec
+ * factory-pipeline-board) shows the same filtered runs in stage columns.
  */
 import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
-import { Clock, Factory } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { Clock, Factory, KanbanSquare, List } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
+import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
 import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +23,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFactoryQueueRuns } from '@/data/factory/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -37,6 +40,7 @@ import { timeAgo } from '@/lib/thread-utils';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { type FactoryViewLayout, useFactoryViewStore } from '@/stores/factory-view-store';
 
 interface RowProps {
   run: FactoryQueueRun;
@@ -213,6 +217,10 @@ interface ToolbarProps {
   shown: number;
   total: number;
   stateCounts: Record<string, number>;
+  activeOnly: boolean;
+  onActiveOnlyChange: (activeOnly: boolean) => void;
+  layout: FactoryViewLayout;
+  onLayoutChange: (layout: FactoryViewLayout) => void;
 }
 
 function FactoryQueueToolbar({
@@ -229,6 +237,10 @@ function FactoryQueueToolbar({
   shown,
   total,
   stateCounts,
+  activeOnly,
+  onActiveOnlyChange,
+  layout,
+  onLayoutChange,
 }: ToolbarProps) {
   const { t } = useTranslation();
   const toggle = (selected: Set<string>, value: string, onChange: (next: Set<string>) => void) => {
@@ -278,6 +290,21 @@ function FactoryQueueToolbar({
         counts={stateCounts}
       />
 
+      <ToggleGroup
+        type="single"
+        size="sm"
+        variant="outline"
+        value={activeOnly ? 'active' : 'all'}
+        onValueChange={(value) => value && onActiveOnlyChange(value === 'active')}
+      >
+        <ToggleGroupItem value="all" data-testid="factory-view-show-all">
+          {t('factoryView.showAll', 'All')}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="active" data-testid="factory-view-show-active">
+          {t('factoryView.showActive', 'Active')}
+        </ToggleGroupItem>
+      </ToggleGroup>
+
       {(stateFilter.size > 0 || projectFilter.size > 0) && (
         <button
           type="button"
@@ -291,6 +318,35 @@ function FactoryQueueToolbar({
           {t('allThreads.clearFilters')}
         </button>
       )}
+
+      <div className="ml-auto">
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          value={layout}
+          onValueChange={(value) => {
+            if (value === 'list' || value === 'board') onLayoutChange(value);
+          }}
+        >
+          <ToggleGroupItem
+            value="list"
+            aria-label={t('factoryView.layoutList', 'List')}
+            title={t('factoryView.layoutList', 'List')}
+            data-testid="factory-view-layout-list"
+          >
+            <List className="icon-sm" />
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="board"
+            aria-label={t('factoryView.layoutBoard', 'Board')}
+            title={t('factoryView.layoutBoard', 'Board')}
+            data-testid="factory-view-layout-board"
+          >
+            <KanbanSquare className="icon-sm" />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
     </div>
   );
 }
@@ -303,6 +359,10 @@ export function FactoryQueueView() {
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [stateFilter, setStateFilter] = useState<Set<string>>(() => new Set());
   const [projectFilter, setProjectFilter] = useState<Set<string>>(() => new Set());
+  const [activeOnly, setActiveOnly] = useState(false);
+  const layout = useFactoryViewStore((state) => state.layout);
+  const setLayout = useFactoryViewStore((state) => state.setLayout);
+  const navigate = useStableNavigate();
 
   const projectNameById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
@@ -339,9 +399,27 @@ export function FactoryQueueView() {
         states: stateFilter,
         projectIds: projectFilter,
         projectNameById,
+        activeOnly,
       }),
-    [runs, search, caseSensitive, stateFilter, projectFilter, projectNameById],
+    [runs, search, caseSensitive, stateFilter, projectFilter, projectNameById, activeOnly],
   );
+
+  const openRun = useCallback(
+    (run: FactoryQueueRun, threadId: string) =>
+      navigate(
+        buildPath(getThreadRoute({ id: threadId, projectId: run.projectId, isScratch: false })),
+      ),
+    [navigate],
+  );
+
+  // The finished runs the board's Done column leaves out, in the list.
+  const showOlderDone = useCallback(() => {
+    setActiveOnly(false);
+    setStateFilter(new Set(['merged', 'stopped']));
+    setLayout('list');
+  }, [setLayout]);
+
+  const singleProjectId = projectFilter.size === 1 ? [...projectFilter][0]! : null;
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="factory-view">
@@ -360,8 +438,23 @@ export function FactoryQueueView() {
         shown={filtered?.length ?? 0}
         total={runs?.length ?? 0}
         stateCounts={stateCounts}
+        activeOnly={activeOnly}
+        onActiveOnlyChange={setActiveOnly}
+        layout={layout}
+        onLayoutChange={setLayout}
       />
-      <FactoryQueueBody runs={filtered} projectNameById={projectNameById} now={now} />
+      {layout === 'board' && filtered && runs && runs.length > 0 ? (
+        <FactoryBoard
+          runs={filtered}
+          projectNameById={projectNameById}
+          now={now}
+          singleProjectId={singleProjectId}
+          onOpen={openRun}
+          onShowOlderDone={showOlderDone}
+        />
+      ) : (
+        <FactoryQueueBody runs={filtered} projectNameById={projectNameById} now={now} />
+      )}
     </div>
   );
 }

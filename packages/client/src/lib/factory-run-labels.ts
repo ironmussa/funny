@@ -208,12 +208,17 @@ export interface FactoryRunFilter {
   /** The projects to keep; empty keeps every project. */
   projectIds: ReadonlySet<string>;
   projectNameById: ReadonlyMap<string, string>;
+  /** Hide the runs that finished without needing anyone (merged, no change, stopped). */
+  activeOnly?: boolean;
 }
+
+/** Finished, and nobody has to look at them: what the Active filter hides. */
+const SETTLED: ReadonlySet<FactoryRun['state']> = new Set(['merged', 'no_change', 'stopped']);
 
 /** The runs the factory view shows, in its order (waiting, in progress, queue, failed, ended). */
 export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
   runs: R[],
-  { search, caseSensitive, states, projectIds, projectNameById }: FactoryRunFilter,
+  { search, caseSensitive, states, projectIds, projectNameById, activeOnly }: FactoryRunFilter,
 ): R[] {
   const fold = (text: string) => (caseSensitive ? text : text.toLowerCase());
   const needle = fold(search.trim().replace(/^#/, ''));
@@ -224,6 +229,7 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
     fold(run.currentStep ?? '').includes(needle);
   const kept = runs.filter(
     (run) =>
+      !(activeOnly && SETTLED.has(run.state)) &&
       (states.size === 0 || states.has(run.state)) &&
       (projectIds.size === 0 || projectIds.has(run.projectId)) &&
       matchesSearch(run),

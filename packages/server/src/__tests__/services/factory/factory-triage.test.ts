@@ -224,6 +224,7 @@ describe('the triage step', () => {
     await provider.triage!({ model: 'haiku' });
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({
+      readOnly: true,
       permissionMode: 'plan',
       source: 'factory',
       model: 'haiku',

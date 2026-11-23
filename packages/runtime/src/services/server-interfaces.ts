@@ -32,6 +32,8 @@ export interface RuntimeThreadRecord {
   userId: string;
   sessionId: string | null;
   isScratch?: boolean;
+  /** `threads.read_only`: 1 when the agent may only read. */
+  readOnly?: number | boolean | null;
   status?: string | null;
   stage?: string | null;
   mode?: string | null;

@@ -71,6 +71,7 @@ export function createTestDb() {
       project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL DEFAULT '',
       is_scratch INTEGER NOT NULL DEFAULT 0,
+      read_only INTEGER NOT NULL DEFAULT 0,
       created_by TEXT,
       title TEXT NOT NULL,
       mode TEXT NOT NULL,

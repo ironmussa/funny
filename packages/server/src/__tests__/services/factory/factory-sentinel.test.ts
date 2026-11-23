@@ -153,6 +153,7 @@ describe('a base branch red after a factory merge', () => {
     expect(incidents()).toMatchObject([{ state: 'investigating' }]);
     expect(launches).toHaveLength(1);
     expect(launches[0]).toMatchObject({
+      readOnly: true,
       permissionMode: 'plan',
       source: 'factory',
       baseBranch: 'main',

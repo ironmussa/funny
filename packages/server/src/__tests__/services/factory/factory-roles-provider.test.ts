@@ -282,6 +282,7 @@ describe('the review step', () => {
     expect(bodies[0]).toMatchObject({
       projectId: 'p1',
       source: 'factory',
+      readOnly: true,
       permissionMode: 'plan',
       disallowedTools: [...REVIEWER_DISALLOWED_TOOLS],
       title: `[Factory review] #7 ${SHA_A.slice(0, 8)} Fix it`,

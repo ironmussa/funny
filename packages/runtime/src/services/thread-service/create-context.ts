@@ -73,6 +73,8 @@ export interface CreateAndStartThreadParams {
   baseBranch?: string;
   /** Start a new worktree from `origin/<baseBranch>` (fetched first), not the local branch. */
   baseFromRemote?: boolean;
+  /** The agent may only read, at every start (`threads.read_only`). */
+  readOnly?: boolean;
   /** Branch for a `worktree` thread's worktree; generated from the title when absent. */
   branch?: string;
   prompt: string;
@@ -204,6 +206,7 @@ export function baseProjectThreadRow(ctx: ProjectThreadContext) {
     permissionMode: defaults.permissionMode,
     model: defaults.model,
     source: params.source || 'web',
+    readOnly: params.readOnly ? 1 : 0,
     parentThreadId: params.parentThreadId,
     designId: params.designId,
     agentTemplateId: params.agentTemplateId,

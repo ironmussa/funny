@@ -117,6 +117,8 @@ export const threads = pgTable('threads', {
   projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull(),
   isScratch: integer('is_scratch').notNull().default(0),
+  /** The agent may only read: the runner starts it in a read-only sandbox (migration 112). */
+  readOnly: integer('read_only').notNull().default(0),
   createdBy: text('created_by'),
   title: text('title').notNull(),
   mode: text('mode').notNull(),

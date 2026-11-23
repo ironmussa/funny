@@ -176,6 +176,13 @@ export interface ClaudeProcessOptions {
   /** Enable Claude fast mode (higher output speed at premium pricing). Claude SDK only. */
   fastMode?: boolean;
   /**
+   * The agent may only read (`READ_ONLY_AGENT_TOOLS` in `@funny/shared/models`):
+   * Claude runs its Bash in the SDK's OS sandbox (no writes to the checkout, no
+   * network, no credentials) and denies every other tool; Codex runs in its
+   * `read-only` sandbox. No MCP server is given.
+   */
+  readOnly?: boolean;
+  /**
    * Deny a Bash call that is only a check (`npx vitest`, `tsc`, `bun run lint`)
    * and point the agent at `mcp__funny__funny_run_checks`. Claude SDK only.
    */

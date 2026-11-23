@@ -56,6 +56,8 @@ const createSandboxThreadSchema = z
     sandbox: sandboxMachineRequestSchema.partial({ connectionId: true }).optional(),
     // Who started it: the web composer, or the issue factory (services/factory).
     source: z.enum(['web', 'factory']).optional(),
+    // The agent may only read, at every start (`threads.read_only`).
+    readOnly: z.boolean().optional(),
   })
   // The compose payload carries more fields; only the ones above are used here,
   // plus the message extras forwarded below.
@@ -102,6 +104,8 @@ export interface NewSandboxThreadRow {
   baseBranch?: string;
   initialPrompt: string;
   source: 'web' | 'factory';
+  /** `threads.read_only`: 1 when the agent may only read. */
+  readOnly: 0 | 1;
   createdAt: string;
   updatedAt: string;
 }
@@ -207,6 +211,7 @@ function newSandboxThreadRow(
     baseBranch: input.baseBranch,
     initialPrompt: input.prompt,
     source: input.source ?? 'web',
+    readOnly: input.readOnly ? 1 : 0,
     createdAt,
     updatedAt: createdAt,
   };

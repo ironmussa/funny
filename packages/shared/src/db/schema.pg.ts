@@ -384,6 +384,8 @@ export const factoryRuns = pgTable('factory_runs', {
   stepOptions: text('step_options'),
   /** The node its `merge` regenerates the change with (`merge.regenerate`), or null: merged alone. */
   regenerateNode: text('regenerate_node'),
+  /** An early integration waiting for the step that holds the checkout (D8), or null. */
+  integrationPendingAt: text('integration_pending_at'),
 });
 
 /**

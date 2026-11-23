@@ -2347,6 +2347,14 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'regenerate_node', 'TEXT');
     },
   },
+  {
+    // Change factory-integration, D8: an early integration asked for while a
+    // step held the run's checkout, waiting for that step to end. Not a state.
+    name: '117_factory_runs_integration_pending',
+    async up() {
+      await ctx().addColumn('factory_runs', 'integration_pending_at', 'TEXT');
+    },
+  },
 ];
 
 /**

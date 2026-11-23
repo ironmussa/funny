@@ -154,6 +154,21 @@ describe('batch branches', () => {
   });
 });
 
+describe('what changed on the base', () => {
+  test("the paths between two commits, from GitHub's compare", async () => {
+    const { provider } = github({
+      'GET /repos/o/r/compare/b1...b2': {
+        status: 200,
+        body: { files: [{ filename: 'src/a.ts' }, { filename: 'bun.lock' }] },
+      },
+    });
+    expect((await provider.changedPaths('o/r', 'b1', 'b2'))._unsafeUnwrap()).toEqual([
+      'src/a.ts',
+      'bun.lock',
+    ]);
+  });
+});
+
 describe('merging a pull request', () => {
   test('merged at the tested head, pinned with its sha', async () => {
     const { provider, requests } = github({

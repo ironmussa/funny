@@ -448,6 +448,8 @@ export interface UpdateRunInput {
   stepOptions?: FactoryStepOptionsRecord[];
   /** The node its `merge` regenerates the change with (D9), or null. */
   regenerateNode?: string | null;
+  /** When an early integration started waiting for the step holding the checkout (D8), or null. */
+  integrationPendingAt?: string | null;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
@@ -459,6 +461,7 @@ const PLAIN_FIELDS = [
   'flowSource',
   'flowCommit',
   'regenerateNode',
+  'integrationPendingAt',
 ] as const;
 const JSON_FIELDS = [
   'threadIds',
@@ -643,6 +646,7 @@ function queueOperations(newId: () => string) {
             flowCommit: null,
             stepOptions: null,
             regenerateNode: null,
+            integrationPendingAt: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -839,6 +843,7 @@ export function createFactoryRunsRepository(
       flowCommit: null,
       stepOptions: null,
       regenerateNode: null,
+      integrationPendingAt: null,
     };
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
       toView(row),

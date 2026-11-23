@@ -99,6 +99,8 @@ export interface IntegrationProvider {
   ): ResultAsync<HostQueueResult, GithubCallError>;
   /** Delete a branch; one already gone is not an error. */
   deleteBranch(repo: string, branch: string): ResultAsync<void, GithubCallError>;
+  /** The paths changed between commits `from` and `to` (at most 300, GitHub's compare). */
+  changedPaths(repo: string, from: string, to: string): ResultAsync<string[], GithubCallError>;
 }
 
 /** A branch as path segments: `release/1.x` keeps its slashes. */
@@ -300,6 +302,16 @@ export function createGithubIntegration(
           return okAsync({ kind: state.kind });
         },
       );
+    },
+
+    changedPaths(repo, from, to) {
+      return github
+        .json<{ files?: Array<{ filename: string }> }>(
+          repo,
+          'GET',
+          `/repos/${repo}/compare/${from}...${to}`,
+        )
+        .map((compare) => (compare.files ?? []).map((file) => file.filename));
     },
 
     deleteBranch(repo, branch) {

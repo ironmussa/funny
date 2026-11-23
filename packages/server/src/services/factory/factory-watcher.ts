@@ -54,6 +54,7 @@ import {
   waitReasonFor,
   type LatestRunState,
 } from './factory-dependencies.js';
+import { integrateEarly } from './factory-early-watch.js';
 import {
   createFactoryFlowRuns,
   type FactoryFlowRunsDeps,
@@ -391,9 +392,59 @@ async function fire(id: string): Promise<void> {
   await reconcileParked(factory, target.repo);
   await retriageAnswered(factory, target.repo);
   await resumeRuns(factory, target.repo, target.mode);
+  await watchEarlyIntegration(factory, target.repo);
   if (incident) return;
   // A paused factory finishes its runs but admits nothing new; its queue waits.
   if (factory.enabled) await admitWork(factory, target.repo, target.mode);
+}
+
+/** Each factory's last look at its repository's base head (early integration, D8). */
+const baseHeads = new Map<string, string>();
+
+/**
+ * Early integration (openspec factory-integration D8): when the base moved
+ * since the last tick, the factory's runs whose changes overlap it and whose
+ * pull requests no longer merge integrate now, not at merge time.
+ */
+async function watchEarlyIntegration(factory: WatchedFactory, repo: string): Promise<void> {
+  if (!runs || !deps || !flows) return;
+  const github = deps.github;
+  const driver = flows;
+  const repository = runs;
+  const host = github.pullRequests.integrationFor?.({
+    userId: factory.userId,
+    projectId: factory.projectId,
+  });
+  if (!host) return;
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const asked = await integrateEarly({
+    lastBase: baseHeads,
+    key: `${factory.id}:${repo}`,
+    head: async () => (await github.defaultBranchHead(reader)).map((h) => h.sha).unwrapOr(null),
+    changedPaths: async (from, to) => (await host.changedPaths(repo, from, to)).unwrapOr(null),
+    candidates: async () => {
+      const listed = await repository.list(factory.id);
+      if (listed.isErr()) return [];
+      return listed.value.flatMap((run) => {
+        const prNumber = prNumberOf(run.prUrl);
+        const inFlight = (IN_FLIGHT_STATES as readonly string[]).includes(run.state);
+        if (prNumber === null || !inFlight) return [];
+        const paths = run.risk?.paths ?? contractOf(run)?.likelyPaths ?? [];
+        return [{ runId: run.id, prNumber, paths }];
+      });
+    },
+    mergeable: async (prNumber) =>
+      (await host.pullRequestMergeability(repo, prNumber)).map((pr) => pr.mergeable).unwrapOr(null),
+    integrate: (runId) => driver.earlyIntegrate(runId),
+  });
+  for (const { runId, outcome } of asked) {
+    log.info('Issue factory early integration', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      runId,
+      outcome,
+    });
+  }
 }
 
 /**

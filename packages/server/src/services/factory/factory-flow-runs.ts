@@ -67,6 +67,7 @@ import {
   createFactoryBatchesRepository,
   type FactoryBatchesRepository,
 } from './factory-batches.js';
+import type { EarlyIntegration, EarlyOutcome } from './factory-early-integration.js';
 import {
   isMergeLane,
   flowReadsOf,
@@ -348,6 +349,8 @@ export function mergePriority(
 
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
+  /** Each running flow's early integration (D8), for the watcher to ask when the base moves. */
+  const earlyOf = new Map<string, EarlyIntegration>();
   const waitThread = deps.waitThread ?? createThreadWaits();
   const journalRows = createWorkflowJournalRepository();
   /** Each run's place in a group's queue, by its id (the holder is `<runId>/<node>/<visit>`). */
@@ -666,6 +669,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         : undefined,
       github: deps.github,
       queue: queueFor(controller.signal),
+      registerEarly: (early) => earlyOf.set(job.run.id, early),
       onChangeSize: (lines) => {
         const order = mergeOrder.get(job.run.id) ?? { blocker: false };
         mergeOrder.set(job.run.id, { ...order, lines });
@@ -842,11 +846,21 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           if (active.get(job.run.id) === controller) active.delete(job.run.id);
           priorities.delete(job.run.id);
           mergeOrder.delete(job.run.id);
+          earlyOf.delete(job.run.id);
         });
       return started;
     },
 
     isActive: (runId: string) => active.has(runId),
+
+    /**
+     * Integrate a running flow's branch early (D8): the base moved and its pull
+     * request no longer merges. `not-running`: no flow of this server drives it.
+     */
+    earlyIntegrate(runId: string): Promise<EarlyOutcome | 'not-running'> {
+      const early = earlyOf.get(runId);
+      return early ? early.request() : Promise.resolve('not-running');
+    },
 
     /** Take the factory's stage limits as saved now (each tick): they apply to the next slot asked for. */
     noteFactory(factory: Pick<WatchedFactory, 'id' | 'stageLimits'>): void {

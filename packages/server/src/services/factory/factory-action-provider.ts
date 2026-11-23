@@ -68,6 +68,11 @@ import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
+import {
+  createEarlyIntegration,
+  createWorkspaceLock,
+  type EarlyIntegration,
+} from './factory-early-integration.js';
 import type { FactoryGithubPort } from './factory-github.js';
 import { createFactoryIntegrate } from './factory-integrate.js';
 import type { FactoryIssueText } from './factory-issue-text.js';
@@ -233,6 +238,8 @@ export interface FactoryActionProviderDeps {
    * Absent: every merge takes the serial path.
    */
   queue?: FactoryQueuePort;
+  /** Receives the run's early integration (D8), for the watcher to ask when the base moves. */
+  registerEarly?(early: EarlyIntegration): void;
   /** The pull request's size in changed lines, once read: the merge queue's order (D11). */
   onChangeSize?(lines: number): void;
   /** `.funny/integrate.yaml` as the flow was loaded with it: what `integrate` regenerates and checks. */
@@ -992,6 +999,37 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     integrationOf: (sha) => integration.integrationOf(sha),
   });
 
+  /** The run's checkout: one step at a time, an early integration included (D8). */
+  const workspace = createWorkspaceLock();
+  /** Whether the run waits for or holds the merge slot (an early integration leaves it to the queue). */
+  let atMerge = false;
+  const early = createEarlyIntegration({
+    lock: workspace,
+    integrate: () => integration.integrate(),
+    atMerge: () => atMerge,
+    toImplementer: (feedback) => conflictToImplementer(feedback),
+    markPending: (at) => deps.record({ integrationPendingAt: at }),
+  });
+  deps.registerEarly?.(early);
+  /** A step that works in the run's checkout: it holds the lock; a pending integration follows it. */
+  const inCheckout = <T>(fn: () => Promise<T>): Promise<T> => {
+    atMerge = false;
+    return workspace.hold(fn, () => early.afterStep());
+  };
+
+  /** An early integration's conflict, as a follow-up on the implementing thread, waited for. */
+  async function conflictToImplementer(feedback: string): Promise<void> {
+    const threadId = threadIds[0];
+    const continuation = deps.continuation;
+    if (!threadId || !continuation) return;
+    const completedAt = await continuation.completedAt(threadId);
+    const sentAt = new Date().toISOString();
+    const sent = await continuation.followUp(threadId, feedback);
+    if (sent.isErr()) return;
+    await count({ ...metrics, agentFixes: metrics.agentFixes + 1 }, { event: 'agent_fix_early' });
+    await deps.waitThread(threadId, deps.signal, { completedAt, sentAt });
+  }
+
   const integration = createFactoryIntegrate({
     steps: deps.steps,
     threadId: () => threadIds[0],
@@ -1335,6 +1373,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   }
 
   async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
+    atMerge = true;
     await enterStage('merge');
     if (opts.regenerate && regenerating !== opts.regenerate) {
       regenerating = opts.regenerate;
@@ -1414,27 +1453,30 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return { ok: false, error: `The command ${how}:\n${tail}`, metadata };
   }
 
+  /** An agent step: a thread on the enabler's runner (the first, or a follow-up on it). */
+  async function agentStep(opts: SpawnAgentOpts): Promise<ActionResult> {
+    const index = agentSteps++;
+    const options = await optionsOf(opts, index);
+    const step =
+      (deps.legacyReplay ?? true)
+        ? await threadFor(opts, options, index)
+        : await journaledThreadFor(opts, options);
+    if (!('threadId' in step)) return step;
+    if (!step.replayed) await deps.recordStepOptions?.({ ...options, threadId: step.threadId });
+    // A replayed step that a LATER recorded step continued on the same thread
+    // finished before that one started: waiting on the thread now would read
+    // the later step's run instead of this one.
+    if (step.replayed && threadIds.slice(index + 1).includes(step.threadId)) {
+      return { ok: true, output: '', metadata: { threadId: step.threadId, replayed: true } };
+    }
+    return outcomeResult(
+      step.threadId,
+      await deps.waitThread(step.threadId, deps.signal, step.after),
+    );
+  }
+
   return {
-    async spawnAgent(opts) {
-      const index = agentSteps++;
-      const options = await optionsOf(opts, index);
-      const step =
-        (deps.legacyReplay ?? true)
-          ? await threadFor(opts, options, index)
-          : await journaledThreadFor(opts, options);
-      if (!('threadId' in step)) return step;
-      if (!step.replayed) await deps.recordStepOptions?.({ ...options, threadId: step.threadId });
-      // A replayed step that a LATER recorded step continued on the same thread
-      // finished before that one started: waiting on the thread now would read
-      // the later step's run instead of this one.
-      if (step.replayed && threadIds.slice(index + 1).includes(step.threadId)) {
-        return { ok: true, output: '', metadata: { threadId: step.threadId, replayed: true } };
-      }
-      return outcomeResult(
-        step.threadId,
-        await deps.waitThread(step.threadId, deps.signal, step.after),
-      );
-    },
+    spawnAgent: (opts) => inCheckout(() => agentStep(opts)),
 
     async gitCommit() {
       return { ok: true, output: 'The agent commits on the runner.' };
@@ -1496,11 +1538,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       return { ok: true };
     },
 
-    async runCommand(opts) {
-      return runCommandStep(opts);
-    },
+    runCommand: (opts) => inCheckout(() => runCommandStep(opts)),
 
-    integrate: () => integration.integrate(),
+    integrate: () => inCheckout(() => integration.integrate()),
 
     async setStatus() {
       return refused('set_status', 'the run has no thread of its own.');

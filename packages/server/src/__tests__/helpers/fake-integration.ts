@@ -138,6 +138,10 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
             mergeable: true,
           }),
         enqueueInHostQueue: () => okAsync({ kind: 'queued' as const }),
+        changedPaths: (_repo, from, to) => {
+          const before = new Set(contentOf(from));
+          return okAsync(contentOf(to).filter((head) => !before.has(head)));
+        },
         deleteBranch(_repo, branch) {
           branches.delete(branch);
           return okAsync(undefined);

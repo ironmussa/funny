@@ -420,7 +420,8 @@ export function createTestDb() {
       flow_source TEXT,
       flow_commit TEXT,
       step_options TEXT,
-      regenerate_node TEXT
+      regenerate_node TEXT,
+      integration_pending_at TEXT
     )
   `);
   testDb.run(sql`

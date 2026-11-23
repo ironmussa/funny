@@ -25,7 +25,7 @@
 
 - [x] 4.1 Add the strict `stepOverrides` schema to `@funny/shared/contracts/factory` and wire it through `factory-settings.ts` and the `factory` tRPC port (save needs `steer`); verify with `factory-trpc` tests: save, refusal of a permission-mode field, 403 without `steer`
 - [x] 4.2 Read overrides at each agent step in the action provider; verify a test where an override saved mid-run applies to the next step only
-- [ ] 4.3 Add `factory.validateFlow` (`projectProcedure('view')`) answering problems or the step summary, unused overrides and "context replay" warnings; verify with tRPC tests for a parse error, a valid built-in and a stale override, and that no thread is started
+- [x] 4.3 Add `factory.validateFlow` (`projectProcedure('view')`) answering problems or the step summary, unused overrides and "context replay" warnings; verify with tRPC tests for a parse error, a valid built-in and a stale override, and that no thread is started
 
 ## 5. Built-in flows and prompts
 

@@ -395,6 +395,51 @@ export interface FactoryFlowDefinition {
   reviewerSameAsImplementer?: boolean;
 }
 
+/** Why a flow cannot run as a factory flow: the step and field the factory refused. */
+export interface FactoryFlowProblem {
+  /** The agent step (`<node>`, `<node>.before_retry`), `defaults`, or `flow` for a load error. */
+  step: string;
+  field: string;
+  message: string;
+}
+
+/** One agent step of a validated flow, with the options a run would give it now. */
+export interface FactoryFlowAgentStep {
+  stepId: string;
+  provider: string;
+  model: string;
+  effort: FactoryStepOptionsRecord['effort'];
+  permissionMode: string;
+  allowedTools: string[] | null;
+  disallowedTools: string[] | null;
+  /** `continue`: on the implementing thread; `new`: a read-only thread of its own. */
+  thread: FactoryStepOptionsRecord['thread'];
+  /** Whether a factory step override changed it. */
+  overridden: boolean;
+}
+
+/**
+ * Validate flow's answer (openspec factory-flow-step-options, D8): the flow as
+ * an admitted run would load it now, or why it cannot run. Nothing is started.
+ */
+export type FactoryFlowValidation =
+  | { ok: false; message: string; problems: FactoryFlowProblem[] }
+  | {
+      ok: true;
+      name: string;
+      source: FactoryFlowSource;
+      /** The default-branch commit a repository flow was read at; null for a built-in. */
+      commit: string | null;
+      /** Every node in declaration order, by kind (`spawn_agent`, `wait_ci`, …). */
+      steps: Array<{ id: string; kind: string }>;
+      /** Every agent step, a retry's fix step included, with its resolved options. */
+      agentSteps: FactoryFlowAgentStep[];
+      /** Step overrides of the factory that name no agent step of this flow. */
+      unusedOverrides: string[];
+      /** Things that run but cost: a model change on a continuing thread replays its context. */
+      warnings: string[];
+    };
+
 /** The open blockers of some issues (the send bar's warning). */
 export const factoryBlockersInput = z
   .object({ projectId, issueNumbers: z.array(issueNumber).min(1).max(MAX_ISSUES_PER_SEND) })

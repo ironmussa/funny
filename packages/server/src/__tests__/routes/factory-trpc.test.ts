@@ -383,6 +383,15 @@ describe('factory over tRPC', () => {
     });
   });
 
+  test('Validate flow reads with view and answers a summary; an outsider gets 404', async () => {
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    const input = { projectId: 'p1', flowName: 'issue-to-pr' };
+    const answer = await query('vic', 'validateFlow', input);
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({ ok: true, name: 'issue-to-pr', source: 'built-in' });
+    expect((await query('bob', 'validateFlow', input)).status).toBe(404);
+  });
+
   test('a viewer cannot change step overrides', async () => {
     seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
     const refused = await save('vic', {

@@ -42,7 +42,7 @@ import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { messages, projects, threads } from '../../db/schema.js';
+import { messages, threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import type {
   StartedThread,
@@ -80,8 +80,11 @@ import {
   type FactoryRunView,
   type UpdateRunInput,
 } from './factory-runs.js';
-import { getWatchedFactory, type WatchedFactory } from './factory-settings.js';
-import type { ProjectAgentDefaults } from './factory-step-options.js';
+import {
+  getWatchedFactory,
+  projectAgentDefaults,
+  type WatchedFactory,
+} from './factory-settings.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import {
   createThreadWaits,
@@ -255,22 +258,6 @@ async function findLaunchedThread(
     .orderBy(newest ? desc(threads.createdAt) : asc(threads.createdAt))
     .limit(1);
   return row?.id ?? null;
-}
-
-/**
- * The project's agent defaults, under a flow's own (`resolveStepOptions`): what
- * a thread the factory starts without options would get from the runtime.
- */
-async function projectAgentDefaults(projectId: string): Promise<ProjectAgentDefaults> {
-  const [row] = await db
-    .select({
-      provider: projects.defaultProvider,
-      model: projects.defaultModel,
-      effort: projects.defaultEffort,
-    })
-    .from(projects)
-    .where(eq(projects.id, projectId));
-  return row ?? {};
 }
 
 /** Whether a started run has an agent working (or is done), or never started one. */

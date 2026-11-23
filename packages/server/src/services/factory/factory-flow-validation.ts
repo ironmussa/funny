@@ -12,12 +12,18 @@
  */
 
 import type { AgentProvider } from '@funny/shared';
+import type { FactoryFlowAgentStep, FactoryFlowProblem } from '@funny/shared/contracts/factory';
 import {
   KNOWN_PROVIDER_IDS,
   providerModelProblem,
   READ_ONLY_PROVIDERS,
 } from '@funny/shared/models';
-import { listAgentSteps, type FlowAgentStep, type ParsedWorkflow } from '@funny/workflows';
+import {
+  getWorkflowNodeAction,
+  listAgentSteps,
+  type FlowAgentStep,
+  type ParsedWorkflow,
+} from '@funny/workflows';
 
 import {
   resolveStepOptions,
@@ -25,13 +31,8 @@ import {
   type StepOverrides,
 } from './factory-step-options.js';
 
-/** One reason a flow cannot run as a factory flow. */
-export interface FactoryFlowProblem {
-  /** The agent step (`<node>`, `<node>.before_retry`), or `defaults`. */
-  step: string;
-  field: string;
-  message: string;
-}
+/** One reason a flow cannot run as a factory flow (the contract's shape). */
+export type { FactoryFlowProblem };
 
 /**
  * Providers whose agent process applies `allowed_tools` / `denied_tools`
@@ -121,21 +122,8 @@ function stepProblems(
 
   const resolved = resolveStepOptions({
     stepId: step,
-    step: {
-      provider: action.provider,
-      model: action.model,
-      mode: action.permission_mode,
-      allowedTools: action.allowed_tools,
-      disallowedTools: action.denied_tools,
-      thread: action.thread,
-    },
-    flowDefaults: {
-      provider: defaults?.provider,
-      model: defaults?.model,
-      permissionMode: defaults?.permission_mode,
-      allowedTools: defaults?.allowed_tools,
-      disallowedTools: defaults?.denied_tools,
-    },
+    step: stepInput(action),
+    flowDefaults: defaultsInput(parsed),
     overrides: context.overrides,
     project: context.project,
   });
@@ -196,4 +184,90 @@ export function validateFactoryFlow(
 export function formatFactoryFlowProblems(origin: string, problems: FactoryFlowProblem[]): string {
   const lines = problems.map(({ step, field, message }) => `- step ${step}, ${field}: ${message}`);
   return [`${origin}: the issue factory cannot run this flow:`, ...lines].join('\n');
+}
+
+/** A step's own fields as `resolveStepOptions` reads them. */
+function stepInput(action: FlowAgentStep['action']) {
+  return {
+    provider: action.provider,
+    model: action.model,
+    effort: action.effort,
+    mode: action.permission_mode,
+    allowedTools: action.allowed_tools,
+    disallowedTools: action.denied_tools,
+    thread: action.thread,
+  };
+}
+
+/** The flow's `defaults:` as `resolveStepOptions` reads them. */
+function defaultsInput(parsed: ParsedWorkflow) {
+  const d = parsed.defaults;
+  return {
+    provider: d?.provider,
+    model: d?.model,
+    effort: d?.effort,
+    permissionMode: d?.permission_mode,
+    allowedTools: d?.allowed_tools,
+    disallowedTools: d?.denied_tools,
+  };
+}
+
+/** What Validate flow shows of a flow that loads: its steps and what each agent step runs with. */
+export interface FactoryFlowSummary {
+  steps: Array<{ id: string; kind: string }>;
+  agentSteps: FactoryFlowAgentStep[];
+  unusedOverrides: string[];
+  warnings: string[];
+}
+
+/**
+ * The flow's steps by kind and its agent steps with the options a run would
+ * give them now (the same rule as runs, `resolveStepOptions`), the factory's
+ * overrides that name no agent step, and the continuing steps whose model or
+ * provider changes: the runtime then replays the thread's transcript into a new
+ * session, which costs tokens and may lose detail.
+ */
+export function summarizeFactoryFlow(
+  parsed: ParsedWorkflow,
+  context: { overrides?: StepOverrides; project?: ProjectAgentDefaults } = {},
+): FactoryFlowSummary {
+  const overrides = context.overrides ?? {};
+  const flowDefaults = defaultsInput(parsed);
+  const agentSteps = listAgentSteps(parsed).map(({ step, action }): FactoryFlowAgentStep => {
+    const resolved = resolveStepOptions({
+      stepId: step,
+      step: stepInput(action),
+      flowDefaults,
+      overrides,
+      project: context.project,
+    });
+    const { stepId, provider, model, effort, permissionMode, allowedTools, disallowedTools } =
+      resolved;
+    return {
+      stepId,
+      provider,
+      model,
+      effort,
+      permissionMode,
+      allowedTools,
+      disallowedTools,
+      thread: resolved.thread,
+      overridden: step in overrides,
+    };
+  });
+  const known = new Set(agentSteps.map((step) => step.stepId));
+  const continuing = agentSteps.filter((step) => step.thread === 'continue');
+  const warnings = continuing.slice(1).flatMap((step, index) => {
+    const before = continuing[index]!;
+    if (before.provider === step.provider && before.model === step.model) return [];
+    return [
+      `Step ${step.stepId} continues the implementing thread on ${step.provider} ${step.model} after ${before.stepId} on ${before.provider} ${before.model}: the thread's transcript is replayed into a new session (context replay), which costs tokens and may lose detail.`,
+    ];
+  });
+  return {
+    steps: parsed.nodes.map((node) => ({ id: node.id, kind: getWorkflowNodeAction(node).type })),
+    agentSteps,
+    unusedOverrides: Object.keys(overrides).filter((stepId) => !known.has(stepId)),
+    warnings,
+  };
 }

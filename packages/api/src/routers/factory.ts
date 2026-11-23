@@ -73,6 +73,11 @@ export const factoryRouter = router({
     .query(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.flowDefinition(ctx.userId, input.projectId, input.flowName)),
     ),
+  validateFlow: projectProcedure('view')
+    .input(factoryFlowInput)
+    .query(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.validateFlow(ctx.userId, input.projectId, input.flowName)),
+    ),
   blockers: projectProcedure('view')
     .input(factoryBlockersInput)
     .query(async ({ ctx, input }) =>

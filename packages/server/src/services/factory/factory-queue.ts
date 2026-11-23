@@ -23,6 +23,7 @@
 import type { GithubCallError } from '@funny/core/github-app';
 import type {
   FactoryFlowDefinition,
+  FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueClearResult,
@@ -31,6 +32,7 @@ import type {
 import { err, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
+import { summarizeFactoryFlow } from './factory-flow-validation.js';
 import {
   BUILT_IN_FACTORY_FLOWS,
   listFactoryFlows,
@@ -41,7 +43,11 @@ import {
 import type { FactoryGithubPort, FactoryIssueDetail, FactoryRepoReader } from './factory-github.js';
 import { createFactoryRunControl } from './factory-run-control.js';
 import { createFactoryRunsRepository } from './factory-runs.js';
-import { getWatchedFactory, type WatchedFactory } from './factory-settings.js';
+import {
+  getWatchedFactory,
+  projectAgentDefaults,
+  type WatchedFactory,
+} from './factory-settings.js';
 import {
   checkFactoryTarget,
   factoryGithubPort,
@@ -269,6 +275,45 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     return read.mapErr(flowRefusal);
   }
 
+  /**
+   * Validate flow (openspec factory-flow-step-options, D8): the flow loaded
+   * exactly as an admitted run of this factory would load it now (default
+   * branch at its head, prompt files, the factory checks, its step overrides
+   * and the project's defaults), and its summary or every problem. Reads only:
+   * no run, no thread. Without a factory, the built-ins only.
+   */
+  async function validateFlow(
+    factoryId: string | null,
+    projectId: string,
+    flowName: string,
+  ): Promise<Result<FactoryFlowValidation, FactoryQueueError>> {
+    const factory = factoryId ? await loadFactory(factoryId) : null;
+    const context = {
+      overrides: factory?.stepOverrides ?? {},
+      project: await projectAgentDefaults(projectId),
+    };
+    const where = factoryId ? await readerOf(factoryId) : null;
+    const reads = where
+      ? flowReadsOf(where.port, where.reader)
+      : { readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null) };
+    const flow = await loadFactoryFlow(flowName, reads, context);
+    if (flow.isErr()) {
+      if (flow.error.kind === 'unavailable') return err(flowRefusal(flow.error));
+      const problems = flow.error.problems ?? [
+        { step: 'flow', field: 'flow', message: flow.error.message },
+      ];
+      return ok({ ok: false, message: flow.error.message, problems });
+    }
+    const summary = summarizeFactoryFlow(flow.value.workflow, context);
+    return ok({
+      ok: true,
+      name: flow.value.name,
+      source: flow.value.source,
+      commit: flow.value.commit,
+      ...summary,
+    });
+  }
+
   async function blockers(
     factoryId: string,
     issueNumbers: number[],
@@ -310,6 +355,9 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
 
     blockers: (factoryId: string, issueNumbers: number[]) =>
       new ResultAsync(blockers(factoryId, issueNumbers)),
+
+    validateFlow: (factoryId: string | null, projectId: string, flowName: string) =>
+      new ResultAsync(validateFlow(factoryId, projectId, flowName)),
 
     /** Remove every waiting issue from the queue; runs in progress go on. */
     clearQueue(factoryId: string): ResultAsync<FactoryQueueClearResult, FactoryQueueError> {

@@ -27,9 +27,10 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { factoryRuns, factorySettings } from '../../db/schema.js';
+import { factoryRuns, factorySettings, projects } from '../../db/schema.js';
 import { requireProjectAccess } from '../project-access.js';
 import { awaitsPullRequest } from './factory-runs.js';
+import type { ProjectAgentDefaults } from './factory-step-options.js';
 
 export interface FactorySettingsView {
   projectId: string;
@@ -434,4 +435,20 @@ export function createFactorySettingsService(
         );
     },
   };
+}
+
+/**
+ * The project's agent defaults, under a flow's own (`resolveStepOptions`): what
+ * a thread the factory starts without options would get from the runtime.
+ */
+export async function projectAgentDefaults(projectId: string): Promise<ProjectAgentDefaults> {
+  const [row] = await db
+    .select({
+      provider: projects.defaultProvider,
+      model: projects.defaultModel,
+      effort: projects.defaultEffort,
+    })
+    .from(projects)
+    .where(eq(projects.id, projectId));
+  return row ?? {};
 }

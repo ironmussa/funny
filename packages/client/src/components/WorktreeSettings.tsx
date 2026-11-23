@@ -306,6 +306,64 @@ function WorktreeCreateForm({
   );
 }
 
+/** A failed create, shown under the create form. */
+function CreateError({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="text-destructive flex items-center gap-2 px-3 pb-2 text-xs"
+      data-testid="worktree-settings-create-error"
+    >
+      <AlertCircle className="icon-sm shrink-0" />
+      <span className="min-w-0 flex-1">{message}</span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="shrink-0 underline"
+        data-testid="worktree-settings-create-error-dismiss"
+      >
+        {t('worktreeSettings.dismiss')}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * What the list shows while it has no worktrees: loading, a failed load in
+ * place of the list, or that there are none. A refresh keeps a loaded list on
+ * screen; the button's icon shows it is loading.
+ */
+function EmptyWorktreeList({ loading, loadError }: { loading: boolean; loadError: string | null }) {
+  const { t } = useTranslation();
+  if (loading) {
+    return (
+      <LoadingState
+        testId="worktree-settings-loading"
+        label={t('worktreeSettings.loadingWorktrees')}
+      />
+    );
+  }
+  if (loadError) {
+    return (
+      <EmptyState
+        icon={GitFork}
+        title={t('worktreeSettings.loadFailed', 'Could not load worktrees')}
+        description={loadError}
+        className="flex-1"
+        testId="worktree-settings-load-error"
+      />
+    );
+  }
+  return (
+    <EmptyState
+      icon={GitFork}
+      title={t('worktreeSettings.noWorktrees')}
+      className="flex-1"
+      testId="worktree-settings-empty"
+    />
+  );
+}
+
 export function WorktreeSettings({
   projectId,
   activePath,
@@ -497,44 +555,11 @@ export function WorktreeSettings({
               />
             )}
             {!readOnly && showCreate && error && (
-              <div
-                className="text-destructive flex items-center gap-2 px-3 pb-2 text-xs"
-                data-testid="worktree-settings-create-error"
-              >
-                <AlertCircle className="icon-sm shrink-0" />
-                <span className="min-w-0 flex-1">{error}</span>
-                <button
-                  type="button"
-                  onClick={() => setError(null)}
-                  className="shrink-0 underline"
-                  data-testid="worktree-settings-create-error-dismiss"
-                >
-                  {t('worktreeSettings.dismiss')}
-                </button>
-              </div>
+              <CreateError message={error} onDismiss={() => setError(null)} />
             )}
 
-            {/* A refresh keeps the list on screen; the button's icon shows it is loading. */}
-            {loading && worktrees.length === 0 ? (
-              <LoadingState
-                testId="worktree-settings-loading"
-                label={t('worktreeSettings.loadingWorktrees')}
-              />
-            ) : worktrees.length === 0 && loadError ? (
-              <EmptyState
-                icon={GitFork}
-                title={t('worktreeSettings.loadFailed', 'Could not load worktrees')}
-                description={loadError}
-                className="flex-1"
-                testId="worktree-settings-load-error"
-              />
-            ) : worktrees.length === 0 ? (
-              <EmptyState
-                icon={GitFork}
-                title={t('worktreeSettings.noWorktrees')}
-                className="flex-1"
-                testId="worktree-settings-empty"
-              />
+            {worktrees.length === 0 ? (
+              <EmptyWorktreeList loading={loading} loadError={loadError} />
             ) : (
               <div className="divide-sidebar-border flex flex-col divide-y">
                 {worktrees.map((wt) => (

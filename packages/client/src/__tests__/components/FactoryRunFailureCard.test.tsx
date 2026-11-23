@@ -74,6 +74,28 @@ describe('FactoryRunFailureCard', () => {
     expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
   });
 
+  test('a merge held for high risk says so and names why, not just "high risk"', () => {
+    mocks.run = runOf({
+      currentStep: 'merge',
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c',
+        level: 'high',
+        reasons: ['touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)'],
+        changedLines: 345,
+        paths: ['packages/server/src/db/migrate.ts'],
+      },
+    });
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    const card = screen.getByTestId('factory-run-failure-card');
+    expect(card).toHaveTextContent('Not merged: high risk, it needs you');
+    expect(card).not.toHaveTextContent('The factory pipeline stopped at merge');
+    expect(screen.getByTestId('factory-run-failure-detail')).toHaveTextContent(
+      'touches a sensitive path: packages/server/src/db/migrate.ts',
+    );
+    expect(screen.getByTestId('factory-run-failure-detail')).toHaveTextContent('merge it yourself');
+  });
+
   test('a failed run without a known step still shows its error', () => {
     mocks.run = runOf({ state: 'failed', currentStep: null, failureReason: 'merge conflict' });
     render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);

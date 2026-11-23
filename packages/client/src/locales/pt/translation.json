@@ -1798,6 +1798,20 @@
     "risk": {
       "low": "Risco baixo",
       "high": "Risco alto"
+    },
+    "reason": {
+      "noReview": "Sem merge: este commit não tem review",
+      "reviewFailed": "Sem merge: o review não passou",
+      "highRisk": "Sem merge: risco alto, precisa de você",
+      "rewritten": "Sem merge: a branch foi reescrita"
+    },
+    "reasonDetail": {
+      "highRisk": "Este factory só faz merge sozinho de mudanças de risco baixo, e esta é de risco alto: {{reasons}}. Revise o pull request e faça o merge você, ou mude \"Merge automático\" para \"Todos\" nas configurações do factory.",
+      "highRiskUnknown": "Este factory só faz merge sozinho de mudanças de risco baixo, e esta é de risco alto. Revise o pull request e faça o merge você, ou mude \"Merge automático\" para \"Todos\" nas configurações do factory.",
+      "noReview": "O commit que seria mesclado não tem veredito do passo de review do fluxo, então ninguém o verificou. Revise o pull request e faça o merge você.",
+      "reviewFailed": "O review do commit que seria mesclado não passou. Leia os achados no pull request e depois peça neste thread para corrigi-los, ou faça o merge você.",
+      "rewritten": "A branch não contém mais o commit que foi revisado (um rebase ou um force push), então o que seria mesclado não foi verificado. Veja o novo head no pull request antes de fazer o merge você.",
+      "mergeRounds": "As rodadas de correções do agente não conseguiram mesclar a mudança com a branch base. Veja o pull request e resolva você."
     }
   },
   "projectSecrets": {

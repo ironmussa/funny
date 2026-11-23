@@ -276,6 +276,57 @@ export function factoryRunReasonText(t: TFunction, reason: string): string {
 }
 
 /**
+ * What a person needs to know about why a run stopped, beyond its short
+ * reason: what the gate checked, what it found and what to do. The merge
+ * gate's holds get an explanation (a high-risk change names its risk reasons);
+ * any other reason is the server's own text. Null without a reason.
+ */
+export function factoryRunReasonDetail(
+  t: TFunction,
+  run: Pick<FactoryRun, 'failureReason' | 'risk'>,
+): string | null {
+  switch (run.failureReason) {
+    case null:
+      return null;
+    case 'high risk': {
+      const reasons = run.risk?.level === 'high' ? run.risk.reasons : [];
+      return reasons.length > 0
+        ? t(
+            'factory.reasonDetail.highRisk',
+            'This factory merges only low-risk changes by itself, and this one is high risk: {{reasons}}. Review the pull request and merge it yourself, or set "Merges by itself" to "All" in the factory settings.',
+            { reasons: reasons.join('; ') },
+          )
+        : t(
+            'factory.reasonDetail.highRiskUnknown',
+            'This factory merges only low-risk changes by itself, and this one is high risk. Review the pull request and merge it yourself, or set "Merges by itself" to "All" in the factory settings.',
+          );
+    }
+    case 'no review':
+      return t(
+        'factory.reasonDetail.noReview',
+        "The commit it would merge has no verdict from the flow's review step, so nothing checked it. Review the pull request and merge it yourself.",
+      );
+    case 'review failed':
+      return t(
+        'factory.reasonDetail.reviewFailed',
+        'The review of the commit it would merge did not pass. Read its findings on the pull request, then follow up on this thread to fix them or merge it yourself.',
+      );
+    case 'branch history rewritten':
+      return t(
+        'factory.reasonDetail.rewritten',
+        'The branch no longer contains the commit that was reviewed (a rebase or a force push), so what would be merged was not checked. Look at the new head on the pull request before merging it yourself.',
+      );
+    case 'merge rounds spent':
+      return t(
+        'factory.reasonDetail.mergeRounds',
+        "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself.",
+      );
+    default:
+      return run.failureReason;
+  }
+}
+
+/**
  * Whether a review verdict lets the change go on: a pass, or a fail whose
  * findings are all below high (nothing that sends it back).
  */

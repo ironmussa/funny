@@ -1832,6 +1832,20 @@
     "risk": {
       "low": "Riesgo bajo",
       "high": "Riesgo alto"
+    },
+    "reason": {
+      "noReview": "Sin merge: este commit no tiene review",
+      "reviewFailed": "Sin merge: su review no pasó",
+      "highRisk": "Sin merge: riesgo alto, te necesita",
+      "rewritten": "Sin merge: la rama fue reescrita"
+    },
+    "reasonDetail": {
+      "highRisk": "Este factory solo hace merge por sí mismo de cambios de riesgo bajo, y este es de riesgo alto: {{reasons}}. Revisa el pull request y haz el merge tú, o cambia \"Merge automático\" a \"Todos\" en los ajustes del factory.",
+      "highRiskUnknown": "Este factory solo hace merge por sí mismo de cambios de riesgo bajo, y este es de riesgo alto. Revisa el pull request y haz el merge tú, o cambia \"Merge automático\" a \"Todos\" en los ajustes del factory.",
+      "noReview": "El commit que se fusionaría no tiene veredicto del paso de review del flujo, así que nadie lo revisó. Revisa el pull request y haz el merge tú.",
+      "reviewFailed": "La review del commit que se fusionaría no pasó. Lee sus hallazgos en el pull request y luego pide en este hilo que los arregle, o haz el merge tú.",
+      "rewritten": "La rama ya no contiene el commit que se revisó (un rebase o un force push), así que lo que se fusionaría no se revisó. Mira el nuevo head en el pull request antes de hacer el merge tú.",
+      "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú."
     }
   },
   "projectSecrets": {

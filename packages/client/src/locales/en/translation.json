@@ -1839,6 +1839,20 @@
     "risk": {
       "low": "Low risk",
       "high": "High risk"
+    },
+    "reason": {
+      "noReview": "Not merged: this commit has no review",
+      "reviewFailed": "Not merged: its review did not pass",
+      "highRisk": "Not merged: high risk, it needs you",
+      "rewritten": "Not merged: the branch was rewritten"
+    },
+    "reasonDetail": {
+      "highRisk": "This factory merges only low-risk changes by itself, and this one is high risk: {{reasons}}. Review the pull request and merge it yourself, or set \"Merges by itself\" to \"All\" in the factory settings.",
+      "highRiskUnknown": "This factory merges only low-risk changes by itself, and this one is high risk. Review the pull request and merge it yourself, or set \"Merges by itself\" to \"All\" in the factory settings.",
+      "noReview": "The commit it would merge has no verdict from the flow's review step, so nothing checked it. Review the pull request and merge it yourself.",
+      "reviewFailed": "The review of the commit it would merge did not pass. Read its findings on the pull request, then follow up on this thread to fix them or merge it yourself.",
+      "rewritten": "The branch no longer contains the commit that was reviewed (a rebase or a force push), so what would be merged was not checked. Look at the new head on the pull request before merging it yourself.",
+      "mergeRounds": "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself."
     }
   },
   "projectSecrets": {

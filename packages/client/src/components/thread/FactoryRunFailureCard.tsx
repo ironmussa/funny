@@ -12,6 +12,8 @@ import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { useFactoryRunForThread } from '@/data/factory/hooks';
 import {
   factoryRunFailedStep,
+  factoryRunReasonDetail,
+  factoryRunReasonText,
   isFactoryRunFailed,
   isFactoryRunNoChange,
   isFactoryRunUnsavedWork,
@@ -44,6 +46,10 @@ export function FactoryRunFailure({
   const run = useFactoryRunForThread(projectId, threadId);
   if (!run || !(isFactoryRunFailed(run) || isFactoryRunNoChange(run))) return null;
   const step = factoryRunFailedStep(run);
+  // A merge gate's hold (high risk, no review, …) reads as what it is, with why.
+  const shortReason = run.failureReason ? factoryRunReasonText(t, run.failureReason) : null;
+  const heldReason = shortReason !== run.failureReason ? shortReason : null;
+  const detail = factoryRunReasonDetail(t, run);
   const controls = (
     <div className="flex items-center justify-end gap-1">
       <FactoryRunControls
@@ -98,16 +104,24 @@ export function FactoryRunFailure({
       <div className="flex items-center gap-2">
         <CircleX className="text-destructive icon-sm shrink-0" />
         <span className="text-destructive font-medium">
-          {step
-            ? t('factory.failure.titleAtStep', 'The factory pipeline stopped at {{step}}', { step })
-            : t('factory.failure.title', 'The factory pipeline stopped on an error')}
+          {heldReason ??
+            (step
+              ? t('factory.failure.titleAtStep', 'The factory pipeline stopped at {{step}}', {
+                  step,
+                })
+              : t('factory.failure.title', 'The factory pipeline stopped on an error'))}
         </span>
         <span className="text-muted-foreground ml-auto">
           {t('factory.banner.title', 'Factory · #{{issue}}', { issue: run.issueNumber })}
         </span>
       </div>
-      {run.failureReason && (
-        <p className="text-foreground break-words whitespace-pre-wrap">{run.failureReason}</p>
+      {detail && (
+        <p
+          className="text-foreground break-words whitespace-pre-wrap"
+          data-testid="factory-run-failure-detail"
+        >
+          {detail}
+        </p>
       )}
       {controls}
     </div>

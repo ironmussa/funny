@@ -16,6 +16,7 @@ import { useDataQuery } from '../hooks';
 import {
   activeFactoryRunsQuery,
   NO_ACTIVE_FACTORY_RUNS,
+  NO_PROJECT_FACTORY_RUNS,
   factoryBlockersQuery,
   factoryFlowDefinitionQuery,
   factoryFlowValidationQuery,
@@ -57,6 +58,20 @@ export function useFactoryRunForThread(
 ): FactoryRun | null | undefined {
   const runs = useFactoryRuns(projectId);
   return runs && (runs.find((run) => run.threadIds.includes(threadId)) ?? null);
+}
+
+/**
+ * The run a factory thread belongs to, from its project's run list (polled
+ * while shown), or null; `undefined` while loading. Any other thread answers
+ * null without a request.
+ */
+export function useFactoryRunOfThread(
+  thread: { id: string; projectId?: string; source?: string } | null | undefined,
+): FactoryRun | null | undefined {
+  const projectId = thread?.source === 'factory' ? thread.projectId : undefined;
+  const runs = useDataQuery(projectId ? factoryRunsQuery(projectId) : NO_PROJECT_FACTORY_RUNS).data;
+  if (!projectId || !thread) return null;
+  return runs && (runs.find((run) => run.threadIds.includes(thread.id)) ?? null);
 }
 
 /**

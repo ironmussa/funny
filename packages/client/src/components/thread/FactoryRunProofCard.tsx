@@ -1,6 +1,6 @@
 /**
- * The regression proof of a factory run's pull request, as a card at the end
- * of the run's thread (change factory-quality-gates): the verdict, why, the
+ * The regression proof of a factory run's pull request, as a card in the run's
+ * thread at the time it ran (change factory-quality-gates): the verdict, why, the
  * test files and commands that ran, and the output kept as evidence (on a
  * pass, the base's failing output; on a fail, the failing run's).
  */
@@ -18,10 +18,11 @@ import { cn } from '@/lib/utils';
 export function FactoryRunProofCard({ threadId }: { threadId?: string }) {
   const thread = useThreadById(threadId);
   if (!threadId || !thread?.projectId || !isFactoryThread(thread)) return null;
-  return <RunProof projectId={thread.projectId} threadId={threadId} />;
+  return <FactoryRunProof projectId={thread.projectId} threadId={threadId} />;
 }
 
-function RunProof({ projectId, threadId }: { projectId: string; threadId: string }) {
+/** The proof card of the run that started `threadId` in `projectId`, once a proof ran. */
+export function FactoryRunProof({ projectId, threadId }: { projectId: string; threadId: string }) {
   const run = useFactoryRunForThread(projectId, threadId);
   if (!run?.regressionProof) return null;
   return <RegressionProofDetails proof={run.regressionProof} />;

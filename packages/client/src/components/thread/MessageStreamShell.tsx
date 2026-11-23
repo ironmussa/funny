@@ -5,8 +5,7 @@ import type { ReactNode, RefObject } from 'react';
 import { LoadingState } from '@/components/ui/loading-state';
 import { cn } from '@/lib/utils';
 
-import { FactoryRunFailureCard } from './FactoryRunFailureCard';
-import { FactoryRunProofCard } from './FactoryRunProofCard';
+import { TrailingFactoryCards } from './FactoryTimelineCards';
 import type { MessageStreamProps } from './message-stream-types';
 import { MessageStreamStatusTail } from './MessageStreamStatusTail';
 import { ProviderAuthRecovery } from './ProviderAuthRecovery';
@@ -30,6 +29,8 @@ interface MessageStreamShellProps {
   compact: boolean;
   className?: string;
   // Chrome data
+  /** The loaded messages: a factory card newer than all of them shows below the status. */
+  messages: MessageStreamProps['messages'];
   lastUserMessage?: MessageStreamProps['lastUserMessage'];
   pagination: MessageStreamProps['pagination'];
   status: string;
@@ -74,6 +75,7 @@ export function MessageStreamShell({
   bottomSentinel,
   compact,
   className,
+  messages,
   lastUserMessage,
   pagination,
   status,
@@ -157,8 +159,12 @@ export function MessageStreamShell({
           onPermissionDecision={onPermissionDecision}
         />
 
-        <FactoryRunProofCard threadId={copyThreadId} />
-        <FactoryRunFailureCard threadId={copyThreadId} agentRunning={isRunning} />
+        {/* The factory run's newest cards; older ones sit among the messages. */}
+        <TrailingFactoryCards
+          threadId={copyThreadId}
+          messages={messages}
+          agentRunning={isRunning}
+        />
 
         {/* Prompt pin spacer (full mode only) */}
         <PromptPinSpacer compact={compact} height={promptPinSpacerHeight} />

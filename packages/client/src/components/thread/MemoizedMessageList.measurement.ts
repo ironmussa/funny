@@ -136,6 +136,7 @@ export function estimateItemHeight(
   if (item.type === 'thread-event') return item.event.type === 'sandbox:error' ? 80 : 32;
   if (item.type === 'compaction-event') return 32;
   if (item.type === 'workflow-event-group') return 32;
+  if (item.type === 'factory-card') return item.card.kind === 'proof' ? 140 : 100;
   return 60;
 }
 

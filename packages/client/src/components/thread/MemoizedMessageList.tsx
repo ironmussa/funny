@@ -189,6 +189,7 @@ export const MemoizedMessageList = memo(
       threadEvents,
       compactionEvents,
       threadStatus,
+      threadId,
     );
     const leadingUserItem = useMemo(
       () => getLeadingUserItem(leadingUserMessage, messages),

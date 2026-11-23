@@ -724,3 +724,52 @@ describe('events outside the loaded message window', () => {
     expect(items.some((i) => i.type === 'thread-event')).toBe(false);
   });
 });
+
+// --- factory run cards ---
+
+describe('factory run cards in the timeline', () => {
+  const card = (kind: 'proof' | 'failure', at: string | null) => ({
+    kind,
+    at,
+    projectId: 'p1',
+    threadId: 't1',
+  });
+  const messages = [
+    makeMessage('m1', 'implement', [], '2026-11-23T22:00:00Z'),
+    makeMessage('m2', 'follow-up after the proof', [], '2026-11-23T22:20:00Z'),
+  ];
+
+  test('a card with messages after it sits between them, by time', () => {
+    const items = buildGroupedRenderItems(messages, [], [], 'completed', [
+      card('proof', '2026-11-23T22:10:00Z'),
+    ]);
+    expect(items.map(getItemKey)).toEqual(['m1', 'factory-proof', 'm2']);
+  });
+
+  test('a card newer than every message stays out of the list (shown below the status)', () => {
+    const items = buildGroupedRenderItems(messages, [], [], 'completed', [
+      card('proof', '2026-11-23T22:10:00Z'),
+      card('failure', '2026-11-23T22:30:00Z'),
+      card('failure', null),
+    ]);
+    expect(items.map(getItemKey)).toEqual(['m1', 'factory-proof', 'm2']);
+  });
+
+  test('a tool call after the card counts as a later message', () => {
+    const items = buildGroupedRenderItems(
+      [
+        makeMessage(
+          'm1',
+          'fixing',
+          [makeToolCall('tc1', 'Bash', '2026-11-23T22:40:00Z')],
+          '2026-11-23T22:00:00Z',
+        ),
+      ],
+      [],
+      [],
+      'completed',
+      [card('failure', '2026-11-23T22:30:00Z')],
+    );
+    expect(items.map(getItemKey)).toContain('factory-failure');
+  });
+});

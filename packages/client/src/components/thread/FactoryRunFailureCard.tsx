@@ -1,6 +1,6 @@
 /**
- * The error of a factory thread's pipeline, as a card at the end of the
- * thread: where the run stopped, why, and the member's controls. The footer
+ * The error of a factory thread's pipeline, as a card in the thread at the
+ * time it happened: where the run stopped, why, and the member's controls. The footer
  * indicator shows the same failure, but only when its popover is opened; this
  * card makes it visible without looking for it. It goes away once the run is
  * retried (the failure is cleared) or moves on.
@@ -29,10 +29,17 @@ export function FactoryRunFailureCard({
 }) {
   const thread = useThreadById(threadId);
   if (agentRunning || !threadId || !thread?.projectId || !isFactoryThread(thread)) return null;
-  return <RunFailure projectId={thread.projectId} threadId={threadId} />;
+  return <FactoryRunFailure projectId={thread.projectId} threadId={threadId} />;
 }
 
-function RunFailure({ projectId, threadId }: { projectId: string; threadId: string }) {
+/** The failure (or "no change") card of the run that started `threadId`, while it shows one. */
+export function FactoryRunFailure({
+  projectId,
+  threadId,
+}: {
+  projectId: string;
+  threadId: string;
+}) {
   const { t } = useTranslation();
   const run = useFactoryRunForThread(projectId, threadId);
   if (!run || !(isFactoryRunFailed(run) || isFactoryRunNoChange(run))) return null;

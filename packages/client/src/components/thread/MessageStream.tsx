@@ -79,6 +79,7 @@ function VirtualMessageStream(props: MessageStreamProps) {
       list={list}
       compact={compact}
       className={className}
+      messages={messages}
       lastUserMessage={lastUserMessage}
       pagination={pagination}
       status={status}

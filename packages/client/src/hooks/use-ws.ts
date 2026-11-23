@@ -460,7 +460,7 @@ export function useWS() {
       clearTimeout(teardownTimer);
       teardownTimer = null;
     }
-    refCount++;
+    refCount += 1;
     if (refCount === 1 && !activeSocket) connect();
 
     // Auto-manage remote WS connections when the active thread is remote, and
@@ -507,7 +507,7 @@ export function useWS() {
     return () => {
       unsub();
       stopRealtimeController();
-      refCount--;
+      refCount -= 1;
       if (refCount === 0) {
         // Defer teardown so StrictMode/HMR remounts (which fire cleanup then
         // immediately re-run the effect) cancel the disconnect instead of

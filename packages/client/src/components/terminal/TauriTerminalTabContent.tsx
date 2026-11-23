@@ -15,6 +15,20 @@ import { cn } from '@/lib/utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
+// Module-level loaders: React Compiler cannot compile `import()` inside a component.
+const loadXterm = () =>
+  Promise.all([
+    import('@xterm/xterm'),
+    import('@xterm/addon-fit'),
+    import('@xterm/addon-web-links'),
+    import('@xterm/addon-search'),
+    import('@xterm/addon-webgl'),
+  ]);
+// @ts-ignore - CSS import handled by Vite bundler
+const loadXtermStyles = () => import('@xterm/xterm/css/xterm.css');
+const loadTauriCore = () => import('@tauri-apps/api/core');
+const loadTauriEvents = () => import('@tauri-apps/api/event');
+
 /** Tauri PTY tab — uses xterm.js (lazy-loaded) */
 export function TauriTerminalTabContent({
   id,
@@ -41,15 +55,8 @@ export function TauriTerminalTabContent({
 
     (async () => {
       const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { SearchAddon }, { WebglAddon }] =
-        await Promise.all([
-          import('@xterm/xterm'),
-          import('@xterm/addon-fit'),
-          import('@xterm/addon-web-links'),
-          import('@xterm/addon-search'),
-          import('@xterm/addon-webgl'),
-        ]);
-      // @ts-ignore - CSS import handled by Vite bundler
-      await import('@xterm/xterm/css/xterm.css');
+        await loadXterm();
+      await loadXtermStyles();
 
       if (!isMounted || !containerRef.current) return;
 
@@ -91,8 +98,8 @@ export function TauriTerminalTabContent({
         if (isMounted) fitAddon.fit();
       });
 
-      const { invoke } = await import('@tauri-apps/api/core');
-      const { listen } = await import('@tauri-apps/api/event');
+      const { invoke } = await loadTauriCore();
+      const { listen } = await loadTauriEvents();
       if (!isMounted) return;
 
       const unlistenData = await listen<{ data: string }>(`pty:data:${id}`, (event) => {

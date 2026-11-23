@@ -87,7 +87,7 @@ const existing = {
     'react/set-state-in-render': 'error',
     'react/static-components': 'error',
     'react/syntax': 'error',
-    'react/todo': 'warn',
+    'react/todo': 'error',
     'react/unsupported-syntax': 'error',
     'react/use-memo': 'error',
     'react/void-use-memo': 'error',

@@ -4,6 +4,9 @@ import { toast } from 'sonner';
 
 import { useUIStore } from '@/stores/ui-store';
 
+// Module-level loader: React Compiler cannot compile `import()` inside a hook.
+const loadTauriEvents = () => import('@tauri-apps/api/event');
+
 const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 const isPreviewWindow = !!(window as { __PREVIEW_MODE__?: unknown }).__PREVIEW_MODE__;
 
@@ -31,7 +34,7 @@ export function useTauriAnnotatorEvents() {
     let cancelled = false;
 
     (async () => {
-      const { listen } = await import('@tauri-apps/api/event');
+      const { listen } = await loadTauriEvents();
       const off = await listen<AnnotatorCapturePayload>('annotator:capture', (event) => {
         const md = event.payload?.markdown?.trim();
         if (!md) return;

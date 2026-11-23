@@ -6,6 +6,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+// Module-level loaders: React Compiler cannot compile `import()` inside a component.
+const loadTauriEvents = () => import('@tauri-apps/api/event');
+
 interface PreviewTab {
   commandId: string;
   projectId: string;
@@ -29,7 +32,7 @@ export function PreviewBrowser() {
     const unlisteners: Array<() => void> = [];
 
     (async () => {
-      const { listen, emit } = await import('@tauri-apps/api/event');
+      const { listen, emit } = await loadTauriEvents();
 
       const u1 = await listen<PreviewTab>('preview:add-tab', (e) => {
         const tab = e.payload;
@@ -94,7 +97,7 @@ export function PreviewBrowser() {
     }
     // Notify main window
     if (isTauri) {
-      const { emit } = await import('@tauri-apps/api/event');
+      const { emit } = await loadTauriEvents();
       emit('preview:tab-closed', { commandId });
     }
   };

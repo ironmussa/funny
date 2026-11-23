@@ -20,6 +20,24 @@ interface StreamScrollRefs {
   scrollToBottom: () => void;
 }
 
+// Built outside the hook: React Compiler cannot compile an object getter.
+function createStreamHandle(
+  scrollToBottom: () => void,
+  scrollViewportRef: StreamScrollRefs['scrollViewportRef'],
+  messageListRef: StreamScrollRefs['messageListRef'],
+) {
+  return {
+    scrollToBottom,
+    get scrollViewport() {
+      return scrollViewportRef.current;
+    },
+    expandToItem: (id: string) => messageListRef.current?.expandToItem(id),
+    hasHiddenItems: () => messageListRef.current?.hasHiddenItems() ?? false,
+    captureScrollAnchor: () => messageListRef.current?.captureScrollAnchor(),
+    restoreScrollAnchor: () => messageListRef.current?.restoreScrollAnchor(),
+  };
+}
+
 /**
  * The part of a message stream shared by the virtual and frozen viewers: the
  * imperative handle, the permission-prompt handlers, and the props of the
@@ -45,16 +63,7 @@ export function useMessageStreamList(props: MessageStreamProps, scroll: StreamSc
 
   useImperativeHandle(
     ref,
-    () => ({
-      scrollToBottom,
-      get scrollViewport() {
-        return scrollViewportRef.current;
-      },
-      expandToItem: (id: string) => messageListRef.current?.expandToItem(id),
-      hasHiddenItems: () => messageListRef.current?.hasHiddenItems() ?? false,
-      captureScrollAnchor: () => messageListRef.current?.captureScrollAnchor(),
-      restoreScrollAnchor: () => messageListRef.current?.restoreScrollAnchor(),
-    }),
+    () => createStreamHandle(scrollToBottom, scrollViewportRef, messageListRef),
     [messageListRef, scrollToBottom, scrollViewportRef],
   );
 

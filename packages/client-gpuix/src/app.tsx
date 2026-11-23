@@ -49,6 +49,7 @@ import {
   windowStartForVisibleRange,
 } from '@funny/gpuix-ui/virtual-range';
 import type { GitStatusInfo, Thread, ToolCall } from '@funny/shared';
+import { whilePending } from '@funny/shared/while-pending';
 import { useWindowSize } from '@gpuix/react';
 import type { EventPayload } from '@gpuix/react';
 import type { ReactElement } from 'react';
@@ -296,16 +297,15 @@ function LoginView({ application }: { application: NativeApplicationServices }) 
   const [error, setError] = useState<string | null>(null);
   const submit = async (submittedPassword = password, submittedUsername = username) => {
     if (!submittedUsername.trim() || !submittedPassword || pending) return;
-    setPending(true);
     setError(null);
-    try {
-      await application.signIn(submittedUsername.trim(), submittedPassword);
-      setPassword('');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setPending(false);
-    }
+    await whilePending(setPending, async () => {
+      try {
+        await application.signIn(submittedUsername.trim(), submittedPassword);
+        setPassword('');
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    });
   };
   return (
     <div
@@ -862,17 +862,14 @@ export const PermissionCard = memo(function PermissionCard({
   if (!permission) return null;
   const respond = async (decision: 'allow_once' | 'deny') => {
     if (pending || permission.status !== 'active') return;
-    setPending(true);
-    try {
+    await whilePending(setPending, async () => {
       await application.commands.respondPermission({
         threadId,
         runId: permission.runId,
         requestId: permission.requestId,
         decision,
       });
-    } finally {
-      setPending(false);
-    }
+    });
   };
   return (
     <UiPermissionCard
@@ -941,8 +938,7 @@ export const ThreadControls = memo(function ThreadControls({
   const submit = async (submittedContent = content) => {
     const trimmed = submittedContent.trim();
     if (!trimmed || pending || !canSteer) return;
-    setPending(true);
-    try {
+    await whilePending(setPending, async () => {
       const ok = waiting
         ? await application.commands.resumeRun({
             threadId,
@@ -963,9 +959,7 @@ export const ThreadControls = memo(function ThreadControls({
       if (ok) {
         setContent((current) => (current === submittedContent ? '' : current));
       }
-    } finally {
-      setPending(false);
-    }
+    });
   };
   return (
     <div

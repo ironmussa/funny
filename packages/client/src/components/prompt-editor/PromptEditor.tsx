@@ -565,6 +565,55 @@ function useSuggestionStateRefs(
   return { suggestionItemsRef, suggestionTypeRef, suggestionQueryRef, suggestionIndexRef };
 }
 
+// Declared at module level: the `this` in addAttributes is not something
+// React Compiler can compile inside a component.
+const FileMention = Mention.extend({
+  name: 'fileMention',
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      path: { default: null },
+      fileType: { default: 'file' },
+    };
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const fileType = node.attrs.fileType || 'file';
+    return [
+      'span',
+      {
+        ...HTMLAttributes,
+        class: 'file-mention',
+        'data-file-type': fileType,
+      },
+      node.attrs.label || node.attrs.id,
+    ];
+  },
+});
+
+const SymbolMention = Mention.extend({
+  name: 'symbolMention',
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      path: { default: null },
+      kind: { default: 'function' },
+      line: { default: 0 },
+      endLine: { default: null },
+    };
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      {
+        ...HTMLAttributes,
+        class: 'symbol-mention',
+        'data-symbol-kind': node.attrs.kind || 'function',
+      },
+      node.attrs.label || node.attrs.id,
+    ];
+  },
+});
+
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
   {
     placeholder,
@@ -1136,28 +1185,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       // during thread preparation), not just while editable.
       Placeholder.configure({ placeholder: placeholder ?? '', showOnlyWhenEditable: false }),
       // File mentions (@ trigger)
-      Mention.extend({
-        name: 'fileMention',
-        addAttributes() {
-          return {
-            ...this.parent?.(),
-            path: { default: null },
-            fileType: { default: 'file' },
-          };
-        },
-        renderHTML({ node, HTMLAttributes }) {
-          const fileType = node.attrs.fileType || 'file';
-          return [
-            'span',
-            {
-              ...HTMLAttributes,
-              class: 'file-mention',
-              'data-file-type': fileType,
-            },
-            node.attrs.label || node.attrs.id,
-          ];
-        },
-      }).configure({
+      FileMention.configure({
         HTMLAttributes: { class: 'file-mention' },
         suggestion: fileSuggestion(),
         deleteTriggerWithBackspace: true,
@@ -1188,29 +1216,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         deleteTriggerWithBackspace: true,
       }),
       // Symbol mentions (# trigger)
-      Mention.extend({
-        name: 'symbolMention',
-        addAttributes() {
-          return {
-            ...this.parent?.(),
-            path: { default: null },
-            kind: { default: 'function' },
-            line: { default: 0 },
-            endLine: { default: null },
-          };
-        },
-        renderHTML({ node, HTMLAttributes }) {
-          return [
-            'span',
-            {
-              ...HTMLAttributes,
-              class: 'symbol-mention',
-              'data-symbol-kind': node.attrs.kind || 'function',
-            },
-            node.attrs.label || node.attrs.id,
-          ];
-        },
-      }).configure({
+      SymbolMention.configure({
         HTMLAttributes: { class: 'symbol-mention' },
         suggestion: symbolSuggestion(),
         deleteTriggerWithBackspace: true,

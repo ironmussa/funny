@@ -62,6 +62,82 @@ interface ProjectMemberPick {
   name: string;
 }
 
+/** A project member as the picker lists them: anyone but the caller. */
+function toMemberPick(member: {
+  userId: string;
+  user?: { name?: string | null; username?: string | null; email?: string | null } | null;
+}): ProjectMemberPick {
+  const user = member.user;
+  return {
+    userId: member.userId,
+    name: user?.name ?? user?.username ?? user?.email ?? member.userId,
+  };
+}
+
+/**
+ * The thread's shares and the project members it can be shared with, read
+ * while the dialog is open, and sharing / revoking (each refreshes the list).
+ */
+function useThreadShares({
+  threadId,
+  projectId,
+  open,
+  selfId,
+}: {
+  threadId: string;
+  projectId: string;
+  open: boolean;
+  selfId: string | null;
+}) {
+  const [shares, setShares] = useState<ThreadShareGrant[]>([]);
+  const [members, setMembers] = useState<ProjectMemberPick[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const refreshShares = useCallback(async () => {
+    const res = await threadsApi.listThreadShares(threadId);
+    res.match(setShares, (err) => log.warn('Failed to list thread shares', { error: String(err) }));
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!open) return;
+    void refreshShares();
+    void api.listProjectMembers(projectId).then((res) =>
+      res.match(
+        ({ members: rows }) =>
+          setMembers(rows.map(toMemberPick).filter((m) => m.userId && m.userId !== selfId)),
+        (err) => log.warn('Failed to load project members', { error: String(err) }),
+      ),
+    );
+  }, [open, projectId, selfId, refreshShares]);
+
+  /** Run `action`, then re-read the shares, with the buttons disabled meanwhile. */
+  const busyWhile = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await action();
+      await refreshShares();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const share = (userId: string, level: ShareLevel) =>
+    busyWhile(async () => {
+      const res = await threadsApi.shareThread(threadId, userId, level);
+      res.mapErr((err) => {
+        log.warn('Failed to share thread', { error: String(err) });
+        toast.error('Could not share thread', { description: String(err) });
+      });
+    });
+
+  const revoke = (userId: string) =>
+    busyWhile(async () => {
+      await threadsApi.unshareThread(threadId, userId);
+    });
+
+  return { shares, members, busy, share, revoke };
+}
+
 /**
  * Owner-only "Share" dialog, Google-Drive-style. It has no trigger of its own:
  * the thread header's "More actions" menu and the Alt+H shortcut open it
@@ -91,13 +167,16 @@ export function ShareThreadDialog({
   // owned threads, but the flag would otherwise leak across navigation).
   const open = useUIStore((s) => s.shareDialogOpen);
   const setOpen = useUIStore((s) => s.setShareDialogOpen);
-  const [shares, setShares] = useState<ThreadShareGrant[]>([]);
-  const [members, setMembers] = useState<ProjectMemberPick[]>([]);
-  const [busy, setBusy] = useState(false);
   const [copied, copy] = useCopyToClipboard();
   // Permission level applied to the NEXT member added: viewer / commenter /
   // editor (view | comment | steer). See `ShareLevel`.
   const [level, setLevel] = useState<ShareLevel>('view');
+  const { shares, members, busy, share, revoke } = useThreadShares({
+    threadId,
+    projectId,
+    open,
+    selfId,
+  });
 
   // Close the dialog when the active thread changes so a stale open flag from
   // a previous (owned) thread can't pop the dialog on an unrelated thread.
@@ -106,57 +185,6 @@ export function ShareThreadDialog({
     // Intentionally only on threadId change, not on setOpen identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
-
-  const refreshShares = useCallback(async () => {
-    const res = await threadsApi.listThreadShares(threadId);
-    res.match(
-      (rows) => setShares(rows),
-      (err) => log.warn('Failed to list thread shares', { error: String(err) }),
-    );
-  }, [threadId]);
-
-  useEffect(() => {
-    if (!open) return;
-    void refreshShares();
-    void api.listProjectMembers(projectId).then((res) => {
-      res.match(
-        ({ members: rows }) => {
-          const list: ProjectMemberPick[] = rows
-            .map((m) => ({
-              userId: m.userId,
-              name: m.user?.name ?? m.user?.username ?? m.user?.email ?? m.userId,
-            }))
-            .filter((m) => m.userId && m.userId !== selfId);
-          setMembers(list);
-        },
-        (err) => log.warn('Failed to load project members', { error: String(err) }),
-      );
-    });
-  }, [open, projectId, selfId, refreshShares]);
-
-  const share = async (userId: string) => {
-    setBusy(true);
-    try {
-      const res = await threadsApi.shareThread(threadId, userId, level);
-      res.mapErr((err) => {
-        log.warn('Failed to share thread', { error: String(err) });
-        toast.error('Could not share thread', { description: String(err) });
-      });
-      await refreshShares();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const revoke = async (userId: string) => {
-    setBusy(true);
-    try {
-      await threadsApi.unshareThread(threadId, userId);
-      await refreshShares();
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const copyLink = () => {
     const url = `${window.location.origin}${buildPath(
@@ -188,7 +216,11 @@ export function ShareThreadDialog({
         </DialogHeader>
 
         <LevelPicker level={level} onLevel={setLevel} />
-        <MemberPicker members={pickable} busy={busy} onPick={(userId) => void share(userId)} />
+        <MemberPicker
+          members={pickable}
+          busy={busy}
+          onPick={(userId) => void share(userId, level)}
+        />
         <AccessList
           selfName={selfName}
           shares={shares}

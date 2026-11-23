@@ -17,6 +17,9 @@
  * parallel branches (`agentStepIssues`).
  */
 
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
 import type { GithubCallError } from '@funny/core/github-app';
 import type { PipelineDefinition } from '@funny/pipelines';
 import type { FactoryFlowDefinition } from '@funny/shared/contracts/factory';
@@ -25,7 +28,9 @@ import {
   isProofReady,
   loadWorkflowCatalog,
   parseWorkflowYaml,
+  resolvePromptFiles,
   type ParsedWorkflow,
+  type PromptFileReader,
   type WorkflowIssue,
 } from '@funny/workflows';
 import {
@@ -36,17 +41,54 @@ import {
 } from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
 
+import {
+  formatFactoryFlowProblems,
+  validateFactoryFlow,
+  type FactoryFlowProblem,
+} from './factory-flow-validation.js';
+import type { FactoryGithubPort, FactoryRepoReader } from './factory-github.js';
+import type { ProjectAgentDefaults, StepOverrides } from './factory-step-options.js';
+
 export type FactoryFlowError =
-  /** The flow is missing or invalid: every run of this factory would fail the same way. */
-  | { kind: 'invalid'; message: string }
+  /**
+   * The flow is missing or invalid: every run of this factory would fail the
+   * same way. `problems`: each step and field the factory refused, when that is
+   * why.
+   */
+  | { kind: 'invalid'; message: string; problems?: FactoryFlowProblem[] }
   /** GitHub could not be read now; a later tick may succeed. */
   | { kind: 'unavailable'; message: string };
 
 export interface LoadFactoryFlowDeps {
   /** The default branch's copy of a repository file, or null when absent. */
   readDefaultBranchFile(path: string): PromiseLike<Result<string | null, GithubCallError>>;
+  /**
+   * The default branch's head commit. With `readFileAt`, the flow and its
+   * prompt files are read at that one commit, which the run records.
+   */
+  defaultBranchHead?(): PromiseLike<Result<{ branch: string; sha: string }, GithubCallError>>;
+  /** A repository file as of `ref`, or null when absent there. */
+  readFileAt?(path: string, ref: string): PromiseLike<Result<string | null, GithubCallError>>;
   /** The built-in flows' directory (tests). */
   defaultsDir?: string;
+}
+
+/** The loader's reads of one repository through the factory's GitHub port, as `reader`. */
+export function flowReadsOf(
+  port: Pick<FactoryGithubPort, 'readDefaultBranchFile' | 'defaultBranchHead' | 'readFileAt'>,
+  reader: FactoryRepoReader,
+): LoadFactoryFlowDeps {
+  return {
+    readDefaultBranchFile: (path) => port.readDefaultBranchFile(reader, path),
+    defaultBranchHead: () => port.defaultBranchHead(reader),
+    readFileAt: (path, ref) => port.readFileAt(reader, path, ref),
+  };
+}
+
+/** What a factory adds to the flow it loads: its step overrides and the project's agent defaults. */
+export interface FactoryFlowContext {
+  overrides?: StepOverrides;
+  project?: ProjectAgentDefaults;
 }
 
 /** Built-ins written for the orchestrator's workspace, not for a server-run factory. */
@@ -55,6 +97,10 @@ const WORKSPACE_ONLY_FLOWS = new Set(['factory-issue']);
 export interface FactoryFlow {
   name: string;
   source: 'repository' | 'built-in';
+  /** The default-branch commit a repository flow was read at; null for a built-in or when unknown. */
+  commit: string | null;
+  /** The flow as it runs: parsed, its prompt files resolved (Validate flow summarizes it). */
+  workflow: ParsedWorkflow;
   pipeline: PipelineDefinition<YamlPipelineContext>;
   /** Parse warnings of the flow: logged by the caller, they block nothing. */
   warnings: WorkflowIssue[];
@@ -163,24 +209,43 @@ function proofConfigOf(workflow: ParsedWorkflow): RegressionProofOpts | undefine
   return step ? regressionProofOpts(step) : undefined;
 }
 
-function compile(
-  yaml: string,
-  origin: string,
-  source: FactoryFlow['source'],
-): Result<FactoryFlow, FactoryFlowError> {
+/**
+ * The found flow parsed, its prompt files read from where the flow was read,
+ * checked against what the factory applies, and compiled.
+ */
+async function compile(
+  found: FoundFlow,
+  context: FactoryFlowContext,
+): Promise<Result<FactoryFlow, FactoryFlowError>> {
+  const { yaml, origin, source } = found;
   const parsed = parseWorkflowYaml(yaml, origin, { validate: agentStepIssues });
   if (!parsed.ok) return err({ kind: 'invalid', message: formatParseError(parsed.error) });
+  const prompts = await resolvePromptFiles(parsed.workflow, found.readPromptFile);
+  if (!prompts.ok) {
+    return err({
+      kind: 'invalid',
+      message: formatFactoryFlowProblems(origin, prompts.problems),
+      problems: prompts.problems,
+    });
+  }
+  const workflow = prompts.workflow;
+  const problems = validateFactoryFlow(workflow, context);
+  if (problems.length > 0) {
+    return err({ kind: 'invalid', message: formatFactoryFlowProblems(origin, problems), problems });
+  }
   try {
     return ok({
-      name: parsed.workflow.name,
+      name: workflow.name,
       source,
-      pipeline: compileYamlPipeline(withMergeLane(parsed.workflow)),
+      commit: found.commit,
+      workflow,
+      pipeline: compileYamlPipeline(withMergeLane(workflow)),
       warnings:
         source === 'repository'
-          ? [...parsed.warnings, ...staleBranchWordingIssues(parsed.workflow)]
+          ? [...parsed.warnings, ...staleBranchWordingIssues(workflow)]
           : parsed.warnings,
-      proofReady: isProofReady(parsed.workflow),
-      regressionProof: proofConfigOf(parsed.workflow),
+      proofReady: isProofReady(workflow),
+      regressionProof: proofConfigOf(workflow),
     });
   } catch (error) {
     return err({
@@ -190,13 +255,40 @@ function compile(
   }
 }
 
+/** Where a repository flow lives; its prompt files are relative to it. */
+const REPO_FLOWS_DIR = '.funny/workflows';
+
+/** How repository files are read for one load: at one commit when the host can, else by branch. */
+interface RepositoryReads {
+  commit: string | null;
+  read(path: string): PromiseLike<Result<string | null, GithubCallError>>;
+}
+
+async function repositoryReads(
+  deps: LoadFactoryFlowDeps,
+): Promise<Result<RepositoryReads, FactoryFlowError>> {
+  const { defaultBranchHead, readFileAt } = deps;
+  if (!defaultBranchHead || !readFileAt) {
+    return ok({ commit: null, read: (path) => deps.readDefaultBranchFile(path) });
+  }
+  const head = await defaultBranchHead();
+  if (head.isErr()) return err({ kind: 'unavailable', message: head.error.message });
+  const sha = head.value.sha;
+  return ok({ commit: sha, read: (path) => readFileAt(path, sha) });
+}
+
+/** A built-in prompt file, from the built-in flows' directory; null when missing. */
+function builtInPromptReader(flowFile: string): PromptFileReader {
+  return async (path) => readFile(join(dirname(flowFile), path), 'utf8').catch(() => null);
+}
+
 /** The repository's copy (`.yaml`, then `.yml`), or null when neither exists. */
 async function repositoryCopy(
   flowName: string,
-  deps: LoadFactoryFlowDeps,
+  reads: RepositoryReads,
 ): Promise<Result<{ path: string; yaml: string } | null, FactoryFlowError>> {
-  for (const path of [`.funny/workflows/${flowName}.yaml`, `.funny/workflows/${flowName}.yml`]) {
-    const read = await deps.readDefaultBranchFile(path);
+  for (const path of [`${REPO_FLOWS_DIR}/${flowName}.yaml`, `${REPO_FLOWS_DIR}/${flowName}.yml`]) {
+    const read = await reads.read(path);
     if (read.isErr()) return err({ kind: 'unavailable', message: read.error.message });
     if (read.value !== null) return ok({ path, yaml: read.value });
   }
@@ -211,17 +303,34 @@ interface FoundFlow {
   /** The repository path; null for a built-in (its server path is not shown). */
   path: string | null;
   yaml: string;
+  /** The default-branch commit it was read at; null for a built-in or when unknown. */
+  commit: string | null;
+  /** Reads its prompt files, relative to its directory, from where it was read. */
+  readPromptFile: PromptFileReader;
 }
 
 async function findFactoryFlow(
   flowName: string,
   deps: LoadFactoryFlowDeps,
 ): Promise<Result<FoundFlow, FactoryFlowError>> {
-  const copy = await repositoryCopy(flowName, deps);
+  const reads = await repositoryReads(deps);
+  if (reads.isErr()) return err(reads.error);
+  const copy = await repositoryCopy(flowName, reads.value);
   if (copy.isErr()) return err(copy.error);
   if (copy.value) {
     const { path, yaml } = copy.value;
-    return ok({ source: 'repository', origin: path, path, yaml });
+    const readPromptFile: PromptFileReader = async (relative) => {
+      const read = await reads.value.read(`${REPO_FLOWS_DIR}/${relative}`);
+      return read.isOk() ? read.value : null;
+    };
+    return ok({
+      source: 'repository',
+      origin: path,
+      path,
+      yaml,
+      commit: reads.value.commit,
+      readPromptFile,
+    });
   }
 
   if (WORKSPACE_ONLY_FLOWS.has(flowName)) {
@@ -238,15 +347,29 @@ async function findFactoryFlow(
       message: `No flow named "${flowName}": add .funny/workflows/${flowName}.yaml to the default branch or pick a built-in flow.`,
     });
   }
-  return ok({ source: 'built-in', origin: builtIn.filePath, path: null, yaml: builtIn.yaml });
+  return ok({
+    source: 'built-in',
+    origin: builtIn.filePath,
+    path: null,
+    yaml: builtIn.yaml,
+    commit: null,
+    readPromptFile: builtInPromptReader(builtIn.filePath),
+  });
 }
 
+/**
+ * The flow a run of the factory executes, loaded as the run would: from the
+ * default branch (at its head commit when the host can say it), its prompt
+ * files resolved, refused when it uses an option the factory cannot apply.
+ */
 export async function loadFactoryFlow(
   flowName: string,
   deps: LoadFactoryFlowDeps,
+  context: FactoryFlowContext = {},
 ): Promise<Result<FactoryFlow, FactoryFlowError>> {
   const found = await findFactoryFlow(flowName, deps);
-  return found.andThen((flow) => compile(flow.yaml, flow.origin, flow.source));
+  if (found.isErr()) return err(found.error);
+  return compile(found.value, context);
 }
 
 /**

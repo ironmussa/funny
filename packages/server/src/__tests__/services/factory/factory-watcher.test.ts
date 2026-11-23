@@ -205,6 +205,12 @@ function fakeGithub(
       const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
       return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
     },
+    defaultBranchHead: () => okAsync({ branch: 'main', sha: 'head-sha' }),
+    readFileAt: (_reader: unknown, path: string) => {
+      port.fileReads.push(path);
+      const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
+      return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
+    },
     branchAhead: () => okAsync(script.branchAhead ?? true),
     defaultBranch: () => okAsync('main'),
     branchState: () =>

@@ -55,6 +55,8 @@ export {
 export {
   resolvePromptFiles,
   normalizePromptPath,
+  listAgentSteps,
+  type FlowAgentStep,
   type PromptFileReader,
   type PromptFileProblem,
   type PromptFilesResult,

@@ -34,6 +34,7 @@ import { log } from '../../lib/logger.js';
 import {
   BUILT_IN_FACTORY_FLOWS,
   listFactoryFlows,
+  flowReadsOf,
   loadFactoryFlow,
   readFactoryFlowDefinition,
 } from './factory-flow.js';
@@ -180,9 +181,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     if (ready.isErr()) return err(ready.error);
     const { port, reader } = ready.value;
 
-    const flow = await loadFactoryFlow(input.flowName, {
-      readDefaultBranchFile: (path) => port.readDefaultBranchFile(reader, path),
-    });
+    const flow = await loadFactoryFlow(input.flowName, flowReadsOf(port, reader));
     if (flow.isErr()) return err(flowRefusal(flow.error));
 
     const refused: FactorySubmitResult['refused'] = [];

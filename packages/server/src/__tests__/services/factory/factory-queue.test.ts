@@ -95,6 +95,11 @@ function fakeGithub(script: Script = {}): FakeGithub {
       script.repoUnreadable
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
         : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
+    defaultBranchHead: () => okAsync({ branch: 'main', sha: 'head-sha' }),
+    readFileAt: (_reader: unknown, path: string) =>
+      script.repoUnreadable
+        ? errAsync({ message: 'GitHub answered 500', status: 500 })
+        : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
     branchAhead: () => okAsync(true),
     defaultBranch: () => okAsync('main'),
     branchState: () => okAsync({ sha: 'base-sha', ci: { kind: 'green' as const } }),

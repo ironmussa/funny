@@ -44,16 +44,26 @@ export function normalizePromptPath(path: string): { path: string } | { error: s
   return { path: segments.join('/') };
 }
 
+/** An agent step of a flow: its step id and its `spawn_agent` shape. */
+export interface FlowAgentStep {
+  /** `<node>`, `<node>.before_retry` or `<node>.on_reject`. */
+  step: string;
+  /** The node it belongs to. */
+  nodeId: string;
+  action: SpawnAgent;
+}
+
 /** Every agent step of the flow with its step id, in declaration order. */
-function agentSteps(parsed: ParsedWorkflow): Array<{ step: string; action: SpawnAgent }> {
-  const steps: Array<{ step: string; action: SpawnAgent }> = [];
+export function listAgentSteps(parsed: ParsedWorkflow): FlowAgentStep[] {
+  const steps: FlowAgentStep[] = [];
   for (const node of parsed.nodes) {
-    if (node.spawn_agent) steps.push({ step: node.id, action: node.spawn_agent });
+    const nodeId = node.id;
+    if (node.spawn_agent) steps.push({ step: nodeId, nodeId, action: node.spawn_agent });
     if (node.retry?.before_retry) {
-      steps.push({ step: `${node.id}.before_retry`, action: node.retry.before_retry });
+      steps.push({ step: `${nodeId}.before_retry`, nodeId, action: node.retry.before_retry });
     }
     if (node.approval?.on_reject) {
-      steps.push({ step: `${node.id}.on_reject`, action: node.approval.on_reject });
+      steps.push({ step: `${nodeId}.on_reject`, nodeId, action: node.approval.on_reject });
     }
   }
   return steps;
@@ -77,7 +87,7 @@ export async function resolvePromptFiles(
   const texts = new Map<string, string | null>();
   const resolved = new Map<SpawnAgent, string>();
 
-  for (const { step, action } of agentSteps(parsed)) {
+  for (const { step, action } of listAgentSteps(parsed)) {
     if (action.prompt_file === undefined) continue;
     const normalized = normalizePromptPath(action.prompt_file);
     if ('error' in normalized) {

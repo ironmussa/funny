@@ -65,6 +65,7 @@ import {
 } from './factory-action-provider.js';
 import {
   isMergeLane,
+  flowReadsOf,
   loadFactoryFlow,
   type FactoryFlow,
   type FactoryFlowError,
@@ -327,13 +328,14 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const loadFlow =
     deps.loadFlow ??
     ((job: FactoryRunJob) =>
-      loadFactoryFlow(flowOf(job), {
-        readDefaultBranchFile: (path) =>
-          deps.github.readDefaultBranchFile(
-            { repo: job.repo, ownerId: job.factory.userId, projectId: job.factory.projectId },
-            path,
-          ),
-      }));
+      loadFactoryFlow(
+        flowOf(job),
+        flowReadsOf(deps.github, {
+          repo: job.repo,
+          ownerId: job.factory.userId,
+          projectId: job.factory.projectId,
+        }),
+      ));
 
   /** A run whose flow could not be loaded: dropped when it never ran, failed when invalid. */
   async function flowUnavailable(job: FactoryRunJob, error: FactoryFlowError): Promise<void> {

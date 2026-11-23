@@ -8,10 +8,10 @@
 
 ## 2. Factory option resolution and validation
 
-- [ ] 2.1 Add `factory-step-options.ts` with `resolveStepOptions` (override → step → `defaults` → factory defaults, every field explicit) and unit tests covering precedence and no leak between steps
-- [ ] 2.2 Add `validateFactoryFlow` in `factory-flow.ts` (allowed fields, `autoEdit`/`plan` only, tool lists only on tool-policy providers, `thread: new` ⇒ `plan` and not first, provider/model validity, collected problems with step + field); verify with tests for every spec refusal scenario and that the current built-ins load
-- [ ] 2.3 Add the tool-policy provider table with a test that fails if `claude` / `pi` stop reading `disallowedTools`
-- [ ] 2.4 Read the default branch head commit once in `loadFactoryFlow`, read flow and prompt files at that ref, return `{ source, commit }`; verify with `factory-flow` tests using a fake contents reader (PR-branch edits ignored, missing prompt file refused)
+- [x] 2.1 Add `factory-step-options.ts` with `resolveStepOptions` (override → step → `defaults` → factory defaults, every field explicit) and unit tests covering precedence and no leak between steps
+- [x] 2.2 Add `validateFactoryFlow` in `factory-flow.ts` (allowed fields, `autoEdit`/`plan` only, tool lists only on tool-policy providers, `thread: new` ⇒ `plan` and not first, provider/model validity, collected problems with step + field); verify with tests for every spec refusal scenario and that the current built-ins load
+- [x] 2.3 Add the tool-policy provider table with a test that fails if `claude` / `pi` stop reading `disallowedTools`
+- [x] 2.4 Read the default branch head commit once in `loadFactoryFlow`, read flow and prompt files at that ref, return `{ source, commit }`; verify with `factory-flow` tests using a fake contents reader (PR-branch edits ignored, missing prompt file refused)
 
 ## 3. Applying options in runs
 

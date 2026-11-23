@@ -56,6 +56,25 @@ export function labelNames(labels: Array<string | { name?: string }> | undefined
 }
 
 export function createFactoryRepoReads(repo: string, github: RepoGithub) {
+  /** `path` as of `ref` (a commit of the default branch), or null when absent there. */
+  const readFileAt = (path: string, ref: string): ResultAsync<string | null, GithubCallError> =>
+    github
+      .json<{ content?: string; encoding?: string }>(
+        repo,
+        'GET',
+        `/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+      )
+      .map((file) =>
+        file.encoding === 'base64' && file.content
+          ? Buffer.from(file.content, 'base64').toString('utf8')
+          : null,
+      )
+      .orElse((error) =>
+        error.status === 404
+          ? okAsync<string | null, GithubCallError>(null)
+          : errAsync<string | null, GithubCallError>(error),
+      );
+
   return {
     getIssue(issueNumber: number): ResultAsync<RepoIssue, GithubCallError> {
       return github
@@ -192,30 +211,34 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
     },
 
     /**
+     * The default branch and the commit it is at now. A flow and its prompt
+     * files are read at that commit, so they come from one version of the
+     * branch even while it moves.
+     */
+    defaultBranchHead(): ResultAsync<{ branch: string; sha: string }, GithubCallError> {
+      return github
+        .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
+        .andThen((meta) =>
+          github
+            .json<{ sha: string }>(
+              repo,
+              'GET',
+              `/repos/${repo}/commits/${encodeURIComponent(meta.default_branch)}`,
+            )
+            .map((commit) => ({ branch: meta.default_branch, sha: commit.sha })),
+        );
+    },
+
+    readFileAt,
+
+    /**
      * `path` as of the default branch, or null when absent there. The ref is
      * always the default branch's, never the run's or a pull request's.
      */
     readDefaultBranchFile(path: string): ResultAsync<string | null, GithubCallError> {
       return github
         .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
-        .andThen((meta) =>
-          github
-            .json<{ content?: string; encoding?: string }>(
-              repo,
-              'GET',
-              `/repos/${repo}/contents/${path}?ref=${encodeURIComponent(meta.default_branch)}`,
-            )
-            .map((file) =>
-              file.encoding === 'base64' && file.content
-                ? Buffer.from(file.content, 'base64').toString('utf8')
-                : null,
-            )
-            .orElse((error) =>
-              error.status === 404
-                ? okAsync<string | null, GithubCallError>(null)
-                : errAsync<string | null, GithubCallError>(error),
-            ),
-        );
+        .andThen((meta) => readFileAt(path, meta.default_branch));
     },
 
     /**

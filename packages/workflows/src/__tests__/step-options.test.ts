@@ -46,6 +46,8 @@ function recorder() {
     notify: async () => ok,
     setStatus: async () => ok,
     setStage: async () => ok,
+    waitCi: async () => ok,
+    merge: async () => ok,
     requestApproval: async () => ({ decision: 'approve' }),
   };
   return { provider, spawns };

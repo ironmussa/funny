@@ -49,6 +49,8 @@ export interface QueueMember extends FactoryBatchMember {
   repo: string;
   baseBranch: string;
   method: MergeMethod;
+  /** The paths its head changes, when known (batches prefer members with disjoint ones, D11). */
+  paths?: string[];
 }
 
 /** What happened to one member. */

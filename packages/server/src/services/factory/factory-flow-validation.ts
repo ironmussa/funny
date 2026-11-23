@@ -217,6 +217,42 @@ function commandProblems(parsed: ParsedWorkflow): FactoryFlowProblem[] {
   });
 }
 
+/** The nodes that can produce a change again: a command, or an agent step. */
+const producesChange = (node: ParsedWorkflow['nodes'][number]) =>
+  !!(node.run_command || node.bash || node.spawn_agent);
+
+/**
+ * A `merge` that regenerates its change (`regenerate: <node>`, openspec
+ * factory-integration D9): the node must exist and produce the change, and the
+ * merge loop must go back to it, so a conflict re-runs it on the new base.
+ */
+function regenerateProblems(parsed: ParsedWorkflow): FactoryFlowProblem[] {
+  return parsed.nodes.flatMap((node) => {
+    const target = node.merge?.regenerate;
+    if (!target) return [];
+    const produced = parsed.nodes.find((other) => other.id === target);
+    if (!produced || !producesChange(produced)) {
+      return [
+        {
+          step: node.id,
+          field: 'regenerate',
+          message: `regenerate names "${target}", which is not a run_command, bash or agent step of this flow`,
+        },
+      ];
+    }
+    if (node.loop?.back_to !== target) {
+      return [
+        {
+          step: node.id,
+          field: 'regenerate',
+          message: `the merge loop must go back to "${target}" (loop.back_to), so a conflict re-runs it on the new base`,
+        },
+      ];
+    }
+    return [];
+  });
+}
+
 /**
  * Every reason the flow cannot run as a factory flow, given the factory's step
  * overrides (which may change a step's provider) and the project's defaults.
@@ -232,6 +268,7 @@ export function validateFactoryFlow(
     ...defaultsProblems(parsed),
     ...steps.flatMap((step) => stepProblems(step, parsed, firstNode, context)),
     ...commandProblems(parsed),
+    ...regenerateProblems(parsed),
   ];
 }
 

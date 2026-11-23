@@ -233,6 +233,8 @@ export interface FactoryActionProviderDeps {
    * Absent: every merge takes the serial path.
    */
   queue?: FactoryQueuePort;
+  /** The pull request's size in changed lines, once read: the merge queue's order (D11). */
+  onChangeSize?(lines: number): void;
   /** `.funny/integrate.yaml` as the flow was loaded with it: what `integrate` regenerates and checks. */
   integrateConfig?: IntegrateConfig;
   /**
@@ -389,6 +391,9 @@ const noCheckpoint: Checkpoint = async () => {};
 /** Allowance for the runner's clock when comparing its timestamps with the server's. */
 const CLOCK_SLACK_MS = 60 * 1000;
 
+/** How many changed paths a risk record keeps (the merge queue compares them, D11). */
+const MAX_RECORDED_PATHS = 300;
+
 /** A factory step's timeout when the flow sets none: 10 minutes. */
 const DEFAULT_STEP_TIMEOUT_MS = 10 * 60_000;
 
@@ -483,6 +488,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   let prUrl = deps.prUrl;
   let pendingLaunch = deps.launchStartedAt;
   let metrics: FactoryRunMetrics = { ...EMPTY_FACTORY_RUN_METRICS, ...deps.metrics };
+  /** The node a regenerable merge (D9) sends a conflict back to, once `merge` named one. */
+  let regenerating: string | undefined;
 
   /** Add to the run's counters and store them with the run. */
   async function count(next: FactoryRunMetrics | null, attributes: Record<string, string>) {
@@ -862,6 +869,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           level: 'high',
           reasons: [`the change could not be read: ${files.error.message}`],
         };
+    if (files.isOk()) {
+      risk.changedLines = files.value.files.reduce((n, f) => n + f.additions + f.deletions, 0);
+      risk.paths = files.value.files.slice(0, MAX_RECORDED_PATHS).map((f) => f.path);
+      deps.onChangeSize?.(risk.changedLines);
+    }
     classified = { sha, findings, risk };
     await deps.record({ risk });
     metric('factory.integration_event', 1, {
@@ -1162,7 +1174,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
    * Null when the merge may go on.
    */
   async function mergeHeld(opts: MergeOpts, sha: string): Promise<ActionResult | null> {
-    const rewritten = await historyRewritten(sha);
+    // A regenerated change (D9) is produced again on each new base: its
+    // history may be rewritten, and its review gate still applies.
+    const rewritten = opts.regenerate ? null : await historyRewritten(sha);
     if (rewritten) return rewritten;
     if (opts.requireReview !== false) {
       const verdict = reviewer.verdicts().find((review) => review.sha === sha);
@@ -1210,8 +1224,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
   /** `merge` sent the change back to the implementing agent: ok, so the flow's loop can act. */
   async function sentBack(why: 'conflict' | 'checks', feedback: string): Promise<ActionResult> {
+    // A regenerable change (D9) goes back to the node that produces it: no agent round.
+    const regenerate = why === 'conflict' ? regenerating : undefined;
     // A conflict goes to the flow's integrate step first, which may settle it alone.
-    if (why === 'checks' || !deps.flowIntegrates) {
+    if (!regenerate && (why === 'checks' || !deps.flowIntegrates)) {
       const parked = await mergeRoundToImplementer();
       if (parked) return parked;
     }
@@ -1219,7 +1235,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
       { event: `merge_sent_back_${why}` },
     );
-    return { ok: true, output: 'sent_back', metadata: { outcome: 'sent_back', why, feedback } };
+    const metadata: Record<string, unknown> = { outcome: 'sent_back', why, feedback };
+    if (regenerate) metadata.regenerate = regenerate;
+    return { ok: true, output: 'sent_back', metadata };
   }
 
   /**
@@ -1281,6 +1299,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   async function asBatchLeader(opts: MergeOpts, baseBranch: string): Promise<ActionResult | null> {
     const batch = opts.execution?.batch;
     if (!batch || batch.members.length === 0 || !deps.queue) return null;
+    // A regenerable change is merged alone (D11): the others wait for the next batch.
+    if (opts.regenerate) {
+      for (const member of batch.members) batch.settle(member.holder, { status: 'requeued' });
+      return null;
+    }
     const self = await deps.queue.memberOf(scope.runId, null, { repo: scope.repo, baseBranch });
     if (!self) {
       for (const member of batch.members) batch.settle(member.holder, { status: 'requeued' });
@@ -1311,6 +1334,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
   async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
     await enterStage('merge');
+    if (opts.regenerate && regenerating !== opts.regenerate) {
+      regenerating = opts.regenerate;
+      // The merge queue reads it: such a run is merged alone (D11).
+      await deps.record({ regenerateNode: opts.regenerate });
+    }
     const pr = pullRequest();
     if (!pr) return ci.merge(opts);
     const head = await deps.github.pullRequests.pullHead(pr);

@@ -581,6 +581,10 @@ export const factoryRiskSchema = z.object({
   level: z.enum(['low', 'high']),
   /** Why it is high, in the order found; empty for low. */
   reasons: z.array(z.string()),
+  /** Lines the change adds and removes (the merge queue's order, openspec factory-integration D11). */
+  changedLines: z.number().int().nonnegative().optional(),
+  /** The paths it changes, at most 300 (batches prefer members with disjoint paths, D11). */
+  paths: z.array(z.string()).max(300).optional(),
 });
 export type FactoryRisk = z.infer<typeof factoryRiskSchema>;
 

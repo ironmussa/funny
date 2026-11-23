@@ -40,6 +40,12 @@ export interface QueueGates {
   requireRegressionProof: boolean;
 }
 
+/** The changed paths a run recorded for commit `sha`, as a member's `paths` field. */
+function pathsAt(run: FactoryRunView, sha: string): Pick<QueueMember, 'paths'> {
+  const paths = run.risk?.headSha === sha ? run.risk.paths : undefined;
+  return paths ? { paths } : {};
+}
+
 /** Base branches whose up-to-date rule was learned from a refused merge (D3): batches of one there. */
 const strictBranches = new Set<string>();
 
@@ -85,7 +91,8 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
     ): Promise<QueueMember | null> {
       const run = await deps.run(runId);
       const prNumber = prNumberOf(run?.prUrl ?? null);
-      if (!run || prNumber === null) return null;
+      // A regenerable change (D9) is merged alone: it leads its own batch of one.
+      if (!run || prNumber === null || run.regenerateNode) return null;
       const factory = await deps.factory(run.factoryId);
       if (!factory) return null;
       const owner = { userId: factory.userId, projectId: factory.projectId };
@@ -101,6 +108,8 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
         repo: at.repo,
         baseBranch: at.baseBranch,
         method: 'squash',
+        // The paths of the head it is tested at, when its last classification was of it.
+        ...pathsAt(run, pr.value.headSha),
       };
     },
 

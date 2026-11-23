@@ -261,6 +261,8 @@ export interface FactoryRunView {
   flowSource: FactoryFlowSource | null;
   /** The default-branch commit a repository flow was read at; null for a built-in. */
   flowCommit: string | null;
+  /** The node its `merge` regenerates the change with (D9): such a run is merged alone. */
+  regenerateNode: string | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
 }
@@ -311,6 +313,7 @@ const queueAndFlowOf = (row: Row) => ({
   waitReason: parseWaitReason(row.waitReason ?? null),
   flowSource: flowSourceOf(row.flowSource ?? null),
   flowCommit: row.flowCommit ?? null,
+  regenerateNode: row.regenerateNode ?? null,
 });
 
 /** The columns stored as JSON, parsed (a value that no longer parses reads as empty). */
@@ -439,6 +442,8 @@ export interface UpdateRunInput {
   flowCommit?: string | null;
   /** Every step's options so far (the run appends and writes the whole list). */
   stepOptions?: FactoryStepOptionsRecord[];
+  /** The node its `merge` regenerates the change with (D9), or null. */
+  regenerateNode?: string | null;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
@@ -449,6 +454,7 @@ const PLAIN_FIELDS = [
   'failureReason',
   'flowSource',
   'flowCommit',
+  'regenerateNode',
 ] as const;
 const JSON_FIELDS = [
   'threadIds',
@@ -632,6 +638,7 @@ function queueOperations(newId: () => string) {
             flowSource: null,
             flowCommit: null,
             stepOptions: null,
+            regenerateNode: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -827,6 +834,7 @@ export function createFactoryRunsRepository(
       flowSource: null,
       flowCommit: null,
       stepOptions: null,
+      regenerateNode: null,
     };
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
       toView(row),

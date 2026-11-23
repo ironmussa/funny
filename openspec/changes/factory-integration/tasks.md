@@ -35,7 +35,7 @@ Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its ta
 - [x] 3.4 Add the `integrate` node to the built-in flow as the start of both loop regions (`back_to: integrate`), skipped when the branch contains the base, with `address` skipped when no gate left feedback; verify with a flow-run test where a resolvable conflict never reaches the implementer and a real one does
 - [x] 3.4c Loop budget: merge loop `max_iterations` 10 in the built-in, and the factory parks a run after 2 rounds that reached the implementer; verify with flow-run tests for four resolved rounds (not parked) and three agent rounds (parked)
 - [x] 3.4b Review freshness after `integrate`: a clean merge of the base keeps the review; a resolved conflict sends the run through the review gate again with the reviewer limited to the resolved hunks and regenerated paths; verify with flow-run tests for both cases
-- [ ] 3.5 `regenerate: <node>` on `merge`: a conflict re-runs that node on the new base through the merge loop; verify with a flow-run test for a codemod run
+- [x] 3.5 `regenerate: <node>` on `merge`: a conflict re-runs that node on the new base through the merge loop; verify with a flow-run test for a codemod run
 
 ## 4. Merge queue
 
@@ -44,7 +44,7 @@ Prerequisites: `workflow-dag-engine` groups 1–3 including batch groups (its ta
 - [x] 4.3 Red batch: one more test of the same tree first, on a tree-identical commit (green → flake, merge); then bisection in parallel halves from the same base, splitting every red half, culprits to `address`, the rest settled as requeued and tested again as a new batch before merging, no red half → batches of one; verify with tests for a culprit at each position, two culprits, a flake, an interaction failure and a batch of one
 - [x] 4.4 Delegate to GitHub's merge queue when the rules require it, read per batch; verify with a test that switches when the rule appears
 - [x] 4.4b Branches that require being up to date (`strict` checks): batches of one on them, never a bypass; when the rule cannot be read, learn it from the refused second merge and remember it per branch; verify with a provider-response test and queue tests for both paths
-- [ ] 4.5 Queue order (blockers first, much smaller changes first, disjoint batches, regenerable runs alone) through the engine's `priority` and batch selection; verify with ordering tests
+- [x] 4.5 Queue order (blockers first, much smaller changes first, disjoint batches, regenerable runs alone) through the engine's `priority` and batch selection; verify with ordering tests
 - [x] 4.6 Factory setting for batch size and wait (defaults 5 and 60 s) next to the stage limits; verify with tRPC and component tests
 
 ## 5. Early integration and stacking

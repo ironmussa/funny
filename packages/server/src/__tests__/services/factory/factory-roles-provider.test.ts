@@ -92,7 +92,10 @@ describe('risk class of the pull request head', () => {
         okAsync({ files: [changed('src/sum.ts', ['+return a + b;'])], truncated: false }),
     });
     await provider.waitCi({});
-    expect(risks).toEqual([{ headSha: 'sha-1', level: 'low', reasons: [] }]);
+    // With its size and paths, which order the merge queue (openspec factory-integration D11).
+    expect(risks).toEqual([
+      { headSha: 'sha-1', level: 'low', reasons: [], changedLines: 1, paths: ['src/sum.ts'] },
+    ]);
   });
 
   test('a CI fix that skips a test makes the run high risk', async () => {
@@ -109,6 +112,8 @@ describe('risk class of the pull request head', () => {
         headSha: 'sha-1',
         level: 'high',
         reasons: ["skip-marker in src/sum.test.ts: test.skip('adds', () => {});"],
+        changedLines: 1,
+        paths: ['src/sum.test.ts'],
       },
     ]);
   });

@@ -419,7 +419,8 @@ export function createTestDb() {
       triage TEXT,
       flow_source TEXT,
       flow_commit TEXT,
-      step_options TEXT
+      step_options TEXT,
+      regenerate_node TEXT
     )
   `);
   testDb.run(sql`

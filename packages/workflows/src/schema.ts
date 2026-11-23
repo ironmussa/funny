@@ -187,6 +187,13 @@ const mergeAction = z
      * for the head commit (default true: an unreviewed commit is not merged).
      */
     require_review: z.boolean().optional(),
+    /**
+     * A change produced by a script (a codemod, `--fix`): the node that
+     * produces it. A conflict at merge time re-runs that node on the new base
+     * (the merge loop goes back to it) instead of resolving the conflict, and
+     * the run is merged alone, never in a batch.
+     */
+    regenerate: z.string().min(1).optional(),
   })
   .strict();
 

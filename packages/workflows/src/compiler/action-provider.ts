@@ -215,6 +215,11 @@ export interface MergeOpts {
    * the head it merges (the step's `require_review`, default true).
    */
   requireReview?: boolean;
+  /**
+   * The node that produces the change (`regenerate`): a conflict goes back to
+   * it, and the run is merged alone.
+   */
+  regenerate?: string;
 }
 
 /** A `triage` step: whether the run's issue can be worked unattended, and its contract. */

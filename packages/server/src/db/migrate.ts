@@ -2339,6 +2339,14 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'batch_wait_ms', 'INTEGER');
     },
   },
+  {
+    // Change factory-integration, D9: the node a run's `merge` regenerates its
+    // change with (`merge.regenerate`), or null. Such a run is merged alone.
+    name: '116_factory_runs_regenerate_node',
+    async up() {
+      await ctx().addColumn('factory_runs', 'regenerate_node', 'TEXT');
+    },
+  },
 ];
 
 /**

@@ -382,6 +382,8 @@ export const factoryRuns = pgTable('factory_runs', {
   flowCommit: text('flow_commit'),
   /** JSON array of the options each agent step ran with (`FactoryStepOptionsRecord[]`). */
   stepOptions: text('step_options'),
+  /** The node its `merge` regenerates the change with (`merge.regenerate`), or null: merged alone. */
+  regenerateNode: text('regenerate_node'),
 });
 
 /**

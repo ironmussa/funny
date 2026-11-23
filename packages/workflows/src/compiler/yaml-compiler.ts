@@ -361,6 +361,7 @@ function merge(
     execution: ctx.execution,
     requireRegressionProof: opts.require_regression_proof ?? true,
     requireReview: opts.require_review ?? true,
+    regenerate: opts.regenerate,
     regressionProof: proofNode
       ? regressionProofOpts(interpolateObject(proofNode.regression_proof!, scope))
       : undefined,

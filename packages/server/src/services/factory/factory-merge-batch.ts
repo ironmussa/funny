@@ -55,6 +55,23 @@ async function settleMember(
   batch.settle(holder, { status: 'failed', error: `Not merged: ${verdict.reason}.` });
 }
 
+/**
+ * The members whose changed paths do not overlap the batch so far, in queue
+ * order (D11): two changes to the same files are likely to conflict or break
+ * each other, so the later one waits for the next batch. A member whose paths
+ * are not known is kept.
+ */
+export function preferDisjoint(self: QueueMember, others: QueueMember[]): QueueMember[] {
+  const taken = new Set(self.paths ?? []);
+  const kept: QueueMember[] = [];
+  for (const member of others) {
+    if (member.paths?.some((path) => taken.has(path))) continue;
+    for (const path of member.paths ?? []) taken.add(path);
+    kept.push(member);
+  }
+  return kept;
+}
+
 export async function mergeAsBatch(input: {
   queue: FactoryQueuePort;
   batch: Batch;
@@ -77,11 +94,15 @@ export async function mergeAsBatch(input: {
     if (member) others.push(member);
     else batch.settle(waiting.holder, { status: 'requeued' });
   }
-  if (others.length === 0) return null;
+  const disjoint = preferDisjoint(self, others);
+  for (const member of others) {
+    if (!disjoint.includes(member)) batch.settle(member.holder!, { status: 'requeued' });
+  }
+  if (disjoint.length === 0) return null;
   const left = (member: QueueMember) =>
     batch.members.find((m) => m.holder === member.holder)?.state === 'cancelled';
-  const outcome = await queue.lead([self, ...others], input.gates, left);
-  for (const member of others) {
+  const outcome = await queue.lead([self, ...disjoint], input.gates, left);
+  for (const member of disjoint) {
     await settleMember(queue, batch, member, outcome.verdicts.get(member.runId));
   }
   return (

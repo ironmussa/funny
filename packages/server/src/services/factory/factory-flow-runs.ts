@@ -326,12 +326,38 @@ export function admissionPriority(run: Pick<FactoryRunView, 'admittedAt' | 'star
   return Math.max(0, Math.floor((admitted - PRIORITY_EPOCH_MS) / 1000));
 }
 
+/** A bucket's weight in a merge priority: above any admission order (seconds since 2026). */
+const MERGE_BUCKET = 10_000_000_000;
+
+/**
+ * A run's place among the waiters of the merge group (openspec
+ * factory-integration D11): a blocker of other runs first; then by size in
+ * powers of four of its changed lines, so a much smaller change does not wait
+ * behind a large one; within a size, admission order.
+ */
+export function mergePriority(
+  admission: number,
+  opts: { blocker: boolean; lines?: number },
+): number {
+  if (opts.blocker) return admission;
+  const bucket = opts.lines && opts.lines > 1 ? Math.floor(Math.log(opts.lines) / Math.log(4)) : 0;
+  return (1 + bucket) * MERGE_BUCKET + admission;
+}
+
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
   const waitThread = deps.waitThread ?? createThreadWaits();
   const journalRows = createWorkflowJournalRepository();
   /** Each run's place in a group's queue, by its id (the holder is `<runId>/<node>/<visit>`). */
   const priorities = new Map<string, number>();
+  /** What orders a run in the merge group: whether it blocks other runs, and its size. */
+  const mergeOrder = new Map<string, { blocker: boolean; lines?: number }>();
+  const priorityOf = (holder: string): number => {
+    const [runId = '', node] = holder.split('/');
+    const admission = priorities.get(runId) ?? 0;
+    const order = mergeOrder.get(runId);
+    return node === 'merge' && order ? mergePriority(admission, order) : admission;
+  };
   /** Each factory's own stage limits, by its id: what replaces a flow's declared limit. */
   const stageLimits = new Map<string, Record<string, number>>();
   /** The factory's limit for a stage group (`<node>:<factoryId>`), when it set one. */
@@ -342,7 +368,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const { gate, stop: stopGate } = flowGate(deps.gate, {
     // The merge lane is one at a time, whatever a flow or a setting says.
     resolveLimit: (group, declared) => (isMergeLane(group) ? 1 : (stageLimitOf(group) ?? declared)),
-    priority: (holder) => priorities.get(holder.split('/')[0] ?? '') ?? 0,
+    priority: priorityOf,
   });
 
   const loadFlow =
@@ -490,6 +516,13 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     });
   }
 
+  /** Whether another queued run of the factory waits for this run's issue (it is a blocker). */
+  async function blocksOthers(job: FactoryRunJob): Promise<boolean> {
+    const queued = await deps.runs.queue(job.factory.id);
+    if (queued.isErr()) return false;
+    return queued.value.some((run) => run.waitReason?.blockers.includes(job.run.issueNumber));
+  }
+
   /**
    * The merge queue for a run's `merge` step (openspec factory-integration
    * D2): absent where the GitHub side cannot build per-enabler providers.
@@ -533,6 +566,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     }
     logFlowWarnings(job, flow.value);
     priorities.set(job.run.id, admissionPriority(job.run));
+    mergeOrder.set(job.run.id, { blocker: await blocksOthers(job) });
     stageLimits.set(job.factory.id, job.factory.stageLimits);
     const trace: FlowTrace = {
       agentsRan: job.run.threadIds.length > 0,
@@ -621,6 +655,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         : undefined,
       github: deps.github,
       queue: queueFor(controller.signal),
+      onChangeSize: (lines) => {
+        const order = mergeOrder.get(job.run.id) ?? { blocker: false };
+        mergeOrder.set(job.run.id, { ...order, lines });
+      },
       defaultBranch: () =>
         deps.github.defaultBranch({
           repo: scope.repo,
@@ -792,6 +830,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         .finally(() => {
           if (active.get(job.run.id) === controller) active.delete(job.run.id);
           priorities.delete(job.run.id);
+          mergeOrder.delete(job.run.id);
         });
       return started;
     },

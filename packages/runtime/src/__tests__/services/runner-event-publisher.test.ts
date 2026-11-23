@@ -4,6 +4,7 @@ import type { WSEvent } from '@funny/shared';
 import { EventDurability } from '@funny/shared/runner-v2/events';
 
 import { GrpcEventReplayStore } from '../../services/grpc-event-replay-store.js';
+import type { RunnerGrpcWireMessage } from '../../services/grpc-runner-client.js';
 import {
   RunnerEventPublisher,
   runnerEventDurability,
@@ -123,6 +124,41 @@ describe('RunnerEventPublisher', () => {
       expect(send).toHaveBeenCalledTimes(130);
       expect(new Set(sentScopes(send).map((scope) => scope.executionId)).size).toBe(130);
       expect(store.pendingScopes(200)).toHaveLength(30);
+    });
+
+    test('sends every page of an execution with more stored events than one page', () => {
+      const send = vi.fn((_name: 'events', _message: RunnerGrpcWireMessage) => true);
+      const store = new GrpcEventReplayStore(':memory:');
+      const long = { threadId: 'thread-long', executionId: 'execution-long' };
+      const short = { threadId: 'thread-short', executionId: 'execution-short' };
+      for (let index = 0; index < 250; index += 1) {
+        store.append({ scope: long, eventType: 'agent:chunk', data: { index }, durability: 2 });
+      }
+      store.append({ scope: short, eventType: 'agent:chunk', data: {}, durability: 2 });
+      const publisher = new RunnerEventPublisher({ send }, store);
+      const sequencesSent = () =>
+        send.mock.calls
+          .filter(([, message]) => message.scope.executionId === long.executionId)
+          .map(([, message]) => Number(message.sequence));
+      const accept = (sequence: number) =>
+        publisher.receiveReceipt({
+          scope: long,
+          accepted: { highestContiguousSequence: String(sequence) },
+        });
+
+      publisher.activated();
+      expect(sequencesSent()).toHaveLength(100);
+
+      // The page is still in flight: nothing more is sent until its last receipt.
+      for (let sequence = 1; sequence < 100; sequence += 1) accept(sequence);
+      expect(sequencesSent()).toHaveLength(100);
+      accept(100);
+      expect(sequencesSent()).toHaveLength(200);
+      for (let sequence = 101; sequence <= 200; sequence += 1) accept(sequence);
+      for (let sequence = 201; sequence <= 250; sequence += 1) accept(sequence);
+
+      expect(sequencesSent()).toEqual(Array.from({ length: 250 }, (_, index) => index + 1));
+      expect(store.pendingScopes().map((scope) => scope.executionId)).toEqual([short.executionId]);
     });
 
     test('an execution is replayed once per session, and again after a reconnect', () => {

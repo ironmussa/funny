@@ -4,7 +4,11 @@ import { FailureCode } from '@funny/shared/runner-v2/common';
 import { EventDurability } from '@funny/shared/runner-v2/events';
 import { nanoid } from 'nanoid';
 
-import { GrpcEventReplayStore, type GrpcReplayEvent } from './grpc-event-replay-store.js';
+import {
+  GrpcEventReplayStore,
+  type GrpcEventScope,
+  type GrpcReplayEvent,
+} from './grpc-event-replay-store.js';
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 
 export interface RunnerEventSender {
@@ -26,8 +30,11 @@ export class RunnerEventPublisher {
   private readonly executions = new Map<string, string>();
   /** Executions replayed in this session, so each is sent once per session. */
   private readonly replayed = new Set<string>();
-  /** Replayed executions of the current batch the server has not answered. */
-  private readonly awaiting = new Set<string>();
+  /**
+   * Replayed executions of the current batch the server has not finished
+   * answering, with the last sequence sent for each.
+   */
+  private readonly awaiting = new Map<string, bigint>();
   /** Whether the server enabled `RUNNER_CAPABILITY_USER_EVENTS` this session. */
   private userEventsEnabled = false;
 
@@ -94,21 +101,33 @@ export class RunnerEventPublisher {
       .slice(0, REPLAY_BATCH_SCOPES);
     for (const scope of batch) {
       this.replayed.add(scope.executionId);
-      this.awaiting.add(scope.executionId);
-      const page = this.store.replay(scope, 0n);
-      if (!page.historyAvailable) {
-        this.sender.send('events', {
-          scope,
-          sequence: String(page.earliestAvailableSequence),
-          gap: {
-            requestedSequence: '1',
-            earliestAvailableSequence: String(page.earliestAvailableSequence),
-            reason: 'runner replay history was pruned',
-          },
-        });
-      }
-      for (const event of page.events) this.send(event);
+      this.awaiting.set(scope.executionId, 0n);
+      this.replayPage(scope, 0n);
     }
+  }
+
+  /**
+   * Send the stored events of one execution after `afterSequence`, one page at
+   * a time. Returns false when there is none left.
+   */
+  private replayPage(scope: GrpcEventScope, afterSequence: bigint): boolean {
+    const page = this.store.replay(scope, afterSequence);
+    if (!page.historyAvailable) {
+      this.sender.send('events', {
+        scope,
+        sequence: String(page.earliestAvailableSequence),
+        gap: {
+          requestedSequence: '1',
+          earliestAvailableSequence: String(page.earliestAvailableSequence),
+          reason: 'runner replay history was pruned',
+        },
+      });
+    }
+    for (const event of page.events) this.send(event);
+    const last = page.events.at(-1);
+    if (!last) return false;
+    this.awaiting.set(scope.executionId, last.sequence);
+    return true;
   }
 
   receiveReceipt(message: RunnerGrpcWireMessage): void {
@@ -118,7 +137,12 @@ export class RunnerEventPublisher {
       executionId: String(message.scope.executionId),
     };
     if (message.accepted) {
-      this.store.acknowledge(scope, BigInt(message.accepted.highestContiguousSequence));
+      const highest = BigInt(message.accepted.highestContiguousSequence);
+      this.store.acknowledge(scope, highest);
+      // An execution being replayed has more stored events than one page: wait
+      // for the page in flight, then send the next one in the same session.
+      const lastSent = this.awaiting.get(scope.executionId);
+      if (lastSent !== undefined && (highest < lastSent || this.replayPage(scope, highest))) return;
     } else if (message.failure) {
       // A failure the server may lift (session not active yet) keeps the events.
       if (message.failure.retryable === true) return;

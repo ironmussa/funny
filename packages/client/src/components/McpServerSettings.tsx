@@ -75,8 +75,8 @@ function ClaudeSettingsEditorButton({ className }: { className?: string }) {
     <Button
       type="button"
       variant="outline"
-      size="sm"
-      className={cn('h-6 px-2 text-xs', className)}
+      size="xs"
+      className={cn('h-6', className)}
       data-testid="mcp-edit-claude-settings"
       onClick={() => void openClaudeSettingsInEditor()}
     >
@@ -290,10 +290,10 @@ function InstalledServerCard({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
-              className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 h-6 px-2 text-xs"
+              className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 h-6"
               data-testid={`mcp-oauth-${server.name}`}
             >
               {authenticating ? (
@@ -305,10 +305,10 @@ function InstalledServerCard({
             </Button>
             <Button
               variant={showTokenInput ? 'secondary' : 'outline'}
-              size="sm"
+              size="xs"
               onClick={() => setShowTokenInput(!showTokenInput)}
               disabled={authenticating || settingToken}
-              className="h-6 px-2 text-xs"
+              className="h-6"
               data-testid={`mcp-manual-token-${server.name}`}
             >
               <KeyRound className="icon-xs mr-1" />
@@ -319,16 +319,17 @@ function InstalledServerCard({
           {showTokenInput && (
             <div className="flex items-center gap-2">
               <Input
+                size="xs"
                 type="password"
                 value={tokenValue}
                 onChange={(e) => setTokenValue(e.target.value)}
                 placeholder={t('mcp.tokenPlaceholder')}
-                className="h-7 flex-1 px-2 text-xs"
+                className="flex-1"
                 data-testid={`mcp-token-input-${server.name}`}
               />
               <Button
                 variant="outline"
-                size="sm"
+                size="xs"
                 onClick={() => {
                   if (tokenValue && onSetToken) {
                     onSetToken(tokenValue);
@@ -337,7 +338,6 @@ function InstalledServerCard({
                   }
                 }}
                 disabled={!tokenValue || settingToken}
-                className="h-7 px-2 text-xs"
                 data-testid={`mcp-token-save-${server.name}`}
               >
                 {settingToken ? (

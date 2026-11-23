@@ -374,19 +374,20 @@ export function SkillsSettings() {
             </label>
             <div className="flex gap-2">
               <Input
+                size="xs"
                 id="custom-skill-id"
                 type="text"
                 value={customId}
                 onChange={(e) => setCustomId(e.target.value)}
                 placeholder="vercel-labs/agent-skills@nextjs-best-practices"
-                className="h-8 flex-1 px-2 font-mono text-xs"
+                className="h-8 flex-1 font-mono"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
               />
               <Button
-                size="sm"
+                size="xs"
                 onClick={handleAddCustom}
                 disabled={!customId.trim() || addingCustom}
-                className="h-8 text-xs"
+                className="h-8"
               >
                 {addingCustom ? (
                   <Loader2 className="icon-xs mr-1 animate-spin" />

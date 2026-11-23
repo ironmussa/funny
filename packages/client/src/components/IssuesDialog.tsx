@@ -99,9 +99,8 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
         <div className="flex gap-1">
           <Button
             variant={state === 'open' ? 'default' : 'ghost'}
-            size="sm"
+            size="xs"
             onClick={() => setState('open')}
-            className="h-7 text-xs"
             data-testid="issues-filter-open"
           >
             <CircleDot className="icon-xs text-status-success mr-1" />
@@ -109,9 +108,8 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
           </Button>
           <Button
             variant={state === 'closed' ? 'default' : 'ghost'}
-            size="sm"
+            size="xs"
             onClick={() => setState('closed')}
-            className="h-7 text-xs"
             data-testid="issues-filter-closed"
           >
             <CircleCheck className="icon-xs text-status-violet mr-1" />

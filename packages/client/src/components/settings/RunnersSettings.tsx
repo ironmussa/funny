@@ -109,15 +109,16 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
         </SelectContent>
       </Select>
       <Input
+        size="xs"
         value={localPath}
         onChange={(e) => setLocalPath(e.target.value)}
         placeholder="/home/user/my-project"
-        className="h-7 font-mono text-xs"
+        className="font-mono"
         data-testid={`runner-assign-localpath-${runnerId}`}
       />
       <Button
-        size="sm"
-        className="h-6 text-xs"
+        size="xs"
+        className="h-6"
         disabled={!projectId || !localPath.trim() || saving}
         onClick={handleAssign}
         data-testid={`runner-assign-submit-${runnerId}`}
@@ -460,11 +461,11 @@ export function RunnersSettings() {
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">My Runners</p>
           <Button
-            size="sm"
+            size="xs"
             variant="ghost"
             onClick={loadRunners}
             disabled={loadingRunners}
-            className="h-6 text-xs"
+            className="h-6"
             data-testid="runners-refresh"
           >
             <RefreshCw className={cn('mr-1 icon-xs', loadingRunners && 'animate-spin')} />

@@ -293,7 +293,8 @@ export function ProjectConfigSettings() {
                 ))}
                 <div className="flex items-center gap-1">
                   <Input
-                    className="h-6 w-32 font-mono text-xs"
+                    size="xs"
+                    className="h-6 w-32 font-mono"
                     placeholder={t('projectConfig.envVarPlaceholder')}
                     value={groupEnvVar}
                     onChange={(e) => setGroupEnvVar(e.target.value)}

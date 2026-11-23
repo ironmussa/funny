@@ -859,8 +859,7 @@ function McpServersSection({
       ) : (
         <Button
           variant="outline"
-          size="sm"
-          className="text-xs"
+          size="xs"
           onClick={() => setAdding(true)}
           data-testid="agent-template-mcp-add"
         >
@@ -927,11 +926,11 @@ function McpServerForm({
             Name
           </label>
           <Input
+            size="xs"
             id="agent-template-mcp-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="server-name"
-            className="h-7 text-xs"
             data-testid="agent-template-mcp-name"
           />
         </div>
@@ -963,11 +962,11 @@ function McpServerForm({
               Command
             </label>
             <Input
+              size="xs"
               id="agent-template-mcp-command"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
               placeholder="npx -y @modelcontextprotocol/server-..."
-              className="h-7 text-xs"
               data-testid="agent-template-mcp-command"
             />
           </div>
@@ -976,11 +975,11 @@ function McpServerForm({
               Args <span className="text-muted-foreground">(comma-separated)</span>
             </label>
             <Input
+              size="xs"
               id="agent-template-mcp-args"
               value={argsStr}
               onChange={(e) => setArgsStr(e.target.value)}
               placeholder="--port, 3000"
-              className="h-7 text-xs"
               data-testid="agent-template-mcp-args"
             />
           </div>
@@ -991,11 +990,11 @@ function McpServerForm({
             URL
           </label>
           <Input
+            size="xs"
             id="agent-template-mcp-url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://..."
-            className="h-7 text-xs"
             data-testid="agent-template-mcp-url"
           />
         </div>
@@ -1020,8 +1019,7 @@ function McpServerForm({
       <div className="flex gap-1">
         <Button
           variant="default"
-          size="sm"
-          className="text-xs"
+          size="xs"
           onClick={handleSave}
           disabled={!name.trim()}
           data-testid="agent-template-mcp-save"
@@ -1030,8 +1028,7 @@ function McpServerForm({
         </Button>
         <Button
           variant="ghost"
-          size="sm"
-          className="text-xs"
+          size="xs"
           onClick={onCancel}
           data-testid="agent-template-mcp-cancel"
         >
@@ -1088,30 +1085,31 @@ function VariablesSection({
             >
               <div className="flex-1 space-y-1">
                 <Input
+                  size="xs"
                   id={`agent-template-variable-name-${idx}`}
                   aria-label={`Variable ${idx + 1} name`}
                   value={v.name}
                   onChange={(e) => updateVariable(idx, 'name', e.target.value)}
                   placeholder="VARIABLE_NAME"
-                  className="h-7 font-mono text-xs"
+                  className="font-mono"
                   data-testid={`agent-template-variable-name-${idx}`}
                 />
                 <Input
+                  size="xs"
                   id={`agent-template-variable-description-${idx}`}
                   aria-label={`Variable ${idx + 1} description`}
                   value={v.description ?? ''}
                   onChange={(e) => updateVariable(idx, 'description', e.target.value)}
                   placeholder="Description (shown to user)"
-                  className="h-7 text-xs"
                   data-testid={`agent-template-variable-desc-${idx}`}
                 />
                 <Input
+                  size="xs"
                   id={`agent-template-variable-default-${idx}`}
                   aria-label={`Variable ${idx + 1} default value`}
                   value={v.defaultValue ?? ''}
                   onChange={(e) => updateVariable(idx, 'defaultValue', e.target.value)}
                   placeholder="Default value (optional)"
-                  className="h-7 text-xs"
                   data-testid={`agent-template-variable-default-${idx}`}
                 />
               </div>
@@ -1130,8 +1128,7 @@ function VariablesSection({
 
       <Button
         variant="outline"
-        size="sm"
-        className="text-xs"
+        size="xs"
         onClick={addVariable}
         data-testid="agent-template-variable-add"
       >

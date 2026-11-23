@@ -230,9 +230,9 @@ export function ProjectCollaborators() {
                       </p>
                     </div>
                     <Button
-                      size="sm"
+                      size="xs"
                       variant="outline"
-                      className="h-7 shrink-0 text-xs"
+                      className="shrink-0"
                       disabled={already}
                       onClick={() => handleAdd(u)}
                       data-testid={`collaborators-add-${u.id}`}

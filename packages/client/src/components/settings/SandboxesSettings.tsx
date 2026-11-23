@@ -119,24 +119,25 @@ function AddConnectionForm({
           </SelectContent>
         </Select>
         <Input
+          size="xs"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Name, e.g. Personal Boat"
-          className="h-7 text-xs"
           data-testid="sandbox-connection-label"
         />
         <Input
+          size="xs"
           type="password"
           autoComplete="off"
           value={credential}
           onChange={(e) => setCredential(e.target.value)}
           placeholder="API key"
-          className="h-7 font-mono text-xs"
+          className="font-mono"
           data-testid="sandbox-connection-credential"
         />
         <Button
-          size="sm"
-          className="h-6 self-start text-xs"
+          size="xs"
+          className="h-6 self-start"
           disabled={!canSubmit}
           onClick={handleAdd}
           data-testid="sandbox-connection-add"
@@ -252,9 +253,9 @@ function ConnectionRow({
         )}
       </div>
       <Button
-        size="sm"
+        size="xs"
         variant="ghost"
-        className="h-6 text-xs"
+        className="h-6"
         disabled={testing}
         onClick={handleTest}
         data-testid={`sandbox-connection-test-${connection.id}`}
@@ -263,9 +264,9 @@ function ConnectionRow({
         {testing ? 'Testing…' : 'Test'}
       </Button>
       <Button
-        size="sm"
+        size="xs"
         variant="ghost"
-        className="text-destructive h-6 text-xs"
+        className="text-destructive h-6"
         onClick={() => setConfirmOpen(true)}
         data-testid={`sandbox-connection-remove-${connection.id}`}
       >

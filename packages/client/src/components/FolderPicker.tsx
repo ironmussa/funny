@@ -292,14 +292,14 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
 
           <Button
             variant="muted"
-            size="sm"
+            size="xs"
             onClick={() => {
               setCreatingFolder(true);
               setNewFolderName('');
               setNewFolderError('');
             }}
             disabled={!currentPath || loading}
-            className="ml-1 h-6 shrink-0 px-2 text-xs"
+            className="ml-1 h-6 shrink-0"
             data-testid="folder-picker-new-folder"
           >
             <FolderPlus className="icon-xs mr-1" />
@@ -313,12 +313,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             {roots.map((root) => (
               <Tooltip key={root}>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="muted"
-                    size="sm"
-                    onClick={() => loadDir(root)}
-                    className="h-6 px-2 text-xs"
-                  >
+                  <Button variant="muted" size="xs" onClick={() => loadDir(root)} className="h-6">
                     <HardDrive className="icon-xs mr-1" />
                     {root.replace(':\\', '')}
                   </Button>
@@ -335,11 +330,12 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             <div className="relative">
               <Search className="icon-xs text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2" />
               <Input
+                size="xs"
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('folderPicker.searchPlaceholder')}
-                className="h-7 pr-2 pl-7 text-xs"
+                className="pr-2 pl-7"
                 autoFocus={false}
               />
             </div>

@@ -63,10 +63,10 @@ export function HistoryPopover() {
           {history.length > 0 && (
             <Button
               variant="muted"
-              size="sm"
+              size="xs"
               data-testid="browser-panel-history-clear"
               onClick={clearSentHistory}
-              className="h-6 px-2 text-xs"
+              className="h-6"
             >
               Clear
             </Button>

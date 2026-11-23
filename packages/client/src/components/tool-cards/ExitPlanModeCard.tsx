@@ -296,10 +296,10 @@ function PlanResponseControls({
         />
         {planComments.length > 0 && (
           <Button
-            size="sm"
+            size="xs"
             onClick={onSendComments}
             data-testid="plan-send-comments"
-            className="bg-primary h-7 shrink-0 px-3 text-xs"
+            className="bg-primary shrink-0 px-3"
           >
             {labels.sendComments}
           </Button>

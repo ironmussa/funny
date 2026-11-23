@@ -721,8 +721,8 @@ export function TestFileBrowser({
           <Button
             data-testid="test-stop"
             variant="destructive"
-            size="sm"
-            className="h-7 shrink-0 gap-1 px-2 text-xs"
+            size="xs"
+            className="shrink-0 gap-1"
             onClick={onStop}
           >
             <Square className="icon-sm" />
@@ -732,8 +732,8 @@ export function TestFileBrowser({
           <Button
             data-testid="test-run-all"
             variant="ghost"
-            size="sm"
-            className="h-7 shrink-0 gap-1 px-2 text-xs"
+            size="xs"
+            className="shrink-0 gap-1"
             disabled={files.length === 0}
             onClick={onRunAll}
           >

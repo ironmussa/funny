@@ -247,6 +247,7 @@ export function PipelineSettings() {
               description="Max retries before failing the commit"
             >
               <Input
+                size="xs"
                 type="number"
                 min={1}
                 max={5}
@@ -254,7 +255,7 @@ export function PipelineSettings() {
                 onChange={(e) =>
                   saveField({ precommitFixMaxIterations: parseInt(e.target.value, 10) || 3 })
                 }
-                className="h-8 w-16 text-center text-xs"
+                className="h-8 w-16 text-center"
                 data-testid="pipeline-precommit-max"
               />
             </SettingRow>
@@ -307,12 +308,13 @@ export function PipelineSettings() {
               description="Max review-fix cycles before giving up"
             >
               <Input
+                size="xs"
                 type="number"
                 min={1}
                 max={20}
                 value={pipeline.maxIterations ?? 10}
                 onChange={(e) => saveField({ maxIterations: parseInt(e.target.value, 10) || 10 })}
-                className="h-8 w-16 text-center text-xs"
+                className="h-8 w-16 text-center"
                 data-testid="pipeline-max-iterations"
               />
             </SettingRow>
@@ -343,11 +345,12 @@ export function PipelineSettings() {
               description="Command to run tests (e.g. bun test)"
             >
               <Input
+                size="xs"
                 type="text"
                 value={pipeline.testCommand ?? ''}
                 onChange={(e) => saveField({ testCommand: e.target.value })}
                 placeholder="bun test"
-                className="h-8 w-40 text-xs"
+                className="h-8 w-40"
                 data-testid="pipeline-test-command"
               />
             </SettingRow>
@@ -381,6 +384,7 @@ export function PipelineSettings() {
                   description="Max test-fix cycles before giving up"
                 >
                   <Input
+                    size="xs"
                     type="number"
                     min={1}
                     max={10}
@@ -388,7 +392,7 @@ export function PipelineSettings() {
                     onChange={(e) =>
                       saveField({ testFixMaxIterations: parseInt(e.target.value, 10) || 3 })
                     }
-                    className="h-8 w-16 text-center text-xs"
+                    className="h-8 w-16 text-center"
                     data-testid="pipeline-test-fix-max"
                   />
                 </SettingRow>

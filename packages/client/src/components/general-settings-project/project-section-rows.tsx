@@ -193,6 +193,7 @@ export function LauncherUrlSetting({
       )}
     >
       <Input
+        size="xs"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={save}
@@ -201,7 +202,7 @@ export function LauncherUrlSetting({
           if (e.key === 'Enter') save();
         }}
         placeholder="http://localhost:4040"
-        className="h-8 w-[240px] font-mono text-xs"
+        className="h-8 w-[240px] font-mono"
         data-testid="settings-launcher-url"
       />
     </ProjectSettingRow>

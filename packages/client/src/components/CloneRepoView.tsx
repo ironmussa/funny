@@ -595,8 +595,8 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
             ) : (
               <Button
                 variant="muted"
-                size="sm"
-                className="ml-auto h-7 text-xs"
+                size="xs"
+                className="ml-auto"
                 onClick={disconnect}
                 data-testid="clone-repo-disconnect"
               >

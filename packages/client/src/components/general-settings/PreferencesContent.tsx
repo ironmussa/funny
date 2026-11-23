@@ -283,8 +283,8 @@ function ProviderKeyRow({
       {keyPresence[id] && (
         <Button
           variant="ghost-destructive"
-          size="sm"
-          className="shrink-0 text-xs"
+          size="xs"
+          className="shrink-0"
           onClick={() => handleClear(id)}
           disabled={!!keySaving[id]}
           data-testid={`preferences-clear-${id}-key`}
@@ -345,8 +345,8 @@ function ProviderKeyPanel({
             {keyPresence[id] && (
               <Button
                 variant="ghost-destructive"
-                size="sm"
-                className="shrink-0 text-xs"
+                size="xs"
+                className="shrink-0"
                 onClick={() => handleClear(id)}
                 disabled={!!keySaving[id]}
                 data-testid={clearTestId}

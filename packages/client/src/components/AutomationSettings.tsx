@@ -330,8 +330,8 @@ export function AutomationSettings() {
                       </div>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-5 px-1.5 text-xs"
+                        size="xs"
+                        className="h-5 px-1.5"
                         onClick={() => {
                           navigate(
                             buildPath(`/projects/${selectedProjectId}/threads/${run.threadId}`),
@@ -345,8 +345,8 @@ export function AutomationSettings() {
                 )}
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="h-5 w-full text-xs"
+                  size="xs"
+                  className="h-5 w-full"
                   onClick={() => setRunsAutomationId(null)}
                 >
                   Close
@@ -416,7 +416,8 @@ export function AutomationSettings() {
                 </Select>
                 {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (
                   <Input
-                    className="settings-form-input mt-1.5 font-mono text-xs"
+                    size="xs"
+                    className="settings-form-input mt-1.5 font-mono"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}

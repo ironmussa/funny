@@ -443,13 +443,7 @@ function BranchRefDetail({
         <div className="border-border/70 flex border-t pt-3">
           <div className="flex flex-wrap gap-2">
             {githubUrl ? (
-              <Button
-                asChild
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 px-2 text-xs"
-              >
+              <Button asChild type="button" variant="outline" size="xs" className="gap-1.5">
                 <a
                   href={githubUrl}
                   target="_blank"
@@ -465,9 +459,9 @@ function BranchRefDetail({
               <Button
                 type="button"
                 variant="default"
-                size="sm"
+                size="xs"
                 aria-label={branchActionTooltip(t, summary)}
-                className="h-7 gap-1.5 px-2 text-xs"
+                className="gap-1.5"
                 disabled={!!actionInProgress}
                 onClick={(event) => {
                   event.preventDefault();

@@ -204,12 +204,7 @@ export function UserManagement() {
               <p className="text-muted-foreground text-xs">@{user.username}</p>
             </div>
             {user.id !== currentUser?.id && (
-              <Button
-                variant="ghost-destructive"
-                size="sm"
-                className="text-xs"
-                onClick={() => handleRemove(user.id)}
-              >
+              <Button variant="ghost-destructive" size="xs" onClick={() => handleRemove(user.id)}>
                 {t('common.delete')}
               </Button>
             )}

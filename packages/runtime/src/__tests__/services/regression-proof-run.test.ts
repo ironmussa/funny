@@ -82,6 +82,18 @@ function prove(
 }
 
 describe('regression proof run', () => {
+  test('a rule command without {{files}} is refused, and nothing runs (#441)', async () => {
+    const repo = repoWithFix({ 'lib.test.sh': ASSERTS_FIX });
+    const marker = join(repo.path, 'ran');
+    const result = await prove(repo, {
+      rules: [{ globs: ['**/*.test.sh'], command: `touch '${marker}'; sh ` }],
+    });
+    expect(result.verdict).toBe('fail');
+    expect(result.failureKind).toBe('environment');
+    expect(result.finding).toContain('{{files}}');
+    expect(existsSync(marker)).toBe(false);
+  });
+
   test('a test at the repository root that fails on the base and passes on the head proves the fix', async () => {
     const result = await prove(repoWithFix({ 'lib.test.sh': ASSERTS_FIX }));
     expect(result.verdict).toBe('pass');

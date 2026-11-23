@@ -393,6 +393,16 @@ async function planProof(
   projectPath: string,
   request: ProofRequest,
 ): Promise<{ plan: ProofPlan } | { outcome: Outcome }> {
+  // A command without the placeholder would run its whole suite, not the pull
+  // request's tests, and fail on whatever else is broken (#441).
+  const unfilled = request.rules.find((rule) => !rule.command.includes('{{files}}'));
+  if (unfilled) {
+    return {
+      outcome: failed(
+        `The proof rule command "${unfilled.command}" has no {{files}} placeholder, so it would run the whole suite instead of the pull request's tests.`,
+      ),
+    };
+  }
   const baseResult = await mergeBase(
     projectPath,
     `origin/${request.defaultBranch}`,

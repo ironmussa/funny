@@ -363,7 +363,7 @@ function merge(
     requireReview: opts.require_review ?? true,
     regenerate: opts.regenerate,
     regressionProof: proofNode
-      ? regressionProofOpts(interpolateObject(proofNode.regression_proof!, scope))
+      ? regressionProofOpts(interpolateProofNode(proofNode.regression_proof!, scope))
       : undefined,
   });
 }
@@ -406,8 +406,24 @@ function regressionProof(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: 
   if (!ctx.provider.regressionProof) {
     throw new Error(`regression_proof[${yamlNode.id}]: the provider does not support this action`);
   }
-  const opts = interpolateObject(yamlNode.regression_proof!, scope);
+  const opts = interpolateProofNode(yamlNode.regression_proof!, scope);
   return ctx.provider.regressionProof(regressionProofOpts(opts));
+}
+
+type ProofNode = NonNullable<ParsedNode['regression_proof']>;
+
+/**
+ * A `regression_proof` node with the flow's templates filled in, except each
+ * rule's `command`: its `{{files}}` is the runtime's placeholder (the pull
+ * request's test files), not a flow variable, so the flow's interpolation
+ * (which renders an unknown name as '') must not touch it (#441).
+ */
+export function interpolateProofNode(node: ProofNode, scope: TemplateScope): ProofNode {
+  const { rules, ...rest } = node;
+  return {
+    ...interpolateObject(rest, scope),
+    rules: rules.map(({ command, ...rule }) => ({ ...interpolateObject(rule, scope), command })),
+  };
 }
 
 /** A `regression_proof` step's YAML configuration as provider options. */

@@ -514,3 +514,51 @@ describe('issue-to-merge workflow', () => {
     });
   });
 });
+
+// #441: `{{files}}` in a proof rule is the runtime's placeholder; the flow's
+// interpolation rendered it as '' and every rule ran its whole suite.
+describe('regression proof rules', () => {
+  test('keep {{files}} in the commands the proof and merge steps receive', async () => {
+    const workflow = await resolvedBuiltIn('issue-to-merge');
+    const proofNode = workflow.nodes.find((n) => n.regression_proof !== undefined)!;
+    proofNode.regression_proof = {
+      ...proofNode.regression_proof!,
+      rules: [
+        {
+          globs: ['packages/client/**/*.test.ts'],
+          cwd: 'packages/client',
+          command: 'bun test --parallel {{files}}',
+        },
+        { globs: ['**/*.test.ts'], command: 'bun test {{files}}' },
+      ],
+    };
+    const fake = provider([green]);
+    const received: string[][] = [];
+    fake.p.regressionProof = async (opts) => {
+      received.push(opts.rules.map((r) => r.command));
+      return ok;
+    };
+    const merge = fake.p.merge;
+    fake.p.merge = async (opts) => {
+      received.push((opts.regressionProof?.rules ?? []).map((r) => r.command));
+      return merge(opts);
+    };
+    await runPipeline(compileYamlPipeline(workflow), {
+      provider: fake.p,
+      progress: nullReporter,
+      cwd: '',
+      inputs: {
+        repo: 'o/r',
+        issue_number: '7',
+        issue_title: 'Fix it',
+        issue_url: 'u/7',
+        branch: 'factory/issue-7',
+      },
+      outputs: {},
+    });
+    expect(received.length).toBeGreaterThanOrEqual(2);
+    for (const commands of received) {
+      expect(commands).toEqual(['bun test --parallel {{files}}', 'bun test {{files}}']);
+    }
+  });
+});

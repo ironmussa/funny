@@ -993,7 +993,9 @@ export function createFactoryRunsRepository(
           .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
           .returning({ id: factoryRuns.id }),
         storage,
-      ).map((rows) => rows.length > 0);
+      )
+        .map((rows) => rows.length > 0)
+        .andThen((moved) => afterStateWrite(runId, { state: to }, moved));
     },
 
     /**

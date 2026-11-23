@@ -35,12 +35,17 @@ const RUN_STAGE = {
   // Not started, or back in line: the thread (if any) has not been worked on yet.
   requested: null,
   queued: null,
+  // The triage agent reads the issue; the run's own threads have not started.
+  triaging: null,
   working: 'in_progress',
   fixing: 'in_progress',
   pr_open: 'in_progress',
   waiting_ci: 'in_progress',
+  reviewing: 'in_progress',
+  merging: 'in_progress',
   // A person has to look at it.
   waiting_human: 'review',
+  needs_info: 'review',
   failed: 'review',
   no_change: 'review',
   merged: 'done',

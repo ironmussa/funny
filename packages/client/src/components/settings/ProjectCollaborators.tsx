@@ -35,23 +35,11 @@ const log = createClientLogger('project-collaborators');
 function RoleBadge({ role }: { role: string }) {
   switch (role) {
     case 'owner':
-      return (
-        <Badge variant="secondary" className="bg-status-violet/15 text-status-violet">
-          {role}
-        </Badge>
-      );
+      return <Badge variant="violet">{role}</Badge>;
     case 'admin':
-      return (
-        <Badge variant="secondary" className="bg-status-info/15 text-status-info">
-          {role}
-        </Badge>
-      );
+      return <Badge variant="info">{role}</Badge>;
     case 'member':
-      return (
-        <Badge variant="secondary" className="bg-status-success/15 text-status-success">
-          {role}
-        </Badge>
-      );
+      return <Badge variant="success">{role}</Badge>;
     default:
       return (
         <Badge variant="secondary" className="bg-muted text-muted-foreground">
@@ -295,14 +283,7 @@ export function ProjectCollaborators() {
                         </SelectContent>
                       </Select>
                     )}
-                    {!m.localPath && !isOwner && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-status-warning/15 text-status-warning"
-                      >
-                        needs setup
-                      </Badge>
-                    )}
+                    {!m.localPath && !isOwner && <Badge variant="warning">needs setup</Badge>}
                   </div>
                   {m.user?.username && (
                     <p className="text-muted-foreground truncate text-xs">@{m.user.username}</p>

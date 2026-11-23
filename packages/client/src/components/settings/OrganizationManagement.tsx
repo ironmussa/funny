@@ -242,14 +242,7 @@ export function OrganizationManagement() {
                     <Badge variant="secondary" className="text-xs">
                       {role}
                     </Badge>
-                    {isActive && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-status-success/15 text-status-success dark:text-status-success"
-                      >
-                        Active
-                      </Badge>
-                    )}
+                    {isActive && <Badge variant="success">Active</Badge>}
                   </div>
                   <p className="text-muted-foreground ml-6 text-xs">{org.slug}</p>
                 </div>

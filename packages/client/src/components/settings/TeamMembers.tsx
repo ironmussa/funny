@@ -357,14 +357,7 @@ export function TeamMembers() {
                         <code className="text-muted-foreground truncate text-xs">
                           {window.location.origin}/invite/{link.token}
                         </code>
-                        <Badge
-                          variant="secondary"
-                          className={
-                            isActive
-                              ? 'bg-status-success/15 text-status-success'
-                              : 'bg-status-error/15 text-status-error'
-                          }
-                        >
+                        <Badge variant={isActive ? 'success' : 'error'}>
                           {isExpired ? 'expired' : isMaxed ? 'maxed' : link.role}
                         </Badge>
                       </div>

@@ -135,21 +135,19 @@ function McpServerToggle({
   );
 }
 
+const PROTOCOL_BADGE_VARIANT = {
+  http: 'info',
+  sse: 'warning',
+  stdio: 'success',
+} as const satisfies Record<McpServerType, 'info' | 'warning' | 'success'>;
+
 function McpProtocolBadge({ type }: { type: McpServerType }) {
   return (
     <Badge
-      variant="outline"
+      variant={PROTOCOL_BADGE_VARIANT[type]}
       size="xs"
       data-testid={`mcp-protocol-badge-${type}`}
-      className={cn(
-        'rounded-md border-transparent uppercase tracking-wider',
-        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-        type === 'http'
-          ? 'bg-status-info/10 text-status-info/80'
-          : type === 'sse'
-            ? 'bg-status-warning/10 text-status-warning/80'
-            : 'bg-status-success/10 text-status-success/80',
-      )}
+      className="rounded-md tracking-wider uppercase"
     >
       {type === 'stdio' ? <Terminal className="icon-2xs" /> : <Globe className="icon-2xs" />}
       {type}

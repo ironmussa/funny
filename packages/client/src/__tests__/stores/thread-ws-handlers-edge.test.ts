@@ -231,6 +231,31 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
     expect(takePreSendState(THREAD_ID)).toBeUndefined();
   });
 
+  test('handleWSStatus stopped marks the open thread read at its new completedAt', () => {
+    // A stop ends the run with `agent:status` alone (no `agent:result`). The
+    // open thread must not turn unread, or the blue unread dot hides the
+    // stopped dot in the sidebar.
+    const state = makeState();
+    const { get, set } = makeGetSet(state);
+
+    handleWSStatus(get, set, THREAD_ID, { status: 'stopped' });
+
+    const completedAt = state.threadsById[THREAD_ID].completedAt;
+    expect(state.threadsById[THREAD_ID].status).toBe('stopped');
+    expect(completedAt).toBeString();
+    expect(mockMarkRead).toHaveBeenCalledWith(THREAD_ID, completedAt);
+  });
+
+  test('handleWSStatus stopped leaves a thread the user is not viewing unread', () => {
+    const state = makeState({ selectedThreadId: 'other-thread' });
+    const { get, set } = makeGetSet(state);
+
+    handleWSStatus(get, set, THREAD_ID, { status: 'stopped' });
+
+    expect(state.threadsById[THREAD_ID].status).toBe('stopped');
+    expect(mockMarkRead).not.toHaveBeenCalled();
+  });
+
   test('handleWSStatus no-ops when machine event is invalid', () => {
     mockWsEventToMachine.mockReturnValueOnce(null);
     const state = makeState();

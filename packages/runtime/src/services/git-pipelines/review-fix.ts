@@ -129,9 +129,28 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
   });
 
   await waitForAgentCompletion(correctorThread.id, signal);
+  try {
+    return await readCorrectorChanges(ctx, correctorThread.id);
+  } finally {
+    // The patch is read into the context; the corrector's worktree and branch
+    // go, as the reviewer's do (track-pipeline-runs, design D2).
+    await cleanupReviewerThread(correctorThread.id, ctx.projectId).catch((error) =>
+      log.warn('Pipeline: failed to clean up the corrector thread', {
+        namespace: 'pipeline',
+        correctorThreadId: correctorThread.id,
+        error: String(error),
+      }),
+    );
+  }
+}
 
+/** Read what the corrector changed in its worktree as a staged patch. */
+async function readCorrectorChanges(
+  ctx: GitPipelineContext,
+  correctorThreadId: string,
+): Promise<GitPipelineContext> {
   // Check if the corrector made changes
-  const correctorThreadData = await tm.getThread(correctorThread.id);
+  const correctorThreadData = await tm.getThread(correctorThreadId);
   const correctorCwd = correctorThreadData?.worktreePath || correctorThreadData?.initCwd;
 
   if (!correctorCwd) {
@@ -152,12 +171,12 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
       await emitWorkflowEvent(ctx.userId, ctx.threadId, 'workflow:fix', {
         workflowId: ctx.workflowId,
         iteration: ctx.iteration,
-        correctorThreadId: correctorThread.id,
+        correctorThreadId: correctorThreadId,
         hasChanges: false,
       });
     }
 
-    return { ...ctx, correctorThreadId: correctorThread.id, patchDiff: null, noChanges: true };
+    return { ...ctx, correctorThreadId: correctorThreadId, patchDiff: null, noChanges: true };
   }
 
   // Stage all and generate diff patch
@@ -175,14 +194,14 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
     await emitWorkflowEvent(ctx.userId, ctx.threadId, 'workflow:fix', {
       workflowId: ctx.workflowId,
       iteration: ctx.iteration,
-      correctorThreadId: correctorThread.id,
+      correctorThreadId: correctorThreadId,
       hasChanges: true,
     });
   }
 
   return {
     ...ctx,
-    correctorThreadId: correctorThread.id,
+    correctorThreadId: correctorThreadId,
     patchDiff: diffResult.stdout,
     noChanges: false,
   };

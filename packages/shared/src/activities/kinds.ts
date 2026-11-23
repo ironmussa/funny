@@ -213,6 +213,16 @@ export const ACTIVITY_KINDS = {
       messageId: z.string().max(128).optional(),
     }),
   },
+  // track-pipeline-runs: a review pipeline run started by a commit.
+  'pipeline.run': {
+    scope: 'thread',
+    destructive: true,
+    record: 'always',
+    input: z.object({
+      pipelineId: z.string().max(128),
+      commitSha: z.string().max(64).optional(),
+    }),
+  },
 } as const satisfies Record<
   string,
   {
@@ -284,6 +294,7 @@ export const ACTIVITY_EFFECTS = [
   'stash-dropped',
   'code-rewound',
   'snapshot-saved',
+  'commit-created',
 ] as const satisfies readonly ActivityEffectType[];
 
 /** The most effects an activity keeps, and the longest name of one. */

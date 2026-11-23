@@ -1064,7 +1064,8 @@ export type ActivityEffectType =
   | 'commits-reset'
   | 'stash-dropped'
   | 'code-rewound'
-  | 'snapshot-saved';
+  | 'snapshot-saved'
+  | 'commit-created';
 
 /** One thing an activity changed, with the name of the thing (a path, a branch, a PR). */
 export interface ActivityEffect {

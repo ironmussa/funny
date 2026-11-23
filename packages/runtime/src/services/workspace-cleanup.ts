@@ -36,6 +36,7 @@ import {
   trackActivity as defaultTrackActivity,
 } from './activity-tracker.js';
 import { stopCommandsByCwd } from './command-runner.js';
+import { removeThreadCheckpoints } from './git-checkpoints.js';
 import { projectSearchRegistry } from './project-search-registry.js';
 import { killPtysUnderPath } from './pty-manager.js';
 import { forgetProjectIndex } from './symbol-index-service.js';
@@ -70,6 +71,8 @@ export interface WorkspaceCleanupDeps {
   forgetSymbolIndex: (dir: string) => void;
   removeDirectory: (dir: string) => Promise<void>;
   pathExists: (path: string) => boolean;
+  /** Drops a thread's rewind checkpoints from the project repository. */
+  removeThreadCheckpoints: (projectPath: string, threadId: string) => Promise<number>;
   trackActivity: typeof defaultTrackActivity;
   recordActivity: typeof defaultRecordActivity;
 }
@@ -104,6 +107,7 @@ const defaultDeps: WorkspaceCleanupDeps = {
   },
   removeDirectory: (dir) => rm(dir, { recursive: true, force: true }),
   pathExists: existsSync,
+  removeThreadCheckpoints,
   trackActivity: defaultTrackActivity,
   recordActivity: defaultRecordActivity,
 };
@@ -135,6 +139,18 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
     if (registered.value) return null;
     if (!deps.pathExists(worktreePath)) return 'gone';
     return badRequest(`${worktreePath} is not a worktree of this project`);
+  }
+
+  /** A thread's rewind checkpoints go with its workspace (track-pipeline-runs, D3). */
+  async function dropThreadCheckpoints(request: WorkspaceCleanupRequest): Promise<void> {
+    if (!request.threadId) return;
+    await deps.removeThreadCheckpoints(request.projectPath, request.threadId).catch((error) =>
+      log.warn('Failed to remove thread checkpoints', {
+        namespace: 'workspace-cleanup',
+        threadId: request.threadId,
+        error: messageOf(error),
+      }),
+    );
   }
 
   /** Stops what runs inside `dir`; each stopped thing becomes an effect. */
@@ -212,6 +228,7 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
           if (deleted.isErr()) branchError = deleted.error;
           else note({ effect: 'branch-deleted', target: branch });
         }
+        await dropThreadCheckpoints(request);
         const failure = worktreeError ?? branchError;
         return failure ? err(failure) : ok({ effects });
       },

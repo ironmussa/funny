@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import {
   captureGitCheckpoint,
   copyGitCheckpoint,
+  pruneGitCheckpoints,
+  removeThreadCheckpoints,
   restoreGitCheckpoint,
 } from '../../services/git-checkpoints.js';
 
@@ -107,5 +109,62 @@ describe('Git checkpoints', () => {
     });
 
     expect(copied).toBe(false);
+  });
+});
+
+describe('dated checkpoints (track-pipeline-runs)', () => {
+  const ref = (thread: string, message: string, kind: string) =>
+    `refs/funny/codex-checkpoints/${thread}/${message}/${kind}`;
+  const refs = (cwd: string) =>
+    git(cwd, 'for-each-ref', '--format=%(refname)', 'refs/funny/codex-checkpoints').trim();
+
+  test('a new checkpoint is a dated commit and still restores', async () => {
+    const cwd = await createRepo();
+    await writeFile(join(cwd, 'tracked.txt'), 'before\n');
+    await captureGitCheckpoint({ threadId: 't1', messageId: 'm1', cwd });
+    expect(git(cwd, 'cat-file', '-t', ref('t1', 'm1', 'worktree')).trim()).toBe('commit');
+
+    await writeFile(join(cwd, 'tracked.txt'), 'after\n');
+    const restored = await restoreGitCheckpoint({ threadId: 't1', messageId: 'm1', cwd });
+    expect(restored.canRewind).toBe(true);
+    expect(await readFile(join(cwd, 'tracked.txt'), 'utf8')).toBe('before\n');
+  });
+
+  test('a legacy checkpoint (a bare tree) still restores and is kept by the age prune', async () => {
+    const cwd = await createRepo();
+    await writeFile(join(cwd, 'tracked.txt'), 'legacy\n');
+    git(cwd, 'add', '-A');
+    const tree = git(cwd, 'write-tree').trim();
+    git(cwd, 'update-ref', ref('t0', 'm0', 'worktree'), tree);
+    git(cwd, 'update-ref', ref('t0', 'm0', 'index'), tree);
+    await writeFile(join(cwd, 'tracked.txt'), 'later\n');
+
+    const restored = await restoreGitCheckpoint({ threadId: 't0', messageId: 'm0', cwd });
+    expect(restored.canRewind).toBe(true);
+    expect(await readFile(join(cwd, 'tracked.txt'), 'utf8')).toBe('legacy\n');
+
+    const in31Days = () => Date.now() + 31 * 24 * 60 * 60_000;
+    expect(await pruneGitCheckpoints(cwd, undefined, in31Days)).toBe(0);
+    expect(refs(cwd)).toContain(ref('t0', 'm0', 'worktree'));
+  });
+
+  test('a checkpoint older than 30 days is pruned with its index ref; a recent one stays', async () => {
+    const cwd = await createRepo();
+    await captureGitCheckpoint({ threadId: 't1', messageId: 'm1', cwd });
+    expect(await pruneGitCheckpoints(cwd)).toBe(0);
+
+    const in31Days = () => Date.now() + 31 * 24 * 60 * 60_000;
+    expect(await pruneGitCheckpoints(cwd, undefined, in31Days)).toBe(1);
+    expect(refs(cwd)).toBe('');
+  });
+
+  test("removing a thread's checkpoints leaves the other threads' alone", async () => {
+    const cwd = await createRepo();
+    await captureGitCheckpoint({ threadId: 't1', messageId: 'm1', cwd });
+    await captureGitCheckpoint({ threadId: 't1', messageId: 'm2', cwd });
+    await captureGitCheckpoint({ threadId: 't2', messageId: 'm1', cwd });
+
+    expect(await removeThreadCheckpoints(cwd, 't1')).toBe(4);
+    expect(refs(cwd).split('\n')).toEqual([ref('t2', 'm1', 'index'), ref('t2', 'm1', 'worktree')]);
   });
 });

@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useAgentTemplates } from '@/data/templates/hooks';
 import { ensureTemplatesLoaded } from '@/data/templates/loaders';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { projectsApi } from '@/lib/api/projects';
 import { cn } from '@/lib/utils';
 import { whilePending } from '@/lib/while-pending';
@@ -122,12 +123,8 @@ export function ProjectSystemPrompt({
   currentPrompt?: string;
   onSave: (projectId: string, data: { systemPrompt: string | null }) => void;
 }) {
-  const [value, setValue] = useState(currentPrompt || '');
+  const [value, setValue] = useResettableState(currentPrompt || '', [currentPrompt]);
   const { t } = useTranslation();
-
-  useEffect(() => {
-    setValue(currentPrompt || '');
-  }, [currentPrompt]);
 
   const save = () => {
     const trimmed = value.trim();
@@ -178,12 +175,8 @@ export function LauncherUrlSetting({
   currentUrl?: string;
   onSave: (projectId: string, data: { launcherUrl: string | null }) => void;
 }) {
-  const [value, setValue] = useState(currentUrl || '');
+  const [value, setValue] = useResettableState(currentUrl || '', [currentUrl]);
   const { t } = useTranslation();
-
-  useEffect(() => {
-    setValue(currentUrl || '');
-  }, [currentUrl]);
 
   const save = () => {
     const trimmed = value.trim();

@@ -33,6 +33,7 @@ import { usePRDetail } from '@/data/pull-requests/hooks';
 import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { useGitHubProjectId } from '@/hooks/use-github-project-id';
 import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { useStartThreadOnBranch } from '@/hooks/use-start-thread-on-branch';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -437,13 +438,9 @@ function prPageFetcher(
 function usePRList(visible: boolean | undefined, projectId: string | null) {
   const { t } = useTranslation();
   const [state, setState] = useState<PRState>('open');
-  const [filters, setFilters] = useState<PRFilterState>(EMPTY_PR_FILTERS);
+  // Filters reset when switching projects so stale selections don't leak across.
+  const [filters, setFilters] = useResettableState<PRFilterState>(EMPTY_PR_FILTERS, [projectId]);
   const filterOptions = usePRFilterOptions(visible, projectId);
-
-  // Reset filters when switching projects so stale selections don't leak across.
-  useEffect(() => {
-    setFilters(EMPTY_PR_FILTERS);
-  }, [projectId]);
 
   const fetchPage = useMemo(
     () => (projectId ? prPageFetcher(projectId, state, filters) : null),

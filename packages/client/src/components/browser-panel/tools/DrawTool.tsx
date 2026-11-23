@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { cn } from '@/lib/utils';
 import { DRAW_COLORS, useBrowserPanelStore, type Annotation } from '@/stores/browser-panel-store';
 import {
@@ -171,11 +172,10 @@ function DrawToolbar({
   updateAnnotationNote: (id: string, note: string) => void;
   fontStyle: React.CSSProperties;
 }) {
-  const [localNote, setLocalNote] = useState(drawAnnotation?.note ?? '');
-
-  useEffect(() => {
-    setLocalNote(drawAnnotation?.note ?? '');
-  }, [drawAnnotation?.id, drawAnnotation?.note]);
+  const [localNote, setLocalNote] = useResettableState(drawAnnotation?.note ?? '', [
+    drawAnnotation?.id,
+    drawAnnotation?.note,
+  ]);
 
   return (
     <div

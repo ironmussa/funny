@@ -34,6 +34,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import type { BlameHunk, BlameResponse, FileHistoryEntry } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
@@ -97,13 +98,13 @@ export function MonacoEditorDialog({
   // code/preview toggle (which would show an empty Monaco) is hidden.
   const lockPreview = !!fileVisualizer?.contributes.binary;
 
-  const [showPreview, setShowPreview] = useState(canPreview);
-  const [copied, copy] = useCopyToClipboard();
-
   // When the dialog opens or the file changes, default previewable files to preview mode.
-  useEffect(() => {
-    if (open) setShowPreview(canPreview);
-  }, [open, filePath, canPreview]);
+  const [showPreview, setShowPreview] = useResettableState(canPreview, [
+    open,
+    filePath,
+    canPreview,
+  ]);
+  const [copied, copy] = useCopyToClipboard();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -259,7 +260,7 @@ export function MonacoEditorDialog({
         editor?.focus();
       });
     },
-    [canPreview, lockPreview, showPreview],
+    [canPreview, lockPreview, setShowPreview, showPreview],
   );
 
   const closeSearch = useCallback(() => {

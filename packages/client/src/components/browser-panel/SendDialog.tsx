@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useProjects } from '@/data/projects/hooks';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { threadsApi } from '@/lib/api/threads';
 import {
@@ -92,13 +93,8 @@ function SendDialog({
     [projects, projectId],
   );
 
-  const [model, setModel] = useState<string>(persistedModel);
+  const [model, setModel] = useResettableState<string>(persistedModel, [open, persistedModel]);
   const [sending, setSending] = useState(false);
-
-  // Re-sync defaults when the dialog opens or persisted model changes.
-  useEffect(() => {
-    if (open) setModel(persistedModel);
-  }, [open, persistedModel]);
 
   const noProject = !projectId || !activeProject;
 

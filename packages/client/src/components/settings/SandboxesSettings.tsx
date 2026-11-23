@@ -39,15 +39,12 @@ function canSubmitConnection(form: {
 
 /** Form state + submit for a new provider connection. */
 function useAddConnectionForm(providers: SandboxProviderInfo[], onAdded: () => void) {
-  const [provider, setProvider] = useState(providers[0]?.id ?? '');
+  // Providers load asynchronously: until one is chosen, the first one is the default.
+  const [chosenProvider, setProvider] = useState('');
+  const provider = chosenProvider || (providers[0]?.id ?? '');
   const [label, setLabel] = useState('');
   const [credential, setCredential] = useState('');
   const [saving, setSaving] = useState(false);
-
-  // Providers load asynchronously: default to the first one once it arrives.
-  useEffect(() => {
-    if (!provider && providers[0]) setProvider(providers[0].id);
-  }, [provider, providers]);
 
   const handleAdd = async () => {
     setSaving(true);

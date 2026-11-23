@@ -44,6 +44,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Textarea } from '@/components/ui/textarea';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { whilePending } from '@/lib/while-pending';
@@ -455,15 +456,19 @@ function Inspector({
   onUpdate: (updater: (workflow: ParsedWorkflow) => ParsedWorkflow) => void;
 }) {
   const action = useMemo(() => (node ? actionOf(node) : null), [node]);
-  const [actionSource, setActionSource] = useState('{}');
-  const [retrySource, setRetrySource] = useState('');
-  const [loopSource, setLoopSource] = useState('');
-
-  useEffect(() => {
-    setActionSource(JSON.stringify(action?.value ?? {}, null, 2));
-    setRetrySource(node?.retry ? JSON.stringify(node.retry, null, 2) : '');
-    setLoopSource(node?.loop ? JSON.stringify(node.loop, null, 2) : '');
-  }, [action, node?.loop, node?.retry]);
+  const sourceKeys = [action, node?.loop, node?.retry];
+  const [actionSource, setActionSource] = useResettableState(
+    JSON.stringify(action?.value ?? {}, null, 2),
+    sourceKeys,
+  );
+  const [retrySource, setRetrySource] = useResettableState(
+    node?.retry ? JSON.stringify(node.retry, null, 2) : '',
+    sourceKeys,
+  );
+  const [loopSource, setLoopSource] = useResettableState(
+    node?.loop ? JSON.stringify(node.loop, null, 2) : '',
+    sourceKeys,
+  );
 
   if (!node || !workflow || !action) {
     return (

@@ -25,6 +25,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -112,7 +113,8 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [loadingRepos, setLoadingRepos] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  // Highlight resets when the debounced query changes (new result set).
+  const [highlightedIndex, setHighlightedIndex] = useResettableState(-1, [debouncedSearch]);
   const listRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -261,11 +263,6 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [search]);
-
-  // Reset highlight when the debounced query changes (new result set).
-  useEffect(() => {
-    setHighlightedIndex(-1);
-  }, [debouncedSearch]);
 
   // Keyboard navigation for repo list
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {

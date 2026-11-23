@@ -20,7 +20,12 @@ const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNAL
 
 export function PreviewBrowser() {
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [selectedTabId, setActiveTabId] = useState<string | null>(null);
+  // A selected tab that was closed falls back to the last open tab.
+  const activeTabId =
+    selectedTabId && !tabs.some((t) => t.commandId === selectedTabId)
+      ? (tabs[tabs.length - 1]?.commandId ?? null)
+      : selectedTabId;
   const [iframeKey, setIframeKey] = useState(0);
 
   const activeTab = tabs.find((t) => t.commandId === activeTabId);
@@ -53,7 +58,7 @@ export function PreviewBrowser() {
         setActiveTabId((prev) => {
           if (prev === commandId) {
             // Switch to last remaining tab using the setter's callback for fresh state
-            return null; // Will be corrected by the sync effect below
+            return null;
           }
           return prev;
         });
@@ -79,13 +84,6 @@ export function PreviewBrowser() {
       unlisteners.forEach((fn) => fn());
     };
   }, []);
-
-  // Update active tab reference when tabs change
-  useEffect(() => {
-    if (activeTabId && !tabs.some((t) => t.commandId === activeTabId)) {
-      setActiveTabId(tabs[tabs.length - 1]?.commandId ?? null);
-    }
-  }, [tabs, activeTabId]);
 
   const handleRefresh = () => setIframeKey((k) => k + 1);
 

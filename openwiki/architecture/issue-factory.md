@@ -315,6 +315,20 @@ The search, project and state filters and the **Active** filter (hides `merged`,
   Merge says one at a time per repository. Across projects there is no shared limit, so only counts
   show.
 - The column layout is `components/board/BoardColumn.tsx`, shared with the thread kanban.
+- **Run detail panel** (openspec `factory-run-detail`, `components/factory-board/run-detail/`): a
+  board card, or a list row's details button, opens a side panel named by the `run` search
+  parameter (`/factory?run=<id>`, `use-selected-factory-run.ts`), so it can be linked; an id that
+  is not listed clears the parameter once the runs have loaded. It is a view of the listed run, so
+  it follows it live: header with the run controls and why it stopped, the flow, triage's decision
+  (contract, questions or split), the regression proof, one entry per review verdict with its
+  findings, risk and CI, and every agent thread (`thread-links.ts`: triage, implementer, one
+  reviewer per review). The list row's title still opens the run's thread.
+- **Health header** (`FactoryHealthHeader.tsx`, `factory-health.ts`): over every listed run, not
+  the filtered ones: in flight, needing a person, merged in 24 h, and over 7 days the first-pass
+  review rate, merge holds and median time to merge (7 days, because the queue lists ended runs
+  for 14). Above the layouts, one banner per project whose factory has an open incident
+  (`ProjectFactoryIncident`, the same banner as the project settings, read from each project's
+  factory settings).
 - Time per stage is not shown: runs do not record when each step started and ended.
 
 ## Security boundaries

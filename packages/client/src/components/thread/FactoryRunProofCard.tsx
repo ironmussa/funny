@@ -34,7 +34,7 @@ const VERDICT_STYLE = {
 } as const;
 
 /** One proof, shown in the run's thread. */
-function RegressionProofDetails({ proof }: { proof: FactoryRegressionProof }) {
+export function RegressionProofDetails({ proof }: { proof: FactoryRegressionProof }) {
   const { t } = useTranslation();
   const style = VERDICT_STYLE[proof.verdict];
   const verdict = {

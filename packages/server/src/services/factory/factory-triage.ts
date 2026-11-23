@@ -162,6 +162,9 @@ function triagePrompt(input: {
     `The issue is #${input.issueNumber} of ${input.repo}${input.issueUrl ? ` (${input.issueUrl})` : ''}.`,
     issueInstruction(input.issueNumber, input.issue),
     'Then read the code it is about in the checkout.',
+    // Seen in a real run: a contract without the changelog line the repository's
+    // CI requires cost the implementer a CI round to find it out.
+    'Also read what the repository requires of every change before it merges: its CI workflows (`.github/workflows/`), the scripts they run, and its contributing notes (`CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`). Each requirement this change must meet (a changelog line, a test next to the code, a lint or format step) is an acceptance criterion of the contract, naming the file or script that enforces it.',
     '',
     'Decide one of:',
     '- `ready`: an agent can do it without asking anyone. Write its contract: acceptance criteria someone could check against the code, the files it will probably touch (globs, at most 50), and risk hints only when the change is risky (it changes a migration, authentication, a public API, CI, or deletes data).',

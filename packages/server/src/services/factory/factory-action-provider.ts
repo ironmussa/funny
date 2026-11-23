@@ -888,6 +888,19 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return { comment: false, status: false };
   }
 
+  /** The `funny/review` status of a verdict carried to a base-merge commit (best effort). */
+  async function publishCarriedStatus(verdict: FactoryReviewVerdict): Promise<boolean> {
+    const pr = pullRequest();
+    if (!pr) return false;
+    const from = verdict.carriedFrom ? ` (kept from ${verdict.carriedFrom.slice(0, 8)})` : '';
+    const published = await deps.github.pullRequests.publishReview(pr, {
+      sha: verdict.sha,
+      allowsMerge: reviewAllowsMerge(verdict),
+      description: `${reviewHeadline(verdict)}${from}`.slice(0, 140),
+    });
+    return published.isOk() && published.value.status;
+  }
+
   const enterStage = async (stage: FactoryRunStage) =>
     deps.enterStage
       ? deps.enterStage(stage)
@@ -950,6 +963,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     otherPullRequests: deps.otherPullRequests,
     acquireSlot: deps.reviewSlot,
     publish: publishVerdict,
+    publishStatus: publishCarriedStatus,
     record: deps.record,
     enterReview: () => enterStage('review'),
     count: (event) => count(reviewCounted(metrics, event), { event }),

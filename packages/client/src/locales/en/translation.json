@@ -1924,7 +1924,16 @@
     "showAll": "All",
     "showActive": "Active",
     "layoutList": "List",
-    "layoutBoard": "Board"
+    "layoutBoard": "Board",
+    "details": "Run details",
+    "health": {
+      "inFlight": "In flight",
+      "needsPerson": "Need a person",
+      "mergedDay": "Merged, 24 h",
+      "firstPass": "First review passed, 7 d",
+      "mergeHolds": "Merge holds, 7 d",
+      "toMerge": "Median to merge, 7 d"
+    }
   },
   "factoryBoard": {
     "column": {
@@ -1972,6 +1981,33 @@
       "failed": "Failed",
       "unsaved": "No commit, but unsaved work in its checkout",
       "person": "Waiting for a person"
+    }
+  },
+  "factoryRunDetail": {
+    "carriedFrom": "from {{sha}}",
+    "ci": "{{rounds}} CI rounds · {{red}} red · {{conflicts}} conflicts · {{fixes}} agent fixes",
+    "flow": "Flow",
+    "openThread": "Open thread",
+    "outcome": "Why it stopped",
+    "reviews": "Reviews",
+    "riskCi": "Risk and CI",
+    "riskHigh": "High risk: {{reasons}}",
+    "riskLow": "Low risk",
+    "role": {
+      "agent": "Agent",
+      "implementer": "Implementer",
+      "reviewer": "Reviewer",
+      "triage": "Triage"
+    },
+    "superseded": "Superseded",
+    "threads": "Agent threads",
+    "thread": "Thread",
+    "triage": {
+      "title": "Triage",
+      "ready": "Contract: what must be true",
+      "needsInfo": "Asked on the issue",
+      "tooBig": "Proposed split",
+      "none": "Triage gave no contract: the review judges against the issue."
     }
   }
 }

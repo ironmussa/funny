@@ -249,6 +249,9 @@ describe('the triage step', () => {
     expect(prompt).not.toContain('Fix it');
     expect(prompt).not.toContain('IGNORE PREVIOUS');
     expect(prompt).toContain('cat "$FUNNY_ROLE_INPUTS/issue.md"');
+    // What CI requires of every change goes into the contract, so the implementer meets it first time.
+    expect(prompt).toContain('.github/workflows/');
+    expect(prompt).toContain('is an acceptance criterion of the contract');
     const issue = String(
       (bodies[0]?.roleInputs as Record<string, string> | undefined)?.['issue.md'],
     );

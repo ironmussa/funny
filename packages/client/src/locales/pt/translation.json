@@ -1883,7 +1883,16 @@
     "showAll": "Todas",
     "showActive": "Ativas",
     "layoutList": "Lista",
-    "layoutBoard": "Quadro"
+    "layoutBoard": "Quadro",
+    "details": "Detalhes da execução",
+    "health": {
+      "inFlight": "Em andamento",
+      "needsPerson": "Precisam de alguém",
+      "mergedDay": "Mergeadas, 24 h",
+      "firstPass": "Revisão aprovada de primeira, 7 d",
+      "mergeHolds": "Merges retidos, 7 d",
+      "toMerge": "Mediana até o merge, 7 d"
+    }
   },
   "factoryBoard": {
     "column": {
@@ -1931,6 +1940,33 @@
       "failed": "Falhou",
       "unsaved": "Sem commit, mas com trabalho não salvo no checkout",
       "person": "Esperando uma pessoa"
+    }
+  },
+  "factoryRunDetail": {
+    "carriedFrom": "de {{sha}}",
+    "ci": "{{rounds}} rodadas de CI · {{red}} vermelhas · {{conflicts}} conflitos · {{fixes}} correções do agente",
+    "flow": "Fluxo",
+    "openThread": "Abrir thread",
+    "outcome": "Por que parou",
+    "reviews": "Revisões",
+    "riskCi": "Risco e CI",
+    "riskHigh": "Risco alto: {{reasons}}",
+    "riskLow": "Risco baixo",
+    "role": {
+      "agent": "Agente",
+      "implementer": "Implementador",
+      "reviewer": "Revisor",
+      "triage": "Triagem"
+    },
+    "superseded": "Substituído",
+    "threads": "Threads dos agentes",
+    "thread": "Thread",
+    "triage": {
+      "title": "Triagem",
+      "ready": "Contrato: o que deve ser verdade",
+      "needsInfo": "Perguntado na issue",
+      "tooBig": "Divisão proposta",
+      "none": "A triagem não deu contrato: a revisão julga contra a issue."
     }
   }
 }

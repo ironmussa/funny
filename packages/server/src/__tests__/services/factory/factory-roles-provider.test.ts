@@ -205,8 +205,12 @@ function reviewing(script: ReviewScript) {
   const recorded: UpdateRunInput[] = [];
   const stages: string[] = [];
   const abandoned: string[] = [];
-  const published: Array<{ sha: string; allowsMerge: boolean; body: string; description: string }> =
-    [];
+  const published: Array<{
+    sha: string;
+    allowsMerge: boolean;
+    body?: string;
+    description: string;
+  }> = [];
   const turn = new Map<string, number>();
   const indexOf = (threadId: string) =>
     threadId === script.launched ? 0 : Number(threadId.replace('rev-', '')) - 1;
@@ -838,9 +842,14 @@ describe('merge brings the branch up to date with its base first', () => {
     const merges: Array<{ sha?: string } | undefined> = [];
     const recorded: UpdateRunInput[] = [];
     const followUps: string[] = [];
+    const published: Array<{ sha: string; body?: string; description: string }> = [];
     const { provider } = providerWith(
       {
         pullHead: () => okAsync({ sha: head, baseRef: 'main', autoMerge: false }),
+        publishReview: (_pr, review) => {
+          published.push(review);
+          return okAsync({ status: true });
+        },
         baseDistance: (_pr, base, sha) => {
           // A commit of the base has nothing the base lacks.
           if (sha === BASE_1) return okAsync({ behindBy: 0, aheadBy: 0 });
@@ -910,7 +919,7 @@ describe('merge brings the branch up to date with its base first', () => {
       const writes = recorded.flatMap((input) => (input.reviews ? [input.reviews] : []));
       return writes.at(-1) ?? [];
     };
-    return { merge, merges, updates, reviews, recorded, followUps, enqueued };
+    return { merge, merges, updates, reviews, recorded, followUps, enqueued, published };
   }
 
   test('a head that has its base is merged without touching the branch', async () => {
@@ -936,6 +945,22 @@ describe('merge brings the branch up to date with its base first', () => {
       { sha: SHA_A, verdict: 'pass' },
       { sha: SHA_M, verdict: 'pass', carriedFrom: SHA_A },
     ]);
+  });
+
+  // The PR's final head is the merge commit: without its own `funny/review`
+  // status, GitHub showed the pull request as merged without a review.
+  test('a review carried to the merge commit puts its status on that commit, without a second comment', async () => {
+    const { merge, published, reviews } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({ sha: SHA_M, allowsMerge: true });
+    expect(published[0]?.body).toBeUndefined();
+    expect(published[0]?.description).toContain(`kept from ${SHA_A.slice(0, 8)}`);
+    expect(reviews().at(-1)).toMatchObject({ sha: SHA_M, statusPublished: true });
   });
 
   // The proof ran on the implementing agent's worktree, which stays at A: proving

@@ -108,8 +108,12 @@ export interface FactoryReviewPublication {
   sha: string;
   /** Whether the verdict allows a merge (the status' state). */
   allowsMerge: boolean;
-  /** The review comment (Markdown). */
-  body: string;
+  /**
+   * The review comment (Markdown). Absent for a verdict carried to a commit
+   * that only merges the base in: the pull request already has its comment,
+   * and only the new head's status is set.
+   */
+  body?: string;
   /** The status' one-line description. */
   description: string;
 }
@@ -488,24 +492,25 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
 
     publishReview(pr, review) {
       const issuer = deps.issueStatusPublisher;
-      return commentReview(repoGithubFor(pr, 'write'), pr.repo, pr.number, {
-        commitId: review.sha,
-        body: review.body,
-      })
-        .mapErr(callError)
-        .andThen(() => {
-          if (!issuer) return okAsync({ status: false });
-          return (
-            setCommitStatus(serverOnlyGithub(pr, issuer), pr.repo, review.sha, {
-              context: REVIEW_STATUS_CONTEXT,
-              state: review.allowsMerge ? 'success' : 'failure',
-              description: review.description,
-            })
-              .map(() => ({ status: true }))
-              // The comment is on the pull request: a status GitHub refused is not an error.
-              .orElse(() => okAsync({ status: false }))
-          );
-        });
+      const commented = review.body
+        ? commentReview(repoGithubFor(pr, 'write'), pr.repo, pr.number, {
+            commitId: review.sha,
+            body: review.body,
+          }).mapErr(callError)
+        : okAsync<unknown, FactoryPullRequestError>(undefined);
+      return commented.andThen(() => {
+        if (!issuer) return okAsync({ status: false });
+        return (
+          setCommitStatus(serverOnlyGithub(pr, issuer), pr.repo, review.sha, {
+            context: REVIEW_STATUS_CONTEXT,
+            state: review.allowsMerge ? 'success' : 'failure',
+            description: review.description,
+          })
+            .map(() => ({ status: true }))
+            // The comment is on the pull request: a status GitHub refused is not an error.
+            .orElse(() => okAsync({ status: false }))
+        );
+      });
     },
 
     merge(pr, options = {}) {

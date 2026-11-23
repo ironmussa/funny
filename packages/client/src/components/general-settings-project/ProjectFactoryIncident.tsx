@@ -20,7 +20,7 @@ type Incident = NonNullable<FactorySettings['incident']>;
 /** An http(s) link, or null: only links GitHub gave are shown as links. */
 const safeUrl = (url: string | undefined) => (url && /^https:\/\//.test(url) ? url : null);
 
-function IncidentFinding({ incident }: { incident: Incident }) {
+function IncidentFinding({ incident, testIdPrefix }: { incident: Incident; testIdPrefix: string }) {
   const { t } = useTranslation();
   const result = incident.result;
   if (!result) {
@@ -34,7 +34,7 @@ function IncidentFinding({ incident }: { incident: Incident }) {
   const revert = safeUrl(result.revertPrUrl);
   if (result.decision !== 'revert' || !culprit) {
     return (
-      <p data-testid="settings-factory-incident-finding">
+      <p data-testid={`${testIdPrefix}-finding`}>
         {t(
           'factory.incident.unknown',
           'The factory could not name the merge that broke it: {{reason}}',
@@ -46,14 +46,14 @@ function IncidentFinding({ incident }: { incident: Incident }) {
     );
   }
   return (
-    <p data-testid="settings-factory-incident-finding">
+    <p data-testid={`${testIdPrefix}-finding`}>
       {t('factory.incident.culprit', 'It points at')}{' '}
       <a
         className="underline"
         href={culprit}
         target="_blank"
         rel="noreferrer"
-        data-testid="settings-factory-incident-culprit"
+        data-testid={`${testIdPrefix}-culprit`}
       >
         {culprit.replace('https://github.com/', '')}
       </a>
@@ -64,7 +64,7 @@ function IncidentFinding({ incident }: { incident: Incident }) {
           href={revert}
           target="_blank"
           rel="noreferrer"
-          data-testid="settings-factory-incident-revert"
+          data-testid={`${testIdPrefix}-revert`}
         >
           {t('factory.incident.revert', 'Review and merge the revert')}
         </a>
@@ -81,9 +81,12 @@ function IncidentFinding({ incident }: { incident: Incident }) {
 export function ProjectFactoryIncident({
   projectId,
   incident,
+  testIdPrefix = 'settings-factory-incident',
 }: {
   projectId: string;
   incident: Incident;
+  /** Prefix of the test ids, so the banner can show in more than one screen. */
+  testIdPrefix?: string;
 }) {
   const { t } = useTranslation();
   const [closing, setClosing] = useState(false);
@@ -98,11 +101,7 @@ export function ProjectFactoryIncident({
   };
 
   return (
-    <Alert
-      variant="destructive"
-      className="mx-4 my-2 w-auto"
-      data-testid="settings-factory-incident"
-    >
+    <Alert variant="destructive" className="mx-4 my-2 w-auto" data-testid={`${testIdPrefix}`}>
       <AlertDescription className="flex flex-col gap-2">
         <p>
           {t(
@@ -111,13 +110,13 @@ export function ProjectFactoryIncident({
             { branch: incident.baseBranch, repo: incident.repo },
           )}
         </p>
-        <IncidentFinding incident={incident} />
+        <IncidentFinding incident={incident} testIdPrefix={testIdPrefix} />
         <div>
           <Button
             size="xs"
             variant="outline"
             disabled={closing}
-            data-testid="settings-factory-incident-close"
+            data-testid={`${testIdPrefix}-close`}
             onClick={close}
           >
             {t('factory.incident.close', 'Close incident and resume')}

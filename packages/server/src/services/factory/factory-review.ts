@@ -370,6 +370,8 @@ export interface FactoryReviewerDeps {
   acquireSlot?(holder: string, signal: AbortSignal): Promise<() => void>;
   /** Put the verdict on the pull request; resolves what got there (the comment, the status). */
   publish?(verdict: FactoryReviewVerdict): Promise<{ comment: boolean; status: boolean }>;
+  /** Set only the `funny/review` status of a carried verdict; whether it was set. */
+  publishStatus?(verdict: FactoryReviewVerdict): Promise<boolean>;
   record(input: UpdateRunInput): Promise<void>;
   /** Move the run into its review step (a compare-and-set on the stored state). */
   enterReview(): Promise<void>;
@@ -605,15 +607,22 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
     async carry(from: string, to: string): Promise<void> {
       const verdict = reviews.find((review) => review.sha === from);
       if (!verdict || reviews.some((review) => review.sha === to)) return;
-      reviews = withReviewVerdict(reviews, {
+      const carried: FactoryReviewVerdict = {
         ...verdict,
         sha: to,
         carriedFrom: verdict.carriedFrom ?? from,
         published: false,
         statusPublished: false,
-      });
+      };
+      reviews = withReviewVerdict(reviews, carried);
       await deps.record({ reviews });
       await deps.count('review_carried');
+      // The pull request has the review comment already: only the new head's
+      // `funny/review` status, so GitHub shows the verdict on the commit merged.
+      const published = await deps.publishStatus?.(carried);
+      if (!published) return;
+      reviews = withReviewVerdict(reviews, { ...carried, statusPublished: true });
+      await deps.record({ reviews });
     },
 
     /**

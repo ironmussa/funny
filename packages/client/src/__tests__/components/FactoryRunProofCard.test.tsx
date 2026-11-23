@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import type { Thread } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
+import { MemoryRouter } from 'react-router-dom';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
@@ -197,9 +198,11 @@ describe('the "regression proof not configured" blocker', () => {
     ];
     // The view's search bar and status pins carry tooltips.
     render(
-      <TooltipProvider>
-        <FactoryQueueView />
-      </TooltipProvider>,
+      <MemoryRouter>
+        <TooltipProvider>
+          <FactoryQueueView />
+        </TooltipProvider>
+      </MemoryRouter>,
     );
     expect(screen.getByTestId('factory-view-run-r2')).toHaveTextContent(
       'Regression proof not configured',

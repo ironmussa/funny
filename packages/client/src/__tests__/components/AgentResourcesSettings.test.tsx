@@ -17,13 +17,9 @@ mock.module('@/lib/api', () => ({
   api: { listAgentResources: mockListAgentResources },
 }));
 
-mock.module('@/stores/app-store', () => ({
-  useAppStore: (sel: (s: unknown) => unknown) =>
-    sel({ projects: [{ id: 'p1', path: '/repo' }], selectedProjectId: 'p1' }),
-}));
-
 import { AgentResourcesSettings } from '@/components/AgentResourcesSettings';
 import { buildProject, seedProjects } from '@/data/projects/testing';
+import { useProjectStore } from '@/stores/project-store';
 
 const claudeSkill: AgentResource = {
   kind: 'skill',
@@ -43,6 +39,7 @@ const incompatible: AgentResource = {
 
 describe('AgentResourcesSettings', () => {
   beforeEach(() => {
+    useProjectStore.setState({ selectedProjectId: 'p1' });
     seedProjects([buildProject({ id: 'p1', path: '/repo' })]);
     mockListAgentResources.mockReset();
   });

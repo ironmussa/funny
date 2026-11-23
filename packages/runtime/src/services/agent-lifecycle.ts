@@ -20,9 +20,11 @@ import type {
   Thread,
   ThreadStatus,
 } from '@funny/shared';
+import { internal, type DomainError } from '@funny/shared/errors';
 import { createSecretRedactor, type SecretValue } from '@funny/shared/project-secrets';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
+import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
@@ -199,7 +201,13 @@ export class AgentLifecycleManager {
 
   // ── Start ──────────────────────────────────────────────────────
 
-  async startAgent(
+  /**
+   * Start (or steer) the agent of a thread. Every start failure comes back as
+   * an `Err`, never a rejection (#230). A failure after the thread turned
+   * `running` has already marked it failed and closed its run span, so a
+   * caller only decides what else to do (log, re-enqueue, answer an error).
+   */
+  startAgent(
     threadId: string,
     prompt: string,
     cwd: string,
@@ -215,7 +223,29 @@ export class AgentLifecycleManager {
     /** Steer the live turn (interrupt + redirect) instead of respawning.
      *  Set by the caller when sending to a running thread in 'steer' mode. */
     steer?: boolean,
-  ): Promise<void> {
+  ): ResultAsync<void, DomainError> {
+    const req: StartRequest = {
+      threadId,
+      prompt,
+      cwd,
+      model,
+      permissionMode,
+      images,
+      disallowedTools,
+      allowedTools,
+      provider,
+      mcpServers,
+      skipMessageInsert,
+      effort,
+      steer,
+    };
+    return ResultAsync.fromPromise(this.startAgentImpl(req), (error) =>
+      internal(errorMessage(error, `Failed to start ${provider} agent process`)),
+    );
+  }
+
+  private async startAgentImpl(req: StartRequest): Promise<void> {
+    const { threadId, prompt, model, permissionMode, images, provider, skipMessageInsert } = req;
     log.info('startAgent called', {
       namespace: 'agent',
       threadId,
@@ -238,22 +268,6 @@ export class AgentLifecycleManager {
     );
     const ownerId = currentThread?.userId;
 
-    const req: StartRequest = {
-      threadId,
-      prompt,
-      cwd,
-      model,
-      permissionMode,
-      images,
-      disallowedTools,
-      allowedTools,
-      provider,
-      mcpServers,
-      skipMessageInsert,
-      effort,
-      steer,
-    };
-
     // Once the thread is `running`, ANY failure before the agent process is
     // handed off has to drive it back to `failed` and close the run span.
     // Previously only `launchAgent` did that, so a throw earlier in the start
@@ -264,7 +278,8 @@ export class AgentLifecycleManager {
       await this.runStartSequence(req, { currentThread, newStatus, resumeReason, ownerId });
     } catch (err: any) {
       // Close the span (a no-op if it never opened) and mark the thread failed
-      // before re-throwing, so no start failure leaves the thread `running`.
+      // before re-throwing (`startAgent` turns it into an `Err`), so no start
+      // failure leaves the thread `running`.
       this.endRunSpan(threadId, 'error', err?.message);
       const message = err?.message || `Failed to start ${provider} agent process`;
       log.error(`Failed to start ${provider} agent`, {
@@ -280,8 +295,7 @@ export class AgentLifecycleManager {
   /**
    * The start sequence from the user-message insert through handing the process
    * to the orchestrator. Any throw here is caught by `startAgent`'s single
-   * failure path (#195). Returns early (leaving the thread failed via
-   * `resolveCwdOrFail`) when the cwd cannot be resolved.
+   * failure path (#195), an unresolvable cwd included.
    */
   private async runStartSequence(req: StartRequest, startState: StartState): Promise<void> {
     const { threadId, prompt, model, permissionMode, provider } = req;
@@ -313,9 +327,7 @@ export class AgentLifecycleManager {
     // The caller passes a best-effort cwd, but `resolveThreadCwd` is the source
     // of truth (see scratch-threads design D3).
     if (thread) {
-      const resolvedCwd = await this.resolveCwdOrFail(threadId, thread, project);
-      if (resolvedCwd === null) return;
-      cwd = resolvedCwd;
+      cwd = this.resolveCwdOrThrow(threadId, thread, project);
       await this.prepareWorkspace(threadId, thread, project, cwd);
     }
 
@@ -551,12 +563,16 @@ export class AgentLifecycleManager {
     this.eventRouter.emitWSToUser(threadId, userId, 'agent:status', { status: 'failed' });
   }
 
-  /** Resolve the thread cwd; on failure marks the thread failed and returns null. */
-  private async resolveCwdOrFail(
+  /**
+   * Resolve the thread cwd, or throw so the start fails through `startAgent`'s
+   * single failure path: the thread is marked failed AND the caller gets an
+   * `Err` (#234). Returning early here used to report the failed start `Ok`.
+   */
+  private resolveCwdOrThrow(
     threadId: string,
     thread: RuntimeThreadRecord,
     project: StartProject,
-  ): Promise<string | null> {
+  ): string {
     const cwdResult = resolveThreadCwd(
       // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
       thread as unknown as Thread,
@@ -571,8 +587,7 @@ export class AgentLifecycleManager {
       kind: errInfo.kind,
       message: errInfo.message,
     });
-    await this.failStart(threadId, thread.userId, errInfo.message);
-    return null;
+    throw new Error(errInfo.message);
   }
 
   /** Get the working directory ready before the agent touches it. */
@@ -731,7 +746,14 @@ export class AgentLifecycleManager {
 
   // ── Stop / Cleanup ─────────────────────────────────────────────
 
-  async stopAgent(threadId: string): Promise<void> {
+  /** Stop the agent of a thread; a failed lookup or stop is an `Err` (#230). */
+  stopAgent(threadId: string): ResultAsync<void, DomainError> {
+    return ResultAsync.fromPromise(this.stopAgentImpl(threadId), (error) =>
+      internal(errorMessage(error, 'Failed to stop agent process')),
+    );
+  }
+
+  private async stopAgentImpl(threadId: string): Promise<void> {
     const thread = await this.threadManager.getThread(threadId);
     if (thread?.provider === 'external') return;
     await this.orchestrator.stopAgent(threadId);
@@ -830,4 +852,10 @@ export class AgentLifecycleManager {
     delete (globalThis as any).__funnyActiveAgentSnapshot;
     delete (globalThis as any).__funnyActiveAgents;
   }
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error) return error;
+  return fallback;
 }

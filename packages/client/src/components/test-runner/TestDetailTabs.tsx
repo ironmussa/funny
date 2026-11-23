@@ -1132,7 +1132,7 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
               key={`${anno.type}\u0000${anno.description}`}
               className="border-border/30 flex items-start gap-2 border-b px-3 py-1.5"
             >
-              <Badge variant="outline" className="shrink-0 text-[10px]">
+              <Badge variant="outline" className="text-2xs shrink-0">
                 @{anno.type}
               </Badge>
               {anno.description && (
@@ -1258,7 +1258,7 @@ function TabTrigger({
       {icon}
       {label}
       {count != null && count > 0 && (
-        <Badge variant="secondary" className="ml-1 h-4 min-w-[16px] px-1 text-[10px]">
+        <Badge variant="secondary" className="text-2xs ml-1 h-4 min-w-[16px] px-1">
           {count}
         </Badge>
       )}

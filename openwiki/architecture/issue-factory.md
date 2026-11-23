@@ -48,7 +48,11 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    missing, or already in the factory.
 1. **Admit**: each tick fills `maxConcurrent − slot-holding runs`: first the `requested` runs in
    queue order (compare-and-set `requested → queued`), then, in automatic mode, labelled issues
-   (a new `queued` row, `source = 'label'`). An issue whose blockers are unfinished is skipped,
+   (a new `queued` row, `source = 'label'`). The tick's count is only a first guess: every write
+   that puts a run in flight (admit, label admission, Retry, take-over) re-checks the cap in the
+   same step (`withFreeSlot` in `factory-runs.ts`: serialized per factory in-process, and on
+   Postgres in a transaction holding an advisory lock on the factory), so a Retry during the
+   tick's GitHub reads cannot push the factory over `maxConcurrent` (#328). An issue whose blockers are unfinished is skipped,
    with its `wait_reason` recorded, and the next one is tried. A blocker is finished when its
    issue is closed or it has a merged run in this factory; an unreadable blocker list blocks for
    that tick. A partial unique index (migration 098) allows one non-terminal run per issue, so a
@@ -59,7 +63,11 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    **continues that thread** with a follow-up message, so the agent keeps its context. The agent
    commits, pushes the run's branch (`factory/issue-<n>-<runId8>`) and opens the PR; the server has no
    checkout. A worktree thread is created on that branch (the launch passes `branch`), so the
-   thread, its worktree and the PR share one branch. If the branch exists already (a retried
+   thread, its worktree and the PR share one branch. A new branch starts from the remote's copy
+   of the repository's DEFAULT branch, fetched first (the launch passes `baseBranch` and
+   `baseFromRemote`; `createWorktree`'s `fromRemote`), so the PR holds the agent's commits only:
+   not the branch the enabler's checkout is on, nor their unpushed commits. A default branch that
+   cannot be read fails the step. If the branch exists already (a retried
    run), the worktree checks it out and the agent goes on from the earlier attempt
    (`worktreeBranchName`, `createWorktree`'s `reuseExistingBranch`); only when another worktree
    still holds it does the runner fall back to a name from the title. Each follow-up step sends
@@ -92,8 +100,20 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    any agent ran → a label run is dropped, a sent one goes back to `requested` in its place, and
    the reason is shown as the factory's `blockedReason`.
    **No change**: when `create_pr` finds no PR and the branch has no commits ahead of the
-   default branch, the run comments the agent's last message on the issue, removes its
-   worktrees and parks `waiting_human` with reason `no change` (the flow stops there).
+   default branch, the run comments the agent's last message on the issue and removes its
+   worktrees (the flow stops there). With nothing left behind the run ends as `no_change`, a
+   terminal state that is not a failure: the issue is not closed ("nothing to change" is the
+   agent's opinion) but handed back to a person, its factory label swapped for `needs-triage`
+   (`relabelIssue`), nobody is notified, and the label does not admit the issue again
+   (`endedWithoutChange`); Retry starts a new agent. A worktree with uncommitted files or
+   commits only its branch has is kept and named in the comment, and the run parks
+   `waiting_human` with reason `no change` instead: the runner checks and removes in one
+   request (`POST /api/worktrees/remove-unchanged`), and a runner that cannot answer leaves the
+   worktree in place and counts as kept.
+   **A finished turn is not a finished agent**: a `completed` thread with a background job
+   still running or a watcher pending (or one that ended in the last 2 minutes, whose wake is
+   starting) still counts as running (`awaitsWake` in `factory-thread-waits.ts`), so the flow
+   does not move on while the agent waits for its own tests.
 7. **Finished outside the factory**: each tick looks at the parked runs (`waiting_human`, `failed`)
    that have a PR. If a person merged it, the run becomes `merged`; if it was closed without a
    merge, `stopped` with that reason. The write is a compare-and-set from the parked states
@@ -137,10 +157,15 @@ at the PR for teams that merge by hand).
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
-  branch and PR; a completed implement step is kept, later steps run again.
+  branch and PR; a completed implement step is kept, later steps run again. Refused (409) while
+  the factory already runs `maxConcurrent` runs. A `no_change` run (or one parked with reason `no change`)
+  keeps nothing (replaying its thread would only reach `no change` again): a new agent starts.
+  The threads the retry does not keep are archived (unless one is still running), so the list does
+  not show the old failed thread next to the new one under the same title.
 - **Take over**: when the thread's **owner** follows up on a parked run's last thread after it
   parked (noted by `POST /api/threads/:id/message`), the run resumes from that step when the thread
-  completes. A steer sharee's follow-up never does: it would otherwise move the flow toward a merge
+  completes (when the factory is full, the run stays parked; a later completion of the follow-up,
+  or a Retry, takes it over once a slot frees). A steer sharee's follow-up never does: it would otherwise move the flow toward a merge
   in the enabler's name. The note is in memory; after a restart use Retry.
 - **Lost access**: if the enabler loses `steer`, the factory is turned off and their open runs are
   stopped (`factory.disabled_access_lost` audit).

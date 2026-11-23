@@ -146,8 +146,10 @@ export {
   pruneOrphanWorktrees,
   pruneStaleWorktreeSafeDirectories,
   checkWorktreePathInProject,
+  worktreeUnsavedWork,
   WORKTREE_DIR_NAME,
   type WorktreeInfo,
+  type WorktreeUnsavedWork,
   type WorktreePreview,
 } from './worktree.js';
 

@@ -22,7 +22,7 @@ const mocks = (() => ({
   threadEventBus: {
     emit: vi.fn(),
   },
-  startAgent: vi.fn(async (..._args: unknown[]) => undefined),
+  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
   getCurrentBranch: vi.fn(),
   createWorktree: vi.fn(),
   removeWorktree: vi.fn(),
@@ -135,6 +135,7 @@ mock.module('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 
+import { internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { ok, err, okAsync, errAsync } from 'neverthrow';
 
@@ -562,7 +563,7 @@ describe('createAndStartThread', () => {
       mocks.adoptStagedUploads.mockReturnValue(
         okAsync([{ path: '.funny/uploads/fixed-thread-id/spec.pdf' }]),
       );
-      mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+      mocks.startAgent.mockReturnValueOnce(errAsync(internal('spawn failed')));
 
       const result = await createAndStartThread({
         projectId: 'p-1',
@@ -676,6 +677,37 @@ describe('createAndStartThread', () => {
     });
   });
 
+  // The issue factory names the default branch and asks for the remote's copy,
+  // so its pull request does not carry the checkout's branch or unpushed commits.
+  test('a worktree thread with baseFromRemote starts from the remote base branch', async () => {
+    mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
+    mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
+
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'worktree',
+      prompt: 'Fix the issue',
+      title: 'Factory run',
+      baseBranch: 'master',
+      baseFromRemote: true,
+    });
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'worktree', baseBranch: 'master' }),
+    );
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(mocks.createWorktree).toHaveBeenCalledWith(
+      '/projects/my-app',
+      expect.any(String),
+      'master',
+      expect.any(Function),
+      { reuseExistingBranch: false, fromRemote: true },
+    );
+  });
+
   test('creates worktree thread in setting_up and kicks off background setup', async () => {
     mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
     mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
@@ -726,7 +758,8 @@ describe('createAndStartThread', () => {
       'my-app/new-feature-fixed-',
       'main',
       expect.any(Function),
-      { reuseExistingBranch: false },
+      // The checkout's branch is the default base: never taken from the remote.
+      { reuseExistingBranch: false, fromRemote: false },
     );
     expect(mocks.setupWorktree).toHaveBeenCalledWith(
       '/projects/my-app',
@@ -859,7 +892,7 @@ describe('createAndStartThread', () => {
   test('marks worktree thread failed when startAgent throws after setup', async () => {
     mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
     mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
-    mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+    mocks.startAgent.mockReturnValueOnce(errAsync(internal('spawn failed')));
 
     const result = await createAndStartThread({
       projectId: 'p-1',

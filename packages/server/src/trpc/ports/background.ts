@@ -18,7 +18,22 @@ type WatcherRow = typeof watchers.$inferSelect;
 type JobRow = typeof jobs.$inferSelect;
 
 const toWatcher = (row: WatcherRow): Watcher => ({ ...row, status: row.status as WatcherStatus });
-const toJob = (row: JobRow): Job => ({ ...row, status: row.status as JobStatus });
+/** Only the `Job` fields: a column added to the table does not reach the client by itself. */
+const toJob = (row: JobRow): Job => ({
+  id: row.id,
+  threadId: row.threadId,
+  userId: row.userId,
+  command: row.command,
+  cwd: row.cwd,
+  label: row.label,
+  pid: row.pid,
+  logPath: row.logPath,
+  exitPath: row.exitPath,
+  status: row.status as JobStatus,
+  exitCode: row.exitCode,
+  startedAt: row.startedAt,
+  updatedAt: row.updatedAt,
+});
 
 export const watchersPort: WatchersPort = {
   async list(userId) {
@@ -48,12 +63,15 @@ export const watchersPort: WatchersPort = {
 };
 
 export const jobsPort: JobsPort = {
-  async list(userId) {
+  // Newest first; the id breaks ties so consecutive pages neither repeat nor skip a job.
+  async list(userId, page) {
     const rows = await db
       .select()
       .from(jobs)
       .where(eq(jobs.userId, userId))
-      .orderBy(desc(jobs.startedAt));
+      .orderBy(desc(jobs.startedAt), desc(jobs.id))
+      .limit(page.limit)
+      .offset(page.offset);
     return ok(rows.map(toJob));
   },
 };

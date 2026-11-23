@@ -150,7 +150,7 @@ export function SchedulerView() {
                       </button>
                       <StatusBadge status={status} />
                       {run.attempt > 0 && (
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-2xs">
                           attempt {run.attempt}
                         </Badge>
                       )}

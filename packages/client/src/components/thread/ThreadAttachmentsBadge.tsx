@@ -59,7 +59,7 @@ function ThreadAttachmentsBadge({
           )}
         >
           <Paperclip className="icon-xs" />
-          <span className="text-[10px] leading-none">{files.length}</span>
+          <span className="text-2xs leading-none">{files.length}</span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-xs text-xs">

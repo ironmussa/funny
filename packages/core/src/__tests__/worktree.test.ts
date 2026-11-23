@@ -12,6 +12,7 @@ import {
   removeWorktree,
   removeBranch,
   shouldRegisterSafeDirectory,
+  worktreeUnsavedWork,
 } from '../git/worktree.js';
 
 const TMP = resolve(tmpdir(), 'core-worktree-test-' + Date.now());
@@ -223,6 +224,133 @@ describe('worktree operations', () => {
     test('does not throw for non-existent worktree', async () => {
       // Should not throw because reject=false
       await removeWorktree(repoPath, '/nonexistent/path');
+    });
+  });
+
+  // An issue-factory worktree started from whatever the local checkout had, so
+  // its pull request carried the local base's unpushed commits.
+  describe('createWorktree from the remote base', () => {
+    function commit(cwd: string, file: string): string {
+      writeFileSync(resolve(cwd, file), file);
+      executeSync('git', ['add', '.'], { cwd });
+      executeSync('git', ['commit', '-m', file], { cwd });
+      return executeSync('git', ['rev-parse', 'HEAD'], { cwd }).stdout.trim();
+    }
+
+    /** A bare remote holding the repo's first commit, with the local base one commit ahead. */
+    function withRemoteBehind(): { base: string; pushed: string; local: string } {
+      const base = executeSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: repoPath,
+      }).stdout.trim();
+      const remote = resolve(repoPath, '..', 'remote.git');
+      executeSync('git', ['init', '--bare', remote], { cwd: repoPath });
+      executeSync('git', ['remote', 'add', 'origin', remote], { cwd: repoPath });
+      executeSync('git', ['push', 'origin', base], { cwd: repoPath });
+      const pushed = executeSync('git', ['rev-parse', 'HEAD'], { cwd: repoPath }).stdout.trim();
+      return { base, pushed, local: commit(repoPath, 'unpushed.txt') };
+    }
+
+    const headOf = (cwd: string) =>
+      executeSync('git', ['rev-parse', 'HEAD'], { cwd }).stdout.trim();
+
+    test("starts from origin, without the local base's unpushed commits", async () => {
+      const { base, pushed } = withRemoteBehind();
+      const result = await createWorktree(repoPath, 'from-remote', base, undefined, {
+        fromRemote: true,
+      });
+      const wtPath = result._unsafeUnwrap();
+      expect(headOf(wtPath)).toBe(pushed);
+      // The new branch does not track the base branch.
+      const upstream = executeSync('git', ['config', '--get', 'branch.from-remote.merge'], {
+        cwd: wtPath,
+        reject: false,
+      });
+      expect(upstream.stdout.trim()).toBe('');
+    });
+
+    test('starts from origin even when the checkout is on another branch', async () => {
+      const { base, pushed } = withRemoteBehind();
+      executeSync('git', ['checkout', '-b', 'someone-elses-work'], { cwd: repoPath });
+      commit(repoPath, 'other.txt');
+      const result = await createWorktree(repoPath, 'from-remote-2', base, undefined, {
+        fromRemote: true,
+      });
+      expect(headOf(result._unsafeUnwrap())).toBe(pushed);
+    });
+
+    test('fetches first: a commit pushed from elsewhere is included', async () => {
+      const { base } = withRemoteBehind();
+      // Move the remote ahead without the local remote-tracking ref knowing.
+      const clone = resolve(repoPath, '..', 'clone');
+      executeSync('git', ['clone', resolve(repoPath, '..', 'remote.git'), clone], {
+        cwd: repoPath,
+      });
+      executeSync('git', ['config', 'user.email', 'test@test.com'], { cwd: clone });
+      executeSync('git', ['config', 'user.name', 'Test'], { cwd: clone });
+      const newer = commit(clone, 'from-elsewhere.txt');
+      executeSync('git', ['push', 'origin', base], { cwd: clone });
+
+      const result = await createWorktree(repoPath, 'from-remote-3', base, undefined, {
+        fromRemote: true,
+      });
+      expect(headOf(result._unsafeUnwrap())).toBe(newer);
+    });
+
+    test('without a remote it falls back to the local base branch', async () => {
+      const base = executeSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: repoPath,
+      }).stdout.trim();
+      const local = headOf(repoPath);
+      const result = await createWorktree(repoPath, 'no-remote', base, undefined, {
+        fromRemote: true,
+      });
+      expect(headOf(result._unsafeUnwrap())).toBe(local);
+    });
+
+    test('without fromRemote the local base is used, as before', async () => {
+      const { base, local } = withRemoteBehind();
+      const result = await createWorktree(repoPath, 'local-base', base);
+      expect(headOf(result._unsafeUnwrap())).toBe(local);
+    });
+  });
+
+  // Issue #229: the issue factory removed a worktree holding 85 uncommitted
+  // files. This is what decides whether a worktree may be deleted.
+  describe('worktreeUnsavedWork', () => {
+    async function freshWorktree(): Promise<string> {
+      const result = await createWorktree(repoPath, 'unsaved-branch');
+      expect(result.isOk()).toBe(true);
+      return result._unsafeUnwrap();
+    }
+
+    test('a worktree just created has nothing to lose, even off an unpushed base', async () => {
+      // The test repo has no remote: its base commit is on no remote either,
+      // but the base branch keeps it.
+      const wtPath = await freshWorktree();
+      const work = (await worktreeUnsavedWork(wtPath))._unsafeUnwrap();
+      expect(work).toEqual({ dirtyFileCount: 0, unpushedCommitCount: 0 });
+    });
+
+    test('counts untracked and modified files', async () => {
+      const wtPath = await freshWorktree();
+      writeFileSync(resolve(wtPath, 'new-file.txt'), 'new');
+      writeFileSync(resolve(wtPath, 'another.txt'), 'new');
+      const work = (await worktreeUnsavedWork(wtPath))._unsafeUnwrap();
+      expect(work).toEqual({ dirtyFileCount: 2, unpushedCommitCount: 0 });
+    });
+
+    test('counts commits only its branch has', async () => {
+      const wtPath = await freshWorktree();
+      writeFileSync(resolve(wtPath, 'committed.txt'), 'x');
+      executeSync('git', ['add', '.'], { cwd: wtPath });
+      executeSync('git', ['commit', '-m', 'work'], { cwd: wtPath });
+      const work = (await worktreeUnsavedWork(wtPath))._unsafeUnwrap();
+      expect(work).toEqual({ dirtyFileCount: 0, unpushedCommitCount: 1 });
+    });
+
+    test('a path that is not a repository is an error, not "nothing to lose"', async () => {
+      const result = await worktreeUnsavedWork(resolve(TMP, `missing-${testCount}`));
+      expect(result.isErr()).toBe(true);
     });
   });
 

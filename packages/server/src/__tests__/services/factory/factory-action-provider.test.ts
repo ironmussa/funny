@@ -21,6 +21,7 @@ import type {
   FactoryMergeOutcome,
   FactoryProofCheck,
 } from '../../../services/factory/factory-pull-requests.js';
+import type { KeptWorktree } from '../../../services/factory/factory-thread-requests.js';
 
 const scope = {
   runId: 'r1',
@@ -88,6 +89,56 @@ describe('factory action provider', () => {
     await provider.spawnAgent({ prompt: 'implement', cwd: '' });
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ branch: 'factory/issue-7-r1', source: 'factory' });
+  });
+
+  // Runs #227-#230 started from the branch the enabler's checkout was on:
+  // #227's pull request carried 11 commits that were not the agent's.
+  test("a worktree run starts from the remote's default branch, not the checkout's", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const { provider } = providerWith({
+      scope: { ...scope, mode: 'worktree' as const },
+      defaultBranch: async () => ok('master'),
+      launch: async (body) => {
+        bodies.push(body);
+        return ok({ thread: { id: 't-new' }, threadId: 't-new', runnerId: 'r' });
+      },
+    });
+    await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    expect(bodies[0]).toMatchObject({
+      mode: 'worktree',
+      branch: 'factory/issue-7-r1',
+      baseBranch: 'master',
+      baseFromRemote: true,
+    });
+  });
+
+  test('a worktree run does not start when the default branch cannot be read', async () => {
+    let launches = 0;
+    const { provider } = providerWith({
+      scope: { ...scope, mode: 'worktree' as const },
+      defaultBranch: async () => err({ message: 'GitHub answered 500' }),
+      launch: async () => {
+        launches++;
+        return ok({ thread: { id: 't-new' }, threadId: 't-new', runnerId: 'r' });
+      },
+    });
+    const result = await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('default branch');
+    expect(launches).toBe(0);
+  });
+
+  test('a local run names no base branch', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const { provider } = providerWith({
+      defaultBranch: async () => ok('master'),
+      launch: async (body) => {
+        bodies.push(body);
+        return ok({ thread: { id: 't-new' }, threadId: 't-new', runnerId: 'r' });
+      },
+    });
+    await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    expect(bodies[0]).not.toHaveProperty('baseBranch');
   });
 
   test('a thread whose launch finished after the run was stopped is stopped', async () => {
@@ -259,6 +310,42 @@ describe('factory action provider regression proof', () => {
     expect(polled).toEqual(['p1', 'p2']);
   });
 
+  test('a runner restarting mid-proof is waited for, then the lost job is started again', async () => {
+    const polled: string[] = [];
+    let starts = 0;
+    let offlineLooks = 2;
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      proof: {
+        pollMs: 1,
+        startProof: async () => ok({ proofId: `p${++starts}`, state: 'running' }),
+        pollProof: async (_threadId, proofId) => {
+          polled.push(proofId);
+          if (offlineLooks-- > 0) return err('runner unavailable: general-runner-offline');
+          return proofId === 'p1' ? err('proof-not-found') : done('pass');
+        },
+      },
+    });
+    const result = await provider.regressionProof!({ rules });
+    expect(result.ok).toBe(true);
+    expect(polled).toEqual(['p1', 'p1', 'p1', 'p2']);
+  });
+
+  test('a runner that stays unreachable past the grace ends the wait', async () => {
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      proof: {
+        pollMs: 1,
+        offlineGraceMs: 5,
+        startProof: async () => ok({ proofId: 'p1', state: 'running' }),
+        pollProof: async () => err('runner unavailable: general-runner-offline'),
+      },
+    });
+    const result = await provider.regressionProof!({ rules });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('poll failed: runner unavailable: general-runner-offline');
+  });
+
   test('an issue with a required label fails a proof that found no test', async () => {
     const proof = {
       startProof: async () => ok({ proofId: 'p1', state: 'running' }),
@@ -385,15 +472,20 @@ describe('factory action provider merge gate', () => {
 });
 
 describe('factory action provider "no change" outcome', () => {
-  function noPr(branchAhead: ResultAsync<boolean, GithubCallError>) {
+  function noPr(branchAhead: ResultAsync<boolean, GithubCallError>, kept: KeptWorktree[] = []) {
     const comments: string[] = [];
     const records: Array<Record<string, unknown>> = [];
     let removed = 0;
+    let released = 0;
     const { provider } = providerWith({
       threadIds: ['t1'],
+      releaseIssue: async () => {
+        released++;
+      },
       lastThreadMessage: async () => 'The bug is already fixed on main.',
-      removeWorktrees: async () => {
+      removeUnchangedWorktrees: async () => {
         removed++;
+        return kept;
       },
       github: {
         findPullRequest: () => okAsync(null),
@@ -415,17 +507,42 @@ describe('factory action provider "no change" outcome', () => {
         records.push({ ...input });
       },
     });
-    return { provider, comments, records, removed: () => removed };
+    return { provider, comments, records, removed: () => removed, released: () => released };
   }
 
-  test('no pull request and no commits: comment, clean up, wait for a person, stop the flow', async () => {
-    const { provider, comments, records, removed } = noPr(okAsync<boolean, GithubCallError>(false));
+  // Issue #236 (an index issue): the agent rightly changed nothing, and the run
+  // stayed "waiting for you" at the pull-request step as if it had failed.
+  test('no pull request, no commits, nothing left behind: comment, clean up, end as no_change', async () => {
+    const { provider, comments, records, removed, released } = noPr(
+      okAsync<boolean, GithubCallError>(false),
+    );
     const result = await provider.createPr({ cwd: '', title: 'Fix it' });
     expect(result.ok).toBe(false);
     expect(result.metadata).toMatchObject({ outcome: 'no_change' });
     expect(comments).toEqual([`${NO_CHANGE_LINE}\n\nThe bug is already fixed on main.`]);
     expect(removed()).toBe(1);
+    // The issue goes back to a person, and the run is over without a failure.
+    expect(released()).toBe(1);
+    expect(records).toContainEqual({ state: 'no_change', failureReason: null });
+    expect(records).not.toContainEqual(expect.objectContaining({ state: 'waiting_human' }));
+  });
+
+  // Issue #229: the agent ended its turn before committing; the cleanup removed
+  // its 85 edited files. The checkout is kept and the comment says where it is.
+  test('a checkout with uncommitted work is kept, named in the comment, and waits for a person', async () => {
+    const { provider, comments, records, released } = noPr(
+      okAsync<boolean, GithubCallError>(false),
+      [{ threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 85, unpushedCommitCount: 1 }],
+    );
+    const result = await provider.createPr({ cwd: '', title: 'Fix it' });
+    expect(result.metadata).toMatchObject({ outcome: 'no_change' });
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toStartWith(NO_CHANGE_LINE);
+    expect(comments[0]).toContain('85 uncommitted file(s) and 1 unpushed commit(s)');
+    expect(comments[0]).toContain('/srv/wt/t1');
     expect(records).toContainEqual({ state: 'waiting_human', failureReason: 'no change' });
+    // Still in the factory's hands: its label stays.
+    expect(released()).toBe(0);
   });
 
   test('no pull request but commits ahead: the agent did not open one (an error, no comment)', async () => {

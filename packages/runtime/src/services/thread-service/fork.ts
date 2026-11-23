@@ -150,11 +150,7 @@ async function forkThreadImpl(params: ForkThreadParams) {
       }
     }
 
-    if (
-      m.role === 'user' &&
-      source.fileCheckpointingEnabled &&
-      canDoGitOps({ isScratch: !!source.isScratch })
-    ) {
+    if (m.role === 'user' && source.fileCheckpointingEnabled && canDoGitOps(source)) {
       const copied = await copyGitCheckpoint({
         cwd,
         from: { threadId: source.id, messageId: m.id },

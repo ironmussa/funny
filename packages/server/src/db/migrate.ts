@@ -2193,6 +2193,19 @@ const migrations: Migration[] = [
       await ctx().addColumn('activities', 'effects', 'TEXT');
     },
   },
+  {
+    // A run that ended with no change (`no_change`) is over: it must not hold
+    // its issue in the one-active-run index, or the issue could not be sent again.
+    name: '108_factory_runs_no_change_ends_a_run',
+    async up() {
+      await ctx().exec(sql`DROP INDEX IF EXISTS factory_runs_one_active_per_issue`);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+        ON factory_runs (factory_id, issue_number)
+        WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')
+      `);
+    },
+  },
 ];
 
 /**

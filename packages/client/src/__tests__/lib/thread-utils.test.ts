@@ -63,8 +63,27 @@ describe('statusConfig', () => {
     expect(statusConfig.completed.className).toContain('text-thread-icon-completed');
   });
 
-  test('failed has red color class', () => {
-    expect(statusConfig.failed.className).toContain('red');
+  // Red by default (`--color-red-400`), the pastel red where a theme opts in (Minimal).
+  test('failed uses the themeable failed-icon color', () => {
+    expect(statusConfig.failed.className).toContain('text-thread-icon-failed');
+  });
+
+  // Minimal swaps these icons for dots in the sidebar (`.status-glyph-dots`);
+  // a status without a dot keeps its icon everywhere.
+  test('finished and interrupted statuses carry a dot fill', () => {
+    expect(statusConfig.completed.dotClassName).toBe('bg-thread-dot-completed');
+    expect(statusConfig.failed.dotClassName).toBe('bg-thread-dot-failed');
+    expect(statusConfig.interrupted.dotClassName).toBe('bg-thread-dot-interrupted');
+    expect(statusConfig.runner_offline.dotClassName).toBe('bg-thread-dot-interrupted');
+    expect(statusConfig.waiting.dotClassName).toBeUndefined();
+  });
+
+  // In place of the spinner, a launching or running thread shows a blinking gray dot.
+  test('launching and running statuses carry a blinking dot', () => {
+    for (const status of ['setting_up', 'pending', 'running'] as const) {
+      expect(statusConfig[status].dotClassName).toContain('bg-thread-dot-running');
+      expect(statusConfig[status].dotClassName).toContain('status-glyph-blink');
+    }
   });
 
   // setting_up → pending → running is one launch; a different icon for
@@ -260,12 +279,17 @@ describe('gitSyncStateConfig', () => {
     expect(gitSyncStateConfig.clean.className).toContain('text-muted-foreground');
   });
 
-  test('pushed has green class', () => {
-    expect(gitSyncStateConfig.pushed.className).toContain('text-green-500');
+  // Theme-driven tokens: the old Tailwind colors by default, pastels in Minimal.
+  test('unpushed uses the themeable unpushed-icon color', () => {
+    expect(gitSyncStateConfig.unpushed.className).toContain('text-git-icon-unpushed');
   });
 
-  test('merged has purple class', () => {
-    expect(gitSyncStateConfig.merged.className).toContain('text-purple-400');
+  test('pushed uses the themeable pushed-icon color', () => {
+    expect(gitSyncStateConfig.pushed.className).toContain('text-git-icon-pushed');
+  });
+
+  test('merged uses the themeable merged-icon color', () => {
+    expect(gitSyncStateConfig.merged.className).toContain('text-git-icon-merged');
   });
 });
 

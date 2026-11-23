@@ -143,7 +143,7 @@ function ReactionBar({
           key={key}
           variant="outline"
           size="xs"
-          className="h-5 gap-1 px-1.5 text-[10px]"
+          className="text-2xs h-5 gap-1 px-1.5"
           disabled={disabled}
           onClick={() => onReact(key)}
           data-testid={`${testIdBase}-reaction-${key}`}
@@ -487,7 +487,7 @@ export function PinnedPRCard({
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="h-3.5 px-1 text-[9px]">
+            <Badge variant="outline" className="text-3xs h-3.5 px-1">
               {c.author_association}
             </Badge>
           )}
@@ -556,7 +556,7 @@ export function PinnedPRCard({
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
-            <Badge variant="outline" className="h-3.5 px-1 text-[9px]">
+            <Badge variant="outline" className="text-3xs h-3.5 px-1">
               {c.author_association}
             </Badge>
           )}
@@ -640,7 +640,7 @@ export function PinnedPRCard({
           <Badge
             variant="outline"
             className={cn(
-              'h-3.5 px-1 text-[9px]',
+              'h-3.5 px-1 text-3xs',
               rv.state === 'APPROVED' && 'text-status-success border-status-success/40',
               rv.state === 'CHANGES_REQUESTED' && 'text-status-error border-status-error/40',
               (rv.state === 'COMMENTED' || rv.state === 'DISMISSED' || rv.state === 'PENDING') &&
@@ -711,7 +711,7 @@ export function PinnedPRCard({
               <span className="text-sm font-semibold">{pr.title}</span>
             </div>
             <PRMergeLine pr={pr} data-testid={`pinned-pr-merge-line-${pr.number}`} />
-            <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
+            <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
               {pr.user && (
                 <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
               )}
@@ -733,7 +733,7 @@ export function PinnedPRCard({
               {pr.draft ? (
                 <>
                   <span>&middot;</span>
-                  <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] leading-none">
+                  <Badge variant="outline" className="text-3xs h-3.5 px-1 py-0 leading-none">
                     {t('review.pullRequests.draft', 'Draft')}
                   </Badge>
                 </>
@@ -771,7 +771,7 @@ export function PinnedPRCard({
                     data-testid={`pinned-pr-merge-${method}-${pr.number}`}
                   >
                     <span className="text-xs font-medium">{label}</span>
-                    <span className="text-muted-foreground text-[10px]">{hint}</span>
+                    <span className="text-muted-foreground text-2xs">{hint}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -829,7 +829,7 @@ export function PinnedPRCard({
       {/* Review threads */}
       {!loading && threads.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
+          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium tracking-wide uppercase">
             <MessageSquare className="size-3" />
             <span>
               {t('review.pullRequests.reviewThreads', 'Review threads')} ({threads.length}
@@ -841,7 +841,7 @@ export function PinnedPRCard({
               <div key={filePath} className="flex flex-col gap-1.5">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="text-muted-foreground truncate font-mono text-[10px]">
+                    <div className="text-muted-foreground text-2xs truncate font-mono">
                       {filePath}
                     </div>
                   </TooltipTrigger>
@@ -860,7 +860,7 @@ export function PinnedPRCard({
                       )}
                       data-testid={`pinned-pr-thread-${th.id}`}
                     >
-                      <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
+                      <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
                         {th.is_resolved ? (
                           <CheckCircle2 className="text-status-success size-3" />
                         ) : (
@@ -875,7 +875,7 @@ export function PinnedPRCard({
                           <Button
                             variant="ghost"
                             size="xs"
-                            className="h-5 gap-1 px-1.5 text-[10px]"
+                            className="text-2xs h-5 gap-1 px-1.5"
                             disabled={resolving}
                             onClick={() => handleResolve(th)}
                             data-testid={`pinned-pr-thread-resolve-${th.id}`}
@@ -941,7 +941,7 @@ export function PinnedPRCard({
                           <Button
                             variant="ghost"
                             size="xs"
-                            className="h-5 gap-1 px-1.5 text-[10px]"
+                            className="text-2xs h-5 gap-1 px-1.5"
                             onClick={() => {
                               setReplyForThread(th.id);
                               setReplyBody('');
@@ -965,7 +965,7 @@ export function PinnedPRCard({
       {/* Reviews */}
       {!loading && conversation && conversation.reviews.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
+          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium tracking-wide uppercase">
             <ThumbsUp className="size-3" />
             <span>
               {t('review.pullRequests.reviews', 'Reviews')} ({conversation.reviews.length})
@@ -978,7 +978,7 @@ export function PinnedPRCard({
       {/* Conversation comments */}
       {!loading && conversation && (
         <div className="flex flex-col gap-2">
-          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
+          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium tracking-wide uppercase">
             <MessageSquare className="size-3" />
             <span>
               {t('review.pullRequests.conversation', 'Conversation')} (

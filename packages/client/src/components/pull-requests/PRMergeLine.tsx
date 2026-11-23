@@ -32,7 +32,7 @@ export function PRMergeLine({ pr, showDiffLink = true, className, ...props }: PR
   return (
     <div
       className={cn(
-        'text-muted-foreground flex flex-wrap items-center gap-1.5 text-2xs leading-5',
+        'text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs leading-5',
         className,
       )}
       data-testid={props['data-testid']}

@@ -7,8 +7,8 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
-import type { CommentAuthor, Thread, ThreadComment } from '@funny/shared';
-import { threadDeleteQuery } from '@funny/shared/contracts/threads';
+import type { CommentAuthor, CommentSource, Thread, ThreadComment } from '@funny/shared';
+import { threadCommentsQuery, threadDeleteQuery } from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context, type Next } from 'hono';
@@ -158,13 +158,30 @@ async function authorsByIds(userIds: string[]): Promise<Map<string, CommentAutho
   return new Map(rows.map((u: any) => [u.id, u as CommentAuthor]));
 }
 
-// GET /api/threads/:id/comments
+type CommentRow = typeof schema.threadComments.$inferSelect;
+
+/** A comment row as the shared `ThreadComment`, with its author joined in. */
+function toThreadComment(row: CommentRow, authors: Map<string, CommentAuthor>): ThreadComment {
+  return {
+    id: row.id,
+    threadId: row.threadId,
+    userId: row.userId,
+    source: row.source as CommentSource,
+    content: row.content,
+    createdAt: row.createdAt,
+    user: authors.get(row.userId) ?? null,
+  };
+}
+
+// GET /api/threads/:id/comments?limit=&offset=
+// One page counted back from the newest comment, returned oldest first.
 threadRoutes.get('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
+  const page = threadCommentsQuery.parse(c.req.query());
 
-  const comments = (await commentRepo.listComments(id)) as ThreadComment[];
-  const authors = await authorsByIds([...new Set(comments.map((cm) => cm.userId))]);
-  return c.json(comments.map((cm) => ({ ...cm, user: authors.get(cm.userId) ?? null })));
+  const rows: CommentRow[] = await commentRepo.listComments(id, page);
+  const authors = await authorsByIds([...new Set(rows.map((cm) => cm.userId))]);
+  return c.json(rows.map((row) => toThreadComment(row, authors)));
 });
 
 // POST /api/threads/:id/comments
@@ -193,11 +210,7 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
     source: 'user',
     content,
   });
-  const authors = await authorsByIds([userId]);
-  const comment: ThreadComment = {
-    ...inserted,
-    user: authors.get(userId) ?? null,
-  } as ThreadComment;
+  const comment = toThreadComment(inserted, await authorsByIds([userId]));
 
   // Live append for every current viewer (owner + sharees) via the thread's
   // presence room. The client also refetches on panel open as a backstop.

@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { PROVIDER_MODELS, PROVIDERS } from '@/lib/providers';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { SettingAnchor, SettingRow } from './settings/SettingRow';
 
@@ -88,7 +88,7 @@ const ModelSelect = memo(function ModelSelect({
 });
 
 export function PipelineSettings() {
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);

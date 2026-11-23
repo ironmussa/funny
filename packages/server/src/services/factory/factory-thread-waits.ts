@@ -13,13 +13,19 @@
  *
  * A thread that no longer exists, or that has run for longer than `staleMs`
  * without finishing, fails its step instead of holding the run forever.
+ *
+ * A finished turn is not always a finished agent: an agent that started a
+ * background job or scheduled a watcher ends its turn and is woken later. A
+ * `completed` thread with such a wake outstanding still counts as running
+ * (`awaitsWake`), so the flow does not move on (and remove the checkout) under
+ * an agent that is about to continue.
  */
 
 import { sleep as interruptibleSleep } from '@funny/shared/async';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../db/index.js';
-import { messages, threads } from '../../db/schema.js';
+import { jobs, messages, threads, watchers } from '../../db/schema.js';
 
 export type ThreadOutcome = {
   status: 'completed' | 'failed' | 'stopped' | 'interrupted' | 'missing' | 'stale' | 'cancelled';
@@ -54,8 +60,40 @@ export interface WaitAfter {
   sentAt: string;
 }
 
+/** Something that wakes a thread's agent after its turn ended: a job or a watcher. */
+export interface WakeSource {
+  /** Still due: a running job, a pending watcher. */
+  live: boolean;
+  /** When it last changed: for one that ended, when its wake was due to start. */
+  updatedAt: string;
+}
+
+/** How long after a job ended (or a watcher fired) its wake may take to start the agent. */
+export const WAKE_GRACE_MS = 2 * 60 * 1000;
+
+/**
+ * Whether a finished thread is about to run again: a wake source is still due,
+ * or one ended after the thread's last finish less than `graceMs` ago (its wake
+ * is starting). The grace bounds a wake that failed to start the agent.
+ */
+function awaitsWake(
+  thread: Pick<ThreadRecord, 'completedAt'>,
+  sources: WakeSource[],
+  now: number,
+  graceMs = WAKE_GRACE_MS,
+): boolean {
+  const finishedAt = thread.completedAt ? Date.parse(thread.completedAt) : 0;
+  return sources.some((source) => {
+    if (source.live) return true;
+    const at = Date.parse(source.updatedAt);
+    return at > finishedAt && now - at < graceMs;
+  });
+}
+
 export interface ThreadWaitsDeps {
   readThread?: (threadId: string) => Promise<ThreadRecord | null>;
+  /** The thread's jobs and watchers that wake its agent; none by default in tests. */
+  readWakeSources?: (threadId: string) => Promise<WakeSource[]>;
   readOutput?: (threadId: string) => Promise<string>;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   now?: () => number;
@@ -85,6 +123,28 @@ async function dbReadThread(threadId: string): Promise<ThreadRecord | null> {
     .from(threads)
     .where(eq(threads.id, threadId));
   return row ?? null;
+}
+
+/** A job that ended wakes the agent; a cancelled one does not. */
+const JOB_WAKES = ['running', 'exited', 'failed', 'killed'];
+/** A watcher wakes the agent while pending, and when it fires. */
+const WATCHER_WAKES = ['pending', 'fired'];
+
+async function dbReadWakeSources(threadId: string): Promise<WakeSource[]> {
+  const [jobRows, watcherRows] = await Promise.all([
+    db
+      .select({ status: jobs.status, updatedAt: jobs.updatedAt })
+      .from(jobs)
+      .where(and(eq(jobs.threadId, threadId), inArray(jobs.status, JOB_WAKES))),
+    db
+      .select({ status: watchers.status, updatedAt: watchers.updatedAt })
+      .from(watchers)
+      .where(and(eq(watchers.threadId, threadId), inArray(watchers.status, WATCHER_WAKES))),
+  ]);
+  return [
+    ...jobRows.map((row) => ({ live: row.status === 'running', updatedAt: row.updatedAt })),
+    ...watcherRows.map((row) => ({ live: row.status === 'pending', updatedAt: row.updatedAt })),
+  ];
 }
 
 /**
@@ -117,6 +177,7 @@ const dbReadOutput = async (threadId: string): Promise<string> =>
 export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
   const readThread = deps.readThread ?? dbReadThread;
   const readOutput = deps.readOutput ?? dbReadOutput;
+  const readWakeSources = deps.readWakeSources ?? dbReadWakeSources;
   const sleep = deps.sleep ?? interruptibleSleep;
   const now = deps.now ?? Date.now;
   const pollMs = deps.pollMs ?? POLL_MS;
@@ -142,12 +203,20 @@ export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
     };
   }
 
+  /** A completed turn whose agent a background job or a watcher will wake. */
+  async function wakeDue(threadId: string, thread: ThreadRecord): Promise<boolean> {
+    if (thread.status !== 'completed') return false;
+    return awaitsWake(thread, await readWakeSources(threadId), now());
+  }
+
   async function look(threadId: string, after?: WaitAfter): Promise<ThreadOutcome | null> {
     const thread = await readThread(threadId);
     if (!thread) {
       return { status: 'missing', reason: `The agent thread ${threadId} no longer exists.` };
     }
-    if (finishedAfter(thread, after)) return finished(threadId, thread);
+    if (finishedAfter(thread, after) && !(await wakeDue(threadId, thread))) {
+      return finished(threadId, thread);
+    }
     return staleOutcome(threadId, after?.sentAt ?? thread.createdAt);
   }
 

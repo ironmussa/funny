@@ -50,6 +50,8 @@ export const WORKSPACE_CLEANUP_REASONS = [
   'thread-deleted',
   'merged',
   'factory-merged',
+  // A factory run that ended without a commit; removed only when nothing is lost.
+  'factory-no-change',
   'review-finished',
   'manual',
   'setup-undone',

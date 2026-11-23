@@ -9,7 +9,9 @@ import {
   createThreadWaits,
   isWaitingOn,
   signalThreadTerminal,
+  WAKE_GRACE_MS,
   type ThreadRecord,
+  type WakeSource,
 } from '../../../services/factory/factory-thread-waits.js';
 
 const created = new Date(0).toISOString();
@@ -19,9 +21,14 @@ interface RecordSlot {
   current: ThreadRecord | null;
 }
 
-function waitsOver(record: { current: ThreadRecord | null }, now = () => 0) {
+function waitsOver(
+  record: { current: ThreadRecord | null },
+  now = () => 0,
+  wakes: { current: WakeSource[] } = { current: [] },
+) {
   return createThreadWaits({
     readThread: async () => record.current,
+    readWakeSources: async () => wakes.current,
     readOutput: async () => 'summary',
     // A poll that never elapses on its own: only a signal or a stop wakes it.
     sleep: (_ms, signal) =>
@@ -89,6 +96,98 @@ describe('factory thread waits', () => {
     expect(isWaitingOn('t5')).toBe(true);
     controller.abort();
     expect((await wait).status).toBe('cancelled');
+  });
+
+  test('a finished turn with a background job still running is not a finished agent', async () => {
+    // Issue #229: the agent ended its turn to wait for its test job. Moving on
+    // then found no commit and removed the checkout with its uncommitted work.
+    const finishedAt = new Date(1_000).toISOString();
+    const record: RecordSlot = {
+      current: { status: 'completed', createdAt: created, completedAt: finishedAt },
+    };
+    const wakes = { current: [{ live: true, updatedAt: created }] };
+    let settled = false;
+    const wait = waitsOver(
+      record,
+      () => 5_000,
+      wakes,
+    )('t-job', new AbortController().signal).then((outcome) => {
+      settled = true;
+      return outcome;
+    });
+    await Bun.sleep(1);
+    expect(settled).toBe(false);
+
+    // The job ended and woke the agent, which runs and finishes again.
+    wakes.current = [{ live: false, updatedAt: new Date(6_000).toISOString() }];
+    record.current = { status: 'running', createdAt: created, completedAt: finishedAt };
+    signalThreadTerminal('t-job');
+    await Bun.sleep(1);
+    expect(settled).toBe(false);
+
+    record.current = {
+      status: 'completed',
+      createdAt: created,
+      completedAt: new Date(9_000).toISOString(),
+    };
+    signalThreadTerminal('t-job');
+    expect((await wait).status).toBe('completed');
+  });
+
+  test('a job that just ended holds the step while its wake starts, but not forever', async () => {
+    const record: RecordSlot = {
+      current: {
+        status: 'completed',
+        createdAt: created,
+        completedAt: new Date(1_000).toISOString(),
+      },
+    };
+    const wakes = { current: [{ live: false, updatedAt: new Date(2_000).toISOString() }] };
+    let clock = 3_000;
+    let settled = false;
+    const wait = waitsOver(
+      record,
+      () => clock,
+      wakes,
+    )('t-woke', new AbortController().signal).then((outcome) => {
+      settled = true;
+      return outcome;
+    });
+    await Bun.sleep(1);
+    expect(settled).toBe(false);
+
+    // The wake never started the agent: after the grace the turn stands.
+    clock = 2_000 + WAKE_GRACE_MS;
+    signalThreadTerminal('t-woke');
+    expect((await wait).status).toBe('completed');
+  });
+
+  test('a job that ended before the turn finished does not hold the step', async () => {
+    const record = {
+      current: {
+        status: 'completed',
+        createdAt: created,
+        completedAt: new Date(5_000).toISOString(),
+      },
+    };
+    const wakes = { current: [{ live: false, updatedAt: new Date(4_000).toISOString() }] };
+    const outcome = await waitsOver(
+      record,
+      () => 5_500,
+      wakes,
+    )('t-old-job', new AbortController().signal);
+    expect(outcome.status).toBe('completed');
+  });
+
+  test('a stopped thread is settled even with a job still running', async () => {
+    const record = { current: { status: 'stopped', createdAt: created, completedAt: created } };
+    const wakes = { current: [{ live: true, updatedAt: created }] };
+    const outcome = await waitsOver(
+      record,
+      () => 0,
+      wakes,
+    )('t-stopped', new AbortController().signal);
+    expect(outcome.status).toBe('stopped');
   });
 
   test('a thread that no longer exists fails the step', async () => {

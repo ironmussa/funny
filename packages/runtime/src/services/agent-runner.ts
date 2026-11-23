@@ -13,6 +13,8 @@ import { setLogSink } from '@funny/core';
 import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
 import type { IAgentProcessFactory } from '@funny/core/agents';
 import type { AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
+import type { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { AgentEventRouter } from './agent-event-router.js';
@@ -83,7 +85,7 @@ export class AgentRunner {
     this.idleReaper?.stop();
   }
 
-  async startAgent(
+  startAgent(
     threadId: string,
     prompt: string,
     cwd: string,
@@ -97,7 +99,7 @@ export class AgentRunner {
     skipMessageInsert?: boolean,
     effort?: string,
     steer?: boolean,
-  ): Promise<void> {
+  ): ResultAsync<void, DomainError> {
     return this.lifecycle.startAgent(
       threadId,
       prompt,
@@ -115,7 +117,7 @@ export class AgentRunner {
     );
   }
 
-  async stopAgent(threadId: string): Promise<void> {
+  stopAgent(threadId: string): ResultAsync<void, DomainError> {
     return this.lifecycle.stopAgent(threadId);
   }
 

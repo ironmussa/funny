@@ -67,7 +67,7 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
       // the thread with a timestamp matching when the agent actually
       // starts processing it, and with no duplicate vs. the client-side
       // dequeue buffer.
-      await ctx.startAgent(
+      const started = await ctx.startAgent(
         threadId,
         next.content,
         cwd,
@@ -79,6 +79,8 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
         next.provider || thread.provider || DEFAULT_PROVIDER,
         false, // skipMessageInsert
       );
+      // A failed start must re-enqueue the message below, not report it sent.
+      if (started.isErr()) throw new Error(started.error.message);
 
       // Emit queue update with the dequeued message content so the client
       // can inject the user message into the thread (optimistic rendering

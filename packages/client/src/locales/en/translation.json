@@ -1728,6 +1728,7 @@
       "fixing": "Fixing CI",
       "waitingHuman": "Waiting for you",
       "merged": "Merged",
+      "noChange": "No change needed",
       "failed": "Failed",
       "stopped": "Stopped"
     },
@@ -1795,7 +1796,8 @@
     },
     "noChange": {
       "title": "The agent made no change",
-      "body": "It opened no pull request and committed nothing. Its explanation is posted on issue #{{issue}}: close the issue, or retry the run."
+      "body": "It opened no pull request and committed nothing. Its explanation is posted on issue #{{issue}}, now marked for triage: close the issue, or retry the run.",
+      "unsavedBody": "It opened no pull request and committed nothing, but left unsaved work in its checkout, which was kept (its path is on issue #{{issue}}). Follow up on this thread to have it commit and open the pull request, or retry the run."
     }
   },
   "projectSecrets": {

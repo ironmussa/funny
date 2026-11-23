@@ -223,7 +223,7 @@ function CommentsToggleButton({
           <MessageSquare className="icon-base" />
           {commentCount > 0 && (
             <span
-              className="bg-status-info absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-medium text-white"
+              className="bg-status-info text-3xs absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 leading-none font-medium text-white"
               data-testid="comments-badge"
             >
               {commentCount > 99 ? '99+' : commentCount}

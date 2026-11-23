@@ -117,9 +117,9 @@ export function ProjectChip({ name, color, size = 'default', className }: Projec
         'rounded inline-block truncate font-medium',
         // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         size === 'xs'
-          ? 'text-[9px] leading-tight px-1 py-px'
+          ? 'text-3xs leading-tight px-1 py-px'
           : size === 'sm'
-            ? 'text-[10px] leading-tight px-1 py-px'
+            ? 'text-2xs leading-tight px-1 py-px'
             : 'text-xs px-1.5 py-0.5',
         className,
       )}

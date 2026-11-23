@@ -41,7 +41,7 @@ import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { notifyGitHistoryChanged } from '@/lib/git-history-invalidation';
 import { metric, startSpan } from '@/lib/telemetry';
-import { getThreadRoute } from '@/lib/thread-variant';
+import { getThreadRoute, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { clientComposition } from '@/platform/client-composition';
 import { notifyActivityFailed } from '@/stores/activity-notifications';
@@ -884,11 +884,16 @@ function maybeNotifyAgentResult(threadId: string, data: any): void {
   const onClick = () => {
     const navigate = getNavigate();
     if (!navigate) return;
-    if (info.isScratch) {
-      navigate(buildPath(getThreadRoute({ id: threadId, projectId: '', isScratch: true })));
-    } else if (info.projectId) {
-      navigate(buildPath(getThreadRoute({ id: threadId, projectId: info.projectId })));
-    }
+    if (!isScratch(info) && !info.projectId) return;
+    navigate(
+      buildPath(
+        getThreadRoute({
+          id: threadId,
+          projectId: info.projectId ?? '',
+          isScratch: info.isScratch,
+        }),
+      ),
+    );
   };
   if (status === 'completed') {
     showAgentNotification(title, 'Agent finished', {

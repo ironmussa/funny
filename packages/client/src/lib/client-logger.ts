@@ -90,6 +90,27 @@ function applyLevelToConsoleCapture(level: LevelName): void {
 // their logger once at module scope.
 const namespacedLoggers = new Map<string, Logger>();
 
+// The level each namespaced logger was last given. `Logger` keeps its floor
+// private, so this mirror is what lets a caller ask whether a level is on
+// before it builds an expensive payload (a stack trace, a large snapshot).
+const namespaceLevels = new Map<string, LevelName>();
+
+function setNamespacedLevel(namespace: string, logger: Logger, level: LevelName): void {
+  logger.setLevel(level);
+  namespaceLevels.set(namespace, level);
+}
+
+/**
+ * True when `namespace` would emit `level`. Use it to skip building a costly
+ * log payload when the level is off; plain `log.debug(...)` calls with cheap
+ * arguments do not need it.
+ */
+export function isClientLogLevelEnabled(namespace: string, level: LevelName): boolean {
+  const current =
+    namespaceLevels.get(namespace) ?? effectiveLevelFor(namespace, resolveClientLogLevel());
+  return VALID_LEVELS.indexOf(level) >= VALID_LEVELS.indexOf(current);
+}
+
 /** A namespace override wins over the global floor; otherwise the floor applies. */
 function effectiveLevelFor(namespace: string, globalLevel: LevelName): LevelName {
   return readStored(`${NS_PREFIX}${namespace}`) ?? globalLevel;
@@ -108,7 +129,7 @@ function applyLevels(): void {
   const globalLevel = resolveClientLogLevel();
   getLogger().setLevel(globalLevel);
   for (const [namespace, logger] of namespacedLoggers) {
-    logger.setLevel(effectiveLevelFor(namespace, globalLevel));
+    setNamespacedLevel(namespace, logger, effectiveLevelFor(namespace, globalLevel));
   }
   applyLevelToConsoleCapture(globalLevel);
 }
@@ -119,7 +140,7 @@ export function createClientLogger(namespace: string) {
   if (existing) return existing;
 
   const child = getLogger().child({ 'log.namespace': namespace });
-  child.setLevel(effectiveLevelFor(namespace, resolveClientLogLevel()));
+  setNamespacedLevel(namespace, child, effectiveLevelFor(namespace, resolveClientLogLevel()));
   namespacedLoggers.set(namespace, child);
   return child;
 }

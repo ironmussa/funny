@@ -418,9 +418,7 @@ function FileHeader({
       <FileExtensionIcon filePath={path} className="icon-base mr-1.5 shrink-0" />
       <span className="truncate text-xs font-medium">{filename}</span>
       {dir && <span className="text-muted-foreground ml-2 truncate text-xs">{dir}</span>}
-      <span className="text-muted-foreground ml-auto pl-2 text-[10px] tabular-nums">
-        {matchCount}
-      </span>
+      <span className="text-muted-foreground text-2xs ml-auto pl-2 tabular-nums">{matchCount}</span>
     </>
   );
 }
@@ -436,7 +434,7 @@ function MatchLine({
 }) {
   return (
     <div className="flex w-full min-w-0 items-baseline gap-2 pl-6">
-      <span className="text-muted-foreground w-10 shrink-0 text-right text-[10px] tabular-nums">
+      <span className="text-muted-foreground text-2xs w-10 shrink-0 text-right tabular-nums">
         {line}
       </span>
       <HighlightText text={text} ranges={ranges} className="truncate font-mono text-xs" />

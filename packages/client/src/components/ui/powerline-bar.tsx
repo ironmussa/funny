@@ -101,6 +101,8 @@ export interface PowerlineBarProps {
   /** Active search query — when set, the matching substring of each segment
    *  label is highlighted with the shared {@link HighlightText} mark. */
   query?: string;
+  /** Show a hover tooltip on each segment (default true). */
+  tooltips?: boolean;
   /** Additional class names for the outer container */
   className?: string;
   'data-testid'?: string;
@@ -111,14 +113,14 @@ const sizeConfig = {
     arrow: 6,
     height: 'h-[15px]',
     padding: 'px-1.5 py-0',
-    text: 'text-[10px] leading-[15px]',
+    text: 'text-2xs leading-[15px]',
     icon: ICON_SIZE['2xs'],
   },
   md: {
     arrow: 10,
     height: 'min-h-6',
     padding: 'px-2 py-0.5',
-    text: 'text-[11px] leading-4',
+    text: 'text-compact leading-4',
     icon: ICON_SIZE.xs,
   },
 } as const;
@@ -200,9 +202,11 @@ function segmentTestId(segment: PowerlineSegmentData): string {
 
 function SegmentWrapper({
   segment,
+  tooltip = true,
   children,
 }: {
   segment: PowerlineSegmentData;
+  tooltip?: boolean;
   children: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
 }) {
   const interactiveClass = cn(
@@ -215,7 +219,7 @@ function SegmentWrapper({
         {...children.props}
         type="button"
         className={interactiveClass}
-        title={segment.tooltip || segment.label}
+        title={tooltip ? segment.tooltip || segment.label : undefined}
       />,
     );
   }
@@ -230,6 +234,7 @@ function SegmentWrapper({
   ) : (
     children
   );
+  if (!tooltip) return content;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{content}</TooltipTrigger>
@@ -244,6 +249,7 @@ export function PowerlineBar({
   variant: variantProp,
   className,
   query,
+  tooltips = true,
   ...props
 }: PowerlineBarProps) {
   const themeVariant = useThemeVariant();
@@ -295,7 +301,7 @@ export function PowerlineBar({
           if (variant === 'plain') {
             return (
               <React.Fragment key={segment.key}>
-                <SegmentWrapper segment={segment}>
+                <SegmentWrapper segment={segment} tooltip={tooltips}>
                   <div
                     className={cn(
                       'group/seg inline-flex items-center gap-1 min-w-0 text-muted-foreground',
@@ -322,7 +328,7 @@ export function PowerlineBar({
 
           if (variant === 'chips') {
             return (
-              <SegmentWrapper key={segment.key} segment={segment}>
+              <SegmentWrapper key={segment.key} segment={segment} tooltip={tooltips}>
                 <div
                   className={cn(
                     'group/seg inline-flex items-center gap-0.5 min-w-0 rounded-full',
@@ -342,7 +348,7 @@ export function PowerlineBar({
           }
 
           return (
-            <SegmentWrapper key={segment.key} segment={segment}>
+            <SegmentWrapper key={segment.key} segment={segment} tooltip={tooltips}>
               <div
                 className={cn(
                   'group/seg relative inline-flex min-w-0 shrink',

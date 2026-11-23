@@ -3,12 +3,23 @@ import type { HTMLAttributes } from 'react';
 import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { cn } from '@/lib/utils';
 
-type LabelBadgeTone = 'info' | 'success';
+export type LabelBadgeTone = 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 
-const TONE_CLASSES: Record<LabelBadgeTone, string> = {
-  info: 'bg-status-info/15 text-status-info',
-  success: 'bg-status-success/15 text-status-success',
+/** The app's own tags get a fixed pastel, like a GitHub label color would. */
+const TONE_COLORS: Record<LabelBadgeTone, string> = {
+  info: '#7CB9E8',
+  success: '#A8D5A2',
+  warning: '#F9D98C',
+  danger: '#F4A4A4',
+  neutral: '#C8C8C8',
 };
+
+/**
+ * The size of every chip in the review pane: the same as the branch chips in
+ * the History tab (`text-2xs`, 15px tall, fully rounded).
+ */
+const chipSizeClassName =
+  'text-2xs inline-flex h-[0.9375rem] shrink-0 items-center gap-0.5 rounded-full px-1.5 leading-none font-medium whitespace-nowrap';
 
 export type LabelBadgeProps = HTMLAttributes<HTMLSpanElement> &
   (
@@ -18,7 +29,7 @@ export type LabelBadgeProps = HTMLAttributes<HTMLSpanElement> &
         tone?: never;
       }
     | {
-        /** A theme tone, for the app's own tags (worktree Main/Active). Follows light/dark. */
+        /** A pastel for the app's own tags (worktree Main/Active, factory states). */
         tone: LabelBadgeTone;
         color?: never;
       }
@@ -26,19 +37,20 @@ export type LabelBadgeProps = HTMLAttributes<HTMLSpanElement> &
 
 /**
  * Filled tag — the standard look for labels (worktree Main/Active, GitHub
- * issue labels, …). With `color` the fill is the pastelized color and the
- * text picks black or white for contrast; with `tone` both come from the theme.
+ * issue labels, …). The fill is the pastelized color (or the tone's pastel)
+ * and the text picks black or white for contrast.
  */
 export function LabelBadge({ color, tone, className, style, ...props }: LabelBadgeProps) {
-  const bg = color ? pastelize(color.startsWith('#') ? color : `#${color}`) : undefined;
+  const hex = color
+    ? color.startsWith('#')
+      ? color
+      : `#${color}`
+    : TONE_COLORS[tone ?? 'neutral'];
+  const bg = pastelize(hex);
   return (
     <span
-      className={cn(
-        'text-3xs inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0 leading-4 font-medium whitespace-nowrap',
-        tone && TONE_CLASSES[tone],
-        className,
-      )}
-      style={bg ? { backgroundColor: bg, color: contrastText(bg), ...style } : style}
+      className={cn(chipSizeClassName, className)}
+      style={{ backgroundColor: bg, color: contrastText(bg), ...style }}
       {...props}
     />
   );

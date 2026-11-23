@@ -16,6 +16,11 @@
  *     a loaded payload (`activeThread.status`, `threadDataById[id].title`): the
  *     payload's copy is a load-time snapshot. Read the detail view through
  *     `stores/thread-view.ts` or the `stores/thread-context` hooks.
+ *  5. Production code does not use the `stores/app-store` facade. Its hook
+ *     subscribes to all three stores and rebuilds the combined state on every
+ *     change (each streaming flush); select from `project-store`,
+ *     `thread-store` or `ui-store` directly. Tests and stories may still seed
+ *     state through `useAppStore.setState`.
  *
  * `--self-test` checks the rules against allowed and forbidden fixtures.
  * Exits non-zero on violation.
@@ -52,6 +57,9 @@ const MUTABLE_ROW_FIELDS =
 const PAYLOAD_ROW_READ = new RegExp(
   `(?:\\.activeThread|threadDataById\\[[^\\]]+\\])\\??\\.(?:${MUTABLE_ROW_FIELDS})\\b`,
 );
+
+const APP_STORE_IMPORT =
+  /from\s+['"]@\/stores\/app-store['"]|import\(\s*['"]@\/stores\/app-store['"]\s*\)/;
 
 const LEGACY_INDEX_HELPER =
   /\b(?:patchThread|replaceProjectThreads|appendProjectThreads|clearProjectBucket|replaceScratchThreads|replaceSharedThreads|prependScratchThread|removeThread)\s*\(/;
@@ -90,6 +98,11 @@ const LINE_RULES: LineRule[] = [
     label: 'row field read from a loaded payload',
     pattern: PAYLOAD_ROW_READ,
     appliesTo: (rel) => !inDataLayer(rel) && rel !== 'stores/thread-view.ts',
+  },
+  {
+    label: 'app-store facade imported',
+    pattern: APP_STORE_IMPORT,
+    appliesTo: (rel) => rel !== 'stores/app-store.ts',
   },
   {
     label: 'projected thread index written directly',
@@ -151,6 +164,26 @@ function runSelfTest(): void {
     { rel: 'stores/x.ts', source: '// threadsById: {} in a comment', violates: false },
     { rel: 'hooks/x.ts', source: 'threadMutations.patchThread(state, id, fn)', violates: true },
     { rel: 'stores/thread-store.ts', source: 'patchThreadRow(state, id, fn)', violates: false },
+    {
+      rel: 'components/X.tsx',
+      source: "import { useAppStore } from '@/stores/app-store';",
+      violates: true,
+    },
+    {
+      rel: 'components/X.tsx',
+      source: "const m = await import('@/stores/app-store');",
+      violates: true,
+    },
+    {
+      rel: 'components/X.tsx',
+      source: "import { useProjectStore } from '@/stores/project-store';",
+      violates: false,
+    },
+    {
+      rel: 'components/X.stories.tsx',
+      source: "import { useAppStore } from '@/stores/app-store';",
+      violates: false,
+    },
   ];
   const wrong = cases.filter(
     // Excluded files (tests, stories) are never scanned, so they must not expect a violation.

@@ -1,9 +1,9 @@
-import { spawnSync } from 'child_process';
-import { mkdirSync, readFileSync, readlinkSync, writeFileSync } from 'fs';
-import { readdir, stat } from 'fs/promises';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { readdir, readlink, stat } from 'fs/promises';
 import { homedir } from 'os';
 import { basename, dirname, join } from 'path';
 
+import { execute } from '@funny/core/git';
 import type {
   ExternalClaudeSession,
   ExternalClaudeTranscript,
@@ -107,7 +107,7 @@ export interface ExternalClaudeSessionOptions {
   currentPid?: number;
   homeDir?: string;
   now?: Date;
-  getCwd?: (pid: number) => string | null;
+  getCwd?: (pid: number) => string | null | Promise<string | null>;
   projects?: ClaudeProject[];
 }
 
@@ -452,7 +452,7 @@ async function listRunningExternalClaudeSessions(
   const currentPid = options.currentPid ?? process.pid;
   const homeDir = options.homeDir ?? homedir();
   const getCwd = options.getCwd ?? getProcessCwd;
-  const psOutput = options.psOutput ?? readProcessTable();
+  const psOutput = options.psOutput ?? (await readProcessTable());
   const processes = parsePsOutput(psOutput);
   const processByPid = new Map(processes.map((proc) => [proc.pid, proc]));
   const seen = new Set<string>();
@@ -463,7 +463,7 @@ async function listRunningExternalClaudeSessions(
 
   const sessions: ExternalClaudeSession[] = [];
   for (const proc of externalProcesses) {
-    const cwd = getCwd(proc.pid);
+    const cwd = await getCwd(proc.pid);
     const metadata = cwd ? await readClaudeSessionMetadata(homeDir, cwd) : null;
     const session = runningSession(proc, cwd, metadata, now);
     if (!session || seen.has(session.id)) continue;
@@ -633,17 +633,26 @@ function parseElapsed(value: string): number | null {
   return null;
 }
 
-function readProcessTable(): string {
+/**
+ * The process table from `ps`. Asynchronous: a sync spawn would stall the
+ * runner's event loop (every agent stream, PTY and gRPC frame) until `ps` exits.
+ */
+async function readProcessTable(): Promise<string> {
   const args =
     process.platform === 'darwin'
       ? ['-axo', 'pid=,ppid=,etime=,comm=,args=']
       : ['-eo', 'pid=,ppid=,etime=,comm=,args='];
-  const result = spawnSync('ps', args, {
-    encoding: 'utf8',
-    timeout: 3000,
-    maxBuffer: 2 * 1024 * 1024,
-  });
-  return result.status === 0 ? result.stdout : '';
+  try {
+    const result = await execute('ps', args, {
+      timeout: 3000,
+      maxOutputBytes: 2 * 1024 * 1024,
+      reject: false,
+    });
+    return result.exitCode === 0 ? result.stdout : '';
+  } catch {
+    // ps missing, timed out or produced too much output.
+    return '';
+  }
 }
 
 function isFunnyManagedProcess(
@@ -665,25 +674,29 @@ function isFunnyManagedProcess(
   return false;
 }
 
-function getProcessCwd(pid: number): string | null {
+async function getProcessCwd(pid: number): Promise<string | null> {
   if (process.platform === 'linux') {
     try {
-      return readlinkSync(`/proc/${pid}/cwd`);
+      return await readlink(`/proc/${pid}/cwd`);
     } catch {
       return null;
     }
   }
 
   if (process.platform === 'darwin') {
-    const result = spawnSync('lsof', ['-a', '-d', 'cwd', '-p', String(pid), '-Fn'], {
-      encoding: 'utf8',
-      timeout: 1000,
-    });
-    if (result.status !== 0) return null;
-    const line = result.stdout
-      .split('\n')
-      .find((entry) => entry.startsWith('n') && entry.length > 1);
-    return line ? line.slice(1) : null;
+    try {
+      const result = await execute('lsof', ['-a', '-d', 'cwd', '-p', String(pid), '-Fn'], {
+        timeout: 1000,
+        reject: false,
+      });
+      if (result.exitCode !== 0) return null;
+      const line = result.stdout
+        .split('\n')
+        .find((entry) => entry.startsWith('n') && entry.length > 1);
+      return line ? line.slice(1) : null;
+    } catch {
+      return null;
+    }
   }
 
   return null;

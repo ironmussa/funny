@@ -489,6 +489,65 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
+  describe('GET /api/threads/:id/comments — paging (#231)', () => {
+    /** Seed `n` comments one second apart, `c0` the oldest. */
+    function seedComments(n: number) {
+      for (let i = 0; i < n; i++) {
+        t.db
+          .insert(t.schema.threadComments)
+          .values({
+            id: `c${i}`,
+            threadId: 't1',
+            userId: 'user-1',
+            source: 'user',
+            content: `comment ${i}`,
+            createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+          })
+          .run();
+      }
+    }
+
+    test('returns at most the default page, the newest comments, oldest first', async () => {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedComments(205);
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/comments');
+      const body: Array<{ id: string }> = await res.json();
+      expect(body).toHaveLength(200);
+      expect(body[0].id).toBe('c5');
+      expect(body.at(-1)?.id).toBe('c204');
+    });
+
+    test('limit and offset walk back through older comments without overlap', async () => {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedComments(5);
+
+      const page = async (query: string) =>
+        (await (await t.requestAs('user-1').get(`/api/threads/t1/comments?${query}`)).json()).map(
+          (c: { id: string }) => c.id,
+        );
+      expect(await page('limit=2')).toEqual(['c3', 'c4']);
+      expect(await page('limit=2&offset=2')).toEqual(['c1', 'c2']);
+      expect(await page('limit=2&offset=4')).toEqual(['c0']);
+      // Out-of-range paging is clamped, as on the other list queries.
+      expect(await page('limit=0')).toEqual(['c4']);
+    });
+
+    test('answers only the ThreadComment fields', async () => {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedComments(1);
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/comments');
+      const [comment] = await res.json();
+      expect(Object.keys(comment).sort()).toEqual(
+        ['content', 'createdAt', 'id', 'source', 'threadId', 'user', 'userId'].sort(),
+      );
+    });
+  });
+
   describe('DELETE /api/threads/:id/comments/:commentId', () => {
     test('removes a comment', async () => {
       seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });

@@ -17,14 +17,10 @@ mock.module('@/lib/api', () => ({
   api: { listWorktrees: mockListWorktrees, listBranches: mockListBranches },
 }));
 
-mock.module('@/stores/app-store', () => ({
-  useAppStore: <T,>(sel: (s: { selectedProjectId: string }) => T): T =>
-    sel({ selectedProjectId: 'p1' }),
-}));
-
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { WorktreeSettings } from '@/components/WorktreeSettings';
 import { seedProjects } from '@/data/projects/testing';
+import { useProjectStore } from '@/stores/project-store';
 
 const main = { path: '/repo', branch: 'master', commit: 'aaaaaaa', isMain: true };
 const feature = {
@@ -44,6 +40,7 @@ function renderSettings() {
 
 describe('WorktreeSettings refresh', () => {
   beforeEach(() => {
+    useProjectStore.setState({ selectedProjectId: 'p1' });
     // SAFETY: WorktreeSettings reads only `id` from the project row; the rest of
     // the row is irrelevant to the worktree list under test.
     seedProjects([{ id: 'p1', path: '/repo' } as never]);

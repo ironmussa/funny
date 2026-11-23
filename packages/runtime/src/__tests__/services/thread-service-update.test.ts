@@ -22,8 +22,8 @@ const mocks = (() => ({
     emit: vi.fn(),
   },
   isAgentRunning: vi.fn(() => false),
-  stopAgent: vi.fn(async () => undefined),
-  startAgent: vi.fn(async (..._args: unknown[]) => undefined),
+  stopAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
+  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
   cleanupThreadState: vi.fn(),
   createWorktree: vi.fn(),
   findWorktreeForBranch: vi.fn(),
@@ -106,7 +106,8 @@ mock.module('../../services/project-search-registry.js', () => ({
   projectSearchRegistry: { invalidate: mocks.invalidateSearch },
 }));
 
-import { ok, err, okAsync } from 'neverthrow';
+import { internal, type DomainError } from '@funny/shared/errors';
+import { ok, err, okAsync, errAsync } from 'neverthrow';
 
 import { updateThread, convertToWorktree } from '../../services/thread-service/update.js';
 
@@ -573,7 +574,7 @@ describe('updateThread — idle branch checkout and failures', () => {
       initialPrompt: 'Go',
       worktreePath: '/repo/.worktrees/existing',
     }));
-    mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+    mocks.startAgent.mockReturnValueOnce(errAsync(internal('spawn failed')));
 
     await updateThread({ threadId: 't-1', userId: 'u-1', stage: 'in_progress' });
     await waitFor(() => {

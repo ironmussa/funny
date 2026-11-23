@@ -48,9 +48,7 @@ export function PlanCard({
             <FileCode2 className="icon-xs text-muted-foreground shrink-0" />
             <span className="text-foreground font-medium">{t('tools.plan')}</span>
             {displayTime && (
-              <span className="text-muted-foreground/50 text-[10px] tabular-nums">
-                {displayTime}
-              </span>
+              <span className="text-muted-foreground/50 text-2xs tabular-nums">{displayTime}</span>
             )}
           </div>
           <TooltipIconButton

@@ -12,9 +12,9 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { LabelBadge, type LabelBadgeTone } from '@/components/ui/label-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -34,7 +34,6 @@ import type { FactoryRun, FactorySettings, FactorySubmitResult } from '@/lib/api
 import {
   ENDED_FACTORY_STATES,
   factoryRunStateLabel,
-  factoryRunStateVariant,
   factoryWaitReasonText,
 } from '@/lib/factory-run-labels';
 import { getThreadRoute } from '@/lib/thread-variant';
@@ -151,6 +150,16 @@ function statusText(t: TFunction, run: FactoryRun, position: number | undefined)
     : label;
 }
 
+/** The pastel of a run's state chip, next to the issue's GitHub labels. */
+function factoryRunTone(state: FactoryRun['state']): LabelBadgeTone {
+  // Ended well either way: merged, or the agent found nothing to change.
+  if (state === 'merged' || state === 'no_change') return 'success';
+  if (state === 'failed') return 'danger';
+  if (state === 'waiting_human') return 'warning';
+  if (state === 'stopped') return 'neutral';
+  return 'info';
+}
+
 /** An issue's state in the caller's factory; opens the run's last thread. */
 export function IssueFactoryStatus({
   projectId,
@@ -164,13 +173,12 @@ export function IssueFactoryStatus({
   const { t } = useTranslation();
   const lastThread = run.threadIds.at(-1);
   const badge = (
-    <Badge
-      size="xs"
-      variant={factoryRunStateVariant(run.state)}
+    <LabelBadge
+      tone={factoryRunTone(run.state)}
       data-testid={`issue-factory-status-${run.issueNumber}`}
     >
       {statusText(t, run, position)}
-    </Badge>
+    </LabelBadge>
   );
   const cancel = () =>
     void controlFactoryRun('stop', projectId, run.id).orTee((error) =>
@@ -219,14 +227,14 @@ export function IssueFactoryStatus({
       )}
       {run.state === 'requested' && (
         <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground"
+          variant="outline"
+          size="xs"
+          className="text-muted-foreground hover:text-foreground ml-1"
           onClick={cancel}
-          aria-label={t('factory.cancelQueued', 'Remove from the queue')}
           data-testid={`issue-factory-cancel-${run.issueNumber}`}
         >
           <X className="icon-xs" />
+          {t('factory.cancelQueued', 'Remove from the queue')}
         </Button>
       )}
     </span>

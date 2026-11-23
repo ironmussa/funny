@@ -61,6 +61,7 @@ import {
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
 import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /**
@@ -77,6 +78,25 @@ const proofUnavailable = (why: string): ActionResult => ({
   ok: false,
   error: `Regression proof unavailable: ${why}`,
 });
+
+/** What a "no change" comment says about a checkout that was kept. */
+function keptWorktreeLine(kept: KeptWorktree): string {
+  const parts = [
+    kept.dirtyFileCount > 0 ? `${kept.dirtyFileCount} uncommitted file(s)` : null,
+    kept.unpushedCommitCount > 0 ? `${kept.unpushedCommitCount} unpushed commit(s)` : null,
+  ].filter(Boolean);
+  const what = parts.length > 0 ? parts.join(' and ') : 'work that could not be checked';
+  return `The run's checkout was kept because it holds ${what}: \`${kept.worktreePath}\`.`;
+}
+
+/**
+ * Why a run without a commit or a pull request waits for a person: its checkout
+ * held unsaved work, so the agent may not have meant "nothing to change".
+ */
+export const NO_CHANGE_REASON = 'no change';
+
+/** The label an issue gets when its run ended with no change: a person decides what is next. */
+export const NO_CHANGE_TRIAGE_LABEL = 'needs-triage';
 
 /** The fixed first line of the issue comment a "no change" run posts. */
 export const NO_CHANGE_LINE = 'The issue factory made no change for this issue. The agent said:';
@@ -116,8 +136,12 @@ export interface FactoryActionProviderDeps {
   proof?: FactoryProofDeps;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
-  /** Remove the run's worktrees on the enabler's runner (a "no change" run keeps no checkout). */
-  removeWorktrees?: () => Promise<void>;
+  /**
+   * Remove the run's worktrees on the enabler's runner (a "no change" run keeps
+   * no checkout), except the ones holding work that exists nowhere else
+   * (uncommitted files, unpushed commits), which are returned.
+   */
+  removeUnchangedWorktrees?: () => Promise<KeptWorktree[]>;
   /**
    * Set when the run was interrupted while starting its next agent thread:
    * that step first looks for the thread it may have started.
@@ -141,6 +165,19 @@ export interface FactoryActionProviderDeps {
     FactoryGithubPort,
     'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
   >;
+  /**
+   * Hand the issue back to a person after a run that ended with no change:
+   * take it out of the factory's label queue and mark it for triage. Best
+   * effort; the run ends with no change either way.
+   */
+  releaseIssue?: () => Promise<void>;
+  /**
+   * The repository's default branch. A worktree run starts from the remote's
+   * copy of it, so the pull request holds the agent's commits only: not the
+   * branch the enabler's checkout happens to be on, nor their unpushed commits.
+   * Absent (tests): the runner picks the base.
+   */
+  defaultBranch?: () => PromiseLike<Result<string, { message: string }>>;
   /** Write the run's progress; ignored once the run is terminal (e.g. stopped). */
   record(input: UpdateRunInput): Promise<void>;
   /**
@@ -379,11 +416,32 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return finishedBefore ? { completedAt: current, sentAt: since } : undefined;
   }
 
+  /**
+   * Where a worktree run's branch starts: the remote's default branch. Not
+   * knowing it fails the step, since the runner would then start from whatever
+   * the enabler's checkout has (run #227 opened a pull request with 11 commits
+   * that were not the agent's).
+   */
+  async function worktreeBase(): Promise<
+    { baseBranch?: string; baseFromRemote?: boolean } | { error: string }
+  > {
+    if (scope.mode !== 'worktree' || !deps.defaultBranch) return {};
+    const branch = await deps.defaultBranch();
+    if (branch.isErr()) {
+      return {
+        error: `The agent could not start: the repository's default branch could not be read (${branch.error.message}).`,
+      };
+    }
+    return { baseBranch: branch.value, baseFromRemote: true };
+  }
+
   /** Start a new thread for this step, marked first so a crash in between is adopted. */
   async function launchNew(
     opts: SpawnAgentOpts,
     checkpoint: Checkpoint = noCheckpoint,
   ): Promise<StepThread | ActionResult> {
+    const base = await worktreeBase();
+    if ('error' in base) return { ok: false, error: base.error };
     const since = new Date().toISOString();
     await checkpoint({ phase: 'launching', since });
     await deps.record({ launchStartedAt: since });
@@ -391,6 +449,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       projectId: scope.projectId,
       title,
       mode: scope.mode,
+      ...base,
       // A worktree thread is created on the run's branch, so the thread, its
       // worktree and the pull request share one branch.
       branch: scope.branch,
@@ -558,14 +617,27 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
 
   /**
-   * The agent made no commit and opened no pull request: say so on the issue
-   * with its explanation, remove the run's checkout, and leave the run for a
-   * person (`no change`). Not ok, so the flow stops here.
+   * The agent pushed no commit and opened no pull request: say so on the issue
+   * with its explanation and remove the run's checkout. Not ok, so the flow
+   * stops here.
+   *
+   * With nothing left behind, the agent decided there is nothing to change: the
+   * run ends as `no_change` (not a failure) and the issue goes back to a person
+   * for triage. The issue is not closed: "nothing to change" is the agent's
+   * opinion (an index issue is not done; a bug may not really be fixed).
+   *
+   * A checkout with uncommitted files or unpushed commits is kept and named in
+   * the comment, and the run waits for a person (`waiting_human`, reason `no
+   * change`): the agent may have stopped before committing (issue #229 lost 85
+   * edited files this way).
    */
   async function noChange(): Promise<ActionResult> {
     const threadId = threadIds[0];
     const explanation = threadId ? await deps.lastThreadMessage?.(threadId) : null;
-    const body = explanation ? `${NO_CHANGE_LINE}\n\n${explanation}` : NO_CHANGE_LINE;
+    const kept = (await deps.removeUnchangedWorktrees?.()) ?? [];
+    const body = [NO_CHANGE_LINE, explanation, ...kept.map(keptWorktreeLine)]
+      .filter(Boolean)
+      .join('\n\n');
     const commented = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
     if (commented.isErr()) {
       log.warn('Issue factory could not comment a no-change outcome on the issue', {
@@ -575,8 +647,13 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         error: commented.error.message,
       });
     }
-    await deps.removeWorktrees?.();
-    await deps.record({ state: 'waiting_human', failureReason: 'no change' });
+    if (kept.length > 0) {
+      await deps.record({ state: 'waiting_human', failureReason: NO_CHANGE_REASON });
+    } else {
+      await deps.releaseIssue?.();
+      // The step stays recorded: the run's step chain shows how far it went.
+      await deps.record({ state: 'no_change', failureReason: null });
+    }
     await count(metrics, { event: 'no_change' });
     return {
       ok: false,

@@ -3,10 +3,12 @@ import {
   CheckCircle2,
   Cloud,
   CloudCheck,
+  CloudDownload,
   Copy,
   Download,
   ExternalLink,
   Monitor,
+  MonitorUp,
   RefreshCw,
   Tag,
   Upload,
@@ -22,6 +24,17 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { githubBranchUrl } from '@/lib/github-url';
 import type { FoldedRef, GraphBranchSummary } from '@/lib/graph-refs';
 import { cn } from '@/lib/utils';
+
+/**
+ * Height of one ref chip and the gap between stacked chips, in px (not rem).
+ * The commit graph places the node and its leader line at the first chip's
+ * center with px arithmetic (`CommitGraphTab`'s row heights and `nodeYForRow`),
+ * so the chips must have exactly these sizes. Rem sizes shrink with the root
+ * font size and the vertically centered stack drifts below the node, by more
+ * with every extra chip.
+ */
+export const GRAPH_REF_CHIP_HEIGHT_PX = 15;
+export const GRAPH_REF_CHIP_GAP_PX = 4;
 
 function branchStateLabel(t: ReturnType<typeof useTranslation>['t'], branch: GraphBranchSummary) {
   switch (branch.state) {
@@ -148,11 +161,23 @@ function ThreadBranchMarker({ branch, color }: { branch: string; color: string }
   );
 }
 
-function renderRefIcon(ref: FoldedRef) {
-  const props = { className: 'icon-2xs shrink-0', 'aria-hidden': true } as const;
+/**
+ * Where the ref lives: local only, remote only, both on this commit (folded), or
+ * a tag. A branch that exists on one side only gets the "upload" / "download"
+ * variant, so the chip needs no separate status badge to say it.
+ */
+function renderRefIcon(ref: FoldedRef, summary: GraphBranchSummary | undefined) {
+  const props = {
+    className: 'icon-2xs shrink-0',
+    'aria-hidden': true,
+    'data-testid': `graph-ref-icon-${ref.name}`,
+  } as const;
   if (ref.kind === 'tag') return <Tag {...props} />;
-  if (ref.kind === 'remote') return <Cloud {...props} />;
-  return ref.syncedRemote ? <CloudCheck {...props} /> : <Monitor {...props} />;
+  if (ref.kind === 'remote') {
+    return summary?.state === 'remote-only' ? <CloudDownload {...props} /> : <Cloud {...props} />;
+  }
+  if (ref.syncedRemote) return <CloudCheck {...props} />;
+  return summary?.state === 'local-only' ? <MonitorUp {...props} /> : <Monitor {...props} />;
 }
 
 /**
@@ -222,13 +247,18 @@ function branchChipStatusMeta(
     return null;
   }
 
+  // The badge only says what the ref icon cannot: how far the branch is ahead,
+  // behind or diverged. "Synced" (the folded chip's cloud-check icon) and
+  // "local / remote only" (the monitor-up / cloud-down icons) are in the icon.
   switch (summary.state) {
     case 'synced':
-      return {
-        icon: CheckCircle2,
-        label: null,
-        tooltip: branchStateLabel(t, summary),
-      };
+      return ref.kind === 'local' && ref.syncedRemote
+        ? null
+        : {
+            icon: CheckCircle2,
+            label: null,
+            tooltip: branchStateLabel(t, summary),
+          };
     case 'ahead':
       return ref.kind === 'local'
         ? {
@@ -252,21 +282,8 @@ function branchChipStatusMeta(
         tooltip: branchStateLabel(t, summary),
       };
     case 'local-only':
-      return ref.kind === 'local'
-        ? {
-            icon: Upload,
-            label: null,
-            tooltip: branchStateLabel(t, summary),
-          }
-        : null;
     case 'remote-only':
-      return ref.kind === 'remote'
-        ? {
-            icon: Download,
-            label: null,
-            tooltip: branchStateLabel(t, summary),
-          }
-        : null;
+      return null;
   }
 }
 
@@ -505,10 +522,11 @@ function GraphRefChip({
   return (
     <div
       className={cn(
-        'inline-flex h-[0.9375rem] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
+        'inline-flex max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
         isMergedRef(ref) && 'opacity-60',
       )}
       style={{
+        height: GRAPH_REF_CHIP_HEIGHT_PX,
         backgroundColor: color,
         color: textColor,
         // The thread's chip is outlined in a darker shade of its own color.
@@ -528,7 +546,7 @@ function GraphRefChip({
             onClick={(event) => event.stopPropagation()}
             data-testid={`graph-branch-info-${ref.name}`}
           >
-            {renderRefIcon(ref)}
+            {renderRefIcon(ref, summary)}
             <span
               className={cn(
                 'truncate text-2xs leading-tight font-medium whitespace-nowrap',
@@ -593,7 +611,8 @@ export function GraphRefChips({
 
   return (
     <div
-      className="inline-flex min-w-0 shrink flex-col items-start gap-1"
+      className="inline-flex min-w-0 shrink flex-col items-start"
+      style={{ gap: GRAPH_REF_CHIP_GAP_PX }}
       data-testid="graph-ref-chips"
     >
       {refs.map((ref) => {
@@ -618,12 +637,16 @@ export function GraphRefChips({
           />
         );
         if (!isThreadBranch) return chip;
+        // The marker hangs in the gap LEFT of the chip (absolute), so marking the
+        // thread's branch never shifts its chip out of line with the others.
         return (
           <div
             key={`${ref.kind}:${ref.name}`}
-            className="flex max-w-full min-w-0 items-center gap-0.5"
+            className="relative flex max-w-full min-w-0 items-center"
           >
-            <ThreadBranchMarker branch={ref.name} color={color} />
+            <span className="absolute top-1/2 right-full mr-0.5 inline-flex -translate-y-1/2">
+              <ThreadBranchMarker branch={ref.name} color={color} />
+            </span>
             {chip}
           </div>
         );

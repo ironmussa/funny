@@ -56,6 +56,7 @@ import {
   type FactoryProofDeps,
   type FactoryRunScope,
   type FactoryThreadMode,
+  NO_CHANGE_TRIAGE_LABEL,
 } from './factory-action-provider.js';
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
@@ -67,6 +68,7 @@ import {
   type UpdateRunInput,
 } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
+import type { KeptWorktree } from './factory-thread-requests.js';
 import {
   createThreadWaits,
   lastThreadMessage,
@@ -103,6 +105,11 @@ export interface FactoryFlowRunsDeps {
   stopThreads?: (userId: string, threadIds: string[]) => Promise<void>;
   /** Remove the worktree and local branch of a merged run's threads (best effort). */
   cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
+  /**
+   * The same for a run that ended without a pull request, keeping (and
+   * returning) the worktrees with uncommitted files or unpushed commits.
+   */
+  cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Regression proof start/poll through the enabler's runner. */
   proof?: (userId: string, threadId: string) => FactoryProofDeps;
@@ -132,12 +139,15 @@ interface FlowTrace {
   step: string | null;
   /** A step left the run for a person itself (e.g. `no change`): the end keeps that. */
   parked: boolean;
+  /** A step ended the run itself (`no_change`): nothing is left to settle. */
+  ended: boolean;
 }
 
 /** Note what a recorded update means for the flow's end; whether it recorded an agent thread. */
 function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
   if (input.prUrl) trace.prOpen = true;
   if (input.state === 'waiting_human') trace.parked = true;
+  if (input.state === 'no_change') trace.ended = true;
   if (!input.threadIds) return false;
   trace.agentsRan = true;
   return true;
@@ -357,6 +367,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   /** A flow that failed: dropped before any agent ran, left as a step parked it, failed, or parked. */
   async function settleFailed(job: FactoryRunJob, trace: FlowTrace, error?: string): Promise<void> {
     const { run } = job;
+    // The step wrote the run's end: not a failure, and nobody is waited for.
+    if (trace.ended) return;
     if (!trace.agentsRan && !wasReopened(job)) return dropUnstarted(job, error);
     if (trace.parked) {
       await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
@@ -389,7 +401,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       factoryId: job.factory.id,
       runId: run.id,
       issue: run.issueNumber,
-      outcome,
+      outcome: trace.ended ? 'no_change' : outcome,
       error,
     });
   }
@@ -410,6 +422,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       prOpen: job.run.prUrl !== null,
       step: null,
       parked: false,
+      ended: false,
     };
     if (trace.agentsRan) agentStarted();
 
@@ -467,12 +480,33 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           }
         : undefined,
       github: deps.github,
+      defaultBranch: () =>
+        deps.github.defaultBranch({
+          repo: scope.repo,
+          ownerId: scope.userId,
+          projectId: scope.projectId,
+        }),
       issueLabels: job.issue.labels ?? [],
+      releaseIssue: async () => {
+        const relabelled = await deps.github.relabelIssue(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+          { remove: job.factory.label || undefined, add: NO_CHANGE_TRIAGE_LABEL },
+        );
+        if (relabelled.isErr()) {
+          log.warn('Issue factory could not relabel an issue that ended with no change', {
+            namespace: 'factory',
+            runId: job.run.id,
+            issue: scope.issueNumber,
+            error: relabelled.error.message,
+          });
+        }
+      },
       lastThreadMessage,
-      removeWorktrees: async () => {
+      removeUnchangedWorktrees: async () => {
         const run = await deps.runs.get(job.run.id);
         const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;
-        await deps.cleanupMerged?.(scope.userId, ids);
+        return (await deps.cleanupUnchanged?.(scope.userId, ids)) ?? [];
       },
       proof: deps.proof
         ? {

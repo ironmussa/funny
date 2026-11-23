@@ -402,7 +402,7 @@ export function createTestDb() {
   testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
-    WHERE state NOT IN ('merged', 'failed', 'stopped')
+    WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')
   `);
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS workflow_node_executions (
@@ -567,6 +567,42 @@ export function createTestDb() {
       file_references TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS watchers (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      next_wake_at INTEGER NOT NULL,
+      last_delay_ms INTEGER NOT NULL DEFAULT 0,
+      wake_count INTEGER NOT NULL DEFAULT 0,
+      max_wakes INTEGER NOT NULL DEFAULT 20,
+      deadline INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS jobs (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      command TEXT NOT NULL,
+      cwd TEXT,
+      label TEXT,
+      pid INTEGER,
+      log_path TEXT NOT NULL,
+      exit_path TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      exit_code INTEGER,
+      started_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )
   `);
 

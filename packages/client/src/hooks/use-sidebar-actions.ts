@@ -81,9 +81,9 @@ export function useSidebarActions() {
         navigate(buildPath(scratch || !projectId ? '/' : `/projects/${projectId}`));
       }
 
+      // A refused delete already brought the row back with an error toast.
       if (scratch) {
-        await deleteScratchThread(threadId);
-        toast.success(t('toast.threadDeleted', { title }));
+        if (await deleteScratchThread(threadId)) toast.success(t('toast.threadDeleted', { title }));
         return;
       }
 
@@ -91,9 +91,11 @@ export function useSidebarActions() {
       // asks the thread's runner to remove the worktree, and the branch when
       // the dialog's checkbox is set (track-funny-actions). A prior
       // `DELETE /worktrees` from here kept the row visible for the whole (slow,
-      // on NTFS tens of seconds) removal, so a second click raced it.
-      await deleteThread(threadId, projectId, { deleteBranch: opts.deleteBranch });
-      toast.success(t('toast.threadDeleted', { title }));
+      // on NTFS tens of seconds) removal, so a second click raced it and the
+      // first delete came back as a 404.
+      if (await deleteThread(threadId, projectId, { deleteBranch: opts.deleteBranch })) {
+        toast.success(t('toast.threadDeleted', { title }));
+      }
     },
     [deleteThreadConfirm, deleteThread, deleteScratchThread, t, navigate],
   );

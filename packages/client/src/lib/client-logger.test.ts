@@ -33,6 +33,7 @@ let freshImport = 0;
 async function loadLogger(): Promise<{
   funnyLog: FunnyLog;
   createClientLogger: (namespace: string) => unknown;
+  isClientLogLevelEnabled: typeof import('./client-logger').isClientLogLevelEnabled;
 }> {
   // A fresh module instance per test (vitest used vi.resetModules()): the
   // query string makes bun load the module again with empty logger caches.
@@ -44,6 +45,7 @@ async function loadLogger(): Promise<{
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing test-injected global
     funnyLog: (window as unknown as { __funnyLog: FunnyLog }).__funnyLog,
     createClientLogger: mod.createClientLogger,
+    isClientLogLevelEnabled: mod.isClientLogLevelEnabled,
   };
 }
 
@@ -138,5 +140,30 @@ describe('__funnyLog level control', () => {
 
     expect(second).toBe(first);
     expect(childSetLevels).toEqual([{ namespace: 'ws', level: 'trace' }]);
+  });
+
+  it('reports whether a level is on, following the live toggles', async () => {
+    const { funnyLog, createClientLogger, isClientLogLevelEnabled } = await loadLogger();
+    createClientLogger('ws');
+
+    funnyLog.setLevel('info');
+    expect(isClientLogLevelEnabled('ws', 'debug')).toBe(false);
+    expect(isClientLogLevelEnabled('ws', 'info')).toBe(true);
+
+    funnyLog.setNamespaceLevel('ws', 'debug');
+    expect(isClientLogLevelEnabled('ws', 'debug')).toBe(true);
+
+    funnyLog.setNamespaceLevel('ws', 'warn');
+    expect(isClientLogLevelEnabled('ws', 'info')).toBe(false);
+    expect(isClientLogLevelEnabled('ws', 'error')).toBe(true);
+  });
+
+  it('resolves the level of a namespace that has no logger yet', async () => {
+    const { funnyLog, isClientLogLevelEnabled } = await loadLogger();
+
+    funnyLog.setLevel('error');
+
+    expect(isClientLogLevelEnabled('never-created', 'warn')).toBe(false);
+    expect(isClientLogLevelEnabled('never-created', 'error')).toBe(true);
   });
 });

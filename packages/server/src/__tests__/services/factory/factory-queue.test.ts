@@ -95,6 +95,8 @@ function fakeGithub(script: Script = {}): FakeGithub {
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
         : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
     branchAhead: () => okAsync(true),
+    defaultBranch: () => okAsync('main'),
+    relabelIssue: () => okAsync(undefined),
     commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {

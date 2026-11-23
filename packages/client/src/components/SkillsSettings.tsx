@@ -25,7 +25,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 interface RecommendedSkill {
   name: string;
@@ -224,7 +224,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
 export function SkillsSettings() {
   const { t } = useTranslation();
   const projects = useProjects();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [recommended, setRecommended] = useState<RecommendedSkill[]>([]);

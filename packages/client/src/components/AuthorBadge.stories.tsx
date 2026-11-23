@@ -77,7 +77,7 @@ export const CustomLabel: Story = {
 export const Gallery: Story = {
   args: { name: 'Gallery' },
   render: () => (
-    <div className="text-muted-foreground flex flex-col gap-2 text-[10px]">
+    <div className="text-muted-foreground text-2xs flex flex-col gap-2">
       <AuthorBadge name="shadcn" avatarUrl="https://github.com/shadcn.png" size="xs" />
       <AuthorBadge name="octocat" email="1234+octocat@users.noreply.github.com" size="xs" />
       <AuthorBadge name="Jane Doe" email="jane.doe@example.com" size="xs" />

@@ -32,7 +32,7 @@ import { useAutomationRuns, useProjectAutomations } from '@/data/automations/hoo
 import { loadAutomationRuns, loadAutomations } from '@/data/automations/loaders';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { SegmentedControl } from './settings/SegmentedControl';
 
@@ -78,7 +78,7 @@ const defaultForm: FormState = {
 export function AutomationSettings() {
   const navigate = useNavigate();
   const location = useLocation();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

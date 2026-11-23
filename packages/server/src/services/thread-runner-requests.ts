@@ -55,12 +55,12 @@ function runnerError(body: string | null | undefined): {
     : { text: null, activityRecorded: false };
 }
 
-/** Send a request to the runner a thread runs on, as `userId`. */
+/** Send a request to the runner a thread runs on, as `userId`. Answers the response body. */
 export async function sendToThreadRunner(
   ports: RunnerPorts,
   userId: string,
   { method, path, query = {}, body }: ThreadRunnerRequest,
-): Promise<Result<void, ThreadRunnerError>> {
+): Promise<Result<string | null, ThreadRunnerError>> {
   const sink = authorizedRunnerRequests(ports.requests);
   try {
     const sent = await withRunnerFor(
@@ -84,7 +84,7 @@ export async function sendToThreadRunner(
         activityRecorded: false,
       });
     }
-    if (sent.value.status < 400) return ok(undefined);
+    if (sent.value.status < 400) return ok(sent.value.body ?? null);
     const reason = runnerError(sent.value.body);
     return err({
       message: `the runner answered ${sent.value.status}${reason.text ? `: ${reason.text}` : ''}`,

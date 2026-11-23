@@ -197,6 +197,75 @@ describe('factory thread requests', () => {
       expect((await row('t-run')).worktreePath).toBe('/srv/wt/t-run');
     });
 
+    // Issue #229: a run that ended without a pull request had 85 uncommitted
+    // files in its worktree. The runner decides, and what it keeps stays recorded.
+    test('keepUnsaved asks the runner to remove only an unchanged worktree', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t1');
+      requests.response = {
+        status: 200,
+        headers: {},
+        body: JSON.stringify({ removed: false, dirtyFileCount: 85, unpushedCommitCount: 0 }),
+        bodyEncoding: 'utf8',
+      };
+      const events: unknown[] = [];
+
+      const kept = await cleanupFactoryWorktrees(
+        ports(),
+        'alice',
+        ['t1'],
+        { toUser: (_userId, event) => events.push(event) },
+        { keepUnsaved: true },
+      );
+
+      expect(requests.requests[0]!.request).toMatchObject({
+        method: 'POST',
+        path: '/api/worktrees/remove-unchanged',
+      });
+      expect(kept).toEqual([
+        { threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 85, unpushedCommitCount: 0 },
+      ]);
+      expect(events).toEqual([]);
+      expect(await row('t1')).toMatchObject({
+        worktreePath: '/srv/wt/t1',
+        branch: 'factory/issue-7-t1',
+      });
+    });
+
+    test('keepUnsaved clears the thread once the runner removed its unchanged worktree', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t1');
+      requests.response = {
+        status: 200,
+        headers: {},
+        body: JSON.stringify({ removed: true }),
+        bodyEncoding: 'utf8',
+      };
+
+      const kept = await cleanupFactoryWorktrees(ports(), 'alice', ['t1'], undefined, {
+        keepUnsaved: true,
+      });
+
+      expect(kept).toEqual([]);
+      expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
+    });
+
+    test('keepUnsaved leaves the worktree when the runner does not know the route', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t1');
+      requests.response = { status: 404, headers: {}, body: '', bodyEncoding: 'utf8' };
+
+      const kept = await cleanupFactoryWorktrees(ports(), 'alice', ['t1'], undefined, {
+        keepUnsaved: true,
+      });
+
+      // Reported as kept, unchecked: the run must not end as "nothing left behind".
+      expect(kept).toEqual([
+        { threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 0, unpushedCommitCount: 0 },
+      ]);
+      expect((await row('t1')).worktreePath).toBe('/srv/wt/t1');
+    });
+
     test('a runner that refuses keeps the worktree recorded on the thread', async () => {
       runner('r-alice', 'alice');
       worktreeThread('t1');

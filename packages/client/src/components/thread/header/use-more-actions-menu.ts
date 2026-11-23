@@ -102,17 +102,20 @@ export function useMoreActionsMenu() {
     const title = thread.title;
     setDeleteLoading(true);
     await (async () => {
+      // A refused delete already brought the row back with an error toast.
       if (variant.isScratch(thread)) {
-        await deleteScratchThread(threadId);
+        const deleted = await deleteScratchThread(threadId);
         setDeleteOpen(false);
+        if (!deleted) return;
         toast.success(t('toast.threadDeleted', { title }));
         navigate(buildPath('/'));
         return;
       }
       const projId = thread.projectId;
       if (!projId) return;
-      await useThreadStore.getState().deleteThread(threadId, projId);
+      const deleted = await useThreadStore.getState().deleteThread(threadId, projId);
       setDeleteOpen(false);
+      if (!deleted) return;
       toast.success(t('toast.threadDeleted', { title }));
       navigate(buildPath(`/projects/${projId}`));
     })().finally(() => setDeleteLoading(false));

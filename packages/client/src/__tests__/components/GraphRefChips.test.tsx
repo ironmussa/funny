@@ -6,7 +6,11 @@ import { describe, expect, test, vi } from 'bun:test';
  */
 import { fireEvent, screen } from '@testing-library/react';
 
-import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
+import {
+  GRAPH_REF_CHIP_GAP_PX,
+  GRAPH_REF_CHIP_HEIGHT_PX,
+  GraphRefChips,
+} from '@/components/commit-graph/GraphRefChips';
 import { findThreadBranchRowIndex } from '@/components/CommitGraphTab';
 import type { FoldedRef } from '@/lib/graph-refs';
 
@@ -109,6 +113,34 @@ describe('GraphRefChips', () => {
       /#6b75a4|rgb\(107, 117, 164\)/,
     );
     expect(screen.getByTestId('graph-ref-chip-local:master').style.boxShadow).toBe('');
+  });
+
+  test('stacks chips at the px height and gap the graph places its node with', () => {
+    // CommitGraphTab puts the node at the first chip's center with px math. Rem
+    // sizes shrink with the root font, and the centered stack of several chips
+    // then sits below the node.
+    renderWithProviders(
+      <GraphRefChips
+        refs={[
+          { kind: 'local', name: 'a', isCurrent: false },
+          { kind: 'local', name: 'b', isCurrent: false },
+          { kind: 'local', name: 'c', isCurrent: false },
+        ]}
+        branchSummaryByName={new Map()}
+        actionInProgress={null}
+        color="#a5b4fc"
+        searchQuery=""
+        onPushBranch={vi.fn()}
+        onPullCurrentBranch={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('graph-ref-chips').style.gap).toBe(`${GRAPH_REF_CHIP_GAP_PX}px`);
+    for (const name of ['a', 'b', 'c']) {
+      expect(screen.getByTestId(`graph-ref-chip-local:${name}`).style.height).toBe(
+        `${GRAPH_REF_CHIP_HEIGHT_PX}px`,
+      );
+    }
   });
 
   test('shows no arrow without an open thread branch', () => {

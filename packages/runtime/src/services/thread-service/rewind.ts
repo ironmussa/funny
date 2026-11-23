@@ -83,7 +83,7 @@ async function resolveAnchor(params: {
     throw new ThreadServiceError('Thread not found', 404);
   }
   const provider = (source as any).provider ?? 'claude';
-  if (!canDoGitOps({ isScratch: !!(source as any).isScratch })) {
+  if (!canDoGitOps(source)) {
     throw new ThreadServiceError('Rewind is unavailable for scratch threads', 400);
   }
   if (!(source as any).fileCheckpointingEnabled) {

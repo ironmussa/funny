@@ -11,7 +11,7 @@ import type { SetupProgressFn } from '../ports/setup-progress.js';
 import { toDomainError } from './errors.js';
 import { getNativeGit } from './native.js';
 import { validatePath } from './path-validation.js';
-import { gitRead, gitWrite } from './process.js';
+import { gitRead, gitWrite, nativeGitWrite } from './process.js';
 
 /**
  * Security HI-4: pure predicate that decides whether a path is *safe* to
@@ -172,6 +172,84 @@ export interface CreateWorktreeOptions {
    * from its earlier attempt on the same branch. `baseBranch` is then unused.
    */
   reuseExistingBranch?: boolean;
+  /**
+   * Start the new branch from the remote's copy of `baseBranch`
+   * (`origin/<baseBranch>`, fetched first) instead of the local branch: the
+   * issue factory's pull request must hold the agent's commits only, not the
+   * ones the local base branch has and the remote lacks. Falls back to the
+   * usual resolution when the remote has no such branch.
+   */
+  fromRemote?: boolean;
+}
+
+/** How long the fetch of a remote base may take before the last known ref is used. */
+const REMOTE_BASE_FETCH_TIMEOUT_MS = 60_000;
+
+/**
+ * `origin/<baseBranch>` after a best-effort fetch, or null when the remote has
+ * no such branch. A failed fetch (offline, no credentials) leaves the ref as
+ * last fetched, which still excludes the local base's unpushed commits.
+ *
+ * The start point is its commit, not the ref: a branch created from a
+ * remote-tracking ref gets that ref as its upstream, and the new branch must
+ * not track the base branch (a pull would merge it, a push could target it).
+ */
+async function remoteBaseRef(
+  projectPath: string,
+  baseBranch: string,
+): Promise<{ ref: string; commit: string } | null> {
+  if (baseBranch.startsWith('-')) return null;
+  await gitWrite(['fetch', 'origin', baseBranch], {
+    cwd: projectPath,
+    reject: false,
+    timeout: REMOTE_BASE_FETCH_TIMEOUT_MS,
+  }).catch(() => undefined);
+  const remoteRef = `origin/${baseBranch}`;
+  const check = await gitRead(
+    ['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteRef}^{commit}`],
+    { cwd: projectPath, reject: false },
+  );
+  const commit = check.stdout.trim();
+  return check.exitCode === 0 && commit ? { ref: remoteRef, commit } : null;
+}
+
+/**
+ * The ref a new worktree starts from. With `fromRemote`, the fetched
+ * `origin/<baseBranch>`; otherwise the name as-is, then `origin/<name>` for
+ * remote-only branches (common after a fresh clone); `undefined` means HEAD.
+ */
+async function resolveWorktreeBase(
+  projectPath: string,
+  baseBranch: string | undefined,
+  fromRemote: boolean,
+  onProgress?: SetupProgressFn,
+): Promise<string | undefined> {
+  if (!baseBranch) return undefined;
+  const remoteBase = fromRemote ? await remoteBaseRef(projectPath, baseBranch) : null;
+  if (remoteBase) {
+    onProgress?.('worktree:resolve', `Using remote branch "${remoteBase.ref}"`, 'completed');
+    return remoteBase.commit;
+  }
+  onProgress?.('worktree:resolve', `Resolving branch "${baseBranch}"`, 'running');
+  const branchCheck = await gitRead(['rev-parse', '--verify', baseBranch], {
+    cwd: projectPath,
+    reject: false,
+  });
+  if (branchCheck.exitCode === 0) {
+    onProgress?.('worktree:resolve', `Resolved branch "${baseBranch}"`, 'completed');
+    return baseBranch;
+  }
+  const remoteRef = `origin/${baseBranch}`;
+  const remoteCheck = await gitRead(['rev-parse', '--verify', remoteRef], {
+    cwd: projectPath,
+    reject: false,
+  });
+  if (remoteCheck.exitCode === 0) {
+    onProgress?.('worktree:resolve', `Using remote branch "${remoteRef}"`, 'completed');
+    return remoteRef;
+  }
+  onProgress?.('worktree:resolve', `Branch "${baseBranch}" not found, using HEAD`, 'completed');
+  return undefined;
 }
 
 export function createWorktree(
@@ -179,7 +257,7 @@ export function createWorktree(
   branchName: string,
   baseBranch?: string,
   onProgress?: SetupProgressFn,
-  { reuseExistingBranch = false }: CreateWorktreeOptions = {},
+  { reuseExistingBranch = false, fromRemote = false }: CreateWorktreeOptions = {},
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
@@ -207,41 +285,12 @@ export function createWorktree(
       }
       onProgress?.('worktree:init', 'Checking repository', 'completed');
 
-      // Resolve the base branch ref. Try the name as-is first, then try
-      // origin/<name> for remote-only branches (common after a fresh clone).
-      let effectiveBase = baseBranch;
-      if (baseBranch) {
-        onProgress?.('worktree:resolve', `Resolving branch "${baseBranch}"`, 'running');
-        const branchCheck = await gitRead(['rev-parse', '--verify', baseBranch], {
-          cwd: projectPath,
-          reject: false,
-        });
-        if (branchCheck.exitCode !== 0) {
-          // Branch doesn't exist locally — try origin/<name>
-          const remoteRef = `origin/${baseBranch}`;
-          const remoteCheck = await gitRead(['rev-parse', '--verify', remoteRef], {
-            cwd: projectPath,
-            reject: false,
-          });
-          if (remoteCheck.exitCode === 0) {
-            effectiveBase = remoteRef;
-            onProgress?.(
-              'worktree:resolve',
-              `Using remote branch "origin/${baseBranch}"`,
-              'completed',
-            );
-          } else {
-            effectiveBase = undefined;
-            onProgress?.(
-              'worktree:resolve',
-              `Branch "${baseBranch}" not found, using HEAD`,
-              'completed',
-            );
-          }
-        } else {
-          onProgress?.('worktree:resolve', `Resolved branch "${baseBranch}"`, 'completed');
-        }
-      }
+      const effectiveBase = await resolveWorktreeBase(
+        projectPath,
+        baseBranch,
+        fromRemote,
+        onProgress,
+      );
 
       const baseResult = await getWorktreeBase(projectPath);
       if (baseResult.isErr()) throw baseResult.error;
@@ -280,14 +329,8 @@ export function createWorktree(
       const reuse = reuseExistingBranch && branchExisted;
       const source = reuse ? branchName : (effectiveBase ?? 'HEAD');
       onProgress?.('worktree:create', `Creating worktree from ${source}`, 'running');
-      const args = reuse
-        ? ['worktree', 'add', worktreePath, branchName]
-        : ['worktree', 'add', '-b', branchName, worktreePath];
-      if (!reuse && effectiveBase) args.push(effectiveBase);
-      // No deadline: the checkout of a large repository and its post-checkout
-      // hook can take minutes, and killing git halfway leaves a broken worktree.
       const result = await validatePath(projectPath).andThen((cwd) =>
-        ResultAsync.fromPromise(gitWrite(args, { cwd, timeout: 0 }), toDomainError),
+        addWorktree(cwd, worktreePath, branchName, reuse ? null : (effectiveBase ?? 'HEAD')),
       );
       if (result.isErr()) {
         onProgress?.('worktree:create', `Creating worktree from ${source}`, 'failed');
@@ -302,6 +345,58 @@ export function createWorktree(
       return internal(String(error));
     },
   );
+}
+
+/**
+ * Runner setting: `1` makes worktree creation and removal always run
+ * `git worktree add` / `remove` instead of trying gitoxide first.
+ */
+export const DISABLE_NATIVE_WORKTREE_ENV = 'FUNNY_DISABLE_NATIVE_WORKTREE';
+
+/**
+ * `git worktree add` for `branchName` at `worktreePath`: a new branch from
+ * `startPoint`, or the existing branch when `startPoint` is null.
+ *
+ * Done in-process with gitoxide when the native module has it, which spares
+ * a git process and its checkout. A remote-tracking start point gets the
+ * upstream `git branch` would set. gitoxide runs no hooks, so the native side
+ * declines repositories with a post-checkout or reference-transaction hook,
+ * and also `branch.autoSetupMerge=always|inherit`, an ambiguous upstream and
+ * stale `branch.<name>` config; git does those. A native
+ * failure has already been rolled back (registration, files, the branch it
+ * created), so git gets a clean second try and reports its own error.
+ */
+function addWorktree(
+  cwd: string,
+  worktreePath: string,
+  branchName: string,
+  startPoint: string | null,
+): ResultAsync<void, DomainError> {
+  const cli = () => {
+    const args =
+      startPoint === null
+        ? ['worktree', 'add', worktreePath, branchName]
+        : ['worktree', 'add', '-b', branchName, worktreePath, startPoint];
+    // No deadline: the checkout of a large repository and its post-checkout
+    // hook can take minutes, and killing git halfway leaves a broken worktree.
+    return ResultAsync.fromPromise(gitWrite(args, { cwd, timeout: 0 }), toDomainError).map(
+      () => undefined,
+    );
+  };
+  const addNative = getNativeGit()?.addWorktree;
+  if (!addNative || process.env[DISABLE_NATIVE_WORKTREE_ENV] === '1') return cli();
+  const options =
+    startPoint === null
+      ? { branch: branchName, createBranch: false }
+      : { branch: branchName, createBranch: true, startPoint };
+  return ResultAsync.fromPromise(
+    nativeGitWrite(cwd, () => addNative(cwd, worktreePath, options)),
+    toDomainError,
+  )
+    .orElse(() => ResultAsync.fromSafePromise(Promise.resolve({ created: false })))
+    .andThen((outcome) =>
+      outcome.created ? ResultAsync.fromSafePromise(Promise.resolve()) : cli(),
+    );
 }
 
 /** A path in a form two spellings of one folder share (symlinks resolved when it exists). */
@@ -505,6 +600,74 @@ function assertWorktreeInProjectBase(
   return null;
 }
 
+/**
+ * `git worktree remove -f` in-process with gitoxide, which deletes the files
+ * on several threads (a worktree with `node_modules` holds a great many).
+ * False when the native module lacks it or it failed; the caller then runs
+ * git, whose own fallback force-deletes what is left. The native side only
+ * removes the worktree registered at exactly `worktreePath`.
+ */
+async function removeWorktreeNatively(projectPath: string, worktreePath: string): Promise<boolean> {
+  const removeNative = getNativeGit()?.removeWorktree;
+  if (!removeNative || process.env[DISABLE_NATIVE_WORKTREE_ENV] === '1') return false;
+  return nativeGitWrite(projectPath, () => removeNative(projectPath, worktreePath)).then(
+    () => true,
+    () => false,
+  );
+}
+
+/** Work in a worktree that exists nowhere else: removing the worktree loses it. */
+export interface WorktreeUnsavedWork {
+  /** Files changed or untracked and not committed. */
+  dirtyFileCount: number;
+  /** Commits on HEAD that no remote and no other local branch has. */
+  unpushedCommitCount: number;
+}
+
+/**
+ * Count the uncommitted files and the unpushed commits of a worktree, read from
+ * git now (no cache): the answer decides whether the worktree may be deleted.
+ * A git failure is an error, never "nothing to lose".
+ *
+ * A commit counts when only this worktree's branch has it. One that another
+ * local branch has (a base branch ahead of its remote) survives the removal.
+ */
+export function worktreeUnsavedWork(
+  worktreePath: string,
+): ResultAsync<WorktreeUnsavedWork, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      // Exits 1 on a detached HEAD: then no branch is left out below.
+      const head = await gitRead(['symbolic-ref', '--short', '-q', 'HEAD'], {
+        cwd: worktreePath,
+        reject: false,
+      });
+      const ownBranch = head.exitCode === 0 ? head.stdout.trim() : '';
+      const others = ownBranch ? [`--exclude=${ownBranch}`, '--branches'] : ['--branches'];
+      const [status, unpushed] = await Promise.all([
+        gitRead(['status', '--porcelain'], { cwd: worktreePath, reject: false }),
+        gitRead(['rev-list', '--count', 'HEAD', '--not', '--remotes', ...others], {
+          cwd: worktreePath,
+          reject: false,
+        }),
+      ]);
+      if (status.exitCode !== 0 || unpushed.exitCode !== 0) {
+        throw internal(
+          `Could not read the state of the worktree ${worktreePath}: ${(status.stderr || unpushed.stderr).trim()}`,
+        );
+      }
+      return {
+        dirtyFileCount: status.stdout.split('\n').filter((line) => line.trim() !== '').length,
+        unpushedCommitCount: parseInt(unpushed.stdout.trim(), 10) || 0,
+      };
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      return internal(String(error));
+    },
+  );
+}
+
 export function removeWorktree(
   projectPath: string,
   worktreePath: string,
@@ -513,6 +676,11 @@ export function removeWorktree(
     (async () => {
       const containmentErr = assertWorktreeInProjectBase(projectPath, worktreePath);
       if (containmentErr) throw containmentErr;
+
+      if (await removeWorktreeNatively(projectPath, worktreePath)) {
+        await forgetSafeDirectory(worktreePath);
+        return;
+      }
 
       const result = await gitWrite(['worktree', 'remove', '-f', worktreePath], {
         cwd: projectPath,

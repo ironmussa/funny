@@ -5,7 +5,7 @@ import {
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { ProjectHook, HookType } from '@funny/shared';
 import { HOOK_TYPES } from '@funny/shared';
-import { Editor, type BeforeMount } from '@monaco-editor/react';
+import { Editor } from '@monaco-editor/react';
 import { Plus, Pencil, Trash2, X, Check, GripVertical } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -27,35 +27,12 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
-import { isLightTheme } from '@/lib/theme';
+import { defineFunnyDarkTheme, monacoThemeFor } from '@/lib/monaco-theme';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
 /* ── Inline shell editor (Monaco) ── */
-
-const handleBeforeMount: BeforeMount = (monaco) => {
-  monaco.editor.defineTheme('funny-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [],
-    colors: {
-      'editor.background': '#0a0a0a',
-      'editorGutter.background': '#0a0a0a',
-      // Find widget
-      'editorWidget.background': '#1e1e1e',
-      'editorWidget.border': '#454545',
-      'editorWidget.foreground': '#cccccc',
-      'input.background': '#2a2a2a',
-      'input.foreground': '#cccccc',
-      'input.border': '#454545',
-      'inputOption.activeBorder': '#007acc',
-      'inputOption.activeBackground': '#007acc44',
-      'inputOption.activeForeground': '#ffffff',
-      focusBorder: '#007acc',
-    },
-  });
-};
 
 function ShellEditor({
   value,
@@ -70,7 +47,7 @@ function ShellEditor({
 }) {
   const { resolvedTheme } = useTheme();
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
-  const monacoTheme = isLightTheme(resolvedTheme) ? 'vs' : 'funny-dark';
+  const monacoTheme = monacoThemeFor(resolvedTheme);
   const lineCount = Math.max(value.split('\n').length, 3);
   const height = Math.min(Math.max(lineCount * 22 + 16, 100), 400);
 
@@ -80,7 +57,7 @@ function ShellEditor({
         height={height}
         language="shell"
         theme={monacoTheme}
-        beforeMount={handleBeforeMount}
+        beforeMount={defineFunnyDarkTheme}
         value={value}
         onChange={(v) => onChange(v ?? '')}
         options={{
@@ -244,7 +221,7 @@ function HookItem({
 
 export function ProjectHooksSettings() {
   const { t } = useTranslation();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [hooks, setHooks] = useState<ProjectHook[]>([]);
   const [adding, setAdding] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);

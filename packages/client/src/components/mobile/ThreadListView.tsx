@@ -9,7 +9,6 @@ import { ensureStatusForThreads } from '@/data/git-status/actions';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useThreadsForProject } from '@/lib/thread-selectors';
-import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 interface Props {
@@ -31,7 +30,7 @@ export function ThreadListView({
 }: Props) {
   const { t } = useTranslation();
   const projects = useProjects();
-  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const threads = useThreadsForProject(projectId);
 
   const project = projects.find((p) => p.id === projectId);

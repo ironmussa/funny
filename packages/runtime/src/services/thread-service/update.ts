@@ -205,7 +205,7 @@ async function autoStartIdleThread(
         const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
         const draftMsg = draftMessages[0];
         const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
-        await startAgent(
+        const started = await startAgent(
           threadId,
           await startPromptForIdleThread(threadId, thread.initialPrompt!, projectPath, wtPath),
           wtPath,
@@ -218,6 +218,7 @@ async function autoStartIdleThread(
           undefined,
           !!draftMsg,
         );
+        if (started.isErr()) throw new Error(started.error.message);
       } catch (err) {
         log.error('Failed to setup worktree and start agent', {
           namespace: 'agent',
@@ -290,7 +291,7 @@ async function autoStartIdleThread(
       projectPath,
       cwd,
     );
-    startAgent(
+    void startAgent(
       threadId,
       startPrompt,
       cwd,
@@ -302,15 +303,21 @@ async function autoStartIdleThread(
       (thread.provider || project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider,
       undefined,
       !!draftMsg,
-    ).catch(async (err) => {
-      log.error('Failed to auto-start agent for idle thread', {
-        namespace: 'agent',
-        threadId,
-        error: err,
-      });
-      await tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
-      emitAgentFailed(thread.userId, threadId);
-    });
+    ).match(
+      () => undefined,
+      async (error) => {
+        log.error('Failed to auto-start agent for idle thread', {
+          namespace: 'agent',
+          threadId,
+          error: error.message,
+        });
+        await tm.updateThread(threadId, {
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+        });
+        emitAgentFailed(thread.userId, threadId);
+      },
+    );
   }
 }
 
@@ -367,13 +374,12 @@ async function convertToWorktreeImpl(
   const agentWasRunning = isAgentRunning(threadId);
   const settledStatus = statusAfterConvert(thread.status, agentWasRunning);
   if (agentWasRunning) {
-    try {
-      await stopAgent(threadId);
-    } catch (err) {
+    const stopped = await stopAgent(threadId);
+    if (stopped.isErr()) {
       log.warn('Failed to stop agent during convert-to-worktree', {
         namespace: 'thread-service',
         threadId,
-        error: String(err),
+        error: stopped.error.message,
       });
     }
   }

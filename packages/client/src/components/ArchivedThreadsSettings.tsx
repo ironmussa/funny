@@ -13,15 +13,16 @@ import { useGitStatusMaps } from '@/data/git-status/hooks';
 import { statusBranchKeyForThread } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 const PAGE_SIZE = 100;
 
 export function ArchivedThreadsSettings() {
   const { t } = useTranslation();
   const projects = useProjects();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const { statusByBranch, threadToBranchKey } = useGitStatusMaps();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [total, setTotal] = useState(0);

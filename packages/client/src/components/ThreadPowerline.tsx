@@ -43,6 +43,8 @@ export interface ThreadPowerlineProps {
    * passive inside clickable rows (sidebar, kanban).
    */
   copyable?: boolean;
+  /** Show hover tooltips on the segments (default true). Off in the sidebar. */
+  showTooltips?: boolean;
   /** Additional className for the outer wrapper */
   className?: string;
   /**
@@ -71,6 +73,7 @@ export function ThreadPowerline({
   prBadgeTestId,
   variant,
   copyable = false,
+  showTooltips = true,
   className,
   onDiffStatsClick,
   ...props
@@ -158,6 +161,7 @@ export function ThreadPowerline({
           segments={segments}
           size="sm"
           variant={variant}
+          tooltips={showTooltips}
           className="min-w-0 shrink"
           data-testid={props['data-testid']}
         />

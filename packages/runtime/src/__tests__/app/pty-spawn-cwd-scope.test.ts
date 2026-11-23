@@ -54,7 +54,9 @@ mock.module('../../services/service-registry.js', () => ({
   }),
 }));
 
+const actualThreadContext = { ...(await import('../../services/thread-context.js')) };
 mock.module('../../services/thread-context.js', () => ({
+  ...actualThreadContext,
   scratchPathFor: (userId: string, threadId: string) => `/tmp/scratch/${userId}/${threadId}`,
 }));
 

@@ -5,8 +5,8 @@ import {
   Loader2,
   AlertCircle,
   GitFork,
-  FolderOpen,
   House,
+  ExternalLink,
   ChevronUp,
   RefreshCw,
 } from 'lucide-react';
@@ -20,6 +20,7 @@ import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusIndicator } from '@/components/thread/ThreadStatusPin';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -128,16 +129,12 @@ function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
   );
 }
 
-/**
- * The path row's icon: a house for the repository's original checkout (the
- * project folder, not a branch), a folder for the linked worktrees.
- */
-function WorktreePathIcon({ isMain }: { isMain: boolean }) {
+/** Marks the repository's original checkout (the project folder, not a branch). */
+function WorktreeMainIcon() {
   const { t } = useTranslation();
-  if (!isMain) return <FolderOpen className="icon-xs shrink-0 opacity-70" aria-hidden="true" />;
   return (
     <House
-      className="icon-xs shrink-0"
+      className="icon-xs text-muted-foreground shrink-0"
       role="img"
       aria-label={t('worktreeSettings.main')}
       data-testid="worktree-main-icon"
@@ -204,79 +201,70 @@ function WorktreeCard({
     >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2" title={worktree.path}>
+            {worktree.isMain && <WorktreeMainIcon />}
             <WorktreeBranchLabel worktree={worktree} />
           </div>
-          {readOnly ? (
-            <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-              <WorktreePathIcon isMain={worktree.isMain} />
-              <span
-                title={
-                  worktree.isMain
-                    ? `${worktree.path}\n${t('worktreeSettings.mainDescription')}`
-                    : worktree.path
-                }
-                className="truncate font-mono"
-              >
-                {worktree.path}
-              </span>
-            </div>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const result = await api.openDirectory({ path: worktree.path });
-                    if (result.isErr()) toastError(result.error);
-                  }}
-                  className="text-muted-foreground hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left text-xs transition-colors"
-                  data-testid={`worktree-open-directory-${rowKey}`}
-                >
-                  <WorktreePathIcon isMain={worktree.isMain} />
-                  <span className="truncate font-mono hover:underline">{worktree.path}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" variant="mono">
-                {worktree.path}
-                {worktree.isMain && (
-                  <span className="text-muted-foreground block font-sans">
-                    {t('worktreeSettings.mainDescription')}
-                  </span>
-                )}
-              </TooltipContent>
-            </Tooltip>
-          )}
           {threads.length > 0 && <WorktreeThreadLinks threads={threads} />}
         </div>
       </div>
-      {!readOnly && !worktree.isMain && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t('dialog.deleteWorktree')}
-              onClick={onRemove}
-              disabled={removing}
-              // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
-              className={cn(
-                listRowActionClassName,
-                'hover:text-destructive',
-                removing && listRowActionBusyClassName,
+      {!readOnly && (
+        <ButtonGroup data-testid={`worktree-actions-${rowKey}`}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('sidebar.openDirectory')}
+                onClick={async () => {
+                  const result = await api.openDirectory({ path: worktree.path });
+                  if (result.isErr()) toastError(result.error);
+                }}
+                // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
+                className={listRowActionClassName}
+                data-testid={`worktree-open-directory-${rowKey}`}
+              >
+                <ExternalLink className="icon-sm" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" variant="mono">
+              {worktree.path}
+              {worktree.isMain && (
+                <span className="text-muted-foreground block font-sans">
+                  {t('worktreeSettings.mainDescription')}
+                </span>
               )}
-              // oxlint-enable shadcn/require-static-classes
-              data-testid={`worktree-delete-${rowKey}`}
-            >
-              {removing ? (
-                <Loader2 className="icon-sm animate-spin" />
-              ) : (
-                <Trash2 className="icon-sm" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="left">{t('dialog.deleteWorktree')}</TooltipContent>
-        </Tooltip>
+            </TooltipContent>
+          </Tooltip>
+          {!worktree.isMain && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('dialog.deleteWorktree')}
+                  onClick={onRemove}
+                  disabled={removing}
+                  // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
+                  className={cn(
+                    listRowActionClassName,
+                    'hover:text-destructive',
+                    removing && listRowActionBusyClassName,
+                  )}
+                  // oxlint-enable shadcn/require-static-classes
+                  data-testid={`worktree-delete-${rowKey}`}
+                >
+                  {removing ? (
+                    <Loader2 className="icon-sm animate-spin" />
+                  ) : (
+                    <Trash2 className="icon-sm" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">{t('dialog.deleteWorktree')}</TooltipContent>
+            </Tooltip>
+          )}
+        </ButtonGroup>
       )}
     </div>
   );

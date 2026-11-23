@@ -127,7 +127,8 @@ describe('Worktrees sidebar', () => {
     renderWithProviders(<WorktreesPanel />);
     const label = await screen.findByTestId('worktree-detached-1234567');
     expect(label).toHaveTextContent('1234567');
-    expect(screen.getByText('/tmp/detached')).toBeInTheDocument();
+    // The path is no longer a row of its own; the open-directory icon carries it.
+    expect(screen.getByTestId('worktree-open-directory-1234567')).toBeInTheDocument();
   });
 
   test('distinguishes the main checkout from the active linked worktree', async () => {
@@ -139,11 +140,16 @@ describe('Worktrees sidebar', () => {
     );
     const view = renderWithProviders(<WorktreesPanel />);
     await screen.findByText('feature/test');
-    // The original checkout is marked by a house icon on its path, not a chip.
+    // The original checkout is marked by a house icon beside its branch, not a chip.
     expect(screen.getAllByTestId('worktree-main-icon')).toHaveLength(1);
-    expect(screen.getByTestId('worktree-open-directory-main')).toContainElement(
+    expect(screen.getByTestId('worktree-row-main')).toContainElement(
       screen.getByTestId('worktree-main-icon'),
     );
+    // It can be opened, but not deleted: its actions hold only the open icon.
+    expect(screen.getByTestId('worktree-actions-main')).toContainElement(
+      screen.getByTestId('worktree-open-directory-main'),
+    );
+    expect(screen.queryByTestId('worktree-delete-main')).not.toBeInTheDocument();
     expect(screen.queryByTestId('worktree-badge-main')).not.toBeInTheDocument();
     // The active worktree shows as a selected row (like the sidebar's selected
     // thread), not as an outlined branch chip or a separate "Current" badge.

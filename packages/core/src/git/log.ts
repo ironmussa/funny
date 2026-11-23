@@ -360,9 +360,12 @@ export function getGraphLog(
   if (skip > 0) args.push(`--skip=${skip}`);
   // Exclude checkpoint refs before traversal so they neither create graph lanes
   // nor consume pagination slots. Commits reachable from normal branches remain.
+  // `refs/funny/*` holds funny's own snapshots (rewind checkpoints, undo
+  // snapshots): parentless commits that would show up as unconnected nodes.
   if (all) {
     args.push(
       '--exclude=refs/t3/*',
+      '--exclude=refs/funny/*',
       ...excludeRefs.filter(isFullRefName).map((ref) => `--exclude=${ref}`),
       '--all',
     );

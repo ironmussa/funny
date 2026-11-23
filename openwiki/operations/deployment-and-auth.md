@@ -107,8 +107,9 @@ and set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PEM; one-line `\n` escapes
 accepted) on the server; they take precedence.
 
 The App needs exactly these **repository permissions** (`APP_PERMISSIONS` in
-`packages/server/src/services/github-app/token-issuer.ts`), and no organization
-or account permissions:
+`packages/server/src/services/github-app/token-issuer.ts`); every other
+repository permission stays at **No access**, with no organization, account or
+enterprise permissions and no events to subscribe to:
 
 | Permission      | Access         | Used for                                                                                       |
 | --------------- | -------------- | ---------------------------------------------------------------------------------------------- |
@@ -118,15 +119,16 @@ or account permissions:
 | Workflows       | Read and write | pushing changes under `.github/workflows/` (every write token asks for it)                     |
 | Actions         | Read-only      | the end of a failed job's log, given to the fix step                                           |
 | Checks          | Read and write | reading a pull request's check runs; writing only the factory's `funny/regression-proof` check |
-| Commit statuses | Read-only      | a pull request's commit statuses                                                               |
+| Commit statuses | Read and write | reading a pull request's commit statuses; writing only the factory's `funny/review` status     |
 | Metadata        | Read-only      | (mandatory)                                                                                    |
 
 A token is never given all of them: a sandbox token is capped by the owner's own
-access and keeps `checks: read`, so an agent cannot write the regression-proof
-check; only the server's check-publishing token has `checks: write` (with
-`metadata: read` and nothing else). An App created before the factory published
-that check lacks `checks: write`: add it in the App's settings, and have every
-installation accept the new permission (GitHub asks each installation's admin);
+access and keeps `checks: read` and `statuses: read`, so an agent cannot write
+the regression-proof check or the review status; only the server's publishing
+tokens have `checks: write` or `statuses: write` (each with `metadata: read` and
+nothing else). An App created before the factory published them lacks
+`checks: write` or `statuses: write`: add them in the App's settings, and have
+every installation accept the new permissions (GitHub asks each installation's admin);
 Preferences > GitHub App lists the installations that have not. Without an App, or
 when it is not installed on the thread's repository, sandboxes get no GitHub
 access and the thread shows why. A steer sharee can act on the repository

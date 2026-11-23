@@ -1,4 +1,4 @@
-import { Check, Link2, Share2, X } from 'lucide-react';
+import { Check, Link2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -19,10 +19,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
-import { ShortcutHint } from '@/components/ui/kbd';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { threadsApi, type ShareLevel, type ThreadShareGrant } from '@/lib/api/threads';
@@ -66,13 +63,17 @@ interface ProjectMemberPick {
 }
 
 /**
- * Owner-only "Share" affordance, rendered as a Google-Drive-style modal:
+ * Owner-only "Share" dialog, Google-Drive-style. It has no trigger of its own:
+ * the thread header's "More actions" menu and the Alt+H shortcut open it
+ * through `shareDialogOpen` in the UI store. While mounted for the owner it
+ * renders a hidden `share-thread-available` marker so the shortcut knows a
+ * dialog exists to open. In the dialog the owner can:
  * invite a member of THIS PROJECT to read+comment on the thread, see who
  * currently has access (with the owner pinned on top), revoke shares, and
  * copy a deep link. The link is identity-gated server-side — only granted
  * users can open it.
  */
-export function ShareThreadButton({
+export function ShareThreadDialog({
   threadId,
   projectId,
 }: {
@@ -171,23 +172,7 @@ export function ShareThreadButton({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-testid="header-share-thread"
-              className={shares.length > 0 ? 'text-status-info' : 'text-muted-foreground'}
-            >
-              <Share2 className="icon-base" />
-            </Button>
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <ShortcutHint label="Share thread" keys={['Alt', 'H']} />
-        </TooltipContent>
-      </Tooltip>
+      <span hidden data-testid="share-thread-available" />
 
       <DialogContent
         className="max-w-md gap-0 overflow-hidden p-0"

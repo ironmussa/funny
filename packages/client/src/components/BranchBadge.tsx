@@ -1,18 +1,26 @@
 import { GitBranch } from 'lucide-react';
 
-import { colorFromName, contrastText, pastelize } from '@/components/ui/project-chip';
+import { contrastText, darkenHex } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { branchColor } from '@/lib/graph-colors';
 import { cn, ICON_SIZE } from '@/lib/utils';
 
 interface BranchBadgeProps {
   branch: string;
   size?: 'xs' | 'sm' | 'md';
   /**
-   * `badge` (default): pastel chip (color picked from the branch name), for a
+   * `badge` (default): pastel chip in the branch's History graph color (`branchColor`), for a
    * branch inside a row's metadata or a sentence.
    * `plain`: no chip, inherits the surrounding color, for headers, toggles and row titles.
    */
   variant?: 'badge' | 'plain';
+  /**
+   * Outline the chip in a darker shade of its own color, the way the History
+   * graph marks the open thread's branch. `highlightLabel` is read by screen
+   * readers and shown in the tooltip, since the outline alone says nothing.
+   */
+  highlighted?: boolean;
+  highlightLabel?: string;
   className?: string;
   'data-testid'?: string;
 }
@@ -32,11 +40,14 @@ export function BranchBadge({
   branch,
   size = 'sm',
   variant = 'badge',
+  highlighted = false,
+  highlightLabel,
   className,
   'data-testid': testId = 'branch-badge',
 }: BranchBadgeProps) {
   const s = sizeStyles[size];
-  const bg = variant === 'badge' ? pastelize(colorFromName(branch)) : undefined;
+  const bg = variant === 'badge' ? branchColor(branch) : undefined;
+  const outlined = highlighted && !!bg;
 
   return (
     <Tooltip>
@@ -53,14 +64,26 @@ export function BranchBadge({
             variant === 'badge' && ['rounded-full font-medium will-change-transform', s.chip],
             className,
           )}
-          style={bg ? { backgroundColor: bg, color: contrastText(bg) } : undefined}
+          style={
+            bg
+              ? {
+                  backgroundColor: bg,
+                  color: contrastText(bg),
+                  boxShadow: outlined ? `0 0 0 1.5px ${darkenHex(bg, 0.35)}` : undefined,
+                }
+              : undefined
+          }
           data-testid={testId}
+          data-highlighted={highlighted || undefined}
         >
           <GitBranch className={cn(s.icon, 'shrink-0')} aria-hidden="true" />
           <span className="truncate">{branch}</span>
+          {highlighted && highlightLabel ? <span className="sr-only">{highlightLabel}</span> : null}
         </span>
       </TooltipTrigger>
-      <TooltipContent variant="mono">{branch}</TooltipContent>
+      <TooltipContent variant="mono">
+        {highlighted && highlightLabel ? `${branch} · ${highlightLabel}` : branch}
+      </TooltipContent>
     </Tooltip>
   );
 }

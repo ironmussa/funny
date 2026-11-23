@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Thread, ThreadRuntime } from '@funny/shared';
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 
 interface ThreadRef {
@@ -23,7 +23,7 @@ mock.module('@/stores/thread-context', () => ({
   useThreadSelector: (selector: (t: unknown) => unknown) => selector(thread.current),
 }));
 
-const { ShareThreadButton } = await import('@/components/thread/header/ShareThreadButton');
+const { ShareThreadDialog } = await import('@/components/thread/header/ShareThreadDialog');
 const { useAuthStore } = await import('@/stores/auth-store');
 const { useUIStore } = await import('@/stores/ui-store');
 
@@ -34,11 +34,12 @@ function open(runtime: ThreadRuntime, extra: Partial<Thread> = { projectId: 'p-1
   useAuthStore.setState({
     user: { id: 'alice', username: 'alice', displayName: 'alice', role: 'user' },
   });
-  renderWithProviders(<ShareThreadButton threadId="t-1" projectId="p-1" />);
-  fireEvent.click(screen.getByTestId('header-share-thread'));
+  renderWithProviders(<ShareThreadDialog threadId="t-1" projectId="p-1" />);
+  // Opened after mount: the dialog closes itself whenever its thread changes.
+  act(() => useUIStore.setState({ shareDialogOpen: true }));
 }
 
-describe('ShareThreadButton', () => {
+describe('ShareThreadDialog', () => {
   beforeEach(() => {
     useUIStore.setState({ shareDialogOpen: false });
   });

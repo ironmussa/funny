@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
-import { IssueBadges } from '@/components/IssueBadges';
+import { IssueLabelBadges, IssueLinkBadges } from '@/components/IssueBadges';
 import { IssueDetailDialog } from '@/components/IssueDetailDialog';
 import {
   canSendIssue,
@@ -415,14 +415,6 @@ function IssueRow({
         </button>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-muted-foreground text-xs">#{issue.number}</span>
-          {factoryRun && (
-            <IssueFactoryStatus
-              projectId={projectId}
-              run={factoryRun}
-              position={factory.queuePosition.get(issue.number)}
-            />
-          )}
-          <IssueBadges issue={issue} />
           <span className="text-muted-foreground text-xs">{timeAgo(issue.created_at, now)}</span>
           {issue.user && <span className="text-muted-foreground text-xs">{issue.user.login}</span>}
           {issue.comments > 0 && (
@@ -431,6 +423,33 @@ function IssueRow({
               {issue.comments}
             </span>
           )}
+        </div>
+        {/* The linked branch and pull request on one line… */}
+        <div
+          className="flex flex-wrap items-center gap-1.5 empty:hidden"
+          data-testid={`issue-links-${issue.number}`}
+        >
+          <IssueLinkBadges issue={issue} />
+        </div>
+        {/* …the issue's state in the factory on its own line… */}
+        {factoryRun && (
+          <div
+            className="flex items-center gap-1.5"
+            data-testid={`issue-factory-line-${issue.number}`}
+          >
+            <IssueFactoryStatus
+              projectId={projectId}
+              run={factoryRun}
+              position={factory.queuePosition.get(issue.number)}
+            />
+          </div>
+        )}
+        {/* …and the GitHub labels on another. */}
+        <div
+          className="flex flex-wrap items-center gap-1.5 empty:hidden"
+          data-testid={`issue-tags-${issue.number}`}
+        >
+          <IssueLabelBadges issue={issue} />
         </div>
         {issue.body ? (
           <p

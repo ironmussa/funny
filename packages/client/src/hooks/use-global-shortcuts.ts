@@ -222,10 +222,10 @@ const PANEL_TOGGLES: Record<string, (ui: UIState) => void> = {
     ui.setCommentsPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'comments'));
   },
   h: (ui) => {
-    // Share is owner-only: the dialog mounts only when the header's Share
-    // button is rendered. Gate on its presence so we never strand a stale
+    // Share is owner-only: the dialog mounts (with its hidden marker) only on
+    // a thread the user owns. Gate on the marker so we never strand a stale
     // `shareDialogOpen` flag on a thread with no share dialog.
-    if (document.querySelector('[data-testid="header-share-thread"]')) {
+    if (document.querySelector('[data-testid="share-thread-available"]')) {
       log.info('shortcut.toggle_share');
       ui.toggleShareDialog();
     }

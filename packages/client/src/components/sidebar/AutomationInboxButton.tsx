@@ -2,17 +2,24 @@ import { Inbox } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { NavItem } from '@/components/ui/nav-item';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAutomationInbox } from '@/data/automations/hooks';
 import { loadInbox } from '@/data/automations/loaders';
 import { buildPath } from '@/lib/url';
+import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const BASE_POLL_MS = 60_000;
 const MAX_POLL_MS = 300_000; // 5 min cap
 
-export function AutomationInboxButton() {
+/**
+ * Sidebar top-bar icon that opens the Automation Inbox, with a badge for the
+ * pending runs. It also polls the inbox, so it must stay mounted. `className`
+ * lets the top bar keep it visible while it has pending items.
+ */
+export function AutomationInboxButton({ className }: { className?: string }) {
   const navigate = useNavigate();
   const { pendingCount: inboxCount } = useAutomationInbox();
   const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
@@ -44,15 +51,39 @@ export function AutomationInboxButton() {
   }, [isAuthenticated]);
 
   return (
-    <NavItem
-      icon={Inbox}
-      label="Automation Inbox"
-      count={inboxCount}
-      isActive={automationInboxOpen}
-      data-testid="sidebar-automation-inbox"
-      onClick={() => {
-        navigate(buildPath(automationInboxOpen ? '/' : '/inbox'));
-      }}
-    />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          tabIndex={-1}
+          data-testid="sidebar-automation-inbox"
+          aria-label="Automation Inbox"
+          onClick={() => {
+            navigate(buildPath(automationInboxOpen ? '/' : '/inbox'));
+          }}
+          className={cn(
+            'relative',
+            automationInboxOpen
+              ? 'text-foreground'
+              : inboxCount > 0
+                ? 'text-status-info'
+                : 'text-muted-foreground',
+            className,
+          )}
+        >
+          <Inbox className="icon-base" />
+          {inboxCount > 0 && (
+            <span
+              className="bg-status-info text-3xs absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 leading-none font-medium text-white"
+              data-testid="sidebar-automation-inbox-badge"
+            >
+              {inboxCount > 99 ? '99+' : inboxCount}
+            </span>
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Automation Inbox</TooltipContent>
+    </Tooltip>
   );
 }

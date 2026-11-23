@@ -191,6 +191,12 @@ interface BrowserPanelState {
   attachThreadSession: (threadId: string) => Promise<void>;
   /** Follow the active thread: detach from another thread's session, attach to this one's. */
   syncActiveThread: (threadId: string | null) => void;
+  /**
+   * Show a thread's browser in the panel (the sidebar's browser icon): opens the
+   * panel now if that thread is the one it follows, otherwise when the thread
+   * becomes active (`syncActiveThread` restores the remembered open state).
+   */
+  showThreadBrowser: (threadId: string) => void;
   /** An agent opened its thread's session — surface it if that thread is active. */
   handleAgentOpened: (sessionId: string, threadId: string, activeThreadId: string | null) => void;
   setSessionViewport: (sessionId: string, width: number, height: number) => void;
@@ -684,6 +690,15 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     const open = state.openByThread[threadKey(threadId)] ?? false;
     set(panelStateForThread(threadId, open));
     if (open && threadId) void get().attachThreadSession(threadId);
+  },
+
+  showThreadBrowser: (threadId) => {
+    const state = get();
+    if (state.panelThreadId === threadId) {
+      if (!state.open) get().togglePanel();
+      return;
+    }
+    set({ openByThread: { ...state.openByThread, [threadKey(threadId)]: true } });
   },
 
   handleAgentOpened: (sessionId, threadId, activeThreadId) => {

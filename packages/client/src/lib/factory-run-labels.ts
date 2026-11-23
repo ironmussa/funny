@@ -205,13 +205,15 @@ export interface FactoryRunFilter {
   caseSensitive: boolean;
   /** The states to keep; empty keeps every state. */
   states: ReadonlySet<string>;
+  /** The projects to keep; empty keeps every project. */
+  projectIds: ReadonlySet<string>;
   projectNameById: ReadonlyMap<string, string>;
 }
 
 /** The runs the factory view shows, in its order (waiting, in progress, queue, failed, ended). */
 export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
   runs: R[],
-  { search, caseSensitive, states, projectNameById }: FactoryRunFilter,
+  { search, caseSensitive, states, projectIds, projectNameById }: FactoryRunFilter,
 ): R[] {
   const fold = (text: string) => (caseSensitive ? text : text.toLowerCase());
   const needle = fold(search.trim().replace(/^#/, ''));
@@ -221,7 +223,10 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
     fold(projectNameById.get(run.projectId) ?? '').includes(needle) ||
     fold(run.currentStep ?? '').includes(needle);
   const kept = runs.filter(
-    (run) => (states.size === 0 || states.has(run.state)) && matchesSearch(run),
+    (run) =>
+      (states.size === 0 || states.has(run.state)) &&
+      (projectIds.size === 0 || projectIds.has(run.projectId)) &&
+      matchesSearch(run),
   );
   const groups = groupFactoryRuns(kept);
   return FACTORY_QUEUE_SECTIONS.flatMap((section) => groups[section]);

@@ -118,11 +118,12 @@ describe('StashTab other branches', () => {
     const list = screen.getByTestId('stash-list');
     expect(list).toContainElement(screen.getByTestId('stash-entry-0'));
     expect(list).toContainElement(screen.getByTestId('stash-entry-1'));
-    // Each row names its branch; only the checked-out one is Current.
+    // Each row names its branch; only the checked-out one's chip is outlined.
     expect(screen.getByTestId('stash-branch-0')).toHaveTextContent('main');
-    expect(screen.getByTestId('stash-current-0')).toHaveTextContent('Current');
+    expect(screen.getByTestId('stash-branch-0')).toHaveAttribute('data-highlighted', 'true');
+    expect(screen.getByTestId('stash-branch-0')).toHaveTextContent('Current');
     expect(screen.getByTestId('stash-branch-1')).toHaveTextContent('feat/x');
-    expect(screen.queryByTestId('stash-current-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('stash-branch-1')).not.toHaveAttribute('data-highlighted');
     // git's "On <branch>:" prefix is dropped from the title, since the row shows the branch.
     expect(screen.getByTestId('stash-entry-0')).toHaveTextContent('wip');
     expect(screen.getByTestId('stash-entry-0')).not.toHaveTextContent('On main:');

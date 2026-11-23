@@ -161,7 +161,7 @@
     "openDesign": "Open design"
   },
   "thread": {
-    "browserOpenTooltip": "Browser open",
+    "browserOpenTooltip": "Browser open — click to show it",
     "claudeContext": "Claude Code · Automatic context",
     "claudeContextDescription": "Instructions supplied to Claude Code, not a message written by you.",
     "status": {

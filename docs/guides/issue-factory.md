@@ -31,18 +31,19 @@ repository, limited to that repository and valid for an hour.
    Active**: the factory polls, it needs no webhook.
 3. Under **Repository permissions** grant exactly these:
 
-   | Permission      | Access         | Used for                                                                                       |
-   | --------------- | -------------- | ---------------------------------------------------------------------------------------------- |
-   | Contents        | Read and write | cloning, pushing the run's branch, deleting it after a merge                                   |
-   | Pull requests   | Read and write | opening the draft, marking it ready, enabling auto-merge                                       |
-   | Issues          | Read and write | reading ready issues and their blockers, claiming, labels, comments, hand-backs                |
-   | Workflows       | Read and write | pushing changes the agent makes under `.github/workflows/` (required: every token asks for it) |
-   | Actions         | Read-only      | the end of a failed job's log, given to the agent for a fix                                    |
-   | Checks          | Read-only      | the pull request's check runs                                                                  |
-   | Commit statuses | Read-only      | the pull request's commit statuses                                                             |
-   | Metadata        | Read-only      | (mandatory)                                                                                    |
+   | Permission      | Access         | Used for                                                                                         |
+   | --------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+   | Contents        | Read and write | cloning, pushing the run's branch, deleting it after a merge                                     |
+   | Pull requests   | Read and write | opening the draft, marking it ready, enabling auto-merge                                         |
+   | Issues          | Read and write | reading ready issues and their blockers, claiming, labels, comments, hand-backs                  |
+   | Workflows       | Read and write | pushing changes the agent makes under `.github/workflows/` (required: every token asks for it)   |
+   | Actions         | Read-only      | the end of a failed job's log, given to the agent for a fix                                      |
+   | Checks          | Read and write | reading the pull request's check runs; writing only the factory's `funny/regression-proof` check |
+   | Commit statuses | Read and write | reading the pull request's commit statuses; writing only the factory's `funny/review` status     |
+   | Metadata        | Read-only      | (mandatory)                                                                                      |
 
-   No organization or account permissions.
+   Every other repository permission stays at **No access**. No organization, account or
+   enterprise permissions, and no events to subscribe to.
 
 4. **Where can this GitHub App be installed?** _Only on this account._
 5. Create it, note its **App ID**, and under **Private keys** generate a key: a `.pem`

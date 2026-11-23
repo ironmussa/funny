@@ -8,6 +8,7 @@ import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { api } from '@/lib/api';
 import * as variant from '@/lib/thread-variant';
+import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { type Editor } from '@/stores/settings-store';
@@ -76,7 +77,7 @@ export function useMoreActionsMenu() {
     if (!threadId) return;
     const result = await api.convertToWorktree(threadId);
     if (result.isErr()) {
-      toast.error(String(result.error));
+      toastError(result.error);
     } else {
       toast.success(t('toast.convertToWorktreeStarted'));
     }
@@ -88,7 +89,7 @@ export function useMoreActionsMenu() {
       setCreateBranchLoading(true);
       await (async () => {
         const result = await api.checkout(threadProjectId, name, 'carry', true, threadId);
-        if (result.isErr()) toast.error(String(result.error));
+        if (result.isErr()) toastError(result.error);
         else setCreateBranchOpen(false);
       })().finally(() => setCreateBranchLoading(false));
     },

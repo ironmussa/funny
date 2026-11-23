@@ -198,6 +198,18 @@ async function probeNestedUserNamespace(): Promise<boolean> {
   );
 }
 
+/**
+ * The flag settings of a read-only agent: the ones it already has, with the
+ * hooks of the settings files and plugins off. Those run on the host, outside
+ * the sandbox, at every tool call; a command-rewriting one (RTK's) turned `ls`
+ * into a command that prints nothing in the sandbox. funny's own pre-tool hook
+ * is an SDK callback, not a settings hook, and keeps running.
+ */
+export function withSettingsHooksOff(settings: unknown): Record<string, unknown> {
+  const current = settings && typeof settings === 'object' ? settings : {};
+  return { ...current, disableAllHooks: true };
+}
+
 const ALLOWED = new Set(READ_ONLY_AGENT_TOOLS);
 
 const text = (value: unknown) => (typeof value === 'string' && value.length > 0 ? value : null);

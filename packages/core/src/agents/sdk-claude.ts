@@ -18,7 +18,12 @@ import { BaseAgentProcess } from './base-process.js';
 import { checkRedirectReason } from './check-redirect.js';
 import { toContextBreakdown } from './context-breakdown.js';
 import type { IAgentProcess } from './interfaces.js';
-import { detectReadOnlySandboxMode, readOnlyDenial, readOnlySandboxSettings } from './read-only.js';
+import {
+  detectReadOnlySandboxMode,
+  readOnlyDenial,
+  readOnlySandboxSettings,
+  withSettingsHooksOff,
+} from './read-only.js';
 import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
@@ -402,6 +407,11 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       sdkOptions.permissionMode = 'default';
       delete sdkOptions.allowDangerouslySkipPermissions;
       sdkOptions.settingSources = ['user'];
+      // Hooks from the settings files and plugins run outside the sandbox, on
+      // the host, at every tool call (a command-rewriting one, like RTK's,
+      // also turned `ls` into `rtk ls`, which prints nothing in the sandbox).
+      // funny's own pre-tool hook is an SDK callback and keeps running.
+      sdkOptions.settings = withSettingsHooksOff(sdkOptions.settings);
       const mode = await detectReadOnlySandboxMode();
       sdkOptions.sandbox = readOnlySandboxSettings(
         this.options.cwd,

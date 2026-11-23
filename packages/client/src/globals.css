@@ -1886,9 +1886,13 @@ mark.md-search-match[data-active='true'] {
 
 /* Dockview hides the content container of a collapsed edge group, but the
    left sidebar renders its collapsed rail (with the expand button) inside
-   that container — `collapsedSize: 40` in DockviewLayout. Keep it visible. */
+   that container — `collapsedSize: 40` in DockviewLayout. Keep it visible.
+   The selector must out-rank dockview's own
+   `.dv-groupview.dv-groupview-edge.dv-edge-collapsed > .dv-content-container`
+   (four classes): at equal specificity the stylesheet loaded last wins, and
+   dockview's loads after this one, which hid the rail and its expand button. */
 .dockview-theme-funny
-  [data-testid='dv-edge-group-left-edge'].dv-edge-collapsed
+  .dv-groupview.dv-groupview-edge[data-testid='dv-edge-group-left-edge'].dv-edge-collapsed
   > .dv-content-container {
   display: block;
 }

@@ -317,6 +317,18 @@ export function createMergeLane(deps: MergeLaneDeps) {
 
   return {
     /**
+     * Whether `to` is exactly a merge of `from` with a commit of the pull
+     * request's base branch, so it holds what was proved of `from`.
+     */
+    async isBaseMergeOf(from: string, to: string): Promise<boolean> {
+      const pr = deps.pullRequest();
+      if (!pr) return false;
+      const head = await deps.prs.pullHead(pr);
+      if (head.isErr()) return false;
+      return isBaseMerge(pr, head.value.baseRef, from, to);
+    },
+
+    /**
      * Where the base branch requires GitHub's merge queue: add the pull request
      * (only while its head is `sha`) and follow it. GitHub tests it on the
      * current base and merges it, so the branch is not updated first.

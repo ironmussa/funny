@@ -896,6 +896,13 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       const proved = await runRegressionProof(config);
       if (!proved.ok) return { refused: proved };
     }
+    // The proof ran in the implementer's checkout, which stays at the commit it
+    // pushed: a head that only merged the base into that commit holds its proof
+    // (a run resumed after the merge lane updated the branch).
+    const provedSha = lastProof?.record.headSha;
+    if (provedSha && provedSha !== sha && (await lane.isBaseMergeOf(provedSha, sha))) {
+      await carryProof(provedSha, sha);
+    }
     if (lastProof?.record.headSha !== sha) {
       return {
         refused: {

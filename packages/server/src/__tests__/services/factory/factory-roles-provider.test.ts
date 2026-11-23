@@ -816,6 +816,8 @@ describe('merge brings the branch up to date with its base first', () => {
      * agent's worktree, which stays at the commit it pushed (SHA_A).
      */
     proof?: boolean;
+    /** The pull request's head when the step starts (default SHA_A). */
+    head?: string;
   }
 
   /** A runner that proves the implementing agent's worktree, which stays at SHA_A. */
@@ -826,7 +828,7 @@ describe('merge brings the branch up to date with its base first', () => {
   };
 
   function lane(script: LaneScript) {
-    let head = SHA_A;
+    let head = script.head ?? SHA_A;
     const updates: string[] = [];
     const enqueued: string[] = [];
     const merges: Array<{ sha?: string } | undefined> = [];
@@ -947,6 +949,35 @@ describe('merge brings the branch up to date with its base first', () => {
       input.regressionProof ? [input.regressionProof] : [],
     );
     expect(proofs.at(-1)).toMatchObject({ headSha: SHA_M, carriedFrom: SHA_A, verdict: 'pass' });
+  });
+
+  // Retried or resumed after the lane already updated the branch: nothing is
+  // brought in now, and the proof run again only proves A once more.
+  test('with a regression proof: a run resumed on the merge commit merges it on the proof of A', async () => {
+    const { merge, merges, updates, recorded } = lane({
+      head: SHA_M,
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      reviews: [reviewedA, { ...reviewedA, sha: SHA_M, carriedFrom: SHA_A }],
+      proof: true,
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(updates).toEqual([]);
+    expect(merges).toMatchObject([{ sha: SHA_M }]);
+    const proofs = recorded.flatMap((input) =>
+      input.regressionProof ? [input.regressionProof] : [],
+    );
+    expect(proofs.at(-1)).toMatchObject({ headSha: SHA_M, carriedFrom: SHA_A });
+  });
+
+  test('with a regression proof: a head that is not a base merge of the proved commit is refused', async () => {
+    const { merge, merges } = lane({
+      head: SHA_M,
+      parents: { [SHA_M]: [SHA_A, 'f'.repeat(40)] },
+      reviews: [reviewedA, { ...reviewedA, sha: SHA_M, carriedFrom: SHA_A }],
+      proof: true,
+    });
+    expect(await merge()).toMatchObject({ ok: false });
+    expect(merges).toEqual([]);
   });
 
   test('the base moves again while the checks run: it is merged in again before the merge', async () => {

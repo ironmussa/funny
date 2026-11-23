@@ -19,7 +19,6 @@ export type {
   FactoryRegressionProof,
   FactoryRun,
   FactorySettings,
-  FactoryStepOptionsRecord,
   FactoryStepOverride,
   FactoryStepOverrides,
   FactorySubmitResult,

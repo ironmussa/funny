@@ -86,7 +86,7 @@ export async function prepareWorktree(
 }
 
 /** A conversion is its own action in the activity panel, not a plain setup. */
-export function activityTitle(flow: WorktreeFlow, branchName: string): string {
+function activityTitle(flow: WorktreeFlow, branchName: string): string {
   return flow === 'convert'
     ? `Convert thread to worktree ${branchName}`
     : `Set up worktree ${branchName}`;

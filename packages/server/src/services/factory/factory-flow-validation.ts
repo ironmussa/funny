@@ -28,6 +28,7 @@ import {
 import {
   resolveStepOptions,
   type ProjectAgentDefaults,
+  type ResolvedStepOptions,
   type StepOverrides,
 } from './factory-step-options.js';
 
@@ -94,6 +95,75 @@ function defaultsProblems(parsed: ParsedWorkflow): FactoryFlowProblem[] {
   return [{ step: 'defaults', field: 'permission_mode', message: modeProblem(mode) }];
 }
 
+/** A problem of a step before its step id is attached. */
+type StepProblem = Omit<FactoryFlowProblem, 'step'>;
+
+/** What the step itself writes that the factory would not apply. */
+function writtenProblems(action: FlowAgentStep['action'], parsed: ParsedWorkflow): StepProblem[] {
+  const problems: StepProblem[] = Object.keys(action)
+    .filter((field) => !APPLIED_FIELDS.has(field))
+    .map((field) => ({ field, message: `${field} is not applied by the issue factory` }));
+  if (action.permission_mode && !UNATTENDED_MODES.has(action.permission_mode)) {
+    problems.push({ field: 'permission_mode', message: modeProblem(action.permission_mode) });
+  }
+  if (action.provider && !KNOWN_PROVIDER_IDS.includes(action.provider)) {
+    problems.push({ field: 'provider', message: `Unknown provider "${action.provider}"` });
+  }
+  const defaults = parsed.defaults;
+  const pairProblem = providerModelProblem(
+    action.provider ?? defaults?.provider,
+    action.model ?? (action.provider ? undefined : defaults?.model),
+  );
+  if (pairProblem) problems.push({ field: 'model', message: pairProblem });
+  return problems;
+}
+
+/** Tool lists on a provider whose agent process would not apply them. */
+function toolProblems(resolved: ResolvedStepOptions): StepProblem[] {
+  if (TOOL_POLICY_PROVIDERS.has(resolved.provider)) return [];
+  const lists = [
+    ['allowed_tools', resolved.allowedTools],
+    ['denied_tools', resolved.disallowedTools],
+  ] as const;
+  return lists.flatMap(([field, list]) =>
+    list === null
+      ? []
+      : [
+          {
+            field,
+            message: `${field} cannot be applied on provider "${resolved.provider}": only ${[...TOOL_POLICY_PROVIDERS].join(' and ')} apply tool lists`,
+          },
+        ],
+  );
+}
+
+/** A `thread: new` step must be read-only, on a provider held to it, and not the first. */
+function newThreadProblems(resolved: ResolvedStepOptions, isFirst: boolean): StepProblem[] {
+  if (resolved.thread !== 'new') return [];
+  const problems: StepProblem[] = [];
+  if (resolved.permissionMode !== 'plan') {
+    problems.push({
+      field: 'thread',
+      message:
+        'thread: new runs beside the implementing thread, so it must be read-only (permission_mode: plan): only the implementing thread writes to the branch',
+    });
+  }
+  if (!READ_ONLY_PROVIDERS.includes(resolved.provider as AgentProvider)) {
+    problems.push({
+      field: 'provider',
+      message: `thread: new runs read-only, which only ${READ_ONLY_PROVIDERS.join(' and ')} can be held to; "${resolved.provider}" cannot`,
+    });
+  }
+  if (isFirst) {
+    problems.push({
+      field: 'thread',
+      message:
+        'thread: new cannot be on the first agent step: it is the implementing thread the later steps continue',
+    });
+  }
+  return problems;
+}
+
 /** The problems of one agent step, its options resolved as a run would. */
 function stepProblems(
   { step, action }: FlowAgentStep,
@@ -101,25 +171,6 @@ function stepProblems(
   firstNode: string | undefined,
   context: { overrides?: StepOverrides; project?: ProjectAgentDefaults },
 ): FactoryFlowProblem[] {
-  const problems: FactoryFlowProblem[] = [];
-  const add = (field: string, message: string) => problems.push({ step, field, message });
-
-  for (const field of Object.keys(action)) {
-    if (!APPLIED_FIELDS.has(field)) add(field, `${field} is not applied by the issue factory`);
-  }
-  if (action.permission_mode && !UNATTENDED_MODES.has(action.permission_mode)) {
-    add('permission_mode', modeProblem(action.permission_mode));
-  }
-  if (action.provider && !KNOWN_PROVIDER_IDS.includes(action.provider)) {
-    add('provider', `Unknown provider "${action.provider}"`);
-  }
-  const defaults = parsed.defaults;
-  const pairProblem = providerModelProblem(
-    action.provider ?? defaults?.provider,
-    action.model ?? (action.provider ? undefined : defaults?.model),
-  );
-  if (pairProblem) add('model', pairProblem);
-
   const resolved = resolveStepOptions({
     stepId: step,
     step: stepInput(action),
@@ -127,40 +178,11 @@ function stepProblems(
     overrides: context.overrides,
     project: context.project,
   });
-  if (!TOOL_POLICY_PROVIDERS.has(resolved.provider)) {
-    for (const [field, list] of [
-      ['allowed_tools', resolved.allowedTools],
-      ['denied_tools', resolved.disallowedTools],
-    ] as const) {
-      if (list) {
-        add(
-          field,
-          `${field} cannot be applied on provider "${resolved.provider}": only ${[...TOOL_POLICY_PROVIDERS].join(' and ')} apply tool lists`,
-        );
-      }
-    }
-  }
-  if (resolved.thread === 'new') {
-    if (resolved.permissionMode !== 'plan') {
-      add(
-        'thread',
-        'thread: new runs beside the implementing thread, so it must be read-only (permission_mode: plan): only the implementing thread writes to the branch',
-      );
-    }
-    if (!READ_ONLY_PROVIDERS.includes(resolved.provider as AgentProvider)) {
-      add(
-        'provider',
-        `thread: new runs read-only, which only ${READ_ONLY_PROVIDERS.join(' and ')} can be held to; "${resolved.provider}" cannot`,
-      );
-    }
-    if (step === firstNode) {
-      add(
-        'thread',
-        'thread: new cannot be on the first agent step: it is the implementing thread the later steps continue',
-      );
-    }
-  }
-  return problems;
+  return [
+    ...writtenProblems(action, parsed),
+    ...toolProblems(resolved),
+    ...newThreadProblems(resolved, step === firstNode),
+  ].map((problem) => ({ step, ...problem }));
 }
 
 /**

@@ -81,7 +81,7 @@ const PERMISSION_MODES: readonly PermissionMode[] = [
 ];
 
 /** The factory's own permission mode: edits without asking, as an unattended run needs. */
-export const FACTORY_PERMISSION_MODE: PermissionMode = 'autoEdit';
+const FACTORY_PERMISSION_MODE: PermissionMode = 'autoEdit';
 
 const effortOf = (value: string | null | undefined): EffortLevel | undefined =>
   EFFORTS.find((effort) => effort === value);

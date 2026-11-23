@@ -19,7 +19,7 @@ function repoOf(prUrl: string | null): string | null {
 }
 
 /** Where the run's flow file is on GitHub at the commit it was read at, when that is known. */
-export function flowFileUrl(run: FactoryRun): string | null {
+function flowFileUrl(run: FactoryRun): string | null {
   const repo = repoOf(run.prUrl);
   if (!repo || !run.flowCommit || !run.flowName) return null;
   return `https://github.com/${repo}/blob/${run.flowCommit}/.funny/workflows/${run.flowName}.yaml`;

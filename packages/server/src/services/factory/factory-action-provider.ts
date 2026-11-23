@@ -289,7 +289,7 @@ export interface StepAgentBody {
 }
 
 /** The body fields of a step's resolved options: every kept field explicit, the rest only when set. */
-export function stepAgentBody(options: ResolvedStepOptions): StepAgentBody {
+function stepAgentBody(options: ResolvedStepOptions): StepAgentBody {
   const body: StepAgentBody = {
     provider: options.provider,
     model: options.model,

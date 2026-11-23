@@ -284,32 +284,47 @@ const storage = (error: unknown): FactoryRunsError => ({
   message: error instanceof Error ? error.message : String(error),
 });
 
-const toView = (row: Row): FactoryRunView => ({
+/** The run's own columns, stored as they are. */
+const plainFieldsOf = (row: Row) => ({
   id: row.id,
   factoryId: row.factoryId,
   issueNumber: row.issueNumber,
   prUrl: row.prUrl,
   state: row.state as FactoryRunState,
   currentStep: row.currentStep,
-  threadIds: parseThreadIds(row.threadIds),
   launchStartedAt: row.launchStartedAt ?? null,
   startedAt: row.startedAt,
   admittedAt: row.admittedAt ?? null,
   completedAt: row.completedAt,
-  source: row.source === 'manual' ? 'manual' : 'label',
+  source: row.source === 'manual' ? ('manual' as const) : ('label' as const),
+  failureReason: row.failureReason ?? null,
+});
+
+/** Its place in the queue and the flow it executes. */
+const queueAndFlowOf = (row: Row) => ({
   flowName: row.flowName ?? null,
   queueOrder: row.queueOrder ?? null,
   waitReason: parseWaitReason(row.waitReason ?? null),
+  flowSource: flowSourceOf(row.flowSource ?? null),
+  flowCommit: row.flowCommit ?? null,
+});
+
+/** The columns stored as JSON, parsed (a value that no longer parses reads as empty). */
+const jsonFieldsOf = (row: Row) => ({
+  threadIds: parseThreadIds(row.threadIds),
   flowSteps: parseStepNames(row.flowSteps ?? null),
-  failureReason: row.failureReason ?? null,
   metrics: parseMetrics(row.metrics ?? null),
   regressionProof: parseRegressionProof(row.regressionProof ?? null),
   reviews: parseReviews(row.reviews ?? null),
   risk: parseRisk(row.risk ?? null),
   triage: parseTriage(row.triage ?? null),
-  flowSource: flowSourceOf(row.flowSource ?? null),
-  flowCommit: row.flowCommit ?? null,
   stepOptions: parseStepOptions(row.stepOptions ?? null),
+});
+
+const toView = (row: Row): FactoryRunView => ({
+  ...plainFieldsOf(row),
+  ...queueAndFlowOf(row),
+  ...jsonFieldsOf(row),
 });
 
 const flowSourceOf = (raw: string | null): FactoryFlowSource | null =>

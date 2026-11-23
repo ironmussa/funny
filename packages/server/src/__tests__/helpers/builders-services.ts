@@ -211,7 +211,7 @@ export function proofReadyFlowFiles(): Record<string, string> {
 }
 
 /** The built-in prompt files, as a repository holds them next to its flows. */
-export function builtInPromptFiles(): Record<string, string> {
+function builtInPromptFiles(): Record<string, string> {
   const dir = new URL('../../../../workflows/defaults/prompts/', import.meta.url);
   return Object.fromEntries(
     readdirSync(dir).map((name) => [

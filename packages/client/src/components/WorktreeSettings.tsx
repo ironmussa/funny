@@ -322,6 +322,9 @@ export function WorktreeSettings({
   const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  /** The worktree list could not be read (e.g. the runner is offline). */
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /** Creating a worktree failed; shown under the create form. */
   const [error, setError] = useState<string | null>(null);
   const [removingPath, setRemovingPath] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<WorktreeInfo | null>(null);
@@ -345,11 +348,11 @@ export function WorktreeSettings({
   const loadWorktrees = useCallback(async () => {
     if (!project) return;
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const result = await api.listWorktrees(project.id);
       if (result.isOk()) setWorktrees(result.value);
-      else setError(result.error.message);
+      else setLoadError(result.error.message);
     } finally {
       setLoading(false);
     }
@@ -366,8 +369,9 @@ export function WorktreeSettings({
         setBaseBranch((prev) => prev || data.defaultBranch || data.branches[0]);
       }
     } else {
+      // Only the create form uses the branches; the list's own load error
+      // already says when the runner cannot be reached.
       console.error('Failed to load branches:', result.error);
-      setError(result.error.message || 'Failed to load branches');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
   }, [project?.id]);
@@ -432,17 +436,6 @@ export function WorktreeSettings({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col text-xs">
-      {/* Error banner */}
-      {error && (
-        <div className="bg-destructive/10 text-destructive flex items-center gap-2 rounded-md px-3 py-2 text-xs">
-          <AlertCircle className="icon-sm shrink-0" />
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto text-xs underline">
-            {t('worktreeSettings.dismiss')}
-          </button>
-        </div>
-      )}
-
       {/* Worktree list */}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-sidebar-border flex shrink-0 items-center gap-1 border-b px-2 py-1">
@@ -504,12 +497,37 @@ export function WorktreeSettings({
                 onCreate={handleCreate}
               />
             )}
+            {!readOnly && showCreate && error && (
+              <div
+                className="text-destructive flex items-center gap-2 px-3 pb-2 text-xs"
+                data-testid="worktree-settings-create-error"
+              >
+                <AlertCircle className="icon-sm shrink-0" />
+                <span className="min-w-0 flex-1">{error}</span>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="shrink-0 underline"
+                  data-testid="worktree-settings-create-error-dismiss"
+                >
+                  {t('worktreeSettings.dismiss')}
+                </button>
+              </div>
+            )}
 
             {/* A refresh keeps the list on screen; the button's icon shows it is loading. */}
             {loading && worktrees.length === 0 ? (
               <LoadingState
                 testId="worktree-settings-loading"
                 label={t('worktreeSettings.loadingWorktrees')}
+              />
+            ) : worktrees.length === 0 && loadError ? (
+              <EmptyState
+                icon={GitFork}
+                title={t('worktreeSettings.loadFailed', 'Could not load worktrees')}
+                description={loadError}
+                className="flex-1"
+                testId="worktree-settings-load-error"
               />
             ) : worktrees.length === 0 ? (
               <EmptyState

@@ -1106,6 +1106,7 @@
     "creating": "Creando...",
     "loadingWorktrees": "Cargando worktrees...",
     "noWorktrees": "No se encontraron worktrees. Crea uno para comenzar.",
+    "loadFailed": "No se pudieron cargar los worktrees",
     "openThread": "Abrir hilo: {{title}}"
   },
   "common": {

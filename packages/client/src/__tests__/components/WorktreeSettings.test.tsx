@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 
 import { mockT } from '../helpers/mock-i18n';
 
@@ -66,6 +66,21 @@ describe('WorktreeSettings refresh', () => {
     await waitFor(() => expect(screen.getByText('feature-x')).toBeInTheDocument());
     expect(mockListWorktrees).toHaveBeenCalledTimes(2);
     expect(mockListBranches).toHaveBeenCalledTimes(2);
+  });
+
+  test('a failed load shows the error in place of the list, not as a banner', async () => {
+    mockListWorktrees.mockReturnValueOnce(
+      errAsync({ message: 'No runner connected. Check that your runner is online.' }),
+    );
+    mockListBranches.mockReturnValueOnce(errAsync({ message: 'No runner connected.' }));
+    renderSettings();
+
+    const state = await screen.findByTestId('worktree-settings-load-error');
+    expect(state).toHaveTextContent('Could not load worktrees');
+    expect(state).toHaveTextContent('No runner connected. Check that your runner is online.');
+    expect(screen.queryByTestId('worktree-settings-empty')).not.toBeInTheDocument();
+    // The branch list failing too does not add a second message.
+    expect(screen.getAllByText(/No runner connected/)).toHaveLength(1);
   });
 
   test('clicking a worktree path opens it in the system file manager', async () => {

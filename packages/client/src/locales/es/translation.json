@@ -1917,7 +1917,16 @@
     "showAll": "Todos",
     "showActive": "Activos",
     "layoutList": "Lista",
-    "layoutBoard": "Tablero"
+    "layoutBoard": "Tablero",
+    "details": "Detalle del run",
+    "health": {
+      "inFlight": "En curso",
+      "needsPerson": "Necesitan a alguien",
+      "mergedDay": "Mergeados, 24 h",
+      "firstPass": "Review a la primera, 7 d",
+      "mergeHolds": "Merges retenidos, 7 d",
+      "toMerge": "Mediana hasta merge, 7 d"
+    }
   },
   "factoryBoard": {
     "column": {
@@ -1965,6 +1974,33 @@
       "failed": "Falló",
       "unsaved": "Sin commit, pero con trabajo sin guardar en su checkout",
       "person": "Esperando a una persona"
+    }
+  },
+  "factoryRunDetail": {
+    "carriedFrom": "desde {{sha}}",
+    "ci": "{{rounds}} rondas de CI · {{red}} en rojo · {{conflicts}} conflictos · {{fixes}} arreglos del agente",
+    "flow": "Flujo",
+    "openThread": "Abrir hilo",
+    "outcome": "Por qué se paró",
+    "reviews": "Reviews",
+    "riskCi": "Riesgo y CI",
+    "riskHigh": "Riesgo alto: {{reasons}}",
+    "riskLow": "Riesgo bajo",
+    "role": {
+      "agent": "Agente",
+      "implementer": "Implementador",
+      "reviewer": "Reviewer",
+      "triage": "Triage"
+    },
+    "superseded": "Reemplazado",
+    "threads": "Hilos de los agentes",
+    "thread": "Hilo",
+    "triage": {
+      "title": "Triage",
+      "ready": "Contrato: lo que debe cumplirse",
+      "needsInfo": "Preguntado en el issue",
+      "tooBig": "División propuesta",
+      "none": "Triage no dio contrato: el review juzga contra el issue."
     }
   }
 }

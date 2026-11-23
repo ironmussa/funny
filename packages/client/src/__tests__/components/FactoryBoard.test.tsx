@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, mock, test, vi } from 'bun:test';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
+import { MemoryRouter } from 'react-router-dom';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
@@ -67,7 +68,7 @@ const renderBoard = (runs: FactoryQueueRun[], singleProjectId: string | null = n
         projectNameById={new Map([['p1', 'funny']])}
         now={Date.now()}
         singleProjectId={singleProjectId}
-        onOpen={mocks.navigate}
+        onSelect={mocks.navigate}
         onShowOlderDone={vi.fn()}
       />
     </TooltipProvider>,
@@ -110,12 +111,12 @@ describe('FactoryBoard', () => {
     expect(screen.queryByTestId('factory-board-limit-implementing')).toBeNull();
   });
 
-  test('cards cannot be dragged, and opening one opens its implementing thread', () => {
+  test('cards cannot be dragged, and opening one selects the run', () => {
     const run = queueRun('r1', 'working', { threadIds: ['t-impl'] });
     renderBoard([run]);
     expect(screen.getByTestId('factory-board-card-r1').getAttribute('draggable')).toBe('false');
     fireEvent.click(screen.getByTestId('factory-board-open-r1'));
-    expect(mocks.navigate).toHaveBeenCalledWith(run, 't-impl');
+    expect(mocks.navigate).toHaveBeenCalledWith(run);
   });
 
   test('old finished runs are left to the list and counted', () => {
@@ -135,9 +136,11 @@ describe('FactoryQueueView layouts', () => {
       queueRun('merged', 'merged', { completedAt: recent() }),
     ];
     const { unmount } = render(
-      <TooltipProvider>
-        <FactoryQueueView />
-      </TooltipProvider>,
+      <MemoryRouter>
+        <TooltipProvider>
+          <FactoryQueueView />
+        </TooltipProvider>
+      </MemoryRouter>,
     );
     fireEvent.click(screen.getByTestId('factory-view-layout-board'));
     expect(screen.getByTestId('factory-board')).toBeTruthy();
@@ -148,9 +151,11 @@ describe('FactoryQueueView layouts', () => {
     unmount();
 
     render(
-      <TooltipProvider>
-        <FactoryQueueView />
-      </TooltipProvider>,
+      <MemoryRouter>
+        <TooltipProvider>
+          <FactoryQueueView />
+        </TooltipProvider>
+      </MemoryRouter>,
     );
     expect(screen.getByTestId('factory-board')).toBeTruthy();
     expect(JSON.parse(localStorage.getItem('funny:factory-view-layout') ?? '{}').state.layout).toBe(

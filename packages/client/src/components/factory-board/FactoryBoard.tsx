@@ -141,7 +141,8 @@ interface ColumnProps {
   now: number;
   singleProjectId: string | null;
   hiddenDone: number;
-  onOpen: (run: FactoryQueueRun, threadId: string) => void;
+  /** Opens the run's detail panel. */
+  onSelect: (run: FactoryQueueRun) => void;
   onShowOlderDone: () => void;
 }
 
@@ -154,7 +155,7 @@ function FactoryBoardStage({
   now,
   singleProjectId,
   hiddenDone,
-  onOpen,
+  onSelect,
   onShowOlderDone,
 }: ColumnProps) {
   const { t } = useTranslation();
@@ -191,7 +192,7 @@ function FactoryBoardStage({
           run={run}
           projectName={projectNameById.get(run.projectId)}
           now={now}
-          onOpen={onOpen}
+          onSelect={onSelect}
         />
       ))}
       <ShowMore
@@ -209,7 +210,8 @@ interface Props {
   now: number;
   /** The one project the view is filtered to: its limits show in the headers. */
   singleProjectId: string | null;
-  onOpen: (run: FactoryQueueRun, threadId: string) => void;
+  /** Opens the run's detail panel. */
+  onSelect: (run: FactoryQueueRun) => void;
   /** Shows the finished runs the Done column hides, in the list. */
   onShowOlderDone: () => void;
 }

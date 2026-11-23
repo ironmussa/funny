@@ -265,6 +265,17 @@ export function factoryRunReasonText(t: TFunction, reason: string): string {
   }
 }
 
+/**
+ * Whether a review verdict lets the change go on: a pass, or a fail whose
+ * findings are all below high (nothing that sends it back).
+ */
+export function factoryReviewPassed(review: FactoryRun['reviews'][number]): boolean {
+  const blocking = review.findings.some(
+    (finding) => finding.severity === 'critical' || finding.severity === 'high',
+  );
+  return review.verdict === 'pass' || (review.findings.length > 0 && !blocking);
+}
+
 /** The run's review as a short label: the verdict of its newest reviewed commit, or null. */
 export function factoryRunReviewLabel(
   t: TFunction,
@@ -272,10 +283,7 @@ export function factoryRunReviewLabel(
 ): { text: string; passed: boolean } | null {
   const last = run.reviews.at(-1);
   if (!last) return null;
-  const blocking = last.findings.some(
-    (finding) => finding.severity === 'critical' || finding.severity === 'high',
-  );
-  const passed = last.verdict === 'pass' || (last.findings.length > 0 && !blocking);
+  const passed = factoryReviewPassed(last);
   return {
     passed,
     text: passed

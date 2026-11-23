@@ -1,7 +1,8 @@
 /**
  * A run on the factory board (openspec factory-pipeline-board): its issue and
  * project, the flow strip, the gate chips and why it waits. Opening it opens
- * the run's implementing thread. Not draggable: only the server moves a run.
+ * the run's detail panel (openspec factory-run-detail). Not draggable: only the
+ * server moves a run.
  */
 import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import { memo } from 'react';
@@ -11,7 +12,6 @@ import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
-import { cn } from '@/lib/utils';
 
 import { factoryRunActivityAt } from './board-columns';
 import { FactoryRunGateChips } from './FactoryRunGateChips';
@@ -25,7 +25,7 @@ function factoryIssueUrl(run: Pick<FactoryQueueRun, 'prUrl' | 'issueNumber'>): s
 }
 
 /** The thread a card opens: the implementing one, else the run's latest. */
-function factoryRunCardThread(
+export function factoryRunCardThread(
   run: Pick<FactoryQueueRun, 'threadIds' | 'stepOptions'>,
 ): string | undefined {
   return implementingThreadOf(run) ?? run.threadIds.at(-1);
@@ -35,14 +35,15 @@ interface Props {
   run: FactoryQueueRun;
   projectName: string | undefined;
   now: number;
-  onOpen: (run: FactoryQueueRun, threadId: string) => void;
+  /** Opens the run's detail panel. */
+  onSelect: (run: FactoryQueueRun) => void;
 }
 
 export const FactoryRunCard = memo(function FactoryRunCard({
   run,
   projectName,
   now,
-  onOpen,
+  onSelect,
 }: Props) {
   const { t } = useTranslation();
   const threadId = factoryRunCardThread(run);
@@ -60,12 +61,8 @@ export const FactoryRunCard = memo(function FactoryRunCard({
     >
       <button
         type="button"
-        className={cn(
-          'text-foreground line-clamp-2 text-left text-sm',
-          !threadId && 'cursor-default',
-        )}
-        disabled={!threadId}
-        onClick={() => threadId && onOpen(run, threadId)}
+        className="text-foreground line-clamp-2 text-left text-sm"
+        onClick={() => onSelect(run)}
         data-testid={`factory-board-open-${run.id}`}
       >
         {title}

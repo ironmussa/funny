@@ -91,15 +91,20 @@ const short = (text: string) => {
   return line.length > 160 ? `${line.slice(0, 160)}…` : line;
 };
 
-/** Tests whose declaration was removed and does not come back in the same file. */
+/**
+ * Tests whose declaration was removed and does not come back in the same file.
+ * A title that goes while a new one comes in the same file is a rename (`'returns
+ * Hello'` → `'returns Hi'`), not a removal: only when more titles go than come
+ * does the file lose tests, and then every title that went is named, since the
+ * diff cannot say which ones were renamed.
+ */
 function removedTests(path: string, added: string[], removed: string[]): TestWeakeningFinding[] {
-  const kept = new Set(added.flatMap((line) => testTitle(line) ?? []));
-  const gone = new Set<string>();
-  for (const line of removed) {
-    const title = testTitle(line);
-    if (title !== null && !kept.has(title)) gone.add(title);
-  }
-  return [...gone].map((title) => ({ kind: 'test-case-removed', path, detail: short(title) }));
+  const before = new Set(removed.flatMap((line) => testTitle(line) ?? []));
+  const after = new Set(added.flatMap((line) => testTitle(line) ?? []));
+  const gone = [...before].filter((title) => !after.has(title));
+  const arrived = [...after].filter((title) => !before.has(title));
+  if (gone.length <= arrived.length) return [];
+  return gone.map((title) => ({ kind: 'test-case-removed', path, detail: short(title) }));
 }
 
 function markers(path: string, added: string[]): TestWeakeningFinding[] {

@@ -1106,6 +1106,7 @@
   },
   "worktreeSettings": {
     "main": "Main",
+    "detached": "detached at {{commit}}",
     "active": "Current",
     "mainDescription": "Original repository checkout. It cannot be deleted as a linked worktree.",
     "activeDescription": "Working directory currently shown in the review panel.",

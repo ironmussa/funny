@@ -117,6 +117,19 @@ describe('Worktrees sidebar', () => {
     );
   });
 
+  test('shows a detached worktree, which has no branch, without crashing', async () => {
+    mocked(api.listWorktrees).mockReturnValue(
+      okAsync([
+        { path: '/second', branch: 'main', commit: 'abcdef12', isMain: true },
+        { path: '/tmp/detached', commit: '1234567890abcdef', isMain: false },
+      ]),
+    );
+    renderWithProviders(<WorktreesPanel />);
+    const label = await screen.findByTestId('worktree-detached-1234567');
+    expect(label).toHaveTextContent('1234567');
+    expect(screen.getByText('/tmp/detached')).toBeInTheDocument();
+  });
+
   test('distinguishes the main checkout from the active linked worktree', async () => {
     mocked(api.listWorktrees).mockReturnValue(
       okAsync([

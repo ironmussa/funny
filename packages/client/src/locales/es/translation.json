@@ -1104,6 +1104,7 @@
   },
   "worktreeSettings": {
     "main": "Principal",
+    "detached": "desacoplado en {{commit}}",
     "active": "Actual",
     "mainDescription": "Carpeta original del repositorio. No se puede eliminar como un worktree secundario.",
     "activeDescription": "Directorio de trabajo mostrado actualmente en el panel de revisión.",

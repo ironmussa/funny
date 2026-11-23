@@ -44,7 +44,8 @@ import { BranchPicker } from './SearchablePicker';
 
 interface WorktreeInfo {
   path: string;
-  branch: string;
+  /** Absent for a worktree with a detached HEAD. */
+  branch?: string;
   commit: string;
   isMain: boolean;
 }
@@ -164,22 +165,35 @@ function WorktreeCard({
   readOnly: boolean;
 }) {
   const { t } = useTranslation();
+  // A detached worktree has no branch: its rows are keyed by the short commit.
+  const shortCommit = worktree.commit.slice(0, 7);
+  const rowKey = worktree.branch ?? shortCommit;
   return (
     <div
       // oxlint-disable-next-line shadcn/require-static-classes -- listRowClassName is a static constant from list-row-styles
       className={cn(listRowClassName, active && 'bg-sidebar-selected hover:bg-sidebar-selected')}
       aria-current={active || undefined}
       data-active={active || undefined}
-      data-testid={`worktree-row-${worktree.branch}`}
+      data-testid={`worktree-row-${rowKey}`}
     >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <BranchBadge
-              branch={worktree.branch}
-              size="xs"
-              data-testid={`worktree-branch-${worktree.branch}`}
-            />
+            {worktree.branch ? (
+              <BranchBadge
+                branch={worktree.branch}
+                size="xs"
+                data-testid={`worktree-branch-${worktree.branch}`}
+              />
+            ) : (
+              <span
+                className="text-muted-foreground text-2xs font-mono"
+                title={worktree.commit}
+                data-testid={`worktree-detached-${shortCommit}`}
+              >
+                {t('worktreeSettings.detached', { commit: shortCommit })}
+              </span>
+            )}
           </div>
           {readOnly ? (
             <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
@@ -205,7 +219,7 @@ function WorktreeCard({
                     if (result.isErr()) toastError(result.error);
                   }}
                   className="text-muted-foreground hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left text-xs transition-colors"
-                  data-testid={`worktree-open-directory-${worktree.branch}`}
+                  data-testid={`worktree-open-directory-${rowKey}`}
                 >
                   <WorktreePathIcon isMain={worktree.isMain} />
                   <span className="truncate font-mono hover:underline">{worktree.path}</span>
@@ -240,7 +254,7 @@ function WorktreeCard({
                 removing && listRowActionBusyClassName,
               )}
               // oxlint-enable shadcn/require-static-classes
-              data-testid={`worktree-delete-${worktree.branch}`}
+              data-testid={`worktree-delete-${rowKey}`}
             >
               {removing ? (
                 <Loader2 className="icon-sm animate-spin" />
@@ -612,7 +626,9 @@ export function WorktreeSettings({
           if (!open) setConfirmRemove(null);
         }}
         title={t('dialog.deleteWorktree')}
-        description={t('dialog.deleteWorktreeDesc', { branch: confirmRemove?.branch })}
+        description={t('dialog.deleteWorktreeDesc', {
+          branch: confirmRemove?.branch ?? confirmRemove?.commit.slice(0, 7),
+        })}
         cancelLabel={t('common.cancel')}
         confirmLabel={t('common.delete')}
         onCancel={() => setConfirmRemove(null)}

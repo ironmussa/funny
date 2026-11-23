@@ -6,9 +6,8 @@ import {
   AlertCircle,
   GitFork,
   FolderOpen,
+  House,
   ChevronUp,
-  GitCommitHorizontal,
-  MessageSquare,
   RefreshCw,
 } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
@@ -16,13 +15,12 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { BranchBadge } from '@/components/BranchBadge';
-import { CommitHash } from '@/components/CommitHash';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -33,9 +31,9 @@ import {
   listRowActionBusyClassName,
   listRowActionClassName,
   listRowClassName,
-  listRowTitleClassName,
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
+import { getStatusLabels, statusDotClassName } from '@/lib/thread-utils';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
@@ -89,6 +87,7 @@ export function groupThreadsByWorktree(
 function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
+  const statusLabels = getStatusLabels(t);
   return (
     <div className="flex min-w-0 flex-col gap-0.5" data-testid="worktree-threads">
       {threads.map((thread) => {
@@ -103,15 +102,49 @@ function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
               navigate(href);
             }}
             title={t('worktreeSettings.openThread', { title: thread.title })}
-            className="text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-1.5 text-xs hover:underline"
+            // The title at the sidebar's thread-title size and color (`ThreadItemRows`).
+            className="text-thread-title flex min-w-0 items-center gap-1.5 text-sm leading-tight hover:underline"
             data-testid={`worktree-thread-link-${thread.id}`}
           >
-            <MessageSquare className="icon-xs shrink-0" />
-            <span className="truncate">{thread.title}</span>
+            <span className="flex size-3 shrink-0 items-center justify-center">
+              <span
+                role="img"
+                aria-label={statusLabels[thread.status]}
+                title={statusLabels[thread.status]}
+                // oxlint-disable-next-line shadcn/require-static-classes -- the color comes from statusConfig (one entry per status)
+                className={cn('size-2 rounded-full', statusDotClassName(thread.status))}
+                data-testid={`worktree-thread-status-${thread.id}`}
+                data-status={thread.status}
+              />
+            </span>
+            {/* The sidebar's title rendering: capitalized, attachments and commands as chips. */}
+            <ThreadTitle
+              title={thread.title}
+              as="span"
+              density="compact"
+              badgeTestId={`worktree-thread-attachments-${thread.id}`}
+            />
           </a>
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The path row's icon: a house for the repository's original checkout (the
+ * project folder, not a branch), a folder for the linked worktrees.
+ */
+function WorktreePathIcon({ isMain }: { isMain: boolean }) {
+  const { t } = useTranslation();
+  if (!isMain) return <FolderOpen className="icon-xs shrink-0 opacity-70" aria-hidden="true" />;
+  return (
+    <House
+      className="icon-xs shrink-0"
+      role="img"
+      aria-label={t('worktreeSettings.main')}
+      data-testid="worktree-main-icon"
+    />
   );
 }
 
@@ -138,33 +171,23 @@ function WorktreeCard({
           <div className="flex flex-wrap items-center gap-2">
             <BranchBadge
               branch={worktree.branch}
-              variant="plain"
-              className={cn(listRowTitleClassName, 'font-mono')}
+              size="xs"
+              highlighted={active}
+              highlightLabel={t('worktreeSettings.active')}
               data-testid={`worktree-branch-${worktree.branch}`}
             />
-            {worktree.isMain && (
-              <LabelBadge
-                tone="info"
-                title={t('worktreeSettings.mainDescription')}
-                data-testid="worktree-badge-main"
-              >
-                {t('worktreeSettings.main')}
-              </LabelBadge>
-            )}
-            {active && (
-              <LabelBadge
-                tone="success"
-                title={t('worktreeSettings.activeDescription')}
-                data-testid="worktree-badge-active"
-              >
-                {t('worktreeSettings.active')}
-              </LabelBadge>
-            )}
           </div>
           {readOnly ? (
             <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-              <FolderOpen className="icon-xs shrink-0 opacity-70" />
-              <span title={worktree.path} className="truncate font-mono">
+              <WorktreePathIcon isMain={worktree.isMain} />
+              <span
+                title={
+                  worktree.isMain
+                    ? `${worktree.path}\n${t('worktreeSettings.mainDescription')}`
+                    : worktree.path
+                }
+                className="truncate font-mono"
+              >
                 {worktree.path}
               </span>
             </div>
@@ -180,20 +203,19 @@ function WorktreeCard({
                   className="text-muted-foreground hover:text-foreground flex min-w-0 cursor-pointer items-center gap-1.5 text-left text-xs transition-colors"
                   data-testid={`worktree-open-directory-${worktree.branch}`}
                 >
-                  <FolderOpen className="icon-xs shrink-0 opacity-70" />
+                  <WorktreePathIcon isMain={worktree.isMain} />
                   <span className="truncate font-mono hover:underline">{worktree.path}</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" variant="mono">
                 {worktree.path}
+                {worktree.isMain && (
+                  <span className="text-muted-foreground block font-sans">
+                    {t('worktreeSettings.mainDescription')}
+                  </span>
+                )}
               </TooltipContent>
             </Tooltip>
-          )}
-          {worktree.commit && (
-            <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-              <GitCommitHorizontal className="icon-xs shrink-0" />
-              <CommitHash hash={worktree.commit} />
-            </span>
           )}
           {threads.length > 0 && <WorktreeThreadLinks threads={threads} />}
         </div>

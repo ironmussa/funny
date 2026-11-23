@@ -21,6 +21,7 @@ import {
   type FactoryBatchSettings,
   type FactoryDependencies,
   type FactoryMode,
+  type FactorySettings,
   type FactoryStepOverrides,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
@@ -35,30 +36,8 @@ import { requireProjectAccess } from '../project-access.js';
 import { awaitsPullRequest } from './factory-runs.js';
 import type { ProjectAgentDefaults } from './factory-step-options.js';
 
-export interface FactorySettingsView {
-  projectId: string;
-  /** Running (true) or paused; separate from the mode. */
-  enabled: boolean;
-  mode: FactoryMode;
-  label: string;
-  flowName: string;
-  maxConcurrent: number;
-  /** Which reviewed changes the factory merges by itself. */
-  autoMerge: FactoryAutoMerge;
-  /** Globs that make a change high risk, besides the default list. */
-  sensitivePaths: string[];
-  /** Runs inside a flow node at once, per node id. */
-  stageLimits: Record<string, number>;
-  /** Provider / model / effort per agent step id, over the flow's own. */
-  stepOverrides: FactoryStepOverrides;
-  /** The merge queue's batch size and wait. */
-  batch: FactoryBatchSettings;
-  /** Wait for an in-flight blocker, or stack on its branch (D10). */
-  dependencies: FactoryDependencies;
-  /** Why the factory cannot make progress now, or null. */
-  blockedReason: string | null;
-  updatedAt: string;
-}
+/** A factory's settings as the server reads them: the contract, without the incident it looks up apart. */
+export type FactorySettingsView = Omit<FactorySettings, 'incident'>;
 
 export type FactorySettingsError =
   | { kind: 'not-found'; message: string }

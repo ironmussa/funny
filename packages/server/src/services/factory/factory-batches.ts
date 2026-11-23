@@ -36,7 +36,7 @@ import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { factoryBatchAttempts, factoryBatches } from '../../db/schema.js';
 
-export const BATCH_STATES = [
+const BATCH_STATES = [
   'building',
   'testing',
   'retesting',
@@ -77,7 +77,7 @@ export const BATCH_TRANSITIONS = {
 export type FactoryBatchTransition = keyof typeof BATCH_TRANSITIONS;
 
 /** One pull request in a batch: whose run it is, and the head commit the batch tests. */
-export const batchMemberSchema = z.object({
+const batchMemberSchema = z.object({
   runId: z.string(),
   factoryId: z.string(),
   /** The run's enabler: every write about this member uses their capped token. */
@@ -89,7 +89,7 @@ export const batchMemberSchema = z.object({
 export type FactoryBatchMember = z.infer<typeof batchMemberSchema>;
 
 /** How a batch ended, for the runs and the metrics. */
-export const batchResultSchema = z.object({
+const batchResultSchema = z.object({
   /** One line a person can read. */
   summary: z.string(),
   /** Members that landed, in order, with the commit each merge made. */
@@ -227,6 +227,20 @@ export function createFactoryBatchesRepository(
     return set;
   };
 
+  /** Write an attempt only while it is testing; whether it was. */
+  const writeTesting = (
+    id: string,
+    set: Partial<AttemptRow>,
+  ): ResultAsync<boolean, FactoryBatchesError> =>
+    ResultAsync.fromPromise(
+      db
+        .update(factoryBatchAttempts)
+        .set(set)
+        .where(and(eq(factoryBatchAttempts.id, id), eq(factoryBatchAttempts.state, 'testing')))
+        .returning({ id: factoryBatchAttempts.id }),
+      storage,
+    ).map((moved) => moved.length > 0);
+
   return {
     /**
      * Start a batch for the repository's base branch; null when another one
@@ -357,14 +371,7 @@ export function createFactoryBatchesRepository(
 
     /** Record the commit an attempt tests, while it is testing. */
     attemptSha(id: string, sha: string): ResultAsync<boolean, FactoryBatchesError> {
-      return ResultAsync.fromPromise(
-        db
-          .update(factoryBatchAttempts)
-          .set({ sha })
-          .where(and(eq(factoryBatchAttempts.id, id), eq(factoryBatchAttempts.state, 'testing')))
-          .returning({ id: factoryBatchAttempts.id }),
-        storage,
-      ).map((moved) => moved.length > 0);
+      return writeTesting(id, { sha });
     },
 
     /** End an attempt that is testing; whether it was. */
@@ -375,14 +382,7 @@ export function createFactoryBatchesRepository(
     ): ResultAsync<boolean, FactoryBatchesError> {
       const set: Partial<AttemptRow> = { state, endedAt: stamp() };
       if (result !== undefined) set.result = JSON.stringify(result);
-      return ResultAsync.fromPromise(
-        db
-          .update(factoryBatchAttempts)
-          .set(set)
-          .where(and(eq(factoryBatchAttempts.id, id), eq(factoryBatchAttempts.state, 'testing')))
-          .returning({ id: factoryBatchAttempts.id }),
-        storage,
-      ).map((moved) => moved.length > 0);
+      return writeTesting(id, set);
     },
 
     attemptsOf(batchId: string): ResultAsync<FactoryBatchAttempt[], FactoryBatchesError> {

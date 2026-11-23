@@ -57,6 +57,27 @@ function pathsAt(run: FactoryRunView, sha: string): Pick<QueueMember, 'paths'> {
   return paths ? { paths } : {};
 }
 
+/** The run's review of `sha` does not allow a merge, or there is none. */
+function reviewHold(run: FactoryRunView, sha: string): string | null {
+  const verdict = run.reviews.find((review) => review.sha === sha);
+  if (!verdict) return `commit ${sha} has no review`;
+  return reviewAllowsMerge(verdict) ? null : `the review of commit ${sha} did not pass`;
+}
+
+/** `sha` is high risk and the factory merges only low-risk changes by itself. */
+function riskHold(run: FactoryRunView, sha: string, mergesAll: boolean): string | null {
+  const risk = run.risk;
+  if (mergesAll || risk?.headSha !== sha || risk.level !== 'high') return null;
+  return `the change is high risk (${risk.reasons.join('; ')})`;
+}
+
+/** `sha` has no passing regression proof. */
+function proofHold(run: FactoryRunView, sha: string): string | null {
+  const proof = run.regressionProof;
+  const passed = proof?.headSha === sha && proof.verdict === 'pass';
+  return passed ? null : `commit ${sha} has no passing regression proof`;
+}
+
 /** Base branches whose up-to-date rule was learned from a refused merge (D3): batches of one there. */
 const strictBranches = new Set<string>();
 /** Repositories whose queue branches got no CI (D12): no batch there until their workflows change. */
@@ -110,25 +131,11 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
     const run = await deps.run(member.runId);
     if (!run) return 'the run is gone';
     const factory = await deps.factory(run.factoryId);
-    if (gates.requireReview) {
-      const verdict = run.reviews.find((review) => review.sha === member.headSha);
-      if (!verdict) return `commit ${member.headSha} has no review`;
-      if (!reviewAllowsMerge(verdict)) return `the review of commit ${member.headSha} did not pass`;
-    }
-    if (
-      run.risk?.headSha === member.headSha &&
-      run.risk.level === 'high' &&
-      factory?.autoMerge !== 'all'
-    ) {
-      return `the change is high risk (${run.risk.reasons.join('; ')})`;
-    }
-    if (gates.requireRegressionProof) {
-      const proof = run.regressionProof;
-      if (!proof || proof.headSha !== member.headSha || proof.verdict !== 'pass') {
-        return `commit ${member.headSha} has no passing regression proof`;
-      }
-    }
-    return null;
+    return (
+      (gates.requireReview ? reviewHold(run, member.headSha) : null) ??
+      riskHold(run, member.headSha, factory?.autoMerge === 'all') ??
+      (gates.requireRegressionProof ? proofHold(run, member.headSha) : null)
+    );
   }
 
   return {

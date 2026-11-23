@@ -251,35 +251,16 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
     if (built.merged.length === 0)
       return endWith(batch, progress, 'abandon', 'No member merged onto the base.');
     await deps.batches.move(batch.id, 'test', { baseSha: base.value, queueSha: built.sha });
-    let tested = built.sha;
-    const verdict = await queue.waitVerdict(host, batch.repo, tested, expected);
-    if (verdict.kind === 'unknown' && verdict.noCi) {
-      // Nobody is blamed: the members wait again, and the repository's next
-      // merges take the serial path until CI runs on the queue branches.
-      deps.onNoQueueCi?.(batch.repo);
-      for (const member of built.merged) {
-        decide(progress, member, { kind: 'requeued', why: verdict.why });
-      }
-      return endWith(batch, progress, 'abandon', verdict.why);
-    }
-    if (verdict.kind === 'unknown') return endUnknown(batch, built.merged, progress, verdict.why);
-    if (verdict.kind === 'red') {
-      const again = await retest(host, batch, tested, expected);
-      if (!again.green) {
-        await split(
-          host,
-          batch,
-          built.merged,
-          base.value,
-          expected,
-          again.checks.length ? again.checks : verdict.checks,
-          progress,
-        );
-        return { done: true };
-      }
-      progress.flake = true;
-      tested = again.sha;
-    }
+    const tested = await testBatch(
+      host,
+      batch,
+      built.merged,
+      built.sha,
+      base.value,
+      expected,
+      progress,
+    );
+    if (tested === null) return { done: true };
     const now = await queue.stillAsTested(host, built.merged, base.value);
     if (now.baseMoved || now.moved.length > 0) {
       for (const member of now.moved)
@@ -288,6 +269,76 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
     }
     await landAll(host, batch, built.merged, tested, progress);
     return { done: true };
+  }
+
+  /**
+   * Wait for the batch commit's verdict: the commit to merge on (a green one,
+   * or the same tree green again after a red), or null when the batch ended
+   * here (no CI, an unknown verdict, or a red that bisection settled).
+   */
+  async function testBatch(
+    host: IntegrationProvider,
+    batch: FactoryBatch,
+    members: QueueMember[],
+    sha: string,
+    base: string,
+    expected: string[],
+    progress: Progress,
+  ): Promise<string | null> {
+    const verdict = await queue.waitVerdict(host, batch.repo, sha, expected);
+    if (verdict.kind === 'unknown' && verdict.noCi) {
+      // Nobody is blamed: the members wait again, and the repository's next
+      // merges take the serial path until CI runs on the queue branches.
+      deps.onNoQueueCi?.(batch.repo);
+      for (const member of members)
+        decide(progress, member, { kind: 'requeued', why: verdict.why });
+      await endWith(batch, progress, 'abandon', verdict.why);
+      return null;
+    }
+    if (verdict.kind === 'unknown') {
+      await endUnknown(batch, members, progress, verdict.why);
+      return null;
+    }
+    if (verdict.kind === 'green') return sha;
+    const again = await retest(host, batch, sha, expected);
+    if (again.green) {
+      progress.flake = true;
+      return again.sha;
+    }
+    const failing = again.checks.length ? again.checks : verdict.checks;
+    await split(host, batch, members, base, expected, failing, progress);
+    return null;
+  }
+
+  /** Build and test until the batch ends or was rebuilt too often; then clean its branches up. */
+  async function runRounds(
+    host: IntegrationProvider,
+    batch: FactoryBatch,
+    members: QueueMember[],
+    expected: string[],
+    progress: Progress,
+  ): Promise<void> {
+    let remaining = members;
+    for (let attempt = 1; attempt <= MAX_REBUILDS && remaining.length > 0; attempt++) {
+      if (attempt > 1 && !(await deps.batches.rebuild(batch.id, remaining)).unwrapOr(false)) break;
+      const done = await round(host, batch, remaining, expected, progress);
+      if (done.done) {
+        remaining = [];
+        break;
+      }
+      remaining = done.members;
+    }
+    for (const member of remaining) {
+      decide(progress, member, { kind: 'requeued', why: 'the batch was rebuilt too often' });
+    }
+    await host.deleteBranch(batch.repo, batch.stagingBranch);
+    await host.deleteBranch(batch.repo, batch.queueBranch);
+    const ended = await deps.batches.get(batch.id);
+    if (ended.isOk() && ended.value && !ended.value.endedAt) {
+      await deps.batches.move(batch.id, 'abandon', {
+        result: resultOf(progress, 'Rebuilt too often.'),
+      });
+    }
   }
 
   /** CI could not say (it did not run, a check could not run, the host failed): nobody is blamed. */
@@ -331,7 +382,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
         durationMs: Date.now() - started,
       });
       const progress: Progress = { verdicts: new Map(), flake: false, partialLanding: false };
-      let remaining = await eligible(members, progress);
+      const remaining = await eligible(members, progress);
       if (remaining.length === 0) {
         return {
           verdicts: progress.verdicts,
@@ -369,23 +420,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
           stats: await statsOf(batch.id),
         };
       }
-      for (let attempt = 1; attempt <= MAX_REBUILDS && remaining.length > 0; attempt++) {
-        if (attempt > 1 && !(await deps.batches.rebuild(batch.id, remaining)).unwrapOr(false))
-          break;
-        const done = await round(host, batch, remaining, expected, progress);
-        if (done.done) break;
-        remaining = done.members;
-      }
-      for (const member of remaining)
-        decide(progress, member, { kind: 'requeued', why: 'the batch was rebuilt too often' });
-      await host.deleteBranch(batch.repo, batch.stagingBranch);
-      await host.deleteBranch(batch.repo, batch.queueBranch);
-      const ended = await deps.batches.get(batch.id);
-      if (ended.isOk() && ended.value && !ended.value.endedAt) {
-        await deps.batches.move(batch.id, 'abandon', {
-          result: resultOf(progress, 'Rebuilt too often.'),
-        });
-      }
+      await runRounds(host, batch, remaining, expected, progress);
       log.info('Issue factory batch ended', {
         namespace: 'factory',
         batchId: batch.id,

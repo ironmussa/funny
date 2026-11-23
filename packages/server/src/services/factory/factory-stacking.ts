@@ -97,5 +97,3 @@ export function createStacking(deps: StackingDeps) {
     },
   };
 }
-
-export type Stacking = ReturnType<typeof createStacking>;

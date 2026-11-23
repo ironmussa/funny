@@ -1394,10 +1394,14 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     };
   }
 
-  async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
+  /**
+   * What `merge` settles before it looks at the pull request (factory-integration):
+   * a stacked run whose blocker landed is retargeted and integrated first
+   * (D10), and a regenerable change is recorded as one (merged alone, D9).
+   */
+  async function beforeMerge(opts: MergeOpts): Promise<ActionResult | null> {
     atMerge = true;
     await enterStage('merge');
-    // A stacked run whose blocker landed: retarget, then integrate the base first (D10).
     const retarget = await stacking.retargetIfLanded();
     if (retarget === 'retargeted') {
       return sentBack(
@@ -1408,9 +1412,14 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     if (typeof retarget === 'object') return holdMerge(MERGE_HOLD_REASONS.stacked, retarget.error);
     if (opts.regenerate && regenerating !== opts.regenerate) {
       regenerating = opts.regenerate;
-      // The merge queue reads it: such a run is merged alone (D11).
       await deps.record({ regenerateNode: opts.regenerate });
     }
+    return null;
+  }
+
+  async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
+    const settled = await beforeMerge(opts);
+    if (settled) return settled;
     const pr = pullRequest();
     if (!pr) return ci.merge(opts);
     const head = await deps.github.pullRequests.pullHead(pr);

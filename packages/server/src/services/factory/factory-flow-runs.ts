@@ -58,6 +58,7 @@ import {
 import { createLeaseGate } from '../workflow-engine/lease-gate.js';
 import {
   createFactoryActionProvider,
+  type FactoryContinuation,
   type FactoryProofDeps,
   type FactoryRunScope,
   type FactoryThreadMode,
@@ -577,6 +578,70 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     });
   }
 
+  /** Following up on the run's threads, when this host can (`deps.followUp`). */
+  function continuationFor(scope: FactoryRunScope): FactoryContinuation | undefined {
+    const followUp = deps.followUp;
+    if (!followUp) return undefined;
+    return {
+      // The run's branch: a worktree switched away refuses the step.
+      followUp: (threadId, content, options) =>
+        followUp(scope.userId, threadId, content, scope.branch, { ...options }),
+      completedAt: threadCompletedAt,
+      followedUpSince,
+      // A reviewer's thread is on its own branch: no branch guard.
+      followUpOffBranch: (threadId, content) => followUp(scope.userId, threadId, content),
+    };
+  }
+
+  /** The regression proof on the enabler's runner, when this host runs one (`deps.proof`). */
+  function proofFor(scope: FactoryRunScope): FactoryProofDeps | undefined {
+    const proof = deps.proof;
+    if (!proof) return undefined;
+    return {
+      startProof: (threadId, body) => proof(scope.userId, threadId).startProof(threadId, body),
+      pollProof: (threadId, proofId) => proof(scope.userId, threadId).pollProof(threadId, proofId),
+      cancelProof: async (threadId, proofId) =>
+        proof(scope.userId, threadId).cancelProof?.(threadId, proofId),
+    };
+  }
+
+  /** Point a run's pull request at `base` (a stacked run, once its blocker landed: D10). */
+  async function retargetRun(
+    job: FactoryRunJob,
+    scope: FactoryRunScope,
+    base: string,
+  ): Promise<Result<void, string>> {
+    // The pull request was opened during the flow: read where it is now.
+    const live = (await deps.runs.get(job.run.id)).unwrapOr(null);
+    const pr = prNumberOf(live?.prUrl ?? null);
+    const retarget = deps.github.pullRequests.retarget;
+    if (pr === null || !retarget) return err('the run has no pull request to retarget');
+    const done = await retarget(
+      { repo: scope.repo, number: pr, userId: scope.userId, projectId: scope.projectId },
+      base,
+    );
+    return done.mapErr((e) => e.message);
+  }
+
+  /**
+   * What a run's provider needs for openspec factory-integration: the merge
+   * queue, stacking on a blocker (D10), early integration (D8) and the queue's
+   * order by size (D11).
+   */
+  function integrationDepsFor(job: FactoryRunJob, scope: FactoryRunScope, signal: AbortSignal) {
+    return {
+      queue: queueFor(signal),
+      stackedOn: job.run.stackedOn,
+      blockerState: () => blockerStateOf(job.run.stackedOn),
+      retarget: (base: string) => retargetRun(job, scope, base),
+      registerEarly: (early: EarlyIntegration) => earlyOf.set(job.run.id, early),
+      onChangeSize: (lines: number) => {
+        const order = mergeOrder.get(job.run.id) ?? { blocker: false };
+        mergeOrder.set(job.run.id, { ...order, lines });
+      },
+    };
+  }
+
   async function execute(
     job: FactoryRunJob,
     controller: AbortController,
@@ -669,39 +734,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       abandon: async (threadId) => deps.stopThreads?.(scope.userId, [threadId]),
       launch: (body) => deps.launch({ userId: scope.userId, body }),
       waitThread,
-      continuation: deps.followUp
-        ? {
-            // The run's branch: a worktree switched away refuses the step.
-            followUp: (threadId, content, options) =>
-              deps.followUp!(scope.userId, threadId, content, scope.branch, { ...options }),
-            completedAt: threadCompletedAt,
-            followedUpSince,
-            // A reviewer's thread is on its own branch: no branch guard.
-            followUpOffBranch: (threadId, content) =>
-              deps.followUp!(scope.userId, threadId, content),
-          }
-        : undefined,
+      continuation: continuationFor(scope),
       github: deps.github,
-      queue: queueFor(controller.signal),
-      stackedOn: job.run.stackedOn,
-      blockerState: () => blockerStateOf(job.run.stackedOn),
-      retarget: async (base) => {
-        // The pull request was opened during the flow: read where it is now.
-        const live = (await deps.runs.get(job.run.id)).unwrapOr(null);
-        const pr = prNumberOf(live?.prUrl ?? null);
-        const retarget = deps.github.pullRequests.retarget;
-        if (pr === null || !retarget) return err('the run has no pull request to retarget');
-        const done = await retarget(
-          { repo: scope.repo, number: pr, userId: scope.userId, projectId: scope.projectId },
-          base,
-        );
-        return done.mapErr((e) => e.message);
-      },
-      registerEarly: (early) => earlyOf.set(job.run.id, early),
-      onChangeSize: (lines) => {
-        const order = mergeOrder.get(job.run.id) ?? { blocker: false };
-        mergeOrder.set(job.run.id, { ...order, lines });
-      },
+      ...integrationDepsFor(job, scope, controller.signal),
       defaultBranch: () =>
         deps.github.defaultBranch({
           repo: scope.repo,
@@ -783,16 +818,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;
         return (await deps.cleanupUnchanged?.(scope.userId, ids)) ?? [];
       },
-      proof: deps.proof
-        ? {
-            startProof: (threadId, body) =>
-              deps.proof!(scope.userId, threadId).startProof(threadId, body),
-            pollProof: (threadId, proofId) =>
-              deps.proof!(scope.userId, threadId).pollProof(threadId, proofId),
-            cancelProof: async (threadId, proofId) =>
-              deps.proof!(scope.userId, threadId).cancelProof?.(threadId, proofId),
-          }
-        : undefined,
+      proof: proofFor(scope),
       steps: deps.steps?.(scope.userId),
       integrateConfig: flow.value.integrate,
       flowIntegrates: flow.value.workflow.nodes.some((node) => node.integrate),

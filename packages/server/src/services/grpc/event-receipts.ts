@@ -50,7 +50,7 @@ interface ReceiptRow {
  * cursor only for an execution with events it has not seen acknowledged, so a
  * longer list is a runner from before that rule or a hostile one.
  */
-export const MAX_RESUME_EVENT_CURSORS = 10_000;
+const MAX_RESUME_EVENT_CURSORS = 10_000;
 
 /** Executions per lookup query, under SQLite's bound-parameter limit. */
 const RECEIPT_LOOKUP_BATCH = 500;

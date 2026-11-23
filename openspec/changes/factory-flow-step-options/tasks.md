@@ -2,9 +2,9 @@
 
 ## 1. Workflow schema and compiler
 
-- [ ] 1.1 Add `effort`, `thread` (`continue` | `new`), `prompt_file` (mutually exclusive with `prompt`) to `spawnAgentAction` and a flow-level `defaults` block in `packages/workflows/src/schema.ts`; verify with schema tests for both/neither prompt and unknown `thread` values
-- [ ] 1.2 Pass `stepId` (`<node>` or `<node>.before_retry`), `effort` and `thread` in `SpawnAgentOpts`, plus the flow's `defaults`, and widen `coercePermissionMode` to the full permission mode set; verify with compiler tests asserting the opts a fake provider receives for a node and a `before_retry`
-- [ ] 1.3 Implement `resolvePromptFiles(parsed, readFile)` with path normalization (refuse absolute, `..`, outside the flow dir) and a compile error when an unresolved `prompt_file` reaches the compiler; verify with unit tests for each refusal and for templating of a file prompt
+- [x] 1.1 Add `effort`, `thread` (`continue` | `new`), `prompt_file` (mutually exclusive with `prompt`) to `spawnAgentAction` and a flow-level `defaults` block in `packages/workflows/src/schema.ts`; verify with schema tests for both/neither prompt and unknown `thread` values
+- [x] 1.2 Pass `stepId` (`<node>` or `<node>.before_retry`), `effort` and `thread` in `SpawnAgentOpts`, plus the flow's `defaults`, and widen `coercePermissionMode` to the full permission mode set; verify with compiler tests asserting the opts a fake provider receives for a node and a `before_retry`
+- [x] 1.3 Implement `resolvePromptFiles(parsed, readFile)` with path normalization (refuse absolute, `..`, outside the flow dir) and a compile error when an unresolved `prompt_file` reaches the compiler; verify with unit tests for each refusal and for templating of a file prompt
 
 ## 2. Factory option resolution and validation
 

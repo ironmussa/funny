@@ -34,7 +34,7 @@ import {
   type PipelineNode,
   type TemplateScope,
 } from '@funny/pipelines';
-import type { AgentDefinition } from '@funny/shared';
+import type { AgentDefinition, PermissionMode } from '@funny/shared';
 
 import type { ParsedNode, ParsedWorkflow } from '../schema.js';
 import type {
@@ -42,6 +42,7 @@ import type {
   PipelineContext,
   RegressionProofOpts,
   ReviewOpts,
+  SpawnAgentDefaults,
 } from './action-provider.js';
 import { approvalNode } from './approval.js';
 
@@ -419,6 +420,8 @@ async function dispatch(
   ctx: YamlPipelineContext,
   parsed: ParsedWorkflow,
   options: CompileOptions,
+  /** The step id the provider sees; the node id unless a synthesized node stands for a step. */
+  stepId: string = yamlNode.id,
 ): Promise<NodeOutput> {
   const scope = scopeOf(ctx);
   const provider = ctx.provider;
@@ -427,14 +430,18 @@ async function dispatch(
     const opts = interpolateObject(yamlNode.spawn_agent, scope);
     const agentDef = resolveAgentDefinition(opts, parsed, options);
     const result = await provider.spawnAgent({
-      prompt: opts.prompt,
+      prompt: promptOf(opts, stepId, parsed),
       cwd: ctx.cwd,
       agent: agentDef,
+      stepId,
       model: opts.model,
       provider: opts.provider,
+      effort: opts.effort,
+      thread: opts.thread,
       mode: coercePermissionMode(opts.permission_mode),
       allowedTools: opts.allowed_tools,
       disallowedTools: opts.denied_tools,
+      defaults: flowDefaults(parsed),
       execution: ctx.execution,
     });
     if (!result.ok) throw new Error(`spawn_agent[${yamlNode.id}] failed: ${result.error}`);
@@ -588,7 +595,7 @@ function compileRetry(
             ...ctx,
             inputs: { ...ctx.inputs, LAST_ERROR: err.message, ATTEMPT: attempt },
           };
-          await dispatch(fakeNode, augmentedScope, parsed, options);
+          await dispatch(fakeNode, augmentedScope, parsed, options, `${yamlNode.id}.before_retry`);
           return ctx;
         }
       : undefined,
@@ -676,11 +683,44 @@ function tryParseJson(text: string): Record<string, unknown> | undefined {
   return undefined;
 }
 
-function coercePermissionMode(
-  mode: string | undefined,
-): 'plan' | 'autoEdit' | 'confirmEdit' | undefined {
-  if (mode === 'plan' || mode === 'autoEdit' || mode === 'confirmEdit') return mode;
-  return undefined;
+const PERMISSION_MODES: readonly PermissionMode[] = [
+  'plan',
+  'auto',
+  'autoEdit',
+  'confirmEdit',
+  'ask',
+];
+
+/** The flow's permission mode as written; the host decides which ones it allows. */
+function coercePermissionMode(mode: string | undefined): PermissionMode | undefined {
+  return PERMISSION_MODES.find((known) => known === mode);
+}
+
+/** A step's prompt. A `prompt_file` the host did not resolve is refused, never sent empty. */
+function promptOf(
+  opts: NonNullable<ParsedNode['spawn_agent']>,
+  stepId: string,
+  parsed: ParsedWorkflow,
+): string {
+  if (opts.prompt !== undefined) return opts.prompt;
+  throw new YamlCompileError(
+    `Step ${stepId}: prompt_file is not supported here (the host did not resolve prompt files)`,
+    parsed.name,
+  );
+}
+
+/** The flow's `defaults:` block as provider options, or undefined without one. */
+function flowDefaults(parsed: ParsedWorkflow): SpawnAgentDefaults | undefined {
+  const d = parsed.defaults;
+  if (!d) return undefined;
+  return {
+    provider: d.provider,
+    model: d.model,
+    effort: d.effort,
+    permissionMode: d.permission_mode,
+    allowedTools: d.allowed_tools,
+    disallowedTools: d.denied_tools,
+  };
 }
 
 function resolveAgentDefinition(

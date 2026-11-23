@@ -27,6 +27,9 @@ import { graphIssues } from './validate.js';
 
 // ── Action option schemas ───────────────────────────────────
 
+/** Reasoning effort an agent step may ask for. */
+const effortLevel = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+
 const spawnAgentAction = z
   .object({
     /** Named agent (resolved from agent registry) OR inline definition. */
@@ -34,9 +37,21 @@ const spawnAgentAction = z
     /** Inline agent definition fields (override registry). */
     model: z.string().optional(),
     provider: z.string().optional(),
+    /** Reasoning effort for this step. */
+    effort: effortLevel.optional(),
     permission_mode: z.enum(['plan', 'auto', 'autoEdit', 'confirmEdit', 'ask']).optional(),
-    /** Mustache-templated prompt. */
-    prompt: z.string(),
+    /** Mustache-templated prompt. Exactly one of `prompt` and `prompt_file`. */
+    prompt: z.string().optional(),
+    /**
+     * The prompt read from a file next to the flow (relative to the flow's
+     * directory). The host resolves it before compiling (`resolvePromptFiles`).
+     */
+    prompt_file: z.string().min(1).optional(),
+    /**
+     * `continue` (default): the host may run the step on the thread an earlier
+     * agent step started. `new`: the step gets its own thread.
+     */
+    thread: z.enum(['continue', 'new']).optional(),
     /** Tool allow-list (cuts the agent's available tools). */
     allowed_tools: z.array(z.string()).optional(),
     /** Tool deny-list. */
@@ -54,7 +69,20 @@ const spawnAgentAction = z
       })
       .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    const both = val.prompt !== undefined && val.prompt_file !== undefined;
+    const neither = val.prompt === undefined && val.prompt_file === undefined;
+    if (both || neither) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [both ? 'prompt_file' : 'prompt'],
+        message: both
+          ? 'Set either prompt or prompt_file, not both'
+          : 'An agent step needs a prompt or a prompt_file',
+      });
+    }
+  });
 
 const runCommandAction = z
   .object({
@@ -178,7 +206,7 @@ const reviewAction = z
   .object({
     provider: z.string().optional(),
     model: z.string().optional(),
-    effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    effort: effortLevel.optional(),
     /**
      * Start the review when the commit's checks start instead of after they
      * pass (default true). The verdict still counts only with green checks.
@@ -202,7 +230,7 @@ const triageAction = z
   .object({
     provider: z.string().optional(),
     model: z.string().optional(),
-    effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    effort: effortLevel.optional(),
   })
   .catchall(z.unknown());
 
@@ -488,7 +516,10 @@ export const workflowSchema = z
       .object({
         provider: z.string().optional(),
         model: z.string().optional(),
+        effort: effortLevel.optional(),
         permission_mode: z.string().optional(),
+        allowed_tools: z.array(z.string()).optional(),
+        denied_tools: z.array(z.string()).optional(),
       })
       .strict()
       .optional(),

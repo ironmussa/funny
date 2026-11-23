@@ -3,7 +3,7 @@
 ## 1. Schedules module
 
 - [x] 1.1 Add `services/schedules.ts` with `scheduleProblem`, `nextOccurrence` and `occurrenceTaken`, `claimOccurrence` in `automation-repository.ts`, and keep `parseAutomationSchedule` as an alias of `scheduleProblem`. Verify with unit tests: a valid and an invalid pattern, the next occurrence after a given time, a claim that wins, one that loses, and one from a null `next_run_at`
-- [ ] 1.2 (after `flow-triggers` merges) When `factory-triggers.ts` is on the branch, replace its `scheduleProblem` / `nextOccurrence` / `take` with the shared ones. Verify the existing schedule trigger tests pass unchanged
+- [x] 1.2 (done on the `flow-triggers` branch) When `factory-triggers.ts` is on the branch, replace its `scheduleProblem` / `nextOccurrence` / `take` with the shared ones. Verify the existing schedule trigger tests pass unchanged
 
 ## 2. Claim before a scheduled run
 

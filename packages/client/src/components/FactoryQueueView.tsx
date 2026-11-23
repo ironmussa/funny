@@ -10,7 +10,7 @@
  */
 import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
-import { Clock, Factory, PanelRight } from 'lucide-react';
+import { Clock, Factory, PanelRight, Play } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,9 +26,11 @@ import {
 } from '@/components/factory-board/FactoryViewToggles';
 import { FactoryRunDetail } from '@/components/factory-board/run-detail/FactoryRunDetail';
 import { useSelectedFactoryRun } from '@/components/factory-board/use-selected-factory-run';
+import { RunFactoryFlowDialog } from '@/components/factory-flows/RunFactoryFlowDialog';
 import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,6 +46,8 @@ import {
   factoryRunStateVariant,
   factoryWaitReasonText,
   filterFactoryRuns,
+  factoryRunFallbackTitle,
+  factoryRunRef,
 } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
@@ -71,11 +75,7 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now, onSel
   const navigate = useStableNavigate();
   const lastThreadId = implementingThreadOf(run);
   const thread = useThreadById(lastThreadId);
-  const title =
-    thread?.title ||
-    t('factoryView.issueTitle', 'Issue #{{number}}', {
-      number: run.issueNumber,
-    });
+  const title = thread?.title || factoryRunFallbackTitle(t, run);
   const detail = runDetail(t, run);
   const open = () => {
     if (!lastThreadId) return;
@@ -111,7 +111,7 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now, onSel
         <span className="text-muted-foreground flex w-full min-w-0 items-center gap-1.5 text-xs">
           {projectName && <span className="shrink-0">{projectName}</span>}
           <span className="shrink-0">/</span>
-          <span className="shrink-0">#{run.issueNumber}</span>
+          <span className="shrink-0">{factoryRunRef(t, run)}</span>
           <Badge size="xs" variant={factoryRunStateVariant(run.state)} className="shrink-0">
             {factoryRunStateLabel(t, run.state)}
           </Badge>
@@ -158,6 +158,7 @@ const STATE_ORDER: readonly FactoryRun['state'][] = [
   'failed',
   'merged',
   'no_change',
+  'done',
   'stopped',
 ];
 
@@ -205,8 +206,17 @@ function FactoryQueueBody({
   );
 }
 
-function FactoryQueueHeader({ runs, now }: { runs: FactoryQueueRun[] | undefined; now: number }) {
+function FactoryQueueHeader({
+  runs,
+  now,
+  projects,
+}: {
+  runs: FactoryQueueRun[] | undefined;
+  now: number;
+  projects: ReadonlyArray<{ id: string; name: string }>;
+}) {
   const { t } = useTranslation();
+  const [running, setRunning] = useState(false);
   const all = runs ?? [];
   return (
     <div className="border-border flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-4 py-3">
@@ -223,6 +233,19 @@ function FactoryQueueHeader({ runs, now }: { runs: FactoryQueueRun[] | undefined
         </p>
       </div>
       <FactoryHealthStats runs={all} now={now} />
+      {projects.length > 0 && (
+        <Button
+          variant="outline"
+          size="xs"
+          className="ml-auto"
+          onClick={() => setRunning(true)}
+          data-testid="factory-view-run-flow"
+        >
+          <Play className="icon-sm" />
+          {t('factory.runFlow.title', 'Run a flow')}
+        </Button>
+      )}
+      {running && <RunFactoryFlowDialog open onOpenChange={setRunning} projects={projects} />}
     </div>
   );
 }
@@ -439,7 +462,7 @@ function useShowOlderDone(
 ) {
   return useCallback(() => {
     onActiveOnlyChange(false);
-    onStateFilterChange(new Set(['merged', 'stopped']));
+    onStateFilterChange(new Set(['merged', 'done', 'stopped']));
     setLayout('list');
   }, [onActiveOnlyChange, onStateFilterChange, setLayout]);
 }
@@ -514,7 +537,7 @@ export function FactoryQueueView() {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="factory-view">
-      <FactoryQueueHeader runs={runs} now={now} />
+      <FactoryQueueHeader runs={runs} now={now} projects={projects} />
       <FactoryIncidentBanners runs={all} />
       <FactoryQueueToolbar
         {...toolbar}

@@ -92,7 +92,12 @@ import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.
 import { withBatchStats, type FactoryQueuePort } from './factory-queue-port.js';
 import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
-import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import {
+  factoryRunLabel,
+  type FactoryRunStage,
+  type RegressionProofRecord,
+  type UpdateRunInput,
+} from './factory-runs.js';
 import { createStacking, type BlockerState } from './factory-stacking.js';
 import {
   resolveStepOptions,
@@ -179,13 +184,18 @@ export interface FactoryRunScope {
   /** `owner/name`. */
   repo: string;
   mode: FactoryThreadMode;
-  issueNumber: number;
+  /** The run's issue, or null for a run without one (change flow-triggers). */
+  issueNumber: number | null;
+  /** The issue's title, or the trigger's name for a run without an issue. */
   issueTitle: string;
   /** The branch the agent pushes and opens the pull request from. */
   branch: string;
   /** The issue's page (the reviewer reads the issue there). */
   issueUrl?: string;
 }
+
+/** The scope of a run that has an issue: what the steps judging a change against it need. */
+export type IssueRunScope = FactoryRunScope & { issueNumber: number };
 
 export type { FactoryProofDeps } from './factory-proof-runner.js';
 export { regressionTestRequired } from './factory-proof-runner.js';
@@ -527,14 +537,16 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     });
     await deps.record({ metrics });
   }
-  const titlePrefix = `[Factory] #${scope.issueNumber} `;
+  // How the run is named in its thread titles: `#<issue>`, or `run-<id>` without one.
+  const label = factoryRunLabel({ id: scope.runId, issueNumber: scope.issueNumber });
+  const titlePrefix = `[Factory] ${label} `;
   /**
    * The title prefix of a step's thread: the implementing thread's, or one of
    * its own for a `thread: new` step, so adopting an interrupted launch never
    * mistakes one for the other.
    */
   const titlePrefixOf = (options: ResolvedStepOptions) =>
-    options.thread === 'new' ? `[Factory ${options.stepId}] #${scope.issueNumber} ` : titlePrefix;
+    options.thread === 'new' ? `[Factory ${options.stepId}] ${label} ` : titlePrefix;
   const titleOf = (options: ResolvedStepOptions) =>
     `${titlePrefixOf(options)}${scope.issueTitle}`.slice(0, 200);
 
@@ -961,8 +973,18 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       ? { send: offBranch, completedAt: deps.continuation.completedAt }
       : undefined;
 
+  // Triage and review judge a change against the run's issue. A run without
+  // one never reaches them: its flow is refused when it has such a step
+  // (`validateFlowForSubject`), and the step entries below refuse again. The
+  // roles are still built, on a scope whose issue number is never used.
+  const roleScope: IssueRunScope = { ...scope, issueNumber: scope.issueNumber ?? 0 };
+  const needsIssue = (step: string): ActionResult => ({
+    ok: false,
+    error: `The ${step} step needs an issue, and this run has none.`,
+  });
+
   const triager = createFactoryTriage({
-    scope,
+    scope: roleScope,
     issueUrl: scope.issueUrl ?? null,
     stored: deps.triage ?? null,
     since: deps.admittedAt ?? new Date(0).toISOString(),
@@ -974,7 +996,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     followUp: askAgain,
     worktreeBase,
     comment: async (body) => {
-      const posted = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
+      const posted = await deps.github.commentOnIssue(reader, roleScope.issueNumber, body);
       return posted.isOk() ? ok(undefined) : err(posted.error.message);
     },
     busyPaths: deps.busyPaths,
@@ -986,7 +1008,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   });
 
   const reviewer = createFactoryReviewer({
-    scope,
+    scope: roleScope,
     issueUrl: scope.issueUrl ?? null,
     issueText: deps.issueText,
     reviews: deps.reviews ?? [],
@@ -1071,6 +1093,18 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   /** The enabler reads the repository: the App token capped by their access. */
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
 
+  /** Say the no-change outcome on the issue; a comment that fails is logged, not fatal. */
+  async function commentNoChange(issueNumber: number, body: string): Promise<void> {
+    const commented = await deps.github.commentOnIssue(reader, issueNumber, body);
+    if (commented.isOk()) return;
+    log.warn('Issue factory could not comment a no-change outcome on the issue', {
+      namespace: 'factory',
+      runId: scope.runId,
+      issue: issueNumber,
+      error: commented.error.message,
+    });
+  }
+
   /**
    * The agent pushed no commit and opened no pull request: say so on the issue
    * with its explanation and remove the run's checkout. Not ok, so the flow
@@ -1093,21 +1127,17 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const body = [NO_CHANGE_LINE, explanation, ...kept.map(keptWorktreeLine)]
       .filter(Boolean)
       .join('\n\n');
-    const commented = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
-    if (commented.isErr()) {
-      log.warn('Issue factory could not comment a no-change outcome on the issue', {
-        namespace: 'factory',
-        runId: scope.runId,
-        issue: scope.issueNumber,
-        error: commented.error.message,
-      });
-    }
+    // A run without an issue has none to comment on or hand back: with nothing kept, it is done.
+    if (scope.issueNumber !== null) await commentNoChange(scope.issueNumber, body);
     if (kept.length > 0) {
       await deps.record({ state: 'waiting_human', failureReason: NO_CHANGE_REASON });
     } else {
       await deps.releaseIssue?.();
       // The step stays recorded: the run's step chain shows how far it went.
-      await deps.record({ state: 'no_change', failureReason: null });
+      await deps.record({
+        state: scope.issueNumber === null ? 'done' : 'no_change',
+        failureReason: null,
+      });
     }
     await count(metrics, { event: 'no_change' });
     return {
@@ -1553,7 +1583,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       // and the reviewer starts on this commit without waiting for green
       // (D7). A review of an older commit is stopped and its result dropped.
       const head = await classifyHead();
-      if (head && opts.earlyReview) await reviewer.startEarly(head.sha, opts.earlyReview);
+      if (head && opts.earlyReview && scope.issueNumber !== null) {
+        await reviewer.startEarly(head.sha, opts.earlyReview);
+      }
       const result = await ci.waitCi(opts);
       const verdict = result.metadata?.verdict;
       await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });
@@ -1563,13 +1595,16 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       return stuck ? { ok: false, error: stuck, metadata: { outcome: 'blocker-gone' } } : result;
     },
 
-    merge: (opts) => provedMerge(opts),
+    merge: async (opts) => (scope.issueNumber === null ? needsIssue('merge') : provedMerge(opts)),
 
-    regressionProof: (opts) => runRegressionProof(opts),
+    regressionProof: async (opts) =>
+      scope.issueNumber === null ? needsIssue('regression_proof') : runRegressionProof(opts),
 
-    review: (opts) => reviewer.review(opts),
+    review: async (opts) =>
+      scope.issueNumber === null ? needsIssue('review') : reviewer.review(opts),
 
-    triage: (opts) => triager.triage(opts),
+    triage: async (opts) =>
+      scope.issueNumber === null ? needsIssue('triage') : triager.triage(opts),
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

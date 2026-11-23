@@ -42,6 +42,7 @@ const COLUMN_OF = {
   failed: 'needs_person',
   no_change: 'needs_person',
   merged: 'done',
+  done: 'done',
   stopped: 'done',
 } satisfies Record<FactoryRunState, FactoryBoardColumnId>;
 

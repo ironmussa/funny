@@ -16,7 +16,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import type { FactoryQueueRun } from '@/lib/api/factory';
-import { factoryRunStateLabel } from '@/lib/factory-run-labels';
+import {
+  factoryRunStateLabel,
+  factoryRunFallbackTitle,
+  factoryRunRef,
+} from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 
 import { factoryRunCardThread } from '../FactoryRunCard';
@@ -45,13 +49,12 @@ function RunHeader({
   return (
     <SheetHeader className="pr-8">
       <SheetTitle data-testid="factory-run-detail-title">
-        {thread?.title ||
-          t('factoryView.issueTitle', 'Issue #{{number}}', { number: run.issueNumber })}
+        {thread?.title || factoryRunFallbackTitle(t, run)}
       </SheetTitle>
       <SheetDescription asChild>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {projectName && <span>{projectName}</span>}
-          <span>#{run.issueNumber}</span>
+          <span data-testid="factory-run-detail-ref">{factoryRunRef(t, run)}</span>
           <LabelBadge tone="info" data-testid="factory-run-detail-state">
             {factoryRunStateLabel(t, run.state)}
           </LabelBadge>
@@ -93,6 +96,25 @@ function RunFlow({ run }: { run: FactoryQueueRun }) {
   );
 }
 
+/** The input values a run without an issue was started with (change flow-triggers). */
+function RunInputs({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
+  const entries = Object.entries(run.inputs);
+  if (entries.length === 0) return null;
+  return (
+    <DetailSection id="inputs" title={t('factoryRunDetail.inputs', 'Inputs')}>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+        {entries.map(([name, value]) => (
+          <div key={name} className="contents" data-testid={`factory-run-detail-input-${name}`}>
+            <dt className="text-muted-foreground font-mono">{name}</dt>
+            <dd className="text-foreground break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </DetailSection>
+  );
+}
+
 function RunOutcome({ run }: { run: FactoryQueueRun }) {
   const { t } = useTranslation();
   const text = factoryRunWaitingText(t, run);
@@ -116,10 +138,16 @@ function FactoryRunDetailBody({
       <RunHeader run={run} projectName={projectName} />
       <RunOutcome run={run} />
       <RunFlow run={run} />
+      <RunInputs run={run} />
       <RunTimeline run={run} />
-      <RunTriage run={run} />
-      {run.regressionProof && <RegressionProofDetails proof={run.regressionProof} />}
-      <RunReviews run={run} />
+      {/* Triage, the proof and the reviews judge a change against an issue. */}
+      {run.issueNumber !== null && (
+        <>
+          <RunTriage run={run} />
+          {run.regressionProof && <RegressionProofDetails proof={run.regressionProof} />}
+          <RunReviews run={run} />
+        </>
+      )}
       <RunRiskCi run={run} />
       <RunThreads run={run} />
     </div>

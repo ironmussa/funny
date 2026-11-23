@@ -3,11 +3,13 @@ import type {
   FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
+  FactoryIssuelessFlow,
   FactoryQueueRun,
   FactoryReadiness,
   FactoryRun,
   FactorySettings,
   FactoryStepOverrides,
+  FactoryTrigger,
 } from '@funny/shared/contracts/factory';
 
 import { useDataQuery } from '../hooks';
@@ -18,6 +20,8 @@ import {
   factoryFlowDefinitionQuery,
   factoryFlowValidationQuery,
   factoryFlowsQuery,
+  factoryIssuelessFlowQuery,
+  factoryTriggersQuery,
   factoryQueueRunsQuery,
   factoryReadinessQuery,
   factoryRunsQuery,
@@ -129,4 +133,18 @@ export function useFactoryBlockers(
   issueNumbers: number[],
 ): FactoryIssueBlockers[] | undefined {
   return useDataQuery(factoryBlockersQuery(projectId, issueNumbers)).data;
+}
+
+/** The schedule triggers of the caller's factory; `undefined` while loading. */
+export function useFactoryTriggers(projectId: string): FactoryTrigger[] | undefined {
+  return useDataQuery(factoryTriggersQuery(projectId)).data;
+}
+
+/** Whether `flowName` can run without an issue and its inputs; `undefined` while loading. */
+export function useFactoryIssuelessFlow(
+  projectId: string,
+  flowName: string,
+): { flow: FactoryIssuelessFlow | undefined; error: Error | null; loading: boolean } {
+  const { data, error, isFetching } = useDataQuery(factoryIssuelessFlowQuery(projectId, flowName));
+  return { flow: data, error: error ?? null, loading: isFetching };
 }

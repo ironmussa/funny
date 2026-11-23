@@ -70,6 +70,10 @@ import {
 } from './factory-batches.js';
 import type { EarlyIntegration, EarlyOutcome } from './factory-early-integration.js';
 import {
+  formatFactoryFlowProblems,
+  validateFlowForIssuelessRun,
+} from './factory-flow-validation.js';
+import {
   isMergeLane,
   flowReadsOf,
   loadFactoryFlow,
@@ -110,7 +114,8 @@ export interface FactoryRunJob {
   factory: WatchedFactory;
   repo: string;
   mode: FactoryThreadMode;
-  issue: FactoryIssue;
+  /** The run's issue as GitHub has it; null for a run without one (change flow-triggers). */
+  issue: FactoryIssue | null;
   run: FactoryRunView;
 }
 
@@ -195,7 +200,7 @@ function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
   if (input.prUrl) trace.prOpen = true;
   if (input.state === 'waiting_human') trace.parked = true;
   if (input.state === 'needs_info') trace.held = true;
-  if (input.state === 'no_change') trace.ended = true;
+  if (input.state === 'no_change' || input.state === 'done') trace.ended = true;
   if (!input.threadIds) return false;
   trace.agentsRan = true;
   return true;
@@ -278,6 +283,40 @@ async function findLaunchedThread(
 
 /** Whether a started run has an agent working (or is done), or never started one. */
 export type FactoryRunStart = 'started' | 'not-started';
+
+/** How a run is named to a person: its issue, or its trigger (or flow) without one. */
+const subjectOf = (job: FactoryRunJob): string =>
+  job.issue ? `Issue #${job.issue.number}` : `"${job.run.triggerName ?? flowOf(job)}"`;
+
+/**
+ * The flow's inputs for a run: the issue's for an issue run, what its trigger
+ * recorded otherwise, then the factory's own, which always win.
+ */
+export function flowInputsOf(
+  job: Pick<FactoryRunJob, 'repo' | 'issue'> & {
+    factory: Pick<WatchedFactory, 'id'>;
+    run: Pick<FactoryRunView, 'inputs'>;
+  },
+  // What the host's concurrency groups are named by (the merge lane, stage limits),
+  // and a stacked run's blocker branch (empty otherwise).
+  at: { branch: string; baseBranch: string; stackBranch?: string },
+): Record<string, string> {
+  const subject = job.issue
+    ? {
+        issue_number: String(job.issue.number),
+        issue_title: job.issue.title,
+        issue_url: job.issue.url,
+      }
+    : job.run.inputs;
+  return {
+    ...subject,
+    repo: job.repo,
+    branch: at.branch,
+    base_branch: at.baseBranch,
+    factory_id: job.factory.id,
+    stack_branch: at.stackBranch ?? '',
+  };
+}
 
 /** A run a retry or take-over put back in flight (it has a history). */
 const wasReopened = (job: FactoryRunJob) => job.run.currentStep === REOPENED_STEP;
@@ -424,8 +463,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
   /** A run that never started an agent: a sent issue goes back in line, a label run is dropped. */
   async function forgetUnstarted(job: FactoryRunJob): Promise<void> {
-    if (job.run.source === 'manual') await deps.runs.requeue(job.run.id);
-    else await deps.runs.remove(job.run.id);
+    // What a person sent or started waits in line; a labelled issue is found
+    // again, and a scheduled occurrence that could not start is not run late.
+    if (job.run.source === 'manual' || job.run.source === 'run_now') {
+      await deps.runs.requeue(job.run.id);
+    } else await deps.runs.remove(job.run.id);
   }
 
   const notify = deps.notify ?? sendPush;
@@ -433,7 +475,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   /** Tell the enabler their run waits for them; best-effort. */
   async function noticeWaiting(job: FactoryRunJob, why: string): Promise<void> {
     await notify(job.factory.userId, {
-      title: `Issue #${job.issue.number} needs you`,
+      title: `${subjectOf(job)} needs you`,
       body: why.length > 200 ? `${why.slice(0, 199)}…` : why,
       url: `/projects/${job.factory.projectId}`,
       tag: `factory-run-${job.run.id}`,
@@ -468,7 +510,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     await forgetUnstarted(job);
     await deps.reportBlocked?.(
       job.factory.id,
-      `Issue #${job.run.issueNumber} could not start: ${error ?? 'unknown error'}`,
+      `${subjectOf(job)} could not start: ${error ?? 'unknown error'}`,
     );
   }
 
@@ -516,7 +558,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const { run } = job;
     if (outcome === 'cancelled') return;
     if (outcome === 'failed') await settleFailed(job, trace, error);
-    else await park(job, null, error);
+    // A run without an issue that opened no pull request has nothing left to follow.
+    else if (job.issue === null && !trace.prOpen) {
+      await deps.runs.updateInFlight(run.id, { state: 'done', currentStep: null });
+    } else await park(job, null, error);
     log.info('Issue factory run ended', {
       namespace: 'factory',
       factoryId: job.factory.id,
@@ -546,9 +591,12 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
   /** Whether another queued run of the factory waits for this run's issue (it is a blocker). */
   async function blocksOthers(job: FactoryRunJob): Promise<boolean> {
+    // A run without an issue blocks nobody: blockers are issues.
+    const issue = job.run.issueNumber;
+    if (issue === null) return false;
     const queued = await deps.runs.queue(job.factory.id);
     if (queued.isErr()) return false;
-    return queued.value.some((run) => run.waitReason?.blockers.includes(job.run.issueNumber));
+    return queued.value.some((run) => run.waitReason?.blockers.includes(issue));
   }
 
   /**
@@ -642,6 +690,75 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     };
   }
 
+  /** What a run's steps are bound to; a run without an issue is titled by its trigger or flow. */
+  const scopeOf = (job: FactoryRunJob): FactoryRunScope => ({
+    runId: job.run.id,
+    userId: job.factory.userId,
+    projectId: job.factory.projectId,
+    repo: job.repo,
+    mode: job.mode,
+    issueNumber: job.issue?.number ?? null,
+    issueTitle: job.issue?.title ?? job.run.triggerName ?? flowOf(job),
+    branch: factoryRunBranch(job.run),
+    issueUrl: job.issue?.url,
+  });
+
+  /** The provider's reads and writes of the run's issue; they do nothing for a run without one. */
+  function issueDepsOf(job: FactoryRunJob, scope: FactoryRunScope) {
+    return {
+      issueLabels: job.issue?.labels ?? [],
+      issueUpdatedAt: async () => {
+        if (scope.issueNumber === null) return null;
+        const issue = await deps.github.getIssue(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+        );
+        return issue.isOk() ? (issue.value.updatedAt ?? null) : null;
+      },
+      issueText: async () => {
+        if (scope.issueNumber === null) return null;
+        const text = await deps.github.issueText(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+        );
+        return text.isOk() ? text.value : null;
+      },
+      releaseIssue: async () => {
+        if (scope.issueNumber === null) return;
+        const relabelled = await deps.github.relabelIssue(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+          { remove: job.factory.label || undefined, add: NO_CHANGE_TRIAGE_LABEL },
+        );
+        if (relabelled.isErr()) {
+          log.warn('Issue factory could not relabel an issue that ended with no change', {
+            namespace: 'factory',
+            runId: job.run.id,
+            issue: scope.issueNumber,
+            error: relabelled.error.message,
+          });
+        }
+      },
+    };
+  }
+
+  /**
+   * Fail a run without an issue whose flow cannot run that way, before any
+   * thread. The flow is read again for every run: it may have gained an
+   * issue-only step or a required input since its trigger was saved.
+   */
+  async function refusedWithoutIssue(job: FactoryRunJob, flow: FactoryFlow): Promise<boolean> {
+    if (job.issue !== null) return false;
+    const problems = validateFlowForIssuelessRun(flow.workflow, Object.keys(job.run.inputs));
+    if (problems.length === 0) return false;
+    await deps.runs.updateInFlight(job.run.id, {
+      state: 'failed',
+      currentStep: null,
+      failureReason: formatFactoryFlowProblems(`The flow "${flowOf(job)}"`, problems),
+    });
+    return true;
+  }
+
   async function execute(
     job: FactoryRunJob,
     controller: AbortController,
@@ -658,6 +775,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       return 'not-started';
     }
     logFlowWarnings(job, flow.value);
+    if (await refusedWithoutIssue(job, flow.value)) return 'not-started';
     priorities.set(job.run.id, admissionPriority(job.run));
     mergeOrder.set(job.run.id, { blocker: await blocksOthers(job) });
     stageLimits.set(job.factory.id, job.factory.stageLimits);
@@ -705,17 +823,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       return trace.agentsRan ? 'started' : 'not-started';
     }
 
-    const scope: FactoryRunScope = {
-      runId: job.run.id,
-      userId: job.factory.userId,
-      projectId: job.factory.projectId,
-      repo: job.repo,
-      mode: job.mode,
-      issueNumber: job.issue.number,
-      issueTitle: job.issue.title,
-      branch: factoryRunBranch(job.run),
-      issueUrl: job.issue.url,
-    };
+    const scope = scopeOf(job);
     const provider = createFactoryActionProvider({
       projectDefaults,
       // Read at every agent step: a change saved mid-run reaches the steps not started yet.
@@ -743,7 +851,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           ownerId: scope.userId,
           projectId: scope.projectId,
         }),
-      issueLabels: job.issue.labels ?? [],
+      ...issueDepsOf(job, scope),
       sensitivePaths: job.factory.sensitivePaths,
       autoMerge: job.factory.autoMerge,
       triage: job.run.triage,
@@ -751,20 +859,6 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       busyPaths: async () => {
         const others = await deps.runs.inFlight(job.factory.id);
         return others.isOk() ? busyPathsOf(others.value, job.run.id) : [];
-      },
-      issueUpdatedAt: async () => {
-        const issue = await deps.github.getIssue(
-          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
-          scope.issueNumber,
-        );
-        return issue.isOk() ? (issue.value.updatedAt ?? null) : null;
-      },
-      issueText: async () => {
-        const text = await deps.github.issueText(
-          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
-          scope.issueNumber,
-        );
-        return text.isOk() ? text.value : null;
       },
       holdForPaths: async (blockers) => {
         const held = await deps.runs.holdForPaths(job.run.id, blockers);
@@ -797,21 +891,6 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         // Stopped or parked elsewhere: stop driving it.
         if (entered.isOk() && !entered.value) controller.abort();
       },
-      releaseIssue: async () => {
-        const relabelled = await deps.github.relabelIssue(
-          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
-          scope.issueNumber,
-          { remove: job.factory.label || undefined, add: NO_CHANGE_TRIAGE_LABEL },
-        );
-        if (relabelled.isErr()) {
-          log.warn('Issue factory could not relabel an issue that ended with no change', {
-            namespace: 'factory',
-            runId: job.run.id,
-            issue: scope.issueNumber,
-            error: relabelled.error.message,
-          });
-        }
-      },
       lastThreadMessage: deps.lastThreadMessage ?? lastThreadMessage,
       removeUnchangedWorktrees: async () => {
         const run = await deps.runs.get(job.run.id);
@@ -841,18 +920,12 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       provider,
       progress: nullReporter,
       cwd: '',
-      inputs: {
-        repo: job.repo,
-        issue_number: String(job.issue.number),
-        issue_title: job.issue.title,
-        issue_url: job.issue.url,
+      inputs: flowInputsOf(job, {
         branch: scope.branch,
-        // What the host's concurrency groups are named by (the merge lane, stage limits).
-        base_branch: baseBranch,
-        factory_id: job.factory.id,
+        baseBranch,
         // A stacked run's blocker branch, for its prompts (D10); its merge group stays the base's.
-        stack_branch: job.run.stackedOn?.retargeted ? '' : (job.run.stackedOn?.branch ?? ''),
-      },
+        stackBranch: job.run.stackedOn?.retargeted ? '' : (job.run.stackedOn?.branch ?? ''),
+      }),
       outputs: {},
     };
     const result = await runPipeline(flow.value.pipeline, context, {

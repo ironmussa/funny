@@ -17,6 +17,7 @@ import {
   type FactoryRunView,
 } from '../../../services/factory/factory-runs.js';
 import { createFactorySettingsService } from '../../../services/factory/factory-settings.js';
+import { createFactoryTriggersRepository } from '../../../services/factory/factory-triggers.js';
 import {
   type CreatePoll,
   startFactoryWatcher,
@@ -212,6 +213,8 @@ async function setUp(
     script?: Script;
     launcher?: ReturnType<typeof fakeLauncher>;
     waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
+    /** The clock of the schedule triggers (change flow-triggers). */
+    now?: () => Date;
   } = {},
 ) {
   const settings = createFactorySettingsService();
@@ -229,6 +232,8 @@ async function setUp(
   const poll = fakePoll();
   const launcher = opts.launcher ?? fakeLauncher();
   const github = fakeGithub(opts.script);
+  /** The kinds of the activities the watcher recorded. */
+  const activities: string[] = [];
   await startFactoryWatcher({
     ports: unusedRunnerPorts(),
     github,
@@ -240,11 +245,24 @@ async function setUp(
     proof: passingProof,
     steps: upToDateSteps,
     lastThreadMessage: passingReview,
+    now: opts.now,
+    activities: {
+      recordServerActivity: async (activity) => {
+        activities.push(activity.kind);
+        return undefined as never;
+      },
+    },
   });
   // The tests fire the tick themselves: a send does not poke the factory here.
-  const queue = createFactoryQueue({ wake: async () => {} });
+  const queue = createFactoryQueue({
+    wake: async () => {},
+    triggers: createFactoryTriggersRepository({
+      newId: () => crypto.randomUUID(),
+      now: opts.now ?? (() => new Date()),
+    }),
+  });
   const tick = () => poll.ticks[0]!();
-  return { factoryId, queue, launcher, github, tick };
+  return { factoryId, queue, launcher, github, tick, activities };
 }
 
 const runsOf = async (factoryId: string) =>
@@ -824,5 +842,376 @@ describe('blocked issues', () => {
     const answer = (await queue.blockers(factoryId, [2]))._unsafeUnwrap();
 
     expect(answer).toEqual([{ issue: 2, blockers: [{ issue: 1, inFactory: false }] }]);
+  });
+});
+
+/** A flow that needs no issue: one agent step and a notice, with one typed input. */
+const AUDIT_FLOW = `name: audit
+description: Look at an area and report
+inputs:
+  scope: { type: string, required: true }
+nodes:
+  - id: look
+    spawn_agent:
+      prompt: 'Audit {{scope}} and report.'
+  - id: tell
+    depends_on: [look]
+    notify:
+      message: 'Audit of {{scope}} finished'
+`;
+
+const auditFiles = () => ({ '.funny/workflows/audit.yaml': AUDIT_FLOW });
+
+/** A clock the test moves. */
+function clock(start: string) {
+  let at = new Date(start);
+  return {
+    now: () => at,
+    set: (iso: string) => {
+      at = new Date(iso);
+    },
+  };
+}
+
+/** The factory's runs without an issue, oldest first. */
+const issuelessRuns = async (factoryId: string) =>
+  (await runsOf(factoryId)).filter((run) => run.issueNumber === null).reverse();
+
+async function settled(
+  factoryId: string,
+  done: (runs: FactoryRunView[]) => boolean,
+): Promise<FactoryRunView[]> {
+  for (let i = 0; i < 200; i++) {
+    const runs = await issuelessRuns(factoryId);
+    if (done(runs)) return runs;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error('the runs never reached the expected state');
+}
+
+describe('starting a flow without an issue (change flow-triggers)', () => {
+  test('a member starts a flow with typed inputs; it runs and ends done', async () => {
+    const { factoryId, queue, launcher, tick } = await setUp({
+      script: { repoFiles: auditFiles() },
+      waitThread: finishedThreads('completed'),
+    });
+
+    const started = await queue.runFlow(factoryId, {
+      flowName: 'audit',
+      inputs: { scope: 'auth' },
+    });
+
+    const run = started._unsafeUnwrap();
+    expect(run).toMatchObject({
+      issueNumber: null,
+      source: 'run_now',
+      state: 'requested',
+      flowName: 'audit',
+      inputs: { scope: 'auth' },
+      triggerId: null,
+    });
+
+    await tick();
+    const [ended] = await settled(factoryId, (runs) => runs[0]?.state === 'done');
+
+    expect(ended!.completedAt).not.toBeNull();
+    expect(launcher.calls).toHaveLength(1);
+    const body = launcher.calls[0]!.body;
+    expect(String(body.title)).toBe(`[Factory] run-${run.id.slice(0, 8)} audit`);
+    expect(String(body.prompt)).toContain('Audit auth and report.');
+    expect(JSON.stringify(body)).toContain(`factory/run-${run.id.slice(0, 8)}`);
+  });
+
+  test('a flow with a step that needs an issue is refused, naming the step', async () => {
+    const { factoryId, queue } = await setUp();
+
+    const started = await queue.runFlow(factoryId, { flowName: 'issue-to-merge', inputs: {} });
+
+    const error = started._unsafeUnwrapErr();
+    expect(error.kind).toBe('invalid-flow');
+    expect(error.message).toContain('merge');
+    expect(await issuelessRuns(factoryId)).toHaveLength(0);
+  });
+
+  test('a required input left empty is refused, naming the input', async () => {
+    const { factoryId, queue } = await setUp({ script: { repoFiles: auditFiles() } });
+
+    const empties: Array<Record<string, string>> = [{}, { scope: '  ' }];
+    for (const inputs of empties) {
+      const started = await queue.runFlow(factoryId, { flowName: 'audit', inputs });
+      expect(started._unsafeUnwrapErr()).toMatchObject({ kind: 'invalid-flow' });
+      expect(started._unsafeUnwrapErr().message).toContain('"scope"');
+    }
+    expect(await issuelessRuns(factoryId)).toHaveLength(0);
+  });
+
+  test('an input the factory supplies, or named like a credential, is refused', async () => {
+    const { factoryId, queue } = await setUp({ script: { repoFiles: auditFiles() } });
+
+    for (const name of ['repo', 'gh_token']) {
+      const started = await queue.runFlow(factoryId, {
+        flowName: 'audit',
+        inputs: { scope: 'auth', [name]: 'x' },
+      });
+      expect(started._unsafeUnwrapErr()).toMatchObject({ kind: 'invalid' });
+    }
+  });
+
+  test('a paused factory refuses the start as it refuses a sent issue', async () => {
+    const { factoryId, queue } = await setUp({
+      enabled: false,
+      script: { repoFiles: auditFiles() },
+    });
+
+    const started = await queue.runFlow(factoryId, { flowName: 'audit', inputs: { scope: 'a' } });
+    const sent = await queue.submit(factoryId, { issueNumbers: [7], flowName: 'issue-to-merge' });
+
+    expect(started._unsafeUnwrapErr()).toEqual(sent._unsafeUnwrapErr());
+    expect(started._unsafeUnwrapErr().kind).toBe('paused');
+  });
+
+  test("the dialog learns a flow's inputs and why an issue flow cannot run", async () => {
+    const { factoryId, queue } = await setUp({ script: { repoFiles: auditFiles() } });
+
+    const audit = (await queue.issuelessFlow(factoryId, 'audit'))._unsafeUnwrap();
+    const merge = (await queue.issuelessFlow(factoryId, 'issue-to-merge'))._unsafeUnwrap();
+
+    expect(audit).toEqual({
+      inputs: [{ name: 'scope', required: true, description: null }],
+      problems: [],
+    });
+    expect(merge.problems.map((problem) => problem.field)).toEqual(
+      expect.arrayContaining(['triage', 'review', 'merge']),
+    );
+  });
+
+  test('a run whose flow gained a required input fails before any thread starts', async () => {
+    const files = auditFiles();
+    const { factoryId, queue, launcher, tick } = await setUp({ script: { repoFiles: files } });
+    await queue.runFlow(factoryId, { flowName: 'audit', inputs: { scope: 'auth' } });
+    files['.funny/workflows/audit.yaml'] = AUDIT_FLOW.replace(
+      '  scope:',
+      '  depth: { type: string, required: true }\n  scope:',
+    );
+
+    await tick();
+    const [run] = await settled(factoryId, (runs) => runs[0]?.state === 'failed');
+
+    expect(run!.failureReason).toContain('"depth"');
+    expect(launcher.calls).toHaveLength(0);
+  });
+});
+
+describe('schedule triggers (change flow-triggers)', () => {
+  const everyFive = { name: 'Nightly audit', schedule: '*/5 * * * *', flowName: 'audit' };
+
+  test('a saved trigger knows its next occurrence; an invalid schedule is refused', async () => {
+    const time = clock('2026-11-23T02:01:00.000Z');
+    const { factoryId, queue } = await setUp({
+      script: { repoFiles: auditFiles() },
+      now: time.now,
+    });
+
+    const saved = await queue.saveTrigger(factoryId, {
+      ...everyFive,
+      inputs: { scope: 'auth' },
+      enabled: true,
+    });
+    const refused = await queue.saveTrigger(factoryId, {
+      ...everyFive,
+      schedule: 'every night',
+      inputs: { scope: 'auth' },
+      enabled: true,
+    });
+
+    expect(saved._unsafeUnwrap()).toMatchObject({
+      name: 'Nightly audit',
+      enabled: true,
+      nextRunAt: '2026-11-23T02:05:00.000Z',
+      inputs: { scope: 'auth' },
+    });
+    expect(refused._unsafeUnwrapErr().kind).toBe('invalid');
+    expect((await queue.triggers(factoryId))._unsafeUnwrap()).toHaveLength(1);
+  });
+
+  test('a trigger for a flow that needs an issue, or misses an input, is refused', async () => {
+    const { factoryId, queue } = await setUp({ script: { repoFiles: auditFiles() } });
+
+    const issueFlow = await queue.saveTrigger(factoryId, {
+      ...everyFive,
+      flowName: 'issue-to-merge',
+      inputs: {},
+      enabled: true,
+    });
+    const noInput = await queue.saveTrigger(factoryId, { ...everyFive, inputs: {}, enabled: true });
+
+    expect(issueFlow._unsafeUnwrapErr().kind).toBe('invalid-flow');
+    expect(noInput._unsafeUnwrapErr().message).toContain('"scope"');
+    expect((await queue.triggers(factoryId))._unsafeUnwrap()).toHaveLength(0);
+  });
+
+  test("an occurrence starts one run with the trigger's inputs and moves to the next", async () => {
+    const time = clock('2026-11-23T02:01:00.000Z');
+    const { factoryId, queue, launcher, tick } = await setUp({
+      script: { repoFiles: auditFiles() },
+      waitThread: finishedThreads('completed'),
+      now: time.now,
+    });
+    const trigger = (
+      await queue.saveTrigger(factoryId, { ...everyFive, inputs: { scope: 'auth' }, enabled: true })
+    )._unsafeUnwrap();
+
+    await tick();
+    expect(await issuelessRuns(factoryId)).toHaveLength(0);
+
+    time.set('2026-11-23T02:05:20.000Z');
+    await tick();
+    const [run] = await settled(factoryId, (runs) => runs[0]?.state === 'done');
+
+    expect(run).toMatchObject({
+      source: 'schedule',
+      triggerId: trigger.id,
+      triggerName: 'Nightly audit',
+      inputs: { scope: 'auth' },
+      issueNumber: null,
+    });
+    expect(launcher.calls).toHaveLength(1);
+    expect((await queue.triggers(factoryId))._unsafeUnwrap()[0]!.nextRunAt).toBe(
+      '2026-11-23T02:10:00.000Z',
+    );
+
+    // The same tick again starts nothing: the occurrence was taken.
+    await tick();
+    expect(await issuelessRuns(factoryId)).toHaveLength(1);
+  });
+
+  test('an occurrence is skipped, and recorded, while the previous run still works', async () => {
+    const time = clock('2026-11-23T02:01:00.000Z');
+    const { factoryId, queue, tick, activities } = await setUp({
+      script: { repoFiles: auditFiles() },
+      now: time.now,
+    });
+    await queue.saveTrigger(factoryId, { ...everyFive, inputs: { scope: 'auth' }, enabled: true });
+
+    time.set('2026-11-23T02:05:20.000Z');
+    await tick();
+    await settled(factoryId, (runs) => runs[0]?.state === 'working');
+    time.set('2026-11-23T02:10:20.000Z');
+    await tick();
+
+    expect(await issuelessRuns(factoryId)).toHaveLength(1);
+    expect(activities).toEqual(['factory.trigger_skipped']);
+  });
+
+  test('an occurrence missed by more than five minutes is not run late', async () => {
+    const time = clock('2026-11-23T02:01:00.000Z');
+    const { factoryId, queue, tick } = await setUp({
+      script: { repoFiles: auditFiles() },
+      now: time.now,
+    });
+    await queue.saveTrigger(factoryId, { ...everyFive, inputs: { scope: 'auth' }, enabled: true });
+
+    time.set('2026-11-23T03:02:00.000Z');
+    await tick();
+
+    expect(await issuelessRuns(factoryId)).toHaveLength(0);
+    expect((await queue.triggers(factoryId))._unsafeUnwrap()[0]!.nextRunAt).toBe(
+      '2026-11-23T03:05:00.000Z',
+    );
+  });
+
+  test('a run parked on its pull request does not hold its trigger', async () => {
+    const time = clock('2026-11-23T02:01:00.000Z');
+    const flow = `name: bump
+nodes:
+  - id: work
+    spawn_agent:
+      prompt: 'Update the dependencies.'
+  - id: pull-request
+    depends_on: [work]
+    create_pr:
+      title: 'Update dependencies'
+      body: 'Scheduled update.'
+      base: main
+`;
+    const { factoryId, queue, tick, github } = await setUp({
+      script: { repoFiles: { '.funny/workflows/bump.yaml': flow } },
+      waitThread: finishedThreads('completed'),
+      now: time.now,
+    });
+    await queue.saveTrigger(factoryId, {
+      name: 'Weekly bump',
+      schedule: '*/5 * * * *',
+      flowName: 'bump',
+      inputs: {},
+      enabled: true,
+    });
+
+    time.set('2026-11-23T02:05:20.000Z');
+    await tick();
+    const [first] = await settled(factoryId, (runs) => runs[0]?.state === 'waiting_human');
+    expect(first!.prUrl).toBe('https://github.com/o/r/pull/9');
+    expect(github.merges).toBe(0);
+
+    time.set('2026-11-23T02:10:20.000Z');
+    await tick();
+    await settled(factoryId, (runs) => runs.length === 2);
+  });
+
+  test('a disabled trigger has no next occurrence and starts nothing', async () => {
+    const time = clock('2026-11-23T02:01:00.000Z');
+    const { factoryId, queue, tick } = await setUp({
+      script: { repoFiles: auditFiles() },
+      now: time.now,
+    });
+    const saved = await queue.saveTrigger(factoryId, {
+      ...everyFive,
+      inputs: { scope: 'auth' },
+      enabled: false,
+    });
+
+    time.set('2026-11-23T02:05:20.000Z');
+    await tick();
+
+    expect(saved._unsafeUnwrap().nextRunAt).toBeNull();
+    expect(await issuelessRuns(factoryId)).toHaveLength(0);
+  });
+
+  test('editing a trigger does not change the inputs of a run in progress', async () => {
+    const time = clock('2026-11-23T02:01:00.000Z');
+    const { factoryId, queue, tick } = await setUp({
+      script: { repoFiles: auditFiles() },
+      now: time.now,
+    });
+    const trigger = (
+      await queue.saveTrigger(factoryId, { ...everyFive, inputs: { scope: 'auth' }, enabled: true })
+    )._unsafeUnwrap();
+    time.set('2026-11-23T02:05:20.000Z');
+    await tick();
+    await settled(factoryId, (runs) => runs[0]?.state === 'working');
+
+    await queue.saveTrigger(factoryId, {
+      ...everyFive,
+      id: trigger.id,
+      name: 'Renamed',
+      inputs: { scope: 'billing' },
+      enabled: true,
+    });
+
+    const [run] = await issuelessRuns(factoryId);
+    expect(run).toMatchObject({ triggerName: 'Nightly audit', inputs: { scope: 'auth' } });
+  });
+
+  test("a trigger is removed; another factory's trigger is not found", async () => {
+    const { factoryId, queue } = await setUp({ script: { repoFiles: auditFiles() } });
+    const trigger = (
+      await queue.saveTrigger(factoryId, { ...everyFive, inputs: { scope: 'auth' }, enabled: true })
+    )._unsafeUnwrap();
+
+    expect((await queue.removeTrigger('another-factory', trigger.id))._unsafeUnwrapErr().kind).toBe(
+      'not-found',
+    );
+    expect((await queue.removeTrigger(factoryId, trigger.id)).isOk()).toBe(true);
+    expect((await queue.triggers(factoryId))._unsafeUnwrap()).toHaveLength(0);
   });
 });

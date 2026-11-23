@@ -20,7 +20,7 @@ import { validateFilePaths } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
-import { validate } from '../../validation/schemas.js';
+import { readBody } from '../../validation/request.js';
 import { gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 /** Who asks, and the checkout the operation runs in. */
@@ -205,16 +205,6 @@ async function prepareMutation<Target extends GitTarget, Body, Value>(
       body: value,
     })),
   );
-}
-
-/** The request's JSON body validated against `schema`; a missing or malformed body reads as `{}`. */
-export async function readBody<Body>(
-  c: Context<HonoEnv>,
-  schema: z.ZodType<Body> | undefined,
-): Promise<Result<Body, DomainError>> {
-  // SAFETY: a route without a body schema declares Body = undefined (the default).
-  if (!schema) return ok(undefined as Body);
-  return validate(schema, await c.req.json().catch(() => ({})));
 }
 
 function checkPaths<Body>(

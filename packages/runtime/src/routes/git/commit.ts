@@ -22,6 +22,7 @@ import * as tm from '../../services/thread-manager.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, requireProject } from '../../utils/route-helpers.js';
+import { readBody } from '../../validation/request.js';
 import {
   validate,
   commitSchema,
@@ -29,7 +30,7 @@ import {
   gitignoreSchema,
   runHookCommandSchema,
 } from '../../validation/schemas.js';
-import { readBody, withProjectCheckout, withThreadCheckout } from './checkout-route.js';
+import { withProjectCheckout, withThreadCheckout } from './checkout-route.js';
 import { gitStatusCache, invalidateGitStatusCache } from './helpers.js';
 
 export const commitRoutes = new Hono<HonoEnv>();

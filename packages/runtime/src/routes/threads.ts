@@ -12,7 +12,7 @@
 
 import type { DomainError } from '@funny/shared/errors';
 import { badRequest, conflict, forbidden, internal, notFound } from '@funny/shared/errors';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
 import type { z } from 'zod';
 
@@ -41,6 +41,7 @@ import { uploadFile } from '../services/thread-service/upload.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { requireThread, steerFromContext } from '../utils/route-helpers.js';
+import { readBody } from '../validation/request.js';
 import {
   createThreadSchema,
   createIdleThreadSchema,
@@ -116,6 +117,25 @@ function toDomainError(error: unknown): DomainError {
 }
 
 /** Format a ThreadServiceError into an HTTP response via resultToResponse */
+type RouteThread = NonNullable<Awaited<ReturnType<typeof tm.getThread>>>;
+
+/** Runs `handler` for the route's `:id` thread when the caller may act on it, or answers why not. */
+async function withThread(
+  c: Context<HonoEnv>,
+  handler: (route: {
+    id: string;
+    userId: string;
+    thread: RouteThread;
+  }) => Response | Promise<Response>,
+): Promise<Response> {
+  // SAFETY: only used on routes whose path declares :id.
+  const id = c.req.param('id') as string;
+  const userId = c.get('userId');
+  const thread = await requireThread(id, userId);
+  if (thread.isErr()) return resultToResponse(c, thread);
+  return handler({ id, userId, thread: thread.value });
+}
+
 function handleServiceError(c: any, error: unknown) {
   return resultToResponse(c, err(toDomainError(error)));
 }
@@ -242,125 +262,106 @@ threadRoutes.post('/:id/upload', async (c) => {
 });
 
 // POST /api/threads/:id/stop
-threadRoutes.post('/:id/stop', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-
-  const result = await stopThread(id);
-  if (result.isErr()) return handleServiceError(c, result.error);
-  return c.json({ ok: true });
-});
+threadRoutes.post('/:id/stop', (c) =>
+  withThread(c, async ({ id }) => {
+    const result = await stopThread(id);
+    if (result.isErr()) return handleServiceError(c, result.error);
+    return c.json({ ok: true });
+  }),
+);
 
 // POST /api/threads/:id/fork — fork the thread at a specific user message
-threadRoutes.post('/:id/fork', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+threadRoutes.post('/:id/fork', (c) =>
+  withThread(c, async ({ id, userId }) => {
+    const parsed = await readBody(c, forkThreadSchema);
+    if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(forkThreadSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-
-  const span = requestSpan(c, 'thread.fork', { threadId: id });
-  const result = await forkThread({
-    sourceThreadId: id,
-    messageId: parsed.value.messageId,
-    title: parsed.value.title,
-    userId,
-  });
-  if (result.isErr()) {
-    log.error('Failed to fork thread', {
-      namespace: 'agent',
-      threadId: id,
-      error: result.error.message,
+    const span = requestSpan(c, 'thread.fork', { threadId: id });
+    const result = await forkThread({
+      sourceThreadId: id,
+      messageId: parsed.value.messageId,
+      title: parsed.value.title,
+      userId,
     });
-    span.end('error', result.error.message);
-    return handleServiceError(c, result.error);
-  }
-  metric('threads.forked', 1, { type: 'sum' });
-  span.end('ok');
-  return c.json(result.value, 201);
-});
+    if (result.isErr()) {
+      log.error('Failed to fork thread', {
+        namespace: 'agent',
+        threadId: id,
+        error: result.error.message,
+      });
+      span.end('error', result.error.message);
+      return handleServiceError(c, result.error);
+    }
+    metric('threads.forked', 1, { type: 'sum' });
+    span.end('ok');
+    return c.json(result.value, 201);
+  }),
+);
 
 // POST /api/threads/:id/rewind — rewind code + truncate conversation in place
-threadRoutes.post('/:id/rewind', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+threadRoutes.post('/:id/rewind', (c) =>
+  withThread(c, async ({ id, userId }) => {
+    const parsed = await readBody(c, rewindCodeSchema);
+    if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(rewindCodeSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-
-  const span = requestSpan(c, 'thread.rewind_code', { threadId: id });
-  const result = await rewindCode({
-    threadId: id,
-    messageId: parsed.value.messageId,
-    userId,
-  });
-  if (result.isErr()) {
-    log.error('Failed to rewind thread', {
-      namespace: 'agent',
+    const span = requestSpan(c, 'thread.rewind_code', { threadId: id });
+    const result = await rewindCode({
       threadId: id,
-      error: result.error.message,
+      messageId: parsed.value.messageId,
+      userId,
     });
-    span.end('error', result.error.message);
-    return handleServiceError(c, result.error);
-  }
-  span.end('ok');
-  return c.json(result.value);
-});
+    if (result.isErr()) {
+      log.error('Failed to rewind thread', {
+        namespace: 'agent',
+        threadId: id,
+        error: result.error.message,
+      });
+      span.end('error', result.error.message);
+      return handleServiceError(c, result.error);
+    }
+    span.end('ok');
+    return c.json(result.value);
+  }),
+);
 
 // POST /api/threads/:id/fork-and-rewind — fork the thread then rewind code on the fork
-threadRoutes.post('/:id/fork-and-rewind', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+threadRoutes.post('/:id/fork-and-rewind', (c) =>
+  withThread(c, async ({ id, userId }) => {
+    const parsed = await readBody(c, forkAndRewindSchema);
+    if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(forkAndRewindSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-
-  const span = requestSpan(c, 'thread.fork_and_rewind', { threadId: id });
-  const result = await forkAndRewind({
-    sourceThreadId: id,
-    messageId: parsed.value.messageId,
-    title: parsed.value.title,
-    userId,
-  });
-  if (result.isErr()) {
-    log.error('Failed to fork-and-rewind thread', {
-      namespace: 'agent',
-      threadId: id,
-      error: result.error.message,
+    const span = requestSpan(c, 'thread.fork_and_rewind', { threadId: id });
+    const result = await forkAndRewind({
+      sourceThreadId: id,
+      messageId: parsed.value.messageId,
+      title: parsed.value.title,
+      userId,
     });
-    span.end('error', result.error.message);
-    return handleServiceError(c, result.error);
-  }
-  span.end('ok');
-  return c.json(result.value, 201);
-});
+    if (result.isErr()) {
+      log.error('Failed to fork-and-rewind thread', {
+        namespace: 'agent',
+        threadId: id,
+        error: result.error.message,
+      });
+      span.end('error', result.error.message);
+      return handleServiceError(c, result.error);
+    }
+    span.end('ok');
+    return c.json(result.value, 201);
+  }),
+);
 
 // POST /api/threads/:id/convert-to-worktree
-threadRoutes.post('/:id/convert-to-worktree', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+threadRoutes.post('/:id/convert-to-worktree', (c) =>
+  withThread(c, async ({ id, userId }) => {
+    const parsed = await readBody(c, convertToWorktreeSchema);
+    if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(convertToWorktreeSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-
-  const result = await convertToWorktree(id, userId, parsed.value.baseBranch);
-  if (result.isErr()) return handleServiceError(c, result.error);
-  return c.json({ ok: true });
-});
+    const result = await convertToWorktree(id, userId, parsed.value.baseBranch);
+    if (result.isErr()) return handleServiceError(c, result.error);
+    return c.json({ ok: true });
+  }),
+);
 
 // POST /api/threads/:id/approve-tool
 threadRoutes.post('/:id/approve-tool', async (c) => {
@@ -409,62 +410,52 @@ threadRoutes.post('/:id/permission-requests/:requestId/respond', async (c) => {
 });
 
 // PATCH /api/threads/:id/tool-calls/:toolCallId — persist tool call output
-threadRoutes.patch('/:id/tool-calls/:toolCallId', async (c) => {
-  const id = c.req.param('id');
-  const toolCallId = c.req.param('toolCallId');
-  const userId = c.get('userId');
+threadRoutes.patch('/:id/tool-calls/:toolCallId', (c) =>
+  withThread(c, async () => {
+    const toolCallId = c.req.param('toolCallId');
 
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+    const raw = await c.req.json();
+    const parsed = validate(updateToolCallOutputSchema, raw);
+    if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const raw = await c.req.json();
-  const parsed = validate(updateToolCallOutputSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-
-  try {
-    await tm.updateToolCallOutput(toolCallId, parsed.value.output);
-    return c.json({ ok: true });
-  } catch (error) {
-    return handleServiceError(c, error);
-  }
-});
+    try {
+      await tm.updateToolCallOutput(toolCallId, parsed.value.output);
+      return c.json({ ok: true });
+    } catch (error) {
+      return handleServiceError(c, error);
+    }
+  }),
+);
 
 // ── Thread events (runner-side storage) ──────────────────────
 
 // GET /api/threads/:id/events
-threadRoutes.get('/:id/events', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-
-  const events = await getServices().threadEvents.getThreadEvents(id);
-  return c.json({ events });
-});
+threadRoutes.get('/:id/events', (c) =>
+  withThread(c, async ({ id }) => {
+    const events = await getServices().threadEvents.getThreadEvents(id);
+    return c.json({ events });
+  }),
+);
 
 // ── Message Queue ────────────────────────────────────────────
 
 // GET /api/threads/:id/queue
-threadRoutes.get('/:id/queue', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  return c.json(await getServices().messageQueue.listQueue(id));
-});
+threadRoutes.get('/:id/queue', (c) =>
+  withThread(c, async ({ id }) => {
+    return c.json(await getServices().messageQueue.listQueue(id));
+  }),
+);
 
 // DELETE /api/threads/:id/queue/:messageId
-threadRoutes.delete('/:id/queue/:messageId', async (c) => {
-  const id = c.req.param('id');
-  const messageId = c.req.param('messageId');
-  const userId = c.get('userId');
-  const threadResult = await requireThread(id, userId);
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+threadRoutes.delete('/:id/queue/:messageId', (c) =>
+  withThread(c, async ({ id }) => {
+    const messageId = c.req.param('messageId');
 
-  const cancelResult = await cancelQueuedMessage(id, messageId);
-  if (cancelResult.isErr()) return handleServiceError(c, cancelResult.error);
-  return c.json({ ok: true, queuedCount: cancelResult.value.queuedCount });
-});
+    const cancelResult = await cancelQueuedMessage(id, messageId);
+    if (cancelResult.isErr()) return handleServiceError(c, cancelResult.error);
+    return c.json({ ok: true, queuedCount: cancelResult.value.queuedCount });
+  }),
+);
 
 // PATCH /api/threads/:id/queue/:messageId
 threadRoutes.patch('/:id/queue/:messageId', async (c) => {

@@ -3,6 +3,9 @@ import type { Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 import { z, type ZodTypeAny } from 'zod';
 
+import type { HonoEnv } from '../types/hono-env.js';
+import { validate } from './schemas.js';
+
 /** Parse and validate a Hono JSON request body at the route boundary. */
 export async function parseJsonBody<TSchema extends ZodTypeAny>(
   c: Context,
@@ -21,6 +24,16 @@ export async function parseJsonBody<TSchema extends ZodTypeAny>(
     return err(validationErr(firstIssue?.message ?? 'Invalid request body'));
   }
   return ok(parsed.data);
+}
+
+/** The request's JSON body validated against `schema`; a missing or malformed body reads as `{}`. */
+export async function readBody<Body>(
+  c: Context<HonoEnv>,
+  schema: z.ZodType<Body> | undefined,
+): Promise<Result<Body, DomainError>> {
+  // SAFETY: a route without a body schema declares Body = undefined (the default).
+  if (!schema) return ok(undefined as Body);
+  return validate(schema, await c.req.json().catch(() => ({})));
 }
 
 /** Parse and validate Hono query parameters at the route boundary. */

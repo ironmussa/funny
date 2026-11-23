@@ -42,7 +42,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { ActivityList } from './ActivityList';
 
 /** Compact pill used for status chips in the background-activity panel. */
-const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-[9px] leading-none font-medium';
+const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-3xs leading-none font-medium';
 
 function statusLabel(w: Watcher): string {
   switch (w.status) {
@@ -478,6 +478,11 @@ function openRetryTarget(activity: Activity, navigate: (path: string) => void): 
       useUIStore.getState().setAddProjectOpen(true);
     },
     openReviewPane: () => useUIStore.getState().setReviewPaneOpen(true),
+    openWorktrees: () => {
+      const ui = useUIStore.getState();
+      ui.setReviewSubTab('worktrees');
+      ui.setReviewPaneOpen(true);
+    },
   });
 }
 

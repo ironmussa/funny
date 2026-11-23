@@ -17,7 +17,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 
 // Bundled providers, in display order. Mirrors the shared descriptor map; kept
 // inline so this view does not depend on the runtime registry.
@@ -68,7 +68,7 @@ function ResourceRow({ resource, dimmed }: { resource: AgentResource; dimmed?: b
             {resource.kind === 'slash-command' ? `/${resource.name}` : resource.name}
           </span>
           {resource.commandTier && (
-            <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
+            <span className="bg-muted text-muted-foreground text-2xs rounded px-1.5 py-0.5 font-medium">
               {resource.commandTier}
             </span>
           )}
@@ -91,7 +91,7 @@ function ResourceRow({ resource, dimmed }: { resource: AgentResource; dimmed?: b
 export function AgentResourcesSettings() {
   const { t } = useTranslation();
   const projects = useProjects();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
   const [provider, setProvider] = useState<string>('claude');
   const [resources, setResources] = useState<AgentResource[]>([]);

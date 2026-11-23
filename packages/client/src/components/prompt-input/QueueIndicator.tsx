@@ -54,7 +54,7 @@ function BusyIcon({ busy, children }: { busy: boolean; children: React.ReactNode
 
 function QueueIndex({ index }: { index: number }) {
   return (
-    <span className="text-muted-foreground shrink-0 text-[10px] font-medium tracking-wide uppercase">
+    <span className="text-muted-foreground text-2xs shrink-0 font-medium tracking-wide uppercase">
       #{index + 1}
     </span>
   );

@@ -1,6 +1,7 @@
 import { Editor, type BeforeMount, type OnMount } from '@monaco-editor/react';
 
 import '@/lib/monaco-setup';
+import { defineFunnyDarkTheme } from '@/lib/monaco-theme';
 
 interface MonacoCodeViewProps {
   language: string;
@@ -64,26 +65,7 @@ function registerDotenvLanguage(monaco: typeof import('monaco-editor')) {
 const handleBeforeMount: BeforeMount = (monaco) => {
   registerDotenvLanguage(monaco);
 
-  monaco.editor.defineTheme('funny-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [
-      { token: 'variable.name.dotenv', foreground: '9CDCFE' },
-      { token: 'delimiter.dotenv', foreground: 'D4D4D4' },
-      { token: 'string.dotenv', foreground: 'CE9178' },
-      { token: 'variable.dotenv', foreground: '4FC1FF' },
-      { token: 'string.escape.dotenv', foreground: 'D7BA7D' },
-      { token: 'comment.dotenv', foreground: '6A9955', fontStyle: 'italic' },
-      { token: 'keyword.dotenv', foreground: '569CD6' },
-      { token: 'number.dotenv', foreground: 'B5CEA8' },
-    ],
-    colors: {
-      'editor.background': '#000000',
-      'editorGutter.background': '#000000',
-      'minimap.background': '#0a0a0a',
-      focusBorder: '#007acc',
-    },
-  });
+  defineFunnyDarkTheme(monaco);
 
   const compilerOptions: import('monaco-editor').typescript.CompilerOptions = {
     jsx: monaco.typescript.JsxEmit.React,

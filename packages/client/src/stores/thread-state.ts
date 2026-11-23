@@ -73,8 +73,13 @@ export interface ThreadState {
   /**
    * Delete a thread. Resolves `true` once the server deleted it; on `false`
    * the row is back in its lists and an error toast was shown.
+   * `deleteBranch`: the worktree thread's branch goes with its worktree.
    */
-  deleteThread: (threadId: string, projectId: string) => Promise<boolean>;
+  deleteThread: (
+    threadId: string,
+    projectId: string,
+    options?: { deleteBranch?: boolean },
+  ) => Promise<boolean>;
   /** Delete a scratch thread (no project / no worktree). Same result as `deleteThread`. */
   deleteScratchThread: (threadId: string) => Promise<boolean>;
   /**

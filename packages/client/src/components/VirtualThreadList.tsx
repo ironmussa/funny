@@ -186,7 +186,7 @@ export function VirtualThreadList({
                     <HighlightText
                       text={contentSnippets.get(thread.id)!}
                       query={search}
-                      className="text-muted-foreground block truncate text-[11px] italic"
+                      className="text-muted-foreground text-compact block truncate italic"
                     />
                   )}
                 <div className="mt-0.5 flex items-center gap-2">

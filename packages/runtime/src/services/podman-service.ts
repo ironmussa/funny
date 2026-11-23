@@ -45,12 +45,6 @@ export interface LaunchContainerResult {
   containerName: string;
 }
 
-export interface StopContainerOptions {
-  containerName: string;
-  launcherUrl: string;
-  remove?: boolean;
-}
-
 // ── Public API ──────────────────────────────────────────────────
 
 /**
@@ -114,20 +108,5 @@ export function launchContainer(
         );
       });
     });
-  });
-}
-
-/**
- * Stop (and optionally remove) a running container via the launcher API.
- */
-export function stopContainer(options: StopContainerOptions): ResultAsync<void, DomainError> {
-  const { containerName, launcherUrl, remove = true } = options;
-
-  // Security HI-5: see launchContainer.
-  return ResultAsync.fromPromise(
-    launcherPost(`${launcherUrl}/stop`, { containerName, remove }).then(() => {}),
-    (error) => internal(`Failed to stop container: ${error}`),
-  ).map(() => {
-    log.info(`Container stopped: ${containerName}`, { namespace: 'podman' });
   });
 }

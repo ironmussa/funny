@@ -2,7 +2,7 @@ import type { Thread } from '@funny/shared';
 import { useShallow } from 'zustand/react/shallow';
 
 import { readThreadRow } from '@/data/threads/read';
-import { runsInSandbox } from '@/lib/thread-variant';
+import { isScratch, runsInSandbox } from '@/lib/thread-variant';
 import { useProjectStore } from '@/stores/project-store';
 import { SCRATCH_TERMINAL_SCOPE_ID } from '@/stores/terminal-store';
 import { useActiveThreadSelect, useThreadViewSelect } from '@/stores/thread-context';
@@ -54,7 +54,7 @@ export function resolveTerminalScope({
     if (!gridThread) {
       return { scopeId: null, scratchThreadId: null, worktreePath: null };
     }
-    if (gridThread.isScratch) {
+    if (isScratch(gridThread)) {
       return {
         scopeId: SCRATCH_TERMINAL_SCOPE_ID,
         scratchThreadId: gridThread.id,
@@ -69,7 +69,7 @@ export function resolveTerminalScope({
     };
   }
 
-  if (activeThread?.isScratch) {
+  if (activeThread && isScratch(activeThread)) {
     return {
       scopeId: SCRATCH_TERMINAL_SCOPE_ID,
       scratchThreadId: activeThread.id,

@@ -120,15 +120,15 @@ function PRDetailInfoTab({
       <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-2">
         <Select value={selectedCommit} onValueChange={onSelectedCommitChange}>
           <SelectTrigger
-            className="h-6 w-auto max-w-[400px] text-[11px]"
+            className="text-compact h-6 w-auto max-w-[400px]"
             data-testid="pr-detail-commit-select"
           >
             <GitCommitHorizontal className="text-muted-foreground mr-1 size-3 shrink-0" />
             <SelectValue placeholder="All commits">
               {selectedCommit === 'all' ? (
-                <span className="text-[11px]">All commits ({commits.length})</span>
+                <span className="text-compact">All commits ({commits.length})</span>
               ) : (
-                <span className="truncate text-[11px]">
+                <span className="text-compact truncate">
                   {firstLine(
                     commits.find((c) => c.sha === selectedCommit)?.message ?? selectedCommit,
                   )}
@@ -138,7 +138,7 @@ function PRDetailInfoTab({
           </SelectTrigger>
           <SelectContent className="max-w-[480px]">
             <SelectItem value="all" data-testid="pr-detail-commit-all">
-              <span className="text-[11px]">All commits ({commits.length})</span>
+              <span className="text-compact">All commits ({commits.length})</span>
             </SelectItem>
             {commits.map((c) => (
               <SelectItem
@@ -147,8 +147,8 @@ function PRDetailInfoTab({
                 data-testid={`pr-detail-commit-${shortSha(c.sha)}`}
               >
                 <div className="flex flex-col gap-0.5 py-0.5">
-                  <span className="truncate text-[11px]">{firstLine(c.message)}</span>
-                  <span className="text-muted-foreground text-[10px]">
+                  <span className="text-compact truncate">{firstLine(c.message)}</span>
+                  <span className="text-muted-foreground text-2xs">
                     <span className="font-mono">{shortSha(c.sha)}</span>
                     {c.author?.login && <> &middot; {c.author.login}</>}
                     {c.date && <> &middot; {new Date(c.date).toLocaleDateString()}</>}

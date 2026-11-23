@@ -168,6 +168,8 @@ describe('factory thread requests', () => {
         worktreePath: '/srv/wt/t1',
         branchName: 'factory/issue-7-t1',
         deleteBranch: true,
+        reason: 'factory-merged',
+        threadId: 't1',
       });
       expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
       expect(events).toEqual([

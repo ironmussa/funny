@@ -1,4 +1,3 @@
-import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 
@@ -27,11 +26,12 @@ import type { HonoEnv } from '../types/hono-env.js';
 import { resolveClaudeProfileRouteOptions } from '../utils/agent-profile-options.js';
 import { resetBinaryCache } from '../utils/claude-binary.js';
 import { getAvailableProviders, resetProviderCache } from '../utils/provider-detection.js';
+import { readCargoVersion } from '../utils/rust-toolchain.js';
 
 /**
  * Mounts the runtime's "system" endpoints (health, available shells, pi /
  * cursor model discovery, setup status, native-git build, bootstrap).
- * Pulled out of app.ts so the bootstrap file doesn't need spawnSync,
+ * Pulled out of app.ts so the bootstrap file doesn't need cargo detection,
  * fs/path, provider-detection, claude-binary, or shared/models utilities.
  */
 export function registerSystemRoutes(app: Hono<HonoEnv>): void {
@@ -353,17 +353,8 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     const nativeGitDir = resolve(import.meta.dir, '..', '..', '..', '..', 'native-git');
     const hasCargoToml = existsSync(join(nativeGitDir, 'Cargo.toml'));
 
-    let rustAvailable = false;
-    let rustVersion: string | null = null;
-    try {
-      const result = spawnSync('cargo', ['--version'], { timeout: 5000 });
-      if (result.status === 0 && result.stdout) {
-        rustVersion = result.stdout.toString().trim();
-        rustAvailable = true;
-      }
-    } catch {
-      // cargo not available
-    }
+    const rustVersion = await readCargoVersion();
+    const rustAvailable = rustVersion !== null;
 
     const platform = `${process.platform}-${process.arch}`;
 
@@ -403,16 +394,13 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       return c.json({ error: 'native-git package not found' }, 404);
     }
 
-    try {
-      const check = spawnSync('cargo', ['--version'], { timeout: 5000 });
-      if (check.status !== 0) {
-        return c.json({ error: 'Rust toolchain not available' }, 400);
-      }
-    } catch {
+    // Claim the build before awaiting cargo, so two concurrent requests cannot
+    // both pass the in-progress check while the first one is still checking.
+    nativeGitBuildInProgress = true;
+    if ((await readCargoVersion()) === null) {
+      nativeGitBuildInProgress = false;
       return c.json({ error: 'Rust toolchain not available' }, 400);
     }
-
-    nativeGitBuildInProgress = true;
 
     const emitBuild = (type: string, data: unknown) => {
       wsBroker.emitToUser(userId, { type, threadId: '', data } as any);

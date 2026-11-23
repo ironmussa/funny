@@ -55,4 +55,5 @@ export {
   type ActivityRepositoryDeps,
   type ActivityRepository,
   type ActivityPatch,
+  type ActivityInsert,
 } from './activity-repository.js';

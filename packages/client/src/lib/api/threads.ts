@@ -289,8 +289,12 @@ export const threadsApi = {
       method: 'POST',
       body: JSON.stringify({ decision }),
     }),
-  deleteThread: (threadId: string) =>
-    request<{ ok: boolean }>(`/threads/${threadId}`, { method: 'DELETE' }),
+  /** `deleteBranch`: the worktree's branch goes too (`threadDeleteQuery`). */
+  deleteThread: (threadId: string, options: { deleteBranch?: boolean } = {}) =>
+    request<{ ok: boolean }>(
+      `/threads/${threadId}${options.deleteBranch ? '?deleteBranch=true' : ''}`,
+      { method: 'DELETE' },
+    ),
   updateToolCallOutput: (threadId: string, toolCallId: string, output: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/tool-calls/${toolCallId}`, {
       method: 'PATCH',

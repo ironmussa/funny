@@ -51,7 +51,7 @@ function useNavigateToThread() {
 }
 
 const ansiConverter = createAnsiConverter({
-  fg: '#d4d4d4',
+  fg: 'hsl(var(--foreground))',
   bg: 'transparent',
 });
 
@@ -125,7 +125,7 @@ const HooksEventCard = memo(function HooksEventCard({
         <Badge
           data-testid={`workflow-hooks-verdict-${hasFailed ? 'fail' : 'pass'}`}
           variant={hasFailed ? 'destructive' : 'default'}
-          className="h-4 px-1.5 py-0 text-[10px] leading-none"
+          className="text-2xs h-4 px-1.5 py-0 leading-none"
         >
           {hasFailed ? 'FAILED' : 'PASSED'}
         </Badge>
@@ -147,9 +147,9 @@ const HooksEventCard = memo(function HooksEventCard({
         )}
       </button>
       {expanded && errorOutput && (
-        <ScrollArea className="border-border/50 mx-3 mt-1 mb-2 max-h-60 rounded border bg-black/80">
+        <ScrollArea className="border-border/50 bg-muted mx-3 mt-1 mb-2 max-h-60 rounded border">
           <pre
-            className="p-2 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-[#d4d4d4]"
+            className="text-compact text-foreground p-2 font-mono leading-relaxed break-all whitespace-pre-wrap"
             dangerouslySetInnerHTML={{ __html: errorOutput }}
           />
         </ScrollArea>
@@ -224,7 +224,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
           <Badge
             data-testid={`workflow-review-verdict-${isPassing ? 'pass' : 'fail'}`}
             variant={isPassing ? 'default' : 'destructive'}
-            className="h-4 px-1.5 py-0 text-[10px] leading-none"
+            className="text-2xs h-4 px-1.5 py-0 leading-none"
           >
             {isPassing ? 'PASS' : 'FAIL'}
           </Badge>

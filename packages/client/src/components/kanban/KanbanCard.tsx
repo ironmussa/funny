@@ -157,7 +157,7 @@ export const KanbanCard = memo(function KanbanCard({
           <HighlightText
             text={contentSnippet}
             query={search}
-            className="text-muted-foreground mb-1 line-clamp-2 block text-[11px] italic"
+            className="text-muted-foreground text-compact mb-1 line-clamp-2 block italic"
           />
         )}
       </div>

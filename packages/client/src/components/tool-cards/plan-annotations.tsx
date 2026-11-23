@@ -242,7 +242,7 @@ export function highlightTextInDom(
 
     const mark = document.createElement('mark');
     mark.setAttribute('data-annotation-index', String(annotationIndex));
-    mark.style.cssText = 'background-color:#FFE500;color:black;padding:0;margin:0';
+    mark.style.cssText = 'background-color:var(--search-highlight);color:black;padding:0;margin:0';
     mark.textContent = highlighted;
 
     const parent = textNode.parentNode;
@@ -303,7 +303,7 @@ export function MarginAnnotations({
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onRemove(a.index)}
-                  className="hover:bg-destructive/20 flex size-4 items-center justify-center rounded-full text-[10px] transition-colors"
+                  className="hover:bg-destructive/20 text-2xs flex size-4 items-center justify-center rounded-full transition-colors"
                   data-testid={`plan-margin-annotation-${a.index}`}
                 >
                   {a.emoji || <MessageSquare className="text-primary size-3" />}

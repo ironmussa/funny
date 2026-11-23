@@ -36,6 +36,7 @@ import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
+import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import {
   startThreadOnRunner,
   type RunnerPorts,
@@ -72,6 +73,7 @@ import {
   createFactoryRunsRepository,
   factoryRunBranch,
   IN_FLIGHT_STATES,
+  NO_FREE_SLOT,
   type FactoryRunState,
   type FactoryRunView,
   type RegressionProofRecord,
@@ -112,6 +114,8 @@ export interface FactoryWatcherDeps {
   launch?: typeof startThreadOnRunner;
   /** Access check override for tests; defaults to `steer` via the server's role resolver. */
   checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
+  /** Records what the watcher does on its own (default: the server's activities). */
+  activities?: Pick<ServerActivities, 'recordServerActivity'>;
   /**
    * Start a sandbox thread for the enabler (the sandbox thread launcher of
    * `thread-sandboxes`, with their own connection). Without it a sandbox
@@ -571,19 +575,25 @@ async function admitQueue(
   let left = slots;
   for (const run of queue) {
     if (left <= 0) break;
-    if (await admitQueued(factory, repo, mode, run, ctx)) left--;
+    const admitted = await admitQueued(factory, repo, mode, run, ctx);
+    // Another writer (a Retry, a take-over) took the last slot meanwhile.
+    if (admitted === NO_FREE_SLOT) return 0;
+    if (admitted) left--;
   }
   return left;
 }
 
-/** Admit one sent issue when nothing holds it back; whether an agent started. */
+/**
+ * Admit one sent issue when nothing holds it back; whether an agent started,
+ * or `NO_FREE_SLOT` when the factory filled up since the pass counted.
+ */
 async function admitQueued(
   factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
   run: FactoryRunView,
   ctx: AdmissionContext,
-): Promise<boolean> {
+): Promise<boolean | typeof NO_FREE_SLOT> {
   if (!runs || !deps) return false;
   if (await heldWithoutProofRules(factory, run, ctx)) return false;
   // The issue first: one closed since it was sent leaves the queue even while
@@ -595,9 +605,12 @@ async function admitQueued(
   await noteWaitReason(run, reason);
   if (reason) return false;
 
-  const admitted = await runs.admit(run.id);
+  // The capacity check is part of the write: the slots counted at the start of
+  // the pass may have been taken during the GitHub reads above.
+  const admitted = await runs.admit(factory.id, run.id);
+  if (admitted.isOk() && admitted.value === NO_FREE_SLOT) return NO_FREE_SLOT;
   // Cancelled meanwhile (or another pass took it): not ours to start.
-  if (admitted.isErr() || !admitted.value) return false;
+  if (admitted.isErr() || admitted.value !== 'admitted') return false;
   return startFlow(factory, repo, mode, issue, { ...run, state: 'queued', waitReason: null });
 }
 
@@ -691,6 +704,18 @@ async function enablerCanStillSteer(factory: WatchedFactory): Promise<boolean> {
   await disableFactory(factory.id);
   unscheduleFactory(factory.id);
   await stopOpenRuns(factory);
+  // The enabler sees why their factory stopped (track-funny-actions).
+  await (deps?.activities ?? serverActivities).recordServerActivity(
+    {
+      kind: 'factory.disabled',
+      userId: factory.userId,
+      projectId: factory.projectId,
+      title: 'Turned the issue factory off: you can no longer start threads in this project',
+      input: { reason: 'access-lost' },
+      origin: 'system',
+    },
+    { ok: true, effects: [{ effect: 'factory-disabled', target: factory.projectId }] },
+  );
   audit({
     action: 'factory.disabled_access_lost',
     actorId: factory.userId,
@@ -736,6 +761,8 @@ async function admitIssues(
     if (!(await isAdmissible(factory.id, issue.number))) continue;
     if (await blockedReason(ctx, issue.number)) continue;
     const started = await startImplement(factory, repo, mode, issue);
+    // Another writer (a Retry, a take-over) took the last slot meanwhile.
+    if (started === NO_FREE_SLOT) return;
     if (started) free--;
   }
 }
@@ -1062,18 +1089,22 @@ async function resumeRuns(factory: WatchedFactory, repo: string, mode: LaunchMod
   }
 }
 
-/** Record a run for an issue and start its flow; whether an agent started. */
+/**
+ * Record a run for an issue and start its flow; whether an agent started, or
+ * `NO_FREE_SLOT` when the factory filled up since the pass counted.
+ */
 async function startImplement(
   factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
   issue: FactoryIssue,
-): Promise<boolean> {
+): Promise<boolean | typeof NO_FREE_SLOT> {
   if (!runs || !flows) return false;
 
   // Record the run before launching, so the issue is taken while the launch is
-  // in flight: no later tick (or reschedule) can admit it a second time.
-  const run = await runs.start({
+  // in flight: no later tick (or reschedule) can admit it a second time. The
+  // capacity check is part of the write.
+  const run = await runs.startInFlight({
     factoryId: factory.id,
     issueNumber: issue.number,
     source: 'label',
@@ -1088,6 +1119,7 @@ async function startImplement(
     });
     return false;
   }
+  if (run.value === NO_FREE_SLOT) return NO_FREE_SLOT;
   return startFlow(factory, repo, mode, issue, run.value);
 }
 

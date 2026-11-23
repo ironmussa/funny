@@ -29,6 +29,8 @@ export function buildActivity(overrides: Partial<Activity> = {}): Activity {
     error: null,
     input: { cloneUrl: 'https://github.com/acme/widget.git', destinationPath: '/home/me/code' },
     resultRef: null,
+    origin: 'user',
+    effects: null,
     startedAt: '2026-11-20T10:00:00.000Z',
     endedAt: null,
     ...overrides,

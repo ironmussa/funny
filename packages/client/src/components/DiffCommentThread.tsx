@@ -33,7 +33,7 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
       data-testid={`comment-thread-${thread.id}`}
     >
       {/* Thread header */}
-      <div className="text-muted-foreground mb-2 flex items-center gap-2 text-[10px]">
+      <div className="text-muted-foreground text-2xs mb-2 flex items-center gap-2">
         <MessageSquare className="size-3" />
         <span className="font-mono">{thread.path}</span>
         {thread.line && <span>line {thread.line}</span>}
@@ -66,17 +66,17 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
                   className="size-4 rounded-full"
                 />
               )}
-              <span className="text-[11px] font-medium">{comment.author}</span>
+              <span className="text-compact font-medium">{comment.author}</span>
               {comment.author_association && comment.author_association !== 'NONE' && (
-                <span className="bg-muted text-muted-foreground rounded px-1 text-[9px]">
+                <span className="bg-muted text-muted-foreground text-3xs rounded px-1">
                   {comment.author_association.toLowerCase()}
                 </span>
               )}
-              <span className="text-muted-foreground ml-auto text-[10px]">
+              <span className="text-muted-foreground text-2xs ml-auto">
                 {formatRelativeTime(comment.created_at, now)}
               </span>
             </div>
-            <div className="text-foreground/90 text-[11px] leading-relaxed whitespace-pre-wrap">
+            <div className="text-foreground/90 text-compact leading-relaxed whitespace-pre-wrap">
               {comment.body}
             </div>
           </div>

@@ -317,7 +317,7 @@ function UserMessageContent({
             }
             setExpanded(!expanded);
           }}
-          className="text-background hover:text-background/80 mt-1 flex items-center gap-1 text-[11px] font-medium transition-colors"
+          className="text-background hover:text-background/80 text-compact mt-1 flex items-center gap-1 font-medium transition-colors"
         >
           {expanded ? (
             <>

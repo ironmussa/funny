@@ -155,7 +155,7 @@ export function AvailableMcpServers({
               <TooltipContent side="bottom" align="start" className="w-72 p-3 text-left">
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-foreground min-w-0 truncate font-medium">{server.name}</p>
-                  <span className="border-border bg-muted text-muted-foreground shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[10px] leading-none uppercase">
+                  <span className="border-border bg-muted text-muted-foreground text-2xs shrink-0 rounded-full border px-1.5 py-0.5 font-mono leading-none uppercase">
                     {server.type}
                   </span>
                 </div>
@@ -177,7 +177,9 @@ export function AvailableMcpServers({
                           ? t('mcp.tooltip.endpoint', 'Endpoint')
                           : t('mcp.tooltip.command', 'Command')}
                       </dt>
-                      <dd className="text-foreground truncate font-mono text-[11px]">{endpoint}</dd>
+                      <dd className="text-foreground text-compact truncate font-mono">
+                        {endpoint}
+                      </dd>
                     </div>
                   )}
                   <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">

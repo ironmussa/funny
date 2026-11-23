@@ -3,7 +3,9 @@ import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import type { DomainError } from '@funny/shared/errors';
 import { advanceTimersByTimeAsync } from '@funny/test-kit';
+import { okAsync } from 'neverthrow';
 
 const { fakeJobs } = (() => ({
   fakeJobs: {
@@ -17,7 +19,7 @@ const { fakeJobs } = (() => ({
 // itself only touches fs + process.kill, none of these.
 mock.module('../../services/agent-runner-control.js', () => ({
   isAgentRunning: () => false,
-  startAgent: vi.fn(async () => undefined),
+  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
 }));
 mock.module('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
 mock.module('../../services/service-registry.js', () => ({

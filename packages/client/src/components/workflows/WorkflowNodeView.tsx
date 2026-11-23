@@ -132,7 +132,7 @@ function Badge({
   return (
     <span
       data-testid={testId}
-      className="bg-muted text-muted-foreground inline-flex max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-[11px]"
+      className="bg-muted text-muted-foreground text-compact inline-flex max-w-full items-center gap-1 rounded px-1.5 py-0.5"
     >
       <Icon className="size-3 shrink-0" />
       <span className="truncate">{children}</span>

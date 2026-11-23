@@ -15,10 +15,12 @@ import {
   ACTIVITY_ERROR_MAX,
   ACTIVITY_STEP_MAX,
   ACTIVITY_TITLE_MAX,
+  isActivityOrigin,
+  parseActivityEffects,
   parseActivityInput,
 } from '@funny/shared/activities';
 import { isFinalActivityStatus } from '@funny/shared/activity-machine';
-import type { ActivityPatch } from '@funny/shared/repositories';
+import type { ActivityInsert, ActivityPatch } from '@funny/shared/repositories';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
@@ -51,7 +53,7 @@ function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
   return Object.keys(ref).length > 0 ? ref : null;
 }
 
-function broadcastActivity(activity: Activity): void {
+export function broadcastActivity(activity: Activity): void {
   relayToUser(activity.userId, { type: 'activity:updated', threadId: '', data: { activity } });
 }
 
@@ -62,7 +64,11 @@ export function broadcastActivitiesRemoved(userId: string, ids: string[]): void 
 
 export type ActivityWriteResult = { ok: true; applied: boolean } | { ok: false; error: string };
 
-/** `data:activity_start`: inserts a running activity for the runner's owner. */
+/**
+ * `data:activity_start`: inserts an activity for the runner's owner, `running`,
+ * or already `succeeded` / `failed` for an instant action (track-funny-actions,
+ * design D6), recorded and broadcast once.
+ */
 export async function startActivityFromRunner(args: {
   runnerId: string;
   ownerId: string;
@@ -77,7 +83,9 @@ export async function startActivityFromRunner(args: {
   const input = parseActivityInput(kind, payload.input);
   if (!input) return { ok: false, error: `activity kind ${kind} or its input is invalid` };
 
-  const { inserted, capped } = await repos.activities().insert({
+  const finalStatus =
+    payload.status === 'succeeded' || payload.status === 'failed' ? payload.status : undefined;
+  const row: ActivityInsert = {
     id,
     userId: ownerId,
     runnerId,
@@ -87,11 +95,19 @@ export async function startActivityFromRunner(args: {
     title,
     input,
     step: text(payload.step, ACTIVITY_STEP_MAX),
+    origin: isActivityOrigin(payload.origin) ? payload.origin : 'user',
+    effects: parseActivityEffects(payload.effects),
     startedAt: new Date().toISOString(),
-  });
+  };
+  if (finalStatus) {
+    row.status = finalStatus;
+    row.error = finalStatus === 'failed' ? text(payload.error, ACTIVITY_ERROR_MAX) : null;
+    row.resultRef = resultRefOf(payload.resultRef) ?? null;
+  }
+  const { inserted, capped } = await repos.activities().insert(row);
   if (inserted) {
-    const row = await repos.activities().getById(id);
-    if (row) broadcastActivity(row);
+    const stored = await repos.activities().getById(id);
+    if (stored) broadcastActivity(stored);
     broadcastActivitiesRemoved(ownerId, capped);
   }
   return { ok: true, applied: inserted };
@@ -103,7 +119,7 @@ function reportedStatus(value: unknown): ActivityStatus | undefined {
     : undefined;
 }
 
-/** The fields a runner may change on its own activity. */
+/** The fields a runner may change on its own activity; never `origin`. */
 function pickActivityPatch(raw: unknown): ActivityPatch {
   if (!raw || typeof raw !== 'object') return {};
   const value = raw as Record<string, unknown>;
@@ -114,6 +130,7 @@ function pickActivityPatch(raw: unknown): ActivityPatch {
   if ('error' in value) patch.error = text(value.error, ACTIVITY_ERROR_MAX);
   const resultRef = resultRefOf(value.resultRef);
   if (resultRef !== undefined) patch.resultRef = resultRef;
+  if ('effects' in value) patch.effects = parseActivityEffects(value.effects);
   if (status && isFinalActivityStatus(status)) patch.endedAt = new Date().toISOString();
   return patch;
 }

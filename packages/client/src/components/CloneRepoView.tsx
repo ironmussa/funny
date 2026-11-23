@@ -30,7 +30,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { FolderPicker } from './FolderPicker';
@@ -80,8 +80,8 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   const { t } = useTranslation();
   const now = useMinuteTick();
   const navigate = useNavigate();
-  const loadProjects = useAppStore((s) => s.loadProjects);
-  const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+  const setAddProjectOpen = useUIStore((s) => s.setAddProjectOpen);
   const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
 
   const [view, setView] = useState<ViewState>('checking');

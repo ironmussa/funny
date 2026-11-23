@@ -32,7 +32,6 @@ import { log } from '../lib/logger.js';
 import { loadPipelines, type LoadedPipeline } from '../pipelines/yaml-loader.js';
 import { BUILTIN_AGENTS, resolveAgent, resolveBuiltinAgentByName } from './agent-registry.js';
 import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
-import { projectSearchRegistry } from './project-search-registry.js';
 import { getServices } from './service-registry.js';
 import * as tm from './thread-manager.js';
 
@@ -467,33 +466,26 @@ export async function cleanupReviewerThread(
   if (!project) return;
 
   if (reviewerThread.worktreePath && reviewerThread.mode === 'worktree') {
-    const { removeWorktree, removeBranch } = await import('@funny/core/git');
-    await projectSearchRegistry.invalidate(reviewerThread.worktreePath).match(
-      () => undefined,
-      (error) =>
-        log.warn('Pipeline: failed to dispose reviewer search index', {
-          namespace: 'pipeline',
-          error: error.message,
-        }),
-    );
-    await removeWorktree(project.path, reviewerThread.worktreePath).match(
+    // Recorded cleanup (services/workspace-cleanup.ts); best effort here.
+    const { cleanupWorkspace } = await import('./workspace-cleanup.js');
+    await cleanupWorkspace({
+      userId: reviewerThread.userId,
+      projectId,
+      projectPath: project.path,
+      threadId: reviewerThreadId,
+      worktreePath: reviewerThread.worktreePath,
+      branch: reviewerThread.branch ?? null,
+      deleteBranch: !!reviewerThread.branch,
+      reason: 'review-finished',
+      origin: 'system',
+    }).match(
       () => undefined,
       (e) =>
-        log.warn('Pipeline: failed to remove reviewer worktree', {
+        log.warn('Pipeline: failed to clean up reviewer worktree', {
           namespace: 'pipeline',
-          error: String(e),
+          error: e.message,
         }),
     );
-    if (reviewerThread.branch) {
-      await removeBranch(project.path, reviewerThread.branch).match(
-        () => undefined,
-        (e) =>
-          log.warn('Pipeline: failed to remove reviewer branch', {
-            namespace: 'pipeline',
-            error: String(e),
-          }),
-      );
-    }
   }
 
   await tm.updateThread(reviewerThreadId, {

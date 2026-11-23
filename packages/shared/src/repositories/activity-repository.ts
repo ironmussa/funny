@@ -12,12 +12,13 @@
  * `ResultAsync.fromPromise` per CLAUDE.md's neverthrow boundary mandate.
  */
 
-import { and, asc, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { isActivityOrigin, parseActivityEffects } from '../activities/kinds.js';
 import { ACTIVITY_STATUS_WRITTEN_FROM } from '../activity-machine.js';
 import { parseStoredJson } from '../json-validation.js';
-import type { Activity, ActivityResultRef, ActivityStatus } from '../types.js';
+import type { Activity, ActivityEffect, ActivityResultRef, ActivityStatus } from '../types.js';
 import type { RepoDeps } from './deps.js';
 import { updateWithStatusGuard } from './guarded-status-update.js';
 
@@ -32,7 +33,23 @@ export interface ActivityPatch {
   error?: string | null;
   resultRef?: ActivityResultRef | null;
   endedAt?: string | null;
+  /** Replaces the stored list (the reporter sends the whole list each time). */
+  effects?: ActivityEffect[] | null;
 }
+
+/** A new row: `running` by default, or already finished in one write (design D6). */
+export type ActivityInsert = Omit<
+  Activity,
+  'status' | 'endedAt' | 'step' | 'error' | 'resultRef' | 'origin' | 'effects'
+> & {
+  step?: string | null;
+  origin?: Activity['origin'];
+  effects?: ActivityEffect[] | null;
+  /** A final status records an instant action; its `endedAt` is `startedAt`. */
+  status?: 'running' | 'succeeded' | 'failed';
+  error?: string | null;
+  resultRef?: ActivityResultRef | null;
+};
 
 type StoredRow = RepoDeps['schema']['activities']['$inferSelect'];
 
@@ -54,6 +71,14 @@ function parseResultRef(raw: string | null): ActivityResultRef | null {
   return parsed.ok ? parsed.value : null;
 }
 
+const effectsSchema = z.array(z.unknown());
+
+function parseEffects(raw: string | null): ActivityEffect[] | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(effectsSchema, raw, 'activity effects');
+  return parsed.ok ? parseActivityEffects(parsed.value) : null;
+}
+
 function toActivity(row: StoredRow): Activity {
   return {
     id: row.id,
@@ -68,6 +93,8 @@ function toActivity(row: StoredRow): Activity {
     error: row.error,
     input: parseInput(row.input),
     resultRef: parseResultRef(row.resultRef),
+    origin: isActivityOrigin(row.origin) ? row.origin : 'user',
+    effects: parseEffects(row.effects),
     startedAt: row.startedAt,
     endedAt: row.endedAt,
   };
@@ -106,14 +133,14 @@ export function createActivityRepository(deps: ActivityRepositoryDeps) {
   }
 
   /**
-   * Inserts a `running` activity. Returns false when the id already exists
-   * (a retried start is not an error), plus the ids the cap deleted.
+   * Inserts an activity, `running` unless the caller gives a final status (an
+   * instant action, written once). Returns false when the id already exists (a
+   * retried start is not an error), plus the ids the cap deleted.
    */
   async function insert(
-    activity: Omit<Activity, 'status' | 'endedAt' | 'step' | 'error' | 'resultRef'> & {
-      step?: string | null;
-    },
+    activity: ActivityInsert,
   ): Promise<{ inserted: boolean; capped: string[] }> {
+    const status = activity.status ?? 'running';
     const rows = await dbAll<{ id: string }>(
       db
         .insert(table)
@@ -125,10 +152,15 @@ export function createActivityRepository(deps: ActivityRepositoryDeps) {
           projectId: activity.projectId,
           threadId: activity.threadId,
           title: activity.title,
-          status: 'running',
+          status,
           step: activity.step ?? null,
+          error: activity.error ?? null,
           input: JSON.stringify(activity.input ?? {}),
+          resultRef: activity.resultRef ? JSON.stringify(activity.resultRef) : null,
+          origin: activity.origin ?? 'user',
+          effects: activity.effects ? JSON.stringify(activity.effects) : null,
           startedAt: activity.startedAt,
+          endedAt: status === 'running' ? null : activity.startedAt,
           updatedAt: new Date().toISOString(),
         })
         .onConflictDoNothing()
@@ -140,23 +172,29 @@ export function createActivityRepository(deps: ActivityRepositoryDeps) {
 
   /**
    * Patches an activity. A status in the patch is written only from a status the
-   * machine allows; `runnerId` (when given) must still own the row. False means
-   * nothing was written.
+   * machine allows; a patch without one only touches a row still in progress.
+   * `runnerId` (when given) must still own the row: a string compares
+   * `runner_id`, `null` requires a server row (`runner_id IS NULL`), so a runner
+   * never writes a server row and the server never writes a runner's. False
+   * means nothing was written.
    */
-  function update(id: string, patch: ActivityPatch, runnerId?: string): Promise<boolean> {
-    const { resultRef, ...rest } = patch;
-    const stored: Omit<ActivityPatch, 'resultRef'> & { resultRef?: string | null } = { ...rest };
+  function update(id: string, patch: ActivityPatch, runnerId?: string | null): Promise<boolean> {
+    const { resultRef, effects, ...rest } = patch;
+    const stored: Omit<ActivityPatch, 'resultRef' | 'effects'> & {
+      resultRef?: string | null;
+      effects?: string | null;
+    } = { ...rest };
     if (resultRef !== undefined) {
       stored.resultRef = resultRef === null ? null : JSON.stringify(resultRef);
     }
-    return updateWithStatusGuard(
-      deps,
-      table,
-      id,
-      stored,
-      ACTIVITY_STATUS_WRITTEN_FROM,
-      runnerId === undefined ? [] : [eq(table.runnerId, runnerId)],
-    );
+    if (effects !== undefined) {
+      stored.effects = effects === null ? null : JSON.stringify(effects);
+    }
+    const also: SQL[] = [];
+    if (runnerId === null) also.push(isNull(table.runnerId));
+    else if (runnerId !== undefined) also.push(eq(table.runnerId, runnerId));
+    if (patch.status === undefined) also.push(inArray(table.status, ['running', 'interrupted']));
+    return updateWithStatusGuard(deps, table, id, stored, ACTIVITY_STATUS_WRITTEN_FROM, also);
   }
 
   /** The user's activities, newest first. */
@@ -209,6 +247,26 @@ export function createActivityRepository(deps: ActivityRepositoryDeps) {
   }
 
   /**
+   * Server start (track-funny-actions, design D7): every `running` server row
+   * (no runner) was cut short by the restart and becomes `interrupted`.
+   */
+  async function interruptServerActivities(): Promise<Activity[]> {
+    const rows = await dbAll<StoredRow>(
+      db
+        .update(table)
+        .set({ status: 'interrupted', updatedAt: new Date().toISOString() })
+        .where(
+          and(
+            isNull(table.runnerId),
+            inArray(table.status, [...ACTIVITY_STATUS_WRITTEN_FROM.interrupted]),
+          ),
+        )
+        .returning(),
+    );
+    return rows.map(toActivity);
+  }
+
+  /**
    * Reconciliation on runner connect (design D4): every `running` activity of
    * the runner that it does not list as live becomes `interrupted`.
    */
@@ -225,6 +283,7 @@ export function createActivityRepository(deps: ActivityRepositoryDeps) {
     clearFinished,
     reconcile,
     interruptRunner,
+    interruptServerActivities,
     enforceCap,
   };
 }

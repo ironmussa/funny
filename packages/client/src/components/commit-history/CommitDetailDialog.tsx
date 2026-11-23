@@ -276,7 +276,7 @@ export function CommitDetailDialog({
               Commit detail with file changes and diffs
             </DialogDescription>
             {selectedCommit && (
-              <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-[11px]">
+              <div className="text-muted-foreground text-compact flex items-center gap-1.5 pt-1">
                 <GitCommit className="icon-xs shrink-0" />
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -371,7 +371,7 @@ export function CommitDetailDialog({
             )}
             {commitBody && (
               <ScrollArea className="mt-1.5 max-h-[80px]">
-                <p className="text-muted-foreground text-[11px] whitespace-pre-wrap">
+                <p className="text-muted-foreground text-compact whitespace-pre-wrap">
                   {commitBody}
                 </p>
               </ScrollArea>

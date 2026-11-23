@@ -14,7 +14,7 @@ const CHIP_BASE =
 const CHIP_SIZES: Record<ChipSize, string> = {
   xs: 'px-1.5 py-0.5 text-xs',
   sm: 'h-5 px-1.5 text-xs',
-  xxs: 'h-4 gap-0.5 rounded-[3px] px-1 text-[10px]',
+  xxs: 'h-4 gap-0.5 rounded-[3px] px-1 text-2xs',
 };
 
 const CHIP_VARIANTS: Record<ChipVariant, string> = {

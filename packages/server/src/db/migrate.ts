@@ -2185,9 +2185,18 @@ const migrations: Migration[] = [
     },
   },
   {
+    // track-funny-actions (design D4): who started an activity and what it
+    // changed. Existing rows read as user-started with no effects.
+    name: '107_activities_origin_effects',
+    async up() {
+      await ctx().addColumn('activities', 'origin', 'TEXT NOT NULL', "'user'");
+      await ctx().addColumn('activities', 'effects', 'TEXT');
+    },
+  },
+  {
     // A run that ended with no change (`no_change`) is over: it must not hold
     // its issue in the one-active-run index, or the issue could not be sent again.
-    name: '107_factory_runs_no_change_ends_a_run',
+    name: '108_factory_runs_no_change_ends_a_run',
     async up() {
       await ctx().exec(sql`DROP INDEX IF EXISTS factory_runs_one_active_per_issue`);
       await ctx().exec(sql`

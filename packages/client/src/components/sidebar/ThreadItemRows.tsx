@@ -37,7 +37,7 @@ function CreatedByIcon({ createdBy }: { createdBy?: string | null }) {
 function RuntimeBadge({ thread }: { thread: Thread }) {
   if (thread.runtime === 'remote') {
     return (
-      <span className="bg-status-violet/15 text-status-violet shrink-0 rounded px-1 py-0.5 text-[10px] leading-none font-medium">
+      <span className="bg-status-violet/15 text-status-violet text-2xs shrink-0 rounded px-1 py-0.5 leading-none font-medium">
         Remote
       </span>
     );
@@ -47,7 +47,7 @@ function RuntimeBadge({ thread }: { thread: Thread }) {
     return (
       <span
         data-testid={`thread-item-sandbox-badge-${thread.id}`}
-        className="bg-primary/15 text-primary shrink-0 rounded px-1 py-0.5 text-[10px] leading-none font-medium"
+        className="bg-primary/15 text-primary text-2xs shrink-0 rounded px-1 py-0.5 leading-none font-medium"
       >
         Sandbox
       </span>
@@ -64,7 +64,7 @@ function AgentTemplateBadge({ thread }: { thread: Thread }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none font-medium"
+          className="text-2xs flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 leading-none font-medium"
           style={{
             backgroundColor: color ? `${color}22` : 'hsl(var(--muted))',
             color: color ?? 'hsl(var(--muted-foreground))',

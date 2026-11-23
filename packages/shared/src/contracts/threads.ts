@@ -102,6 +102,15 @@ const messagesQuery = z.object({
     .transform((value): 'before' | 'after' => (value === 'after' ? 'after' : 'before')),
 });
 
+/**
+ * `GET /api/threads/:id/comments`: one page, counted back from the newest
+ * comment (`offset` 0 is the latest `limit`), returned oldest first.
+ */
+export const threadCommentsQuery = z.object({
+  limit: clampedInt(200, 1, 500),
+  offset: clampedInt(0, 0, Number.MAX_SAFE_INTEGER),
+});
+
 const messageSearchQuery = z.object({
   q: z.string().optional(),
   limit: clampedInt(100, 1, 200),
@@ -192,6 +201,16 @@ export const threadQueries = {
   searchMessages: messageSearchQuery,
   searchContent: contentSearchQuery,
 };
+
+/**
+ * The query of `DELETE /api/threads/:id` (track-funny-actions): whether the
+ * worktree thread's branch goes with its worktree. Absent means keep it.
+ */
+export const threadDeleteQuery = z
+  .object({ deleteBranch: z.enum(['true', 'false']).optional() })
+  .strip();
+
+export type ThreadDeleteQuery = z.input<typeof threadDeleteQuery>;
 
 /** The body of each thread field update. */
 export const threadBodies = {

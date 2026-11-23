@@ -23,6 +23,15 @@ export function errorStatus(error: DomainError): number {
   return STATUS_MAP[error.type];
 }
 
+/**
+ * The error answer of an operation that recorded its own failed activity
+ * (track-funny-actions): `activityRecorded` tells the server not to record a
+ * second one. A refusal before the operation ran carries no such flag.
+ */
+export function recordedFailureResponse(c: Context, error: DomainError) {
+  return c.json({ error: error.message, activityRecorded: true }, STATUS_MAP[error.type] as any);
+}
+
 /** Convert a Result<T, DomainError> into a Hono JSON response */
 export function resultToResponse<T>(
   c: Context,

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { afterAll, beforeAll, describe, test, expect, mock } from 'bun:test';
 
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -14,11 +14,6 @@ mock.module('@/hooks/use-ws', () => ({
   getActiveWS: () => null,
   subscribeActiveWS: () => () => {},
   sendTerminalRealtime: () => {},
-}));
-
-mock.module('@/stores/app-store', () => ({
-  useAppStore: (selector: (s: any) => any) =>
-    selector({ loadProjects: () => Promise.resolve(), projects: [] }),
 }));
 
 mock.module('@/stores/thread-context', () => ({
@@ -46,6 +41,12 @@ mock.module('@/components/mobile/ChatView', () => ({
 
 // Imported after the mocks, which bun does not hoist.
 const { MobilePage } = await import('@/components/MobilePage');
+const { useProjectStore } = await import('@/stores/project-store');
+
+// MobilePage loads the project list on mount; keep that off the network.
+const realLoadProjects = useProjectStore.getState().loadProjects;
+beforeAll(() => useProjectStore.setState({ loadProjects: () => Promise.resolve() }));
+afterAll(() => useProjectStore.setState({ loadProjects: realLoadProjects }));
 
 describe('MobilePage navigate seam', () => {
   test('store navigate to a thread route opens the chat view', async () => {

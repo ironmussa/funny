@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { Hono } from 'hono';
-import { ok, err, okAsync } from 'neverthrow';
+import { ok, err, errAsync, okAsync } from 'neverthrow';
 
 const {
   mockListWorktrees,
@@ -45,6 +45,18 @@ mock.module('../../services/project-search-registry.js', () => ({
   projectSearchRegistry: { invalidate: mockInvalidateSearch },
 }));
 
+// Removal goes through the workspace module (track-funny-actions, design D3);
+// its own steps are covered by workspace-cleanup.test.ts.
+const { mockCleanupWorkspace, mockPruneOrphans } = (() => ({
+  mockCleanupWorkspace: vi.fn(),
+  mockPruneOrphans: vi.fn(),
+}))();
+
+mock.module('../../services/workspace-cleanup.js', () => ({
+  cleanupWorkspace: mockCleanupWorkspace,
+  pruneOrphans: mockPruneOrphans,
+}));
+
 // Import after mocks
 import { worktreeRoutes } from '../../routes/worktrees.js';
 
@@ -60,6 +72,10 @@ describe('Worktree Routes', () => {
     mockInvalidateSearch.mockReset();
     mockWorktreeUnsavedWork.mockReset();
     mockRequireProject.mockReset();
+    mockCleanupWorkspace.mockReset();
+    mockPruneOrphans.mockReset();
+    mockCleanupWorkspace.mockReturnValue(okAsync({ effects: [] }));
+    mockPruneOrphans.mockReturnValue(okAsync(0));
 
     mockListWorktrees.mockReturnValue(ok([{ path: '/tmp/wt1', branch: 'feature/x' }]));
     mockCreateWorktree.mockReturnValue(ok('/tmp/wt-new'));
@@ -123,7 +139,7 @@ describe('Worktree Routes', () => {
     expect(res.status).toBe(404);
   });
 
-  test('DELETE /worktrees removes a worktree', async () => {
+  test('DELETE /worktrees removes a worktree through the workspace module', async () => {
     const res = await app.request('/worktrees', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -135,9 +151,15 @@ describe('Worktree Routes', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(mockInvalidateSearch).toHaveBeenCalledWith('/tmp/wt1');
-    expect(mockInvalidateSearch.mock.invocationCallOrder[0]).toBeLessThan(
-      mockRemoveWorktree.mock.invocationCallOrder[0]!,
+    expect(mockCleanupWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        projectPath: '/tmp/project',
+        worktreePath: '/tmp/wt1',
+        deleteBranch: false,
+        reason: 'manual',
+        threadId: null,
+      }),
     );
   });
 
@@ -154,7 +176,9 @@ describe('Worktree Routes', () => {
     const res = await removeUnchanged();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ removed: true });
-    expect(mockRemoveWorktree).toHaveBeenCalledTimes(1);
+    expect(mockCleanupWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreePath: '/tmp/wt1', branch: 'b', deleteBranch: true }),
+    );
   });
 
   test('POST /worktrees/remove-unchanged keeps a worktree with uncommitted files', async () => {
@@ -169,7 +193,7 @@ describe('Worktree Routes', () => {
       dirtyFileCount: 85,
       unpushedCommitCount: 0,
     });
-    expect(mockRemoveWorktree).not.toHaveBeenCalled();
+    expect(mockCleanupWorkspace).not.toHaveBeenCalled();
   });
 
   test('POST /worktrees/remove-unchanged keeps a worktree with unpushed commits', async () => {
@@ -177,7 +201,7 @@ describe('Worktree Routes', () => {
     mockWorktreeUnsavedWork.mockReturnValue(okAsync({ dirtyFileCount: 0, unpushedCommitCount: 2 }));
     const res = await removeUnchanged();
     expect((await res.json()).removed).toBe(false);
-    expect(mockRemoveWorktree).not.toHaveBeenCalled();
+    expect(mockCleanupWorkspace).not.toHaveBeenCalled();
   });
 
   test('POST /worktrees/remove-unchanged keeps a worktree whose state cannot be read', async () => {
@@ -187,7 +211,7 @@ describe('Worktree Routes', () => {
     );
     const res = await removeUnchanged();
     expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(mockRemoveWorktree).not.toHaveBeenCalled();
+    expect(mockCleanupWorkspace).not.toHaveBeenCalled();
   });
 
   test('POST /worktrees/remove-unchanged rejects a path outside the project worktrees', async () => {
@@ -195,20 +219,50 @@ describe('Worktree Routes', () => {
     const res = await removeUnchanged('/etc');
     expect(res.status).toBe(400);
     expect(mockWorktreeUnsavedWork).not.toHaveBeenCalled();
-    expect(mockRemoveWorktree).not.toHaveBeenCalled();
+    expect(mockCleanupWorkspace).not.toHaveBeenCalled();
+  });
+
+  test('DELETE /worktrees forwards the reason and thread the server sends', async () => {
+    const res = await app.request('/worktrees', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: 'p1',
+        worktreePath: '/tmp/wt1',
+        branchName: 'feature/x',
+        deleteBranch: true,
+        reason: 'thread-archived',
+        threadId: 't1',
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockCleanupWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: 'feature/x',
+        deleteBranch: true,
+        reason: 'thread-archived',
+        threadId: 't1',
+      }),
+    );
+  });
+
+  test('DELETE /worktrees refuses an unknown reason', async () => {
+    const res = await app.request('/worktrees', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: 'p1', worktreePath: '/tmp/wt1', reason: 'because' }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockCleanupWorkspace).not.toHaveBeenCalled();
   });
 
   /*
-   * Security CR-3 — `removeWorktree` itself enforces containment, but the
-   * route's responsibility is to pass `projectResult.value.path` plus the
-   * user-supplied path through. The unit test in
-   * `packages/core/src/__tests__/worktree.test.ts` covers the underlying
-   * function; here we pin the route-level mapping. If the route ever
-   * forgets to forward the result error, this test fails.
+   * Security CR-3 — the workspace module refuses a path that is not a
+   * worktree of the project; the route must forward that error.
    */
-  test('DELETE /worktrees surfaces a containment error from removeWorktree', async () => {
-    mockRemoveWorktree.mockReturnValue(
-      err({
+  test('DELETE /worktrees surfaces a refused target', async () => {
+    mockCleanupWorkspace.mockReturnValue(
+      errAsync({
         type: 'BAD_REQUEST',
         message: "worktreePath is not one of the project's worktree directories",
       }),
@@ -222,6 +276,13 @@ describe('Worktree Routes', () => {
       }),
     });
     expect(res.status).toBe(400);
+  });
+
+  test('GET /worktrees prunes orphans through the workspace module', async () => {
+    await app.request('/worktrees?projectId=p1');
+    expect(mockPruneOrphans).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'p1', projectPath: '/tmp/project' }),
+    );
   });
 
   /*

@@ -3,19 +3,10 @@
  * @domain subdomain-type: core
  * @domain type: app-service
  * @domain layer: application
- * @domain emits: thread:stage-changed, thread:deleted
+ * @domain emits: thread:stage-changed
  */
 
-import { rmSync } from 'node:fs';
-
-import {
-  findWorktreeForBranch,
-  removeWorktree,
-  removeBranch,
-  getCurrentBranch,
-  git,
-  isSafeGitRefArg,
-} from '@funny/core/git';
+import { findWorktreeForBranch, getCurrentBranch, git, isSafeGitRefArg } from '@funny/core/git';
 import type {
   WSEvent,
   AgentProvider,
@@ -29,20 +20,9 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { hydrateReferencedFiles } from '../../utils/file-mentions.js';
-import {
-  startAgent,
-  stopAgent,
-  isAgentRunning,
-  cleanupThreadState,
-} from '../agent-runner-control.js';
-import { stopCommandsByCwd } from '../command-runner.js';
-import { stopContainer } from '../podman-service.js';
-import { projectSearchRegistry } from '../project-search-registry.js';
-import { killPtysUnderPath } from '../pty-manager.js';
+import { startAgent, stopAgent, isAgentRunning } from '../agent-runner-control.js';
 import type { IProjectRepository } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
-import { forgetProjectIndex } from '../symbol-index-service.js';
-import { scratchPathFor } from '../thread-context.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
@@ -89,46 +69,9 @@ async function updateThreadImpl(params: UpdateThreadParams) {
 
   const fromStage = thread.stage;
 
-  // Cleanup worktree + branch when archiving
-  if (
-    params.archived &&
-    thread.worktreePath &&
-    thread.mode === 'worktree' &&
-    thread.provider !== 'external'
-  ) {
-    const archivePathResult = await getServices().projects.resolveProjectPath(
-      thread.projectId,
-      thread.userId,
-    );
-    const archivePath = archivePathResult.isOk() ? archivePathResult.value : undefined;
-    if (archivePath) {
-      await stopCommandsByCwd(thread.worktreePath).catch(() => {});
-      killPtysUnderPath(thread.worktreePath);
-      forgetProjectIndex(thread.worktreePath);
-      await projectSearchRegistry.invalidate(thread.worktreePath).match(
-        () => undefined,
-        (e) =>
-          log.warn('Failed to dispose worktree search index', {
-            namespace: 'cleanup',
-            error: e.message,
-          }),
-      );
-      await removeWorktree(archivePath, thread.worktreePath).match(
-        () => undefined,
-        (e) => log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) }),
-      );
-      if (thread.branch) {
-        await removeBranch(archivePath, thread.branch).match(
-          () => undefined,
-          (e) => log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) }),
-        );
-      }
-    }
-    updates.worktreePath = null;
-    updates.branch = null;
-    await getServices().messageQueue.clearQueue(params.threadId);
-    cleanupThreadState(params.threadId);
-  }
+  // Archiving removes a worktree thread's workspace on the server's request
+  // (track-funny-actions, design D8: `DELETE /api/worktrees` from
+  // `server/services/thread-workspace-cleanup.ts`), not here.
 
   if (Object.keys(updates).length > 0) {
     await tm.updateThread(params.threadId, updates);
@@ -262,7 +205,7 @@ async function autoStartIdleThread(
         const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
         const draftMsg = draftMessages[0];
         const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
-        await startAgent(
+        const started = await startAgent(
           threadId,
           await startPromptForIdleThread(threadId, thread.initialPrompt!, projectPath, wtPath),
           wtPath,
@@ -275,6 +218,7 @@ async function autoStartIdleThread(
           undefined,
           !!draftMsg,
         );
+        if (started.isErr()) throw new Error(started.error.message);
       } catch (err) {
         log.error('Failed to setup worktree and start agent', {
           namespace: 'agent',
@@ -347,7 +291,7 @@ async function autoStartIdleThread(
       projectPath,
       cwd,
     );
-    startAgent(
+    void startAgent(
       threadId,
       startPrompt,
       cwd,
@@ -359,127 +303,22 @@ async function autoStartIdleThread(
       (thread.provider || project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider,
       undefined,
       !!draftMsg,
-    ).catch(async (err) => {
-      log.error('Failed to auto-start agent for idle thread', {
-        namespace: 'agent',
-        threadId,
-        error: err,
-      });
-      await tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
-      emitAgentFailed(thread.userId, threadId);
-    });
-  }
-}
-
-// ── Delete Thread ───────────────────────────────────────────────
-
-export function deleteThread(threadId: string): ResultAsync<void, ThreadServiceError> {
-  return ResultAsync.fromPromise(deleteThreadImpl(threadId), (err) =>
-    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
-  );
-}
-
-async function deleteThreadImpl(threadId: string): Promise<void> {
-  const thread = await tm.getThread(threadId);
-  if (!thread) throw new ThreadServiceError('Thread not found', 404);
-
-  threadEventBus.emit('thread:deleted', {
-    threadId,
-    projectId: thread.projectId ?? '',
-    userId: thread.userId,
-    worktreePath: thread.worktreePath ?? null,
-  });
-
-  if (isAgentRunning(threadId)) {
-    try {
-      await stopAgent(threadId);
-    } catch (err) {
-      log.error('Failed to stop agent', { namespace: 'agent', threadId, error: err });
-    }
-  }
-
-  // Only remove worktree/branch for worktree-mode threads
-  if (thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
-    await stopCommandsByCwd(thread.worktreePath).catch(() => {});
-    killPtysUnderPath(thread.worktreePath);
-    forgetProjectIndex(thread.worktreePath);
-    await projectSearchRegistry.invalidate(thread.worktreePath).match(
+    ).match(
       () => undefined,
-      (e) =>
-        log.warn('Failed to dispose worktree search index', {
-          namespace: 'cleanup',
-          error: e.message,
-        }),
+      async (error) => {
+        log.error('Failed to auto-start agent for idle thread', {
+          namespace: 'agent',
+          threadId,
+          error: error.message,
+        });
+        await tm.updateThread(threadId, {
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+        });
+        emitAgentFailed(thread.userId, threadId);
+      },
     );
-
-    const deletePathResult = await getServices().projects.resolveProjectPath(
-      thread.projectId,
-      thread.userId,
-    );
-    const deletePath = deletePathResult.isOk() ? deletePathResult.value : undefined;
-    if (deletePath) {
-      await removeWorktree(deletePath, thread.worktreePath).match(
-        () => undefined,
-        (e) => log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) }),
-      );
-      if (thread.branch) {
-        await removeBranch(deletePath, thread.branch).match(
-          () => undefined,
-          (e) => log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) }),
-        );
-      }
-    }
   }
-
-  // Scratch threads have a per-thread sandbox at ~/.funny/scratch/<userId>/<threadId>/.
-  // Remove it on delete. Tolerate missing dir (never spawned an agent).
-  if (thread.isScratch) {
-    const scratchPath = scratchPathFor(thread.userId, threadId);
-    killPtysUnderPath(scratchPath);
-    forgetProjectIndex(scratchPath);
-    try {
-      await projectSearchRegistry.invalidate(scratchPath).match(
-        () => undefined,
-        (e) =>
-          log.warn('Failed to dispose scratch search index', {
-            namespace: 'scratch-threads',
-            error: e.message,
-          }),
-      );
-      rmSync(scratchPath, { recursive: true, force: true });
-      log.info('Removed scratch directory', {
-        namespace: 'scratch-threads',
-        threadId,
-        userId: thread.userId,
-        scratchPath,
-      });
-    } catch (e) {
-      log.warn('Failed to remove scratch directory', {
-        namespace: 'scratch-threads',
-        threadId,
-        scratchPath,
-        error: String(e),
-      });
-    }
-  }
-
-  // Stop container for remote threads (best-effort)
-  if (thread.containerName && thread.runtime === 'remote') {
-    const project = await getServices().projects.getProject(thread.projectId);
-    if (project?.launcherUrl) {
-      void stopContainer({
-        containerName: thread.containerName,
-        launcherUrl: project.launcherUrl,
-      }).match(
-        () => undefined,
-        (e) => log.warn('Failed to stop container', { namespace: 'podman', error: String(e) }),
-      );
-    }
-  }
-
-  await getServices().messageQueue.clearQueue(threadId);
-  cleanupThreadState(threadId);
-  await tm.deleteThread(threadId);
 }
 
 // ── Convert Local Thread to Worktree ────────────────────────
@@ -535,13 +374,12 @@ async function convertToWorktreeImpl(
   const agentWasRunning = isAgentRunning(threadId);
   const settledStatus = statusAfterConvert(thread.status, agentWasRunning);
   if (agentWasRunning) {
-    try {
-      await stopAgent(threadId);
-    } catch (err) {
+    const stopped = await stopAgent(threadId);
+    if (stopped.isErr()) {
       log.warn('Failed to stop agent during convert-to-worktree', {
         namespace: 'thread-service',
         threadId,
-        error: String(err),
+        error: stopped.error.message,
       });
     }
   }

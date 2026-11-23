@@ -9,7 +9,8 @@
  * - **Stop** a run: it becomes `stopped`, its flow stops in this process and
  *   its running agent threads are stopped on the enabler's runner.
  * - **Retry** a failed or parked run: it goes back in flight on the same
- *   branch and pull request. A completed implement step is kept (its thread
+ *   branch and pull request, when the factory has a free slot (`maxConcurrent`,
+ *   checked in the same step as the write; refused otherwise). A completed implement step is kept (its thread
  *   replays); every later step runs again, so a CI fix loop gets its fixes
  *   back. A "no change" run keeps nothing: a new agent implements the issue.
  *   The threads a retry does not keep are archived, so the list does not
@@ -31,7 +32,7 @@ import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
-import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
+import { createFactoryRunsRepository, NO_FREE_SLOT, type FactoryRunView } from './factory-runs.js';
 import { archiveReplacedFactoryThreads, stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
 import {
@@ -137,21 +138,25 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
         .andThen((run) =>
           ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
             runs
-              .reopen(run.id, kept)
+              .reopen(run, kept)
               .mapErr(reopenRefused)
-              .andThen((reopened) =>
-                reopened
-                  ? ResultAsync.fromSafePromise(
-                      archiveReplacedFactoryThreads(
-                        run.threadIds.filter((id) => !kept.includes(id)),
-                        factoryBrowserEvents(),
-                      ),
-                    )
-                  : errAsync<undefined, FactoryRunControlError>({
-                      kind: 'conflict',
-                      message: 'Only a failed run, or one waiting for you, can be retried.',
-                    }),
-              ),
+              .andThen((reopened) => {
+                if (reopened === 'reopened') {
+                  return ResultAsync.fromSafePromise(
+                    archiveReplacedFactoryThreads(
+                      run.threadIds.filter((id) => !kept.includes(id)),
+                      factoryBrowserEvents(),
+                    ),
+                  );
+                }
+                return errAsync<undefined, FactoryRunControlError>({
+                  kind: 'conflict',
+                  message:
+                    reopened === NO_FREE_SLOT
+                      ? 'The factory is already running as many runs as it may at once. Retry when one of them finishes.'
+                      : 'Only a failed run, or one waiting for you, can be retried.',
+                });
+              }),
           ),
         )
         .andThen(() => {
@@ -182,9 +187,19 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
   if (found.isErr()) return;
   for (const run of found.value) {
     if (run.threadIds.at(-1) !== threadId || !followedUpAfterParking(run, threadId)) continue;
+    const reopened = await runs.reopen(run, run.threadIds);
+    if (reopened.isOk() && reopened.value === NO_FREE_SLOT) {
+      // The factory is full: the run stays parked, and a later completion of
+      // the member's follow-up (or a Retry) may still take it over.
+      log.info('Issue factory take-over deferred: the factory has no free slot', {
+        namespace: 'factory',
+        runId: run.id,
+        threadId,
+      });
+      continue;
+    }
     forgetOwnerFollowUp(threadId);
-    const reopened = await runs.reopen(run.id, run.threadIds);
-    if (reopened.isOk() && reopened.value) {
+    if (reopened.isOk() && reopened.value === 'reopened') {
       log.info('Issue factory run taken over by a follow-up', {
         namespace: 'factory',
         runId: run.id,

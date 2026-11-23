@@ -1851,7 +1851,24 @@
     "dismiss": "Descartar",
     "clearFinished": "Limpiar terminadas",
     "failedToast": "Falló: {{title}}",
-    "openPanel": "Ver"
+    "openPanel": "Ver",
+    "automatic": "Automático",
+    "destructive": "Elimina o cambia cosas en disco o en GitHub",
+    "effects": {
+      "worktree-removed": "Worktree eliminado",
+      "branch-deleted": "Rama borrada",
+      "command-stopped": "Comando detenido",
+      "terminal-closed": "Terminal cerrada",
+      "directory-removed": "Carpeta eliminada",
+      "branch-checked-out": "Rama activada",
+      "changes-stashed": "Cambios guardados en stash",
+      "sandbox-stopped": "Sandbox detenido",
+      "sandbox-destroyed": "Sandbox destruido",
+      "pr-merged": "Pull request fusionado",
+      "remote-branch-deleted": "Rama remota borrada",
+      "agent-stopped": "Agente detenido",
+      "factory-disabled": "Factory desactivada"
+    }
   },
   "factoryView": {
     "title": "Cola del factory",

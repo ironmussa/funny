@@ -204,7 +204,7 @@ export function ProjectCollaborators() {
             </SelectContent>
           </Select>
         </div>
-        <p className="text-muted-foreground text-[11px]">
+        <p className="text-muted-foreground text-compact">
           {PROJECT_ROLES.find((r) => r.value === addRole)?.hint}
         </p>
 

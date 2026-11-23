@@ -54,6 +54,24 @@ describe('Invite Links Routes (Integration)', () => {
     seedOrgMember(t.db, { organizationId: orgId, userId: adminId, role: 'admin' });
   });
 
+  // `/accept` reads the caller from the `user` table, not from Better Auth.
+  async function seedUser(id: string): Promise<void> {
+    const schema = await import('../../db/schema.js');
+    const now = new Date().toISOString();
+    t.db
+      .insert(schema.user)
+      .values({
+        id,
+        name: id,
+        email: `${id}@test.com`,
+        emailVerified: false,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .run();
+  }
+
   async function getUseCount(linkId: string): Promise<string | undefined> {
     const schema = await import('../../db/schema.js');
     const row = await t.db
@@ -349,7 +367,7 @@ describe('Invite Links Routes (Integration)', () => {
       expect(res.status).toBe(400);
     });
 
-    test('returns 404 when user is not found in auth', async () => {
+    test('returns 404 when the user row does not exist', async () => {
       seedInviteLink(t.db, { token: 'accept-token', organizationId: orgId });
 
       const res = await t.requestAs('missing-user').post('/api/invite-links/accept', {
@@ -360,11 +378,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('accepts a valid invite for an existing user', async () => {
-      authMockState.users['existing-user'] = {
-        id: 'existing-user',
-        email: 'existing@test.com',
-        name: 'Existing User',
-      };
+      await seedUser('existing-user');
       seedInviteLink(t.db, {
         token: 'accept-ok',
         organizationId: orgId,
@@ -380,11 +394,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('returns alreadyMember when org join reports duplicate membership', async () => {
-      authMockState.users['member-user'] = {
-        id: 'member-user',
-        email: 'member@test.com',
-        name: 'Member User',
-      };
+      await seedUser('member-user');
       authMockState.addMemberError = 'User is already a member';
       seedInviteLink(t.db, { token: 'already-member', organizationId: orgId });
 

@@ -7,7 +7,8 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
-import type { CommentAuthor, Thread, ThreadComment } from '@funny/shared';
+import type { CommentAuthor, CommentSource, Thread, ThreadComment } from '@funny/shared';
+import { threadCommentsQuery, threadDeleteQuery } from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context, type Next } from 'hono';
@@ -44,17 +45,18 @@ import {
 import { forgetThreadOwnership } from '../services/data-ownership.js';
 import { noteOwnerFollowUp } from '../services/factory/factory-follow-ups.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
-import {
-  authorizedRunnerRequests,
-  runnerActor,
-  withRunnerFor,
-} from '../services/runner-access/index.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
 import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
 import { retrySandboxThreadSchema } from '../services/thread-sandboxes/sandbox-thread.js';
+import {
+  requestScratchCleanup,
+  removesScratchOnDelete,
+  requestThreadWorkspaceCleanup,
+  workspaceToRemoveOnDelete,
+} from '../services/thread-workspace-cleanup.js';
 import { parseJsonBody } from '../validation/request.js';
 import { refuseRetiredRoute } from './retired-rest.js';
 
@@ -156,13 +158,30 @@ async function authorsByIds(userIds: string[]): Promise<Map<string, CommentAutho
   return new Map(rows.map((u: any) => [u.id, u as CommentAuthor]));
 }
 
-// GET /api/threads/:id/comments
+type CommentRow = typeof schema.threadComments.$inferSelect;
+
+/** A comment row as the shared `ThreadComment`, with its author joined in. */
+function toThreadComment(row: CommentRow, authors: Map<string, CommentAuthor>): ThreadComment {
+  return {
+    id: row.id,
+    threadId: row.threadId,
+    userId: row.userId,
+    source: row.source as CommentSource,
+    content: row.content,
+    createdAt: row.createdAt,
+    user: authors.get(row.userId) ?? null,
+  };
+}
+
+// GET /api/threads/:id/comments?limit=&offset=
+// One page counted back from the newest comment, returned oldest first.
 threadRoutes.get('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
+  const page = threadCommentsQuery.parse(c.req.query());
 
-  const comments = (await commentRepo.listComments(id)) as ThreadComment[];
-  const authors = await authorsByIds([...new Set(comments.map((cm) => cm.userId))]);
-  return c.json(comments.map((cm) => ({ ...cm, user: authors.get(cm.userId) ?? null })));
+  const rows: CommentRow[] = await commentRepo.listComments(id, page);
+  const authors = await authorsByIds([...new Set(rows.map((cm) => cm.userId))]);
+  return c.json(rows.map((row) => toThreadComment(row, authors)));
 });
 
 // POST /api/threads/:id/comments
@@ -191,11 +210,7 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
     source: 'user',
     content,
   });
-  const authors = await authorsByIds([userId]);
-  const comment: ThreadComment = {
-    ...inserted,
-    user: authors.get(userId) ?? null,
-  } as ThreadComment;
+  const comment = toThreadComment(inserted, await authorsByIds([userId]));
 
   // Live append for every current viewer (owner + sharees) via the thread's
   // presence room. The client also refetches on panel open as a backstop.
@@ -631,52 +646,44 @@ threadRoutes.patch('/:id/queue/:messageId', requireThreadOwner, async (c) => {
   return c.json({ ok: !!updated, queuedCount, message: updated });
 });
 
-// ── Delete thread (native + proxy cleanup) ───────────────────────
+// ── Delete thread ─────────────────────────────────────────────
 
 threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
   const threadId = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const thread = c.get('thread');
+  const query = threadDeleteQuery.safeParse(c.req.query());
+  const deleteBranch = query.success && query.data.deleteBranch === 'true';
 
-  // Delete from local DB
+  // Read before the row goes: the runner cannot look a deleted thread up.
+  const workspace = workspaceToRemoveOnDelete(thread);
+
   await threadRepo.deleteThread(threadId);
   forgetThreadOwnership(threadId);
-
-  // Find which runner handles this thread and clean up there too
-  const runnerInfo = await threadRegistry.getRunnerForThread(threadId, userId);
-
-  // Unregister from central DB and cache
   await threadRegistry.unregisterThread(threadId);
   runnerResolver.uncacheThread(threadId);
-
-  // Proxy the delete to the runner. The runner may have lost access to the
-  // thread's project since (binding change), so this certifies ownership only.
-  // A refused or offline runner is fine: the central DB is already clean.
-  if (runnerInfo) {
-    const thread = c.get('thread');
-    await withRunnerFor(
-      runnerActor({
-        userId,
-        role: c.get('userRole') as string | undefined,
-        orgId: c.get('organizationId') as string | undefined,
-        orgName: c.get('organizationName') as string | undefined,
-      }),
-      { kind: 'owned-runner', runnerId: runnerInfo.runnerId },
-      c.env?.runnerPresence,
-      (actor, runner, proof) =>
-        authorizedRunnerRequests(c.env?.runnerRequests)
-          .send(actor, runner, proof, {
-            method: 'DELETE',
-            path: `/api/threads/${threadId}`,
-            headers: { 'Content-Type': 'application/json' },
-          })
-          .catch(() => undefined),
-    ).catch(() => undefined);
-    void thread;
-  }
 
   // A sandbox thread's machine goes with it (thread-sandboxes). Provider calls
   // take seconds, so the answer does not wait for them.
   void destroyThreadSandbox(threadId);
+
+  // The thread's workspace on its runner, after the answer (track-funny-actions,
+  // design D8): the owner's runner only; a runner that cannot be reached is
+  // recorded as a failed cleanup. The worktree path comes from the row.
+  const requests = c.env?.runnerRequests;
+  if (requests) {
+    const ports = { requests, presence: c.env?.runnerPresence };
+    const ownerId = thread.userId;
+    if (workspace) {
+      void requestThreadWorkspaceCleanup(ports, {
+        userId: ownerId,
+        thread: workspace,
+        deleteBranch,
+        reason: 'thread-deleted',
+      });
+    } else if (removesScratchOnDelete(thread)) {
+      void requestScratchCleanup(ports, { userId: ownerId, threadId });
+    }
+  }
 
   return c.json({ ok: true });
 });

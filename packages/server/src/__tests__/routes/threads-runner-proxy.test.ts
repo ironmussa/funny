@@ -739,6 +739,76 @@ describe('Thread routes — runner proxy', () => {
     });
   });
 
+  describe('DELETE /api/threads/:id — workspace cleanup (track-funny-actions)', () => {
+    const cleanupCalls = () =>
+      tunnelFetch.mock.calls.filter(([, request]) => request.path !== undefined);
+
+    async function settle(count: number) {
+      for (let i = 0; i < 50 && cleanupCalls().length < count; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    }
+
+    function seedWorktreeThread() {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
+        id: 't1',
+        projectId: 'p1',
+        userId: 'user-1',
+        mode: 'worktree',
+        status: 'completed',
+        worktreePath: '/wt/t1',
+        branch: 'feature-t1',
+      });
+      tunnelFetch.mockImplementation(async () => ({ status: 200, headers: {}, body: '{}' }));
+    }
+
+    test('removes the worktree and deletes the branch when asked', async () => {
+      seedWorktreeThread();
+      const res = await t.requestAs('user-1').delete('/api/threads/t1?deleteBranch=true');
+      expect(res.status).toBe(200);
+      await settle(1);
+      const [runnerId, request] = cleanupCalls()[0]!;
+      expect(runnerId).toBe('runner-1');
+      expect(request).toMatchObject({ method: 'DELETE', path: '/api/worktrees' });
+      expect(JSON.parse(String(request.body))).toMatchObject({
+        projectId: 'p1',
+        worktreePath: '/wt/t1',
+        branchName: 'feature-t1',
+        deleteBranch: true,
+        reason: 'thread-deleted',
+      });
+      // The dead proxy of the delete itself is gone.
+      expect(cleanupCalls().some(([, r]) => r.path === '/api/threads/t1')).toBe(false);
+    });
+
+    test('keeps the branch by default', async () => {
+      seedWorktreeThread();
+      await t.requestAs('user-1').delete('/api/threads/t1');
+      await settle(1);
+      expect(JSON.parse(String(cleanupCalls()[0]![1].body)).deleteBranch).toBe(false);
+    });
+
+    test('a scratch thread asks the runner to remove its scratch directory', async () => {
+      seedThread(t.db, { id: 's1', projectId: null, userId: 'user-1', isScratch: 1 });
+      tunnelFetch.mockImplementation(async () => ({ status: 200, headers: {}, body: '{}' }));
+      const res = await t.requestAs('user-1').delete('/api/threads/s1');
+      expect(res.status).toBe(200);
+      await settle(1);
+      expect(cleanupCalls()[0]![1]).toMatchObject({
+        method: 'DELETE',
+        path: '/api/threads/s1/scratch',
+      });
+    });
+
+    test('the answer does not wait for the runner', async () => {
+      seedWorktreeThread();
+      tunnelFetch.mockImplementation(() => new Promise(() => {}));
+      const res = await t.requestAs('user-1').delete('/api/threads/t1');
+      expect(res.status).toBe(200);
+    });
+  });
+
   describe('DELETE /api/threads/:id — tenant isolation', () => {
     test('returns 404 when deleting another user thread', async () => {
       seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });

@@ -22,11 +22,12 @@ const mocks = (() => ({
   threadEventBus: {
     emit: vi.fn(),
   },
-  startAgent: vi.fn(async (..._args: unknown[]) => undefined),
+  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
   getCurrentBranch: vi.fn(),
   createWorktree: vi.fn(),
   removeWorktree: vi.fn(),
   removeBranch: vi.fn(),
+  cleanupWorkspace: vi.fn(),
   setupWorktree: vi.fn(),
   git: vi.fn(),
   findWorktreeForBranch: vi.fn(),
@@ -49,6 +50,10 @@ const mocks = (() => ({
   })),
 }))();
 
+// A rollback goes through the workspace module (track-funny-actions).
+mock.module('../../services/workspace-cleanup.js', () => ({
+  cleanupWorkspace: mocks.cleanupWorkspace,
+}));
 mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emit: vi.fn(), emitToUser: vi.fn() },
 }));
@@ -124,6 +129,7 @@ mock.module('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 
+import { internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { ok, err, okAsync, errAsync } from 'neverthrow';
 
@@ -551,7 +557,7 @@ describe('createAndStartThread', () => {
       mocks.adoptStagedUploads.mockReturnValue(
         okAsync([{ path: '.funny/uploads/fixed-thread-id/spec.pdf' }]),
       );
-      mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+      mocks.startAgent.mockReturnValueOnce(errAsync(internal('spawn failed')));
 
       const result = await createAndStartThread({
         projectId: 'p-1',
@@ -804,8 +810,7 @@ describe('createAndStartThread', () => {
     beforeEach(() => {
       mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
       mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
-      mocks.removeWorktree.mockReturnValue(okAsync(undefined));
-      mocks.removeBranch.mockReturnValue(okAsync(undefined));
+      mocks.cleanupWorkspace.mockReset().mockReturnValue(okAsync({ effects: [] }));
       mocks.tm.getThread.mockResolvedValueOnce(undefined);
     });
 
@@ -819,12 +824,16 @@ describe('createAndStartThread', () => {
       });
       expect(result.isOk()).toBe(true);
 
-      await waitFor(() => expect(mocks.removeBranch).toHaveBeenCalled());
-      expect(mocks.removeWorktree).toHaveBeenCalledWith(
-        '/projects/my-app',
-        '/projects/my-app/.worktrees/feature',
+      await waitFor(() => expect(mocks.cleanupWorkspace).toHaveBeenCalled());
+      expect(mocks.cleanupWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectPath: '/projects/my-app',
+          worktreePath: '/projects/my-app/.worktrees/feature',
+          branch: 'my-app/feature-fixed-',
+          deleteBranch: true,
+          reason: 'setup-undone',
+        }),
       );
-      expect(mocks.removeBranch).toHaveBeenCalledWith('/projects/my-app', 'my-app/feature-fixed-');
       expect(mocks.tm.updateThread).not.toHaveBeenCalled();
       expect(mocks.startAgent).not.toHaveBeenCalled();
     });
@@ -844,8 +853,10 @@ describe('createAndStartThread', () => {
       });
       expect(result.isOk()).toBe(true);
 
-      await waitFor(() => expect(mocks.removeWorktree).toHaveBeenCalled());
-      expect(mocks.removeBranch).not.toHaveBeenCalled();
+      await waitFor(() => expect(mocks.cleanupWorkspace).toHaveBeenCalled());
+      expect(mocks.cleanupWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({ deleteBranch: false, reason: 'setup-undone' }),
+      );
       expect(mocks.startAgent).not.toHaveBeenCalled();
     });
   });
@@ -875,7 +886,7 @@ describe('createAndStartThread', () => {
   test('marks worktree thread failed when startAgent throws after setup', async () => {
     mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
     mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
-    mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+    mocks.startAgent.mockReturnValueOnce(errAsync(internal('spawn failed')));
 
     const result = await createAndStartThread({
       projectId: 'p-1',

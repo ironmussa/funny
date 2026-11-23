@@ -49,6 +49,7 @@ import { z } from 'zod';
 
 import { db, dbDialect, withDatabaseTransaction } from '../../db/index.js';
 import { factoryRuns, factorySettings, workflowNodeExecutions } from '../../db/schema.js';
+import { syncRunThreadStages } from './factory-thread-stage.js';
 
 const THREAD_IDS_SCHEMA = z.array(z.string());
 
@@ -705,6 +706,20 @@ function queueOperations(newId: () => string) {
   };
 }
 
+/**
+ * After a write that set the run's `state`, move its threads' kanban stage to
+ * match (`syncRunThreadStages`, which reads the stored state). Passes `wrote`
+ * through; a sync failure is logged there and never fails the write.
+ */
+function afterStateWrite(
+  runId: string,
+  input: Pick<UpdateRunInput, 'state'>,
+  wrote: boolean,
+): ResultAsync<boolean, FactoryRunsError> {
+  if (!wrote || input.state === undefined) return okAsync(wrote);
+  return syncRunThreadStages(runId).map(() => wrote);
+}
+
 export function createFactoryRunsRepository(
   deps: { newId: () => string } = { newId: () => crypto.randomUUID() },
 ) {
@@ -928,7 +943,9 @@ export function createFactoryRunsRepository(
       return ResultAsync.fromPromise(
         db.update(factoryRuns).set(changes).where(eq(factoryRuns.id, runId)),
         storage,
-      ).map(() => undefined);
+      )
+        .andThen(() => afterStateWrite(runId, input, true))
+        .map(() => undefined);
     },
 
     /**
@@ -951,7 +968,9 @@ export function createFactoryRunsRepository(
           .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, from)))
           .returning({ id: factoryRuns.id }),
         storage,
-      ).map((rows) => rows.length > 0);
+      )
+        .map((rows) => rows.length > 0)
+        .andThen((moved) => afterStateWrite(runId, input, moved));
     },
 
     /**
@@ -974,7 +993,9 @@ export function createFactoryRunsRepository(
           .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
           .returning({ id: factoryRuns.id }),
         storage,
-      ).map((rows) => rows.length > 0);
+      )
+        .map((rows) => rows.length > 0)
+        .andThen((moved) => afterStateWrite(runId, { state: to }, moved));
     },
 
     /**
@@ -994,7 +1015,9 @@ export function createFactoryRunsRepository(
           )
           .returning({ id: factoryRuns.id }),
         storage,
-      ).map((rows) => rows.length > 0);
+      )
+        .map((rows) => rows.length > 0)
+        .andThen((live) => afterStateWrite(runId, input, live));
     },
 
     /**
@@ -1012,7 +1035,9 @@ export function createFactoryRunsRepository(
           ? { state: 'merged', currentStep: null, failureReason: null }
           : { state: 'stopped', failureReason: 'Its pull request was closed without a merge.' },
       )!;
-      return updateFromParked(runId, changes);
+      return updateFromParked(runId, changes).andThen((closed) =>
+        afterStateWrite(runId, { state: changes.state as FactoryRunState }, closed),
+      );
     },
 
     /** The parked runs of a factory that may still close by their pull request (`awaitsPullRequest`). */

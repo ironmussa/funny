@@ -157,6 +157,25 @@ export function markerEvent(
   return { type, threadId, data } as any;
 }
 
+/**
+ * The read-only agents of the fakes: a triage thread (`tri-N`) says the issue
+ * is ready, a reviewer's thread (`rev-N`) passes the fakes' head commit
+ * (`sha-head`); any other thread says what is stored for it.
+ */
+export async function passingReview(threadId: string): Promise<string | null> {
+  // A triage agent's thread (`tri-N`): the issue is ready, with a contract and no paths.
+  if (threadId.startsWith('tri-')) {
+    const ready = { decision: 'ready', contract: { acceptanceCriteria: ['It works'] } };
+    return ['```json', JSON.stringify(ready), '```'].join('\n');
+  }
+  if (threadId.startsWith('rev-')) {
+    return ['```json', JSON.stringify({ sha: 'sha-head', verdict: 'pass' }), '```'].join('\n');
+  }
+  // Imported here: this module is loaded by tests that never open a database.
+  const { lastThreadMessage } = await import('../../services/factory/factory-thread-waits.js');
+  return lastThreadMessage(threadId);
+}
+
 /** A runner proof service whose every regression proof passes at once. */
 export const passingProof: NonNullable<FactoryFlowRunsDeps['proof']> = () => ({
   startProof: async () => ok({ proofId: 'proof-1', state: 'done' }),

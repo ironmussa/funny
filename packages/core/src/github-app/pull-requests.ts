@@ -77,6 +77,11 @@ export interface PullRequestCi {
     number: number,
     required?: readonly string[],
   ): ResultAsync<CiState, GithubCallError>;
+  /**
+   * The CI verdict of a commit, branch or tag (never `conflict`): the state of
+   * a base branch after merges, with the commit it is at.
+   */
+  refState(repo: string, ref: string): ResultAsync<{ sha: string; ci: CiState }, GithubCallError>;
   /** Take the pull request out of draft. */
   markReady(repo: string, number: number): ResultAsync<void, GithubCallError>;
   /**
@@ -269,6 +274,15 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     github.json<RestPull>(repo, 'GET', `/repos/${repo}/pulls/${number}`);
 
   return {
+    refState(repo, ref) {
+      const path = ref.split('/').map(encodeURIComponent).join('/');
+      return github
+        .json<{ sha: string }>(repo, 'GET', `/repos/${repo}/commits/${path}`)
+        .andThen((commit) =>
+          stateOfCommit(repo, commit.sha).map((ci) => ({ sha: commit.sha, ci })),
+        );
+    },
+
     ciState(repo, number, required) {
       return pull(repo, number).andThen((pr) =>
         pr.mergeable === false || pr.mergeable_state === 'dirty'

@@ -208,14 +208,23 @@ describe('GitHub App settings', () => {
       return (await status(admin)).body;
     };
 
-    // An App created before the factory needed to publish its check.
-    expect((await statusWith(sandboxSet)).missingPermissions).toEqual(['checks: write']);
-    expect((await statusWith({ ...sandboxSet, checks: 'write' })).missingPermissions).toEqual([]);
+    // An App created before the factory needed to publish its check and its review status.
+    expect((await statusWith(sandboxSet)).missingPermissions).toEqual([
+      'checks: write',
+      'statuses: write',
+    ]);
+    // One created for the regression proof, before the review gate.
+    expect((await statusWith({ ...sandboxSet, checks: 'write' })).missingPermissions).toEqual([
+      'statuses: write',
+    ]);
+    expect(
+      (await statusWith({ ...sandboxSet, checks: 'write', statuses: 'write' })).missingPermissions,
+    ).toEqual([]);
     // GitHub could not be asked: the screen says nothing.
     expect((await statusWith(null)).missingPermissions).toBeUndefined();
 
     // The App has the permission, but one installation has not accepted it yet.
-    const full = { ...sandboxSet, checks: 'write' };
+    const full = { ...sandboxSet, checks: 'write', statuses: 'write' };
     const { admin, anonymous } = setup({
       github: (path) => {
         if (path === '/app') return new Response(JSON.stringify({ permissions: full }));

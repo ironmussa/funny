@@ -12,9 +12,16 @@
  * on the project (`steer`) runs their own factory; a viewer may only read
  * theirs. Runs are stored separately (`factory-runs`).
  */
-import type { FactoryMode } from '@funny/shared/contracts/factory';
+import {
+  MAX_SENSITIVE_PATHS,
+  MERGE_STAGE,
+  type FactoryAutoMerge,
+  type FactoryMode,
+} from '@funny/shared/contracts/factory';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
 import { errAsync, ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { factoryRuns, factorySettings } from '../../db/schema.js';
@@ -29,6 +36,12 @@ export interface FactorySettingsView {
   label: string;
   flowName: string;
   maxConcurrent: number;
+  /** Which reviewed changes the factory merges by itself. */
+  autoMerge: FactoryAutoMerge;
+  /** Globs that make a change high risk, besides the default list. */
+  sensitivePaths: string[];
+  /** Runs inside a flow node at once, per node id. */
+  stageLimits: Record<string, number>;
   /** Why the factory cannot make progress now, or null. */
   blockedReason: string | null;
   updatedAt: string;
@@ -47,6 +60,9 @@ export interface SaveFactorySettingsInput {
   label?: string;
   flowName?: string;
   maxConcurrent?: number;
+  autoMerge?: FactoryAutoMerge;
+  sensitivePaths?: string[];
+  stageLimits?: Record<string, number>;
 }
 
 type Row = typeof factorySettings.$inferSelect;
@@ -68,6 +84,35 @@ const accessErrors = {
 /** A stored mode; anything else reads as manual, which admits only what is sent. */
 const modeOf = (row: Row): FactoryMode => (row.mode === 'automatic' ? 'automatic' : 'manual');
 
+/** A stored policy; anything else reads as the careful one. */
+const autoMergeOf = (row: Row): FactoryAutoMerge => (row.autoMerge === 'all' ? 'all' : 'low_risk');
+
+const SENSITIVE_PATHS_SCHEMA = z.array(z.string());
+const STAGE_LIMITS_SCHEMA = z.record(z.string(), z.number().int().positive());
+
+function sensitivePathsOf(row: Row): string[] {
+  if (!row.sensitivePaths) return [];
+  const parsed = parseStoredJson(
+    SENSITIVE_PATHS_SCHEMA,
+    row.sensitivePaths,
+    'factory_settings.sensitive_paths',
+  );
+  return parsed.ok ? parsed.value : [];
+}
+
+/** The stored limits, never one for `merge` (it is not tunable). */
+function stageLimitsOf(row: Row): Record<string, number> {
+  if (!row.stageLimits) return {};
+  const parsed = parseStoredJson(
+    STAGE_LIMITS_SCHEMA,
+    row.stageLimits,
+    'factory_settings.stage_limits',
+  );
+  if (!parsed.ok) return {};
+  const { [MERGE_STAGE]: _merge, ...limits } = parsed.value;
+  return limits;
+}
+
 const toView = (row: Row): FactorySettingsView => ({
   projectId: row.projectId,
   enabled: row.enabled === 1,
@@ -75,6 +120,9 @@ const toView = (row: Row): FactorySettingsView => ({
   label: row.label,
   flowName: row.flowName,
   maxConcurrent: row.maxConcurrent,
+  autoMerge: autoMergeOf(row),
+  sensitivePaths: sensitivePathsOf(row),
+  stageLimits: stageLimitsOf(row),
   blockedReason: row.blockedReason ?? null,
   updatedAt: row.updatedAt,
 });
@@ -92,7 +140,33 @@ function validate(input: SaveFactorySettingsInput): FactorySettingsError | null 
   if (input.maxConcurrent !== undefined && (input.maxConcurrent < 1 || input.maxConcurrent > 20)) {
     return { kind: 'invalid', message: 'maxConcurrent must be between 1 and 20' };
   }
-  return null;
+  if (
+    input.autoMerge !== undefined &&
+    input.autoMerge !== 'low_risk' &&
+    input.autoMerge !== 'all'
+  ) {
+    return { kind: 'invalid', message: 'autoMerge must be low_risk or all' };
+  }
+  if (input.sensitivePaths !== undefined && input.sensitivePaths.length > MAX_SENSITIVE_PATHS) {
+    return { kind: 'invalid', message: `At most ${MAX_SENSITIVE_PATHS} sensitive paths` };
+  }
+  return validateStageLimits(input.stageLimits);
+}
+
+function validateStageLimits(
+  limits: Record<string, number> | undefined,
+): FactorySettingsError | null {
+  if (limits === undefined) return null;
+  if (MERGE_STAGE in limits) {
+    return {
+      kind: 'invalid',
+      message: 'The merge limit cannot be changed: merges are one at a time per repository',
+    };
+  }
+  const invalid = Object.values(limits).some(
+    (limit) => !Number.isInteger(limit) || limit < 1 || limit > 20,
+  );
+  return invalid ? { kind: 'invalid', message: 'A stage limit must be between 1 and 20' } : null;
 }
 
 /** A new factory starts manual: it admits only the issues sent to it. */
@@ -101,6 +175,9 @@ const DEFAULTS = {
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
+  autoMerge: 'low_risk' as FactoryAutoMerge,
+  sensitivePaths: [] as string[],
+  stageLimits: {} as Record<string, number>,
 };
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */
@@ -122,6 +199,9 @@ function buildRow(
     label: input.label ?? base.label,
     flowName: input.flowName ?? base.flowName,
     maxConcurrent: input.maxConcurrent ?? base.maxConcurrent,
+    autoMerge: input.autoMerge ?? base.autoMerge,
+    sensitivePaths: JSON.stringify(input.sensitivePaths ?? base.sensitivePaths),
+    stageLimits: JSON.stringify(input.stageLimits ?? base.stageLimits),
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -144,6 +224,9 @@ export interface WatchedFactory {
   label: string;
   flowName: string;
   maxConcurrent: number;
+  autoMerge: FactoryAutoMerge;
+  sensitivePaths: string[];
+  stageLimits: Record<string, number>;
 }
 
 const toEnabled = (row: Row): WatchedFactory => ({
@@ -155,6 +238,9 @@ const toEnabled = (row: Row): WatchedFactory => ({
   label: row.label,
   flowName: row.flowName,
   maxConcurrent: row.maxConcurrent,
+  autoMerge: autoMergeOf(row),
+  sensitivePaths: sensitivePathsOf(row),
+  stageLimits: stageLimitsOf(row),
 });
 
 /**
@@ -249,6 +335,9 @@ export function createFactorySettingsService(
       ...(input.label !== undefined && { label: row.label }),
       ...(input.flowName !== undefined && { flowName: row.flowName }),
       ...(input.maxConcurrent !== undefined && { maxConcurrent: row.maxConcurrent }),
+      ...(input.autoMerge !== undefined && { autoMerge: row.autoMerge }),
+      ...(input.sensitivePaths !== undefined && { sensitivePaths: row.sensitivePaths }),
+      ...(input.stageLimits !== undefined && { stageLimits: row.stageLimits }),
     };
     return ResultAsync.fromPromise(
       db

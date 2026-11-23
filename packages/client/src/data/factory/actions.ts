@@ -93,3 +93,18 @@ export function emptyFactory(
     return result;
   });
 }
+
+/**
+ * Close the incident that pauses the caller's factory (a broken base branch),
+ * so its admissions resume. Not optimistic: the server's settings, without
+ * the incident, are recorded. The caller shows the error.
+ */
+export function closeFactoryIncident(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactorySettings, DomainError> {
+  return factoryApi.closeIncident(projectId).map((settings) => {
+    writeFactorySettings(settings, layer);
+    return settings;
+  });
+}

@@ -32,7 +32,12 @@ import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
-import { createFactoryRunsRepository, NO_FREE_SLOT, type FactoryRunView } from './factory-runs.js';
+import {
+  createFactoryRunsRepository,
+  NO_FREE_SLOT,
+  threadsOf,
+  type FactoryRunView,
+} from './factory-runs.js';
 import { archiveReplacedFactoryThreads, stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
 import {
@@ -97,6 +102,20 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
       .mapErr(storage)
       .andThen((run) => (run && run.factoryId === factoryId ? okAsync(run) : errAsync(notFound)));
 
+  /** Send a run parked on its issue back to the queue, to be triaged again. */
+  const retriaged = (run: FactoryRunView): ResultAsync<undefined, FactoryRunControlError> =>
+    runs
+      .retriage(run)
+      .mapErr(storage)
+      .andThen((moved) =>
+        moved
+          ? okAsync(undefined)
+          : errAsync<undefined, FactoryRunControlError>({
+              kind: 'conflict',
+              message: 'Only a failed run, or one waiting for you, can be retried.',
+            }),
+      );
+
   /** The run as it is now (after a change). */
   const reread = (runId: string) =>
     runs
@@ -126,7 +145,7 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             stopFactoryFlow(run.id);
             const ports = factoryRunnerPorts();
             const threadsStopped = ports
-              ? stopFactoryThreads(ports, userId, run.threadIds)
+              ? stopFactoryThreads(ports, userId, threadsOf(run))
               : Promise.resolve();
             return ResultAsync.fromSafePromise(threadsStopped).andThen(() => reread(run.id));
           }),
@@ -136,28 +155,31 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     retry(factoryId: string, runId: string): ResultAsync<FactoryRunView, FactoryRunControlError> {
       return runOf(factoryId, runId)
         .andThen((run) =>
-          ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
-            runs
-              .reopen(run, kept)
-              .mapErr(reopenRefused)
-              .andThen((reopened) => {
-                if (reopened === 'reopened') {
-                  return ResultAsync.fromSafePromise(
-                    archiveReplacedFactoryThreads(
-                      run.threadIds.filter((id) => !kept.includes(id)),
-                      factoryBrowserEvents(),
-                    ),
-                  );
-                }
-                return errAsync<undefined, FactoryRunControlError>({
-                  kind: 'conflict',
-                  message:
-                    reopened === NO_FREE_SLOT
-                      ? 'The factory is already running as many runs as it may at once. Retry when one of them finishes.'
-                      : 'Only a failed run, or one waiting for you, can be retried.',
-                });
-              }),
-          ),
+          // A run parked on its issue has done no work to keep: it is triaged again.
+          run.state === 'needs_info'
+            ? retriaged(run)
+            : ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
+                runs
+                  .reopen(run, kept)
+                  .mapErr(reopenRefused)
+                  .andThen((reopened) => {
+                    if (reopened === 'reopened') {
+                      return ResultAsync.fromSafePromise(
+                        archiveReplacedFactoryThreads(
+                          run.threadIds.filter((id) => !kept.includes(id)),
+                          factoryBrowserEvents(),
+                        ),
+                      );
+                    }
+                    return errAsync<undefined, FactoryRunControlError>({
+                      kind: 'conflict',
+                      message:
+                        reopened === NO_FREE_SLOT
+                          ? 'The factory is already running as many runs as it may at once. Retry when one of them finishes.'
+                          : 'Only a failed run, or one waiting for you, can be retried.',
+                    });
+                  }),
+              ),
         )
         .andThen(() => {
           wake(factoryId);

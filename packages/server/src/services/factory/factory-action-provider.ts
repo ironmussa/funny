@@ -29,11 +29,26 @@
  *   the agent opened from the run's branch.
  * - `wait_ci` / `merge` act on that pull request with the App token capped by
  *   the enabler (`factory-ci-actions.ts`).
+ * - `review` judges the pull request's head commit on a NEW read-only thread
+ *   (`factory-review.ts`), never a follow-up on the implementing thread. Review
+ *   threads are not recorded in `threadIds`, which stays the implementing
+ *   agent's steps; each verdict keeps its thread id.
+ * - `triage` decides on its own read-only thread whether the issue can be
+ *   worked unattended and writes the run's contract (`factory-triage.ts`).
  * - `run_command`, `set_status`, `set_stage` and approvals are refused: there
  *   is nowhere on the server to run them (checks belong in the repository's CI).
  */
 
-import { EMPTY_FACTORY_RUN_METRICS, type FactoryRunMetrics } from '@funny/shared/contracts/factory';
+import {
+  contractOf,
+  EMPTY_FACTORY_RUN_METRICS,
+  reviewAllowsMerge,
+  type FactoryAutoMerge,
+  type FactoryReviewVerdict,
+  type FactoryRisk,
+  type FactoryRunMetrics,
+  type FactoryTriage,
+} from '@funny/shared/contracts/factory';
 import type {
   ActionProvider,
   ActionResult,
@@ -42,7 +57,7 @@ import type {
   RegressionProofOpts,
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
-import type { Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
@@ -50,6 +65,7 @@ import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
+import { createMergeLane } from './factory-merge-lane.js';
 import {
   proofAllowsMerge,
   proofCheckOf,
@@ -60,9 +76,13 @@ import {
   type ProofResultBody,
 } from './factory-proof-runner.js';
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
-import type { RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
+import { classifyRisk } from './factory-risk.js';
+import type { FactoryRunStage, RegressionProofRecord, UpdateRunInput } from './factory-runs.js';
+import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
+import { createFactoryTriage } from './factory-triage.js';
 
 /**
  * A proof the agent can fix (its test): the flows retry it with the agent.
@@ -88,6 +108,21 @@ function keptWorktreeLine(kept: KeptWorktree): string {
   const what = parts.length > 0 ? parts.join(' and ') : 'work that could not be checked';
   return `The run's checkout was kept because it holds ${what}: \`${kept.worktreePath}\`.`;
 }
+
+/**
+ * Why `merge` left a run for a person instead of merging (change
+ * factory-agent-roles, D8). The run row shows the reason.
+ */
+export const MERGE_HOLD_REASONS = {
+  /** The branch no longer contains the commit that was reviewed before (a force push). */
+  rewritten: 'branch history rewritten',
+  /** The head commit has no verdict of the flow's `review` step. */
+  noReview: 'no review',
+  /** Its verdict does not allow a merge. */
+  reviewFailed: 'review failed',
+  /** The change is high risk and the factory merges only low-risk changes. */
+  highRisk: 'high risk',
+} as const;
 
 /**
  * Why a run without a commit or a pull request waits for a person: its checkout
@@ -117,6 +152,8 @@ export interface FactoryRunScope {
   issueTitle: string;
   /** The branch the agent pushes and opens the pull request from. */
   branch: string;
+  /** The issue's page (the reviewer reads the issue there). */
+  issueUrl?: string;
 }
 
 export type { FactoryProofDeps } from './factory-proof-runner.js';
@@ -132,6 +169,36 @@ export interface FactoryActionProviderDeps {
   metrics?: FactoryRunMetrics;
   /** The issue's labels (for require_test: labels). */
   issueLabels?: string[];
+  /** The factory's own sensitive path globs (they make a change high risk). */
+  sensitivePaths?: readonly string[];
+  /** Which reviewed changes the factory merges by itself (default: only low-risk ones). */
+  autoMerge?: FactoryAutoMerge;
+  /** The review verdicts the run already has (a resumed run). */
+  reviews?: readonly FactoryReviewVerdict[];
+  /** What the run already stores of its triage (a resumed run, or one back from a path hold). */
+  triage?: FactoryTriage | null;
+  /** The newest triage thread of this run by its title prefix, since `since`. */
+  findTriageThread?(titlePrefix: string, since: string): Promise<string | null>;
+  /** The likely paths of the factory's other runs in progress, by issue. */
+  busyPaths?(): Promise<Array<{ issue: number; paths: string[] }>>;
+  /** When the run's issue last changed, by GitHub's clock; null when unreadable. */
+  issueUpdatedAt?(): Promise<string | null>;
+  /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only). */
+  holdForPaths?(blockers: number[]): Promise<boolean>;
+  /** When the run was admitted: review threads from before are not this run's. */
+  admittedAt?: string;
+  /** The newest review thread of this run by its title prefix, since `since`. */
+  findReviewThread?(titlePrefix: string, since: string): Promise<string | null>;
+  /** Take one of the factory's review slots (its `review` stage limit); resolves with its release. */
+  reviewSlot?(holder: string, signal: AbortSignal): Promise<() => void>;
+  /** The URLs of the factory's other open pull requests (the reviewer is told about them). */
+  otherPullRequests?(): Promise<string[]>;
+  /**
+   * Move the run into its review or merge step: a compare-and-set on the
+   * stored state (`enterStage` of the runs repository). Absent (tests): the
+   * state is written like any other progress.
+   */
+  enterStage?(stage: FactoryRunStage): Promise<void>;
   /** Proof start/poll through the runner. */
   proof?: FactoryProofDeps;
   /** The implementing thread's last assistant message (the "no change" explanation). */
@@ -195,6 +262,11 @@ export interface FactoryContinuation {
   completedAt(threadId: string): Promise<string | null>;
   /** Whether a member/user message reached the thread since `since` (an interrupted follow-up). */
   followedUpSince(threadId: string, since: string): Promise<boolean>;
+  /**
+   * Follow up on a thread that is not on the run's branch (a reviewer's):
+   * `followUp` without the branch guard. Absent: such a thread cannot be asked again.
+   */
+  followUpOffBranch?(threadId: string, content: string): Promise<Result<void, string>>;
 }
 
 /** The thread an agent step waits on; `after` when a follow-up runs it again. */
@@ -260,6 +332,13 @@ const VERDICT_COUNTERS = {
   timeout: 'ciTimeouts',
 } satisfies Record<z.infer<typeof CI_VERDICT>, keyof FactoryRunMetrics | null>;
 
+/** What the server found in one commit of the run's pull request. */
+interface ClassifiedHead {
+  sha: string;
+  findings: TestWeakeningFinding[];
+  risk: FactoryRisk;
+}
+
 /** A proof the merge gate holds: its record, and what publishing it needs. */
 interface HeldProof {
   record: RegressionProofRecord;
@@ -276,6 +355,15 @@ const PROOF_NOT_CONFIGURED: ActionResult = {
   error:
     'Regression proof not configured: the flow has no regression_proof rules, so the factory does not merge.',
 };
+
+/** The counters after a reviewer event: a verdict counts as a review, a failing one also as a fail. */
+export function reviewCounted(metrics: FactoryRunMetrics, event: string): FactoryRunMetrics {
+  if (event === 'review_pass') return { ...metrics, reviews: metrics.reviews + 1 };
+  if (event === 'review_fail') {
+    return { ...metrics, reviews: metrics.reviews + 1, reviewFails: metrics.reviewFails + 1 };
+  }
+  return metrics;
+}
 
 /**
  * The counters after one `wait_ci` result. A stop or a GitHub access error is
@@ -613,6 +701,140 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       : { ...proofUnavailable(finding), metadata: meta };
   }
 
+  /**
+   * What the server found in the last classified commit of the pull request:
+   * its weakened tests and its risk class (change factory-agent-roles, D6).
+   */
+  let classified: ClassifiedHead | null = null;
+
+  /**
+   * Check the pull request's head commit for weakened tests and class its risk,
+   * once per commit, and store the class on the run. A change that cannot be
+   * read is high risk: what was not read was not checked.
+   */
+  async function classifyHead(): Promise<ClassifiedHead | null> {
+    const pr = pullRequest();
+    if (!pr) return null;
+    const head = await deps.github.pullRequests.pullHead(pr);
+    if (head.isErr()) return null;
+    const sha = head.value.sha;
+    if (classified?.sha === sha) return classified;
+    const files = await deps.github.pullRequests.changedFiles(pr);
+    const findings = files.isOk() ? checkTestWeakening(files.value) : [];
+    const risk: FactoryRisk = files.isOk()
+      ? classifyRisk({
+          headSha: sha,
+          change: files.value,
+          findings,
+          sensitivePaths: deps.sensitivePaths,
+          riskHints: contractOf({ triage: triager.current() })?.riskHints,
+        })
+      : {
+          headSha: sha,
+          level: 'high',
+          reasons: [`the change could not be read: ${files.error.message}`],
+        };
+    classified = { sha, findings, risk };
+    await deps.record({ risk });
+    metric('factory.integration_event', 1, {
+      type: 'sum',
+      attributes: { event: `risk_${risk.level}`, repo: scope.repo },
+    });
+    return classified;
+  }
+
+  /**
+   * Put a verdict on the run's pull request. Best effort: a failure is logged
+   * and counted, and the verdict the run stored still decides the merge.
+   */
+  async function publishVerdict(verdict: FactoryReviewVerdict) {
+    const pr = pullRequest();
+    if (!pr) return { comment: false, status: false };
+    const published = await deps.github.pullRequests.publishReview(pr, {
+      sha: verdict.sha,
+      allowsMerge: reviewAllowsMerge(verdict),
+      body: reviewComment(verdict),
+      description: reviewHeadline(verdict),
+    });
+    if (published.isOk()) return { comment: true, status: published.value.status };
+    log.warn('Issue factory could not publish the review verdict', {
+      namespace: 'factory',
+      runId: scope.runId,
+      sha: verdict.sha,
+      error: published.error.message,
+    });
+    metric('factory.integration_event', 1, {
+      type: 'sum',
+      attributes: { event: 'review_unpublished', repo: scope.repo },
+    });
+    return { comment: false, status: false };
+  }
+
+  const enterStage = async (stage: FactoryRunStage) =>
+    deps.enterStage
+      ? deps.enterStage(stage)
+      : deps.record({ state: stage === 'review' ? 'reviewing' : 'merging' });
+
+  const offBranch = deps.continuation?.followUpOffBranch;
+  const askAgain =
+    offBranch && deps.continuation
+      ? { send: offBranch, completedAt: deps.continuation.completedAt }
+      : undefined;
+
+  const triager = createFactoryTriage({
+    scope,
+    issueUrl: scope.issueUrl ?? null,
+    stored: deps.triage ?? null,
+    since: deps.admittedAt ?? new Date(0).toISOString(),
+    signal: deps.signal,
+    launch: deps.launch,
+    findLaunched: async (prefix, since) => (await deps.findTriageThread?.(prefix, since)) ?? null,
+    waitThread: deps.waitThread,
+    finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
+    followUp: askAgain,
+    worktreeBase,
+    comment: async (body) => {
+      const posted = await deps.github.commentOnIssue(reader, scope.issueNumber, body);
+      return posted.isOk() ? ok(undefined) : err(posted.error.message);
+    },
+    busyPaths: deps.busyPaths,
+    issueUpdatedAt: deps.issueUpdatedAt,
+    hold: deps.holdForPaths,
+    record: deps.record,
+    count: (event) => count(metrics, { event }),
+  });
+
+  const reviewer = createFactoryReviewer({
+    scope,
+    issueUrl: scope.issueUrl ?? null,
+    reviews: deps.reviews ?? [],
+    since: deps.admittedAt ?? new Date(0).toISOString(),
+    signal: deps.signal,
+    pullRequest,
+    prUrl: () => prUrl,
+    headSha: async () => {
+      const pr = pullRequest();
+      if (!pr) return err('The run has no pull request yet.');
+      const head = await deps.github.pullRequests.pullHead(pr);
+      return head.isOk() ? ok(head.value.sha) : err(head.error.message);
+    },
+    classify: classifyHead,
+    launch: deps.launch,
+    findLaunched: async (prefix, since) => (await deps.findReviewThread?.(prefix, since)) ?? null,
+    waitThread: deps.waitThread,
+    finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
+    followUp: askAgain,
+    contract: () => contractOf({ triage: triager.current() }),
+    abandon: deps.abandon,
+    worktreeBase,
+    otherPullRequests: deps.otherPullRequests,
+    acquireSlot: deps.reviewSlot,
+    publish: publishVerdict,
+    record: deps.record,
+    enterReview: () => enterStage('review'),
+    count: (event) => count(reviewCounted(metrics, event), { event }),
+  });
+
   /** The enabler reads the repository: the App token capped by their access. */
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
 
@@ -696,27 +918,180 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return true;
   }
 
+  /** Leave the run for a person instead of merging, with why. Not ok, so the flow stops here. */
+  async function holdMerge(reason: string, error: string): Promise<ActionResult> {
+    await deps.record({ state: 'waiting_human', failureReason: reason });
+    // Why runs stop being unattended: the reason is the event, per repository.
+    await count(
+      { ...metrics, mergeHolds: metrics.mergeHolds + 1 },
+      { event: `merge_held_${reason.replaceAll(' ', '_')}` },
+    );
+    return { ok: false, error, metadata: { outcome: 'held', reason } };
+  }
+
   /**
-   * The merge gate: merge only a pull request head with a passing proof of
-   * that exact commit, pinned to it. Runs the flow's proof when none is held.
+   * A branch whose head no longer contains the commit reviewed before it was
+   * rewritten (a rebase or a force push): the run waits for a person. An
+   * unreadable history holds nothing here; the review gate still applies.
+   */
+  async function historyRewritten(sha: string): Promise<ActionResult | null> {
+    const pr = pullRequest();
+    const previous = reviewer
+      .verdicts()
+      .filter((review) => review.sha !== sha)
+      .at(-1);
+    if (!pr || !previous) return null;
+    // Commits of the reviewed commit that the head lacks: none, unless history was rewritten.
+    const distance = await deps.github.pullRequests.baseDistance(pr, previous.sha, sha);
+    if (distance.isErr() || distance.value.behindBy === 0) return null;
+    return holdMerge(
+      MERGE_HOLD_REASONS.rewritten,
+      `Not merged: the branch was rewritten. Its head ${sha} no longer contains ${previous.sha}, which was reviewed.`,
+    );
+  }
+
+  /** The `wait_ci` options of the flow's last look, reused when the merge waits on a new head. */
+  let lastWaitCi: Parameters<typeof ci.waitCi>[0] = {};
+
+  const lane = createMergeLane({
+    prs: deps.github.pullRequests,
+    pullRequest,
+    branch: scope.branch,
+    signal: deps.signal,
+    waitChecks: async () => {
+      const result = await ci.waitCi(lastWaitCi);
+      const verdict = result.metadata?.verdict;
+      await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });
+      return result;
+    },
+  });
+
+  /**
+   * What `merge` checks itself on entry, whatever path led to it (a repository
+   * flow draws its own): the head commit has a verdict of the flow's own
+   * `review` step that allows a merge (unless `require_review: false`), and
+   * its risk class is one the factory merges by itself. A check, status or
+   * approval an external reviewer left on the pull request is not a verdict.
+   * Null when the merge may go on.
+   */
+  async function mergeHeld(opts: MergeOpts, sha: string): Promise<ActionResult | null> {
+    const rewritten = await historyRewritten(sha);
+    if (rewritten) return rewritten;
+    if (opts.requireReview !== false) {
+      const verdict = reviewer.verdicts().find((review) => review.sha === sha);
+      if (!verdict) {
+        return holdMerge(
+          MERGE_HOLD_REASONS.noReview,
+          `Not merged: commit ${sha} has no review. A flow's merge needs a passing review step for the commit it merges, or \`require_review: false\`.`,
+        );
+      }
+      if (!reviewAllowsMerge(verdict)) {
+        return holdMerge(
+          MERGE_HOLD_REASONS.reviewFailed,
+          `Not merged: the review of commit ${sha} did not pass.`,
+        );
+      }
+    }
+    const change = await classifyHead();
+    if (change?.sha === sha && change.risk.level === 'high' && deps.autoMerge !== 'all') {
+      return holdMerge(
+        MERGE_HOLD_REASONS.highRisk,
+        `Not merged: the change is high risk (${change.risk.reasons.join('; ')}). This factory merges only low-risk changes by itself.`,
+      );
+    }
+    return null;
+  }
+
+  /** `merge` sent the change back to the implementing agent: ok, so the flow's loop can act. */
+  async function sentBack(why: 'conflict' | 'checks', feedback: string): Promise<ActionResult> {
+    await count(
+      { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
+      { event: `merge_sent_back_${why}` },
+    );
+    return { ok: true, output: 'sent_back', metadata: { outcome: 'sent_back', why, feedback } };
+  }
+
+  /**
+   * The head to merge once the branch has its base and its checks are green
+   * there (green on an old base proves nothing about the base as it is now),
+   * or the result `merge` ends with instead.
+   */
+  async function upToDate(opts: MergeOpts, sha: string): Promise<string | ActionResult> {
+    const current = await lane.bringUpToDate();
+    if (current.kind === 'failed') return { ok: false, error: current.error };
+    if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
+    for (const step of current.carried) await reviewer.carry(step.from, step.to);
+    if (current.sha === sha) return sha;
+    return (await mergeHeld(opts, current.sha)) ?? current.sha;
+  }
+
+  /**
+   * Merge `sha` through GitHub's merge queue. Taken out of the queue, the
+   * branch is brought up to date here, so what failed with the base shows on
+   * the pull request's own checks and goes to the implementing agent.
+   */
+  async function throughQueue(opts: MergeOpts, sha: string): Promise<ActionResult> {
+    if (opts.requireRegressionProof !== false) {
+      const config = opts.regressionProof;
+      if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
+      const proof = await proofOfHead(config, sha);
+      if ('refused' in proof) return proof.refused;
+    }
+    const end = await lane.throughQueue(sha);
+    if (end.kind === 'merged') {
+      await deps.record({ state: 'merged', currentStep: null });
+      return { ok: true, output: 'merged', metadata: { outcome: 'merged', via: 'merge-queue' } };
+    }
+    if (end.kind === 'failed') return { ok: false, error: end.error };
+    const current = await lane.bringUpToDate();
+    if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
+    return {
+      ok: false,
+      error:
+        current.kind === 'failed'
+          ? `GitHub's merge queue removed the pull request, and it could not be brought up to date: ${current.error}`
+          : "GitHub's merge queue removed the pull request, though its checks pass on the current base.",
+    };
+  }
+
+  /**
+   * The merge gate: merge only a pull request head that passed the flow's
+   * review and has a passing proof of that exact commit, pinned to it. Runs
+   * the flow's proof when none is held.
    */
   async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
-    if (opts.requireRegressionProof === false) return ci.merge(opts);
-    // A proof without rules proves nothing: no merge, whatever it answered.
-    const config = opts.regressionProof;
-    if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
+    await enterStage('merge');
     const pr = pullRequest();
     if (!pr) return ci.merge(opts);
     const head = await deps.github.pullRequests.pullHead(pr);
     if (head.isErr()) {
       return { ok: false, error: head.error.message, metadata: { kind: head.error.kind } };
     }
-    const proof = await proofOfHead(config, head.value.sha);
+    const held = await mergeHeld(opts, head.value.sha);
+    if (held) return held;
+
+    // Where the base branch requires GitHub's merge queue, GitHub tests the
+    // change on the current base and merges it: the factory enqueues and follows.
+    const queue = await deps.github.pullRequests.mergeQueueRequired(pr, head.value.baseRef);
+    if (queue.isErr()) {
+      return { ok: false, error: queue.error.message, metadata: { kind: queue.error.kind } };
+    }
+    const sha = queue.value ? head.value.sha : await upToDate(opts, head.value.sha);
+    if (typeof sha !== 'string') return sha;
+    if (queue.value) return throughQueue(opts, sha);
+    if (opts.requireRegressionProof === false) {
+      // A reviewed commit is merged as that commit; without the review gate, as before.
+      return opts.requireReview === false ? ci.merge(opts) : ci.merge({ ...opts, sha });
+    }
+    // A proof without rules proves nothing: no merge, whatever it answered.
+    const config = opts.regressionProof;
+    if (!config || config.rules.length === 0) return PROOF_NOT_CONFIGURED;
+    const proof = await proofOfHead(config, sha);
     if ('refused' in proof) return proof.refused;
     // Auto-merge only on the proved commit whose check GitHub can hold.
     return ci.merge({
       ...opts,
-      sha: head.value.sha,
+      sha,
       autoMergeWhenHeld: await checkOnGithub(proof.held),
     });
   }
@@ -764,7 +1139,17 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     },
 
     async waitCi(opts) {
+      lastWaitCi = {
+        timeoutMs: opts.timeoutMs,
+        intervalMs: opts.intervalMs,
+        requiredChecks: opts.requiredChecks,
+      };
       await deps.record({ state: 'waiting_ci' });
+      // When the commit's checks start: the report is ready before the review,
+      // and the reviewer starts on this commit without waiting for green
+      // (D7). A review of an older commit is stopped and its result dropped.
+      const head = await classifyHead();
+      if (head && opts.earlyReview) await reviewer.startEarly(head.sha, opts.earlyReview);
       const result = await ci.waitCi(opts);
       const verdict = result.metadata?.verdict;
       await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });
@@ -774,6 +1159,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     merge: (opts) => provedMerge(opts),
 
     regressionProof: (opts) => runRegressionProof(opts),
+
+    review: (opts) => reviewer.review(opts),
+
+    triage: (opts) => triager.triage(opts),
 
     async notify(opts) {
       log.info('Issue factory flow notice', {

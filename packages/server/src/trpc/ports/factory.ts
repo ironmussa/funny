@@ -6,11 +6,15 @@
  */
 
 import { failure, type ApiFailure, type FactoryPort } from '@funny/api';
-import { errAsync, okAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { BUILT_IN_FACTORY_FLOWS } from '../../services/factory/factory-flow.js';
+import {
+  createFactoryIncidentsRepository,
+  publicIncident,
+} from '../../services/factory/factory-incidents.js';
 import {
   createFactoryQueue,
   type FactoryQueueError,
@@ -25,6 +29,7 @@ import {
 } from '../../services/factory/factory-runs.js';
 import {
   createFactorySettingsService,
+  setFactoryBlocked,
   type FactorySettingsError,
 } from '../../services/factory/factory-settings.js';
 import { rescheduleFactory } from '../../services/factory/factory-watcher.js';
@@ -84,6 +89,7 @@ function createFactoryPort(
   runs = createFactoryRunsRepository(),
   control = createFactoryRunControl(runs),
   queue = createFactoryQueue({ runs, control }),
+  incidents = createFactoryIncidentsRepository(),
 ): FactoryPort {
   /** The caller's factory for the project; 404 with `missing` when they have none. */
   const factoryOf = (userId: string, projectId: string, missing: string) =>
@@ -97,6 +103,24 @@ function createFactoryPort(
     factoryOf(userId, projectId, 'Run not found');
   const configured = (userId: string, projectId: string) =>
     factoryOf(userId, projectId, 'Set up the issue factory first.');
+
+  /** The caller's settings with the incident that pauses their factory, when one does. */
+  const settingsWithIncident = (userId: string, projectId: string) =>
+    settings
+      .get(userId, projectId)
+      .mapErr(settingsFailure)
+      .andThen((view) => {
+        if (!view) return okAsync(null);
+        return settings
+          .factoryId(userId, projectId)
+          .mapErr(settingsFailure)
+          .andThen((factoryId) =>
+            factoryId
+              ? incidents.activeForFactory(factoryId).mapErr(storageFailure)
+              : okAsync(null),
+          )
+          .map((incident) => ({ ...view, incident: incident ? publicIncident(incident) : null }));
+      });
 
   /** Audit a queue action and pass its result on. */
   const audited =
@@ -131,7 +155,47 @@ function createFactoryPort(
 
   return {
     async settings(userId, projectId) {
-      return settings.get(userId, projectId).mapErr(settingsFailure);
+      return settingsWithIncident(userId, projectId);
+    },
+
+    async closeIncident(userId, projectId) {
+      return configured(userId, projectId)
+        .andThen((factoryId) =>
+          incidents
+            .activeForFactory(factoryId)
+            .mapErr(storageFailure)
+            .andThen((incident) =>
+              incident
+                ? okAsync({ factoryId, incident })
+                : errAsync<never, ApiFailure>(
+                    failure(404, 'No incident is open for this factory.'),
+                  ),
+            ),
+        )
+        .andThen(({ factoryId, incident }) =>
+          incidents
+            .close(incident.id, userId)
+            .mapErr(storageFailure)
+            .map(() => {
+              audit({
+                action: 'factory.incident_closed',
+                actorId: userId,
+                detail: `Incident on ${incident.baseBranch} of ${incident.repo} closed by a member`,
+                meta: { projectId, incidentId: incident.id, repo: incident.repo },
+              });
+              return factoryId;
+            }),
+        )
+        .andThen((factoryId) =>
+          // The reason the watcher wrote goes with the incident; the next tick writes what holds now.
+          ResultAsync.fromSafePromise(
+            setFactoryBlocked(factoryId, null).then(() => reschedule(factoryId, projectId)),
+          ),
+        )
+        .andThen(() => settingsWithIncident(userId, projectId))
+        .andThen((view) =>
+          view ? okAsync(view) : errAsync<never, ApiFailure>(failure(404, 'Factory not found')),
+        );
     },
 
     async save(userId, projectId, data) {
@@ -150,7 +214,13 @@ function createFactoryPort(
       });
       const factoryId = await settings.factoryId(userId, projectId);
       if (factoryId.isOk() && factoryId.value) await reschedule(factoryId.value, projectId);
-      return saved;
+      // An open incident stays shown after a save: the answer carries it too.
+      const incident =
+        factoryId.isOk() && factoryId.value
+          ? await incidents.activeForFactory(factoryId.value)
+          : null;
+      const paused = incident?.isOk() && incident.value ? publicIncident(incident.value) : null;
+      return saved.map((view) => ({ ...view, incident: paused }));
     },
 
     async stopRun(userId, projectId, runId) {

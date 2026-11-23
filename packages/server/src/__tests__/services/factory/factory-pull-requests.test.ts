@@ -216,6 +216,8 @@ describe('factory pull requests: the proof gate (task 4.4)', () => {
       ownerToken: async () => 'pat_alice',
       issueCheckPublisher: () =>
         okAsync({ token: 'tok-checks', expiresAt: '', repo: 'o/r', level: 'write' }),
+      issueStatusPublisher: () =>
+        okAsync({ token: 'tok-statuses', expiresAt: '', repo: 'o/r', level: 'write' }),
       appId: () => okAsync(opts.appId === undefined ? '999' : opts.appId),
       fetch: fetchImpl,
     });
@@ -364,6 +366,63 @@ describe('factory pull requests: the proof gate (task 4.4)', () => {
       name: 'funny/regression-proof',
       head_sha: 'abc',
       conclusion: 'success',
+    });
+  });
+
+  // Change factory-agent-roles: a review verdict on the pull request.
+  describe('publishing a review verdict', () => {
+    const review = {
+      sha: 'abc',
+      allowsMerge: true,
+      body: '**funny review: Passed**',
+      description: 'Passed',
+    };
+
+    test('a comment that never approves, then the status with the status-only token', async () => {
+      const { prs, calls } = gated({
+        'POST /repos/o/r/pulls/7/reviews': { id: 1 },
+        'POST /repos/o/r/statuses/abc': { id: 2 },
+      });
+      expect((await prs.publishReview(pr, review))._unsafeUnwrap()).toEqual({ status: true });
+      const comment = calls.find((c) => c.key === 'POST /repos/o/r/pulls/7/reviews');
+      expect(comment?.auth).toBe('token tok-repo');
+      expect(comment?.body).toEqual({
+        commit_id: 'abc',
+        body: '**funny review: Passed**',
+        event: 'COMMENT',
+      });
+      const status = calls.find((c) => c.key === 'POST /repos/o/r/statuses/abc');
+      expect(status?.auth).toBe('token tok-statuses');
+      expect(status?.body).toEqual({
+        state: 'success',
+        context: 'funny/review',
+        description: 'Passed',
+      });
+    });
+
+    test('a fail sets a failure status', async () => {
+      const { prs, calls } = gated({
+        'POST /repos/o/r/pulls/7/reviews': { id: 1 },
+        'POST /repos/o/r/statuses/abc': { id: 2 },
+      });
+      await prs.publishReview(pr, { ...review, allowsMerge: false, description: 'Failed' });
+      const status = calls.find((c) => c.key === 'POST /repos/o/r/statuses/abc');
+      expect(status?.body).toMatchObject({ state: 'failure' });
+    });
+
+    test('an installation without the new permission: the comment only', async () => {
+      const { prs, calls } = gated({
+        'POST /repos/o/r/pulls/7/reviews': { id: 1 },
+        'POST /repos/o/r/statuses/abc': { status: 403 },
+      });
+      expect((await prs.publishReview(pr, review))._unsafeUnwrap()).toEqual({ status: false });
+      expect(calls.some((c) => c.key === 'POST /repos/o/r/pulls/7/reviews')).toBe(true);
+    });
+
+    test('a comment GitHub refuses is the error, and no status is set', async () => {
+      const { prs, calls } = gated({ 'POST /repos/o/r/pulls/7/reviews': { status: 422 } });
+      expect((await prs.publishReview(pr, review)).isErr()).toBe(true);
+      expect(calls.some((c) => c.key.includes('/statuses/'))).toBe(false);
     });
   });
 });

@@ -161,6 +161,12 @@ export interface WaitCiOpts {
   intervalMs?: number;
   /** Subset of check names that must pass; default is all required checks. */
   requiredChecks?: string[];
+  /**
+   * The flow's `review` step configuration, when it has one that starts early
+   * (`early` is not false): the provider may start reviewing the commit while
+   * its checks run.
+   */
+  earlyReview?: ReviewOpts;
 }
 
 export interface MergeOpts {
@@ -179,6 +185,34 @@ export interface MergeOpts {
   requireRegressionProof?: boolean;
   /** The flow's `regression_proof` step configuration, when it has one. */
   regressionProof?: RegressionProofOpts;
+  /**
+   * Whether the merge needs a passing verdict of the flow's `review` step for
+   * the head it merges (the step's `require_review`, default true).
+   */
+  requireReview?: boolean;
+}
+
+/** A `triage` step: whether the run's issue can be worked unattended, and its contract. */
+export interface TriageOpts {
+  provider?: string;
+  model?: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  /** The execution this triage belongs to. */
+  execution?: ActionExecution;
+}
+
+/**
+ * A `review` step: an independent verdict on the run's pull request head. The
+ * provider owns the reviewer's thread, permissions, inputs and result format.
+ */
+export interface ReviewOpts {
+  provider?: string;
+  model?: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  /** Start when the commit's checks start (default true). */
+  early?: boolean;
+  /** The execution this review belongs to: adopt `resume.recorded` work, `checkpoint` new work. */
+  execution?: ActionExecution;
 }
 
 // ── Approval (human-in-the-loop) ────────────────────────────
@@ -269,6 +303,22 @@ export interface ActionProvider {
    * fail) and the head (must pass). The provider starts and polls the job.
    */
   regressionProof?(opts: RegressionProofOpts): Promise<ActionResult>;
+
+  /**
+   * Triage the run's issue on a read-only agent. Resolves `ok: true` when the
+   * run may go on, with `metadata.contract` (text for the implementing agent,
+   * empty without a contract); `ok: false` when the run stops here (questions
+   * were asked on the issue, or it waits for other work on the same files).
+   */
+  triage?(opts: TriageOpts): Promise<ActionResult>;
+
+  /**
+   * Review the run's pull request head on an independent read-only agent.
+   * Resolves `ok: true` with the verdict in `metadata` (`verdict`,
+   * `allowsMerge`, `sha`, `feedback`) whether it passes or fails, so a loop
+   * can send the findings back; `ok: false` when no verdict could be had.
+   */
+  review?(opts: ReviewOpts): Promise<ActionResult>;
 
   /**
    * Request a human approval and block until decided (or timeout).

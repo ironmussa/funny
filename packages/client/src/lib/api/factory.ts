@@ -42,4 +42,6 @@ export const factoryApi = {
     trpcCall(() => procedures.blockers.query({ projectId, issueNumbers })),
   clearQueue: (projectId: string) => trpcCall(() => procedures.clearQueue.mutate({ projectId })),
   stopAll: (projectId: string) => trpcCall(() => procedures.stopAll.mutate({ projectId })),
+  closeIncident: (projectId: string) =>
+    trpcCall(() => procedures.closeIncident.mutate({ projectId })),
 };

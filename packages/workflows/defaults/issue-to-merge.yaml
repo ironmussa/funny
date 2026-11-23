@@ -1,6 +1,7 @@
 # Built-in flow of the server-run issue factory (change factory-flow-execution,
-# factory-quality-gates): implement an issue, open a pull request, prove the
-# regression test, wait for green CI and merge it.
+# factory-quality-gates, factory-agent-roles): implement an issue, open a pull
+# request, prove the regression test, wait for green CI, have an independent
+# agent review the commit, and merge it.
 #
 # The server runs this flow as the factory's enabler. Agent steps are threads
 # on the enabler's runner; the agent commits, pushes and opens the pull request
@@ -23,6 +24,23 @@
 # merge on) only those checks. A timeout or a GitHub access error is not
 # retried. When the loop runs out, the run fails and nothing is merged.
 #
+# Review loop: `review` is a second agent on its own read-only thread. It never
+# sees the implementing agent's conversation: it gets the commit, the pull
+# request and what the server found in the diff (weakened tests, risk), and
+# answers pass or fail with findings. A fail with a critical or high finding
+# goes back to the implementing agent (`address`), and the proof, the checks
+# and the review run again on the new commit: three reviews in all, then the
+# run waits for a person. A verdict holds for one commit only, and `merge`
+# needs a passing one for the commit it merges (`require_review: false` on
+# `merge` turns that off). The step takes `provider`, `model`, `effort` and
+# `early` (start with the checks, the default) and nothing else.
+#
+# Merge: one at a time per repository (the factory puts `merge` in the
+# repository's lane whatever this file says). It merges only a commit that
+# passed the review, whose risk the factory accepts, and that has its base
+# branch: when the branch is behind, GitHub merges the base in and the checks
+# run again. A conflict, or checks that fail there, go back to `address`.
+#
 # The factory supplies every input. `issue_url` points at the issue: the agent
 # reads its text there (issue text is untrusted input, so it is not inlined).
 #
@@ -42,7 +60,19 @@ inputs:
   branch: { type: string, required: true }
 
 nodes:
+  # A read-only agent reads the issue first: it either writes the run's
+  # contract (what the change must do, the files it will probably touch, its
+  # risks) or asks on the issue and the run waits there, holding no slot,
+  # until the issue changes. Takes `provider`, `model` and `effort` only.
+  - id: triage
+    triage: {}
+
+  # Runs of one factory inside this step at once: this default, or the
+  # factory's own limit for `implement` (Settings > Factory). `review` has a
+  # limit there too; `merge` is always one per repository.
   - id: implement
+    depends_on: [triage]
+    concurrency: { group: 'implement:{{inputs.factory_id}}', limit: 20 }
     spawn_agent:
       prompt: |
         You are working unattended: nobody will answer questions, so make
@@ -50,6 +80,12 @@ nodes:
 
         Implement GitHub issue #{{issue_number}} of {{repo}}: {{issue_title}}
         Read the issue first: {{issue_url}}
+        {{#triage.json.contract}}
+
+        The issue was triaged before you. Your change must meet this contract:
+
+        {{triage.json.contract}}
+        {{/triage.json.contract}}
 
         How to work:
         - Work on the branch `{{branch}}`. You may already be on it (check with
@@ -96,8 +132,45 @@ nodes:
   # twice; the base must fail by an assertion: a timeout, a setup failure or a
   # test file that cannot load there proves nothing. Every issue needs a
   # regression test except those labelled `docs` or `chore`.
-  - id: regression-proof
+  # The implementing agent's turn after a gate sent the change back: the
+  # review's findings, or what `merge` found when it brought the branch up to
+  # date (a conflict, or checks that fail on the current base). Skipped on the
+  # first pass: there is nothing to address yet.
+  - id: address
     depends_on: [pull-request]
+    when: 'review.json.allowsMerge = false or merge.json.outcome = "sent_back"'
+    spawn_agent:
+      prompt: |
+        You are working unattended: nobody will answer questions.
+
+        {{#review.json.blocking}}
+        An independent review of commit {{review.json.sha}} of the pull request
+        from `{{branch}}` (GitHub issue #{{issue_number}} of {{repo}}) found
+        problems that must be fixed before it can merge:
+
+        {{review.json.feedback}}
+
+        Check out `{{branch}}` and pull it. Fix each finding in the code. Do not
+        disable, skip or weaken tests or checks, and keep the regression test.
+        If a finding is wrong, change nothing for it and say why in your final
+        message.
+        {{/review.json.blocking}}
+        {{^review.json.blocking}}
+        The pull request from `{{branch}}` (GitHub issue #{{issue_number}} of
+        {{repo}}) passed its review but cannot merge yet:
+
+        {{merge.json.feedback}}
+
+        Fix it on `{{branch}}` so your change and what merged first both work.
+        Do not disable, skip or weaken tests or checks.
+        {{/review.json.blocking}}
+
+        Run the project's checks, commit, and push to `{{branch}}`.
+        Do not rebase or force push, and do not open another pull request.
+        End with a short summary of what you changed and why.
+
+  - id: regression-proof
+    depends_on: [address]
     regression_proof:
       require_test: always
       exempt_labels: [docs, chore]
@@ -144,8 +217,23 @@ nodes:
           conflicts), run the project's checks, commit, and push to `{{branch}}`.
           Do not open another pull request. End with a short summary of the fix.
 
-  - id: merge
+  - id: review
     depends_on: [ci]
+    review: {}
+    loop:
+      back_to: address
+      until: 'review.json.allowsMerge = true'
+      max_iterations: 3
+
+  # `merge` brings the branch up to date with its base first and waits for the
+  # checks there. A conflict or failing checks go back to `address`; the proof,
+  # the checks and the review then run again: three tries in all.
+  - id: merge
+    depends_on: [review]
+    loop:
+      back_to: address
+      until: '$not(merge.json.outcome = "sent_back")'
+      max_iterations: 3
     merge:
       method: squash
       delete_branch: true

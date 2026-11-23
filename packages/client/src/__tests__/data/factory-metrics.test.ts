@@ -30,6 +30,9 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     failureReason: null,
     metrics: { ...EMPTY_FACTORY_RUN_METRICS },
     regressionProof: null,
+    reviews: [],
+    risk: null,
+    triage: null,
     ...over,
   };
 }

@@ -19,6 +19,7 @@ const { signAppJwt } = await import('@funny/core/github-app');
 const {
   APP_PERMISSIONS,
   CHECK_PUBLISH_PERMISSIONS,
+  STATUS_PUBLISH_PERMISSIONS,
   createGithubAppTokenIssuer,
   SANDBOX_PERMISSIONS,
 } = await import('../../../services/github-app/token-issuer.js');
@@ -199,14 +200,39 @@ describe('GitHub App token issuer', () => {
     expect(SANDBOX_PERMISSIONS.write.checks).toBe('read');
     expect(SANDBOX_PERMISSIONS.read.checks).toBe('read');
     expect(CHECK_PUBLISH_PERMISSIONS).toEqual({ checks: 'write', metadata: 'read' });
-    // The App asks for everything a sandbox gets, plus writing checks.
-    expect(APP_PERMISSIONS).toEqual({ ...SANDBOX_PERMISSIONS.write, checks: 'write' });
+    // The App asks for everything a sandbox gets, plus what only the server writes.
+    expect(APP_PERMISSIONS).toEqual({
+      ...SANDBOX_PERMISSIONS.write,
+      checks: 'write',
+      statuses: 'write',
+    });
 
     const { issuer, calls } = setup();
     const token = (await issuer.issueCheckPublisher('acme/app', OWNER_PAT))._unsafeUnwrap();
     expect(token.repo).toBe('acme/app');
     const mint = calls.find((c) => c.url.endsWith('/access_tokens'))!;
     expect(mint.body).toEqual({ repositories: ['app'], permissions: CHECK_PUBLISH_PERMISSIONS });
+  });
+
+  // Change factory-agent-roles: the `funny/review` status.
+  test("sandbox tokens never write statuses; only the server's status publisher does", async () => {
+    expect(SANDBOX_PERMISSIONS.write.statuses).toBe('read');
+    expect(SANDBOX_PERMISSIONS.read.statuses).toBe('read');
+    expect(STATUS_PUBLISH_PERMISSIONS).toEqual({ statuses: 'write', metadata: 'read' });
+
+    const { issuer, calls } = setup();
+    const token = (await issuer.issueStatusPublisher('acme/app', OWNER_PAT))._unsafeUnwrap();
+    expect(token.repo).toBe('acme/app');
+    const mint = calls.find((c) => c.url.endsWith('/access_tokens'))!;
+    expect(mint.body).toEqual({ repositories: ['app'], permissions: STATUS_PUBLISH_PERMISSIONS });
+  });
+
+  test('the status publisher needs an owner with write access', async () => {
+    const { issuer, calls } = setup({ permissions: { pull: true } });
+    expect((await issuer.issueStatusPublisher('acme/app', OWNER_PAT))._unsafeUnwrapErr().kind).toBe(
+      'no-access',
+    );
+    expect(calls.some((c) => c.url.endsWith('/access_tokens'))).toBe(false);
   });
 
   test('the check publisher needs an owner with write access', async () => {

@@ -43,6 +43,7 @@ import { createWorkflowJournalRepository } from '../../../services/workflow-engi
 import {
   launchedThread,
   passingProof,
+  passingReview,
   proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
@@ -62,7 +63,7 @@ const ports = unusedRunnerPorts();
 
 const _origStartWatcher = startFactoryWatcher;
 const startWatcherWithProof: typeof startFactoryWatcher = (d) =>
-  _origStartWatcher({ proof: passingProof, ...d });
+  _origStartWatcher({ proof: passingProof, lastThreadMessage: passingReview, ...d });
 
 /** Fake poll: captures each factory's tick so the test can fire it. */
 function fakePoll() {
@@ -74,10 +75,41 @@ function fakePoll() {
   return { ticks, createPoll };
 }
 
+/** Reviewer threads the fake launchers started, across a test file (unique thread ids). */
+let reviewerThreads = 0;
+
+/**
+ * A read-only agent's launch, the reviewer's or triage's (change
+ * factory-agent-roles): a thread row that already
+ * completed, so the real thread wait sees it finished; `passingReview` is what
+ * it says. Kept out of `calls`, which count the implementing agent's launches.
+ */
+function launchReviewer(input: StartThreadInput): LaunchResult {
+  const kind = String(input.body.title).startsWith('[Factory triage]') ? 'tri' : 'rev';
+  const id = `${kind}-${++reviewerThreads}`;
+  seedThread(testDb.db, {
+    id,
+    projectId: String(input.body.projectId),
+    userId: input.userId,
+    title: String(input.body.title),
+    status: 'completed',
+    source: 'factory',
+  });
+  return launchedThread(id);
+}
+
+/** The implementing agent's launch (`[Factory] #N …`), not a read-only agent's. */
+const isImplementerLaunch = (input: StartThreadInput) =>
+  String(input.body.title).startsWith('[Factory] ');
+
+const isReviewerLaunch = (input: StartThreadInput) =>
+  /^\[Factory (review|triage)\]/.test(String(input.body.title));
+
 /** Fake launcher recording calls; succeeds with a thread id per call. */
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   const calls: StartThreadInput[] = [];
   const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
+    if (result === 'ok' && isReviewerLaunch(input)) return launchReviewer(input);
     calls.push(input);
     return result === 'ok' ? launchedThread(`t-${calls.length}`) : runnerOffline('offline');
   };
@@ -100,6 +132,10 @@ interface GithubScript {
   blockers?: Record<number, IssueBlocker[] | 'unreadable'>;
   /** Issues GitHub reports as closed. */
   closed?: number[];
+  /** The checks of the base branch (default: green). */
+  baseCi?: CiState;
+  /** When each issue last changed (GitHub's `updated_at`); an absent one never changed. */
+  updated?: Record<number, string>;
   /** Each pull request's state, by number; an absent one is open. */
   prStates?: Record<number, 'open' | 'merged' | 'closed'>;
   /** The pull request on each branch in any state (lookups with `state: 'all'`). */
@@ -155,6 +191,7 @@ function fakeGithub(
             state: script.closed?.includes(number) ? ('closed' as const) : ('open' as const),
             pullRequest: false,
             createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: script.updated?.[number] ?? '2026-01-01T00:00:00Z',
           }),
     issueBlockers: (_reader: unknown, number: number) => {
       const blockers = script.blockers?.[number] ?? [];
@@ -170,6 +207,9 @@ function fakeGithub(
     },
     branchAhead: () => okAsync(script.branchAhead ?? true),
     defaultBranch: () => okAsync('main'),
+    branchState: () =>
+      okAsync({ sha: 'base-sha', ci: script.baseCi ?? { kind: 'green' as const } }),
+    revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
     relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add: string }) => {
       port.relabels.push({ issue, ...labels });
       return okAsync(undefined);
@@ -187,6 +227,15 @@ function fakeGithub(
     },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
+      changedFiles: () => okAsync({ files: [], truncated: false }),
+      publishReview: () => okAsync({ status: true }),
+      baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
+      updateBranch: () => okAsync({ kind: 'updating' as const }),
+      commitParents: () => okAsync([]),
+      baseChanges: () => okAsync({ commits: [], files: [] }),
+      mergeQueueRequired: () => okAsync(false),
+      enqueue: () => okAsync({ kind: 'queued' as const }),
+      queueState: () => okAsync('merged' as const),
       pullHead: () =>
         okAsync({ sha: 'sha-head', autoMerge: false, ...script.head, baseRef: 'main' }),
       publishProofCheck: (_pr: unknown, check: FactoryProofCheck) => {
@@ -212,10 +261,14 @@ function fakeGithub(
 const resolveRuntime = async () => 'local' as const;
 
 /** Agent threads that never finish until the watcher stops. */
-const pendingThreads = async (_threadId: string, signal: AbortSignal) =>
-  new Promise<{ status: 'cancelled' }>((resolve) =>
+const pendingThreads = async (threadId: string, signal: AbortSignal) => {
+  // The triage agent finishes (its answer is `passingReview`'s): what never
+  // finishes is the work that follows it.
+  if (threadId.startsWith('tri-')) return { status: 'completed' as const, output: '' };
+  return new Promise<{ status: 'cancelled' }>((resolve) =>
     signal.addEventListener('abort', () => resolve({ status: 'cancelled' })),
   );
+};
 
 /** Agent threads that end at once with `status`. */
 const finishedThreads = (status: 'completed' | 'failed') => async () => ({
@@ -242,6 +295,7 @@ async function enableFactory(
     maxConcurrent?: number;
     flowName?: string;
     mode?: 'manual' | 'automatic';
+    stageLimits?: Record<string, number>;
   } = {},
 ) {
   const settings = createFactorySettingsService();
@@ -343,6 +397,7 @@ describe('factory watcher', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const sandboxCalls: Array<{ userId: string; body: Record<string, unknown> }> = [];
+    const triageCalls: Array<Record<string, unknown>> = [];
     await startWatcherWithProof({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
@@ -351,6 +406,11 @@ describe('factory watcher', () => {
       resolveRuntime: async () => 'sandbox' as const,
       waitThread: pendingThreads,
       launchSandbox: async (userId, body) => {
+        // Triage reads untrusted issue text: it runs in the sandbox too.
+        if (String(body.title).startsWith('[Factory triage]')) {
+          triageCalls.push(body);
+          return ok({ thread: { id: 'tri-s' }, threadId: 'tri-s', runnerId: 'sandbox' });
+        }
         sandboxCalls.push({ userId, body });
         return ok({ thread: { id: 's-1' }, threadId: 's-1', runnerId: 'sandbox' });
       },
@@ -359,6 +419,8 @@ describe('factory watcher', () => {
     await poll.ticks[0]!();
 
     expect(launcher.calls).toHaveLength(0);
+    expect(triageCalls).toHaveLength(1);
+    expect(triageCalls[0]).toMatchObject({ permissionMode: 'plan', source: 'factory' });
     expect(sandboxCalls).toHaveLength(1);
     expect(sandboxCalls[0]!.userId).toBe('alice');
     expect(sandboxCalls[0]!.body).toMatchObject({ projectId: 'p1', source: 'factory' });
@@ -444,6 +506,8 @@ describe('factory watcher', () => {
     const gate = new Promise<void>((resolve) => (release = resolve));
     const calls: StartThreadInput[] = [];
     const slowLaunch = async (input: StartThreadInput): Promise<LaunchResult> => {
+      // The triage agent starts at once; the implementing agent's launch is the slow one.
+      if (isReviewerLaunch(input)) return launchReviewer(input);
       calls.push(input);
       await gate;
       return launchedThread('t-1');
@@ -469,11 +533,14 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
     let seenDuringLaunch: unknown = 'unset';
-    const launch = async (): Promise<LaunchResult> => {
-      seenDuringLaunch = (
-        await createFactoryRunsRepository().activeByIssue(factoryId, 7)
-      )._unsafeUnwrap()?.state;
-      return launchedThread('t-1');
+    const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
+      // The run's first launch (its triage agent): the issue is already taken.
+      if (seenDuringLaunch === 'unset') {
+        seenDuringLaunch = (
+          await createFactoryRunsRepository().activeByIssue(factoryId, 7)
+        )._unsafeUnwrap()?.state;
+      }
+      return isReviewerLaunch(input) ? launchReviewer(input) : launchedThread('t-1');
     };
     await startWatcherWithProof({
       ports,
@@ -505,7 +572,8 @@ describe('factory watcher', () => {
     await poll.ticks[0]!();
     await poll.ticks[0]!();
 
-    expect(offline.calls).toHaveLength(2);
+    // Each tick tried the implementing agent once (and its triage before it).
+    expect(offline.calls.filter(isImplementerLaunch)).toHaveLength(2);
     expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
   });
 
@@ -554,6 +622,306 @@ describe('factory watcher', () => {
     await poll.ticks[0]!();
 
     expect(launcher.calls.map((call) => call.body.title)).toEqual(['[Factory] #2 b']);
+  });
+
+  // Change factory-agent-roles, phase 2: triage, through the real watcher.
+  describe('triage', () => {
+    const json = (value: unknown) => ['```json', JSON.stringify(value), '```'].join('\n');
+    const asks = json({ decision: 'needs_info', questions: ['Which endpoint is slow?'] });
+    const readyFor = (paths: string[]) =>
+      json({
+        decision: 'ready',
+        contract: { acceptanceCriteria: ['It works'], likelyPaths: paths },
+      });
+    const issues = [
+      { number: 1, title: 'a', url: 'u/1' },
+      { number: 2, title: 'b', url: 'u/2' },
+    ];
+    const implementing = (launcher: ReturnType<typeof fakeLauncher>) =>
+      launcher.calls.filter(isImplementerLaunch).map((call) => call.body.title);
+    const runOf = async (factoryId: string, issue: number) =>
+      (await createFactoryRunsRepository().list(factoryId))
+        ._unsafeUnwrap()
+        .find((run) => run.issueNumber === issue)!;
+
+    /** A watcher whose triage agent says `says(threadId)`; the work after it never finishes. */
+    async function watching(
+      script: GithubScript,
+      says: (threadId: string) => string,
+      listed = issues.slice(0, 1),
+    ) {
+      const factoryId = await enableFactory({ maxConcurrent: 2 });
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      const github = fakeGithub('acme/repo', listed, script);
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+        lastThreadMessage: async (threadId) =>
+          threadId.startsWith('tri-') ? says(threadId) : null,
+      });
+      return { factoryId, poll, launcher, github };
+    }
+
+    test('an ambiguous issue gets one comment, holds no slot and starts no implementing agent', async () => {
+      const { factoryId, poll, launcher, github } = await watching({}, () => asks);
+      await poll.ticks[0]!();
+
+      const run = await runOf(factoryId, 1);
+      expect(run.state).toBe('needs_info');
+      expect(run.triage).toMatchObject({
+        decision: 'needs_info',
+        items: ['Which endpoint is slow?'],
+      });
+      expect(github.comments).toHaveLength(1);
+      expect(github.comments[0]).toMatchObject({ issue: 1 });
+      expect(implementing(launcher)).toEqual([]);
+      expect((await createFactoryRunsRepository().countActive(factoryId))._unsafeUnwrap()).toBe(0);
+    });
+
+    test('the label does not start a second run, and an unchanged issue is not triaged again', async () => {
+      const { factoryId, poll, github } = await watching({}, () => asks);
+      await poll.ticks[0]!();
+      await poll.ticks[0]!();
+      await poll.ticks[0]!();
+
+      const runs = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.state).toBe('needs_info');
+      // Still the one comment, and the one triage.
+      expect(github.comments).toHaveLength(1);
+    });
+
+    test('the author answers: the issue is triaged again and, now clear, worked', async () => {
+      const script: GithubScript = {};
+      let answer = asks;
+      const { factoryId, poll, launcher } = await watching(script, () => answer);
+      await poll.ticks[0]!();
+      expect((await runOf(factoryId, 1)).state).toBe('needs_info');
+
+      // A comment on the issue moves its update time; triage now finds it clear.
+      script.updated = { 1: '2030-01-01T00:00:00Z' };
+      answer = readyFor([]);
+      await poll.ticks[0]!();
+
+      const run = await eventually(factoryId, (r) => r.threadIds.length > 0);
+      expect(run.state).toBe('working');
+      expect(run.triage).toMatchObject({ decision: 'ready' });
+      expect(implementing(launcher)).toHaveLength(1);
+      // A second triage on its own thread: the first one's answer is not read again.
+      const triageThreads = testDb.sqlite
+        .query("SELECT COUNT(*) AS n FROM threads WHERE title LIKE '[Factory triage]%'")
+        .get() as { n: number };
+      expect(triageThreads.n).toBe(2);
+      // The same run, not a second one.
+      expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toHaveLength(1);
+    });
+
+    test('two issues that touch the same file run one after the other, the second without a new triage', async () => {
+      const { factoryId, poll, launcher } = await watching(
+        {},
+        () => readyFor(['src/db/migrate.ts']),
+        issues,
+      );
+      await poll.ticks[0]!();
+
+      // The first works; the second waits in the queue, with its contract and the reason.
+      expect(implementing(launcher)).toEqual(['[Factory] #1 a']);
+      const waiting = await runOf(factoryId, 2);
+      expect(waiting.state).toBe('requested');
+      expect(waiting.waitReason).toEqual({ kind: 'paths-overlap', blockers: [1] });
+      expect(waiting.triage).toMatchObject({ decision: 'ready' });
+      const triages = () =>
+        testDb.sqlite
+          .query("SELECT COUNT(*) AS n FROM threads WHERE title LIKE '[Factory triage]%'")
+          .get() as { n: number };
+      expect(triages().n).toBe(2);
+
+      // Still waiting while the first works.
+      await poll.ticks[0]!();
+      expect(implementing(launcher)).toEqual(['[Factory] #1 a']);
+
+      // The first leaves those states: the second starts, with the contract it already has.
+      const first = await runOf(factoryId, 1);
+      await createFactoryRunsRepository().update(first.id, { state: 'waiting_human' });
+      await poll.ticks[0]!();
+      // Admitted from the queue, the second run's thread is named from the issue as it is now.
+      expect(implementing(launcher)).toEqual(['[Factory] #1 a', '[Factory] #2 Issue 2']);
+      expect(triages().n).toBe(2);
+    });
+
+    test('issues that touch different files work at once', async () => {
+      const { poll, launcher } = await watching(
+        {},
+        (threadId) => readyFor([`src/${threadId}.ts`]),
+        issues,
+      );
+      await poll.ticks[0]!();
+      expect(implementing(launcher)).toEqual(['[Factory] #1 a', '[Factory] #2 b']);
+    });
+  });
+
+  // Change factory-agent-roles, D10: a broken base branch pauses admissions.
+  describe('an incident', () => {
+    const red: CiState = {
+      kind: 'failing',
+      checks: [{ name: 'test', conclusion: 'failure', excerpt: 'expected 3, got 2' }],
+    };
+
+    /** A factory with a run merged just now, and one labelled issue waiting. */
+    async function afterAMerge(script: GithubScript) {
+      const factoryId = await enableFactory();
+      const runs = createFactoryRunsRepository();
+      const merged = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
+      await runs.update(merged.id, {
+        state: 'merged',
+        prUrl: 'https://github.com/acme/repo/pull/9',
+      });
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      const notices: Array<{ userId: string; body: string }> = [];
+      await startWatcherWithProof({
+        ports,
+        github: fakeGithub('acme/repo', [{ number: 2, title: 'b', url: 'u/2' }], script),
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+        notify: async (userId, notice) => notices.push({ userId, body: notice.body }),
+      });
+      const blockedReason = async () =>
+        (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap()?.blockedReason;
+      const sentinels = () =>
+        launcher.calls.filter((call) => /^\[Factory sentinel\]/.test(String(call.body.title)));
+      return { factoryId, poll, launcher, blockedReason, sentinels };
+    }
+
+    test('the base branch red after a merge: no issue is admitted, and a sentinel starts', async () => {
+      const { poll, launcher, blockedReason, sentinels } = await afterAMerge({ baseCi: red });
+      await poll.ticks[0]!();
+
+      expect(launcher.calls.filter(isImplementerLaunch)).toEqual([]);
+      expect(sentinels()).toHaveLength(1);
+      expect(sentinels()[0]!.body).toMatchObject({ permissionMode: 'plan' });
+      expect(await blockedReason()).toContain('Incident: the base branch main of acme/repo is red');
+      // Still paused on the next tick, with the one incident and the one sentinel.
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch)).toEqual([]);
+      expect(sentinels()).toHaveLength(1);
+    });
+
+    test('the base branch green again: the incident closes and the issue is admitted', async () => {
+      const script: GithubScript = { baseCi: red };
+      const { poll, launcher, blockedReason } = await afterAMerge(script);
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch)).toEqual([]);
+
+      script.baseCi = { kind: 'green' };
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch).map((call) => call.body.title)).toEqual([
+        '[Factory] #2 b',
+      ]);
+      expect(await blockedReason()).toBeNull();
+    });
+
+    test('a green base branch after a merge admits as usual', async () => {
+      const { poll, launcher, sentinels } = await afterAMerge({});
+      await poll.ticks[0]!();
+      expect(launcher.calls.filter(isImplementerLaunch)).toHaveLength(1);
+      expect(sentinels()).toEqual([]);
+    });
+  });
+
+  // Change factory-agent-roles, D13: the factory's own limit for a stage.
+  test('a stage limit of one: the second run waits for the implement slot while the first works', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 2, stageLimits: { implement: 1 } });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [
+        { number: 1, title: 'a', url: 'u/1' },
+        { number: 2, title: 'b', url: 'u/2' },
+      ]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    // Both issues are admitted (two runs in flight), one agent is working.
+    const runs = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(runs).toHaveLength(2);
+    expect(launcher.calls).toHaveLength(1);
+    const waiters = testDb.sqlite
+      .query('SELECT group_key, holder FROM workflow_concurrency_waiters')
+      .all() as Array<{ group_key: string; holder: string }>;
+    expect(waiters.map((waiter) => waiter.group_key)).toEqual([`implement:${factoryId}`]);
+  });
+
+  test('without a stage limit both runs work at once', async () => {
+    await enableFactory({ maxConcurrent: 2 });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [
+        { number: 1, title: 'a', url: 'u/1' },
+        { number: 2, title: 'b', url: 'u/2' },
+      ]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(2);
+  });
+
+  // Change factory-agent-roles, D8: waiting for the repository's merge slot is in
+  // flight, so a full merge lane slows admissions instead of piling up pull requests.
+  test('runs waiting for the merge slot hold their slots: no issue is admitted', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 2 });
+    const runs = createFactoryRunsRepository();
+    for (const issueNumber of [1, 2]) {
+      const run = (await runs.start({ factoryId, issueNumber }))._unsafeUnwrap();
+      await runs.update(run.id, { state: 'merging' });
+    }
+    const issues = [
+      { number: 1, title: 'a', url: 'u/1' },
+      { number: 2, title: 'b', url: 'u/2' },
+      { number: 3, title: 'c', url: 'u/3' },
+    ];
+    const start = async () => {
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      await startWatcherWithProof({
+        ports,
+        github: fakeGithub('acme/repo', issues),
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+      });
+      await poll.ticks[0]!();
+      return launcher.calls.map((call) => call.body.title);
+    };
+
+    expect(await start()).not.toContain('[Factory] #3 c');
+
+    // One of them parks for a person: its slot is free and the next issue comes in.
+    stopFactoryWatcher();
+    const [first] = (await runs.inFlight(factoryId))._unsafeUnwrap();
+    await runs.update(first!.id, { state: 'waiting_human' });
+    expect(await start()).toContain('[Factory] #3 c');
   });
 
   test('a factory whose enabler lost steer access is turned off and starts nothing', async () => {
@@ -649,6 +1017,8 @@ describe('factory flow', () => {
   async function runFlow(
     script: GithubScript,
     waitThread: (id: string, signal: AbortSignal) => Promise<any>,
+    /** What a thread's last message is (a reviewer's verdict); default: every review passes. */
+    lastThreadMessage: (threadId: string) => Promise<string | null> = passingReview,
   ) {
     const factoryId = await enableFactory();
     const poll = fakePoll();
@@ -664,6 +1034,7 @@ describe('factory flow', () => {
       launch: launcher.launch,
       resolveRuntime,
       waitThread,
+      lastThreadMessage,
       cleanupMerged: async (userId, threadIds) => {
         cleanups.push({ userId, threadIds });
       },
@@ -703,7 +1074,75 @@ describe('factory flow', () => {
     for (let i = 0; i < 100 && cleanups.length === 0; i++) {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
-    expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
+    // The implementing thread's worktree, the triage agent's and the reviewer's.
+    expect(cleanups).toEqual([
+      {
+        userId: 'alice',
+        threadIds: ['t-1', expect.stringMatching(/^tri-\d+$/), expect.stringMatching(/^rev-\d+$/)],
+      },
+    ]);
+  });
+
+  // Change factory-agent-roles, D8: the server merges by rule and asks no agent
+  // about a failure that is not code.
+  test('a merge a branch rule refuses leaves the run for a person and starts no agent', async () => {
+    const { factoryId, github, followUps, launcher } = await runFlow(
+      {
+        merge: {
+          kind: 'not-mergeable',
+          reason: 'At least 1 approving review is required by reviewers with write access.',
+        },
+      },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.currentStep).toBe('merge');
+    expect(run.failureReason).toContain('At least 1 approving review is required');
+    expect(github.merges).toBe(1);
+    // Nobody was asked to fix it: no follow-up to the implementer, no new thread.
+    expect(followUps).toEqual([]);
+    expect(launcher.calls).toHaveLength(1);
+  });
+
+  // Change factory-agent-roles: the review gate, through the real flow runner.
+  test('a review that keeps failing sends its findings to the implementer, then leaves the run for a person', async () => {
+    const failing = [
+      '```json',
+      JSON.stringify({
+        sha: 'sha-head',
+        verdict: 'fail',
+        findings: [{ severity: 'high', title: 'Negative numbers are dropped', path: 'src/sum.ts' }],
+      }),
+      '```',
+    ].join('\n');
+    const { factoryId, github, followUps, launcher } = await runFlow(
+      {},
+      finishedThreads('completed'),
+      // Triage is ready; the reviewer fails the change.
+      async (id) => (id.startsWith('tri-') ? passingReview(id) : failing),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(github.merges).toBe(0);
+    expect(run.currentStep).toBe('review');
+    expect(run.failureReason).toContain('loop exhausted');
+    expect(run.reviews).toMatchObject([{ sha: 'sha-head', verdict: 'fail' }]);
+    // One implementing thread; the findings reached it as follow-ups, twice (three reviews).
+    expect(launcher.calls).toHaveLength(1);
+    expect(followUps).toHaveLength(2);
+    expect(followUps.every((f) => f.threadId === 't-1')).toBe(true);
+    expect(followUps[0]!.content).toContain('[high] src/sum.ts: Negative numbers are dropped');
+    // The reviewer is never a step of the implementing thread.
+    expect(run.threadIds.every((id) => id === 't-1')).toBe(true);
+  });
+
+  test('a reviewer that answers in prose leaves the run for a person: "review gave no verdict"', async () => {
+    const { factoryId, github } = await runFlow({}, finishedThreads('completed'), async (id) =>
+      id.startsWith('tri-') ? passingReview(id) : 'The change looks fine to me.',
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.failureReason).toBe('review gave no verdict');
+    expect(run.currentStep).toBe('review');
+    expect(github.merges).toBe(0);
   });
 
   const red: CiState = {
@@ -834,7 +1273,16 @@ describe('factory flow', () => {
   test('a failed run records its flow steps, the step it failed at and why', async () => {
     const { factoryId } = await runFlow({ pr: false }, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'failed');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual([
+      'triage',
+      'implement',
+      'pull-request',
+      'address',
+      'regression-proof',
+      'ci',
+      'review',
+      'merge',
+    ]);
     expect(run.currentStep).toBe('pull-request');
     expect(run.failureReason).toContain('No open pull request');
   });
@@ -889,7 +1337,16 @@ describe('factory flow', () => {
   test('a merged run has its steps and no failure reason', async () => {
     const { factoryId } = await runFlow({}, finishedThreads('completed'));
     const run = await eventually(factoryId, (r) => r.state === 'merged');
-    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'regression-proof', 'ci', 'merge']);
+    expect(run.flowSteps).toEqual([
+      'triage',
+      'implement',
+      'pull-request',
+      'address',
+      'regression-proof',
+      'ci',
+      'review',
+      'merge',
+    ]);
     expect(run.failureReason).toBeNull();
   });
 
@@ -920,8 +1377,8 @@ describe('factory flow', () => {
       '    wait_ci: {}',
       '  - id: merge',
       '    depends_on: [ci]',
-      '    concurrency: { group: "merge-{{inputs.repo}}", limit: 1 }',
-      '    merge: { method: squash, require_regression_proof: false }',
+      // No concurrency here: the factory puts every merge in the repository's lane.
+      '    merge: { method: squash, require_regression_proof: false, require_review: false }',
     ].join('\n');
     const twoIssues = [
       { number: 1, title: 'a', url: 'u/1' },
@@ -984,9 +1441,10 @@ describe('factory flow', () => {
       await until(() => rows('workflow_concurrency_waiters').length === 1, 'a waiter');
       expect(github.merges).toBe(1);
       const [lease] = rows('workflow_concurrency_leases');
-      expect(lease?.group_key).toBe('merge-o/r');
+      // The lane of the repository and its base branch, though the flow declares none.
+      expect(lease?.group_key).toBe('merge:o/r:main');
       const [waiter] = rows('workflow_concurrency_waiters');
-      expect(waiter?.group_key).toBe('merge-o/r');
+      expect(waiter?.group_key).toBe('merge:o/r:main');
       // Holders are `<runId>/<node>/<visit>`: the lease and the waiter are the two runs.
       const runs = await allRuns(factoryId);
       const runOf = (holder?: string) => holder?.split('/')[0];

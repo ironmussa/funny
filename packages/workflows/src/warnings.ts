@@ -12,14 +12,41 @@ interface WarnedWorkflow {
     depends_on: string[];
     trigger_rule?: string;
     on_error?: string;
-    merge?: { require_regression_proof?: boolean };
+    merge?: { require_regression_proof?: boolean; require_review?: boolean };
     regression_proof?: { rules?: unknown[] };
+    review?: object;
   }>;
 }
 
 /** Every warning of the workflow, in node order. */
 export function workflowWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {
-  return [...continuedFailureSkips(workflow), ...regressionProofWarnings(workflow)];
+  return [
+    ...continuedFailureSkips(workflow),
+    ...regressionProofWarnings(workflow),
+    ...mergeWithoutReview(workflow),
+  ];
+}
+
+/**
+ * A `merge` that needs a review (the default) in a flow with no `review`
+ * step: no commit ever gets a verdict, so every run stops at the merge and
+ * waits for a person.
+ */
+function mergeWithoutReview(workflow: WarnedWorkflow): WorkflowIssue[] {
+  if (workflow.nodes.some((n) => n.review !== undefined)) return [];
+  return workflow.nodes.flatMap((n, index) =>
+    n.merge && n.merge.require_review !== false
+      ? [
+          {
+            path: `nodes.${index}.merge`,
+            message:
+              `"${n.id}" needs a passing review of the commit it merges, and this flow has no review step. ` +
+              'Every run will wait for a person at the merge. Add a review step before it, ' +
+              'or set require_review: false on the merge.',
+          },
+        ]
+      : [],
+  );
 }
 
 function regressionProofWarnings(workflow: WarnedWorkflow): WorkflowIssue[] {

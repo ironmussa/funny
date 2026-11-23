@@ -1,0 +1,389 @@
+/**
+ * Triage of a factory run's issue (change factory-agent-roles, phase 2): the
+ * agent's answer, the issue comment, the contract, and the soft hold on
+ * overlapping paths.
+ */
+import { describe, expect, test } from 'bun:test';
+
+import type { FactoryTriage } from '@funny/shared/contracts/factory';
+import { err, ok, okAsync } from 'neverthrow';
+
+import { createFactoryActionProvider } from '../../../services/factory/factory-action-provider.js';
+import type { UpdateRunInput } from '../../../services/factory/factory-runs.js';
+import {
+  busyPathsOf,
+  globsOverlap,
+  issueChangedSince,
+  NEEDS_INFO_REASON,
+  overlappingIssues,
+  publicItems,
+  TRIAGE_QUESTIONS_LINE,
+  TRIAGE_TOO_BIG_LINE,
+  triageComment,
+} from '../../../services/factory/factory-triage.js';
+
+type ProviderDeps = Parameters<typeof createFactoryActionProvider>[0];
+
+const scope = {
+  runId: 'r1',
+  userId: 'alice',
+  projectId: 'p1',
+  repo: 'o/r',
+  mode: 'worktree' as const,
+  issueNumber: 7,
+  issueTitle: 'Fix it',
+  branch: 'factory/issue-7-r1',
+  issueUrl: 'https://github.com/o/r/issues/7',
+};
+
+const json = (value: unknown) => ['```json', JSON.stringify(value), '```'].join('\n');
+const CONTRACT = {
+  acceptanceCriteria: ['Negative numbers are summed'],
+  likelyPaths: ['src/sum.ts'],
+  riskHints: [],
+};
+const READY = json({ decision: 'ready', contract: CONTRACT });
+
+interface Script {
+  /** What the triage agent says: its final message, then after the re-emit request. */
+  says: Array<string | null>;
+  stored?: FactoryTriage | null;
+  busy?: Array<{ issue: number; paths: string[] }>;
+  /** Whether the hold takes (the run was still triaging). */
+  holds?: boolean;
+  launchFails?: boolean;
+  /** A triage thread of this run found by its title. */
+  found?: string;
+}
+
+function triaging(script: Script) {
+  const bodies: Record<string, unknown>[] = [];
+  const recorded: UpdateRunInput[] = [];
+  const comments: string[] = [];
+  const held: number[][] = [];
+  let turn = 0;
+  const deps: ProviderDeps = {
+    scope,
+    threadIds: [],
+    prUrl: null,
+    launchStartedAt: null,
+    triage: script.stored ?? null,
+    admittedAt: '2026-11-22T00:00:00.000Z',
+    findLaunched: async () => null,
+    findTriageThread: async () => script.found ?? null,
+    launch: async (body) => {
+      if (script.launchFails) {
+        return err({ kind: 'runner-unavailable' as const, status: 502, message: 'runner offline' });
+      }
+      bodies.push(body);
+      return ok({ thread: { id: 'tri-1' }, threadId: 'tri-1', runnerId: 'r' });
+    },
+    defaultBranch: async () => ok('main'),
+    waitThread: async () => ({ status: 'completed' as const, output: '' }),
+    lastThreadMessage: async () => script.says[turn] ?? null,
+    continuation: {
+      followUp: async () => ok(undefined),
+      completedAt: async () => null,
+      followedUpSince: async () => false,
+      followUpOffBranch: async () => {
+        turn += 1;
+        return ok(undefined);
+      },
+    },
+    busyPaths: async () => script.busy ?? [],
+    holdForPaths: async (blockers) => {
+      held.push(blockers);
+      return script.holds ?? true;
+    },
+    issueUpdatedAt: async () => '2026-11-22T10:00:05.000Z',
+    github: {
+      branchAhead: () => okAsync(true),
+      commentOnIssue: (_reader, _issue, body) => {
+        comments.push(body);
+        return okAsync(undefined);
+      },
+      findPullRequest: () => okAsync(null),
+      // SAFETY: triage runs before the run has a pull request; none of these is called.
+      pullRequests: {} as ProviderDeps['github']['pullRequests'],
+    },
+    record: async (input) => {
+      recorded.push(input);
+    },
+    signal: new AbortController().signal,
+  };
+  const provider = createFactoryActionProvider(deps);
+  const stored = () => recorded.flatMap((input) => (input.triage ? [input.triage] : [])).at(-1);
+  return { provider, bodies, recorded, comments, held, stored };
+}
+
+describe('paths that overlap', () => {
+  test('the same file, a file under a directory, and a glob over it overlap', () => {
+    expect(globsOverlap('src/db/migrate.ts', 'src/db/migrate.ts')).toBe(true);
+    expect(globsOverlap('src/db', 'src/db/migrate.ts')).toBe(true);
+    expect(globsOverlap('src/db/**', 'src/db/migrate.ts')).toBe(true);
+    expect(globsOverlap('src/**/*.ts', 'src/db/*.sql')).toBe(true);
+  });
+
+  test('different files and different directories do not', () => {
+    expect(globsOverlap('src/a.ts', 'src/ab.ts')).toBe(false);
+    expect(globsOverlap('src/a', 'src/ab/file.ts')).toBe(false);
+    expect(globsOverlap('packages/client/**', 'packages/server/**')).toBe(false);
+  });
+
+  test('the issues whose paths overlap, once each', () => {
+    expect(
+      overlappingIssues(
+        ['src/db/migrate.ts', 'docs/**'],
+        [
+          { issue: 12, paths: ['src/db/**', 'docs/a.md'] },
+          { issue: 13, paths: ['packages/client/**'] },
+        ],
+      ),
+    ).toEqual([12]);
+  });
+
+  test('only runs changing files hold their paths, and never the run itself', () => {
+    const triage = { decision: 'ready' as const, at: '2026-11-22T00:00:00Z', contract: CONTRACT };
+    const run = (
+      id: string,
+      issueNumber: number,
+      state: string,
+      t: FactoryTriage | null = triage,
+    ) => ({
+      id,
+      issueNumber,
+      state,
+      triage: t,
+    });
+    expect(
+      busyPathsOf(
+        [
+          run('me', 1, 'working'),
+          run('a', 2, 'working'),
+          run('b', 3, 'merging'),
+          run('c', 4, 'triaging'),
+          run('d', 5, 'requested'),
+          run('e', 6, 'waiting_human'),
+          run('f', 8, 'working', null),
+        ],
+        'me',
+      ),
+    ).toEqual([
+      { issue: 2, paths: ['src/sum.ts'] },
+      { issue: 3, paths: ['src/sum.ts'] },
+    ]);
+  });
+});
+
+describe('what triage puts on the issue', () => {
+  test('a mention and a link in a question are removed', () => {
+    const comment = triageComment('needs_info', [
+      'Ask @octocat which endpoint, see https://example.com/x and [the doc](https://evil.test/a)',
+    ]);
+    expect(comment).toStartWith(TRIAGE_QUESTIONS_LINE);
+    expect(comment).toContain('> - Ask octocat which endpoint, see and the doc');
+    expect(comment).not.toContain('@');
+    expect(comment).not.toContain('http');
+  });
+
+  test('at most five items of 300 characters, and empty ones are dropped', () => {
+    const items = publicItems([
+      'a',
+      ' ',
+      'https://only.a/link',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'x'.repeat(900),
+    ]);
+    expect(items).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(publicItems(['y'.repeat(900)])[0]).toHaveLength(300);
+  });
+
+  test('a split is posted under its own line', () => {
+    expect(triageComment('too_big', ['Schema', 'UI'])).toStartWith(TRIAGE_TOO_BIG_LINE);
+  });
+
+  test('an issue changed after triage asked is triaged again; an unchanged one is not', () => {
+    const asked = { decision: 'needs_info' as const, at: '2026-11-22T10:00:05.000Z' };
+    expect(issueChangedSince(asked, '2026-11-22T10:30:00Z')).toBe(true);
+    expect(issueChangedSince(asked, '2026-11-22T10:00:05Z')).toBe(false);
+    expect(issueChangedSince(asked, undefined)).toBe(false);
+    expect(issueChangedSince(null, '2026-11-22T10:30:00Z')).toBe(false);
+  });
+});
+
+describe('the triage step', () => {
+  test('runs on a new read-only thread, told to read the issue, with the paths in progress', async () => {
+    const { provider, bodies, recorded } = triaging({
+      says: [READY],
+      busy: [{ issue: 12, paths: ['packages/client/**'] }],
+    });
+    await provider.triage!({ model: 'haiku' });
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({
+      permissionMode: 'plan',
+      source: 'factory',
+      model: 'haiku',
+      title: '[Factory triage] #7 Fix it',
+      baseBranch: 'main',
+    });
+    expect(bodies[0]).not.toHaveProperty('branch');
+    const prompt = String(bodies[0]?.prompt);
+    expect(prompt).toContain('https://github.com/o/r/issues/7');
+    expect(prompt).toContain('- packages/client/**');
+    // The issue's own text is never inlined.
+    expect(prompt).not.toContain('Fix it');
+    expect(recorded).toContainEqual({ state: 'triaging' });
+  });
+
+  test('ready: the contract is stored and handed to the implementing agent', async () => {
+    const { provider, stored, comments } = triaging({ says: [`Clear enough.\n${READY}`] });
+    const result = await provider.triage!({});
+    expect(result).toMatchObject({ ok: true, output: 'ready', metadata: { decision: 'ready' } });
+    expect(String(result.metadata?.contract)).toContain('- Negative numbers are summed');
+    expect(String(result.metadata?.contract)).toContain('- src/sum.ts');
+    expect(stored()).toMatchObject({ decision: 'ready', threadId: 'tri-1', contract: CONTRACT });
+    expect(comments).toEqual([]);
+  });
+
+  test('needs_info: one comment with the questions, and the run waits on its issue', async () => {
+    const { provider, comments, recorded } = triaging({
+      says: [json({ decision: 'needs_info', questions: ['Which endpoint is slow?', 'How slow?'] })],
+    });
+    const result = await provider.triage!({});
+    expect(result).toMatchObject({ ok: false, metadata: { outcome: 'needs_info' } });
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toContain('> - Which endpoint is slow?\n> - How slow?');
+    expect(recorded).toContainEqual({
+      state: 'needs_info',
+      failureReason: NEEDS_INFO_REASON,
+      triage: {
+        decision: 'needs_info',
+        // GitHub's own time of the issue after the comment: the comment is not an answer.
+        at: '2026-11-22T10:00:05.000Z',
+        threadId: 'tri-1',
+        items: ['Which endpoint is slow?', 'How slow?'],
+      },
+    });
+  });
+
+  test('too_big: the proposed split is posted, and the run waits the same way', async () => {
+    const { provider, comments, recorded } = triaging({
+      says: [json({ decision: 'too_big', parts: ['The schema', 'The screen'] })],
+    });
+    expect((await provider.triage!({})).ok).toBe(false);
+    expect(comments[0]).toStartWith(TRIAGE_TOO_BIG_LINE);
+    expect(recorded.some((input) => input.state === 'needs_info')).toBe(true);
+  });
+
+  test('prose, then a valid answer after one request', async () => {
+    const { provider, stored } = triaging({ says: ['Looks doable.', READY] });
+    expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+    expect(stored()?.decision).toBe('ready');
+  });
+
+  test('no valid answer twice: the run goes on without a contract, and shows it has none', async () => {
+    const { provider, stored, comments } = triaging({ says: ['prose', 'more prose'] });
+    const result = await provider.triage!({});
+    expect(result).toMatchObject({ ok: true, output: 'none', metadata: { contract: '' } });
+    expect(stored()).toMatchObject({ decision: 'none', threadId: 'tri-1' });
+    expect(comments).toEqual([]);
+  });
+
+  test('a triage agent that cannot start: the run goes on, and nothing is remembered', async () => {
+    const { provider, stored } = triaging({ says: [], launchFails: true });
+    expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'none' });
+    expect(stored()).toBeUndefined();
+  });
+
+  test('a superseded answer is triaged again on a new thread, not read from the old one', async () => {
+    const { provider, bodies, stored } = triaging({
+      says: [READY],
+      stored: {
+        decision: 'needs_info',
+        at: '2026-11-22T09:00:00Z',
+        threadId: 'tri-old',
+        items: ['Which endpoint?'],
+        superseded: true,
+      },
+      // The newest triage thread by title is still the old one.
+      found: 'tri-old',
+    });
+    expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+    expect(bodies).toHaveLength(1);
+    expect(stored()).toMatchObject({ decision: 'ready', threadId: 'tri-1' });
+    expect(stored()?.superseded).toBeUndefined();
+  });
+
+  test('a triage thread a crashed attempt launched is adopted', async () => {
+    const { provider, bodies, stored } = triaging({ says: [READY], found: 'tri-crashed' });
+    expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+    expect(bodies).toEqual([]);
+    expect(stored()).toMatchObject({ threadId: 'tri-crashed' });
+  });
+
+  test('a run that already has its contract is not triaged again', async () => {
+    const { provider, bodies } = triaging({
+      says: [],
+      stored: { decision: 'ready', at: '2026-11-22T09:00:00Z', contract: CONTRACT },
+    });
+    expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+    expect(bodies).toEqual([]);
+  });
+});
+
+describe('runs with overlapping paths do not work at the same time', () => {
+  test('the run leaves its slot and waits for the run working on the same file', async () => {
+    const { provider, held, stored } = triaging({
+      says: [READY],
+      busy: [{ issue: 12, paths: ['src/sum.ts'] }],
+    });
+    const result = await provider.triage!({});
+    expect(result).toMatchObject({ ok: false, metadata: { outcome: 'path_hold', blockers: [12] } });
+    expect(result.error).toContain('#12');
+    expect(held).toEqual([[12]]);
+    // It keeps its contract: it is not triaged again when it starts.
+    expect(stored()?.decision).toBe('ready');
+  });
+
+  test('no overlap: the run goes on', async () => {
+    const { provider, held } = triaging({
+      says: [READY],
+      busy: [{ issue: 12, paths: ['packages/client/**'] }],
+    });
+    expect((await provider.triage!({})).ok).toBe(true);
+    expect(held).toEqual([]);
+  });
+
+  test('a run without a contract neither holds paths nor waits for them', async () => {
+    const { provider, held } = triaging({
+      says: ['prose', 'prose'],
+      busy: [{ issue: 12, paths: ['**'] }],
+    });
+    expect((await provider.triage!({})).ok).toBe(true);
+    expect(held).toEqual([]);
+  });
+
+  test('back from a hold with the paths still busy: it waits again without a new triage', async () => {
+    const { provider, bodies, held } = triaging({
+      says: [],
+      stored: { decision: 'ready', at: '2026-11-22T09:00:00Z', contract: CONTRACT },
+      busy: [{ issue: 12, paths: ['src/**'] }],
+    });
+    expect((await provider.triage!({})).ok).toBe(false);
+    expect(bodies).toEqual([]);
+    expect(held).toEqual([[12]]);
+  });
+
+  test('a hold that does not take (the run already moved on) lets the run go on', async () => {
+    const { provider } = triaging({
+      says: [READY],
+      busy: [{ issue: 12, paths: ['src/sum.ts'] }],
+      holds: false,
+    });
+    expect((await provider.triage!({})).ok).toBe(true);
+  });
+});

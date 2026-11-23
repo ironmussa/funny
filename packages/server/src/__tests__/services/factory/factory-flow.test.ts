@@ -7,9 +7,12 @@ import { describe, expect, test } from 'bun:test';
 
 import { ok } from 'neverthrow';
 
+import { admissionPriority } from '../../../services/factory/factory-flow-runs.js';
 import {
+  isMergeLane,
   loadFactoryFlow,
   readFactoryFlowDefinition,
+  reviewerSameAsImplementer,
 } from '../../../services/factory/factory-flow.js';
 
 function fromRepository(yaml: string) {
@@ -93,6 +96,67 @@ describe('factory flow host validation', () => {
     spawn_agent: { prompt: polish }
 `);
     expect(flow.isOk()).toBe(true);
+  });
+
+  // Change factory-agent-roles: the reviewer cannot be given write access by a flow.
+  test('a review step with a write permission mode is refused, naming the step and the field', async () => {
+    const flow = await load(`  - id: implement
+    spawn_agent: { prompt: do it }
+  - id: second-opinion
+    depends_on: [implement]
+    review: { permission_mode: autoEdit }
+`);
+    expect(flow.isErr()).toBe(true);
+    const error = flow._unsafeUnwrapErr();
+    expect(error.kind).toBe('invalid');
+    expect(error.message).toContain('second-opinion');
+    expect(error.message).toContain('permission_mode');
+  });
+
+  test('a review step beside the implementing agent loads: it has its own thread', async () => {
+    const flow = await load(`  - id: implement
+    spawn_agent: { prompt: do it }
+  - id: second-opinion
+    depends_on: [implement]
+    review: { model: opus, early: false }
+`);
+    expect(flow.isOk()).toBe(true);
+  });
+
+  // Change factory-agent-roles, D8: the merge lane.
+  describe('the merge lane', () => {
+    const laneOf = async (mergeNode: string) => {
+      const flow = await load(`  - id: implement
+    spawn_agent: { prompt: do it }
+  - id: land
+    depends_on: [implement]
+${mergeNode}
+`);
+      const node = flow._unsafeUnwrap().pipeline.nodes.find((n) => n.name === 'land');
+      const group = node?.concurrency?.group;
+      const inputs = { repo: 'o/r', base_branch: 'main' };
+      return {
+        // SAFETY: the group reads only the run's inputs.
+        group: typeof group === 'function' ? group({ inputs } as never) : group,
+        limit: node?.concurrency?.limit,
+      };
+    };
+
+    test('a merge without a concurrency group gets the lane of its repository and base branch', async () => {
+      expect(
+        await laneOf('    merge: { require_review: false, require_regression_proof: false }'),
+      ).toEqual({
+        group: 'merge:o/r:main',
+        limit: 1,
+      });
+    });
+
+    test("a merge's own group and limit are replaced: no flow merges two at once", async () => {
+      expect(
+        await laneOf(`    concurrency: { group: "mine-{{inputs.repo}}", limit: 5 }
+    merge: { require_review: false, require_regression_proof: false }`),
+      ).toEqual({ group: 'merge:o/r:main', limit: 1 });
+    });
   });
 
   test('the built-in factory flows pass the rule', async () => {
@@ -185,5 +249,74 @@ describe('reading a factory flow definition', () => {
       readDefaultBranchFile: async () => ok(null),
     });
     expect(read._unsafeUnwrapErr().kind).toBe('invalid');
+  });
+});
+
+describe('who gets a slot first', () => {
+  test('the lane is recognized by its group, so its limit can be pinned', () => {
+    expect(isMergeLane('merge:o/r:main')).toBe(true);
+    expect(isMergeLane('review:factory-1')).toBe(false);
+  });
+
+  test('a run admitted earlier goes first, and the number fits a 32-bit column', () => {
+    const earlier = admissionPriority({ admittedAt: '2026-11-22T10:00:00.000Z', startedAt: '' });
+    const later = admissionPriority({ admittedAt: '2026-11-22T10:00:05.000Z', startedAt: '' });
+    expect(earlier).toBeLessThan(later);
+    expect(later - earlier).toBe(5);
+    expect(
+      admissionPriority({ admittedAt: '2090-01-01T00:00:00.000Z', startedAt: '' }),
+    ).toBeLessThan(2 ** 31);
+  });
+
+  test('a run from before admissions were recorded uses when it started', () => {
+    expect(admissionPriority({ admittedAt: null, startedAt: '2026-11-22T10:00:00.000Z' })).toBe(
+      admissionPriority({ admittedAt: '2026-11-22T10:00:00.000Z', startedAt: '' }),
+    );
+  });
+});
+
+// Change factory-agent-roles: the settings warn when the reviewer is the implementer's model.
+describe('whether the reviewer is the implementer model', () => {
+  const flow = (implement: string, review: string | null, defaults = '') => `name: custom
+${defaults}nodes:
+  - id: implement
+    spawn_agent: { prompt: do it${implement} }
+${review === null ? '' : `  - id: second-opinion\n    depends_on: [implement]\n    review: ${review}\n`}`;
+  const same = (yaml: string) => reviewerSameAsImplementer(yaml, 'custom.yaml');
+
+  test('both left to the default are the same', () => {
+    expect(same(flow('', '{}'))).toBe(true);
+  });
+
+  test('a review with its own model, or its own provider, is different', () => {
+    expect(same(flow('', '{ model: opus }'))).toBe(false);
+    expect(same(flow(', model: sonnet', '{ provider: codex, model: sonnet }'))).toBe(false);
+  });
+
+  test('the same model named on both is the same', () => {
+    expect(same(flow(', model: sonnet', '{ model: sonnet }'))).toBe(true);
+  });
+
+  test("the flow's defaults count for a step that names nothing", () => {
+    const defaults = 'defaults: { model: sonnet }\n';
+    expect(same(flow('', '{}', defaults))).toBe(true);
+    expect(same(flow('', '{ model: opus }', defaults))).toBe(false);
+    expect(same(flow(', model: sonnet', '{}', defaults))).toBe(true);
+  });
+
+  test('a flow without a review step, or one that does not parse, says nothing', () => {
+    expect(same(flow('', null))).toBeUndefined();
+    expect(same('not: [a flow')).toBeUndefined();
+  });
+
+  test('the built-in flow is read with the answer', async () => {
+    const read = await readFactoryFlowDefinition('issue-to-merge', {
+      readDefaultBranchFile: async () => ok(null),
+    });
+    expect(read._unsafeUnwrap().reviewerSameAsImplementer).toBe(true);
+    const pr = await readFactoryFlowDefinition('issue-to-pr', {
+      readDefaultBranchFile: async () => ok(null),
+    });
+    expect(pr._unsafeUnwrap().reviewerSameAsImplementer).toBeUndefined();
   });
 });

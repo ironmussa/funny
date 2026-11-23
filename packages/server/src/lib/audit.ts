@@ -34,6 +34,7 @@ type AuditAction =
   | 'factory.issues_sent'
   | 'factory.queue_cleared'
   | 'factory.stopped_all'
+  | 'factory.incident_closed'
   | 'infra.project_sandbox_cleared'
   | 'runner.remove'
   | 'runner.enroll_approved'

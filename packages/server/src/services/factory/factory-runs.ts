@@ -17,8 +17,15 @@
 import {
   EMPTY_FACTORY_RUN_METRICS,
   factoryRegressionProofSchema,
+  factoryReviewVerdictSchema,
+  factoryRiskSchema,
+  factoryTriageSchema,
+  MAX_STORED_REVIEWS,
   type FactoryRegressionProof,
+  type FactoryReviewVerdict,
+  type FactoryRisk,
   type FactoryRunMetrics,
+  type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
@@ -56,6 +63,10 @@ const METRICS_SCHEMA = z.object({
   ciBlocked: z.number().int().nonnegative().default(0),
   ciTimeouts: z.number().int().nonnegative().default(0),
   agentFixes: z.number().int().nonnegative().default(0),
+  reviews: z.number().int().nonnegative().default(0),
+  reviewFails: z.number().int().nonnegative().default(0),
+  mergeHolds: z.number().int().nonnegative().default(0),
+  mergeSentBack: z.number().int().nonnegative().default(0),
 });
 
 const WAIT_REASON_SCHEMA = z.object({
@@ -68,6 +79,7 @@ const WAIT_REASON_SCHEMA = z.object({
     'circular',
     'blockers-unreadable',
     'proof-not-configured',
+    'paths-overlap',
   ]),
   blockers: z.array(z.number().int()),
 });
@@ -76,10 +88,14 @@ const WAIT_REASON_SCHEMA = z.object({
 export type FactoryRunState =
   | 'requested'
   | 'queued'
+  | 'triaging'
+  | 'needs_info'
   | 'working'
   | 'pr_open'
   | 'waiting_ci'
   | 'fixing'
+  | 'reviewing'
+  | 'merging'
   | 'waiting_human'
   | 'merged'
   | 'no_change'
@@ -98,7 +114,9 @@ const TERMINAL: ReadonlySet<FactoryRunState> = new Set(TERMINAL_STATES);
  * Non-terminal states that do NOT hold a concurrency slot: the agent is done and
  * the run waits for a person. It still blocks re-admitting its issue.
  */
-const PARKED_STATES = ['waiting_human'] as const satisfies FactoryRunState[];
+const PARKED_STATES = ['waiting_human', 'needs_info'] as const satisfies FactoryRunState[];
+
+const PARKED: ReadonlySet<FactoryRunState> = new Set(PARKED_STATES);
 
 /** A sent issue waiting in the factory's queue: no flow, no slot. */
 const WAITING_STATES = ['requested'] as const satisfies FactoryRunState[];
@@ -115,16 +133,40 @@ const QUEUE_TRANSITIONS = {
   requeue: { from: ['queued'], to: 'requested' },
   /** Cancelled, or the queue was cleared. */
   cancel: { from: ['requested'], to: 'stopped' },
+  /**
+   * Triage found the run's likely paths overlap a run in progress: back in
+   * line without a slot, keeping its contract, until that run is done.
+   */
+  hold: { from: ['triaging'], to: 'requested' },
+  /** The issue changed (or a member retried): a `needs_info` run is triaged again. */
+  retriage: { from: ['needs_info'], to: 'requested' },
 } as const satisfies Record<string, { from: readonly FactoryRunState[]; to: FactoryRunState }>;
 
 /** States in which a flow is driving the run: neither terminal, parked nor waiting. */
 export const IN_FLIGHT_STATES = [
   'queued',
+  'triaging',
   'working',
   'pr_open',
   'waiting_ci',
   'fixing',
+  'reviewing',
+  'merging',
 ] as const satisfies FactoryRunState[];
+
+/**
+ * The gates after the pull request (change factory-agent-roles): a run enters
+ * its review or its merge step only from a state in which it has a pull
+ * request and a flow driving it, as a compare-and-set (`enterStage`). `merging`
+ * covers waiting for the repository's merge slot: such a run is in flight and
+ * holds one of the factory's concurrency slots.
+ */
+const STAGE_TRANSITIONS = {
+  review: { from: ['pr_open', 'waiting_ci', 'fixing', 'reviewing', 'merging'], to: 'reviewing' },
+  merge: { from: ['pr_open', 'waiting_ci', 'fixing', 'reviewing', 'merging'], to: 'merging' },
+} as const satisfies Record<string, { from: readonly FactoryRunState[]; to: FactoryRunState }>;
+
+export type FactoryRunStage = keyof typeof STAGE_TRANSITIONS;
 
 /**
  * The `currentStep` of a run a retry or take-over put back in flight, until its
@@ -202,9 +244,27 @@ export interface FactoryRunView {
   metrics: FactoryRunMetrics;
   /** The last regression proof of its pull request, or null. */
   regressionProof: RegressionProofRecord | null;
+  /** The review verdicts of its pull request, one per commit, oldest first. */
+  reviews: FactoryReviewVerdict[];
+  /** The risk class of the last classified commit, or null. */
+  risk: FactoryRisk | null;
+  /** What triage decided about the issue, or null before it ran. */
+  triage: FactoryTriage | null;
 }
 
 export type FactoryRunSource = 'manual' | 'label';
+
+/**
+ * Every thread a run started: its implementing agent's (`threadIds`, the
+ * steps a retry replays), its triage agent's, then its reviewers' (kept with
+ * their verdicts).
+ * What stopping the run stops and what a merge cleans up.
+ */
+export function threadsOf(run: Pick<FactoryRunView, 'threadIds' | 'reviews' | 'triage'>): string[] {
+  const reviewers = run.reviews.flatMap((review) => (review.threadId ? [review.threadId] : []));
+  const triage = run.triage?.threadId ? [run.triage.threadId] : [];
+  return [...new Set([...run.threadIds, ...triage, ...reviewers])];
+}
 
 export type FactoryRunsError = { kind: 'storage'; message: string };
 
@@ -235,7 +295,42 @@ const toView = (row: Row): FactoryRunView => ({
   failureReason: row.failureReason ?? null,
   metrics: parseMetrics(row.metrics ?? null),
   regressionProof: parseRegressionProof(row.regressionProof ?? null),
+  reviews: parseReviews(row.reviews ?? null),
+  risk: parseRisk(row.risk ?? null),
+  triage: parseTriage(row.triage ?? null),
 });
+
+function parseTriage(raw: string | null): FactoryTriage | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryTriageSchema, raw, 'factory_runs.triage');
+  return parsed.ok ? parsed.value : null;
+}
+
+const REVIEWS_SCHEMA = z.array(factoryReviewVerdictSchema);
+
+function parseReviews(raw: string | null): FactoryReviewVerdict[] {
+  if (!raw) return [];
+  const parsed = parseStoredJson(REVIEWS_SCHEMA, raw, 'factory_runs.review_verdicts');
+  return parsed.ok ? parsed.value : [];
+}
+
+function parseRisk(raw: string | null): FactoryRisk | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryRiskSchema, raw, 'factory_runs.risk');
+  return parsed.ok ? parsed.value : null;
+}
+
+/**
+ * The run's verdicts with `verdict` added: one per commit (a new verdict of a
+ * commit replaces the old one), oldest first, the newest `MAX_STORED_REVIEWS`.
+ */
+export function withReviewVerdict(
+  reviews: readonly FactoryReviewVerdict[],
+  verdict: FactoryReviewVerdict,
+): FactoryReviewVerdict[] {
+  const others = reviews.filter((review) => review.sha !== verdict.sha);
+  return [...others, verdict].slice(-MAX_STORED_REVIEWS);
+}
 
 function parseWaitReason(raw: string | null): FactoryWaitReason | null {
   if (!raw) return null;
@@ -295,18 +390,29 @@ export interface UpdateRunInput {
   failureReason?: string | null;
   metrics?: FactoryRunMetrics;
   regressionProof?: RegressionProofRecord;
+  reviews?: FactoryReviewVerdict[];
+  risk?: FactoryRisk;
+  triage?: FactoryTriage;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
 const PLAIN_FIELDS = ['currentStep', 'prUrl', 'launchStartedAt', 'failureReason'] as const;
-const JSON_FIELDS = ['threadIds', 'flowSteps', 'metrics', 'regressionProof'] as const;
+const JSON_FIELDS = [
+  'threadIds',
+  'flowSteps',
+  'metrics',
+  'regressionProof',
+  'reviews',
+  'risk',
+  'triage',
+] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
   const changes: Partial<Row> = {};
   if (input.state !== undefined) {
     changes.state = input.state;
     // A parked run's flow ended too: when it parked is when a take-over may follow.
-    if (TERMINAL.has(input.state) || input.state === 'waiting_human') {
+    if (TERMINAL.has(input.state) || PARKED.has(input.state)) {
       changes.completedAt = new Date().toISOString();
     }
   }
@@ -344,7 +450,7 @@ function updateFromParked(
  */
 function moveRun(
   runId: string,
-  transition: 'admit' | 'requeue',
+  transition: 'admit' | 'requeue' | 'hold' | 'retriage',
   changes: Partial<Row>,
 ): ResultAsync<boolean, FactoryRunsError> {
   const { from, to } = QUEUE_TRANSITIONS[transition];
@@ -466,6 +572,9 @@ function queueOperations(newId: () => string) {
             failureReason: null,
             metrics: null,
             regressionProof: null,
+            reviews: null,
+            risk: null,
+            triage: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -520,6 +629,44 @@ function queueOperations(newId: () => string) {
         launchStartedAt: null,
         failureReason: null,
       }),
+
+    /**
+     * `triaging → requested`: the run's likely paths overlap those of `blockers`
+     * (issues with a run in progress). It leaves its slot and keeps its contract.
+     */
+    holdForPaths: (runId: string, blockers: number[]) =>
+      moveRun(runId, 'hold', {
+        admittedAt: null,
+        currentStep: null,
+        launchStartedAt: null,
+        waitReason: JSON.stringify({ kind: 'paths-overlap', blockers }),
+      }),
+
+    /**
+     * `needs_info → requested`: the issue changed since triage asked, or a
+     * member retried. Its old answer is marked superseded, so triage runs
+     * again on a new thread.
+     */
+    retriage: (run: Pick<FactoryRunView, 'id' | 'triage'>) =>
+      moveRun(run.id, 'retriage', {
+        admittedAt: null,
+        currentStep: null,
+        launchStartedAt: null,
+        completedAt: null,
+        failureReason: null,
+        triage: run.triage ? JSON.stringify({ ...run.triage, superseded: true }) : null,
+      }),
+
+    /** The factory's runs waiting on their issue (`needs_info`). */
+    needingInfo(factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryRuns)
+          .where(and(eq(factoryRuns.factoryId, factoryId), eq(factoryRuns.state, 'needs_info'))),
+        storage,
+      ).map((rows) => rows.map(toView));
+    },
 
     /**
      * `requested → stopped` for one run, or for every waiting run of the factory
@@ -617,6 +764,9 @@ export function createFactoryRunsRepository(
       failureReason: null,
       metrics: null,
       regressionProof: null,
+      reviews: null,
+      risk: null,
+      triage: null,
     };
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
       toView(row),
@@ -824,6 +974,29 @@ export function createFactoryRunsRepository(
     },
 
     /**
+     * Move a run into its review or merge step: only from a state in which it
+     * has a pull request and a flow driving it (`STAGE_TRANSITIONS`), a
+     * compare-and-set. Resolves whether it moved; false for a run that was
+     * stopped, parked or never opened a pull request.
+     */
+    enterStage(
+      runId: string,
+      stage: FactoryRunStage,
+      input: Omit<UpdateRunInput, 'state'> = {},
+    ): ResultAsync<boolean, FactoryRunsError> {
+      const { from, to } = STAGE_TRANSITIONS[stage];
+      const changes = changesFor({ ...input, state: to })!;
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set(changes)
+          .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
+    /**
      * Update a run unless it is already terminal (stopped, merged, failed), so
      * a flow still finishing cannot revive a run someone stopped. Resolves
      * whether the run was still in flight.
@@ -894,6 +1067,36 @@ export function createFactoryRunsRepository(
       failureReason: string | null,
     ): ResultAsync<boolean, FactoryRunsError> {
       return updateFromParked(runId, { regressionProof: JSON.stringify(proof), failureReason });
+    },
+
+    /**
+     * The runs of every factory merged since `since` whose pull request is in
+     * `repo` (`owner/name`), newest first, with their enabler: what a broken
+     * base branch may be traced to.
+     */
+    mergedSince(
+      repo: string,
+      since: string,
+    ): ResultAsync<Array<FactoryRunView & { userId: string }>, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ run: factoryRuns, userId: factorySettings.userId })
+          .from(factoryRuns)
+          .innerJoin(factorySettings, eq(factorySettings.id, factoryRuns.factoryId))
+          .where(
+            and(
+              eq(factoryRuns.state, 'merged'),
+              gte(factoryRuns.completedAt, since),
+              // The repository is known in lowercase; GitHub's URL keeps its own case.
+              like(
+                sql`lower(${factoryRuns.prUrl})`,
+                `https://github.com/${repo.toLowerCase()}/pull/%`,
+              ),
+            ),
+          )
+          .orderBy(desc(factoryRuns.completedAt)),
+        storage,
+      ).map((rows) => rows.map(({ run, userId }) => ({ ...toView(run), userId })));
     },
 
     /** One run by its id, or null. */

@@ -362,6 +362,9 @@ export function createTestDb() {
       max_concurrent INTEGER NOT NULL DEFAULT 2,
       blocked_reason TEXT,
       mode TEXT NOT NULL DEFAULT 'manual',
+      auto_merge TEXT NOT NULL DEFAULT 'low_risk',
+      sensitive_paths TEXT,
+      stage_limits TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -406,8 +409,33 @@ export function createTestDb() {
       flow_steps TEXT,
       failure_reason TEXT,
       metrics TEXT,
-      regression_proof TEXT
+      regression_proof TEXT,
+      review_verdicts TEXT,
+      risk TEXT,
+      triage TEXT
     )
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_incidents (
+      id TEXT PRIMARY KEY,
+      repo TEXT NOT NULL,
+      base_branch TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'open',
+      red_sha TEXT NOT NULL,
+      candidates TEXT NOT NULL,
+      opened_by_factory TEXT NOT NULL,
+      affected_factories TEXT,
+      sentinel_thread_id TEXT,
+      result TEXT,
+      opened_at TEXT NOT NULL,
+      closed_at TEXT,
+      closed_by TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_incidents_one_open
+    ON factory_incidents (repo, base_branch)
+    WHERE state <> 'closed'
   `);
   testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue

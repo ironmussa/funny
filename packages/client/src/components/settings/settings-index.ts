@@ -503,6 +503,33 @@ const ENTRIES = [
     description: 'settings.projectFactoryConcurrencyDesc',
     keywords: ['max in flight', 'parallel'],
   },
+  {
+    id: 'factory.autoMerge',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryAutoMerge',
+    description: 'settings.projectFactoryAutoMergeLowDesc',
+    keywords: ['merge', 'risk', 'high risk', 'review'],
+  },
+  {
+    id: 'factory.sensitivePaths',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactorySensitivePaths',
+    description: 'settings.projectFactorySensitivePathsDesc',
+    keywords: ['risk', 'glob', 'paths'],
+  },
+  {
+    id: 'factory.stageLimits',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryStageLimits',
+    description: 'settings.projectFactoryStageLimitsDesc',
+    keywords: ['limit', 'implement', 'review', 'concurrency'],
+  },
 ] as const satisfies readonly SettingsIndexEntry[];
 
 export type SettingId = (typeof ENTRIES)[number]['id'];

@@ -133,6 +133,31 @@ function staleBranchWordingIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
   );
 }
 
+/**
+ * The merge lane (change factory-agent-roles, D8): the concurrency group every
+ * `merge` node of a factory flow runs in, one per repository and base branch,
+ * shared by every factory on that repository.
+ */
+export const MERGE_LANE_GROUP = 'merge:{{inputs.repo}}:{{inputs.base_branch}}';
+
+/** Whether a rendered concurrency group is a merge lane (its limit is always 1). */
+export const isMergeLane = (group: string) => group.startsWith('merge:');
+
+/**
+ * The flow with every `merge` node in the merge lane, whatever group or limit
+ * it declares (or none): a repository flow cannot merge two pull requests of
+ * one repository at once. A batch policy the node declares is kept.
+ */
+function withMergeLane(workflow: ParsedWorkflow): ParsedWorkflow {
+  const nodes = workflow.nodes.map((node) => {
+    if (!node.merge) return node;
+    const concurrency: NonNullable<FlowNode['concurrency']> = { group: MERGE_LANE_GROUP, limit: 1 };
+    if (node.concurrency?.batch) concurrency.batch = node.concurrency.batch;
+    return { ...node, concurrency };
+  });
+  return { ...workflow, nodes };
+}
+
 function proofConfigOf(workflow: ParsedWorkflow): RegressionProofOpts | undefined {
   const step = workflow.nodes.find((node) => node.regression_proof)?.regression_proof;
   return step ? regressionProofOpts(step) : undefined;
@@ -149,7 +174,7 @@ function compile(
     return ok({
       name: parsed.workflow.name,
       source,
-      pipeline: compileYamlPipeline(parsed.workflow),
+      pipeline: compileYamlPipeline(withMergeLane(parsed.workflow)),
       warnings:
         source === 'repository'
           ? [...parsed.warnings, ...staleBranchWordingIssues(parsed.workflow)]
@@ -234,7 +259,34 @@ export async function readFactoryFlowDefinition(
   deps: LoadFactoryFlowDeps,
 ): Promise<Result<FactoryFlowDefinition, FactoryFlowError>> {
   const found = await findFactoryFlow(flowName, deps);
-  return found.map(({ source, path, yaml }) => ({ name: flowName, source, path, yaml }));
+  return found.map(({ source, path, yaml, origin }) => {
+    const definition: FactoryFlowDefinition = { name: flowName, source, path, yaml };
+    const same = reviewerSameAsImplementer(yaml, origin);
+    if (same !== undefined) definition.reviewerSameAsImplementer = same;
+    return definition;
+  });
+}
+
+/**
+ * Whether the flow's `review` step resolves to the provider and model of its
+ * implementing agent (its first `spawn_agent`), each falling back to the
+ * flow's `defaults`, then to the enabler's own default. Undefined when the
+ * flow does not parse or has no review step.
+ */
+export function reviewerSameAsImplementer(yaml: string, origin: string): boolean | undefined {
+  const parsed = parseWorkflowYaml(yaml, origin);
+  if (!parsed.ok) return undefined;
+  const { nodes, defaults } = parsed.workflow;
+  const review = nodes.find((node) => node.review)?.review;
+  if (!review) return undefined;
+  const implementer = nodes.find((node) => node.spawn_agent)?.spawn_agent;
+  const resolved = (step: { provider?: string; model?: string } | undefined) => ({
+    provider: step?.provider ?? defaults?.provider ?? null,
+    model: step?.model ?? defaults?.model ?? null,
+  });
+  const a = resolved(implementer);
+  const b = resolved(review);
+  return a.provider === b.provider && a.model === b.model;
 }
 
 /** The built-in flows written for a server-run factory (they push and open a pull request). */

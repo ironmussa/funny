@@ -2206,6 +2206,58 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Change factory-agent-roles, phase 1: the review verdicts and risk class of
+    // a run, and the factory's merge policy and stage limits. The new run
+    // states (`reviewing`, `merging`) need no column: `state` is free text.
+    name: '109_factory_review_and_merge_policy',
+    async up() {
+      await ctx().addColumn('factory_runs', 'review_verdicts', 'TEXT');
+      await ctx().addColumn('factory_runs', 'risk', 'TEXT');
+      await ctx().addColumn('factory_settings', 'auto_merge', 'TEXT NOT NULL', "'low_risk'");
+      await ctx().addColumn('factory_settings', 'sensitive_paths', 'TEXT');
+      await ctx().addColumn('factory_settings', 'stage_limits', 'TEXT');
+    },
+  },
+  {
+    // Change factory-agent-roles, phase 2: what triage decided about a run's
+    // issue (its contract, or what it asked). The new run states (`triaging`,
+    // `needs_info`) need no column.
+    name: '110_factory_runs_triage',
+    async up() {
+      await ctx().addColumn('factory_runs', 'triage', 'TEXT');
+    },
+  },
+  {
+    // Change factory-agent-roles, D10: a base branch that turned red after a
+    // factory merge. One incident at a time per repository and base branch:
+    // the partial unique index is what a compare-and-set open relies on.
+    name: '111_factory_incidents',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_incidents (
+          id TEXT PRIMARY KEY,
+          repo TEXT NOT NULL,
+          base_branch TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'open',
+          red_sha TEXT NOT NULL,
+          candidates TEXT NOT NULL,
+          opened_by_factory TEXT NOT NULL,
+          affected_factories TEXT,
+          sentinel_thread_id TEXT,
+          result TEXT,
+          opened_at TEXT NOT NULL,
+          closed_at TEXT,
+          closed_by TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_incidents_one_open
+        ON factory_incidents (repo, base_branch)
+        WHERE state <> 'closed'
+      `);
+    },
+  },
 ];
 
 /**

@@ -88,4 +88,10 @@ export const factoryRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.stopAll(ctx.userId, input.projectId)),
     ),
+  /** Close the incident pausing the caller's factory; its admissions resume. */
+  closeIncident: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryProjectInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.closeIncident(ctx.userId, input.projectId)),
+    ),
 });

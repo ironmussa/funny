@@ -5,3 +5,8 @@ export * from './pull-requests.js';
 export * from './repo-github.js';
 export * from './issue-dependencies.js';
 export * from './check-runs.js';
+export * from './pull-request-files.js';
+export * from './pull-request-reviews.js';
+export * from './pull-request-base.js';
+export * from './merge-queue.js';
+export * from './pull-request-revert.js';

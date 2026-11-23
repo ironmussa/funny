@@ -50,7 +50,18 @@ reviewed-flow work in `factory-flow-step-options`, funny needs that shape now.
   rebase or force push, and a force-pushed branch parks the run.
 - **The review is visible on GitHub.** The server posts each verdict as a pull request review
   comment and, when the App may, a `funny/review` commit status.
+- **The review overlaps CI.** The server starts the review of a head commit when its checks
+  start, so a run does not wait for CI before the reviewer looks; a review of a commit that is
+  replaced is stopped and discarded. `merge` still needs both results for the same commit.
+- **A conflict is an agent's work, a merge is not.** The server decides and performs every
+  merge by rule. What needs judgement (a conflict with the base, checks red on the updated
+  base) goes to the implementer as a follow-up; what no agent can fix (App permissions, branch
+  rules, a rewritten branch) parks the run with the reason.
 - The built-in `issue-to-merge` gains `triage` and `review` steps; `issue-to-pr` gains `triage`.
+- **Two phases.** Phase 1 ships the reviewer, the deterministic checks and the merge lane: they
+  answer the two problems above (nobody independent judges; green on an old base) and work
+  without a contract, the reviewer judging against the issue. Phase 2 adds triage and the
+  contract, path reservation and the sentinel.
 
 ## Capabilities
 

@@ -19,10 +19,14 @@ export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): 
   const labels: Record<FactoryRun['state'], string> = {
     requested: t('factory.state.requested', 'In queue'),
     queued: t('factory.state.queued', 'Queued'),
+    triaging: t('factory.state.triaging', 'Triaging'),
+    needs_info: t('factory.state.needsInfo', 'Needs info'),
     working: t('factory.state.working', 'Working'),
     pr_open: t('factory.state.prOpen', 'PR open'),
     waiting_ci: t('factory.state.waitingCi', 'Waiting for CI'),
     fixing: t('factory.state.fixing', 'Fixing CI'),
+    reviewing: t('factory.state.reviewing', 'In review'),
+    merging: t('factory.state.merging', 'In the merge lane'),
     waiting_human: t('factory.state.waitingHuman', 'Waiting for you'),
     merged: t('factory.state.merged', 'Merged'),
     no_change: t('factory.state.noChange', 'No change needed'),
@@ -66,6 +70,12 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
       return t('factory.wait.circular', 'Circular dependency with {{blockers}}', { blockers });
     case 'blockers-unreadable':
       return t('factory.wait.unreadable', 'Its blockers could not be read from GitHub');
+    case 'paths-overlap':
+      return t(
+        'factory.wait.pathsOverlap',
+        'Waiting for {{blockers}}: it works on the same files',
+        { blockers },
+      );
     case 'proof-not-configured':
       return t(
         'factory.wait.proofNotConfigured',
@@ -79,10 +89,13 @@ export type FactoryStepStatus = 'done' | 'current' | 'failed' | 'pending';
 /** States a flow is moving through a step in. */
 const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
   'queued',
+  'triaging',
   'working',
   'pr_open',
   'waiting_ci',
   'fixing',
+  'reviewing',
+  'merging',
 ]);
 
 /**
@@ -144,11 +157,16 @@ export type FactoryQueueSection = 'waiting' | 'active' | 'queue' | 'failed' | 'e
 
 const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   waiting_human: 'waiting',
+  // Parked on its issue: it needs an answer there, from whoever wrote the issue.
+  needs_info: 'waiting',
   queued: 'active',
+  triaging: 'active',
   working: 'active',
   pr_open: 'active',
   waiting_ci: 'active',
   fixing: 'active',
+  reviewing: 'active',
+  merging: 'active',
   requested: 'queue',
   failed: 'failed',
   merged: 'ended',
@@ -207,4 +225,78 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
   );
   const groups = groupFactoryRuns(kept);
   return FACTORY_QUEUE_SECTIONS.flatMap((section) => groups[section]);
+}
+
+/**
+ * Why a parked or failed run stopped, as the server recorded it. The merge
+ * gate's reasons (change factory-agent-roles) get their own wording; any other
+ * reason is shown as it is.
+ */
+export function factoryRunReasonText(t: TFunction, reason: string): string {
+  switch (reason) {
+    case 'no review':
+      return t('factory.reason.noReview', 'Not merged: this commit has no review');
+    case 'review failed':
+      return t('factory.reason.reviewFailed', 'Not merged: its review did not pass');
+    case 'high risk':
+      return t('factory.reason.highRisk', 'Not merged: high risk, it needs you');
+    case 'branch history rewritten':
+      return t('factory.reason.rewritten', 'Not merged: the branch was rewritten');
+    case 'needs info':
+      return t(
+        'factory.reason.needsInfo',
+        'Asked on the issue: it starts again when the issue changes',
+      );
+    case 'review gave no verdict':
+      return t('factory.reason.noVerdict', 'The review gave no verdict');
+    default:
+      return reason;
+  }
+}
+
+/** The run's review as a short label: the verdict of its newest reviewed commit, or null. */
+export function factoryRunReviewLabel(
+  t: TFunction,
+  run: Pick<FactoryRun, 'reviews'>,
+): { text: string; passed: boolean } | null {
+  const last = run.reviews.at(-1);
+  if (!last) return null;
+  const blocking = last.findings.some(
+    (finding) => finding.severity === 'critical' || finding.severity === 'high',
+  );
+  const passed = last.verdict === 'pass' || (last.findings.length > 0 && !blocking);
+  return {
+    passed,
+    text: passed
+      ? t('factory.review.passed', 'Review passed')
+      : t('factory.review.failed', 'Review failed'),
+  };
+}
+
+/**
+ * The run's contract as a short label: that triage wrote one (its criteria in
+ * `detail`), or that the run went on without one. Null before triage decided.
+ */
+export function factoryRunContractLabel(
+  t: TFunction,
+  run: Pick<FactoryRun, 'triage'>,
+): { text: string; detail: string; missing: boolean } | null {
+  const triage = run.triage;
+  if (!triage || triage.superseded) return null;
+  if (triage.decision === 'none') {
+    return {
+      missing: true,
+      text: t('factory.contract.none', 'No contract'),
+      detail: t(
+        'factory.contract.noneDetail',
+        'Triage gave no contract: the review judges against the issue',
+      ),
+    };
+  }
+  if (triage.decision !== 'ready' || !triage.contract) return null;
+  return {
+    missing: false,
+    text: t('factory.contract.ready', 'Contract'),
+    detail: triage.contract.acceptanceCriteria.join('\n'),
+  };
 }

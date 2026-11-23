@@ -247,6 +247,252 @@ describe('factory over tRPC', () => {
     );
   });
 
+  test('a run in review or merging is listed with its verdicts and risk', async () => {
+    const { createFactoryRunsRepository, withReviewVerdict } =
+      await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('waiting_ci');
+    const sha = 'c'.repeat(40);
+    const verdict = {
+      sha,
+      verdict: 'fail' as const,
+      findings: [{ severity: 'high' as const, title: 'Missing null check' }],
+      threadId: 'th-review',
+      reviewedAt: '2026-11-22T10:00:00.000Z',
+    };
+
+    expect(
+      (
+        await runs.enterStage(run.id, 'review', {
+          reviews: withReviewVerdict([], verdict),
+          risk: { headSha: sha, level: 'high', reasons: ['touches .github/'] },
+        })
+      )._unsafeUnwrap(),
+    ).toBe(true);
+    const reviewing = (await query('alice', 'runs', { projectId: 'p1' })).body;
+    expect(reviewing).toMatchObject([
+      {
+        id: run.id,
+        state: 'reviewing',
+        reviews: [verdict],
+        risk: { headSha: sha, level: 'high', reasons: ['touches .github/'] },
+      },
+    ]);
+
+    expect((await runs.enterStage(run.id, 'merge'))._unsafeUnwrap()).toBe(true);
+    const merging = (await query('alice', 'runs', { projectId: 'p1' })).body;
+    expect(merging).toMatchObject([{ state: 'merging', reviews: [verdict] }]);
+    // Waiting for the merge slot holds one of the factory's slots.
+    expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(1);
+  });
+
+  test('a run enters review or merge only with a pull request and a flow driving it', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    for (const state of ['working', 'queued', 'requested', 'waiting_human', 'stopped'] as const) {
+      t.cleanup();
+      seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo-a' });
+      const run = await seededRun(state);
+      expect((await runs.enterStage(run.id, 'review'))._unsafeUnwrap()).toBe(false);
+      expect((await runs.enterStage(run.id, 'merge'))._unsafeUnwrap()).toBe(false);
+      expect((await runs.get(run.id))._unsafeUnwrap()?.state).toBe(state);
+    }
+  });
+
+  test('a new verdict of a commit replaces the old one', async () => {
+    const { withReviewVerdict } = await import('../../services/factory/factory-runs.js');
+    const at = '2026-11-22T10:00:00.000Z';
+    const first = { sha: 'a'.repeat(40), verdict: 'fail' as const, findings: [], reviewedAt: at };
+    const other = { sha: 'b'.repeat(40), verdict: 'pass' as const, findings: [], reviewedAt: at };
+    const again = { ...first, verdict: 'pass' as const };
+    expect(withReviewVerdict(withReviewVerdict([first], other), again)).toEqual([other, again]);
+  });
+
+  test('the merge policy, sensitive paths and stage limits are saved and read back', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      autoMerge: 'low_risk',
+      sensitivePaths: [],
+      stageLimits: {},
+    });
+    const saved = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      autoMerge: 'all',
+      sensitivePaths: ['billing/**'],
+      stageLimits: { review: 1, implement: 3 },
+    });
+    expect(saved.body).toMatchObject({
+      autoMerge: 'all',
+      sensitivePaths: ['billing/**'],
+      stageLimits: { review: 1, implement: 3 },
+    });
+    // Omitted fields keep their values.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      autoMerge: 'all',
+      sensitivePaths: ['billing/**'],
+      stageLimits: { review: 1, implement: 3 },
+    });
+    expect((await save('alice', { projectId: 'p1', enabled: true, autoMerge: 'yes' })).status).toBe(
+      400,
+    );
+  });
+
+  test('the merge limit cannot be raised', async () => {
+    await save('alice', { projectId: 'p1', enabled: true, stageLimits: { review: 2 } });
+    const refused = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      stageLimits: { merge: 2 },
+    });
+    expect(refused.status).toBe(400);
+    expect((await query('alice', 'settings', { projectId: 'p1' })).body).toMatchObject({
+      stageLimits: { review: 2 },
+    });
+  });
+
+  // Change factory-agent-roles, phase 2: triage and its two transitions.
+  test('a run triaging or waiting on its issue is listed with what triage decided', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('triaging');
+    expect((await query('alice', 'runs', { projectId: 'p1' })).body).toMatchObject([
+      { id: run.id, state: 'triaging', triage: null },
+    ]);
+
+    const triage = {
+      decision: 'needs_info' as const,
+      at: '2026-11-22T10:00:00.000Z',
+      threadId: 'th-triage',
+      items: ['Which endpoint is slow?'],
+    };
+    await runs.update(run.id, { state: 'needs_info', triage });
+    expect((await query('alice', 'runs', { projectId: 'p1' })).body).toMatchObject([
+      { state: 'needs_info', triage },
+    ]);
+    // Parked on its issue: it holds no slot, and still holds its issue.
+    expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(0);
+    expect((await runs.activeByIssue(run.factoryId, 7))._unsafeUnwrap()?.id).toBe(run.id);
+    expect((await runs.needingInfo(run.factoryId))._unsafeUnwrap().map((r) => r.id)).toEqual([
+      run.id,
+    ]);
+  });
+
+  test('a needs_info run goes back in line to be triaged again, only from needs_info', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('working');
+    expect((await runs.retriage(run))._unsafeUnwrap()).toBe(false);
+
+    const asked = { decision: 'needs_info' as const, at: '2026-11-22T10:00:00.000Z', items: ['?'] };
+    await runs.update(run.id, { state: 'needs_info', triage: asked });
+    const parked = (await runs.get(run.id))._unsafeUnwrap()!;
+    expect((await runs.retriage(parked))._unsafeUnwrap()).toBe(true);
+    const again = (await runs.get(run.id))._unsafeUnwrap()!;
+    // In the queue without a slot; what was asked stays, marked as no longer the answer.
+    expect(again).toMatchObject({
+      state: 'requested',
+      triage: { ...asked, superseded: true },
+      completedAt: null,
+    });
+    expect((await runs.retriage(again))._unsafeUnwrap()).toBe(false);
+  });
+
+  test('a run whose paths overlap leaves its slot from triaging only, keeping its contract', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const runs = createFactoryRunsRepository();
+    const run = await seededRun('working');
+    expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(false);
+
+    const triage = {
+      decision: 'ready' as const,
+      at: '2026-11-22T10:00:00.000Z',
+      contract: {
+        acceptanceCriteria: ['It works'],
+        likelyPaths: ['src/db/migrate.ts'],
+        riskHints: [],
+      },
+    };
+    await runs.update(run.id, { state: 'triaging', triage });
+    expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(true);
+    expect((await runs.get(run.id))._unsafeUnwrap()).toMatchObject({
+      state: 'requested',
+      triage,
+      waitReason: { kind: 'paths-overlap', blockers: [12] },
+    });
+    expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(0);
+  });
+
+  // Change factory-agent-roles, D10: the incident that pauses a factory.
+  describe('incidents', () => {
+    async function openIncident() {
+      await save('alice', { projectId: 'p1', enabled: true });
+      const { createFactorySettingsService } =
+        await import('../../services/factory/factory-settings.js');
+      const { createFactoryIncidentsRepository } =
+        await import('../../services/factory/factory-incidents.js');
+      const factoryId = (
+        await createFactorySettingsService().factoryId('alice', 'p1')
+      )._unsafeUnwrap()!;
+      const incidents = createFactoryIncidentsRepository();
+      const incident = (
+        await incidents.open({
+          repo: 'o/r',
+          baseBranch: 'main',
+          redSha: 'abc123',
+          candidates: [
+            {
+              issueNumber: 12,
+              prUrl: 'https://github.com/o/r/pull/112',
+              mergedAt: '2026-11-22T11:00:00.000Z',
+              userId: 'alice',
+            },
+          ],
+          factoryId,
+        })
+      )._unsafeUnwrap()!;
+      return { incidents, incident };
+    }
+
+    test('the settings carry the incident that pauses the factory, without the server bookkeeping', async () => {
+      expect((await save('alice', { projectId: 'p1', enabled: true })).body.incident).toBeNull();
+      const { incident } = await openIncident();
+      const read = (await query('alice', 'settings', { projectId: 'p1' })).body;
+      expect(read.incident).toMatchObject({
+        id: incident.id,
+        repo: 'o/r',
+        baseBranch: 'main',
+        state: 'open',
+        result: null,
+      });
+      expect(read.incident).not.toHaveProperty('affectedFactories');
+      expect(read.incident).not.toHaveProperty('sentinelThreadId');
+      // A save answers with it too, so the panel keeps showing it.
+      const saved = await save('alice', { projectId: 'p1', enabled: true, maxConcurrent: 3 });
+      expect(saved.body.incident).toMatchObject({ id: incident.id });
+    });
+
+    test('a member closes it and the factory is no longer paused by it', async () => {
+      const { incidents, incident } = await openIncident();
+      const closed = await mutate('alice', 'closeIncident', { projectId: 'p1' });
+      expect(closed).toMatchObject({ status: 200, body: { incident: null } });
+      const stored = (await incidents.get(incident.id))._unsafeUnwrap()!;
+      expect(stored).toMatchObject({ state: 'closed' });
+      // Nothing left to close.
+      expect((await mutate('alice', 'closeIncident', { projectId: 'p1' })).status).toBe(404);
+    });
+
+    test('closing needs steer, and another user cannot close it through their own project', async () => {
+      await openIncident();
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+      expect((await mutate('vic', 'closeIncident', { projectId: 'p1' })).status).toBe(403);
+      expect((await mutate('carol', 'closeIncident', { projectId: 'p1' })).status).toBe(404);
+      // Bob has his own factory, which this incident did not pause.
+      await save('bob', { projectId: 'bob-project', enabled: true });
+      expect((await mutate('bob', 'closeIncident', { projectId: 'bob-project' })).status).toBe(404);
+      expect((await query('alice', 'settings', { projectId: 'p1' })).body.incident).not.toBeNull();
+    });
+  });
+
   test('a send needs a factory, a running one, and a usable input', async () => {
     const send = { projectId: 'p1', issueNumbers: [7], flowName: 'issue-to-merge' };
     expect((await mutate('alice', 'submitIssues', send)).status).toBe(404);

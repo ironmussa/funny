@@ -26,12 +26,13 @@ import type { StartThreadInput } from '../../../services/runner-thread-launcher.
 import {
   launchedThread,
   passingProof,
+  passingReview,
   proofReadyFlowFiles,
   runnerOffline,
   unusedRunnerPorts,
   type LaunchResult,
 } from '../../helpers/builders-services.js';
-import { createTestDb, seedProject } from '../../helpers/test-db.js';
+import { createTestDb, seedProject, seedThread } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
 
@@ -96,11 +97,22 @@ function fakeGithub(script: Script = {}): FakeGithub {
         : okAsync({ ...proofReadyFlowFiles(), ...script.repoFiles }[path] ?? null),
     branchAhead: () => okAsync(true),
     defaultBranch: () => okAsync('main'),
+    branchState: () => okAsync({ sha: 'base-sha', ci: { kind: 'green' as const } }),
+    revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
     relabelIssue: () => okAsync(undefined),
     commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
       prState: () => okAsync('open' as const),
+      changedFiles: () => okAsync({ files: [], truncated: false }),
+      publishReview: () => okAsync({ status: true }),
+      baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
+      updateBranch: () => okAsync({ kind: 'updating' as const }),
+      commitParents: () => okAsync([]),
+      baseChanges: () => okAsync({ commits: [], files: [] }),
+      mergeQueueRequired: () => okAsync(false),
+      enqueue: () => okAsync({ kind: 'queued' as const }),
+      queueState: () => okAsync('merged' as const),
       pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
       publishProofCheck: () => okAsync(undefined),
       ciState: () => okAsync({ kind: 'green' as const }),
@@ -122,9 +134,36 @@ function fakePoll() {
   return { ticks, createPoll };
 }
 
+/** Reviewer threads the fake launchers started, across a test file (unique thread ids). */
+let reviewerThreads = 0;
+
+/**
+ * A read-only agent's launch, the reviewer's or triage's (change
+ * factory-agent-roles): a thread row that already
+ * completed, so the real thread wait sees it finished; `passingReview` is what
+ * it says. Kept out of `calls`, which count the implementing agent's launches.
+ */
+function launchReviewer(input: StartThreadInput): LaunchResult {
+  const kind = String(input.body.title).startsWith('[Factory triage]') ? 'tri' : 'rev';
+  const id = `${kind}-${++reviewerThreads}`;
+  seedThread(testDb.db, {
+    id,
+    projectId: String(input.body.projectId),
+    userId: input.userId,
+    title: String(input.body.title),
+    status: 'completed',
+    source: 'factory',
+  });
+  return launchedThread(id);
+}
+
+const isReviewerLaunch = (input: StartThreadInput) =>
+  /^\[Factory (review|triage)\]/.test(String(input.body.title));
+
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   const calls: StartThreadInput[] = [];
   const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
+    if (result === 'ok' && isReviewerLaunch(input)) return launchReviewer(input);
     calls.push(input);
     return result === 'ok' ? launchedThread(`t-${calls.length}`) : runnerOffline('offline');
   };
@@ -135,10 +174,14 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
 const issueOf = (call: StartThreadInput) => Number(/#(\d+)/.exec(String(call.body.title))![1]);
 
 /** Agent threads that never finish until the watcher stops. */
-const pendingThreads = async (_threadId: string, signal: AbortSignal) =>
-  new Promise<{ status: 'cancelled' }>((resolve) =>
+const pendingThreads = async (threadId: string, signal: AbortSignal) => {
+  // The triage agent finishes (its answer is `passingReview`'s): what never
+  // finishes is the work that follows it.
+  if (threadId.startsWith('tri-')) return { status: 'completed' as const, output: '' };
+  return new Promise<{ status: 'cancelled' }>((resolve) =>
     signal.addEventListener('abort', () => resolve({ status: 'cancelled' })),
   );
+};
 
 const finishedThreads = (status: 'completed' | 'failed') => async () => ({
   status,
@@ -183,6 +226,7 @@ async function setUp(
     waitThread: opts.waitThread ?? pendingThreads,
     notify: async () => undefined,
     proof: passingProof,
+    lastThreadMessage: passingReview,
   });
   // The tests fire the tick themselves: a send does not poke the factory here.
   const queue = createFactoryQueue({ wake: async () => {} });
@@ -444,9 +488,15 @@ describe('the queue', () => {
 
     await tick();
 
-    expect(launcher.calls).toHaveLength(1);
+    // The implementing agent was tried once (and its triage before it).
+    const implementing = launcher.calls.filter((call) =>
+      String(call.body.title).startsWith('[Factory] '),
+    );
+    expect(implementing).toHaveLength(1);
     const run = await eventually(factoryId, 7, (r) => r.state === 'requested');
     expect(run.source).toBe('manual');
+    // A triage that never ran is not remembered: the next attempt triages again.
+    expect(run.triage).toBeNull();
   });
 
   test('a queued issue closed since it was sent is dropped from the queue', async () => {

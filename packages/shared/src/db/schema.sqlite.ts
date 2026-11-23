@@ -284,6 +284,12 @@ export const factorySettings = sqliteTable(
      * issues sent to it; `automatic`, also the open issues carrying `label`.
      */
     mode: text('mode').notNull().default('manual'),
+    /** Which reviewed changes the factory merges by itself: `low_risk` or `all`. */
+    autoMerge: text('auto_merge').notNull().default('low_risk'),
+    /** JSON array of globs that make a change high risk, besides the default list. */
+    sensitivePaths: text('sensitive_paths'),
+    /** JSON object: runs inside a flow node at once, per node id. */
+    stageLimits: text('stage_limits'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
@@ -333,6 +339,45 @@ export const factoryRuns = sqliteTable('factory_runs', {
   metrics: text('metrics'),
   /** JSON: the last regression proof of the run (`RegressionProofRecord`). */
   regressionProof: text('regression_proof'),
+  /** JSON array of the review verdicts of the run's pull request, one per commit. */
+  reviews: text('review_verdicts'),
+  /** JSON: the risk class of the last classified commit (`FactoryRisk`). */
+  risk: text('risk'),
+  /** JSON: what triage decided about the issue (`FactoryTriage`): the contract, or what it asked. */
+  triage: text('triage'),
+});
+
+/**
+ * A base branch that turned red after a factory merge (change
+ * factory-agent-roles, D10). At most one not-closed incident per repository
+ * and base branch: the partial unique index `factory_incidents_one_open`
+ * (migration 111) enforces it. Admissions of every factory on the repository
+ * pause while one is open.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryIncidents = sqliteTable('factory_incidents', {
+  id: text('id').primaryKey(),
+  /** `owner/name`. */
+  repo: text('repo').notNull(),
+  baseBranch: text('base_branch').notNull(),
+  /** `open` → `investigating` → `reported` → `closed` (`factory-incidents.ts`). */
+  state: text('state').notNull().default('open'),
+  /** The red commit of the base branch when the incident opened. */
+  redSha: text('red_sha').notNull(),
+  /** JSON array of the factory merges the sentinel may name. */
+  candidates: text('candidates').notNull(),
+  /** The factory whose tick opened it: it runs the sentinel, as its enabler. */
+  openedByFactory: text('opened_by_factory').notNull(),
+  /** JSON array of the factories whose admissions it paused (they may close it). */
+  affectedFactories: text('affected_factories'),
+  sentinelThreadId: text('sentinel_thread_id'),
+  /** JSON: what the sentinel answered and what was done (`FactoryIncidentResult`). */
+  result: text('result'),
+  openedAt: text('opened_at').notNull(),
+  closedAt: text('closed_at'),
+  /** Who closed it: a user id, or `green` when the base branch recovered. */
+  closedBy: text('closed_by'),
 });
 
 /**

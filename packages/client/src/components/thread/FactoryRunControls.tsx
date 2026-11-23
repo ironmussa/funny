@@ -14,7 +14,13 @@ import type { FactoryRun } from '@/lib/api/factory';
 import { ENDED_FACTORY_STATES } from '@/lib/factory-run-labels';
 import { toastError } from '@/lib/toast-error';
 
-const RETRYABLE = new Set<FactoryRun['state']>(['failed', 'waiting_human', 'no_change']);
+/** A run parked on its issue (`needs_info`) is triaged again by a retry. */
+const RETRYABLE = new Set<FactoryRun['state']>([
+  'failed',
+  'waiting_human',
+  'no_change',
+  'needs_info',
+]);
 
 export function FactoryRunControls({
   projectId,

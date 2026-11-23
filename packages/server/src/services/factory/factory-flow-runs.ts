@@ -31,7 +31,12 @@
  * - the run was stopped, or the watcher shut down → nothing more is written.
  */
 
-import { nullReporter, runPipeline, type ConcurrencyGate } from '@funny/pipelines';
+import {
+  nullReporter,
+  runPipeline,
+  type ConcurrencyGate,
+  type MemoryGateOptions,
+} from '@funny/pipelines';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
@@ -58,11 +63,17 @@ import {
   type FactoryThreadMode,
   NO_CHANGE_TRIAGE_LABEL,
 } from './factory-action-provider.js';
-import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
+import {
+  isMergeLane,
+  loadFactoryFlow,
+  type FactoryFlow,
+  type FactoryFlowError,
+} from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
 import {
   factoryRunBranch,
   REOPENED_STEP,
+  threadsOf,
   type createFactoryRunsRepository,
   type FactoryRunView,
   type UpdateRunInput,
@@ -75,6 +86,7 @@ import {
   type ThreadOutcome,
   type WaitAfter,
 } from './factory-thread-waits.js';
+import { busyPathsOf } from './factory-triage.js';
 
 export interface FactoryRunJob {
   factory: WatchedFactory;
@@ -89,6 +101,8 @@ export interface FactoryFlowRunsDeps {
   github: FactoryGithubPort;
   launch(input: StartThreadInput): Promise<Result<StartedThread, StartThreadError>>;
   waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /** A thread's last assistant message (tests); defaults to the stored one. */
+  lastThreadMessage?: (threadId: string) => Promise<string | null>;
   /**
    * Send a follow-up to the enabler's thread, so later agent steps continue
    * the first one; without it each agent step starts a new thread.
@@ -139,6 +153,12 @@ interface FlowTrace {
   step: string | null;
   /** A step left the run for a person itself (e.g. `no change`): the end keeps that. */
   parked: boolean;
+  /**
+   * Triage took the run out of flight itself: it waits on its issue
+   * (`needs_info`) or in the queue behind other work on the same files. The
+   * end changes nothing about it.
+   */
+  held: boolean;
   /** A step ended the run itself (`no_change`): nothing is left to settle. */
   ended: boolean;
 }
@@ -147,6 +167,7 @@ interface FlowTrace {
 function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
   if (input.prUrl) trace.prOpen = true;
   if (input.state === 'waiting_human') trace.parked = true;
+  if (input.state === 'needs_info') trace.held = true;
   if (input.state === 'no_change') trace.ended = true;
   if (!input.threadIds) return false;
   trace.agentsRan = true;
@@ -206,6 +227,8 @@ async function findLaunchedThread(
   scope: { userId: string; projectId: string },
   titlePrefix: string,
   since: string,
+  /** The newest match instead of the oldest (a review thread: an older one may be a stopped attempt). */
+  newest = false,
 ): Promise<string | null> {
   const after = slackBefore(since);
   const [row] = await db
@@ -221,7 +244,7 @@ async function findLaunchedThread(
         gte(threads.createdAt, after),
       ),
     )
-    .orderBy(asc(threads.createdAt))
+    .orderBy(newest ? desc(threads.createdAt) : asc(threads.createdAt))
     .limit(1);
   return row?.id ?? null;
 }
@@ -253,17 +276,53 @@ const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineConte
 });
 
 /** The given gate, or this server's lease gate with how to stop renewing its leases. */
-function flowGate(given?: ConcurrencyGate): { gate: ConcurrencyGate; stop: () => void } {
+function flowGate(
+  given: ConcurrencyGate | undefined,
+  rules: Pick<MemoryGateOptions, 'resolveLimit' | 'priority'>,
+): { gate: ConcurrencyGate; stop: () => void } {
   if (given) return { gate: given, stop: () => {} };
-  const leases = createLeaseGate();
+  const leases = createLeaseGate(rules);
   return { gate: leases, stop: () => leases.stop() };
+}
+
+/** How many runs of a factory may be inside a stage at once, unless the flow or the factory says. */
+export const DEFAULT_STAGE_LIMIT = 20;
+
+/** The concurrency group of a stage of one factory (`<node>:<factoryId>`). */
+export const stageGroup = (stage: string, factoryId: string) => `${stage}:${factoryId}`;
+
+/** Admission times are ordered as whole seconds from here (they fit a 32-bit column). */
+const PRIORITY_EPOCH_MS = Date.parse('2025-01-01T00:00:00.000Z');
+
+/**
+ * A run's place among the waiters of a group: the earlier it was admitted, the
+ * sooner it gets the slot. A run blocked by another issue is admitted only
+ * after its blocker finished, so admission order puts it behind.
+ */
+export function admissionPriority(run: Pick<FactoryRunView, 'admittedAt' | 'startedAt'>): number {
+  const admitted = Date.parse(run.admittedAt ?? run.startedAt);
+  if (!Number.isFinite(admitted)) return 0;
+  return Math.max(0, Math.floor((admitted - PRIORITY_EPOCH_MS) / 1000));
 }
 
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
   const waitThread = deps.waitThread ?? createThreadWaits();
   const journalRows = createWorkflowJournalRepository();
-  const { gate, stop: stopGate } = flowGate(deps.gate);
+  /** Each run's place in a group's queue, by its id (the holder is `<runId>/<node>/<visit>`). */
+  const priorities = new Map<string, number>();
+  /** Each factory's own stage limits, by its id: what replaces a flow's declared limit. */
+  const stageLimits = new Map<string, Record<string, number>>();
+  /** The factory's limit for a stage group (`<node>:<factoryId>`), when it set one. */
+  const stageLimitOf = (group: string): number | undefined => {
+    const at = group.lastIndexOf(':');
+    return at < 0 ? undefined : stageLimits.get(group.slice(at + 1))?.[group.slice(0, at)];
+  };
+  const { gate, stop: stopGate } = flowGate(deps.gate, {
+    // The merge lane is one at a time, whatever a flow or a setting says.
+    resolveLimit: (group, declared) => (isMergeLane(group) ? 1 : (stageLimitOf(group) ?? declared)),
+    priority: (holder) => priorities.get(holder.split('/')[0] ?? '') ?? 0,
+  });
 
   const loadFlow =
     deps.loadFlow ??
@@ -359,14 +418,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     if (!deps.cleanupMerged) return;
     const cleanup = deps.cleanupMerged;
     void deps.runs.get(job.run.id).match(
-      (run) => cleanup(job.factory.userId, run?.threadIds ?? job.run.threadIds),
-      () => cleanup(job.factory.userId, job.run.threadIds),
+      (run) => cleanup(job.factory.userId, threadsOf(run ?? job.run)),
+      () => cleanup(job.factory.userId, threadsOf(job.run)),
     );
   }
 
   /** A flow that failed: dropped before any agent ran, left as a step parked it, failed, or parked. */
   async function settleFailed(job: FactoryRunJob, trace: FlowTrace, error?: string): Promise<void> {
     const { run } = job;
+    // Triage parked it on its issue or sent it back to the queue: nothing to settle.
+    if (trace.held) return;
     // The step wrote the run's end: not a failure, and nobody is waited for.
     if (trace.ended) return;
     if (!trace.agentsRan && !wasReopened(job)) return dropUnstarted(job, error);
@@ -417,9 +478,12 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       return 'not-started';
     }
     logFlowWarnings(job, flow.value);
+    priorities.set(job.run.id, admissionPriority(job.run));
+    stageLimits.set(job.factory.id, job.factory.stageLimits);
     const trace: FlowTrace = {
       agentsRan: job.run.threadIds.length > 0,
       prOpen: job.run.prUrl !== null,
+      held: false,
       step: null,
       parked: false,
       ended: false,
@@ -433,6 +497,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       // Stopped (or finished) elsewhere: stop driving it.
       if (live.isOk() && !live.value) controller.abort();
       if (live.isOk() && live.value && input.state === 'merged') cleanUpMerged(job);
+      // The tick that admitted the run waits for its implementing thread, so a
+      // launch that fails frees its slot in the same tick. While triage runs
+      // first that wait ends at the watcher's own limit (`ADMIT_WAIT_MS`).
       if (traceRecorded(trace, input)) agentStarted();
     };
 
@@ -459,6 +526,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       issueNumber: job.issue.number,
       issueTitle: job.issue.title,
       branch: factoryRunBranch(job.run),
+      issueUrl: job.issue.url,
     };
     const provider = createFactoryActionProvider({
       scope,
@@ -477,6 +545,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
               deps.followUp!(scope.userId, threadId, content, scope.branch),
             completedAt: threadCompletedAt,
             followedUpSince,
+            // A reviewer's thread is on its own branch: no branch guard.
+            followUpOffBranch: (threadId, content) =>
+              deps.followUp!(scope.userId, threadId, content),
           }
         : undefined,
       github: deps.github,
@@ -487,6 +558,52 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           projectId: scope.projectId,
         }),
       issueLabels: job.issue.labels ?? [],
+      sensitivePaths: job.factory.sensitivePaths,
+      autoMerge: job.factory.autoMerge,
+      triage: job.run.triage,
+      findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
+      busyPaths: async () => {
+        const others = await deps.runs.inFlight(job.factory.id);
+        return others.isOk() ? busyPathsOf(others.value, job.run.id) : [];
+      },
+      issueUpdatedAt: async () => {
+        const issue = await deps.github.getIssue(
+          { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+          scope.issueNumber,
+        );
+        return issue.isOk() ? (issue.value.updatedAt ?? null) : null;
+      },
+      holdForPaths: async (blockers) => {
+        const held = await deps.runs.holdForPaths(job.run.id, blockers);
+        if (held.isErr() || !held.value) return false;
+        trace.held = true;
+        return true;
+      },
+      reviews: job.run.reviews,
+      admittedAt: job.run.admittedAt ?? job.run.startedAt,
+      findReviewThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
+      reviewSlot: async (holder, signal) => {
+        const grant = await gate.acquire({
+          group: stageGroup('review', job.factory.id),
+          limit: DEFAULT_STAGE_LIMIT,
+          holder: `${job.run.id}/review/${holder}`,
+          signal,
+          onWait: () => {},
+        });
+        return grant.kind === 'slot' ? grant.release : () => {};
+      },
+      otherPullRequests: async () => {
+        const others = await deps.runs.inFlight(job.factory.id);
+        if (others.isErr()) return [];
+        return others.value.flatMap((other) =>
+          other.id !== job.run.id && other.prUrl ? [other.prUrl] : [],
+        );
+      },
+      enterStage: async (stage) => {
+        const entered = await deps.runs.enterStage(job.run.id, stage);
+        // Stopped or parked elsewhere: stop driving it.
+        if (entered.isOk() && !entered.value) controller.abort();
+      },
       releaseIssue: async () => {
         const relabelled = await deps.github.relabelIssue(
           { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
@@ -502,7 +619,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           });
         }
       },
-      lastThreadMessage,
+      lastThreadMessage: deps.lastThreadMessage ?? lastThreadMessage,
       removeUnchangedWorktrees: async () => {
         const run = await deps.runs.get(job.run.id);
         const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;
@@ -523,6 +640,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       legacyReplay: journaled.value.length === 0,
     });
 
+    // The branch the pull request merges into names the merge lane. Unknown
+    // (GitHub could not be read): the lane is the repository's, which still
+    // merges one at a time.
+    const base = await deps.github.defaultBranch({
+      repo: scope.repo,
+      ownerId: scope.userId,
+      projectId: scope.projectId,
+    });
+    const baseBranch = base.isOk() ? base.value : '';
+
     const context: YamlPipelineContext = {
       provider,
       progress: nullReporter,
@@ -533,6 +660,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         issue_title: job.issue.title,
         issue_url: job.issue.url,
         branch: scope.branch,
+        // What the host's concurrency groups are named by (the merge lane, stage limits).
+        base_branch: baseBranch,
+        factory_id: job.factory.id,
       },
       outputs: {},
     };
@@ -545,6 +675,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         // A node waiting for its group's slot (a merge behind another run's)
         // is the run's current step too, though it has not entered yet.
         if (change.kind !== 'entering' && change.kind !== 'waiting_slot') return;
+        // Waiting for a stage's slot, the run is admitted and holds its place:
+        // the tick that admitted it does not wait for the slot.
+        if (change.kind === 'waiting_slot') agentStarted();
         trace.step = change.nodeName;
         void record({ currentStep: change.nodeName });
       },
@@ -578,11 +711,17 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         })
         .finally(() => {
           if (active.get(job.run.id) === controller) active.delete(job.run.id);
+          priorities.delete(job.run.id);
         });
       return started;
     },
 
     isActive: (runId: string) => active.has(runId),
+
+    /** Take the factory's stage limits as saved now (each tick): they apply to the next slot asked for. */
+    noteFactory(factory: Pick<WatchedFactory, 'id' | 'stageLimits'>): void {
+      stageLimits.set(factory.id, factory.stageLimits);
+    },
 
     /** Stop driving one run's flow (the run was stopped); nothing more is written for it. */
     stop(runId: string): void {

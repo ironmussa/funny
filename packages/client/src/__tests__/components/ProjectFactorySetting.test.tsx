@@ -13,8 +13,11 @@ interface FactoryMocks {
   runs: FactoryRun[];
   control: Mock<(...args: any[]) => any>;
   empty: Mock<(...args: any[]) => any>;
+  closeIncident: Mock<(...args: any[]) => any>;
   toastError: Mock<(...args: any[]) => any>;
   canSteer: boolean;
+  /** Whether the flow's review step resolves to the implementer's provider and model. */
+  sameReviewer: boolean | undefined;
 }
 
 const mocks = ((): FactoryMocks => ({
@@ -23,8 +26,10 @@ const mocks = ((): FactoryMocks => ({
   runs: [],
   control: vi.fn(),
   empty: vi.fn(),
+  closeIncident: vi.fn(),
   toastError: vi.fn(),
   canSteer: true,
+  sameReviewer: undefined,
 }))();
 
 mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
@@ -32,11 +37,22 @@ mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.ca
 mock.module('@/data/factory/hooks', () => ({
   useFactorySettings: () => mocks.settings,
   useFactoryRuns: () => mocks.runs,
+  useFactoryFlowDefinition: (_projectId: string, name: string) => ({
+    definition: {
+      name,
+      source: 'built-in',
+      path: null,
+      yaml: '',
+      reviewerSameAsImplementer: mocks.sameReviewer,
+    },
+    error: null,
+  }),
 }));
 mock.module('@/data/factory/actions', () => ({
   saveFactorySettings: (input: unknown) => mocks.save(input),
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
   emptyFactory: (...args: unknown[]) => mocks.empty(...args),
+  closeFactoryIncident: (...args: unknown[]) => mocks.closeIncident(...args),
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
 mock.module('react-i18next', () => ({
@@ -56,6 +72,9 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
+  autoMerge: 'low_risk',
+  sensitivePaths: [],
+  stageLimits: {},
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,
@@ -68,9 +87,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.settings = null;
   mocks.canSteer = true;
+  mocks.sameReviewer = undefined;
   mocks.runs = [];
   mocks.control.mockImplementation(() => okAsync({}));
   mocks.empty.mockImplementation(() => okAsync({ cleared: 0, stopped: 0 }));
+  mocks.closeIncident.mockImplementation(() => okAsync(configured()));
   mocks.save.mockImplementation((input: Record<string, unknown>) =>
     okAsync({ ...configured(), ...input }),
   );
@@ -181,6 +202,175 @@ describe('factory blocked reason', () => {
   });
 });
 
+// Change factory-agent-roles: how the factory reviews and merges.
+describe('review and merge settings', () => {
+  const blur = (testId: string, value: string) =>
+    fireEvent.blur(screen.getByTestId(testId), { target: { value } });
+
+  test('hidden while the factory is paused, shown with their values when it runs', () => {
+    mocks.settings = configured({ enabled: false });
+    const { unmount } = render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.queryByTestId('settings-factory-automerge-low')).toBeNull();
+    unmount();
+
+    mocks.settings = configured({
+      autoMerge: 'all',
+      sensitivePaths: ['billing/**', 'infra/**'],
+      stageLimits: { review: 1 },
+    });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(pressed('automerge-all')).toBe('true');
+    expect(screen.getByTestId('settings-factory-sensitive-paths')).toHaveValue(
+      'billing/**, infra/**',
+    );
+    expect(screen.getByTestId('settings-factory-limit-review')).toHaveValue(1);
+    expect(screen.getByTestId('settings-factory-limit-implement')).toHaveValue(null);
+  });
+
+  test('choosing what merges by itself saves it', () => {
+    mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    fireEvent.click(screen.getByTestId('settings-factory-automerge-all'));
+    expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: true, autoMerge: 'all' });
+  });
+
+  test('sensitive paths are saved as a list, and an unchanged list is not saved', () => {
+    mocks.settings = configured({ sensitivePaths: ['billing/**'] });
+    render(<ProjectFactorySetting projectId="p1" />);
+    blur('settings-factory-sensitive-paths', ' billing/** ');
+    expect(mocks.save).not.toHaveBeenCalled();
+    blur('settings-factory-sensitive-paths', 'billing/**, infra/**,, billing/**');
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      sensitivePaths: ['billing/**', 'infra/**'],
+    });
+  });
+
+  test('a stage limit is saved with the other limits; emptying it removes it', () => {
+    mocks.settings = configured({ stageLimits: { implement: 3 } });
+    render(<ProjectFactorySetting projectId="p1" />);
+    blur('settings-factory-limit-review', '1');
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      stageLimits: { implement: 3, review: 1 },
+    });
+    mocks.save.mockClear();
+    blur('settings-factory-limit-implement', '');
+    expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: true, stageLimits: {} });
+  });
+
+  test('an out-of-range or unchanged stage limit is not saved, and merge has no input', () => {
+    mocks.settings = configured({ stageLimits: { review: 2 } });
+    render(<ProjectFactorySetting projectId="p1" />);
+    blur('settings-factory-limit-review', '0');
+    blur('settings-factory-limit-review', '99');
+    blur('settings-factory-limit-review', '2');
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('settings-factory-limit-merge')).toBeNull();
+  });
+
+  test('a reviewer on the same model as the implementer is called out; a different one is not', () => {
+    mocks.settings = configured();
+    mocks.sameReviewer = true;
+    const { unmount } = render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-same-reviewer')).toHaveTextContent(
+      'same provider and model',
+    );
+    unmount();
+
+    mocks.sameReviewer = false;
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.queryByTestId('settings-factory-same-reviewer')).toBeNull();
+  });
+});
+
+// Change factory-agent-roles, D10: a broken base branch pauses the factory.
+describe('an incident', () => {
+  const incident = (over: Record<string, unknown> = {}) => ({
+    id: 'i1',
+    repo: 'o/r',
+    baseBranch: 'main',
+    state: 'reported' as const,
+    redSha: 'abc123',
+    openedAt: '2026-11-22T12:00:00.000Z',
+    closedAt: null,
+    candidates: [],
+    result: null,
+    ...over,
+  });
+
+  test('is shown with what the factory found, in place of the plain reason', () => {
+    mocks.settings = configured({
+      blockedReason: 'Incident: the base branch main of o/r is red',
+      incident: incident({
+        result: {
+          decision: 'revert',
+          reason: 'It removed the helper.',
+          culpritPrUrl: 'https://github.com/o/r/pull/113',
+          revertPrUrl: 'https://github.com/o/r/pull/900',
+        },
+      }),
+    });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-incident')).toHaveTextContent(
+      'The base branch main of o/r is red after a factory merge',
+    );
+    expect(screen.getByTestId('settings-factory-incident-culprit')).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/pull/113',
+    );
+    expect(screen.getByTestId('settings-factory-incident-revert')).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/pull/900',
+    );
+    expect(screen.queryByTestId('settings-factory-blocked')).toBeNull();
+  });
+
+  test('says so while the factory is still looking, and when it could not name a merge', () => {
+    mocks.settings = configured({ incident: incident({ state: 'investigating' }) });
+    const { unmount } = render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-incident')).toHaveTextContent(
+      'looking for the merge that broke it',
+    );
+    unmount();
+
+    mocks.settings = configured({
+      incident: incident({ result: { decision: 'unknown', reason: 'The test is flaky.' } }),
+    });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-incident-finding')).toHaveTextContent(
+      'could not name the merge that broke it: The test is flaky.',
+    );
+  });
+
+  test('a member closes it, and a refusal is shown', async () => {
+    mocks.settings = configured({ incident: incident() });
+    render(<ProjectFactorySetting projectId="p1" />);
+    fireEvent.click(screen.getByTestId('settings-factory-incident-close'));
+    expect(mocks.closeIncident).toHaveBeenCalledWith('p1');
+
+    mocks.closeIncident.mockImplementation(() =>
+      errAsync({ type: 'NOT_FOUND', message: 'No incident is open for this factory.' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-factory-incident-close')).not.toBeDisabled(),
+    );
+    fireEvent.click(screen.getByTestId('settings-factory-incident-close'));
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalled());
+  });
+
+  test('without an incident the plain reason shows as before', () => {
+    mocks.settings = configured({ blockedReason: 'The runner is offline', incident: null });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-blocked')).toHaveTextContent(
+      'The runner is offline',
+    );
+    expect(screen.queryByTestId('settings-factory-incident')).toBeNull();
+  });
+});
+
 describe('factory runs', () => {
   test('a run in flight can be stopped; its thread is linked', () => {
     mocks.settings = configured();
@@ -275,5 +465,99 @@ describe('factory runs', () => {
     fireEvent.click(screen.getByTestId('settings-factory-mode-manual'));
 
     expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: false, mode: 'manual' });
+  });
+
+  // Change factory-agent-roles: why a run is not merged shows in its row.
+  test('a run held at the merge shows its review, its risk and the reason', () => {
+    mocks.settings = configured();
+    mocks.runs = [
+      runOf({
+        state: 'waiting_human',
+        currentStep: 'merge',
+        failureReason: 'high risk',
+        reviews: [
+          {
+            sha: 'a'.repeat(40),
+            verdict: 'pass',
+            findings: [],
+            reviewedAt: '2026-11-22T00:00:00Z',
+          },
+        ],
+        risk: { headSha: 'a'.repeat(40), level: 'high', reasons: ['touches .github/'] },
+      }),
+    ];
+    renderRuns();
+    expect(screen.getByTestId('factory-run-review-r1')).toHaveTextContent('Review passed');
+    expect(screen.getByTestId('factory-run-risk-r1')).toHaveAttribute('title', 'touches .github/');
+    expect(screen.getByTestId('factory-run-reason-r1')).toHaveTextContent(
+      'Not merged: high risk, it needs you',
+    );
+  });
+
+  test('a failed review is shown as failed, and a run in the lane says so', () => {
+    mocks.settings = configured();
+    mocks.runs = [
+      runOf({
+        state: 'merging',
+        currentStep: 'merge',
+        reviews: [
+          {
+            sha: 'a'.repeat(40),
+            verdict: 'fail',
+            findings: [{ severity: 'high', title: 'Wrong' }],
+            reviewedAt: '2026-11-22T00:00:00Z',
+          },
+        ],
+      }),
+    ];
+    renderRuns();
+    expect(screen.getByTestId('factory-run-review-r1')).toHaveTextContent('Review failed');
+    expect(screen.getByTestId('factory-run-r1')).toHaveTextContent('In the merge lane');
+    expect(screen.queryByTestId('factory-run-reason-r1')).toBeNull();
+  });
+
+  // Change factory-agent-roles, phase 2: triage in the run's row.
+  test('a run parked on its issue says so and can be retried; its contract shows when it has one', () => {
+    mocks.settings = configured();
+    mocks.runs = [
+      runOf({
+        state: 'needs_info',
+        failureReason: 'needs info',
+        triage: { decision: 'needs_info', at: '2026-11-22T00:00:00Z', items: ['Which endpoint?'] },
+      }),
+    ];
+    const { unmount } = renderRuns();
+    expect(screen.getByTestId('factory-run-r1')).toHaveTextContent('Needs info');
+    expect(screen.getByTestId('factory-run-reason-r1')).toHaveTextContent('Asked on the issue');
+    expect(screen.queryByTestId('factory-run-contract-r1')).toBeNull();
+    fireEvent.click(screen.getByTestId('factory-run-retry-r1'));
+    expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
+    unmount();
+
+    mocks.runs = [
+      runOf({
+        triage: {
+          decision: 'ready',
+          at: '2026-11-22T00:00:00Z',
+          contract: {
+            acceptanceCriteria: ['Negative numbers are summed'],
+            likelyPaths: [],
+            riskHints: [],
+          },
+        },
+      }),
+    ];
+    renderRuns();
+    expect(screen.getByTestId('factory-run-contract-r1')).toHaveAttribute(
+      'title',
+      'Negative numbers are summed',
+    );
+  });
+
+  test('a run that went on without a contract shows "No contract"', () => {
+    mocks.settings = configured();
+    mocks.runs = [runOf({ triage: { decision: 'none', at: '2026-11-22T00:00:00Z' } })];
+    renderRuns();
+    expect(screen.getByTestId('factory-run-contract-r1')).toHaveTextContent('No contract');
   });
 });

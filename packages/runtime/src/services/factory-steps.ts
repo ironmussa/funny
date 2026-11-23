@@ -12,12 +12,11 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 
 import { execute, factoryGitConfigEnv, gitNetwork, gitRead, gitWrite } from '@funny/core/git';
 
 import { log } from '../lib/logger.js';
+import { factoryGitDir } from './agent-startup/factory-git.js';
 
 const ns = 'factory-steps';
 
@@ -381,9 +380,6 @@ async function integrateStep(
 // ── Jobs ──────────────────────────────────────────────────────
 
 const jobs = new Map<string, FactoryStepJob>();
-
-/** Where the factory's git configuration files live on this runner. */
-const factoryGitDir = () => join(homedir(), '.funny', 'factory-git');
 
 async function runStep(
   cwd: string,

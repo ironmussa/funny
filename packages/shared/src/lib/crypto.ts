@@ -247,6 +247,16 @@ export function createCrypto({
     }
   }
 
+  /**
+   * A key id: `k`, the time, and a random part. The time alone collided when a
+   * key was rotated in the millisecond the keyring was created (or rotated
+   * twice in one), and the rotation threw. Never contains `:`, which separates
+   * the parts of a ciphertext.
+   */
+  function newKeyId(): string {
+    return `k${Date.now().toString(36)}${randomBytes(4).toString('hex')}`;
+  }
+
   function loadStore(): KeyStore {
     if (cachedStore) return cachedStore;
     const serialized = source.load();
@@ -255,7 +265,7 @@ export function createCrypto({
       store = toKeyStore(serialized);
     } else {
       // First run: generate a fresh key and persist as the active key.
-      const id = `k${Date.now().toString(36)}`;
+      const id = newKeyId();
       store = { active: id, keys: { [id]: randomBytes(32) } };
       persist(store, 'create an encryption key');
     }
@@ -332,7 +342,7 @@ export function createCrypto({
 
     rotateKey() {
       const current = loadStore();
-      const id = `k${Date.now().toString(36)}`;
+      const id = newKeyId();
       if (current.keys[id]) {
         throw new Error('Key id collision — retry');
       }

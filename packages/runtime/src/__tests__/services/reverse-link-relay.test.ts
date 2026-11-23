@@ -52,10 +52,14 @@ function openSpare(relay: ReverseLinkRelay, secret = SECRET) {
   ws.binaryType = 'arraybuffer';
   const frames: Array<string | Uint8Array> = [];
   let closed = false;
+  let opened = false;
+  ws.onopen = () => (opened = true);
   ws.onmessage = (e) => frames.push(typeof e.data === 'string' ? e.data : new Uint8Array(e.data));
   ws.onclose = () => (closed = true);
   cleanups.push(() => ws.close());
-  return { ws, frames, isClosed: () => closed };
+  // The relay counts a spare when the server side opens; on a loaded machine the
+  // client side can still be connecting then, and a send throws InvalidStateError.
+  return { ws, frames, isClosed: () => closed, isOpen: () => opened };
 }
 
 async function connectRunner(relay: ReverseLinkRelay) {
@@ -157,7 +161,7 @@ describe('reverse link relay', () => {
   test('a frame from the server before the spare is assigned closes it', async () => {
     const relay = startRelay();
     const spare = openSpare(relay);
-    await until(() => relay.spareCount() === 1);
+    await until(() => relay.spareCount() === 1 && spare.isOpen());
     spare.ws.send(new Uint8Array([1, 2, 3]));
     await until(spare.isClosed);
     expect(relay.spareCount()).toBe(0);

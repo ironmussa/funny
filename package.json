@@ -165,6 +165,7 @@
     "eslint-plugin-zod": "4.7.1",
     "fallow": "3.44.0",
     "lefthook": "^2.2.2",
+    "railway": "^3.17.0",
     "react-doctor": "0.9.23",
     "secretlint": "^13.0.2",
     "typescript": "7.0.2",

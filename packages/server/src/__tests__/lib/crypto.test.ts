@@ -1,4 +1,4 @@
-import { afterAll, describe, test, expect } from 'bun:test';
+import { afterAll, describe, test, expect, spyOn } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -85,6 +85,21 @@ describe('decrypt', () => {
 // ── key rotation ─────────────────────────────────────────────────
 
 describe('rotateKey', () => {
+  // The key id was the time alone: a rotation in the millisecond the keyring
+  // was created, or a second one in the same millisecond, threw "Key id collision".
+  test('rotations in the same millisecond get different key ids', () => {
+    const now = spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      const first = rotateKey();
+      const second = rotateKey();
+      expect(second).not.toBe(first);
+      expect(first).not.toContain(':');
+      expect(decrypt(encrypt('after two rotations'))).toBe('after two rotations');
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   test('old ciphertext still decrypts after a rotation', () => {
     const before = encrypt('pre-rotation');
     const newKeyId = rotateKey();

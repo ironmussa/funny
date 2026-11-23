@@ -754,6 +754,16 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   // plugin can be active at the same time. So a plugin claims keys only while
   // its own menu is the one on screen — otherwise two plugins would move the
   // shared selected index for a single keypress.
+  /** Closes the open suggestion menu and forgets where it was triggered. */
+  const closeSuggestions = useCallback(() => {
+    triggerPosRef.current = null;
+    setSuggestionType(null);
+    setSuggestionItems([]);
+    setSuggestionQuery('');
+    setSuggestionLoading(false);
+    setSuggestionTruncated(false);
+  }, []);
+
   const makeSuggestionKeyDown = useCallback(
     (menuType: SuggestionMenuType) =>
       ({ event }: { event: KeyboardEvent }) => {
@@ -859,18 +869,11 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           suggestionCommandRef.current = props.command;
         },
         onKeyDown: makeSuggestionKeyDown('file'),
-        onExit: () => {
-          triggerPosRef.current = null;
-          setSuggestionType(null);
-          setSuggestionItems([]);
-          setSuggestionQuery('');
-          setSuggestionLoading(false);
-          setSuggestionTruncated(false);
-        },
+        onExit: closeSuggestions,
       }),
     }),
     // Intentionally minimal: cwd/loadSkills accessed via refs
-    [applySuggestionItems, getFullQuery, makeSuggestionKeyDown],
+    [applySuggestionItems, closeSuggestions, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── Slash command suggestion config ──
@@ -1144,17 +1147,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           suggestionCommandRef.current = props.command;
         },
         onKeyDown: makeSuggestionKeyDown('symbol'),
-        onExit: () => {
-          triggerPosRef.current = null;
-          setSuggestionType(null);
-          setSuggestionItems([]);
-          setSuggestionQuery('');
-          setSuggestionLoading(false);
-          setSuggestionTruncated(false);
-        },
+        onExit: closeSuggestions,
       }),
     }),
-    [applySuggestionItems, getFullQuery, makeSuggestionKeyDown],
+    [applySuggestionItems, closeSuggestions, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── TipTap editor ──

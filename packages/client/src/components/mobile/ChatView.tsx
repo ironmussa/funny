@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
@@ -13,7 +13,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { useQueuedCount } from '@/data/queue/hooks';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useKnownMessageIds } from '@/hooks/use-known-message-ids';
-import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { useTodoSnapshotIndex } from '@/hooks/use-todo-panel';
 import {
   useCompactionEvents,
   useThreadEvents,
@@ -80,12 +80,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   // already-present items skip the entrance animation (matches desktop).
   const knownIds = useKnownMessageIds(activeThread?.id, stableMessages);
 
-  const snapshots = useTodoSnapshots();
-  const snapshotMap = useMemo(() => {
-    const next = new Map<string, number>();
-    snapshots.forEach((s, i) => next.set(s.toolCallId, i));
-    return next;
-  }, [snapshots]);
+  const snapshotMap = useTodoSnapshotIndex();
 
   const isExternal = activeThread?.provider === 'external';
   const queuedCount = useQueuedCount(activeThread?.id);

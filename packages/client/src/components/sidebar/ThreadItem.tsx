@@ -5,7 +5,6 @@ import {
   MoreVertical,
   FolderOpenDot,
   Terminal,
-  Square,
   Pencil,
   GitFork,
   GitBranch,
@@ -14,6 +13,7 @@ import {
 import { useState, memo, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { StopThreadMenuItem } from '@/components/thread/StopThreadMenuItem';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Button } from '@/components/ui/button';
 import {
@@ -255,19 +255,7 @@ function ThreadItemActions({
           {isRunning && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const result = await api.stopThread(thread.id);
-                  if (result.isErr()) {
-                    console.error('Failed to stop thread:', result.error);
-                  }
-                }}
-              >
-                <Square className="icon-sm" />
-                {t('common.stop')}
-              </DropdownMenuItem>
+              <StopThreadMenuItem threadId={thread.id} />
             </>
           )}
           <StopFactoryRunItem thread={thread} activity={activity} />

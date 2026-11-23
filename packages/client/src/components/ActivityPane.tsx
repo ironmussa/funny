@@ -24,7 +24,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
-import { useStableCallback } from '@/hooks/use-stable-callback';
+import { useLoadDiffWhenMissing } from '@/hooks/use-load-diff-when-missing';
 import { useThreadChangedFiles } from '@/hooks/use-thread-changed-files';
 import { useTodoSnapshotsByAgent } from '@/hooks/use-todo-panel';
 import type { TodoSnapshot } from '@/hooks/use-todo-panel';
@@ -304,13 +304,7 @@ export function ActivityPane() {
     [threadId, diffCache, files],
   );
 
-  // Fires on the expanded file only; the cache and loader change on every load.
-  const loadExpandedFileDiff = useStableCallback((path: string) => {
-    if (!diffCache.has(path)) loadDiffForFile(path);
-  });
-  useEffect(() => {
-    if (expandedFile) loadExpandedFileDiff(expandedFile);
-  }, [expandedFile, loadExpandedFileDiff]);
+  useLoadDiffWhenMissing(expandedFile, diffCache, loadDiffForFile);
 
   const requestFullDiff = useCallback(
     async (

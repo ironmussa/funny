@@ -76,6 +76,20 @@ interface ChangesToolbarProps {
  * Extracted from ReviewPane.tsx as part of the god-file split — see
  * .claude/plans/reviewpane-split.md.
  */
+function RefreshButton({ onRefresh, loading }: { onRefresh: () => void; loading: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="muted" size="icon-sm" onClick={onRefresh} data-testid="review-refresh">
+          <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function ChangesToolbar({
   refresh,
   loading,
@@ -114,14 +128,7 @@ export function ChangesToolbar({
   if (readOnly) {
     return (
       <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="muted" size="icon-sm" onClick={refresh} data-testid="review-refresh">
-              <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
-        </Tooltip>
+        <RefreshButton onRefresh={refresh} loading={loading} />
         <ToolbarCount
           label={t('review.toolbarCount.files', { count: summaries.length })}
           testId="review-count"
@@ -132,14 +139,7 @@ export function ChangesToolbar({
 
   return (
     <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="muted" size="icon-sm" onClick={refresh} data-testid="review-refresh">
-            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
-      </Tooltip>
+      <RefreshButton onRefresh={refresh} loading={loading} />
       <PullFetchButtons
         onPull={handlePull}
         onFetch={handleFetchOrigin}

@@ -478,11 +478,16 @@ export function PinnedPRCard({
   const isOwnComment = (author: string) =>
     !!currentUserLogin && author.toLowerCase() === currentUserLogin.toLowerCase();
 
-  const renderThreadComment = (thread: PRReviewThread, c: PRThreadComment, isRoot: boolean) => {
-    const editKey = `review-${c.id}`;
+  /** A comment's header (author, age, association, own-comment actions) and its body or edit form. */
+  const renderEditableComment = (
+    kind: 'review' | 'issue',
+    c: PRThreadComment | PRIssueComment,
+    testPrefix: string,
+  ) => {
+    const editKey = `${kind}-${c.id}`;
     const isEditing = editingId === editKey;
     return (
-      <div key={c.id} className={cn('flex flex-col gap-1', !isRoot && 'pl-3')}>
+      <>
         <div className="flex items-center gap-1.5 text-xs">
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
           <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
@@ -500,7 +505,7 @@ export function PinnedPRCard({
                     variant="ghost"
                     size="icon-xs"
                     onClick={() => setEditingId(editKey)}
-                    data-testid={`pinned-pr-review-edit-${c.id}`}
+                    data-testid={`${testPrefix}-edit-${c.id}`}
                   >
                     <Pencil className="icon-xs" />
                   </Button>
@@ -513,8 +518,8 @@ export function PinnedPRCard({
                     variant="ghost"
                     size="icon-xs"
                     disabled={deletingId === editKey}
-                    onClick={() => handleDelete('review', c.id, editKey)}
-                    data-testid={`pinned-pr-review-delete-${c.id}`}
+                    onClick={() => handleDelete(kind, c.id, editKey)}
+                    data-testid={`${testPrefix}-delete-${c.id}`}
                   >
                     {deletingId === editKey ? (
                       <Loader2 className="icon-xs animate-spin" />
@@ -533,81 +538,32 @@ export function PinnedPRCard({
             initial={c.body}
             saving={savingEditId === editKey}
             onCancel={() => setEditingId(null)}
-            onSave={(body) => handleEditSave('review', c.id, body, editKey)}
-            testId={`pinned-pr-review-edit-form-${c.id}`}
+            onSave={(body) => handleEditSave(kind, c.id, body, editKey)}
+            testId={`${testPrefix}-edit-form-${c.id}`}
           />
         ) : (
           <MarkdownBody body={c.body} />
         )}
+      </>
+    );
+  };
+
+  const renderThreadComment = (thread: PRReviewThread, c: PRThreadComment, isRoot: boolean) => {
+    return (
+      <div key={c.id} className={cn('flex flex-col gap-1', !isRoot && 'pl-3')}>
+        {renderEditableComment('review', c, 'pinned-pr-review')}
       </div>
     );
   };
 
   const renderIssueComment = (c: PRIssueComment) => {
-    const editKey = `issue-${c.id}`;
-    const isEditing = editingId === editKey;
     return (
       <div
         key={c.id}
         className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2"
         data-testid={`pinned-pr-comment-${c.id}`}
       >
-        <div className="flex items-center gap-1.5 text-xs">
-          <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
-          <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
-          {c.author_association && c.author_association !== 'NONE' && (
-            <Badge size="xxs" variant="outline">
-              {c.author_association}
-            </Badge>
-          )}
-          <div className="flex-1" />
-          {isOwnComment(c.author) && !isEditing && (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => setEditingId(editKey)}
-                    data-testid={`pinned-pr-comment-edit-${c.id}`}
-                  >
-                    <Pencil className="icon-xs" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Edit</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={deletingId === editKey}
-                    onClick={() => handleDelete('issue', c.id, editKey)}
-                    data-testid={`pinned-pr-comment-delete-${c.id}`}
-                  >
-                    {deletingId === editKey ? (
-                      <Loader2 className="icon-xs animate-spin" />
-                    ) : (
-                      <Trash2 className="icon-xs" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Delete</TooltipContent>
-              </Tooltip>
-            </>
-          )}
-        </div>
-        {isEditing ? (
-          <EditForm
-            initial={c.body}
-            saving={savingEditId === editKey}
-            onCancel={() => setEditingId(null)}
-            onSave={(body) => handleEditSave('issue', c.id, body, editKey)}
-            testId={`pinned-pr-comment-edit-form-${c.id}`}
-          />
-        ) : (
-          <MarkdownBody body={c.body} />
-        )}
+        {renderEditableComment('issue', c, 'pinned-pr-comment')}
         <ReactionBar
           reactions={c.reactions}
           onReact={(k) => handleReact('issue', c.id, k)}

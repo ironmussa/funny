@@ -62,6 +62,18 @@ function buildClaudeAuthCommand(configDir: string) {
   return `CLAUDE_CONFIG_DIR=${shellQuoteEnvValue(configDir)} claude auth login`;
 }
 
+/** The agent execution profiles, or null after telling the user they could not be loaded. */
+async function fetchProfiles(
+  t: ReturnType<typeof useTranslation>['t'],
+): Promise<AgentExecutionProfileResponse[] | null> {
+  const result = await api.listAgentExecutionProfiles();
+  if (result.isOk()) return result.value.profiles;
+  toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
+    description: result.error.message,
+  });
+  return null;
+}
+
 export function AgentExecutionProfilesSettings() {
   const { t } = useTranslation();
   const [profiles, setProfiles] = useState<AgentExecutionProfileResponse[]>([]);
@@ -76,16 +88,11 @@ export function AgentExecutionProfilesSettings() {
 
   const load = useCallback(async () => {
     await whilePending(setLoading, async () => {
-      const profilesResult = await api.listAgentExecutionProfiles();
-      if (profilesResult.isErr()) {
-        toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
-          description: profilesResult.error.message,
-        });
-        return;
-      }
+      const profiles = await fetchProfiles(t);
+      if (!profiles) return;
 
-      setProfiles(profilesResult.value.profiles);
-      setDrafts(profilesToDrafts(profilesResult.value.profiles));
+      setProfiles(profiles);
+      setDrafts(profilesToDrafts(profiles));
     });
   }, [t]);
 
@@ -249,15 +256,10 @@ export function ProjectAgentExecutionProfileSettings() {
 
   const load = useCallback(async () => {
     await whilePending(setLoading, async () => {
-      const profilesResult = await api.listAgentExecutionProfiles();
-      if (profilesResult.isErr()) {
-        toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
-          description: profilesResult.error.message,
-        });
-        return;
-      }
+      const profiles = await fetchProfiles(t);
+      if (!profiles) return;
 
-      setProfiles(profilesResult.value.profiles);
+      setProfiles(profiles);
 
       if (selectedProjectId) {
         const bindingResult = await api.getProjectAgentProfileBinding(selectedProjectId);

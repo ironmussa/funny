@@ -1,17 +1,11 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { GitStatusInfo, Thread, ThreadStage } from '@funny/shared';
-import {
-  Archive,
-  FolderOpenDot,
-  MoreVertical,
-  Square,
-  Terminal,
-  Trash2,
-} from 'lucide-react';
+import { Archive, FolderOpenDot, MoreVertical, Terminal, Trash2 } from 'lucide-react';
 import { memo, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { StopThreadMenuItem } from '@/components/thread/StopThreadMenuItem';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
@@ -234,17 +228,7 @@ export const KanbanCard = memo(function KanbanCard({
                 {isRunning && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const result = await api.stopThread(thread.id);
-                        if (result.isErr()) console.error('Failed to stop thread:', result.error);
-                      }}
-                    >
-                      <Square className="icon-sm" />
-                      {t('common.stop')}
-                    </DropdownMenuItem>
+                    <StopThreadMenuItem threadId={thread.id} />
                   </>
                 )}
                 {onArchive && !isBusy && (

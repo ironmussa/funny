@@ -12,7 +12,7 @@ import { readProject } from '@/data/projects/read';
 import { useQueuedCount } from '@/data/queue/hooks';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useKnownMessageIds } from '@/hooks/use-known-message-ids';
-import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { useTodoSnapshotIndex } from '@/hooks/use-todo-panel';
 import { sessionChangesFromEvents } from '@/lib/session-changes-from-events';
 import {
   canDoGitOps,
@@ -111,12 +111,7 @@ export function ThreadConversation({
   // Track which message/tool-call IDs existed when the thread was loaded.
   const knownIds = useKnownMessageIds(activeThread?.id, stableMessages);
 
-  const snapshots = useTodoSnapshots();
-  const snapshotMap = useMemo(() => {
-    const next = new Map<string, number>();
-    snapshots.forEach((s, i) => next.set(s.toolCallId, i));
-    return next;
-  }, [snapshots]);
+  const snapshotMap = useTodoSnapshotIndex();
 
   const internalLightbox = useImageLightbox();
   const openLightbox = onOpenLightbox ?? internalLightbox.openLightbox;

@@ -10,6 +10,7 @@ import {
 
 import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
+import { useLoadDiffWhenMissing } from '@/hooks/use-load-diff-when-missing';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
@@ -435,12 +436,7 @@ export function useDiffData({
   }, [selectedFile, loadSelectedFileDiff]);
 
   // Load diff when expanded file changes.
-  const loadExpandedFileDiff = useStableCallback((path: string) => {
-    if (!diffCache.has(path)) loadDiffForFile(path);
-  });
-  useEffect(() => {
-    if (expandedFile) loadExpandedFileDiff(expandedFile);
-  }, [expandedFile, loadExpandedFileDiff]);
+  useLoadDiffWhenMissing(expandedFile, diffCache, loadDiffForFile);
 
   // Fire deferred refresh when the review pane becomes visible. Uses the
   // needsRefreshRef flag set by the parent's gitContextKey reset effect when

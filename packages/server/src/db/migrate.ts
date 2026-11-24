@@ -2447,6 +2447,14 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'size_ignored_paths', 'TEXT');
     },
   },
+  {
+    // What the factory does with an issue triage finds too large: `split`
+    // opens its parts as issues; null (`ask`) comments the proposed split.
+    name: '125_factory_settings_too_big',
+    async up() {
+      await ctx().addColumn('factory_settings', 'too_big', 'TEXT');
+    },
+  },
 ];
 
 /**

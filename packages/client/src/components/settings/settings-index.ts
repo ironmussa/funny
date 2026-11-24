@@ -567,6 +567,15 @@ const ENTRIES = [
     keywords: ['blocker', 'stack', 'stacked', 'depends'],
   },
   {
+    id: 'factory.tooBig',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryTooBig',
+    description: 'settings.projectFactoryTooBigAskDesc',
+    keywords: ['split', 'too big', 'large', 'triage', 'sub-issue', 'parts'],
+  },
+  {
     id: 'factory.stepOptions',
     scope: 'project',
     page: 'factory',

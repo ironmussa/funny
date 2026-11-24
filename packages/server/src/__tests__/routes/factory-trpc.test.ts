@@ -491,6 +491,21 @@ describe('factory over tRPC', () => {
     ).toBe(400);
   });
 
+  test('a too-large issue is commented unless the factory splits it', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      tooBig: 'ask',
+    });
+    const saved = await save('alice', { projectId: 'p1', enabled: true, tooBig: 'split' });
+    expect(saved.body).toMatchObject({ tooBig: 'split' });
+    // Saving something else keeps it.
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: true, maxConcurrent: 3 })).body,
+    ).toMatchObject({ tooBig: 'split' });
+    expect((await save('alice', { projectId: 'p1', enabled: true, tooBig: 'always' })).status).toBe(
+      400,
+    );
+  });
+
   // openspec factory-integration 6.1: how the repository merges, and why.
   test('readiness says how the repository merges; without a running factory, one at a time', async () => {
     await save('alice', { projectId: 'p1', enabled: true });

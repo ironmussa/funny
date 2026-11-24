@@ -26,6 +26,7 @@ import {
   type FactoryMode,
   type FactorySettings,
   type FactoryStepOverrides,
+  type FactoryTooBig,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { KNOWN_PROVIDER_IDS, providerModelProblem } from '@funny/shared/models';
@@ -63,6 +64,7 @@ export interface SaveFactorySettingsInput {
   stepOverrides?: FactoryStepOverrides;
   batch?: FactoryBatchSettings;
   dependencies?: FactoryDependencies;
+  tooBig?: FactoryTooBig;
 }
 
 type Row = typeof factorySettings.$inferSelect;
@@ -70,6 +72,9 @@ type Row = typeof factorySettings.$inferSelect;
 /** How the factory treats an in-flight blocker: `wait` unless it stacks. */
 const dependenciesOf = (row: Row): FactoryDependencies =>
   row.dependencies === 'stack' ? 'stack' : 'wait';
+
+/** What the factory does with a too-large issue: `ask` unless it splits. */
+const tooBigOf = (row: Row): FactoryTooBig => (row.tooBig === 'split' ? 'split' : 'ask');
 
 /** The stored batch settings, or the defaults where a column is null. */
 function batchOf(row: Row): FactoryBatchSettings {
@@ -160,6 +165,7 @@ const toView = (row: Row): FactorySettingsView => ({
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
   dependencies: dependenciesOf(row),
+  tooBig: tooBigOf(row),
   blockedReason: row.blockedReason ?? null,
   updatedAt: row.updatedAt,
 });
@@ -256,6 +262,7 @@ const DEFAULTS = {
   stepOverrides: {} as FactoryStepOverrides,
   batch: DEFAULT_FACTORY_BATCH,
   dependencies: 'wait' as FactoryDependencies,
+  tooBig: 'ask' as FactoryTooBig,
 };
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */
@@ -286,6 +293,7 @@ function buildRow(
     batchSize: (input.batch ?? base.batch).size,
     batchWaitMs: (input.batch ?? base.batch).waitSeconds * 1000,
     dependencies: input.dependencies ?? base.dependencies,
+    tooBig: input.tooBig ?? base.tooBig,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -321,6 +329,8 @@ export interface WatchedFactory {
   batch: FactoryBatchSettings;
   /** Wait for an in-flight blocker, or stack on its branch (D10). */
   dependencies: FactoryDependencies;
+  /** Comment the split of a too-large issue, or open its parts as issues. */
+  tooBig: FactoryTooBig;
 }
 
 const toEnabled = (row: Row): WatchedFactory => ({
@@ -340,6 +350,7 @@ const toEnabled = (row: Row): WatchedFactory => ({
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
   dependencies: dependenciesOf(row),
+  tooBig: tooBigOf(row),
 });
 
 /**
@@ -442,6 +453,7 @@ export function createFactorySettingsService(
       ...(input.stepOverrides !== undefined && { stepOverrides: row.stepOverrides }),
       ...(input.batch !== undefined && { batchSize: row.batchSize, batchWaitMs: row.batchWaitMs }),
       ...(input.dependencies !== undefined && { dependencies: row.dependencies }),
+      ...(input.tooBig !== undefined && { tooBig: row.tooBig }),
     };
     return ResultAsync.fromPromise(
       db

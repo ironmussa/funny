@@ -31,11 +31,13 @@ type MergeSettings = Pick<
   | 'stageLimits'
   | 'batch'
   | 'dependencies'
+  | 'tooBig'
 >;
 
 const { min: LOW_RISK_LINES_MIN, max: LOW_RISK_LINES_MAX } = LOW_RISK_LINES_RANGE;
 type BatchSettings = FactorySettings['batch'];
 type Dependencies = FactorySettings['dependencies'];
+type TooBig = FactorySettings['tooBig'];
 
 /** The input's whole number within `min`–`max`, or null when it is not one. */
 function wholeNumber(text: string, min: number, max: number): number | null {
@@ -284,7 +286,7 @@ export function ProjectFactoryMergeRows({
   const { t } = useTranslation();
   const { definition } = useFactoryFlowDefinition(projectId, flowName);
   const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
-  const { maxLowRiskLines, sizeIgnoredPaths } = settings;
+  const { maxLowRiskLines, sizeIgnoredPaths, tooBig } = settings;
 
   return (
     <>
@@ -458,6 +460,39 @@ export function ProjectFactoryMergeRows({
               value: 'stack',
               label: t('settings.projectFactoryDependenciesStack', 'Stack'),
               testId: 'settings-factory-dependencies-stack',
+            },
+          ]}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.tooBig"
+        title={t('settings.projectFactoryTooBig', 'Issues too large for one change')}
+        description={
+          tooBig === 'split'
+            ? t(
+                'settings.projectFactoryTooBigSplitDesc',
+                'The factory opens each part triage proposes as its own issue and works on them; the original issue leaves the factory. A part is never split again by itself',
+              )
+            : t(
+                'settings.projectFactoryTooBigAskDesc',
+                'The factory comments the split triage proposes on the issue, and waits until a person changes the issue',
+              )
+        }
+      >
+        <SegmentedControl<TooBig>
+          value={tooBig}
+          onChange={(value) => onSave({ tooBig: value })}
+          options={[
+            {
+              value: 'ask',
+              label: t('settings.projectFactoryTooBigAsk', 'Ask'),
+              testId: 'settings-factory-too-big-ask',
+            },
+            {
+              value: 'split',
+              label: t('settings.projectFactoryTooBigSplit', 'Split'),
+              testId: 'settings-factory-too-big-split',
             },
           ]}
         />

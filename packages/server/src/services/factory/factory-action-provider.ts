@@ -110,7 +110,7 @@ import { runStepOnRunner, type FactoryStepDeps } from './factory-step-runner.js'
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
-import { createFactoryTriage } from './factory-triage.js';
+import { createFactoryTriage, type FactorySplitDeps } from './factory-triage.js';
 
 /**
  * A proof the agent can fix (its test): the flows retry it with the agent.
@@ -238,6 +238,8 @@ export interface FactoryActionProviderDeps {
   issueText?(): Promise<FactoryIssueText | null>;
   /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only). */
   holdForPaths?(blockers: number[]): Promise<boolean>;
+  /** Open a too-large issue's parts as issues (the factory's `split` setting); absent: comment the split. */
+  split?: FactorySplitDeps;
   /** When the run was admitted: review threads from before are not this run's. */
   admittedAt?: string;
   /** The newest review thread of this run by its title prefix, since `since`. */
@@ -1015,6 +1017,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     issueUpdatedAt: deps.issueUpdatedAt,
     issueText: deps.issueText,
     hold: deps.holdForPaths,
+    split: deps.split,
     record: deps.record,
     count: (event) => count(metrics, { event }),
   });

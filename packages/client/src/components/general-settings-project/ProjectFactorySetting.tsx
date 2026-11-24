@@ -40,6 +40,7 @@ const DEFAULT_FORM = {
   stepOverrides: {} as FactorySettings['stepOverrides'],
   batch: { size: 5, waitSeconds: 60 } as FactorySettings['batch'],
   dependencies: 'wait' as FactorySettings['dependencies'],
+  tooBig: 'ask' as FactorySettings['tooBig'],
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
@@ -47,7 +48,7 @@ function formValues(settings: FactorySettings | null | undefined) {
   if (!settings) return DEFAULT_FORM;
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
   const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch, dependencies } = settings;
-  const { maxLowRiskLines, sizeIgnoredPaths } = settings;
+  const { maxLowRiskLines, sizeIgnoredPaths, tooBig } = settings;
   return {
     enabled,
     mode,
@@ -62,6 +63,7 @@ function formValues(settings: FactorySettings | null | undefined) {
     stepOverrides,
     batch,
     dependencies,
+    tooBig,
   };
 }
 

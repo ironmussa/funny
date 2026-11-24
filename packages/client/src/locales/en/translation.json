@@ -748,6 +748,11 @@
     "projectFactoryDependenciesStackDesc": "An issue whose blocker has a pull request open starts on the blocker's branch, and merges after it",
     "projectFactoryDependenciesWait": "Wait",
     "projectFactoryDependenciesStack": "Stack",
+    "projectFactoryTooBig": "Issues too large for one change",
+    "projectFactoryTooBigAsk": "Ask",
+    "projectFactoryTooBigSplit": "Split",
+    "projectFactoryTooBigAskDesc": "The factory comments the split triage proposes on the issue, and waits until a person changes the issue",
+    "projectFactoryTooBigSplitDesc": "The factory opens each part triage proposes as its own issue and works on them; the original issue leaves the factory. A part is never split again by itself",
     "projectFactoryLimitImplement": "Implementing",
     "projectFactoryLimitReview": "Reviewing",
     "projectFactoryLimitNone": "No limit",
@@ -1775,7 +1780,9 @@
       "merged": "Merged",
       "noChange": "No change needed",
       "failed": "Failed",
-      "stopped": "Stopped"
+      "stopped": "Stopped",
+      "split": "Split",
+      "tooBig": "Too big"
     },
     "wait": {
       "notSent": "Blocked by {{blockers}}, which is not in the factory",
@@ -1785,7 +1792,8 @@
       "otherRepo": "Blocked by {{blockers}} in another repository",
       "circular": "Circular dependency with {{blockers}}",
       "unreadable": "Its blockers could not be read from GitHub",
-      "proofNotConfigured": "Regression proof not configured: its flow has no proof rules, so it would never merge"
+      "proofNotConfigured": "Regression proof not configured: its flow has no proof rules, so it would never merge",
+      "noFreeSlot": "Waiting for a free slot: the factory is running as many runs as it may"
     },
     "selectIssue": "Select #{{number}} for the factory",
     "queuePosition": "{{label}} · #{{position}}",
@@ -2031,6 +2039,8 @@
     "waiting": {
       "questions": "Triage asked {{count}} questions on the issue",
       "needsInfo": "Triage asked on the issue",
+      "split": "Triage proposed a split into {{count}} parts",
+      "splitInto": "Split into {{issues}}",
       "noChange": "Nothing to change: the issue needs a person",
       "failed": "Failed",
       "unsaved": "No commit, but unsaved work in its checkout",

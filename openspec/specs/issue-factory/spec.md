@@ -550,6 +550,13 @@ SHALL surface when a run is waiting for the member.
 - **WHEN** a member sends a follow-up to a run's implementation thread
 - **THEN** the run continues from that step with the member's input
 
+#### Scenario: Retry on a full factory
+
+- **WHEN** a member retries a run, approves its merge, or takes it over while the factory runs as
+  many runs as it may
+- **THEN** the run waits at the head of the queue with the reason "waiting for a free slot" and
+  continues from the same steps when a slot frees
+
 #### Scenario: Waiting for the member
 
 - **WHEN** a run's CI fails more times than the flow allows
@@ -866,6 +873,26 @@ pass it to the implementer and the reviewer. On `needs_info` or `too_big` the sy
 one comment on the issue from a fixed template, with at most five questions or parts of at most
 300 characters each, with mentions and links removed, and SHALL park the run in `needs_info`,
 holding no concurrency slot.
+
+When the factory's `tooBig` setting is `split` (default `ask`), a `too_big` answer SHALL instead
+open one issue per part (the same sanitized parts; the parent's description, mentions removed,
+for context; a marker naming the parent), queue them in the same factory with the run's flow,
+comment the list on the parent, take the factory's label off it and end the run `done`. A part
+the factory opened SHALL never be split automatically again: its `too_big` answer is commented
+as with `ask`. When no part can be opened the split SHALL be commented as with `ask`; when only
+some can, the opened ones are queued and the comment names the rest for a person. The parts
+opened are recorded on the run as each one opens, so a resumed run does not open them twice.
+
+#### Scenario: The factory splits a too-large issue
+
+- **WHEN** the factory's `tooBig` is `split` and triage answers `too_big` with two parts
+- **THEN** two issues are opened and queued in the factory, the parent gets one comment listing
+  them, loses the factory's label, and its run is `done`
+
+#### Scenario: A part is not split again
+
+- **WHEN** triage answers `too_big` on an issue the factory opened as a part
+- **THEN** the split is commented on it and its run is in `needs_info`
 
 #### Scenario: An ambiguous issue
 

@@ -59,6 +59,7 @@ const settings = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
+  tooBig: 'ask',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

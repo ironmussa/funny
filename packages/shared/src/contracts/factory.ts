@@ -104,6 +104,9 @@ export const factoryMergeApprovalSchema = z.object({
 });
 export type FactoryMergeApproval = z.infer<typeof factoryMergeApprovalSchema>;
 
+/** What the factory does with an issue triage finds too large for one change. */
+export type FactoryTooBig = 'ask' | 'split';
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,
@@ -136,6 +139,8 @@ export const saveFactorySettingsInput = z
     batch: factoryBatchSchema.optional(),
     /** An issue whose blocker is in flight: wait for it, or start on its branch (D10). */
     dependencies: z.enum(['wait', 'stack']).optional(),
+    /** An issue triage finds too large: propose the split on it, or open its parts as issues. */
+    tooBig: z.enum(['ask', 'split']).optional(),
   })
   .strict();
 
@@ -166,6 +171,11 @@ export interface FactorySettings {
   batch: FactoryBatchSettings;
   /** An issue whose blocker is in flight waits for it, or starts on its branch (openspec factory-integration D10). */
   dependencies: FactoryDependencies;
+  /**
+   * An issue triage finds too large: `ask` comments the proposed split and
+   * waits for a person; `split` opens each part as an issue the factory admits.
+   */
+  tooBig: FactoryTooBig;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**
@@ -475,7 +485,9 @@ export interface FactoryWaitReason {
     /** Its flow's merge needs a regression proof and the flow has no proof rules. */
     | 'proof-not-configured'
     /** Its likely paths overlap those of a run in progress (`blockers`: that run's issue). */
-    | 'paths-overlap';
+    | 'paths-overlap'
+    /** Retried or approved while every slot was taken: first in line for the next one. */
+    | 'no-free-slot';
   blockers: number[];
 }
 
@@ -855,6 +867,11 @@ export const factoryTriageSchema = z.object({
    * what was asked, and triage runs again on a new thread, not `threadId`.
    */
   superseded: z.boolean().optional(),
+  /**
+   * For `too_big` with the factory's `split` setting: the issues opened for
+   * the parts, in the order of `items` (filled as each one is opened).
+   */
+  splitInto: z.array(z.number().int().positive()).optional(),
 });
 export type FactoryTriage = z.infer<typeof factoryTriageSchema>;
 

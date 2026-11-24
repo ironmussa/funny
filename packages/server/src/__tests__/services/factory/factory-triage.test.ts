@@ -17,7 +17,11 @@ import {
   NEEDS_INFO_REASON,
   overlappingIssues,
   publicItems,
+  splitComment,
+  splitPartIssue,
+  SPLIT_MARKER,
   TRIAGE_QUESTIONS_LINE,
+  TRIAGE_SPLIT_LINE,
   TRIAGE_TOO_BIG_LINE,
   triageComment,
 } from '../../../services/factory/factory-triage.js';
@@ -56,6 +60,8 @@ interface Script {
   found?: string;
   /** The issue as GitHub has it; null when it cannot be read. */
   issue?: { title: string; body: string; comments: Array<{ author: string; body: string }> } | null;
+  /** The factory's `split` setting: the part issues open from this number; `failAt` (from 0) fails. */
+  split?: { firstNumber: number; failAt?: number };
 }
 
 function triaging(script: Script) {
@@ -63,7 +69,11 @@ function triaging(script: Script) {
   const recorded: UpdateRunInput[] = [];
   const comments: string[] = [];
   const held: number[][] = [];
+  const opened: Array<{ title: string; body: string }> = [];
+  const queued: number[][] = [];
+  const released: boolean[] = [];
   let turn = 0;
+  const split = script.split;
   const deps: ProviderDeps = {
     scope,
     threadIds: [],
@@ -119,11 +129,26 @@ function triaging(script: Script) {
     record: async (input) => {
       recorded.push(input);
     },
+    ...(split && {
+      split: {
+        openIssue: async (issue) => {
+          if (split.failAt === opened.length) return err('GitHub answered 403');
+          opened.push(issue);
+          return ok(split.firstNumber + opened.length - 1);
+        },
+        queue: async (issueNumbers) => {
+          queued.push(issueNumbers);
+        },
+        release: async (complete) => {
+          released.push(complete);
+        },
+      },
+    }),
     signal: new AbortController().signal,
   };
   const provider = createFactoryActionProvider(deps);
   const stored = () => recorded.flatMap((input) => (input.triage ? [input.triage] : [])).at(-1);
-  return { provider, bodies, recorded, comments, held, stored };
+  return { provider, bodies, recorded, comments, held, stored, opened, queued, released };
 }
 
 describe('paths that overlap', () => {
@@ -306,6 +331,110 @@ describe('the triage step', () => {
     expect((await provider.triage!({})).ok).toBe(false);
     expect(comments[0]).toStartWith(TRIAGE_TOO_BIG_LINE);
     expect(recorded.some((input) => input.state === 'needs_info')).toBe(true);
+  });
+
+  describe('the split setting', () => {
+    const TOO_BIG = json({
+      decision: 'too_big',
+      parts: ['The schema, see https://evil.example and ask @bob', 'The screen'],
+    });
+
+    test('each part becomes an issue, queued; the parent is commented, let go, and done', async () => {
+      const { provider, comments, recorded, opened, queued, released, stored } = triaging({
+        says: [TOO_BIG],
+        split: { firstNumber: 40 },
+      });
+      const result = await provider.triage!({});
+      expect(result).toMatchObject({ ok: false, metadata: { outcome: 'split', issues: [40, 41] } });
+      expect(opened).toHaveLength(2);
+      // The sanitized part: no link, no mention.
+      expect(opened[0].title).toBe('The schema, see and ask bob (part 1/2 of #7)');
+      expect(opened[0].body).toContain(`<!-- ${SPLIT_MARKER} #7 -->`);
+      expect(opened[0].body).toContain('Negative numbers break sum()');
+      expect(opened[1].title).toBe('The screen (part 2/2 of #7)');
+      expect(queued).toEqual([[40, 41]]);
+      expect(released).toEqual([true]);
+      expect(comments).toHaveLength(1);
+      expect(comments[0]).toStartWith(TRIAGE_SPLIT_LINE);
+      expect(comments[0]).toContain('- #40: The schema');
+      expect(recorded).toContainEqual(
+        expect.objectContaining({ state: 'done', failureReason: null }),
+      );
+      expect(recorded.some((input) => input.state === 'needs_info')).toBe(false);
+      expect(stored()).toMatchObject({ decision: 'too_big', splitInto: [40, 41] });
+    });
+
+    test('a part issue is never split again: the split is commented, and it waits', async () => {
+      const { provider, comments, recorded, opened } = triaging({
+        says: [TOO_BIG],
+        split: { firstNumber: 40 },
+        issue: { title: 'Part', body: `Do this.\n\n<!-- ${SPLIT_MARKER} #3 -->`, comments: [] },
+      });
+      expect(await provider.triage!({})).toMatchObject({ metadata: { outcome: 'needs_info' } });
+      expect(opened).toEqual([]);
+      expect(comments[0]).toStartWith(TRIAGE_TOO_BIG_LINE);
+      expect(recorded.some((input) => input.state === 'needs_info')).toBe(true);
+    });
+
+    test('no issue could be opened: the split is commented instead', async () => {
+      const { provider, comments, queued, released } = triaging({
+        says: [TOO_BIG],
+        split: { firstNumber: 40, failAt: 0 },
+      });
+      expect(await provider.triage!({})).toMatchObject({ metadata: { outcome: 'needs_info' } });
+      expect(comments[0]).toStartWith(TRIAGE_TOO_BIG_LINE);
+      expect(queued).toEqual([]);
+      expect(released).toEqual([]);
+    });
+
+    test('some parts opened: those are queued, and the rest named for a person', async () => {
+      const { provider, comments, queued, released } = triaging({
+        says: [TOO_BIG],
+        split: { firstNumber: 40, failAt: 1 },
+      });
+      expect(await provider.triage!({})).toMatchObject({ metadata: { issues: [40] } });
+      expect(queued).toEqual([[40]]);
+      expect(released).toEqual([false]);
+      expect(comments[0]).toContain('could not be opened');
+      expect(comments[0]).toContain('> - The screen');
+    });
+
+    test('a resumed run does not open the parts it already opened', async () => {
+      const { provider, opened, queued, comments } = triaging({
+        says: [TOO_BIG],
+        found: 'tri-1',
+        stored: {
+          decision: 'too_big',
+          at: '2026-11-22T10:00:00.000Z',
+          threadId: 'tri-1',
+          items: ['The schema, see and ask bob', 'The screen'],
+          splitInto: [40],
+        },
+        split: { firstNumber: 41 },
+      });
+      expect(await provider.triage!({})).toMatchObject({ metadata: { issues: [40, 41] } });
+      expect(opened.map((issue) => issue.title)).toEqual(['The screen (part 2/2 of #7)']);
+      expect(queued).toEqual([[41]]);
+      expect(comments[0]).toContain('- #40: The schema');
+      expect(comments[0]).toContain('- #41: The screen');
+    });
+
+    test('without the setting the split is only commented', async () => {
+      const { provider, comments } = triaging({ says: [TOO_BIG] });
+      expect(await provider.triage!({})).toMatchObject({ metadata: { outcome: 'needs_info' } });
+      expect(comments[0]).toStartWith(TRIAGE_TOO_BIG_LINE);
+    });
+  });
+
+  test('the part issue copies the parent description without its mentions, and cuts a long one', () => {
+    const issue = splitPartIssue({
+      parent: { number: 9, title: 'Big', body: `Ping @carol. ${'x'.repeat(25_000)}` },
+      parts: ['A'],
+      index: 0,
+    });
+    expect(issue.body).toContain('Ping carol.');
+    expect(issue.body).toContain('_(cut)_');
+    expect(splitComment(['A', 'B'], [5, 6])).not.toContain('could not be opened');
   });
 
   test('prose, then a valid answer after one request', async () => {

@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LabelBadge } from '@/components/ui/label-badge';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 import { factoryRunFallbackTitle } from '@/lib/factory-run-labels';
@@ -43,6 +44,7 @@ import {
   NO_FACTORY_RUN_DEPENDENCIES,
   shortFactoryReason,
 } from './run-dependencies';
+import { factoryRunStateChip } from './run-state-chip';
 import { factoryRunWaitingText } from './run-waiting';
 import { timeInCurrentStep } from './step-timings';
 import { FactoryRunTimeInStep } from './StepTimeBadges';
@@ -108,10 +110,20 @@ function FactoryRunCardBody({
   const { t } = useTranslation();
   const waitingText = factoryRunWaitingText(t, run);
   const waiting = waitingText ? shortFactoryReason(waitingText, 240) : null;
+  const state = factoryRunStateChip(t, run);
   return (
     <div className="flex flex-col gap-1.5 empty:hidden">
-      {/* The chips: what the factory's gates found on the pull request. */}
-      <FactoryRunGateChips run={run} />
+      {/* The run's state (a column holds several), then what the gates found on the pull request. */}
+      <div className="flex flex-wrap items-center gap-1">
+        <LabelBadge
+          tone={state.tone}
+          data-testid={`factory-board-state-${run.id}`}
+          data-state={run.state}
+        >
+          {state.label}
+        </LabelBadge>
+        <FactoryRunGateChips run={run} />
+      </div>
       {waiting && (
         <p
           className={cn(

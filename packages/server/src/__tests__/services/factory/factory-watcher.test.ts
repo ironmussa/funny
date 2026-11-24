@@ -25,6 +25,7 @@ import {
 import {
   createFactoryRunsRepository,
   factoryRunBranch,
+  REOPENED_STEP,
   type FactoryRunView,
 } from '../../../services/factory/factory-runs.js';
 import {
@@ -2669,22 +2670,30 @@ describe('factory capacity between admission and run controls (#328)', () => {
     expect(await inFlightCount(factoryId)).toBe(1);
   });
 
-  test('a Retry on a full factory is refused and the run stays parked', async () => {
+  test('a Retry on a full factory queues the run first in line, without a slot', async () => {
     const factoryId = await enableFactory({ maxConcurrent: 1 });
     (await runsRepo().start({ factoryId, issueNumber: 1, state: 'working' }))._unsafeUnwrap();
+    const sent = (
+      await runsRepo().enqueue({ factoryId, issueNumbers: [3], flowName: 'issue-to-merge' })
+    )._unsafeUnwrap().queued[0]!;
     const failed = (
-      await runsRepo().start({ factoryId, issueNumber: 2, state: 'failed' })
+      await runsRepo().start({ factoryId, issueNumber: 2, state: 'failed', threadIds: ['t-impl'] })
     )._unsafeUnwrap();
 
     const retried = await createFactoryRunControl().retry(factoryId, failed.id);
 
-    expect(retried.isErr() && retried.error.kind).toBe('conflict');
-    expect(retried.isErr() && retried.error.message).toContain('as many runs as it may');
-    expect((await runsRepo().get(failed.id))._unsafeUnwrap()!.state).toBe('failed');
+    expect(retried.isOk()).toBe(true);
+    const run = (await runsRepo().get(failed.id))._unsafeUnwrap()!;
+    expect(run.state).toBe('requested');
+    expect(run.waitReason).toEqual({ kind: 'no-free-slot', blockers: [] });
+    expect(run.currentStep).toBe(REOPENED_STEP);
     expect(await inFlightCount(factoryId)).toBe(1);
+    // Ahead of the issue sent before it.
+    const queue = (await runsRepo().queue(factoryId))._unsafeUnwrap();
+    expect(queue.map((r) => r.id)).toEqual([failed.id, sent.id]);
   });
 
-  test('a take-over on a full factory waits: the run stays parked until a slot frees', async () => {
+  test('a take-over on a full factory waits in the queue for the next slot', async () => {
     const factoryId = await enableFactory({ maxConcurrent: 1 });
     const working = (
       await runsRepo().start({ factoryId, issueNumber: 1, state: 'working' })
@@ -2697,13 +2706,15 @@ describe('factory capacity between admission and run controls (#328)', () => {
 
     await onFactoryThreadTerminal('t-take', 'completed');
 
-    expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.state).toBe('waiting_human');
+    const waiting = (await runsRepo().get(parked.id))._unsafeUnwrap()!;
+    expect(waiting.state).toBe('requested');
+    expect(waiting.threadIds).toEqual(parked.threadIds);
     expect(await inFlightCount(factoryId)).toBe(1);
 
-    // The working run ends; the follow-up's next completion takes the run over.
+    // The working run ends: the queue admits it with its threads to replay.
     await runsRepo().update(working.id, { state: 'merged' });
-    await onFactoryThreadTerminal('t-take', 'completed');
-    expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.state).toBe('queued');
+    expect((await runsRepo().admit(factoryId, parked.id))._unsafeUnwrap()).toBe('admitted');
+    expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.currentStep).toBe(REOPENED_STEP);
   });
 
   test('concurrent Retries never put more runs in flight than maxConcurrent', async () => {
@@ -2717,7 +2728,9 @@ describe('factory capacity between admission and run controls (#328)', () => {
 
     const results = await Promise.all(failed.map((run) => control.retry(factoryId, run.id)));
 
-    expect(results.filter((r) => r.isOk())).toHaveLength(2);
+    // Every Retry is taken; the two beyond the limit wait in the queue.
+    expect(results.filter((r) => r.isOk())).toHaveLength(4);
     expect(await inFlightCount(factoryId)).toBe(2);
+    expect((await runsRepo().queue(factoryId))._unsafeUnwrap()).toHaveLength(2);
   });
 });

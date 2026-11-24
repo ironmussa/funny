@@ -31,6 +31,7 @@ const settings: FactorySettings = {
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
+  tooBig: 'ask',
   blockedReason: null,
   updatedAt: '2026-11-21T00:00:00.000Z',
 };

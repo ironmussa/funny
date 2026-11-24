@@ -324,6 +324,8 @@ export const factorySettings = pgTable(
     batchWaitMs: integer('batch_wait_ms'),
     /** `stack` (an issue starts on its blocker's branch) or `wait` (null): D10. */
     dependencies: text('dependencies'),
+    /** `split` (open a too-large issue's parts as issues) or `ask` (null): comment the split. */
+    tooBig: text('too_big'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),

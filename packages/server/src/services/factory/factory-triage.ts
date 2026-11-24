@@ -14,6 +14,13 @@
  *   fixed template and parks the run in `needs_info`, where it holds no slot.
  *   The agent's words never reach GitHub as they are: at most five items of
  *   300 characters, with mentions and links removed.
+ * - `too_big` with the factory's `split` setting: the server opens one issue
+ *   per part (the same sanitized items, plus the parent's text for context),
+ *   queues them in this factory with the run's flow, comments the list on the
+ *   parent, takes the factory's label off it and ends the run `done`. A part
+ *   issue is never split by itself again (`SPLIT_MARKER`): triage comments the
+ *   split on it instead. Nothing opened: the split is commented as without
+ *   the setting.
  * - No valid result after one request to emit it again: the run goes on
  *   without a contract (the reviewer then judges against the issue).
  * - A ready run whose likely paths overlap those of a run in progress leaves
@@ -50,6 +57,17 @@ export const TRIAGE_QUESTIONS_LINE =
   'The issue factory needs more information before it can work on this issue:';
 export const TRIAGE_TOO_BIG_LINE =
   'The issue factory found this issue too large to work in one change. A possible split:';
+export const TRIAGE_SPLIT_LINE =
+  'The issue factory found this issue too large to work in one change, and opened its parts as issues:';
+/**
+ * Marks an issue the factory opened as a part of a split, with its parent. A
+ * part is never split automatically again, so a split cannot grow by itself;
+ * an issue whose author writes the marker only loses the automatic split.
+ */
+export const SPLIT_MARKER = 'funny-factory-split-of:';
+/** The most of the parent's description a part issue carries. */
+const MAX_PARENT_BODY = 20_000;
+const MAX_PART_TITLE = 120;
 const TRIAGE_FOOTER =
   '_Edit the issue or comment here; the factory looks at it again when the issue changes._';
 
@@ -128,6 +146,63 @@ export function triageComment(
   ].join('\n\n');
 }
 
+/** Whether the issue is a part the factory opened in a split. */
+export const isSplitPart = (issue: FactoryIssueText | null): boolean =>
+  issue !== null && issue.body.includes(SPLIT_MARKER);
+
+/** Mentions turned into plain text, so copying a description pings nobody again. */
+const withoutMentions = (text: string): string => text.replace(/@(?=[\w-])/g, '');
+
+/** The issue opened for part `index` (from 0) of `parts`, already sanitized by `publicItems`. */
+export function splitPartIssue(input: {
+  parent: { number: number; title: string; body: string | null };
+  parts: readonly string[];
+  index: number;
+}): { title: string; body: string } {
+  const { parent, parts, index } = input;
+  const part = parts[index];
+  const position = `${index + 1}/${parts.length}`;
+  const short = part.length > MAX_PART_TITLE ? `${part.slice(0, MAX_PART_TITLE - 1)}…` : part;
+  const parentBody = withoutMentions(parent.body?.trim() ?? '');
+  const context =
+    parentBody.length > 0
+      ? [
+          `<details><summary>The description of #${parent.number}</summary>`,
+          '',
+          parentBody.length > MAX_PARENT_BODY
+            ? `${parentBody.slice(0, MAX_PARENT_BODY)}\n\n_(cut)_`
+            : parentBody,
+          '',
+          '</details>',
+        ].join('\n')
+      : null;
+  return {
+    title: `${short} (part ${position} of #${parent.number})`,
+    body: [
+      part,
+      `Part ${position} of #${parent.number} (${withoutMentions(parent.title)}). The issue factory opened it when it found #${parent.number} too large for one change. Do only this part; the other parts are their own issues.`,
+      ...(context ? [context] : []),
+      `<!-- ${SPLIT_MARKER} #${parent.number} -->`,
+    ].join('\n\n'),
+  };
+}
+
+/** The comment on a split issue: the parts opened, and the ones that could not be. */
+export function splitComment(parts: readonly string[], opened: readonly number[]): string {
+  const missing = parts.slice(opened.length);
+  return [
+    TRIAGE_SPLIT_LINE,
+    opened.map((number, index) => `- #${number}: ${parts[index]}`).join('\n'),
+    ...(missing.length > 0
+      ? [
+          'These parts could not be opened; open them by hand:',
+          missing.map((part) => `> - ${part}`).join('\n'),
+        ]
+      : []),
+    '_The factory works on the parts and no longer on this issue. Close it when they are done._',
+  ].join('\n\n');
+}
+
 const RESULT_FORMAT = [
   'One of these three, as a fenced json block:',
   '```json',
@@ -178,6 +253,19 @@ function triagePrompt(input: {
   ].join('\n');
 }
 
+/** What the factory's `split` setting needs: open, queue, and let go of the parent. */
+export interface FactorySplitDeps {
+  /** Open one issue in the run's repository; its number. */
+  openIssue(issue: { title: string; body: string }): Promise<Result<number, string>>;
+  /** Queue the opened parts in this factory, with the run's flow. */
+  queue(issueNumbers: number[]): Promise<void>;
+  /**
+   * Take the factory's label off the parent, so it is not admitted again. When
+   * some part could not be opened (`complete: false`), hand it to a person too.
+   */
+  release(complete: boolean): Promise<void>;
+}
+
 export interface FactoryTriageDeps {
   scope: IssueRunScope;
   issueUrl: string | null;
@@ -198,6 +286,8 @@ export interface FactoryTriageDeps {
   worktreeBase(): Promise<{ baseBranch?: string; baseFromRemote?: boolean } | { error: string }>;
   /** Post a comment on the run's issue. */
   comment(body: string): Promise<Result<void, string>>;
+  /** Present when the factory opens a too-large issue's parts as issues (its `split` setting). */
+  split?: FactorySplitDeps;
   /** When the issue last changed, by GitHub's clock (read after the comment); null when unreadable. */
   issueUpdatedAt?(): Promise<string | null>;
   /** The issue's text: the triage agent has no network to read it. Null when unreadable. */
@@ -232,10 +322,14 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   const supersededThread = deps.stored?.superseded ? deps.stored.threadId : undefined;
   const titlePrefix = `[Factory triage] #${scope.issueNumber} `;
 
+  /** The issue's text, read once per attempt (the prompt and the split both need it). */
+  let issueRead: Promise<FactoryIssueText | null> | null = null;
+  const issueText = () => (issueRead ??= deps.issueText?.() ?? Promise.resolve(null));
+
   async function launch(opts: TriageOpts, busyPaths: string[]): Promise<Result<string, string>> {
     const base = await deps.worktreeBase();
     if ('error' in base) return err(base.error);
-    const issue = (await deps.issueText?.()) ?? null;
+    const issue = await issueText();
     const prompt = triagePrompt({
       repo: scope.repo,
       issueNumber: scope.issueNumber,
@@ -320,6 +414,72 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     };
   }
 
+  /**
+   * Open the parts as issues and end the run (the factory's `split` setting).
+   * The issues opened so far are recorded after each one, so a resumed run
+   * answering from the same thread does not open them again. Nothing opened:
+   * the split is commented and the run parks, as without the setting.
+   */
+  async function splitIssue(
+    split: FactorySplitDeps,
+    parts: readonly string[],
+    threadId: string,
+    issue: FactoryIssueText | null,
+  ): Promise<ActionResult> {
+    const shown = publicItems(parts);
+    const at = new Date().toISOString();
+    const resumed =
+      deps.stored?.decision === 'too_big' && deps.stored.threadId === threadId
+        ? (deps.stored.splitInto ?? [])
+        : [];
+    const opened = [...resumed];
+    const parent = {
+      number: scope.issueNumber,
+      title: issue?.title ?? scope.issueTitle,
+      body: issue?.body ?? null,
+    };
+    while (opened.length < shown.length) {
+      const index = opened.length;
+      const created = await split.openIssue(splitPartIssue({ parent, parts: shown, index }));
+      if (created.isErr()) {
+        log.warn('Issue factory could not open a part of a split issue', {
+          namespace: 'factory',
+          runId: scope.runId,
+          issue: scope.issueNumber,
+          part: index + 1,
+          error: created.error,
+        });
+        break;
+      }
+      opened.push(created.value);
+      current = { decision: 'too_big', at, threadId, items: shown, splitInto: [...opened] };
+      await deps.record({ triage: current });
+    }
+    if (opened.length === 0) return askOnIssue('too_big', parts, threadId);
+
+    await split.queue(opened.slice(resumed.length));
+    const commented = await deps.comment(splitComment(shown, opened));
+    if (commented.isErr()) {
+      log.warn('Issue factory could not comment the split on the issue', {
+        namespace: 'factory',
+        runId: scope.runId,
+        issue: scope.issueNumber,
+        error: commented.error,
+      });
+    }
+    const complete = opened.length === shown.length;
+    await split.release(complete);
+    current = { decision: 'too_big', at, threadId, items: shown, splitInto: opened };
+    await deps.record({ state: 'done', failureReason: null, triage: current });
+    await deps.count('triage_too_big');
+    await deps.count('triage_split');
+    return {
+      ok: false,
+      error: `The issue was split into ${opened.map((n) => `#${n}`).join(', ')}.`,
+      metadata: { outcome: 'split', decision: 'too_big', issues: opened },
+    };
+  }
+
   /** A ready run waits when its paths overlap a run in progress; null when it may go on. */
   async function heldForPaths(triage: FactoryTriage): Promise<ActionResult | null> {
     const paths = triage.contract?.likelyPaths ?? [];
@@ -361,7 +521,13 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     const answer = result.value;
     if (answer.decision === 'needs_info')
       return askOnIssue('needs_info', answer.questions, threadId);
-    if (answer.decision === 'too_big') return askOnIssue('too_big', answer.parts, threadId);
+    if (answer.decision === 'too_big') {
+      const issue = deps.split ? await issueText() : null;
+      // A part is never split again by itself; one whose text is unreadable is not split either.
+      return deps.split && issue && !isSplitPart(issue)
+        ? splitIssue(deps.split, answer.parts, threadId, issue)
+        : askOnIssue('too_big', answer.parts, threadId);
+    }
     const triage = await keep({
       decision: 'ready',
       at: new Date().toISOString(),

@@ -20,12 +20,25 @@ export function factoryRunWaitingText(
     case 'requested':
       return run.waitReason ? factoryWaitReasonText(t, run.waitReason) : null;
     case 'needs_info': {
+      if (run.triage?.decision === 'too_big' && (run.triage.items?.length ?? 0) > 0) {
+        return t('factoryBoard.waiting.split', 'Triage proposed a split into {{count}} parts', {
+          count: run.triage.items?.length ?? 0,
+        });
+      }
       const count = run.triage?.decision === 'needs_info' ? (run.triage.items?.length ?? 0) : 0;
       return count > 0
         ? t('factoryBoard.waiting.questions', 'Triage asked {{count}} questions on the issue', {
             count,
           })
         : t('factoryBoard.waiting.needsInfo', 'Triage asked on the issue');
+    }
+    case 'done': {
+      const parts = run.triage?.splitInto ?? [];
+      return parts.length > 0
+        ? t('factoryBoard.waiting.splitInto', 'Split into {{issues}}', {
+            issues: parts.map((issue) => `#${issue}`).join(', '),
+          })
+        : null;
     }
     case 'no_change':
       return t('factoryBoard.waiting.noChange', 'Nothing to change: the issue needs a person');

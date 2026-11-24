@@ -79,6 +79,7 @@ export const WithIncident: Story = {
       stepOverrides: {},
       batch: { size: 5, waitSeconds: 60 },
       dependencies: 'wait',
+      tooBig: 'ask',
       blockedReason: null,
       updatedAt: ago(1),
       incident: {

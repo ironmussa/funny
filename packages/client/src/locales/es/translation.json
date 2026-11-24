@@ -746,6 +746,11 @@
     "projectFactoryDependenciesStackDesc": "Un issue cuyo bloqueador tiene un pull request abierto arranca sobre la rama del bloqueador, y se mergea después de él",
     "projectFactoryDependenciesWait": "Esperar",
     "projectFactoryDependenciesStack": "Apilar",
+    "projectFactoryTooBig": "Issues demasiado grandes para un cambio",
+    "projectFactoryTooBigAsk": "Preguntar",
+    "projectFactoryTooBigSplit": "Dividir",
+    "projectFactoryTooBigAskDesc": "El factory comenta en el issue la división que propone el triage y espera a que una persona cambie el issue",
+    "projectFactoryTooBigSplitDesc": "El factory abre cada parte que propone el triage como un issue propio y trabaja en ellas; el issue original sale del factory. Una parte nunca se vuelve a dividir sola",
     "projectFactoryLimitImplement": "Implementando",
     "projectFactoryLimitReview": "En revisión",
     "projectFactoryLimitNone": "Sin límite",
@@ -1768,7 +1773,9 @@
       "merged": "Merged",
       "noChange": "Sin cambios necesarios",
       "failed": "Falló",
-      "stopped": "Detenida"
+      "stopped": "Detenida",
+      "split": "Dividido",
+      "tooBig": "Muy grande"
     },
     "wait": {
       "notSent": "Bloqueada por {{blockers}}, que no está en el factory",
@@ -1778,7 +1785,8 @@
       "otherRepo": "Bloqueada por {{blockers}} en otro repositorio",
       "circular": "Dependencia circular con {{blockers}}",
       "unreadable": "No se pudieron leer sus bloqueadoras desde GitHub",
-      "proofNotConfigured": "Prueba de regresión sin configurar: su flujo no tiene reglas de prueba, así que nunca podría mergear"
+      "proofNotConfigured": "Prueba de regresión sin configurar: su flujo no tiene reglas de prueba, así que nunca podría mergear",
+      "noFreeSlot": "Esperando un slot libre: el factory ya corre todas las runs que puede a la vez"
     },
     "selectIssue": "Seleccionar #{{number}} para el factory",
     "queuePosition": "{{label}} · #{{position}}",
@@ -2024,6 +2032,8 @@
     "waiting": {
       "questions": "Triage hizo {{count}} preguntas en el issue",
       "needsInfo": "Triage preguntó en el issue",
+      "split": "El triage propuso dividirlo en {{count}} partes",
+      "splitInto": "Dividido en {{issues}}",
       "noChange": "Nada que cambiar: el issue necesita una persona",
       "failed": "Falló",
       "unsaved": "Sin commit, pero con trabajo sin guardar en su checkout",

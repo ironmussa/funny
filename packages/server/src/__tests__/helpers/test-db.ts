@@ -370,6 +370,7 @@ export function createTestDb() {
       batch_size INTEGER,
       batch_wait_ms INTEGER,
       dependencies TEXT,
+      too_big TEXT,
       step_overrides TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL

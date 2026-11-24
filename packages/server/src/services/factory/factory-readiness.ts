@@ -50,6 +50,23 @@ function passesBranches(branch: string, patterns: string[]): boolean {
   return passes;
 }
 
+/** The filters of a workflow's `push` trigger this check reads. */
+interface PushFilters {
+  readonly branches?: unknown;
+  readonly 'branches-ignore'?: unknown;
+  readonly tags?: unknown;
+}
+
+/** Whether a `push` trigger's branch filters let a push to a queue branch run it. */
+function pushFiltersRunOnQueueBranch(filters: PushFilters): boolean {
+  const ignored = asList('branches-ignore' in filters ? filters['branches-ignore'] : undefined);
+  if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
+  const branches = asList('branches' in filters ? filters.branches : undefined);
+  // Only tags: no branch push runs it.
+  if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
+  return passesBranches(QUEUE_BRANCH, branches);
+}
+
 /** Whether one workflow file runs on a push to a queue branch. */
 export function workflowRunsOnQueueBranches(text: string): boolean {
   let workflow: unknown;
@@ -69,12 +86,7 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
   if (!('push' in on)) return false;
   const filters = on.push;
   if (!filters || typeof filters !== 'object') return true;
-  const ignored = asList('branches-ignore' in filters ? filters['branches-ignore'] : undefined);
-  if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
-  const branches = asList('branches' in filters ? filters.branches : undefined);
-  // Only tags: no branch push runs it.
-  if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
-  return passesBranches(QUEUE_BRANCH, branches);
+  return pushFiltersRunOnQueueBranch(filters);
 }
 
 /** Whether any of the repository's workflows runs on a push to a queue branch. */

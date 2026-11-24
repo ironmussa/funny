@@ -44,14 +44,17 @@ function decodeValue(value: JsonValue): JsonValue {
       return value.boolValue;
     case 'structValue':
       return decodeStruct(value.structValue);
-    case 'listValue': {
-      const list = value.listValue;
-      const values = isJsonObject(list) ? list.values : undefined;
-      return (Array.isArray(values) ? values : []).map(decodeValue);
-    }
+    case 'listValue':
+      return decodeList(value.listValue);
     default:
       return null;
   }
+}
+
+/** Decode a `google.protobuf.ListValue` (`[]` when it carries no list). */
+function decodeList(list: JsonValue | undefined): JsonValue[] {
+  const values = isJsonObject(list) ? list.values : undefined;
+  return (Array.isArray(values) ? values : []).map(decodeValue);
 }
 
 /**
@@ -69,7 +72,7 @@ export function decodeStruct(value: JsonValue | undefined): JsonObject {
 }
 
 /** Encode a value from a data handler's response as a `google.protobuf.Value`. */
-export function encodeValue(value: unknown): WireStructValue {
+function encodeValue(value: unknown): WireStructValue {
   if (value === null || value === undefined) return { nullValue: 0 };
   if (typeof value === 'number') return { numberValue: value };
   if (typeof value === 'string') return { stringValue: value };

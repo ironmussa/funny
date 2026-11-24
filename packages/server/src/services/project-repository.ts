@@ -354,18 +354,23 @@ const UPDATABLE_FLAGS = [...ON_FLAGS, 'redirectChecks'] as const;
 /** Columns a project update may set. */
 type ProjectColumnUpdates = Partial<typeof schema.projects.$inferInsert>;
 
+/** Settings a PATCH writes as given (`null` clears the optional ones). */
+function settingColumns(fields: ProjectUpdateFields): ProjectColumnUpdates {
+  const columns: ProjectColumnUpdates = {};
+  if (fields.name !== undefined) columns.name = fields.name;
+  if (fields.followUpMode !== undefined) columns.followUpMode = fields.followUpMode;
+  for (const field of OPTIONAL_FIELDS) {
+    if (fields[field] !== undefined) columns[field] = fields[field];
+  }
+  return columns;
+}
+
 /** The columns a PATCH changes: only the fields it names. */
 function projectUpdateData(
   fields: ProjectUpdateFields,
   resolvedPath: string | undefined,
 ): ProjectColumnUpdates {
-  const updateData: ProjectColumnUpdates = {};
-  // Settings a PATCH writes as given (`null` clears the optional ones).
-  if (fields.name !== undefined) updateData.name = fields.name;
-  if (fields.followUpMode !== undefined) updateData.followUpMode = fields.followUpMode;
-  for (const field of OPTIONAL_FIELDS) {
-    if (fields[field] !== undefined) updateData[field] = fields[field];
-  }
+  const updateData = settingColumns(fields);
   for (const flag of UPDATABLE_FLAGS) {
     if (fields[flag] !== undefined) updateData[flag] = fields[flag] ? 1 : 0;
   }

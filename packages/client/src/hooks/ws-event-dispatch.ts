@@ -825,12 +825,15 @@ function applyWebEvent(type: string, threadId: string, data: any): void {
   WEB_EVENT_HANDLERS[type](threadId, data, type);
 }
 
-function findThread(threadId: string): {
+/** What a notification needs to know about a thread. */
+interface NotifiedThread {
   title?: string;
   branch?: string;
   projectId?: string;
   isScratch?: boolean;
-} {
+}
+
+function findThread(threadId: string): NotifiedThread {
   const active = readActiveThreadView(useThreadStore.getState());
   if (active?.id === threadId) {
     return {

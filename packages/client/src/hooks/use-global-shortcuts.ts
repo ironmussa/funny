@@ -208,7 +208,12 @@ function startNewScratchThread(e: KeyboardEvent, ctx: ShortcutContext): void {
 
 type UIState = ReturnType<typeof useUIStore.getState>;
 
-const PANEL_TOGGLES: Record<string, (ui: UIState) => void> = {
+/** Alt+key pane toggles, keyed by the lower-cased key. */
+interface PanelToggles {
+  [key: string]: (ui: UIState) => void;
+}
+
+const PANEL_TOGGLES: PanelToggles = {
   g: (ui) => {
     log.info('shortcut.toggle_review');
     ui.setReviewPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'review'));

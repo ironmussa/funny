@@ -100,8 +100,13 @@ function handleClosed(d: BrowserSessionClosedData): void {
   }
 }
 
+/** Inbound browser-session handlers, keyed by event type. */
+interface BrowserSessionHandlers {
+  [type: string]: (data: any) => void;
+}
+
 /** One handler per inbound browser-session event type. */
-const BROWSER_SESSION_HANDLERS: Record<string, (data: any) => void> = {
+const BROWSER_SESSION_HANDLERS: BrowserSessionHandlers = {
   'browser-session:frame': (d: { sessionId: string; data: string }) =>
     ingestBrowserSessionFrame(d.sessionId, d.data),
 

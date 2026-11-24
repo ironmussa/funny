@@ -10,11 +10,21 @@ export const HIGHLIGHT_MAX_LINES = 50_000;
 
 /* ── Language registry ── */
 
+/** highlight.js language names, keyed by file extension. */
+interface LanguageByExtension {
+  [extension: string]: string;
+}
+
+/** Lazy highlight.js language modules, keyed by language name. */
+interface LanguageImports {
+  [language: string]: () => Promise<{ default: unknown }>;
+}
+
 /**
  * Map file extensions to highlight.js language names.
  * Languages are registered lazily on first use.
  */
-const EXT_TO_HLJS_LANG: Record<string, string> = {
+const EXT_TO_HLJS_LANG: LanguageByExtension = {
   ts: 'typescript',
   tsx: 'typescript',
   js: 'javascript',
@@ -77,7 +87,7 @@ const EXT_TO_HLJS_LANG: Record<string, string> = {
  * Map hljs language name → dynamic import.
  * We only import what we need, avoiding the full 2MB+ hljs bundle.
  */
-const LANG_IMPORTS: Record<string, () => Promise<{ default: unknown }>> = {
+const LANG_IMPORTS: LanguageImports = {
   typescript: () => import('highlight.js/lib/languages/typescript'),
   javascript: () => import('highlight.js/lib/languages/javascript'),
   python: () => import('highlight.js/lib/languages/python'),
@@ -500,7 +510,13 @@ function advanceShellContextForHtml(html: string, ctx: ShellHighlightContext) {
   });
 }
 
-function readSpanBlock(html: string, start: number): { raw: string; end: number } {
+/** A balanced `<span>…</span>` block, and the index just after it. */
+interface SpanBlock {
+  raw: string;
+  end: number;
+}
+
+function readSpanBlock(html: string, start: number): SpanBlock {
   let depth = 0;
   let i = start;
   while (i < html.length) {

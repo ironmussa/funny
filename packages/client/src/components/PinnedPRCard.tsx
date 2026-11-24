@@ -1,115 +1,24 @@
-import type {
-  GitHubPR,
-  PRCommentKind,
-  PRConversation,
-  PRIssueComment,
-  PRReactionContent,
-  PRReactionSummary,
-  PRReview,
-  PRReviewThread,
-  PRThreadComment,
-} from '@funny/shared';
-import {
-  CheckCircle2,
-  ChevronDown,
-  CircleDot,
-  ExternalLink,
-  GitMerge,
-  Loader2,
-  MessageSquare,
-  Pencil,
-  Reply,
-  Send,
-  Smile,
-  ThumbsUp,
-  Trash2,
-  X,
-} from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { GitHubPR, PRReviewThread } from '@funny/shared';
+import { Loader2, MessageSquare, Send, ThumbsUp } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AuthorBadge } from '@/components/AuthorBadge';
 import { MarkdownBody } from '@/components/MarkdownBody';
-import { PRBadge } from '@/components/PRBadge';
-import { getLastCommitAuthor } from '@/components/pull-requests/last-commit-author';
-import { PRCreateThreadButton } from '@/components/pull-requests/PRCreateThreadButton';
-import { PRMergeLine } from '@/components/pull-requests/PRMergeLine';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { PRCardSummary } from '@/components/pinned-pr-card/PRCardSummary';
+import { IssueCommentCard, ReviewCard } from '@/components/pinned-pr-card/PRComments';
+import { ReviewThreadCard } from '@/components/pinned-pr-card/ReviewThreadCard';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  usePRCommentActions,
+  usePRThreadActions,
+} from '@/components/pinned-pr-card/use-pr-comment-actions';
+import {
+  useNewPRComment,
+  usePRConversation,
+  usePRMerge,
+} from '@/components/pinned-pr-card/use-pr-conversation';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { api } from '@/lib/api';
-import { createClientLogger } from '@/lib/client-logger';
-import { cn } from '@/lib/utils';
-import { whilePending } from '@/lib/while-pending';
-
-const log = createClientLogger('pinned-pr-card');
-
-function timeAgo(dateStr: string, now = Date.now()): string {
-  if (!dateStr) return '';
-  const diff = now - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
-}
-
-const REACTION_EMOJI: Record<PRReactionContent, string> = {
-  '+1': '👍',
-  '-1': '👎',
-  laugh: '😄',
-  hooray: '🎉',
-  confused: '😕',
-  heart: '❤️',
-  rocket: '🚀',
-  eyes: '👀',
-};
-
-const REACTION_ORDER: PRReactionContent[] = [
-  '+1',
-  '-1',
-  'laugh',
-  'hooray',
-  'confused',
-  'heart',
-  'rocket',
-  'eyes',
-];
-
-function reactionsTotal(r?: PRReactionSummary | null) {
-  return r?.total ?? 0;
-}
-
-function reactionCounts(r?: PRReactionSummary | null): Array<{
-  key: PRReactionContent;
-  count: number;
-}> {
-  if (!r) return [];
-  const entries: Array<{ key: PRReactionContent; count: number }> = [
-    { key: '+1', count: r.plus1 },
-    { key: '-1', count: r.minus1 },
-    { key: 'laugh', count: r.laugh },
-    { key: 'hooray', count: r.hooray },
-    { key: 'confused', count: r.confused },
-    { key: 'heart', count: r.heart },
-    { key: 'rocket', count: r.rocket },
-    { key: 'eyes', count: r.eyes },
-  ];
-  return entries.filter((e) => e.count > 0);
-}
 
 interface PinnedPRCardProps {
   pr: GitHubPR;
@@ -125,122 +34,6 @@ interface PinnedPRCardProps {
   hideSummary?: boolean;
 }
 
-type MergeMethod = 'squash' | 'merge' | 'rebase';
-
-// ── Reaction bar ──
-
-function ReactionBar({
-  reactions,
-  onReact,
-  disabled,
-  testIdBase,
-}: {
-  reactions: PRReactionSummary | undefined;
-  onReact: (c: PRReactionContent) => void;
-  disabled?: boolean;
-  testIdBase: string;
-}) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const counts = reactionCounts(reactions);
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {counts.map(({ key, count }) => (
-        <Button
-          key={key}
-          variant="outline"
-          size="xs"
-          className="text-2xs h-5 gap-1 px-1.5"
-          disabled={disabled}
-          onClick={() => onReact(key)}
-          data-testid={`${testIdBase}-reaction-${key}`}
-        >
-          <span>{REACTION_EMOJI[key]}</span>
-          <span>{count}</span>
-        </Button>
-      ))}
-      <div className="relative">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-xs"
-              disabled={disabled}
-              onClick={() => setPickerOpen((v) => !v)}
-              data-testid={`${testIdBase}-react-open`}
-            >
-              <Smile className="icon-xs" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">Add reaction</TooltipContent>
-        </Tooltip>
-        {pickerOpen && (
-          <div
-            className="border-border bg-popover absolute top-full left-0 z-10 mt-1 flex gap-0.5 rounded-md border p-1 shadow-md"
-            data-testid={`${testIdBase}-react-picker`}
-          >
-            {REACTION_ORDER.map((k) => (
-              <button
-                key={k}
-                className="hover:bg-accent rounded px-1 text-sm"
-                onClick={() => {
-                  onReact(k);
-                  setPickerOpen(false);
-                }}
-                data-testid={`${testIdBase}-react-${k}`}
-              >
-                {REACTION_EMOJI[k]}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Edit form ──
-
-function EditForm({
-  initial,
-  onCancel,
-  onSave,
-  saving,
-  testId,
-}: {
-  initial: string;
-  onCancel: () => void;
-  onSave: (body: string) => void;
-  saving: boolean;
-  testId: string;
-}) {
-  const [value, setValue] = useState(initial);
-  return (
-    <div className="flex flex-col gap-1.5">
-      <textarea
-        aria-label="Comment body"
-        className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"
-        rows={3}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        data-testid={`${testId}-textarea`}
-      />
-      <div className="flex justify-end gap-1.5">
-        <Button variant="ghost" size="xs" onClick={onCancel} data-testid={`${testId}-cancel`}>
-          Cancel
-        </Button>
-        <Button
-          size="xs"
-          onClick={() => onSave(value)}
-          disabled={saving || value.trim() === initial.trim() || !value.trim()}
-          data-testid={`${testId}-save`}
-        >
-          {saving ? <Loader2 className="icon-xs animate-spin" /> : 'Save'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 // ── Main component ──
 
 export function PinnedPRCard({
@@ -253,355 +46,32 @@ export function PinnedPRCard({
 }: PinnedPRCardProps) {
   const { t } = useTranslation();
   const now = useMinuteTick();
-  const [threads, setThreads] = useState<PRReviewThread[]>([]);
-  const [conversation, setConversation] = useState<PRConversation | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [merging, setMerging] = useState(false);
-  const [merged, setMerged] = useState(false);
-
-  const [replyForThread, setReplyForThread] = useState<number | null>(null);
-  const [replyBody, setReplyBody] = useState('');
-  const [replyingThread, setReplyingThread] = useState(false);
-
-  const [newComment, setNewComment] = useState('');
-  const [posting, setPosting] = useState(false);
-
-  const [editingId, setEditingId] = useState<string | null>(null); // `${kind}-${id}`
-  const [savingEditId, setSavingEditId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [resolvingNodeId, setResolvingNodeId] = useState<string | null>(null);
-
-  const loadAll = useCallback(async () => {
-    return whilePending(setLoading, async () => {
-      setError(null);
-      const [threadsRes, convRes] = await Promise.all([
-        api.githubPRThreads(projectId, pr.number),
-        api.githubPRConversation(projectId, pr.number),
-      ]);
-      if (threadsRes.isOk()) setThreads(threadsRes.value.threads);
-      if (convRes.isOk()) setConversation(convRes.value);
-      if (threadsRes.isErr() || convRes.isErr()) {
-        setError(
-          threadsRes.isErr()
-            ? threadsRes.error.message
-            : convRes.isErr()
-              ? convRes.error.message
-              : 'Failed to load PR data',
-        );
-      }
-    });
-  }, [projectId, pr.number]);
-
-  useEffect(() => {
-    void loadAll();
-  }, [loadAll]);
-
-  // ── Actions ──
-
-  const handleMerge = async (method: MergeMethod) => {
-    setMerging(true);
-    setError(null);
-    const res = await api.githubPRMerge(projectId, pr.number, method);
-    if (res.isOk() && res.value.merged) {
-      setMerged(true);
-      onMerged?.(pr.number);
-    } else {
-      const message = res.isErr()
-        ? res.error.message
-        : t('review.pullRequests.mergeFailed', 'Failed to merge pull request');
-      log.error('pr_merge_failed', { error: message, prNumber: pr.number, method });
-      setError(message);
-    }
-    setMerging(false);
-  };
-
-  const handleNewComment = async () => {
-    const body = newComment.trim();
-    if (!body) return;
-    await whilePending(setPosting, async () => {
-      const res = await api.githubPRCommentCreate(projectId, pr.number, body);
-      if (res.isOk()) {
-        setConversation((prev) =>
-          prev
-            ? { ...prev, comments: [...prev.comments, res.value] }
-            : { comments: [res.value], reviews: [] },
-        );
-        setNewComment('');
-      } else {
-        log.error('pr_comment_create_failed', { error: res.error.message, prNumber: pr.number });
-        setError(res.error.message);
-      }
-    });
-  };
-
-  const handleReply = async (thread: PRReviewThread) => {
-    const body = replyBody.trim();
-    if (!body) return;
-    const rootId = thread.comments[0]?.id;
-    if (!rootId) return;
-    setReplyingThread(true);
-    const res = await api.githubPRReviewReply(projectId, pr.number, rootId, body);
-    if (res.isOk()) {
-      setThreads((prev) =>
-        prev.map((th) =>
-          th.id === thread.id ? { ...th, comments: [...th.comments, res.value] } : th,
-        ),
-      );
-      setReplyBody('');
-      setReplyForThread(null);
-    } else {
-      log.error('pr_review_reply_failed', { error: res.error.message });
-      setError(res.error.message);
-    }
-    setReplyingThread(false);
-  };
-
-  const handleResolve = async (thread: PRReviewThread) => {
-    if (!thread.node_id) return;
-    setResolvingNodeId(thread.node_id);
-    const res = await api.githubPRThreadResolve(projectId, thread.node_id, !thread.is_resolved);
-    if (res.isOk()) {
-      setThreads((prev) =>
-        prev.map((th) =>
-          th.node_id === thread.node_id ? { ...th, is_resolved: res.value.is_resolved } : th,
-        ),
-      );
-    } else {
-      log.error('pr_thread_resolve_failed', { error: res.error.message });
-      setError(res.error.message);
-    }
-    setResolvingNodeId(null);
-  };
-
-  const handleReact = async (
-    kind: PRCommentKind,
-    commentId: number,
-    content: PRReactionContent,
-  ) => {
-    const res = await api.githubPRReaction(projectId, kind, commentId, content);
-    if (res.isOk()) {
-      // Optimistically bump the count locally
-      if (kind === 'issue') {
-        setConversation((prev) =>
-          prev
-            ? {
-                ...prev,
-                comments: prev.comments.map((c) =>
-                  c.id === commentId ? { ...c, reactions: bumpReaction(c.reactions, content) } : c,
-                ),
-              }
-            : prev,
-        );
-      }
-    } else {
-      log.error('pr_reaction_failed', { error: res.error.message });
-    }
-  };
-
-  const handleEditSave = async (
-    kind: PRCommentKind,
-    commentId: number,
-    body: string,
-    editKey: string,
-  ) => {
-    setSavingEditId(editKey);
-    const res = await api.githubPRCommentEdit(projectId, kind, commentId, body);
-    if (res.isOk()) {
-      if (kind === 'issue') {
-        setConversation((prev) =>
-          prev
-            ? {
-                ...prev,
-                comments: prev.comments.map((c) =>
-                  c.id === commentId
-                    ? {
-                        ...c,
-                        body: res.value.body,
-                        updated_at: res.value.updated_at,
-                        reactions: res.value.reactions,
-                      }
-                    : c,
-                ),
-              }
-            : prev,
-        );
-      } else {
-        setThreads((prev) =>
-          prev.map((th) => ({
-            ...th,
-            comments: th.comments.map((c) =>
-              c.id === commentId
-                ? { ...c, body: res.value.body, updated_at: res.value.updated_at }
-                : c,
-            ),
-          })),
-        );
-      }
-      setEditingId(null);
-    } else {
-      log.error('pr_comment_edit_failed', { error: res.error.message });
-      setError(res.error.message);
-    }
-    setSavingEditId(null);
-  };
-
-  const handleDelete = async (kind: PRCommentKind, commentId: number, key: string) => {
-    if (!confirm(t('review.pullRequests.confirmDelete', 'Delete this comment?'))) return;
-    setDeletingId(key);
-    const res = await api.githubPRCommentDelete(projectId, kind, commentId);
-    if (res.isOk()) {
-      if (kind === 'issue') {
-        setConversation((prev) =>
-          prev ? { ...prev, comments: prev.comments.filter((c) => c.id !== commentId) } : prev,
-        );
-      } else {
-        setThreads((prev) =>
-          prev
-            .map((th) => ({
-              ...th,
-              comments: th.comments.filter((c) => c.id !== commentId),
-            }))
-            .filter((th) => th.comments.length > 0),
-        );
-      }
-    } else {
-      log.error('pr_comment_delete_failed', { error: res.error.message });
-      setError(res.error.message);
-    }
-    setDeletingId(null);
-  };
-
-  // ── Render helpers ──
-
-  const isOwnComment = (author: string) =>
-    !!currentUserLogin && author.toLowerCase() === currentUserLogin.toLowerCase();
-
-  /** A comment's header (author, age, association, own-comment actions) and its body or edit form. */
-  const renderEditableComment = (
-    kind: 'review' | 'issue',
-    c: PRThreadComment | PRIssueComment,
-    testPrefix: string,
-  ) => {
-    const editKey = `${kind}-${c.id}`;
-    const isEditing = editingId === editKey;
-    return (
-      <>
-        <div className="flex items-center gap-1.5 text-xs">
-          <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
-          <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
-          {c.author_association && c.author_association !== 'NONE' && (
-            <Badge size="xxs" variant="outline">
-              {c.author_association}
-            </Badge>
-          )}
-          <div className="flex-1" />
-          {isOwnComment(c.author) && !isEditing && (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => setEditingId(editKey)}
-                    data-testid={`${testPrefix}-edit-${c.id}`}
-                  >
-                    <Pencil className="icon-xs" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Edit</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={deletingId === editKey}
-                    onClick={() => handleDelete(kind, c.id, editKey)}
-                    data-testid={`${testPrefix}-delete-${c.id}`}
-                  >
-                    {deletingId === editKey ? (
-                      <Loader2 className="icon-xs animate-spin" />
-                    ) : (
-                      <Trash2 className="icon-xs" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Delete</TooltipContent>
-              </Tooltip>
-            </>
-          )}
-        </div>
-        {isEditing ? (
-          <EditForm
-            initial={c.body}
-            saving={savingEditId === editKey}
-            onCancel={() => setEditingId(null)}
-            onSave={(body) => handleEditSave(kind, c.id, body, editKey)}
-            testId={`${testPrefix}-edit-form-${c.id}`}
-          />
-        ) : (
-          <MarkdownBody body={c.body} />
-        )}
-      </>
-    );
-  };
-
-  const renderThreadComment = (thread: PRReviewThread, c: PRThreadComment, isRoot: boolean) => {
-    return (
-      <div key={c.id} className={cn('flex flex-col gap-1', !isRoot && 'pl-3')}>
-        {renderEditableComment('review', c, 'pinned-pr-review')}
-      </div>
-    );
-  };
-
-  const renderIssueComment = (c: PRIssueComment) => {
-    return (
-      <div
-        key={c.id}
-        className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2"
-        data-testid={`pinned-pr-comment-${c.id}`}
-      >
-        {renderEditableComment('issue', c, 'pinned-pr-comment')}
-        <ReactionBar
-          reactions={c.reactions}
-          onReact={(k) => handleReact('issue', c.id, k)}
-          testIdBase={`pinned-pr-comment-${c.id}`}
-        />
-      </div>
-    );
-  };
-
-  const renderReview = (rv: PRReview) => {
-    const stateBadge: Record<
-      PRReview['state'],
-      { label: string; variant: 'success' | 'error' | 'secondary' }
-    > = {
-      APPROVED: { label: 'Approved', variant: 'success' },
-      CHANGES_REQUESTED: { label: 'Changes requested', variant: 'error' },
-      COMMENTED: { label: 'Commented', variant: 'secondary' },
-      DISMISSED: { label: 'Dismissed', variant: 'secondary' },
-      PENDING: { label: 'Pending', variant: 'secondary' },
-    };
-    const s = stateBadge[rv.state];
-    return (
-      <div
-        key={rv.id}
-        className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2"
-        data-testid={`pinned-pr-review-${rv.id}`}
-      >
-        <div className="flex items-center gap-1.5 text-xs">
-          <AuthorBadge name={rv.author} avatarUrl={rv.author_avatar_url} size="xs" />
-          <Badge variant={s.variant} size="xxs">
-            {s.label}
-          </Badge>
-          <span className="text-muted-foreground">{timeAgo(rv.submitted_at, now)}</span>
-        </div>
-        {rv.body && <MarkdownBody body={rv.body} />}
-      </div>
-    );
-  };
+  const { threads, setThreads, conversation, setConversation, loading, error, setError } =
+    usePRConversation(projectId, pr.number);
+  const { merging, merged, handleMerge } = usePRMerge({
+    projectId,
+    prNumber: pr.number,
+    onMerged,
+    setError,
+  });
+  const threadActions = usePRThreadActions({
+    projectId,
+    prNumber: pr.number,
+    setThreads,
+    setError,
+  });
+  const { newComment, setNewComment, posting, handleNewComment } = useNewPRComment({
+    projectId,
+    prNumber: pr.number,
+    setConversation,
+    setError,
+  });
+  const commentActions = usePRCommentActions({
+    projectId,
+    setConversation,
+    setThreads,
+    setError,
+  });
 
   // Group threads by file
   const threadsByFile = useMemo(() => {
@@ -618,25 +88,6 @@ export function PinnedPRCard({
 
   const isMerged = merged || !!pr.merged_at;
   const canMerge = pr.state === 'open' && !pr.draft && !isMerged;
-  const lastCommitAuthor = getLastCommitAuthor(pr);
-
-  const mergeMethods: Array<{ method: MergeMethod; label: string; hint: string }> = [
-    {
-      method: 'squash',
-      label: t('review.pullRequests.squashAndMerge', 'Squash and merge'),
-      hint: t('review.pullRequests.squashHint', 'Combine all commits into one'),
-    },
-    {
-      method: 'merge',
-      label: t('review.pullRequests.createMergeCommit', 'Create a merge commit'),
-      hint: t('review.pullRequests.mergeHint', 'Keep all commits'),
-    },
-    {
-      method: 'rebase',
-      label: t('review.pullRequests.rebaseAndMerge', 'Rebase and merge'),
-      hint: t('review.pullRequests.rebaseHint', 'Rebase commits onto the base'),
-    },
-  ];
 
   return (
     <div
@@ -646,114 +97,15 @@ export function PinnedPRCard({
       {/* Header with PR body */}
       <div className="flex flex-col gap-2">
         {!hideSummary && (
-          <div className="flex items-start gap-2" data-testid={`pinned-pr-summary-${pr.number}`}>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex items-baseline gap-1.5">
-                <PRBadge
-                  prNumber={pr.number}
-                  prState={isMerged ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN'}
-                  prUrl={pr.html_url}
-                  size="xxs"
-                  data-testid={`pinned-pr-link-${pr.number}`}
-                />
-                <span className="text-sm font-semibold">{pr.title}</span>
-              </div>
-              <PRMergeLine pr={pr} data-testid={`pinned-pr-merge-line-${pr.number}`} />
-              <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
-                {pr.user && (
-                  <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
-                )}
-                {pr.user ? <span>&middot;</span> : null}
-                <span>
-                  {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at, now)}
-                </span>
-                {lastCommitAuthor ? (
-                  <>
-                    <span>&middot;</span>
-                    <span>{t('review.pullRequests.lastCommitBy', 'Last commit by')}</span>
-                    <AuthorBadge
-                      name={lastCommitAuthor.name}
-                      avatarUrl={lastCommitAuthor.avatarUrl}
-                      size="xs"
-                    />
-                  </>
-                ) : null}
-                {pr.draft ? (
-                  <>
-                    <span>&middot;</span>
-                    <Badge size="xxs" variant="outline">
-                      {t('review.pullRequests.draft', 'Draft')}
-                    </Badge>
-                  </>
-                ) : null}
-              </div>
-            </div>
-            {canMerge && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="xs"
-                    className="shrink-0 gap-1"
-                    disabled={merging}
-                    data-testid={`pinned-pr-merge-${pr.number}`}
-                  >
-                    {merging ? (
-                      <Loader2 className="icon-xs animate-spin" />
-                    ) : (
-                      <GitMerge className="icon-xs" />
-                    )}
-                    {t('review.pullRequests.merge', 'Merge')}
-                    <ChevronDown className="icon-xs" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>
-                    {t('review.pullRequests.mergeMethod', 'Merge method')}
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {mergeMethods.map(({ method, label, hint }) => (
-                    <DropdownMenuItem
-                      key={method}
-                      onSelect={() => handleMerge(method)}
-                      className="flex flex-col items-start gap-0.5"
-                      data-testid={`pinned-pr-merge-${method}-${pr.number}`}
-                    >
-                      <span className="text-xs font-medium">{label}</span>
-                      <span className="text-muted-foreground text-2xs">{hint}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {onCreateThreadForBranch && (
-              <PRCreateThreadButton
-                prNumber={pr.number}
-                branch={pr.head.ref}
-                onCreateThread={onCreateThreadForBranch}
-              />
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="muted"
-                  size="icon-xs"
-                  asChild
-                  className="shrink-0"
-                  data-testid={`pinned-pr-open-github-${pr.number}`}
-                >
-                  <a
-                    href={pr.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Open pull request ${pr.number} on GitHub`}
-                  >
-                    <ExternalLink className="icon-xs" />
-                  </a>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Open on GitHub</TooltipContent>
-            </Tooltip>
-          </div>
+          <PRCardSummary
+            pr={pr}
+            now={now}
+            isMerged={isMerged}
+            canMerge={canMerge}
+            merging={merging}
+            handleMerge={handleMerge}
+            onCreateThreadForBranch={onCreateThreadForBranch}
+          />
         )}
         {pr.body && (
           <div className="border-border bg-background rounded-md border p-2">
@@ -785,7 +137,17 @@ export function PinnedPRCard({
               {conversation.comments.length})
             </span>
           </div>
-          <div className="flex flex-col gap-2">{conversation.comments.map(renderIssueComment)}</div>
+          <div className="flex flex-col gap-2">
+            {conversation.comments.map((c) => (
+              <IssueCommentCard
+                key={c.id}
+                c={c}
+                now={now}
+                currentUserLogin={currentUserLogin}
+                actions={commentActions}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -810,115 +172,16 @@ export function PinnedPRCard({
                   </TooltipTrigger>
                   <TooltipContent variant="mono">{filePath}</TooltipContent>
                 </Tooltip>
-                {fileThreads.map((th) => {
-                  const resolving = resolvingNodeId === th.node_id;
-                  return (
-                    <div
-                      key={th.id}
-                      className={cn(
-                        'flex flex-col gap-2 rounded-md border p-2',
-                        th.is_resolved
-                          ? 'border-border/40 bg-background/50 opacity-70'
-                          : 'border-border bg-background',
-                      )}
-                      data-testid={`pinned-pr-thread-${th.id}`}
-                    >
-                      <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
-                        {th.is_resolved ? (
-                          <CheckCircle2 className="text-status-success size-3" />
-                        ) : (
-                          <CircleDot className="size-3" />
-                        )}
-                        <span>
-                          Line {th.line ?? th.original_line ?? '?'}
-                          {th.is_outdated ? ' (outdated)' : ''}
-                        </span>
-                        <div className="flex-1" />
-                        {th.node_id && (
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            className="text-2xs h-5 gap-1 px-1.5"
-                            disabled={resolving}
-                            onClick={() => handleResolve(th)}
-                            data-testid={`pinned-pr-thread-resolve-${th.id}`}
-                          >
-                            {resolving ? (
-                              <Loader2 className="icon-xs animate-spin" />
-                            ) : th.is_resolved ? (
-                              'Unresolve'
-                            ) : (
-                              'Resolve'
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        {th.comments.map((c, idx) => renderThreadComment(th, c, idx === 0))}
-                      </div>
-                      {replyForThread === th.id ? (
-                        <div className="flex flex-col gap-1.5 pl-3">
-                          <label
-                            className="text-muted-foreground text-xs font-medium"
-                            htmlFor={`pinned-pr-thread-reply-${th.id}`}
-                          >
-                            Reply
-                          </label>
-                          <textarea
-                            id={`pinned-pr-thread-reply-${th.id}`}
-                            className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"
-                            rows={2}
-                            value={replyBody}
-                            onChange={(e) => setReplyBody(e.target.value)}
-                            placeholder="Reply…"
-                            data-testid={`pinned-pr-thread-reply-textarea-${th.id}`}
-                          />
-                          <div className="flex justify-end gap-1.5">
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              onClick={() => {
-                                setReplyForThread(null);
-                                setReplyBody('');
-                              }}
-                              data-testid={`pinned-pr-thread-reply-cancel-${th.id}`}
-                            >
-                              <X className="icon-xs" />
-                            </Button>
-                            <Button
-                              size="xs"
-                              disabled={!replyBody.trim() || replyingThread}
-                              onClick={() => handleReply(th)}
-                              data-testid={`pinned-pr-thread-reply-send-${th.id}`}
-                            >
-                              {replyingThread ? (
-                                <Loader2 className="icon-xs animate-spin" />
-                              ) : (
-                                <Send className="icon-xs" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="pl-3">
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            className="text-2xs h-5 gap-1 px-1.5"
-                            onClick={() => {
-                              setReplyForThread(th.id);
-                              setReplyBody('');
-                            }}
-                            data-testid={`pinned-pr-thread-reply-open-${th.id}`}
-                          >
-                            <Reply className="icon-xs" />
-                            Reply
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {fileThreads.map((th) => (
+                  <ReviewThreadCard
+                    key={th.id}
+                    th={th}
+                    now={now}
+                    currentUserLogin={currentUserLogin}
+                    commentActions={commentActions}
+                    threadActions={threadActions}
+                  />
+                ))}
               </div>
             ))}
           </div>
@@ -934,7 +197,11 @@ export function PinnedPRCard({
               {t('review.pullRequests.reviews', 'Reviews')} ({conversation.reviews.length})
             </span>
           </div>
-          <div className="flex flex-col gap-2">{conversation.reviews.map(renderReview)}</div>
+          <div className="flex flex-col gap-2">
+            {conversation.reviews.map((rv) => (
+              <ReviewCard key={rv.id} rv={rv} now={now} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -978,35 +245,4 @@ export function PinnedPRCard({
       )}
     </div>
   );
-}
-
-function bumpReaction(r: PRReactionSummary, content: PRReactionContent): PRReactionSummary {
-  const next = { ...r, total: reactionsTotal(r) + 1 };
-  switch (content) {
-    case '+1':
-      next.plus1 += 1;
-      break;
-    case '-1':
-      next.minus1 += 1;
-      break;
-    case 'laugh':
-      next.laugh += 1;
-      break;
-    case 'hooray':
-      next.hooray += 1;
-      break;
-    case 'confused':
-      next.confused += 1;
-      break;
-    case 'heart':
-      next.heart += 1;
-      break;
-    case 'rocket':
-      next.rocket += 1;
-      break;
-    case 'eyes':
-      next.eyes += 1;
-      break;
-  }
-  return next;
 }

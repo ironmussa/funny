@@ -78,16 +78,21 @@ function isObjectOrNull(value: unknown): value is object | null {
   return typeof value === 'object';
 }
 
+/** The one field of a pipeline context the default merge reads. */
+interface WithOutputs {
+  outputs?: unknown;
+}
+
 /** Default merge: fold each result's `outputs` map over the base, in order. */
 function defaultMerge<T>(base: T, results: T[]): T {
   // SAFETY: only reads the `outputs` property, whose value is checked with isObjectOrNull before use;
   // pipeline contexts are non-nullish values, and a missing property reads as undefined.
-  const baseOutputs = (base as Record<string, unknown>).outputs;
+  const baseOutputs = (base as WithOutputs).outputs;
   if (baseOutputs === undefined || !isObjectOrNull(baseOutputs)) return base;
-  const merged: Record<string, unknown> = { ...baseOutputs };
+  const merged = { ...baseOutputs };
   for (const r of results) {
     // SAFETY: as for `base` above: a property read whose value is checked before use.
-    const ro = (r as Record<string, unknown>).outputs;
+    const ro = (r as WithOutputs).outputs;
     if (ro && isObjectOrNull(ro)) Object.assign(merged, ro);
   }
   return { ...base, outputs: merged };

@@ -11,6 +11,9 @@
 
 // ── Progress reporting ────────────────────────────────────────
 
+/** Plain JSON data: what a step's progress metadata carries to the UI. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 /** Status of a pipeline step. */
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
@@ -28,7 +31,7 @@ export interface StepProgressData {
   /** Sub-items for composite steps (e.g. multiple hooks). */
   subItems?: StepSubItem[];
   /** Extra metadata (e.g. PR url, iteration count). */
-  metadata?: Record<string, unknown>;
+  metadata?: { [key: string]: JsonValue };
 }
 
 /**

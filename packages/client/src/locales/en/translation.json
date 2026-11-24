@@ -1752,7 +1752,6 @@
     }
   },
   "factory": {
-    "pullRequest": "PR",
     "thread": "Thread",
     "retry": "Retry",
     "stop": "Stop",
@@ -1868,7 +1867,6 @@
       "rewritten": "The branch no longer contains the commit that was reviewed (a rebase or a force push), so what would be merged was not checked. Look at the new head on the pull request before merging it yourself.",
       "mergeRounds": "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself."
     },
-    "viewPullRequest": "View PR",
     "approveMerge": "Approve and merge",
     "approveMergeTitle": "Merge this high-risk change?",
     "approveMergeBody": "The factory will merge commit {{sha}} of issue #{{issue}} once its checks, review and regression proof still pass. A new commit on the branch needs a new approval."
@@ -1975,6 +1973,7 @@
     "showActive": "Active",
     "layoutList": "List",
     "layoutBoard": "Board",
+    "layoutAnalytics": "Analytics",
     "details": "Run details",
     "health": {
       "inFlight": "In flight",
@@ -1983,6 +1982,11 @@
       "firstPass": "First review passed, 7 d",
       "mergeHolds": "Merge holds, 7 d",
       "toMerge": "Median to merge, 7 d"
+    },
+    "analytics": {
+      "health": "Right now",
+      "noIntegration": "No run the filters keep started in this period",
+      "empty": "No factory runs to measure"
     }
   },
   "factoryBoard": {
@@ -2036,6 +2040,12 @@
       "inStep": "In {{step}} {{duration}}",
       "waiting": "Waiting for {{step}} {{duration}}",
       "medianTitle": "Median time in this stage, last 7 days"
+    },
+    "deps": {
+      "stuckBehind": "Stuck behind",
+      "needsPerson": "it needs a person",
+      "blocks": "Blocks",
+      "then": "then"
     }
   },
   "factoryRunDetail": {

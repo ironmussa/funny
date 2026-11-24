@@ -83,6 +83,66 @@ describe('layoutFactoryBoard', () => {
     expect(columns.queue.map((r) => r.id)).toEqual(['admitted', 'first', 'second']);
     expect(columns.implementing.map((r) => r.id)).toEqual(['newer', 'older']);
   });
+
+  // Issue #434: its run failed the regression proof, was stopped, and showed in
+  // Done although nothing had fixed it.
+  test('a run stopped after a failure waits for a person; a plain stop is done', () => {
+    const { columns } = layoutFactoryBoard(
+      [
+        buildFactoryRun({
+          id: 'failed-then-stopped',
+          issueNumber: 434,
+          state: 'stopped',
+          failureReason: 'regression_proof[regression-proof] failed',
+          completedAt: hoursAgo(1),
+        }),
+        buildFactoryRun({
+          id: 'stopped',
+          issueNumber: 435,
+          state: 'stopped',
+          failureReason: null,
+          completedAt: hoursAgo(1),
+        }),
+      ],
+      NOW,
+    );
+    expect(columns.needs_person.map((run) => run.id)).toEqual(['failed-then-stopped']);
+    expect(columns.done.map((run) => run.id)).toEqual(['stopped']);
+  });
+
+  test('an ended run a newer run of its issue replaced is done', () => {
+    const { columns } = layoutFactoryBoard(
+      [
+        buildFactoryRun({
+          id: 'first',
+          issueNumber: 434,
+          state: 'stopped',
+          failureReason: 'regression_proof[regression-proof] failed',
+          startedAt: hoursAgo(8),
+          completedAt: hoursAgo(7),
+        }),
+        buildFactoryRun({
+          id: 'earlier-failure',
+          issueNumber: 434,
+          state: 'failed',
+          failureReason: 'ci failed',
+          startedAt: hoursAgo(10),
+          completedAt: hoursAgo(9),
+        }),
+        buildFactoryRun({
+          id: 'resent',
+          issueNumber: 434,
+          state: 'working',
+          startedAt: hoursAgo(6),
+          completedAt: null,
+        }),
+      ],
+      NOW,
+    );
+    expect(columns.needs_person).toEqual([]);
+    expect(columns.done.map((run) => run.id)).toEqual(['first', 'earlier-failure']);
+    expect(columns.implementing.map((run) => run.id)).toEqual(['resent']);
+  });
 });
 
 const review = (sha: string, verdict: 'pass' | 'fail'): FactoryReviewVerdict => ({

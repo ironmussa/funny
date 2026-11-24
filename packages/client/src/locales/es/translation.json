@@ -1745,7 +1745,6 @@
     }
   },
   "factory": {
-    "pullRequest": "PR",
     "thread": "Thread",
     "retry": "Reintentar",
     "stop": "Detener",
@@ -1861,7 +1860,6 @@
       "rewritten": "La rama ya no contiene el commit que se revisó (un rebase o un force push), así que lo que se fusionaría no se revisó. Mira el nuevo head en el pull request antes de hacer el merge tú.",
       "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú."
     },
-    "viewPullRequest": "Ver PR",
     "approveMerge": "Aprobar y hacer merge",
     "approveMergeTitle": "¿Hacer merge de este cambio de riesgo alto?",
     "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación."
@@ -1968,6 +1966,7 @@
     "showActive": "Activos",
     "layoutList": "Lista",
     "layoutBoard": "Tablero",
+    "layoutAnalytics": "Analíticas",
     "details": "Detalle del run",
     "health": {
       "inFlight": "En curso",
@@ -1976,6 +1975,11 @@
       "firstPass": "Review a la primera, 7 d",
       "mergeHolds": "Merges retenidos, 7 d",
       "toMerge": "Mediana hasta merge, 7 d"
+    },
+    "analytics": {
+      "health": "Ahora mismo",
+      "noIntegration": "Ningún run de los filtros empezó en este periodo",
+      "empty": "No hay runs del factory que medir"
     }
   },
   "factoryBoard": {
@@ -2029,6 +2033,12 @@
       "inStep": "En {{step}} {{duration}}",
       "waiting": "Esperando {{step}} {{duration}}",
       "medianTitle": "Mediana del tiempo en esta etapa, últimos 7 días"
+    },
+    "deps": {
+      "stuckBehind": "Atascada detrás de",
+      "needsPerson": "necesita a una persona",
+      "blocks": "Bloquea a",
+      "then": "luego"
     }
   },
   "factoryRunDetail": {

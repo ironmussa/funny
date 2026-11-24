@@ -408,7 +408,10 @@ The search, project and state filters and the **Active** filter (hides `merged`,
   toolbar and act on the projects the project filter keeps (every project with runs when it keeps
   all): one `clearQueue` / `stopAll` per project that has something to clear or stop. Stop all asks
   for a confirmation first.
-- **Integration figures** (`FactoryIntegrationStats.tsx`, folded under the header): merge rate,
+- **Analytics layout** (`FactoryAnalytics.tsx`, the toggle's third layout, `?view=analytics`):
+  the view's figures, as `MetricCard`s like the analytics view; the header shows none. First the
+  health figures, then the integration figures.
+- **Integration figures** (`FactoryIntegrationStats.tsx`, in the analytics layout): merge rate,
   time in the queue and to merge, CI rounds, red rounds, conflicts, agent fixes and merge queue
   batches, from `summarizeFactoryRuns` (`data/factory/metrics.ts`) over the filtered runs of the
   last 14 days (the view lists runs that ended within 14 days). The project settings no longer
@@ -421,7 +424,8 @@ The search, project and state filters and the **Active** filter (hides `merged`,
   (contract, questions or split), the regression proof, one entry per review verdict with its
   findings, risk and CI, and every agent thread (`thread-links.ts`: triage, implementer, one
   reviewer per review). The list row's title still opens the run's thread.
-- **Health header** (`FactoryHealthHeader.tsx`, `factory-health.ts`): over every listed run, not
+- **Health figures** (`FactoryHealthHeader.tsx`, `factory-health.ts`, in the analytics layout):
+  over every listed run, not
   the filtered ones: in flight, needing a person, merged in 24 h, and over 7 days the first-pass
   review rate, merge holds and median time to merge (7 days, because the queue lists ended runs
   for 14). Above the layouts, one banner per project whose factory has an open incident

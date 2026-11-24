@@ -100,17 +100,12 @@ describe('FactoryQueueActions', () => {
 });
 
 describe('FactoryIntegrationStats', () => {
-  test('folded by default; opening it shows the figures over the runs', () => {
+  test('shows the figures over the runs', () => {
     const runs = [
       queueRun('a', 'p1', 'merged', { completedAt: hoursAgo(1), admittedAt: hoursAgo(2) }),
       queueRun('b', 'p1', 'failed', { completedAt: hoursAgo(1) }),
     ];
     render(<FactoryIntegrationStats runs={runs} now={NOW} />);
-    expect(screen.getByTestId('factory-metrics-toggle')).toHaveTextContent(
-      'Integration, last 14 days',
-    );
-    expect(screen.queryByTestId('factory-metric-runs')).toBeNull();
-    fireEvent.click(screen.getByTestId('factory-metrics-toggle'));
     expect(screen.getByTestId('factory-metric-runs')).toHaveTextContent('2');
     expect(screen.getByTestId('factory-metric-merge-rate')).toHaveTextContent('50%');
   });

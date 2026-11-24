@@ -1888,6 +1888,8 @@
     },
     "proof": {
       "title": "Regression proof",
+      "laterRun": "This run ended. Issue #{{issue}} was sent again as a later run: {{state}}",
+      "laterRunPr": "pull request",
       "pass": "Passed",
       "fail": "Failed",
       "skipped": "Skipped",

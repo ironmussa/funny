@@ -1881,6 +1881,8 @@
     },
     "proof": {
       "title": "Prueba de regresión",
+      "laterRun": "Este run terminó. El issue #{{issue}} se envió de nuevo como otro run: {{state}}",
+      "laterRunPr": "pull request",
       "pass": "Aprobada",
       "fail": "Fallida",
       "skipped": "Omitida",

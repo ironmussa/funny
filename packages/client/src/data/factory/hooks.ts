@@ -13,7 +13,7 @@ import type {
   FactoryTrigger,
 } from '@funny/shared/contracts/factory';
 
-import { hasLaterRunOfIssue } from '@/lib/thread-activity';
+import { hasLaterRunOfIssue, latestLaterRunOfIssue } from '@/lib/thread-activity';
 
 import { useDataQuery } from '../hooks';
 import {
@@ -66,6 +66,15 @@ export function useFactoryRunForThread(
 ): FactoryRun | null | undefined {
   const runs = useFactoryRuns(projectId);
   return runs && (runs.find((run) => run.threadIds.includes(threadId)) ?? null);
+}
+
+/**
+ * The newest run of `run`'s issue started after it in the same project, or
+ * null (also while the project's run list loads): the issue was sent again.
+ */
+export function useLaterRunOfIssue(projectId: string, run: FactoryRun | null | undefined) {
+  const runs = useFactoryRuns(projectId);
+  return runs && run ? latestLaterRunOfIssue(runs, run) : null;
 }
 
 /**

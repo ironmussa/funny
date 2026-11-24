@@ -14,6 +14,9 @@
  *   statement (expression, return, throw, variable declaration, class field;
  *   an `export` in front of that statement counts too);
  * - test files are skipped, as oxlint.config.ts turns the rule off for them.
+ *
+ * It lives in packages/client-core (one of the scanned packages) because the
+ * factory's regression proof only runs test files under packages/.
  */
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'fs';
@@ -41,7 +44,7 @@ interface TreeSitterModule {
   new (): TreeSitterParser;
 }
 
-const REPO_ROOT = join(import.meta.dir, '..', '..');
+const REPO_ROOT = join(import.meta.dir, '..', '..', '..', '..');
 // web-tree-sitter and tree-sitter-wasms are dependencies of packages/core.
 const requireFromCore = createRequire(join(REPO_ROOT, 'packages/core/package.json'));
 

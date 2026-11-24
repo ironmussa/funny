@@ -208,11 +208,7 @@ function RefLeaderLine({
   });
   if (!leaderLine) return null;
   return (
-    <svg
-      className="pointer-events-none absolute inset-0"
-      style={{ overflow: 'visible' }}
-      aria-hidden="true"
-    >
+    <svg className="pointer-events-none absolute inset-0 overflow-visible" aria-hidden="true">
       <line
         x1={leaderLine.x1}
         y1={y}
@@ -323,13 +319,10 @@ export function GraphCommitRow({
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: rowHeight,
-        transform: `translateY(${transform}px)`,
+        '--graph-row-height': `${rowHeight}px`,
+        '--graph-row-top': `${transform}px`,
       }}
+      className="absolute top-0 left-0 h-[var(--graph-row-height)] w-full [transform:translateY(var(--graph-row-top))]"
     >
       <div
         role="button"
@@ -398,8 +391,8 @@ export function GraphCommitRow({
           )}
           {/* Rem-based title/meta sizes, identical across every tab. */}
           <div
-            className="flex w-full min-w-0 shrink-0 items-center gap-1.5"
-            style={{ height: titleLineH }}
+            className="flex h-[var(--graph-title-line-height)] w-full min-w-0 shrink-0 items-center gap-1.5"
+            style={{ '--graph-title-line-height': `${titleLineH}px` }}
           >
             <HighlightText
               text={entry.message}
@@ -422,10 +415,10 @@ export function GraphCommitRow({
         {/* Aligned with the title line, not the row's middle: in a row with
             branch/tag chips the middle is the chip line. */}
         <div
-          className="flex min-w-12 shrink-0 items-center self-start"
+          className="mt-[var(--graph-time-margin-top)] flex h-[var(--graph-time-line-height)] min-w-12 shrink-0 items-center self-start"
           style={{
-            height: titleLineH,
-            marginTop: titleYForRow(entry, rowHeight) - titleLineH / 2,
+            '--graph-time-line-height': `${titleLineH}px`,
+            '--graph-time-margin-top': `${titleYForRow(entry, rowHeight) - titleLineH / 2}px`,
           }}
         >
           <HoverTimeMenu
@@ -508,13 +501,16 @@ function GraphCommitNode({
   const nodeHitboxSize = 2 * GRAPH_NODE_RADIUS;
   return (
     <div
-      style={{ width: graphViewportWidth }}
-      className="shrink-0 self-stretch overflow-hidden"
+      style={{ '--graph-viewport-width': `${graphViewportWidth}px` }}
+      className="w-[var(--graph-viewport-width)] shrink-0 self-stretch overflow-hidden"
       onWheel={onGraphGutterWheel}
     >
       <div
-        style={{ width: gutterWidth, transform: `translateX(-${graphScrollLeft}px)` }}
-        className="relative h-full"
+        style={{
+          '--graph-gutter-width': `${gutterWidth}px`,
+          '--graph-scroll-left': `-${graphScrollLeft}px`,
+        }}
+        className="relative h-full w-[var(--graph-gutter-width)] [transform:translateX(var(--graph-scroll-left))]"
       >
         <GraphGutter
           row={graphRow}
@@ -530,12 +526,11 @@ function GraphCommitNode({
           <TooltipTrigger asChild>
             <div
               aria-hidden
-              className="absolute -translate-x-1/2 -translate-y-1/2"
+              className="absolute top-[var(--graph-node-hitbox-top)] left-[var(--graph-node-hitbox-left)] size-[var(--graph-node-hitbox-size)] -translate-x-1/2 -translate-y-1/2"
               style={{
-                left: nodeCenterX,
-                top: nodeYFrac * rowHeight,
-                width: nodeHitboxSize,
-                height: nodeHitboxSize,
+                '--graph-node-hitbox-left': `${nodeCenterX}px`,
+                '--graph-node-hitbox-top': `${nodeYFrac * rowHeight}px`,
+                '--graph-node-hitbox-size': `${nodeHitboxSize}px`,
               }}
             />
           </TooltipTrigger>
@@ -592,11 +587,12 @@ function GraphCommitRefsLine({
     <div
       // -ml-3/pl-3: widen the clip box into the gap left of the chips so
       // the thread-branch marker (absolute, left of its chip) isn't cut.
-      className="mb-1.5 -ml-3 flex min-w-0 shrink-0 items-center overflow-hidden pl-3"
+      className="mb-1.5 -ml-3 flex h-[var(--graph-refs-line-height)] min-w-0 shrink-0 items-center overflow-hidden pl-3"
       style={{
-        height:
+        '--graph-refs-line-height': `${
           foldedRefs.length * GRAPH_REF_CHIP_HEIGHT_PX +
-          (foldedRefs.length - 1) * GRAPH_REF_CHIP_GAP_PX,
+          (foldedRefs.length - 1) * GRAPH_REF_CHIP_GAP_PX
+        }px`,
       }}
     >
       {/* Branches on a commit are siblings, not a hierarchy — render

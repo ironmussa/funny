@@ -142,8 +142,8 @@ function ThreadBranchMarker({ branch, color }: { branch: string; color: string }
         <span
           role="img"
           aria-label={label}
-          className="inline-flex shrink-0 items-center"
-          style={{ color }}
+          className="inline-flex shrink-0 items-center text-[color:var(--graph-thread-marker-color)]"
+          style={{ '--graph-thread-marker-color': color }}
           data-testid="graph-thread-branch-marker"
         >
           <svg
@@ -516,15 +516,16 @@ function GraphRefChip({
   return (
     <div
       className={cn(
-        'inline-flex max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
+        'inline-flex h-[var(--graph-ref-chip-height)] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full bg-[color:var(--graph-ref-chip-bg)] px-1 py-px text-[color:var(--graph-ref-chip-fg)] transition-[filter] hover:brightness-90',
         isMergedRef(gitRef) && 'opacity-60',
+        // The thread's chip is outlined in a darker shade of its own color.
+        isThreadBranch && '[box-shadow:0_0_0_1.5px_var(--graph-ref-chip-outline)]',
       )}
       style={{
-        height: GRAPH_REF_CHIP_HEIGHT_PX,
-        backgroundColor: color,
-        color: textColor,
-        // The thread's chip is outlined in a darker shade of its own color.
-        boxShadow: isThreadBranch ? `0 0 0 1.5px ${darkenHex(color, 0.35)}` : undefined,
+        '--graph-ref-chip-height': `${GRAPH_REF_CHIP_HEIGHT_PX}px`,
+        '--graph-ref-chip-bg': color,
+        '--graph-ref-chip-fg': textColor,
+        '--graph-ref-chip-outline': isThreadBranch ? darkenHex(color, 0.35) : undefined,
       }}
       data-testid={`graph-ref-chip-${gitRef.kind}:${gitRef.name}`}
       data-merged={isMergedRef(gitRef) || undefined}
@@ -605,8 +606,8 @@ export function GraphRefChips({
 
   return (
     <div
-      className="inline-flex min-w-0 shrink flex-col items-start"
-      style={{ gap: GRAPH_REF_CHIP_GAP_PX }}
+      className="inline-flex min-w-0 shrink flex-col items-start gap-[var(--graph-ref-chips-gap)]"
+      style={{ '--graph-ref-chips-gap': `${GRAPH_REF_CHIP_GAP_PX}px` }}
       data-testid="graph-ref-chips"
     >
       {refs.map((gitRef) => {

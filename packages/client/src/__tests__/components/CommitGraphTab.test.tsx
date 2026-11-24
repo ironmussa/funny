@@ -126,7 +126,8 @@ describe('GraphGutterHorizontalScroller', () => {
     const scrollbar = screen.getByTestId('graph-gutter-horizontal-scrollbar');
     expect(frame).toHaveClass('border-t');
     expect(scrollbar).toHaveClass('scrollbar-visible', 'overflow-x-auto');
-    expect(scrollbar).toHaveStyle({ width: '120px', height: '10px' });
+    expect(scrollbar.style.getPropertyValue('--graph-hscroll-viewport-width')).toBe('120px');
+    expect(scrollbar).toHaveClass('w-[var(--graph-hscroll-viewport-width)]', 'h-2.5');
 
     Object.defineProperty(scrollbar, 'scrollLeft', { configurable: true, value: 64 });
     fireEvent.scroll(scrollbar);

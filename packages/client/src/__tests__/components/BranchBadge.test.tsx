@@ -12,12 +12,6 @@ import { branchColor, graphColorKey, graphLanePastel } from '@/lib/graph-colors'
 
 import { renderWithProviders } from '../helpers/render';
 
-/** Hex `#rrggbb` → the `rgb(r, g, b)` form the DOM reports for a style. */
-function toRgb(hex: string): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-}
-
 describe('BranchBadge color', () => {
   test('matches the color of the branch tip in the History graph', () => {
     const branch = 'feat/settings-filter';
@@ -30,7 +24,9 @@ describe('BranchBadge color', () => {
     expect(branchColor(branch)).toBe(graphColor);
 
     renderWithProviders(<BranchBadge branch={branch} data-testid="badge" />);
-    expect(screen.getByTestId('badge').style.backgroundColor).toBe(toRgb(graphColor));
+    const badge = screen.getByTestId('badge');
+    expect(badge.style.getPropertyValue('--branch-badge-bg')).toBe(graphColor);
+    expect(badge).toHaveClass('bg-[color:var(--branch-badge-bg)]');
   });
 
   test('the same name gets the same color, different names can differ', () => {

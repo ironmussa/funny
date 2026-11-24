@@ -63,13 +63,17 @@ export function BranchBadge({
             // 1px off-center depending on where the row lands.
             variant === 'badge' && ['rounded-full font-medium will-change-transform', s.chip],
             className,
+            // Last, so the branch color wins over a caller's color classes
+            // (it used to be an inline style).
+            bg && 'bg-[color:var(--branch-badge-bg)] text-[color:var(--branch-badge-fg)]',
+            outlined && '[box-shadow:0_0_0_1.5px_var(--branch-badge-outline)]',
           )}
           style={
             bg
               ? {
-                  backgroundColor: bg,
-                  color: contrastText(bg),
-                  boxShadow: outlined ? `0 0 0 1.5px ${darkenHex(bg, 0.35)}` : undefined,
+                  '--branch-badge-bg': bg,
+                  '--branch-badge-fg': contrastText(bg),
+                  '--branch-badge-outline': outlined ? darkenHex(bg, 0.35) : undefined,
                 }
               : undefined
           }

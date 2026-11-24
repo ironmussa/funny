@@ -389,8 +389,8 @@ export function CommitDetailDialog({
           ) : (
             <div className="flex min-h-0 flex-1">
               <div
-                className="flex shrink-0 flex-col"
-                style={{ width: sidebarWidth }}
+                className="flex w-[var(--commit-detail-sidebar-width)] shrink-0 flex-col"
+                style={{ '--commit-detail-sidebar-width': `${sidebarWidth}px` }}
                 data-testid="commit-detail-file-tree"
               >
                 {commitFiles.length > 0 && (

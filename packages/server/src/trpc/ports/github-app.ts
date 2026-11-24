@@ -83,6 +83,26 @@ function lacking(has: Record<string, string>): string[] {
     .map(([name, level]) => `${name}: ${level}`);
 }
 
+/**
+ * A permission set as GitHub reports it. Only `read` / `write` count as held
+ * (see `lacking`), so a value of any other type reads as not held, and a
+ * missing or malformed set as holding nothing.
+ */
+const githubPermissionsSchema = z.record(z.string(), z.string().catch('')).catch({});
+
+/** `GET /app`: the App's own permissions. */
+const githubAppSchema = z.object({ permissions: githubPermissionsSchema });
+
+/** `GET /app/installations`; an answer that is not a list holds no installation. */
+const githubAppInstallationsSchema = z
+  .array(
+    z.object({
+      account: z.object({ login: z.string().optional() }).nullish(),
+      permissions: githubPermissionsSchema,
+    }),
+  )
+  .catch([]);
+
 /** What the App's permissions look like on GitHub. */
 interface AppPermissionGaps {
   /** Permissions funny asks for that the App itself does not have. */
@@ -105,7 +125,7 @@ async function appPermissionGaps(
 ): Promise<AppPermissionGaps | null> {
   const jwt = signAppJwt(app.appId, app.privateKey);
   if (jwt.isErr()) return null;
-  const get = async (path: string): Promise<unknown> => {
+  const get = async <T>(path: string, schema: z.ZodType<T>): Promise<T> => {
     const res = await doFetch(`${api}${path}`, {
       headers: {
         accept: 'application/vnd.github+json',
@@ -114,18 +134,18 @@ async function appPermissionGaps(
       },
     });
     if (!res.ok) throw new Error(`GitHub answered ${res.status} for ${path}`);
-    return res.json();
+    return schema.parse(await res.json());
   };
   try {
-    const body = (await get('/app')) as { permissions?: Record<string, string> };
-    const missingPermissions = lacking(body.permissions ?? {});
+    const body = await get('/app', githubAppSchema);
+    const missingPermissions = lacking(body.permissions);
     // The installations are a second question: without an answer, say what is known.
-    const installations = (await get('/app/installations?per_page=100').catch(() => [])) as Array<{
-      account?: { login?: string } | null;
-      permissions?: Record<string, string>;
-    }>;
-    const pendingInstallations = (Array.isArray(installations) ? installations : [])
-      .filter((installation) => lacking(installation.permissions ?? {}).length > 0)
+    const installations = await get(
+      '/app/installations?per_page=100',
+      githubAppInstallationsSchema,
+    ).catch(() => []);
+    const pendingInstallations = installations
+      .filter((installation) => lacking(installation.permissions).length > 0)
       .map((installation) => installation.account?.login ?? 'unknown account');
     return { missingPermissions, pendingInstallations };
   } catch (error) {

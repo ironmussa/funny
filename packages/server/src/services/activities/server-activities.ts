@@ -75,12 +75,12 @@ export interface ServerActivityDeps {
   newId?: () => string;
 }
 
-function messageOf(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message: unknown }).message);
+function messageOf(cause: unknown): string {
+  if (typeof cause === 'string') return cause;
+  if (cause && typeof cause === 'object' && 'message' in cause) {
+    return String((cause as { message: unknown }).message);
   }
-  return String(error);
+  return String(cause);
 }
 
 function clip(value: string, max: number): string {

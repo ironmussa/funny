@@ -21,6 +21,7 @@ import {
 import {
   BrowserSessionAgentActionKind,
   BrowserSessionController,
+  type BrowserSessionMessageSchema,
   BrowserSessionPointerKind,
   InteractiveEnvelopeSchema,
 } from '@funny/shared/browser-v1/interactive';
@@ -81,7 +82,7 @@ export function relayToUser(userId: string, event: Record<string, unknown>): voi
   browserEvents?.toUser(userId, event);
 }
 
-function jsonObject(value: unknown): JsonObject {
+function jsonObject(value: BrowserSessionData): JsonObject {
   const normalized = jsonValue(value, new WeakSet<object>());
   return normalized && typeof normalized === 'object' && !Array.isArray(normalized)
     ? normalized
@@ -103,6 +104,11 @@ function jsonValue(value: unknown, seen: WeakSet<object>): JsonValue {
 
 type BrowserSessionData = Record<string, unknown>;
 
+/** The typed browser.v1 payload of one browser-session message. */
+type BrowserSessionPayload = NonNullable<
+  Parameters<typeof create<typeof BrowserSessionMessageSchema>>[1]
+>['payload'];
+
 interface BrowserSessionDelivery {
   deliveryClass: DeliveryClass;
   delivery: BrowserDeliveryClass;
@@ -110,7 +116,7 @@ interface BrowserSessionDelivery {
 
 /** How one browser-session event travels: its typed payload plus its delivery class. */
 interface BrowserSessionMapping extends BrowserSessionDelivery {
-  payload: any;
+  payload: BrowserSessionPayload;
   priority: number;
   coalescingKey?: string;
 }
@@ -160,55 +166,70 @@ const AGENT_ACTION_KINDS: Record<string, BrowserSessionAgentActionKind> = {
   screenshot: BrowserSessionAgentActionKind.SCREENSHOT,
 };
 
-/** A whole pixel, or absent when the runner did not send a number. */
-function optionalPixel(value: unknown): number | undefined {
+/** `data[key]` as a whole pixel, or absent when the runner did not send a finite number. */
+function pixelField(data: BrowserSessionData, key: string): number | undefined {
+  const value = data[key];
   return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
 }
 
 function agentActionValue(data: Record<string, unknown>) {
   return {
     kind: AGENT_ACTION_KINDS[String(data.kind)] ?? BrowserSessionAgentActionKind.UNSPECIFIED,
-    x: optionalPixel(data.x),
-    y: optionalPixel(data.y),
-    toX: optionalPixel(data.toX),
-    toY: optionalPixel(data.toY),
-    deltaX: optionalPixel(data.deltaX),
-    deltaY: optionalPixel(data.deltaY),
+    x: pixelField(data, 'x'),
+    y: pixelField(data, 'y'),
+    toX: pixelField(data, 'toX'),
+    toY: pixelField(data, 'toY'),
+    deltaX: pixelField(data, 'deltaX'),
+    deltaY: pixelField(data, 'deltaY'),
     detail: typeof data.detail === 'string' ? data.detail.slice(0, 80) : undefined,
   };
 }
 
-function viewportOf(value: unknown): { width: number; height: number } | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  const { width, height } = value as { width?: unknown; height?: unknown };
-  if (typeof width !== 'number' || typeof height !== 'number') return undefined;
+/** `data[key]` when it is an object (its fields), otherwise absent. */
+function objectField(data: BrowserSessionData, key: string): BrowserSessionData | undefined {
+  const value = data[key];
+  // SAFETY: a non-null object's own fields are read as unknown values, never trusted further.
+  return value && typeof value === 'object' ? (value as BrowserSessionData) : undefined;
+}
+
+/** The width and height in `data`, rounded; absent unless both are numbers. */
+function viewportOf(
+  data: BrowserSessionData | undefined,
+): { width: number; height: number } | undefined {
+  if (!data) return undefined;
+  const width = numberField(data, 'width');
+  const height = numberField(data, 'height');
+  if (width === undefined || height === undefined) return undefined;
   return { width: Math.round(width), height: Math.round(height) };
 }
 
-function controllerOf(value: unknown): BrowserSessionController {
-  if (value === 'agent') return BrowserSessionController.AGENT;
-  if (value === 'user') return BrowserSessionController.USER;
+/** Who controls the session, from `data.controller`. */
+function controllerOf(data: BrowserSessionData): BrowserSessionController {
+  if (data.controller === 'agent') return BrowserSessionController.AGENT;
+  if (data.controller === 'user') return BrowserSessionController.USER;
   return BrowserSessionController.UNSPECIFIED;
 }
 
-function stringOrUndefined(value: unknown): string | undefined {
+function stringField(data: BrowserSessionData, key: string): string | undefined {
+  const value = data[key];
   return typeof value === 'string' ? value : undefined;
 }
 
-function numberOrUndefined(value: unknown): number | undefined {
+function numberField(data: BrowserSessionData, key: string): number | undefined {
+  const value = data[key];
   return typeof value === 'number' ? value : undefined;
 }
 
 /** A snapshot-recoverable mapping at priority 0, unless `overrides` says otherwise. */
 function sessionMapping(
-  payload: unknown,
+  payload: BrowserSessionPayload,
   overrides: Partial<Omit<BrowserSessionMapping, 'payload'>> = {},
 ): BrowserSessionMapping {
   return { ...SNAPSHOT_RECOVERABLE, priority: 0, ...overrides, payload };
 }
 
 /** A latest-state mapping coalesced per session under `browser-<name>:<sessionId>`. */
-function coalescedMapping(name: string, sessionId: string, payload: unknown) {
+function coalescedMapping(name: string, sessionId: string, payload: BrowserSessionPayload) {
   return sessionMapping(payload, { ...COALESCIBLE, coalescingKey: `browser-${name}:${sessionId}` });
 }
 
@@ -249,7 +270,7 @@ function dialogValue(dialog: BrowserSessionData | null | undefined) {
   return {
     type: String(dialog.type ?? ''),
     message: String(dialog.message ?? ''),
-    defaultValue: stringOrUndefined(dialog.defaultValue),
+    defaultValue: stringField(dialog, 'defaultValue'),
   };
 }
 
@@ -257,9 +278,9 @@ function consoleValue(data: BrowserSessionData) {
   return {
     level: String(data.level ?? ''),
     text: String(data.text ?? ''),
-    url: stringOrUndefined(data.url),
-    line: numberOrUndefined(data.line),
-    column: numberOrUndefined(data.column),
+    url: stringField(data, 'url'),
+    line: numberField(data, 'line'),
+    column: numberField(data, 'column'),
     occurredAtMs: BigInt(typeof data.timestamp === 'number' ? Math.floor(data.timestamp) : 0),
   };
 }
@@ -274,8 +295,8 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
         case: 'ready',
         value: {
           targetUrl: String(data.url ?? ''),
-          viewport: viewportOf(data.viewport),
-          controller: controllerOf(data.controller),
+          viewport: viewportOf(objectField(data, 'viewport')),
+          controller: controllerOf(data),
           audioMuted: data.audioMuted !== false,
         },
       }),
@@ -301,7 +322,7 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
     ({ sessionId, data }) =>
       coalescedMapping('controller', sessionId, {
         case: 'controller',
-        value: { controller: controllerOf(data.controller) },
+        value: { controller: controllerOf(data) },
       }),
   ],
   [
@@ -408,7 +429,7 @@ function browserSessionPublication(
     sessionId,
     data,
   });
-  const requestId = stringOrUndefined(data.requestId);
+  const requestId = stringField(data, 'requestId');
   return {
     scope: { kind: 'user', userId },
     logicalType: type,

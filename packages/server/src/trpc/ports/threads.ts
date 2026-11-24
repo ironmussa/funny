@@ -11,6 +11,7 @@
 import { failure, type ThreadsPort } from '@funny/api';
 import type { ThreadWithMessages } from '@funny/shared';
 import type { ThreadPatchRequest } from '@funny/shared/contracts/threads';
+import { errorMessage } from '@funny/shared/errors';
 import { ok, err } from 'neverthrow';
 
 import { repos } from '../../db/repos.js';
@@ -50,10 +51,6 @@ function childSpan(parent: ReturnType<typeof startSpan>, name: string, threadId:
     parentSpanId: parent.spanId,
     attributes: { 'thread.id': threadId },
   });
-}
-
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 function detailSpanAttributes(
@@ -186,7 +183,7 @@ export function createThreadsPort(
           hasMore: offset + threads.length < total,
         });
       } catch (e) {
-        span.end('error', errorText(e));
+        span.end('error', errorMessage(e));
         throw e;
       }
     },
@@ -263,7 +260,7 @@ export function createThreadsPort(
           viewerShareLevel,
         });
       } catch (e) {
-        span.end('error', errorText(e));
+        span.end('error', errorMessage(e));
         throw e;
       }
     },

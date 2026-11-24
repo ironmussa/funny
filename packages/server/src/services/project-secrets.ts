@@ -1,3 +1,4 @@
+import type { ProjectSecretSummary } from '@funny/shared/contracts/project-secrets';
 /**
  * @domain subdomain: Projects
  * @domain subdomain-type: supporting
@@ -13,7 +14,7 @@
  * `resolveThreadSecrets`, the single reader of decrypted values, which answers
  * the runner that runs a thread. No other method returns a value.
  */
-import type { ProjectSecretSummary } from '@funny/shared/contracts/project-secrets';
+import { errorMessage } from '@funny/shared/errors';
 import {
   SECRET_MAX_PER_SCOPE,
   secretNameMessage,
@@ -65,9 +66,9 @@ export interface ProjectSecretsDeps {
 
 type Row = typeof projectSecrets.$inferSelect;
 
-const storage = (error: unknown): { kind: 'storage'; message: string } => ({
+const storage = (cause: unknown): { kind: 'storage'; message: string } => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const accessErrors = (forbidden: string): ProjectAccessErrors<ProjectSecretError> => ({

@@ -14,9 +14,9 @@ mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mock
 
 import {
   browserSessionManager,
-  panelViewportSize,
   type BrowserSession,
 } from '../../services/browser-session-manager.js';
+import { panelViewportSize } from '../../services/browser-session/panel-input.js';
 import {
   buildBrowserSession,
   buildBrowserTab,

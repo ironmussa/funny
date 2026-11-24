@@ -113,6 +113,17 @@ import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 import { createFactoryTriage } from './factory-triage.js';
 
 /**
+ * The metadata of a `merge` that sent the change back: why, what the agent
+ * reads, and the node that regenerates it (when one does).
+ */
+type SentBackMetadata = {
+  outcome: 'sent_back';
+  why: 'conflict' | 'checks';
+  feedback: string;
+  regenerate?: string;
+};
+
+/**
  * A proof the agent can fix (its test): the flows retry it with the agent.
  * Matched by `should_retry: "$contains(error, 'Regression proof failed')"`.
  */
@@ -175,6 +186,35 @@ export const NO_CHANGE_LINE = 'The issue factory made no change for this issue. 
 
 /** Where the run's agent threads run: the enabler's runtime for the project. */
 export type FactoryThreadMode = 'local' | 'worktree' | 'sandbox';
+
+/**
+ * What the factory starts a thread with: the fields of the runner's
+ * thread-creation request (`createThreadSchema`) it sets. In `sandbox` mode
+ * the watcher sends it to the sandbox thread launcher instead (`launchFor`).
+ * A type alias, not an interface, so it stays a creation payload.
+ */
+export type FactoryLaunchBody = {
+  projectId: string;
+  title: string;
+  mode: FactoryThreadMode;
+  source: 'factory';
+  prompt: string;
+  baseBranch?: string;
+  /** Start the worktree from `origin/<baseBranch>`. */
+  baseFromRemote?: boolean;
+  /** The worktree's branch: the run's, so the thread and its pull request share it. */
+  branch?: string;
+  /** The agent may only read (`threads.read_only`). */
+  readOnly?: boolean;
+  /** What a read-only agent reads besides its checkout (the issue's text). */
+  roleInputs?: Record<string, string>;
+  provider?: string;
+  model?: string;
+  permissionMode?: string;
+  effort?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+};
 
 /** Everything a run's steps are bound to. */
 export interface FactoryRunScope {
@@ -297,7 +337,7 @@ export interface FactoryActionProviderDeps {
   /** Stop a thread this run started after it was stopped (a launch racing the stop). */
   abandon?(threadId: string): Promise<void>;
   /** Start a thread on the enabler's runner (`startThreadOnRunner` for the enabler). */
-  launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
+  launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** Resolves with the thread's terminal status (or why it never will reach one). */
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
   /** Continue the first thread for later agent steps; without it each step starts a thread. */
@@ -343,15 +383,18 @@ export interface StepOptionsEntry extends ResolvedStepOptions {
   threadId: string;
 }
 
-/** The agent options a launch or follow-up body carries (unset fields are omitted). */
-export interface StepAgentBody {
+/**
+ * The agent options a launch or follow-up body carries (unset fields are
+ * omitted). A type alias, not an interface, so it spreads into a request body.
+ */
+export type StepAgentBody = {
   provider: string;
   model: string;
   permissionMode: string;
   effort?: string;
   allowedTools?: string[];
   disallowedTools?: string[];
-}
+};
 
 /** The body fields of a step's resolved options: every kept field explicit, the rest only when set. */
 function stepAgentBody(options: ResolvedStepOptions): StepAgentBody {
@@ -683,7 +726,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     await checkpoint({ phase: 'launching', since });
     await deps.record({ launchStartedAt: since });
     const own = options.thread === 'new';
-    const body: Record<string, unknown> = {
+    const body: FactoryLaunchBody = {
       projectId: scope.projectId,
       title: titleOf(options),
       mode: scope.mode,
@@ -850,7 +893,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const checkPublished = await publishCheck(proved, testRequired);
     const proofRecord = { ...proved, checkPublished };
     await deps.record({ regressionProof: proofRecord });
-    const meta: Record<string, unknown> = { ...proofRecord };
+    const meta = { ...proofRecord };
     // What the merge gate holds: only a proof that names its commit.
     if (proofRecord.headSha) {
       lastProof = {
@@ -1336,7 +1379,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
       { event: `merge_sent_back_${why}` },
     );
-    const metadata: Record<string, unknown> = { outcome: 'sent_back', why, feedback };
+    const metadata: SentBackMetadata = { outcome: 'sent_back', why, feedback };
     if (regenerate) metadata.regenerate = regenerate;
     return { ok: true, output: 'sent_back', metadata };
   }

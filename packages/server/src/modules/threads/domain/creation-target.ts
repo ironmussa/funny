@@ -13,7 +13,16 @@
  *  - Evaluation order: scratch+project → scratch+non-local mode → missing project.
  */
 
+import type { JsonValue } from '@bufbuild/protobuf';
 import { err, ok, type Result } from 'neverthrow';
+
+/**
+ * The legacy creation envelope: a JSON object, as the client's request body
+ * carried it or as a server caller (automation, issue factory, public API)
+ * built it. It is forwarded to the runtime as JSON, where a field set to
+ * `undefined` is left out.
+ */
+export type CreationPayload = { readonly [field: string]: JsonValue | undefined };
 
 export type CreationTarget =
   | Readonly<{ kind: 'scratch'; mode: 'local' }>
@@ -40,13 +49,13 @@ export interface CreationRejection {
 export interface NormalizedCreation {
   readonly target: CreationTarget;
   /** Payload forwarded to the runtime (normalized for scratch, otherwise untouched). */
-  readonly payload: Readonly<Record<string, unknown>>;
+  readonly payload: CreationPayload;
 }
 
 const SCRATCH_TARGET: CreationTarget = Object.freeze({ kind: 'scratch', mode: 'local' });
 
 export function normalizeCreationRequest(
-  raw: Readonly<Record<string, unknown>>,
+  raw: CreationPayload,
 ): Result<NormalizedCreation, CreationRejection> {
   if (raw.isScratch === true) {
     if (raw.projectId != null) {

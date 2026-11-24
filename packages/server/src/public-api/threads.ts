@@ -11,7 +11,7 @@
  */
 
 import { failure, type ApiFailure } from '@funny/api';
-import type { AgentProvider, ThreadSource } from '@funny/shared';
+import type { AgentProvider, ImageAttachment, ThreadSource } from '@funny/shared';
 import type {
   CreateThreadInput,
   PublicModelList,
@@ -36,8 +36,25 @@ import type { PublicApiContext } from './trpc.js';
 
 const threadRepo = repos.threads();
 
+/**
+ * What v1 sends to the runner's thread-creation endpoint (fields of its
+ * `createThreadSchema`): only what v1 accepts. A type alias, not an
+ * interface, so it stays a creation payload.
+ */
+type RunnerCreateBody = {
+  projectId: string;
+  prompt: string;
+  title?: string;
+  mode: CreateThreadInput['mode'];
+  provider?: string;
+  model?: string;
+  permissionMode: CreateThreadInput['permissionMode'];
+  source: ThreadSource;
+  images?: Array<{ type: 'image'; source: ImageAttachment['source'] }>;
+};
+
 /** The body the runner's thread-creation endpoint receives: only what v1 accepts. */
-function runnerBody(input: CreateThreadInput): Record<string, unknown> {
+function runnerBody(input: CreateThreadInput): RunnerCreateBody {
   const source: ThreadSource = input.client === 'chrome_extension' ? 'chrome_extension' : 'api';
   return {
     projectId: input.projectId,

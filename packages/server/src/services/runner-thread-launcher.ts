@@ -14,7 +14,11 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { composeCreateThread, runnerPathFor } from '../modules/threads/composition.js';
-import { authenticatedUserId, type CreationIntent } from '../modules/threads/index.js';
+import {
+  authenticatedUserId,
+  type CreationIntent,
+  type CreationPayload,
+} from '../modules/threads/index.js';
 import type { RunnerPresencePort, RunnerRequestPort } from './runner-ports.js';
 import { describeResolutionFailure } from './runner-resolver.js';
 
@@ -33,7 +37,7 @@ export interface StartThreadInput {
    * Request body for the runner's thread-creation endpoint. The project (or
    * `isScratch: true`) is read from here, as for `POST /api/threads`.
    */
-  body: Record<string, unknown>;
+  body: CreationPayload;
   /** `idle` creates without starting. Defaults to `normal` (create + start). */
   intent?: CreationIntent;
 }

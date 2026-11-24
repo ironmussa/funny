@@ -63,6 +63,7 @@ import {
   type FactoryRunScope,
   type FactoryThreadMode,
   NO_CHANGE_TRIAGE_LABEL,
+  type StepAgentBody,
 } from './factory-action-provider.js';
 import {
   createFactoryBatchesRepository,
@@ -136,7 +137,7 @@ export interface FactoryFlowRunsDeps {
     content: string,
     expectedBranch?: string,
     /** The step's agent options, carried on the message body. */
-    options?: Record<string, unknown>,
+    options?: Partial<StepAgentBody>,
   ) => Promise<Result<void, string>>;
   /** The merge queue's batches (tests); default: the database's. */
   batches?: FactoryBatchesRepository;

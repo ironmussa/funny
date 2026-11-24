@@ -18,13 +18,14 @@ import type { Result } from 'neverthrow';
 import { z } from 'zod';
 
 import type { FactoryProofCheck } from './factory-pull-requests.js';
+import type { RegressionProofJobBody } from './factory-runner-jobs.js';
 import type { RegressionProofRecord } from './factory-runs.js';
 
 /** Start, poll and stop a proof job on the runner of a run's thread. */
 export interface FactoryProofDeps {
   startProof(
     threadId: string,
-    body: Record<string, unknown>,
+    body: RegressionProofJobBody,
   ): Promise<Result<{ proofId: string; state: string }, string>>;
   pollProof(
     threadId: string,
@@ -85,7 +86,7 @@ export async function proveOnRunner(
   fetchHead = false,
 ): Promise<ProofRun> {
   const timeoutMs = opts.timeoutMs ?? 600_000;
-  const body: Record<string, unknown> = {
+  const body: RegressionProofJobBody = {
     rules: opts.rules ?? [],
     supportGlobs: opts.supportGlobs ?? [],
     setupCommand: opts.setupCommand,
@@ -128,7 +129,7 @@ const unavailable = (why: string): ProofRun => ({ kind: 'unavailable', why });
 /** The proof job being waited for; `proofId` changes when it is started again. */
 interface PolledJob {
   threadId: string;
-  body: Record<string, unknown>;
+  body: RegressionProofJobBody;
   proofId: string;
   /** It was started again once already. */
   restarted: boolean;

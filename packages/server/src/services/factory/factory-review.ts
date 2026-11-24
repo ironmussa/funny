@@ -45,7 +45,11 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
-import type { IssueRunScope } from './factory-action-provider.js';
+import type {
+  FactoryLaunchBody,
+  FactoryThreadMode,
+  IssueRunScope,
+} from './factory-action-provider.js';
 import type { IntegrationScope } from './factory-integrate.js';
 import { issueInputs, issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import type { FactoryPullRequestRef } from './factory-pull-requests.js';
@@ -78,13 +82,13 @@ export const REVIEWER_DISALLOWED_TOOLS: readonly string[] = [
  * needs it, goes as a role input, never in the prompt (`factory-issue-text.ts`).
  */
 export function readOnlyRoleLaunch(input: {
-  scope: { projectId: string; mode: string; issueNumber: number };
+  scope: { projectId: string; mode: FactoryThreadMode; issueNumber: number };
   title: string;
   base: { baseBranch?: string; baseFromRemote?: boolean };
   opts: { provider?: string | null; model?: string | null; effort?: string | null };
   issue: FactoryIssueText | null;
   prompt: string;
-}): Record<string, unknown> {
+}): FactoryLaunchBody {
   return {
     projectId: input.scope.projectId,
     title: input.title.slice(0, 200),
@@ -349,7 +353,7 @@ export interface FactoryReviewerDeps {
   headSha(): Promise<Result<string, string>>;
   /** What the server found in the head commit, or null when it could not look. */
   classify(): Promise<(ReviewedChange & { sha: string }) | null>;
-  launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
+  launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** The newest review thread of this run whose title starts with `titlePrefix`, since `since`. */
   findLaunched(titlePrefix: string, since: string): Promise<string | null>;
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;

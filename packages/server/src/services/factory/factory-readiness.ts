@@ -60,18 +60,18 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
   }
   if (!workflow || typeof workflow !== 'object') return false;
   // YAML 1.1 readers turn the key `on` into `true`.
-  const record = workflow as Record<string, unknown>;
-  const on = record.on ?? record.true;
+  const on =
+    ('on' in workflow ? workflow.on : undefined) ??
+    ('true' in workflow ? workflow.true : undefined);
   if (on === 'push') return true;
   if (Array.isArray(on)) return on.includes('push');
   if (!on || typeof on !== 'object') return false;
   if (!('push' in on)) return false;
-  const push = (on as Record<string, unknown>).push;
-  if (!push || typeof push !== 'object') return true;
-  const filters = push as Record<string, unknown>;
-  const ignored = asList(filters['branches-ignore']);
+  const filters = on.push;
+  if (!filters || typeof filters !== 'object') return true;
+  const ignored = asList('branches-ignore' in filters ? filters['branches-ignore'] : undefined);
   if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
-  const branches = asList(filters.branches);
+  const branches = asList('branches' in filters ? filters.branches : undefined);
   // Only tags: no branch push runs it.
   if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
   return passesBranches(QUEUE_BRANCH, branches);

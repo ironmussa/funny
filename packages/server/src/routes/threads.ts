@@ -7,6 +7,7 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { CommentAuthor, CommentSource, Thread, ThreadComment } from '@funny/shared';
 import { threadCommentsQuery, threadDeleteQuery } from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
@@ -40,6 +41,7 @@ import {
   withForkInputs,
   threadOwnedBy,
   type CreationIntent,
+  type CreationPayload,
   type ForkVariant,
 } from '../modules/threads/index.js';
 import { forgetThreadOwnership } from '../services/data-ownership.js';
@@ -252,9 +254,11 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   if (!body.type.startsWith('workflow:') && !body.type.startsWith('pipeline:')) {
     return c.json({ error: 'type must start with "workflow:" or "pipeline:"' }, 400);
   }
-  const data: Record<string, unknown> =
+  // SAFETY: the request body was parsed as JSON, so `data` is JSON; a
+  // non-null object that is not an array is a JSON object.
+  const data: JsonObject =
     body.data && typeof body.data === 'object' && !Array.isArray(body.data)
-      ? (body.data as Record<string, unknown>)
+      ? (body.data as JsonObject)
       : {};
 
   await threadEventRepo.saveThreadEvent(id, body.type, data);
@@ -299,7 +303,7 @@ async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, st
       namespace: 'threads',
       threadId: parsed.success ? parsed.data.id : undefined,
     });
-    return c.json(created as Record<string, unknown>, status);
+    return c.json(created, status);
   }
   return c.json(toThread(row) satisfies Thread, status);
 }
@@ -312,7 +316,9 @@ async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, st
 async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent) {
   const parsed = await parseJsonBody(c, threadCreateBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  if (parsed.value.runtime === 'sandbox') return handleCreateSandboxThread(c, parsed.value);
+  // SAFETY: the request body was parsed as JSON, so every field is JSON.
+  const payload: CreationPayload = parsed.value as JsonObject;
+  if (payload.runtime === 'sandbox') return handleCreateSandboxThread(c, payload);
 
   const createThread = composeCreateThread(c.env);
   const result = await createThread({
@@ -323,7 +329,7 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
       organizationName: c.get('organizationName') as string | undefined,
     },
     intent,
-    payload: parsed.value,
+    payload,
   });
   if (result.isOk()) return createdThreadResponse(c, result.value.thread, 201);
   return creationFailureResponse(c, intent, result.error);
@@ -361,7 +367,7 @@ function creationFailureResponse(
 }
 
 /** `runtime: 'sandbox'`: the server creates the thread and starts it in its own sandbox. */
-async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<string, unknown>) {
+async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: CreationPayload) {
   const userId = c.get('userId');
   const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
   return sandboxLaunchResponse(c, result, 201);

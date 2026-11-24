@@ -41,6 +41,7 @@ import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
+import type { CreationPayload } from '../../modules/threads/index.js';
 import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import {
   startThreadOnRunner,
@@ -51,7 +52,7 @@ import {
 } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
 import { sendPush } from '../web-push.js';
-import type { FactoryThreadMode } from './factory-action-provider.js';
+import type { FactoryThreadMode, StepAgentBody } from './factory-action-provider.js';
 import {
   sameWaitReason,
   unfinishedBlockers,
@@ -85,6 +86,7 @@ import {
   type FactoryProofDeps,
 } from './factory-proof-runner.js';
 import { prNumberOf } from './factory-pull-requests.js';
+import type { FactoryStepJobBody } from './factory-runner-jobs.js';
 import {
   createFactoryRunsRepository,
   factoryRunBranch,
@@ -156,7 +158,7 @@ export interface FactoryWatcherDeps {
    */
   launchSandbox?: (
     userId: string,
-    body: Record<string, unknown>,
+    body: CreationPayload,
   ) => Promise<Result<StartedThread, StartThreadError>>;
   /** Override for tests of `runsPushedCommits` (whether the thread is isolated in a sandbox). */
   runsPushedCommits?: (threadId: string) => Promise<boolean>;
@@ -175,7 +177,7 @@ export interface FactoryWatcherDeps {
     content: string,
     expectedBranch?: string,
     /** The step's agent options, carried on the message body. */
-    options?: Record<string, unknown>,
+    options?: Partial<StepAgentBody>,
   ) => Promise<Result<void, string>>;
   /** Where the merged-run cleanup tells the enabler's browsers about the cleared threads. */
   browserEvents?: BrowserEventsPort;
@@ -259,7 +261,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
   const steps =
     d.steps ??
     ((userId: string) => ({
-      startStep: (tid: string, body: Record<string, unknown>) =>
+      startStep: (tid: string, body: FactoryStepJobBody) =>
         startFactoryStepOnRunner(d.ports, userId, tid, body),
       pollStep: (tid: string, stepId: string) =>
         pollFactoryStepOnRunner(d.ports, userId, tid, stepId),

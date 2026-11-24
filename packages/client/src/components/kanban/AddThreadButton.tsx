@@ -83,7 +83,7 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
             testIdPrefix="kanban-add-thread-search"
           />
         </div>
-        <ScrollArea className="max-h-56 py-1">
+        <ScrollArea variant="inset-y" className="max-h-56">
           <ProjectPickerResults
             projects={filtered}
             onSelect={(id) => {

@@ -3,7 +3,7 @@ import {
   type FontSizePreference,
   type ThreadViewerPreference,
 } from '@funny/client-core/stores/preferences';
-import type { ToolPermission } from '@funny/shared';
+import type { ToolPermission, UpdateProfileRequest } from '@funny/shared';
 import type { ProfileResponse } from '@funny/shared/contracts/profile';
 import { MODEL_REGISTRY } from '@funny/shared/models';
 import { create } from 'zustand';
@@ -222,7 +222,7 @@ interface SettingsState {
 }
 
 /** Save a partial settings update to the server (fire-and-forget). */
-function syncToServer(data: Record<string, any>) {
+function syncToServer(data: UpdateProfileRequest) {
   updateProfile(data).match(
     () => {},
     () => {},

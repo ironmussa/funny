@@ -89,13 +89,10 @@ export function seedThreadIndex(
  * fixture keeps its shape: `useThreadStore.setState(withThreadIndex({ threadsById, selectedThreadId }))`.
  */
 export function withThreadIndex<T extends object>(patch: T): Omit<T, IndexKey> {
-  const fields: ThreadIndexFields = {};
-  const rest: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if ((INDEX_KEYS as readonly string[]).includes(key))
-      (fields as Record<string, unknown>)[key] = value;
-    else rest[key] = value;
-  }
+  const entries = Object.entries(patch);
+  const isIndexKey = (key: string) => (INDEX_KEYS as readonly string[]).includes(key);
+  const fields: ThreadIndexFields = Object.fromEntries(entries.filter(([key]) => isIndexKey(key)));
+  const rest = Object.fromEntries(entries.filter(([key]) => !isIndexKey(key)));
   seedThreadIndex(fields);
   return rest as Omit<T, IndexKey>;
 }

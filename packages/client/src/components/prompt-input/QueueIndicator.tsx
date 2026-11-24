@@ -86,7 +86,7 @@ function QueueItemEditor({ message, index, queue }: QueueItemProps) {
           label={t('prompt.saveQueuedMessage', 'Save')}
           onClick={() => queue.saveEdit(message.id)}
           disabled={isBusy}
-          className="text-muted-foreground hover:text-foreground"
+          variant="muted-strong"
         >
           <BusyIcon busy={isBusy}>
             <Check className="icon-xs" />

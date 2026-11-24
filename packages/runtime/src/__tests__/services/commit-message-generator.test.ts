@@ -1,8 +1,23 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
-const h = (() => ({ query: vi.fn() }))();
+import { okAsync } from 'neverthrow';
+
+const h = (() => ({
+  query: vi.fn(),
+  completeOnce: vi.fn(),
+  getProfile: vi.fn(async (_userId: string): Promise<unknown> => null),
+  getProviderKey: vi.fn(async (_userId: string, _provider: string): Promise<string | null> => null),
+}))();
 mock.module('@anthropic-ai/claude-agent-sdk', () => ({ query: h.query }));
-mock.module('@funny/core/agents', () => ({ resolveSDKCliPath: () => '/sdk/cli.js' }));
+mock.module('@funny/core/agents', () => ({
+  resolveSDKCliPath: () => '/sdk/cli.js',
+  completeOnce: h.completeOnce,
+}));
+mock.module('../../services/service-registry.js', () => ({
+  getServices: () => ({
+    profile: { getProfile: h.getProfile, getProviderKey: h.getProviderKey },
+  }),
+}));
 mock.module('../../lib/logger.js', () => ({ log: { error: vi.fn() } }));
 mock.module('../../services/pipeline-prompts.js', () => ({
   COMMIT_MESSAGE_SYSTEM_PROMPT: 'system',
@@ -10,7 +25,7 @@ mock.module('../../services/pipeline-prompts.js', () => ({
 
 import { generateCommitMessage } from '../../services/commit-message-generator.js';
 
-const options = { cwd: '/repo', prompt: 'diff' };
+const options = { userId: 'user-1', cwd: '/repo', prompt: 'diff' };
 
 function stream(messages: unknown[], failure?: Error) {
   const close = vi.fn();
@@ -27,7 +42,11 @@ function stream(messages: unknown[], failure?: Error) {
 }
 
 describe('generateCommitMessage', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h.getProfile.mockImplementation(async () => null);
+    h.getProviderKey.mockImplementation(async () => null);
+  });
 
   test('prefers the result and closes the SDK query', async () => {
     const close = stream([
@@ -41,7 +60,38 @@ describe('generateCommitMessage', () => {
       maxTurns: 1,
       tools: [],
       permissionMode: 'plan',
+      model: 'claude-haiku-4-5-20251001',
+      systemPrompt: 'system',
     });
+    expect(h.getProfile).toHaveBeenCalledWith('user-1');
+  });
+
+  test('a non-default utility model reaches the LLM API backend, not the SDK', async () => {
+    h.getProfile.mockImplementation(async () => ({
+      utilityModel: { provider: 'openai', model: 'gpt-4o' },
+    }));
+    h.getProviderKey.mockImplementation(async () => 'sk-user');
+    h.completeOnce.mockImplementation(() => okAsync('TITLE: from gpt'));
+    expect(await generateCommitMessage(options)).toEqual({ text: 'TITLE: from gpt' });
+    expect(h.query).not.toHaveBeenCalled();
+    expect(h.getProviderKey).toHaveBeenCalledWith('user-1', 'openai');
+    expect(h.completeOnce.mock.calls[0][0]).toMatchObject({
+      provider: 'openai',
+      model: 'gpt-4o',
+      apiKey: 'sk-user',
+      system: 'system',
+      prompt: 'diff',
+    });
+  });
+
+  test('an openai utility model without a key fails and tries no other provider', async () => {
+    h.getProfile.mockImplementation(async () => ({
+      utilityModel: { provider: 'openai', model: 'gpt-4o' },
+    }));
+    const output = await generateCommitMessage(options);
+    expect('error' in output && output.error).toContain('openai');
+    expect(h.query).not.toHaveBeenCalled();
+    expect(h.completeOnce).not.toHaveBeenCalled();
   });
 
   test('falls back to assistant text', async () => {

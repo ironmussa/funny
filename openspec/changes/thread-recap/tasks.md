@@ -8,9 +8,9 @@
 
 ## 2. One-shot generation backends (core + runtime)
 
-- [ ] 2.1 Add `completeOnce()` in `core/agents/llm/complete.ts` (`ModelFactory.resolve` + one `/chat/completions` POST, no tools, abort signal, returns `ResultAsync`); verify with a test against a stub HTTP server: success, provider error, abort
-- [ ] 2.2 Create `runtime/services/utility-model.ts` with `runUtilityGeneration`: `claude-sdk` backend extracted from `commit-message-generator.ts` plus the `model` option, LLM API backend via `completeOnce` with the user's provider key; map missing credentials to `utility-model-unavailable` with no fallback; verify with unit tests per backend, the unavailable error and timeout cancellation
-- [ ] 2.3 Route `generateCommitMessage` through `runUtilityGeneration` with the requesting user's setting; verify `commit-message-generator.test.ts` still passes and a new case asserts a non-default setting reaches the LLM API backend
+- [x] 2.1 Add `completeOnce()` in `core/agents/llm/complete.ts` (`ModelFactory.resolve` + one `/chat/completions` POST, no tools, abort signal, returns `ResultAsync`); verify with a test against a stub HTTP server: success, provider error, abort
+- [x] 2.2 Create `runtime/services/utility-model.ts` with `runUtilityGeneration`: `claude-sdk` backend extracted from `commit-message-generator.ts` plus the `model` option, LLM API backend via `completeOnce` with the user's provider key; map missing credentials to `utility-model-unavailable` with no fallback; verify with unit tests per backend, the unavailable error and timeout cancellation
+- [x] 2.3 Route `generateCommitMessage` through `runUtilityGeneration` with the requesting user's setting; verify `commit-message-generator.test.ts` still passes and a new case asserts a non-default setting reaches the LLM API backend
 
 ## 3. Recap generation (runtime + server proxy)
 

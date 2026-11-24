@@ -23,7 +23,7 @@ import {
   type WSBrowserSessionDialogData,
 } from '@funny/shared';
 import type { AnnotationDomInfo } from '@funny/shared/dom/extract';
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
 
 import {
   BROWSER_SESSION_VIEWPORT_HEIGHT,
@@ -460,6 +460,217 @@ function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+type PanelSet = StoreApi<BrowserPanelState>['setState'];
+type PanelGet = StoreApi<BrowserPanelState>['getState'];
+
+type AnnotationActionKeys =
+  | 'resetAnnotationTools'
+  | 'setTool'
+  | 'setDrawColor'
+  | 'addAnnotation'
+  | 'updateAnnotationNote'
+  | 'updateAnnotationDom'
+  | 'updateRegionDom'
+  | 'removeAnnotation'
+  | 'setDrawCanvasRef'
+  | 'clearDraw'
+  | 'clearAllAnnotations'
+  | 'toggleOverlaysVisibility';
+
+/** Annotation tools and the annotations drawn over the page. */
+function createAnnotationActions(
+  set: PanelSet,
+  get: PanelGet,
+): Pick<BrowserPanelState, AnnotationActionKeys> {
+  return {
+    resetAnnotationTools: () => {
+      const state = get();
+      if (state.animationsPaused) state.toggleAnimationsPaused();
+      set({
+        tool: 'browse',
+        inspectActive: false,
+        showTestIds: false,
+      });
+    },
+
+    setTool: (tool) => set({ tool }),
+
+    setDrawColor: (drawColor) => set({ drawColor }),
+
+    addAnnotation: (a) => {
+      const id = newId();
+      log.debug('annotation added', { kind: a.kind, id });
+      metric('browser_panel.annotation_added', 1, {
+        type: 'sum',
+        attributes: { kind: a.kind },
+      });
+      set((state) => ({
+        annotations: [...state.annotations, { ...a, id } as Annotation],
+      }));
+      return id;
+    },
+
+    updateAnnotationNote: (id, note) =>
+      set((state) => ({
+        annotations: state.annotations.map((a) => (a.id === id ? { ...a, note } : a)),
+      })),
+
+    updateAnnotationDom: (id, dom) =>
+      set((state) => ({
+        annotations: state.annotations.map((a) =>
+          a.id === id && a.kind === 'pin' ? { ...a, dom: dom ?? undefined } : a,
+        ),
+      })),
+
+    updateRegionDom: (id, dom) =>
+      set((state) => ({
+        annotations: state.annotations.map((a) =>
+          a.id === id && a.kind === 'region' ? { ...a, dom: dom ?? undefined } : a,
+        ),
+      })),
+
+    removeAnnotation: (id) =>
+      set((state) => ({
+        annotations: state.annotations.filter((a) => a.id !== id),
+      })),
+
+    setDrawCanvasRef: (canvas) => set({ drawCanvasRef: canvas }),
+
+    clearDraw: () => {
+      const canvas = get().drawCanvasRef;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      set((state) => ({
+        annotations: state.annotations.filter((a) => a.kind !== 'draw'),
+      }));
+    },
+
+    clearAllAnnotations: () => {
+      const canvas = get().drawCanvasRef;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      log.info('clear all annotations');
+      set({ annotations: [] });
+    },
+
+    toggleOverlaysVisibility: () => set((state) => ({ overlaysVisible: !state.overlaysVisible })),
+  };
+}
+
+type SessionEventActionKeys =
+  | 'setSessionViewport'
+  | 'handleSessionNotFound'
+  | 'setSessionController'
+  | 'setSessionDialog'
+  | 'setSessionAudio'
+  | 'setAudioMuted'
+  | 'resizeViewport'
+  | 'setUserControl'
+  | 'answerDialog'
+  | 'clearBrowserProfile'
+  | 'setSessionStatus';
+
+/** Runner events about the session, and the inputs the panel sends to it. */
+function createSessionEventActions(
+  set: PanelSet,
+  get: PanelGet,
+): Pick<BrowserPanelState, SessionEventActionKeys> {
+  return {
+    setSessionViewport: (sessionId, width, height) => {
+      if (get().sessionId !== sessionId) return;
+      set({ viewport: { width, height } });
+    },
+
+    handleSessionNotFound: (sessionId) => {
+      if (get().sessionId !== sessionId) return;
+      set({ ...DETACHED });
+    },
+
+    setSessionController: (sessionId, controller) => {
+      if (get().sessionId !== sessionId) return;
+      if (controller !== 'user') get().resetAnnotationTools();
+      set({ controller });
+    },
+
+    setSessionDialog: (sessionId, dialog) => {
+      if (get().sessionId !== sessionId) return;
+      set({ dialog });
+    },
+
+    setSessionAudio: (sessionId, muted) => {
+      if (get().sessionId !== sessionId) return;
+      set({ audioMuted: muted });
+    },
+
+    setAudioMuted: async (muted) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.input(sessionId, { kind: 'audio', muted });
+      metric('browser_panel.audio_toggled', 1, {
+        type: 'sum',
+        attributes: { muted: String(muted) },
+      });
+    },
+
+    resizeViewport: async (width, height) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      // The runner answers with `browser-session:viewport`, which updates `viewport`.
+      browserSessionClient.input(sessionId, { kind: 'viewport', width, height });
+      metric('browser_panel.viewport_resized', 1, {
+        type: 'sum',
+        attributes: { size: `${width}x${height}` },
+      });
+    },
+
+    setUserControl: async (userControls) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      if (!userControls) get().resetAnnotationTools();
+      browserSessionClient.input(sessionId, {
+        kind: userControls ? 'takeControl' : 'releaseControl',
+      });
+      metric('browser_panel.control_changed', 1, {
+        type: 'sum',
+        attributes: { controller: userControls ? 'user' : 'agent' },
+      });
+    },
+
+    answerDialog: async (accept, promptText) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.input(sessionId, { kind: 'dialog', accept, promptText });
+      set({ dialog: null });
+    },
+
+    clearBrowserProfile: async () => {
+      const { sessionId } = get();
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.close(sessionId ?? 'browser-profile', 'clear-profile');
+      if (sessionId) {
+        const { clearLatestFrame } = await loadFrames();
+        clearLatestFrame(sessionId);
+      }
+      metric('browser_panel.profile_cleared', 1, { type: 'sum' });
+      set({ ...DETACHED, url: '', loadedUrl: null });
+    },
+
+    setSessionStatus: (status, error = null) =>
+      set((state) => ({
+        sessionStatus: status,
+        sessionError: error ?? state.sessionError,
+      })),
+  };
+}
+
 export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   ...FRESH,
   openByThread: {},
@@ -493,81 +704,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
   setLoadError: (msg) => set({ loadError: msg }),
 
-  resetAnnotationTools: () => {
-    const state = get();
-    if (state.animationsPaused) state.toggleAnimationsPaused();
-    set({
-      tool: 'browse',
-      inspectActive: false,
-      showTestIds: false,
-    });
-  },
-
-  setTool: (tool) => set({ tool }),
-
-  setDrawColor: (drawColor) => set({ drawColor }),
-
-  addAnnotation: (a) => {
-    const id = newId();
-    log.debug('annotation added', { kind: a.kind, id });
-    metric('browser_panel.annotation_added', 1, {
-      type: 'sum',
-      attributes: { kind: a.kind },
-    });
-    set((state) => ({
-      annotations: [...state.annotations, { ...a, id } as Annotation],
-    }));
-    return id;
-  },
-
-  updateAnnotationNote: (id, note) =>
-    set((state) => ({
-      annotations: state.annotations.map((a) => (a.id === id ? { ...a, note } : a)),
-    })),
-
-  updateAnnotationDom: (id, dom) =>
-    set((state) => ({
-      annotations: state.annotations.map((a) =>
-        a.id === id && a.kind === 'pin' ? { ...a, dom: dom ?? undefined } : a,
-      ),
-    })),
-
-  updateRegionDom: (id, dom) =>
-    set((state) => ({
-      annotations: state.annotations.map((a) =>
-        a.id === id && a.kind === 'region' ? { ...a, dom: dom ?? undefined } : a,
-      ),
-    })),
-
-  removeAnnotation: (id) =>
-    set((state) => ({
-      annotations: state.annotations.filter((a) => a.id !== id),
-    })),
-
-  setDrawCanvasRef: (canvas) => set({ drawCanvasRef: canvas }),
-
-  clearDraw: () => {
-    const canvas = get().drawCanvasRef;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    }
-    set((state) => ({
-      annotations: state.annotations.filter((a) => a.kind !== 'draw'),
-    }));
-  },
-
-  clearAllAnnotations: () => {
-    const canvas = get().drawCanvasRef;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    }
-    log.info('clear all annotations');
-    set({ annotations: [] });
-  },
-
-  toggleOverlaysVisibility: () => set((state) => ({ overlaysVisible: !state.overlaysVisible })),
+  ...createAnnotationActions(set, get),
 
   setBrowserPanelWidth: (w) => {
     const max = typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.8) : MIN_WIDTH * 4;
@@ -718,94 +855,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     void get().attachThreadSession(threadId);
   },
 
-  setSessionViewport: (sessionId, width, height) => {
-    if (get().sessionId !== sessionId) return;
-    set({ viewport: { width, height } });
-  },
-
-  handleSessionNotFound: (sessionId) => {
-    if (get().sessionId !== sessionId) return;
-    set({ ...DETACHED });
-  },
-
-  setSessionController: (sessionId, controller) => {
-    if (get().sessionId !== sessionId) return;
-    if (controller !== 'user') get().resetAnnotationTools();
-    set({ controller });
-  },
-
-  setSessionDialog: (sessionId, dialog) => {
-    if (get().sessionId !== sessionId) return;
-    set({ dialog });
-  },
-
-  setSessionAudio: (sessionId, muted) => {
-    if (get().sessionId !== sessionId) return;
-    set({ audioMuted: muted });
-  },
-
-  setAudioMuted: async (muted) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    browserSessionClient.input(sessionId, { kind: 'audio', muted });
-    metric('browser_panel.audio_toggled', 1, {
-      type: 'sum',
-      attributes: { muted: String(muted) },
-    });
-  },
-
-  resizeViewport: async (width, height) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    // The runner answers with `browser-session:viewport`, which updates `viewport`.
-    browserSessionClient.input(sessionId, { kind: 'viewport', width, height });
-    metric('browser_panel.viewport_resized', 1, {
-      type: 'sum',
-      attributes: { size: `${width}x${height}` },
-    });
-  },
-
-  setUserControl: async (userControls) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    if (!userControls) get().resetAnnotationTools();
-    browserSessionClient.input(sessionId, {
-      kind: userControls ? 'takeControl' : 'releaseControl',
-    });
-    metric('browser_panel.control_changed', 1, {
-      type: 'sum',
-      attributes: { controller: userControls ? 'user' : 'agent' },
-    });
-  },
-
-  answerDialog: async (accept, promptText) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    browserSessionClient.input(sessionId, { kind: 'dialog', accept, promptText });
-    set({ dialog: null });
-  },
-
-  clearBrowserProfile: async () => {
-    const { sessionId } = get();
-    const { browserSessionClient } = await loadClient();
-    browserSessionClient.close(sessionId ?? 'browser-profile', 'clear-profile');
-    if (sessionId) {
-      const { clearLatestFrame } = await loadFrames();
-      clearLatestFrame(sessionId);
-    }
-    metric('browser_panel.profile_cleared', 1, { type: 'sum' });
-    set({ ...DETACHED, url: '', loadedUrl: null });
-  },
-
-  setSessionStatus: (status, error = null) =>
-    set((state) => ({
-      sessionStatus: status,
-      sessionError: error ?? state.sessionError,
-    })),
+  ...createSessionEventActions(set, get),
 
   toggleShowTestIds: () => set((state) => ({ showTestIds: !state.showTestIds })),
 

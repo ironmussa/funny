@@ -100,6 +100,49 @@ interface TestState {
   reset: () => void;
 }
 
+/** Overwrite only the fields a network update actually carries, so a later
+ *  phase (response / completed / failure) does not clobber earlier values. */
+function mergeNetworkEntry(e: TestNetworkEntry, update: TestNetworkEntry): TestNetworkEntry {
+  const merged = { ...e };
+  if (update.status != null) merged.status = update.status;
+  if (update.statusText) merged.statusText = update.statusText;
+  if (update.mimeType) merged.mimeType = update.mimeType;
+  if (update.resourceType) merged.resourceType = update.resourceType;
+  if (update.method) merged.method = update.method;
+  if (update.url) merged.url = update.url;
+  if (update.size != null) merged.size = update.size;
+  if (update.failed) merged.failed = update.failed;
+  if (update.errorText) merged.errorText = update.errorText;
+  if (update.requestHeaders) merged.requestHeaders = update.requestHeaders;
+  if (update.responseHeaders) merged.responseHeaders = update.responseHeaders;
+  if (update.postData) merged.postData = update.postData;
+  if (update.responseBody) merged.responseBody = update.responseBody;
+  if (update.responseBodyBase64 != null) merged.responseBodyBase64 = update.responseBodyBase64;
+  if (update.endTime) {
+    merged.endTime = update.endTime;
+    if (merged.startTime) merged.duration = update.endTime - merged.startTime;
+  }
+  return merged;
+}
+
+/** State reset when a run starts: clears the previous run's output and debug data. */
+function runStartState(s: TestState, file: string): Partial<TestState> {
+  return {
+    outputLines: [],
+    consoleEntries: [],
+    networkEntries: [],
+    errorEntries: [],
+    actions: [],
+    hoveredActionIndex: -1,
+    selectedActionIndex: -1,
+    frameHistory: [],
+    isStreaming: false,
+    fileStatuses: { ...s.fileStatuses, [file]: 'running' },
+    activeFile: file,
+    isRunning: true,
+  };
+}
+
 export const useTestStore = create<TestState>((set, get) => ({
   files: [],
   isRunning: false,
@@ -134,21 +177,7 @@ export const useTestStore = create<TestState>((set, get) => ({
   },
 
   startRun: async (projectId: string, file: string) => {
-    // Clear previous output and debug data
-    set((s) => ({
-      outputLines: [],
-      consoleEntries: [],
-      networkEntries: [],
-      errorEntries: [],
-      actions: [],
-      hoveredActionIndex: -1,
-      selectedActionIndex: -1,
-      frameHistory: [],
-      isStreaming: false,
-      fileStatuses: { ...s.fileStatuses, [file]: 'running' },
-      activeFile: file,
-      isRunning: true,
-    }));
+    set((s) => runStartState(s, file));
 
     const { selectedProjects } = get();
     const result = await api.runTest(projectId, file, undefined, selectedProjects);
@@ -164,20 +193,7 @@ export const useTestStore = create<TestState>((set, get) => ({
   },
 
   startSpecRun: async (projectId: string, file: string, line: number, project?: string) => {
-    set((s) => ({
-      outputLines: [],
-      consoleEntries: [],
-      networkEntries: [],
-      errorEntries: [],
-      actions: [],
-      hoveredActionIndex: -1,
-      selectedActionIndex: -1,
-      frameHistory: [],
-      isStreaming: false,
-      fileStatuses: { ...s.fileStatuses, [file]: 'running' },
-      activeFile: file,
-      isRunning: true,
-    }));
+    set((s) => runStartState(s, file));
 
     // If a specific browser project is given (e.g. clicking "chromium" under a spec), use it.
     // Otherwise use all selected projects.
@@ -292,30 +308,9 @@ export const useTestStore = create<TestState>((set, get) => ({
       // Update existing entry with response/completed/failure info
       // Only overwrite fields that have actual values to avoid clobbering
       return {
-        networkEntries: s.networkEntries.map((e) => {
-          if (e.id !== data.entry.id) return e;
-          const merged = { ...e };
-          if (data.entry.status != null) merged.status = data.entry.status;
-          if (data.entry.statusText) merged.statusText = data.entry.statusText;
-          if (data.entry.mimeType) merged.mimeType = data.entry.mimeType;
-          if (data.entry.resourceType) merged.resourceType = data.entry.resourceType;
-          if (data.entry.method) merged.method = data.entry.method;
-          if (data.entry.url) merged.url = data.entry.url;
-          if (data.entry.size != null) merged.size = data.entry.size;
-          if (data.entry.failed) merged.failed = data.entry.failed;
-          if (data.entry.errorText) merged.errorText = data.entry.errorText;
-          if (data.entry.requestHeaders) merged.requestHeaders = data.entry.requestHeaders;
-          if (data.entry.responseHeaders) merged.responseHeaders = data.entry.responseHeaders;
-          if (data.entry.postData) merged.postData = data.entry.postData;
-          if (data.entry.responseBody) merged.responseBody = data.entry.responseBody;
-          if (data.entry.responseBodyBase64 != null)
-            merged.responseBodyBase64 = data.entry.responseBodyBase64;
-          if (data.entry.endTime) {
-            merged.endTime = data.entry.endTime;
-            if (merged.startTime) merged.duration = data.entry.endTime - merged.startTime;
-          }
-          return merged;
-        }),
+        networkEntries: s.networkEntries.map((e) =>
+          e.id === data.entry.id ? mergeNetworkEntry(e, data.entry) : e,
+        ),
       };
     });
   },

@@ -424,10 +424,12 @@ export function busyPathsOf(
     stackedOn?: { runId: string } | null;
   }>,
   exceptRunId: string,
+  /** The run `exceptRunId` is stacked on (D10): its paths do not count either. */
+  stackedOnRunId: string | null = null,
 ): Array<{ issue: number; paths: string[] }> {
   return runs.flatMap((run) => {
-    // A blocker is not held by the runs stacked on it: they wait for it to merge.
-    if (run.stackedOn?.runId === exceptRunId) return [];
+    // Neither way round: a stacked run and its blocker do not hold each other.
+    if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
     const paths = run.triage?.decision === 'ready' ? (run.triage.contract?.likelyPaths ?? []) : [];
     return run.id !== exceptRunId && paths.length > 0 && WORKING_ON_PATHS.has(run.state)
       ? [{ issue: run.issueNumber, paths }]

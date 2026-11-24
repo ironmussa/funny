@@ -755,7 +755,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
       busyPaths: async () => {
         const others = await deps.runs.inFlight(job.factory.id);
-        return others.isOk() ? busyPathsOf(others.value, job.run.id) : [];
+        return others.isOk()
+          ? busyPathsOf(others.value, job.run.id, job.run.stackedOn?.runId ?? null)
+          : [];
       },
       issueUpdatedAt: async () => {
         const issue = await deps.github.getIssue(

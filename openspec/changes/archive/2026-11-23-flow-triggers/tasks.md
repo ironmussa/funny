@@ -36,4 +36,4 @@
 ## 6. Integration check
 
 - [x] 6.1 Run `bun run lint`, `bun run typecheck`, the full server and client suites and `bunx fallow audit`; verify all pass
-- [ ] 6.2 In a running app against a test repository, schedule a flow with one agent step and a `notify`, wait for an occurrence and confirm the run reaches `done` on the board; start the same flow with "Run a flow"; confirm `issue-to-merge` is refused for a schedule
+- [x] 6.2 In a running app against a test repository, schedule a flow with one agent step and a `notify`, wait for an occurrence and confirm the run reaches `done` on the board; start the same flow with "Run a flow"; confirm `issue-to-merge` is refused for a schedule

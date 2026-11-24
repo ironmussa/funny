@@ -12,7 +12,11 @@ import {
 import { useMemo, useCallback, useEffect, useRef } from 'react';
 import '@xyflow/react/dist/style.css';
 
-import { generateReactFlowGraph, EVFLOW_COLORS } from '../../../src/generators/react-flow';
+import {
+  generateReactFlowGraph,
+  EVFLOW_COLORS,
+  type RFNode,
+} from '../../../src/generators/react-flow';
 import type { ElementKind } from '../../../src/types';
 import { applyDagreLayout } from '../lib/layout';
 import { useViewerStore } from '../stores/viewer-store';
@@ -20,11 +24,29 @@ import { EvflowNode } from './evflow-node';
 
 const nodeTypes = { evflowNode: EvflowNode };
 
+const ELEMENT_KINDS: ElementKind[] = [
+  'command',
+  'event',
+  'readModel',
+  'automation',
+  'aggregate',
+  'screen',
+  'external',
+  'saga',
+];
+
 const miniMapNodeColor = (node: Node) => {
-  const kind = node.data?.kind as ElementKind | undefined;
-  if (kind && kind in EVFLOW_COLORS) return EVFLOW_COLORS[kind];
+  const kind = ELEMENT_KINDS.find((k) => k === node.data?.kind);
+  if (kind) return EVFLOW_COLORS[kind];
   return '#64748b';
 };
+
+/** The slice-filtered graph after Dagre layout. */
+interface LaidOutGraph {
+  layoutNodes: RFNode[];
+  layoutEdges: Edge[];
+  allEdges: Edge[];
+}
 
 /**
  * Given a set of node IDs, find all directly connected node IDs via edges.
@@ -50,9 +72,8 @@ export function GraphView() {
 
   // Build the base graph — filtered by slice only, NOT by search or kind
   // Search and kind now highlight instead of removing
-  const { layoutNodes, layoutEdges, allEdges } = useMemo(() => {
-    if (!model)
-      return { layoutNodes: [] as Node[], layoutEdges: [] as Edge[], allEdges: [] as Edge[] };
+  const { layoutNodes, layoutEdges, allEdges } = useMemo((): LaidOutGraph => {
+    if (!model) return { layoutNodes: [], layoutEdges: [], allEdges: [] };
 
     const graph = generateReactFlowGraph(model, {
       slice: activeSlice ?? undefined,
@@ -79,9 +100,9 @@ export function GraphView() {
 
     const laid = applyDagreLayout(filteredNodes, filteredEdges, 'LR');
     return {
-      layoutNodes: laid as Node[],
-      layoutEdges: filteredEdges as Edge[],
-      allEdges: filteredEdges as Edge[],
+      layoutNodes: laid,
+      layoutEdges: filteredEdges,
+      allEdges: filteredEdges,
     };
   }, [model, activeSlice, activeKind]);
 
@@ -122,8 +143,8 @@ export function GraphView() {
       const q = searchQuery.toLowerCase();
       for (const node of layoutNodes) {
         if (node.type === 'group') continue;
-        const label = (node.data?.label as string) ?? '';
-        const desc = (node.data?.description as string) ?? '';
+        const label = node.data?.label ?? '';
+        const desc = node.data?.description ?? '';
         if (label.toLowerCase().includes(q) || desc.toLowerCase().includes(q)) {
           primaryIds.add(node.id);
         }

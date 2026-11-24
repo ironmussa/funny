@@ -11,6 +11,16 @@ interface ThreadProfileSnapshot {
   initialRowCount: number;
 }
 
+declare global {
+  interface Window {
+    /** Installed by `packages/client/src/benchmarks/thread-viewer.tsx` (`ThreadViewerProfile`). */
+    funnyThreadProfile?: ThreadProfileSnapshot & {
+      scrollSweep: () => Promise<{ meanMs: number; p95Ms: number; maxMs: number; samples: number }>;
+      switchThread: () => Promise<number>;
+    };
+  }
+}
+
 const clientDir = resolve(import.meta.dir, '../packages/client');
 const outputDir = `/tmp/funny-client-profile-${process.pid}`;
 
@@ -124,15 +134,12 @@ try {
   if (errors.length > 0) throw new Error(`Browser profiler errors: ${errors.join('; ')}`);
 
   const before = await captureSnapshot(cdp);
-  const profile = await page.evaluate(
-    () =>
-      ({
-        viewer: window.funnyThreadProfile!.viewer,
-        markdownRenderer: window.funnyThreadProfile!.markdownRenderer,
-        messageCount: window.funnyThreadProfile!.messageCount,
-        initialRowCount: window.funnyThreadProfile!.initialRowCount,
-      }) as ThreadProfileSnapshot,
-  );
+  const profile = await page.evaluate((): ThreadProfileSnapshot => ({
+    viewer: window.funnyThreadProfile!.viewer,
+    markdownRenderer: window.funnyThreadProfile!.markdownRenderer,
+    messageCount: window.funnyThreadProfile!.messageCount,
+    initialRowCount: window.funnyThreadProfile!.initialRowCount,
+  }));
   const scrollSweep = await page.evaluate(() => window.funnyThreadProfile!.scrollSweep());
   const threadSwitchMs = await page.evaluate(() => window.funnyThreadProfile!.switchThread());
   const after = {

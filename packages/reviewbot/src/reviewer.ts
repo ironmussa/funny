@@ -10,8 +10,6 @@ import {
   defaultProcessFactory,
   type IAgentProcess,
   type IAgentProcessFactory,
-  type CLIAssistantMessage,
-  type CLIResultMessage,
 } from '@funny/core/agents';
 import { getPRInfo, getPRDiff, postPRReview } from '@funny/core/git';
 import type { ReviewEvent } from '@funny/core/git';
@@ -49,7 +47,15 @@ const VALID_CATEGORIES = new Set<ReviewFindingCategory>([
   'maintainability',
 ]);
 
-function parseReviewOutput(text: string): ParsedReviewOutput {
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function parseReviewOutput(text: string): ParsedReviewOutput & { findings: CodeReviewFinding[] } {
   // Extract JSON from markdown code blocks or raw JSON
   const jsonMatch =
     text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*"summary"[\s\S]*\})/);
@@ -61,18 +67,18 @@ function parseReviewOutput(text: string): ParsedReviewOutput {
   try {
     const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0]);
 
-    const summary = typeof parsed.summary === 'string' ? parsed.summary : 'Review completed.';
+    const summary = isString(parsed.summary) ? parsed.summary : 'Review completed.';
 
     const findings = Array.isArray(parsed.findings)
       ? parsed.findings
-          .filter((f: any) => f && typeof f.description === 'string' && typeof f.file === 'string')
+          .filter((f: any) => f && isString(f.description) && isString(f.file))
           .map((f: any) => ({
             severity: VALID_SEVERITIES.has(f.severity) ? f.severity : 'low',
             category: VALID_CATEGORIES.has(f.category) ? f.category : 'logic',
             file: f.file,
-            line: typeof f.line === 'number' ? f.line : undefined,
+            line: isNumber(f.line) ? f.line : undefined,
             description: f.description,
-            suggestion: typeof f.suggestion === 'string' ? f.suggestion : undefined,
+            suggestion: isString(f.suggestion) ? f.suggestion : undefined,
           }))
       : [];
 
@@ -103,7 +109,7 @@ function callAgent(
       prompt: fullPrompt,
       cwd,
       model,
-      provider: provider as any,
+      provider,
       maxTurns: 1,
       permissionMode: 'plan', // read-only, no tool execution needed
     });
@@ -114,16 +120,14 @@ function callAgent(
 
     agentProcess.on('message', (msg) => {
       if (msg.type === 'assistant') {
-        const assistantMsg = msg as CLIAssistantMessage;
-        for (const block of assistantMsg.message.content) {
+        for (const block of msg.message.content) {
           if (block.type === 'text') {
             lastAssistantText += block.text;
           }
         }
       }
       if (msg.type === 'result') {
-        const resultMsg = msg as CLIResultMessage;
-        resultText = resultMsg.result ?? lastAssistantText;
+        resultText = msg.result ?? lastAssistantText;
       }
     });
 
@@ -216,7 +220,7 @@ export class PRReviewer {
 
     // Step 3: Parse LLM output into structured findings
     const parsed = parseReviewOutput(llmOutput);
-    const findings: CodeReviewFinding[] = parsed.findings as CodeReviewFinding[];
+    const findings: CodeReviewFinding[] = parsed.findings;
 
     // Step 4: Post review to GitHub
     const reviewEvent: ReviewEvent = decideReviewEvent(findings);

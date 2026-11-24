@@ -147,7 +147,7 @@ async function runCoreAgent(
     permissionMode: request.agent.permissionMode,
     allowedTools: [...request.agent.allowedTools],
     disallowedTools: [...request.agent.disallowedTools],
-    mcpServers: request.agent.mcpServers as Record<string, unknown> | undefined,
+    mcpServers: request.agent.mcpServers,
     systemPrefix: request.agent.instructions,
     effort: request.agent.effort,
     images: request.images,
@@ -258,15 +258,15 @@ function normalizeCoreMessage(msg: unknown): HarnessEvent[] {
           type: 'session.message',
           timestamp: nowIso(),
           role: 'assistant',
-          text: typeof part.text === 'string' ? part.text : '',
+          text: isString(part.text) ? part.text : '',
           raw: msg,
         });
       } else if (part.type === 'tool_use') {
         events.push({
           type: 'session.tool_call',
           timestamp: nowIso(),
-          id: typeof part.id === 'string' ? part.id : undefined,
-          name: typeof part.name === 'string' ? part.name : 'unknown',
+          id: isString(part.id) ? part.id : undefined,
+          name: isString(part.name) ? part.name : 'unknown',
           input: part.input,
           raw: msg,
         });
@@ -301,6 +301,10 @@ function isResultMessage(msg: unknown): msg is {
   errors?: string[];
 } {
   return isRecord(msg) && msg.type === 'result' && typeof msg.session_id === 'string';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
 function isRecord(value: unknown): value is Record<string, any> {
@@ -361,6 +365,8 @@ function makeId(prefix: string): string {
 
 async function loadDefaultProcessFactory(): Promise<CoreProcessFactoryLike> {
   const specifier = '@funny/core/agents';
+  // SAFETY: '@funny/core/agents' exports `defaultProcessFactory` (core/src/agents/index.ts);
+  // the specifier is a variable only so harness does not statically depend on core.
   const mod = (await import(specifier)) as { defaultProcessFactory: CoreProcessFactoryLike };
   return mod.defaultProcessFactory;
 }

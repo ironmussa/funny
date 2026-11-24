@@ -114,6 +114,8 @@ export async function runWorkflow<TCtx extends HarnessWorkflowContext>(
 
   const progress = options.progress ?? nullReporter;
   const tools = options.tools ?? createToolRegistry();
+  // SAFETY: runWorkflow's contract is that initialContext supplies every field TCtx adds to
+  // HarnessWorkflowContext; the base context fields are all set below.
   const ctx = {
     ...(options.initialContext ?? {}),
     cwd: options.cwd,

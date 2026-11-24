@@ -160,6 +160,137 @@ function shouldCheckNewFiles(prev: Set<string>, fileCount: number): boolean {
   return prev.size === 0 || fileCount > prev.size;
 }
 
+interface SubmoduleEntry {
+  submodulePath: string;
+  innerPath: string;
+  staged: boolean;
+}
+
+/** Where a diff comes from: the thread, or the project when there is none. */
+interface DiffSource {
+  threadId: string | undefined;
+  projectId: string | null;
+}
+
+/**
+ * One file's diff, read through its submodule when it is an inner file of an
+ * expanded submodule. `context: 'full'` asks for the whole file.
+ */
+function fetchFileDiff(
+  { threadId, projectId }: DiffSource,
+  filePath: string,
+  file: SubmoduleEntry | { staged: boolean },
+  signal: AbortSignal | undefined,
+  context?: 'full',
+) {
+  const extra = context ? ([context] as const) : ([] as const);
+  if ('submodulePath' in file) {
+    return threadId
+      ? gitApi.getSubmoduleFileDiff(
+          threadId,
+          file.submodulePath,
+          file.innerPath,
+          file.staged,
+          signal,
+          ...extra,
+        )
+      : gitApi.projectSubmoduleFileDiff(
+          projectId!,
+          file.submodulePath,
+          file.innerPath,
+          file.staged,
+          signal,
+          ...extra,
+        );
+  }
+  return threadId
+    ? gitApi.getFileDiff(threadId, filePath, file.staged, signal, ...extra)
+    : gitApi.projectFileDiff(projectId!, filePath, file.staged, signal, ...extra);
+}
+
+interface EnsureSummaryLoadedArgs {
+  reviewPaneOpen: boolean;
+  hasGitContext: boolean;
+  effectiveThreadId: string | undefined;
+  projectModeId: string | null;
+  currentBranch: string | undefined;
+  dirtyFileCount: number | undefined;
+  linesAdded: number | undefined;
+  linesDeleted: number | undefined;
+  summaryCount: number;
+  loading: boolean;
+  loadError: boolean;
+  refresh: () => Promise<void>;
+  ensureLoadedKeyRef: React.MutableRefObject<string | null>;
+}
+
+function useEnsureSummaryLoaded({
+  reviewPaneOpen,
+  hasGitContext,
+  effectiveThreadId,
+  projectModeId,
+  currentBranch,
+  dirtyFileCount,
+  linesAdded,
+  linesDeleted,
+  summaryCount,
+  loading,
+  loadError,
+  refresh,
+  ensureLoadedKeyRef,
+}: EnsureSummaryLoadedArgs): void {
+  // Ensure the visible Changes tab loads its summary, once per (context +
+  // git-status snapshot). This single effect covers two cases that used to be
+  // separate (and raced each other):
+  //   1. Initial mount while already open — status may not be hydrated yet
+  //      (snapshot 0:0:0); we still fire one load.
+  //   2. Recovery — git status later reports a dirty worktree while the summary
+  //      is still empty (an earlier refresh was missed/aborted during thread or
+  //      right-pane hydration); the changed snapshot re-fires the load once.
+  // The parent reset effect (use-review-state) is still the primary refresh on
+  // context change; this is the local "if visible and empty, load once" guard.
+  // Keying on the status snapshot caps it at one refresh per snapshot, so a
+  // genuinely empty worktree can't loop.
+  useEffect(() => {
+    // NOTE: `loadError` is intentionally NOT a bail condition. A failed initial
+    // refresh (e.g. the runner was still reconnecting on app entry) must not
+    // permanently block recovery — when fresh git-status info later arrives the
+    // key below changes and we retry. The per-snapshot key still caps retries to
+    // one per status change, so a genuinely failing context can't tight-loop.
+    if (!reviewPaneOpen || !hasGitContext || summaryCount > 0 || loading) {
+      if (!hasGitContext || summaryCount > 0) {
+        ensureLoadedKeyRef.current = null;
+      }
+      return;
+    }
+
+    const key = [
+      effectiveThreadId ?? projectModeId ?? 'unknown',
+      currentBranch ?? 'unknown-branch',
+      dirtyFileCount ?? 0,
+      linesAdded ?? 0,
+      linesDeleted ?? 0,
+    ].join(':');
+    if (ensureLoadedKeyRef.current === key) return;
+    ensureLoadedKeyRef.current = key;
+    refresh();
+  }, [
+    reviewPaneOpen,
+    hasGitContext,
+    effectiveThreadId,
+    projectModeId,
+    currentBranch,
+    dirtyFileCount,
+    linesAdded,
+    linesDeleted,
+    summaryCount,
+    loading,
+    loadError,
+    refresh,
+    ensureLoadedKeyRef,
+  ]);
+}
+
 export function useDiffData({
   hasGitContext,
   effectiveThreadId,
@@ -357,25 +488,12 @@ export function useDiffData({
       if (!submoduleEntry && !summary) return;
       const signal = abortRef.current?.signal;
       setLoadingDiff(filePath);
-      const result = submoduleEntry
-        ? effectiveThreadId
-          ? await gitApi.getSubmoduleFileDiff(
-              effectiveThreadId,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-            )
-          : await gitApi.projectSubmoduleFileDiff(
-              projectModeId!,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-            )
-        : effectiveThreadId
-          ? await gitApi.getFileDiff(effectiveThreadId, filePath, summary!.staged, signal)
-          : await gitApi.projectFileDiff(projectModeId!, filePath, summary!.staged, signal);
+      const result = await fetchFileDiff(
+        { threadId: effectiveThreadId, projectId: projectModeId },
+        filePath,
+        submoduleEntry ?? { staged: summary!.staged },
+        signal,
+      );
       if (result.isOk() && !signal?.aborted) {
         setDiffCache((prev) => new Map(prev).set(filePath, result.value.diff));
       }
@@ -392,27 +510,13 @@ export function useDiffData({
       const summary = submoduleEntry ? null : summaries.find((s) => s.path === path);
       if (!submoduleEntry && !summary) return null;
       const signal = abortRef.current?.signal;
-      const result = submoduleEntry
-        ? effectiveThreadId
-          ? await gitApi.getSubmoduleFileDiff(
-              effectiveThreadId,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-              'full',
-            )
-          : await gitApi.projectSubmoduleFileDiff(
-              projectModeId!,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-              'full',
-            )
-        : effectiveThreadId
-          ? await gitApi.getFileDiff(effectiveThreadId, path, summary!.staged, signal, 'full')
-          : await gitApi.projectFileDiff(projectModeId!, path, summary!.staged, signal, 'full');
+      const result = await fetchFileDiff(
+        { threadId: effectiveThreadId, projectId: projectModeId },
+        path,
+        submoduleEntry ?? { staged: summary!.staged },
+        signal,
+        'full',
+      );
       if (result.isOk() && !signal?.aborted) {
         return {
           oldValue: parseDiffOld(result.value.diff),
@@ -451,42 +555,7 @@ export function useDiffData({
     if (reviewPaneOpen) runDeferredRefresh();
   }, [reviewPaneOpen, runDeferredRefresh]);
 
-  // Ensure the visible Changes tab loads its summary, once per (context +
-  // git-status snapshot). This single effect covers two cases that used to be
-  // separate (and raced each other):
-  //   1. Initial mount while already open — status may not be hydrated yet
-  //      (snapshot 0:0:0); we still fire one load.
-  //   2. Recovery — git status later reports a dirty worktree while the summary
-  //      is still empty (an earlier refresh was missed/aborted during thread or
-  //      right-pane hydration); the changed snapshot re-fires the load once.
-  // The parent reset effect (use-review-state) is still the primary refresh on
-  // context change; this is the local "if visible and empty, load once" guard.
-  // Keying on the status snapshot caps it at one refresh per snapshot, so a
-  // genuinely empty worktree can't loop.
-  useEffect(() => {
-    // NOTE: `loadError` is intentionally NOT a bail condition. A failed initial
-    // refresh (e.g. the runner was still reconnecting on app entry) must not
-    // permanently block recovery — when fresh git-status info later arrives the
-    // key below changes and we retry. The per-snapshot key still caps retries to
-    // one per status change, so a genuinely failing context can't tight-loop.
-    if (!reviewPaneOpen || !hasGitContext || summaries.length > 0 || loading) {
-      if (!hasGitContext || summaries.length > 0) {
-        ensureLoadedKeyRef.current = null;
-      }
-      return;
-    }
-
-    const key = [
-      effectiveThreadId ?? projectModeId ?? 'unknown',
-      currentBranch ?? 'unknown-branch',
-      dirtyFileCount ?? 0,
-      linesAdded ?? 0,
-      linesDeleted ?? 0,
-    ].join(':');
-    if (ensureLoadedKeyRef.current === key) return;
-    ensureLoadedKeyRef.current = key;
-    refresh();
-  }, [
+  useEnsureSummaryLoaded({
     reviewPaneOpen,
     hasGitContext,
     effectiveThreadId,
@@ -495,11 +564,12 @@ export function useDiffData({
     dirtyFileCount,
     linesAdded,
     linesDeleted,
-    summaries.length,
+    summaryCount: summaries.length,
     loading,
     loadError,
     refresh,
-  ]);
+    ensureLoadedKeyRef,
+  });
 
   // Auto-refresh diffs when agent modifies files (debounced 2s).
   useAutoRefreshDiff(

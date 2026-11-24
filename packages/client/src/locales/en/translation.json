@@ -302,6 +302,12 @@
       "automation": "Created from automation",
       "ingest": "Created from external source",
       "factory": "Created by the issue factory"
+    },
+    "recap": {
+      "title": "While you were away",
+      "dismiss": "Dismiss recap",
+      "unavailableHint": "Thread recaps need a utility model with a working credential.",
+      "openUtilityModelSetting": "Set up the utility model"
     }
   },
   "review": {
@@ -765,7 +771,27 @@
     "projectFactoryMergeDriverGit": "git's own",
     "projectFactoryMergeDriverUnknown": "known after the first integration",
     "projectFactoryMergeDriver": "Merge driver on the runner: {{driver}}",
-    "projectFactoryQueueCiTime": "CI on a batch takes {{ci}} (median); the batch wait is {{wait}}"
+    "projectFactoryQueueCiTime": "CI on a batch takes {{ci}} (median); the batch wait is {{wait}}",
+    "utilityModel": "Utility model",
+    "utilityModelDesc": "The model funny uses for helper text such as thread recaps and commit messages.",
+    "threadRecap": "Show thread recaps",
+    "threadRecapDesc": "When you come back to a thread after 5 minutes or more, show a short summary of what the agent did.",
+    "utilityModelProvider": "Provider",
+    "utilityModelProviderDesc": "Where the utility model runs. Claude Code uses the runner’s Claude login.",
+    "utilityModelName": "Model",
+    "utilityModelNameDesc": "The model id or alias, for example haiku or gpt-4o-mini.",
+    "utilityModelBaseUrl": "Base URL",
+    "utilityModelBaseUrlDesc": "The address of the OpenAI-compatible endpoint.",
+    "utilityModelSave": "Save",
+    "utilityModelReset": "Use default",
+    "utilityModelInvalid": "Enter a model, and a base URL for this provider.",
+    "utilityModelProviders": {
+      "claude-sdk": "Claude Code",
+      "anthropic": "Anthropic API",
+      "openai": "OpenAI",
+      "ollama": "Ollama",
+      "openai-compatible": "OpenAI-compatible"
+    }
   },
   "skills": {
     "showingFor": "Showing skills for:",

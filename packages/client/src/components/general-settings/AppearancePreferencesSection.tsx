@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilitySettings';
 import { SettingAnchor, SettingRow, SettingsSection } from '@/components/settings/SettingRow';
+import { UtilityModelSettings } from '@/components/settings/UtilityModelSettings';
 import {
   Select,
   SelectContent,
@@ -242,6 +243,7 @@ export function ModelsPreferencesSection() {
       <div className="settings-card overflow-visible!">
         <PromptModelVisibilitySettings showHeader={false} />
       </div>
+      <UtilityModelSettings />
     </>
   );
 }

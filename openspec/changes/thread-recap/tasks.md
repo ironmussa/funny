@@ -21,10 +21,10 @@
 
 ## 4. Client
 
-- [ ] 4.1 Add `canShowRecap(thread)` (owner, not sandbox) to `lib/thread-variant.ts` and `shouldOfferRecap(readAt, newestActivityAt, now)` (5-minute + new-activity rule, unread-ever = creation time); verify with unit tests for each spec scenario
-- [ ] 4.2 Add `data/thread-recap/` (api via `requestInThread`, query keyed `[threadId, newestMessageId]`, `staleTime: Infinity`, enabled only when the profile's `threadRecapEnabled` is true, `hooks.ts`), capturing `since` from `readAt` before the thread is marked read; verify a test that reopening with no new activity makes no second request and that with recaps off no request is made
-- [ ] 4.3 Build `ThreadRecapCard` (shadcn components, plain text, skeleton, `thread-recap-card` / `thread-recap-dismiss` test ids, dismissals in `ui-store`, one-time utility-model hint) and mount it in `ThreadView`; add en/es/pt strings; verify component tests for shown / dismissed / quiet failure / hint and `fitness:client-styling` passes
-- [ ] 4.4 Add the Utility model section to Settings > Profile: a "Show thread recaps" `Switch` (`settings-thread-recap-toggle`, on by default) plus provider `Select`, model `Input` and base URL when needed, with `SettingRow` + `settings-index.ts` entries for each (keywords: recap, summary, resumen); verify component tests that toggling saves `threadRecapEnabled` and saving a model persists it, and that `fitness:settings-index` passes
+- [x] 4.1 Add `canShowRecap(thread)` (owner, not sandbox) to `lib/thread-variant.ts` and `shouldOfferRecap(readAt, newestActivityAt, now)` (5-minute + new-activity rule, unread-ever = creation time); verify with unit tests for each spec scenario
+- [x] 4.2 Add `data/thread-recap/` (api via `requestInThread`, query keyed `[threadId, newestMessageId]`, `staleTime: Infinity`, enabled only when the profile's `threadRecapEnabled` is true, `hooks.ts`), capturing `since` from `readAt` before the thread is marked read; verify a test that reopening with no new activity makes no second request and that with recaps off no request is made
+- [x] 4.3 Build `ThreadRecapCard` (shadcn components, plain text, skeleton, `thread-recap-card` / `thread-recap-dismiss` test ids, dismissals in `ui-store`, one-time utility-model hint) and mount it in `ThreadView`; add en/es/pt strings; verify component tests for shown / dismissed / quiet failure / hint and `fitness:client-styling` passes
+- [x] 4.4 Add the Utility model section to Settings > Profile: a "Show thread recaps" `Switch` (`settings-thread-recap-toggle`, on by default) plus provider `Select`, model `Input` and base URL when needed, with `SettingRow` + `settings-index.ts` entries for each (keywords: recap, summary, resumen); verify component tests that toggling saves `threadRecapEnabled` and saving a model persists it, and that `fitness:settings-index` passes
 
 ## 5. Integration
 

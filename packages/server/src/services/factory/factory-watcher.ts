@@ -1030,10 +1030,8 @@ export function pathsHeld(
 ): FactoryWaitReason | null {
   const paths = contractOf(run)?.likelyPaths ?? [];
   if (paths.length === 0) return null;
-  // A stacked run builds on its blocker's branch on purpose (D10): sharing
-  // its files is the point, so the blocker's paths do not hold it back.
-  const others = stackedOn ? ctx.runs.filter((other) => other.id !== stackedOn.runId) : ctx.runs;
-  const blockers = overlappingIssues(paths, busyPathsOf(others, run.id));
+  const busy = busyPathsOf(ctx.runs, run.id, stackedOn?.runId ?? null);
+  const blockers = overlappingIssues(paths, busy);
   return blockers.length > 0 ? { kind: 'paths-overlap', blockers } : null;
 }
 

@@ -423,8 +423,14 @@ export function busyPathsOf(
     triage: FactoryTriage | null;
   }>,
   exceptRunId: string,
+  /**
+   * The run `exceptRunId` is stacked on (D10): it builds on that run's branch
+   * on purpose, so sharing its files is the point and its paths do not count.
+   */
+  stackedOnRunId: string | null = null,
 ): Array<{ issue: number; paths: string[] }> {
   return runs.flatMap((run) => {
+    if (run.id === stackedOnRunId) return [];
     const paths = run.triage?.decision === 'ready' ? (run.triage.contract?.likelyPaths ?? []) : [];
     // A run without an issue has no triage contract, so no likely paths.
     return run.issueNumber !== null &&

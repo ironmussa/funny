@@ -175,7 +175,11 @@ export function ProjectCollaborators() {
             />
           </div>
           {/* Role applied to the next collaborator added. */}
-          <Select value={addRole} onValueChange={(v) => setAddRole(v as ProjectMemberRole)}>
+          <Select
+            value={addRole}
+            // SAFETY: the items are rendered from PROJECT_ROLES, whose values are ProjectMemberRole.
+            onValueChange={(v) => setAddRole(v as ProjectMemberRole)}
+          >
             <SelectTrigger className="w-32 shrink-0" data-testid="collaborators-role-select">
               <SelectValue />
             </SelectTrigger>
@@ -261,11 +265,8 @@ export function ProjectCollaborators() {
                       <RoleBadge role={isOwner ? 'owner' : m.role} />
                     ) : (
                       <Select
-                        value={
-                          (['viewer', 'member', 'admin'] as string[]).includes(m.role)
-                            ? m.role
-                            : 'member'
-                        }
+                        value={['viewer', 'member', 'admin'].includes(m.role) ? m.role : 'member'}
+                        // SAFETY: the items are rendered from PROJECT_ROLES, whose values are ProjectMemberRole.
                         onValueChange={(v) => void handleChangeRole(m, v as ProjectMemberRole)}
                       >
                         <SelectTrigger

@@ -395,8 +395,8 @@ function SuggestionPopup({
   useEffect(() => {
     const container = popupRef.current;
     if (!container) return;
-    const el = container.children[selectedIndex] as HTMLElement | undefined;
-    if (!el) return;
+    const el = container.children[selectedIndex];
+    if (!(el instanceof HTMLElement)) return;
     const elTop = el.offsetTop;
     const elBottom = elTop + el.offsetHeight;
     if (elTop < container.scrollTop) {
@@ -645,7 +645,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   const [suggestionTruncated, setSuggestionTruncated] = useState(false);
   const [suggestionQuery, setSuggestionQuery] = useState('');
   const [suggestionRect, setSuggestionRect] = useState<(() => DOMRect | null) | null>(null);
-  const suggestionCommandRef = useRef<((props: Record<string, unknown>) => void) | null>(null);
+  const suggestionCommandRef = useRef<((props: SuggestionItem) => void) | null>(null);
 
   // Dictation partial tracking: [startPos, endPos] in the document
   const dictationRangeRef = useRef<{ from: number; to: number } | null>(null);
@@ -783,8 +783,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           // re-applies the stale range and deletes the text after the chip.
           const item = suggestionItemsRef.current[suggestionIndexRef.current];
           if (item) {
-            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-            suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+            suggestionCommandRef.current?.(item);
           }
           return true;
         }
@@ -844,6 +843,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         });
       },
       command: ({ editor, range, props }: any) => {
+        // SAFETY: props is the chosen file item, whose label is the file path string.
         insertInlineNodeWithTrailingSpace(editor, range, 'fileMention', {
           id: props.path ?? props.id,
           label: (props.label as string).split('/').pop() ?? props.label,
@@ -863,6 +863,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
         onUpdate: (props: any) => {
           // Only reset the selected index when items actually change
+          // SAFETY: props.items is what this suggestion's items callback returned, a SuggestionItem[].
           applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(getFullQuery(props.query ?? ''));
           setSuggestionRect(() => props.clientRect);
@@ -951,6 +952,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
         onUpdate: (props: any) => {
           // Only reset the selected index when items actually change
+          // SAFETY: props.items is what this suggestion's items callback returned, a SuggestionItem[].
           applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(getFullQuery(props.query ?? ''));
           setSuggestionRect(() => props.clientRect);
@@ -1049,6 +1051,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
             return;
           }
           setSuggestionType('workflow');
+          // SAFETY: props.items is what this suggestion's items callback returned, a SuggestionItem[].
           applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(normalizeWorkflowQuery(fullQuery));
           setSuggestionRect(() => props.clientRect);
@@ -1141,6 +1144,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           suggestionCommandRef.current = props.command;
         },
         onUpdate: (props: any) => {
+          // SAFETY: props.items is what this suggestion's items callback returned, a SuggestionItem[].
           applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(getFullQuery(props.query ?? ''));
           setSuggestionRect(() => props.clientRect);
@@ -1262,15 +1266,14 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         for (const item of Array.from(items)) {
           if (item.type.startsWith('image/')) {
             event.preventDefault();
-            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-            onPaste?.(event as unknown as ClipboardEvent);
+            onPaste?.(event);
             return true;
           }
         }
         return false;
       },
       handleDrop: (view, event) => {
-        const dt = (event as DragEvent).dataTransfer;
+        const dt = event.dataTransfer;
         if (!dt) return false;
         const mention = readFileMentionDragData(dt);
         if (!mention) return false;
@@ -1288,8 +1291,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         });
         const space = schema.text(' ');
         const dropPos = view.posAtCoords({
-          left: (event as DragEvent).clientX,
-          top: (event as DragEvent).clientY,
+          left: event.clientX,
+          top: event.clientY,
         });
         const insertAt = dropPos ? dropPos.pos : view.state.selection.from;
         const tr = view.state.tr.insert(insertAt, [node, space]);
@@ -1311,7 +1314,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       caretScrollFrameRef.current = requestAnimationFrame(() => {
         caretScrollFrameRef.current = null;
         try {
-          const dom = ed.view.dom as HTMLElement;
+          const dom = ed.view.dom;
           if (dom.scrollHeight <= dom.clientHeight) return;
           const coords = ed.view.coordsAtPos(ed.state.selection.from);
           const rect = dom.getBoundingClientRect();
@@ -1347,7 +1350,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     if (!editor || editor.isDestroyed) return;
     editor.extensionManager.extensions.forEach((ext) => {
       if (ext.name === 'placeholder') {
-        (ext.options as any).placeholder = placeholder ?? '';
+        ext.options.placeholder = placeholder ?? '';
         editor.view.dispatch(editor.state.tr);
       }
     });
@@ -1476,14 +1479,14 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // ── Handle suggestion item selection from the popup ──
   const handleSuggestionSelect = useCallback((item: SuggestionItem) => {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+    suggestionCommandRef.current?.(item);
   }, []);
 
   // ── Close suggestion popup on click outside ──
   useEffect(() => {
     if (!suggestionType) return;
     const handleMouseDown = (e: MouseEvent) => {
+      // SAFETY: the listener is on document, so a mousedown target is always a Node in it.
       const target = e.target as Node;
       // Check if click is inside the editor
       try {

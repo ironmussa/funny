@@ -580,7 +580,14 @@ function ModelSection({
       <span id="agent-template-model-label" className="text-muted-foreground mb-1 block text-xs">
         Default Model
       </span>
-      <Select value={template.model ?? ''} onValueChange={(v) => onSave({ model: v as any })}>
+      <Select
+        value={template.model ?? ''}
+        onValueChange={(v) =>
+          // SAFETY: the items are PROVIDER_MODELS.deepagent, built from the keys of
+          // MODEL_REGISTRY.deepagent, so each value is a DeepAgentModel.
+          onSave({ model: v as CreateAgentTemplateRequest['model'] })
+        }
+      >
         <SelectTrigger
           aria-labelledby="agent-template-model-label"
           className="w-full"
@@ -938,7 +945,11 @@ function McpServerForm({
           <span id="agent-template-mcp-type-label" className="text-muted-foreground text-2xs">
             Type
           </span>
-          <Select value={type} onValueChange={(v) => setType(v as McpServerType)}>
+          <Select
+            value={type}
+            // SAFETY: the only items are stdio, http and sse, the three McpServerType values.
+            onValueChange={(v) => setType(v as McpServerType)}
+          >
             <SelectTrigger
               aria-labelledby="agent-template-mcp-type-label"
               size="xs"

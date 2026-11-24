@@ -48,6 +48,8 @@ export function usePromptEditorBindings({
   const handlePromptBoxClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       // Don't steal focus from interactive elements
+      // SAFETY: a click on the prompt box div targets an Element inside it (text nodes are
+      // never event targets).
       if ((e.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) return;
       editorRef.current?.focus();
     },

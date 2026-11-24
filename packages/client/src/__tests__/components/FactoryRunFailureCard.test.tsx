@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -116,7 +116,10 @@ describe('FactoryRunFailureCard', () => {
       risk: {
         headSha: 'c2b585c51b2e',
         level: 'high',
-        reasons: ['touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)'],
+        reasons: [
+          'touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)',
+          '1511 changed lines outside tests and docs (more than 400)',
+        ],
         changedLines: 345,
         paths: ['packages/server/src/db/migrate.ts'],
       },
@@ -131,6 +134,14 @@ describe('FactoryRunFailureCard', () => {
     fireEvent.click(screen.getByTestId('factory-run-failure-approve-merge'));
     expect(mocks.control).not.toHaveBeenCalled();
     expect(await screen.findByText('Merge this high-risk change?')).toBeInTheDocument();
+    // One line per risk reason, not one run-on sentence.
+    const reasons = within(screen.getByTestId('factory-approve-merge-reasons')).getAllByRole(
+      'listitem',
+    );
+    expect(reasons.map((item) => item.textContent)).toEqual([
+      'touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)',
+      '1511 changed lines outside tests and docs (more than 400)',
+    ]);
     fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     expect(mocks.control).toHaveBeenCalledWith('approve-merge', 'p1', 'r1');
   });

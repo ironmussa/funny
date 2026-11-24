@@ -10,6 +10,7 @@
  */
 
 import type { Client } from '@libsql/client';
+import { z } from 'zod';
 
 import { llmComplete } from './llm.js';
 import { log } from './logger.js';
@@ -69,6 +70,10 @@ interface LockData {
   expires: number;
 }
 
+/** The lock fields each check reads; a stored value without them counts as corrupt. */
+const LockExpirySchema = z.object({ expires: z.number() });
+const LockHolderSchema = z.object({ holder: z.string() });
+
 function lockHolder(): string {
   return `${process.env.HOSTNAME ?? 'local'}-${process.pid}-${Date.now()}`;
 }
@@ -82,8 +87,8 @@ async function acquireLock(db: Client): Promise<boolean> {
   const existing = await getMeta(db, LOCK_KEY);
   if (existing) {
     try {
-      const data = JSON.parse(existing) as LockData;
-      if (data.expires > Date.now()) {
+      const data = LockExpirySchema.safeParse(JSON.parse(existing));
+      if (data.success && data.data.expires > Date.now()) {
         // Lock is held and not expired
         return false;
       }
@@ -98,8 +103,8 @@ async function acquireLock(db: Client): Promise<boolean> {
   const confirm = await getMeta(db, LOCK_KEY);
   if (confirm) {
     try {
-      const data = JSON.parse(confirm) as LockData;
-      return data.holder === holder;
+      const data = LockHolderSchema.safeParse(JSON.parse(confirm));
+      return data.success && data.data.holder === holder;
     } catch {
       return false;
     }
@@ -348,7 +353,7 @@ function findClusters(
 
 function inferConsolidatedType(facts: MemoryFact[]): MemoryFact['type'] {
   // Use the most common type in the cluster
-  const counts = new Map<string, number>();
+  const counts = new Map<MemoryFact['type'], number>();
   for (const f of facts) {
     counts.set(f.type, (counts.get(f.type) ?? 0) + 1);
   }
@@ -356,7 +361,7 @@ function inferConsolidatedType(facts: MemoryFact[]): MemoryFact['type'] {
   let maxCount = 0;
   for (const [type, count] of counts) {
     if (count > maxCount) {
-      maxType = type as MemoryFact['type'];
+      maxType = type;
       maxCount = count;
     }
   }

@@ -50,6 +50,8 @@ function parseLocomoData(data: unknown): LocomoDataset {
   if (Array.isArray(data)) {
     rawConvos = data;
   } else if (typeof data === 'object' && data !== null && 'conversations' in data) {
+    // SAFETY: the object form of the LOCOMO file keeps its conversations in an array under
+    // `conversations`; the loader has never validated it (a wrong shape fails while iterating).
     rawConvos = (data as { conversations: unknown[] }).conversations;
   } else {
     throw new Error('Unexpected LOCOMO dataset format');
@@ -59,6 +61,8 @@ function parseLocomoData(data: unknown): LocomoDataset {
   let totalQuestions = 0;
 
   for (let i = 0; i < rawConvos.length; i++) {
+    // SAFETY: every element of the LOCOMO conversations array is a JSON object (sample_id,
+    // conversation, qa); a malformed element fails in parseConversation, as it always has.
     const raw = rawConvos[i] as Record<string, unknown>;
     const convo = parseConversation(raw, i);
     conversations.push(convo);
@@ -70,9 +74,12 @@ function parseLocomoData(data: unknown): LocomoDataset {
 }
 
 function parseConversation(raw: Record<string, unknown>, index: number): LocomoConversation {
+  // SAFETY: LOCOMO's sample_id (or an older file's conversation_id) is a string; the loader passes dataset fields through unvalidated, as it always has.
   const id = (raw.sample_id as string) ?? (raw.conversation_id as string) ?? `locomo-${index}`;
 
   // LOCOMO format: conversation is a dict with session_1, session_2, ... arrays
+  // SAFETY: LOCOMO's `conversation` is an object of session_N arrays (or, in the fallback format,
+  // an array); both branches below check which one it is before reading it.
   const convObj = raw.conversation as Record<string, unknown> | undefined;
   const turns: LocomoTurn[] = [];
   let turnIndex = 0;
@@ -88,7 +95,10 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
       if (!Array.isArray(sessionTurns)) continue;
 
       for (const t of sessionTurns) {
+        // SAFETY: a LOCOMO session turn is an object with string speaker and text fields;
+        // the loader passes dataset fields through unvalidated, as it always has.
         const turn = t as Record<string, unknown>;
+        // SAFETY: as above, speaker and text/content are LOCOMO's string turn fields.
         turns.push({
           speaker: (turn.speaker ?? `Speaker${(turnIndex % 2) + 1}`) as string,
           text: (turn.text ?? turn.content ?? '') as string,
@@ -100,7 +110,10 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
   } else if (Array.isArray(convObj)) {
     // Fallback: flat array of turns
     for (const t of convObj) {
+      // SAFETY: a flat-format turn is an object with string speaker/role and text/content/utterance
+      // fields and a numeric turn_number/turn_id; the loader passes dataset fields through unvalidated, as it always has.
       const turn = t as Record<string, unknown>;
+      // SAFETY: as above, the turn's fields carry the flat format's string and number types.
       turns.push({
         speaker: (turn.speaker ?? turn.role ?? `Speaker${(turnIndex % 2) + 1}`) as string,
         text: (turn.text ?? turn.content ?? turn.utterance ?? '') as string,
@@ -111,6 +124,8 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
   }
 
   // LOCOMO format: questions are under "qa"
+  // SAFETY: LOCOMO keeps its QA pairs in an array under qa (questions / qa_pairs in other files);
+  // a non-array fails at map(), as it always has.
   const rawQs = (raw.qa ?? raw.questions ?? raw.qa_pairs ?? []) as unknown[];
   const categoryMap: Record<number, LocomoCategory> = {
     1: 'single-hop',
@@ -121,6 +136,7 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
   };
 
   const questions: LocomoQuestion[] = rawQs.map((q, j) => {
+    // SAFETY: a LOCOMO QA pair is an object (question, answer, category, evidence); the loader passes dataset fields through unvalidated, as it always has.
     const question = q as Record<string, unknown>;
     const rawCat = question.category;
     const category =
@@ -128,6 +144,8 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
         ? (categoryMap[rawCat] ?? 'single-hop')
         : normalizeCategory(String(rawCat ?? 'single-hop'));
 
+    // SAFETY: a LOCOMO QA pair's ids and question are strings and its evidence turn numbers an
+    // array of numbers; the loader passes dataset fields through unvalidated, as it always has.
     return {
       question_id: (question.question_id ?? question.id ?? `${id}-q${j}`) as string,
       question: (question.question ?? question.query ?? '') as string,
@@ -138,8 +156,10 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
   });
 
   // Get date from first session
+  // SAFETY: LOCOMO's session_1_date_time is a date string; the loader passes dataset fields through unvalidated, as it always has.
   const firstDate = convObj ? ((convObj.session_1_date_time as string) ?? undefined) : undefined;
 
+  // SAFETY: a conversation's optional `date` is a string; the loader passes dataset fields through unvalidated, as it always has.
   return {
     conversation_id: id,
     turns,

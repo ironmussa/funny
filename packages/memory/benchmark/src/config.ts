@@ -49,10 +49,10 @@ export async function llmChat(
     throw new Error(`LLM API error (${res.status}): ${body}`);
   }
 
-  const data = (await res.json()) as {
+  const data: {
     choices: Array<{ message: { content: string } }>;
     usage?: { total_tokens?: number };
-  };
+  } = await res.json();
 
   return {
     content: data.choices[0]?.message?.content ?? '',

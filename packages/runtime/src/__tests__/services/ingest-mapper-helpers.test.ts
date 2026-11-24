@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
-import { decodeUnicodeEscapes, parseOwnerRepo } from '../../services/ingest-mapper.js';
+import { decodeUnicodeEscapes } from '../../services/ingest-mapper.js';
+import { parseOwnerRepo } from '../../services/ingest-mapper/project-resolution.js';
 
 // ── decodeUnicodeEscapes ─────────────────────────────────────────
 

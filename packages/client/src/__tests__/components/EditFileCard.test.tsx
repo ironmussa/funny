@@ -1,4 +1,13 @@
-import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
+import {
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+  type Mock,
+  mock,
+  setDefaultTimeout,
+} from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -11,6 +20,10 @@ import {
   buildIntersectionObserver,
   expectInstance,
 } from '../helpers/builders-components';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 interface IntersectionObserverState {
   callback: IntersectionObserverCallback | null;

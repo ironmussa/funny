@@ -1,10 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, setDefaultTimeout } from 'bun:test';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { VirtualDiff } from '@/components/VirtualDiff';
 
 import { flushAsyncUpdates } from '../helpers/render';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 const SIMPLE_DIFF = `diff --git a/src/example.ts b/src/example.ts
 --- a/src/example.ts

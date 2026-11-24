@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test, setDefaultTimeout } from 'bun:test';
 
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
@@ -6,6 +6,10 @@ import type { TerminalScope } from '@/hooks/use-terminal-scope';
 import type { TerminalTab } from '@/stores/terminal-store';
 
 import { renderWithProviders } from '../helpers/render';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 // TerminalPanel: which tabs a scope shows, the tab actions (activate, close,
 // kill, rename, signals, new terminal, hide) and the PTY tab lifecycle

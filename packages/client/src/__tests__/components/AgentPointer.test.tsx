@@ -1,10 +1,14 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test, setDefaultTimeout } from 'bun:test';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AgentPointer } from '@/components/browser-panel/AgentPointer';
 import { dispatchBrowserSessionEvent } from '@/hooks/dispatch-browser-session-events';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 const viewport = { width: 1000, height: 500 };
 

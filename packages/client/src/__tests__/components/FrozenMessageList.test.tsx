@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, test, expect, vi, mock } from 'bun:test';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  test,
+  expect,
+  vi,
+  mock,
+  setDefaultTimeout,
+} from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { fireEvent, render } from '@testing-library/react';
@@ -11,6 +20,10 @@ import { makeLongThread } from '@/test-fixtures/long-thread-fixture';
 
 import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 mock.module('react-i18next', () => ({
   Trans: ({ i18nKey }: { i18nKey: string }) => mockT(i18nKey),

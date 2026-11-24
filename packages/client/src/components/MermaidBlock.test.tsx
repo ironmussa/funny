@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, describe, expect, it, vi, setDefaultTimeout } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -6,6 +6,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { MermaidBlock, MermaidExpandedDialog } from './MermaidBlock';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 const chart = 'flowchart LR\nA[Client] --> B[Server]';
 

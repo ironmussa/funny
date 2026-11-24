@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, setDefaultTimeout } from 'bun:test';
 
 /**
  * BranchBadge — a branch has one color everywhere: the badge in the PRs,
@@ -11,6 +11,10 @@ import { computeGraphRows } from '@/lib/git-graph-lanes';
 import { branchColor, graphColorKey, graphLanePastel } from '@/lib/graph-colors';
 
 import { renderWithProviders } from '../helpers/render';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 describe('BranchBadge color', () => {
   test('matches the color of the branch tip in the History graph', () => {

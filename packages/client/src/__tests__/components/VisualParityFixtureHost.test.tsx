@@ -1,10 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, setDefaultTimeout } from 'bun:test';
 
 import { desktopParityFixture } from '@funny/ui-contracts/fixtures';
 import { referenceDark } from '@funny/ui-contracts/tokens';
 import { render, screen } from '@testing-library/react';
 
 import { VisualParityFixtureHost } from '@/components/visual-parity/VisualParityFixtureHost';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 describe('VisualParityFixtureHost', () => {
   test('renders the shared desktop structure and tokens', () => {

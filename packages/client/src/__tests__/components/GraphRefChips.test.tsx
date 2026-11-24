@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, setDefaultTimeout } from 'bun:test';
 
 /**
  * GraphRefChips — a branch whose PR is merged reads as merged, not as pending
@@ -15,6 +15,10 @@ import { findThreadBranchRowIndex } from '@/components/CommitGraphTab';
 import type { FoldedRef } from '@/lib/graph-refs';
 
 import { renderWithProviders } from '../helpers/render';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 function renderChips(ref: FoldedRef) {
   renderWithProviders(

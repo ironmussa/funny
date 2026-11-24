@@ -10,6 +10,15 @@ import {
   type BenchmarkEvent,
 } from '../../packages/client-benchmark/src/index';
 
+declare global {
+  interface Window {
+    /** Installed by `packages/client/src/benchmarks/thread-viewer.tsx` (`ThreadViewerProfile`). */
+    funnyThreadProfile?: {
+      handleCommand: (input: BenchmarkCommand) => Promise<BenchmarkEvent[]>;
+    };
+  }
+}
+
 function argument(name: string): string {
   const prefix = `--${name}=`;
   const value = process.argv
@@ -70,12 +79,7 @@ function writeEvents(events: BenchmarkEvent[]): void {
 
 async function handle(command: BenchmarkCommand): Promise<void> {
   const events = await page.evaluate(async (value) => {
-    const benchmarkWindow = window as typeof window & {
-      funnyThreadProfile?: {
-        handleCommand: (input: BenchmarkCommand) => Promise<BenchmarkEvent[]>;
-      };
-    };
-    return benchmarkWindow.funnyThreadProfile?.handleCommand(value) ?? [];
+    return window.funnyThreadProfile?.handleCommand(value) ?? [];
   }, command);
   writeEvents(events);
   if (command.type === 'shutdown') {

@@ -6,7 +6,7 @@ import { defineConfig, type Plugin } from 'vite';
 
 const WORKSPACE_PKG = path.resolve(__dirname, '..', '..', 'runtime');
 
-function isFunction(value: unknown): value is (...args: never[]) => void {
+function isFunction<T>(value: T): value is Extract<T, CallableFunction> {
   return typeof value === 'function';
 }
 
@@ -58,7 +58,7 @@ function evflowConvertPlugin(): Plugin {
               for (const val of Object.values(mod)) {
                 if (isFunction(val)) {
                   try {
-                    const result = (val as Function)();
+                    const result = val();
                     if (result?.toJSON) {
                       model = result;
                       break;
@@ -71,7 +71,7 @@ function evflowConvertPlugin(): Plugin {
             // 3. Named export that IS an EventModel instance
             if (!model) {
               for (const val of Object.values(mod)) {
-                if (isObject(val) && isFunction((val as any).toJSON)) {
+                if (isObject(val) && 'toJSON' in val && isFunction(val.toJSON)) {
                   model = val;
                   break;
                 }
@@ -85,7 +85,7 @@ function evflowConvertPlugin(): Plugin {
             }
 
             res.setHeader('Content-Type', 'application/json');
-            res.end((model as any).toJSON());
+            res.end(model.toJSON());
           } catch (err: any) {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');

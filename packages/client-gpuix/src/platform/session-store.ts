@@ -3,6 +3,8 @@ import { dirname } from 'node:path';
 
 import type { DiagnosticService } from '@funny/client-core';
 
+import { isMissingFile } from './storage';
+
 export interface NativeSessionMaterial {
   cookieHeader: string;
 }
@@ -27,13 +29,14 @@ export class FileNativeSessionStore implements NativeSessionStore {
       if (
         !parsed ||
         typeof parsed !== 'object' ||
-        typeof (parsed as { cookieHeader?: unknown }).cookieHeader !== 'string'
+        !('cookieHeader' in parsed) ||
+        typeof parsed.cookieHeader !== 'string'
       ) {
         throw new Error('Invalid persisted native session');
       }
-      return { cookieHeader: (parsed as { cookieHeader: string }).cookieHeader };
+      return { cookieHeader: parsed.cookieHeader };
     } catch (error) {
-      if ((error as { code?: string }).code !== 'ENOENT') {
+      if (!isMissingFile(error)) {
         this.diagnostics.report({ capability: 'storage', operation: 'session.load', error });
       }
       return null;
@@ -61,7 +64,7 @@ export class FileNativeSessionStore implements NativeSessionStore {
     try {
       unlinkSync(this.filePath);
     } catch (error) {
-      if ((error as { code?: string }).code !== 'ENOENT') {
+      if (!isMissingFile(error)) {
         this.diagnostics.report({ capability: 'storage', operation: 'session.clear', error });
       }
     }

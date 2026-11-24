@@ -179,7 +179,7 @@ export class EventModel {
    */
   context(name: string, fn: (ctx: ContextBuilder) => void): void {
     const elementsBefore = new Set(this.#elements.keys());
-    fn(this as ContextBuilder);
+    fn(this);
     const elementsAfter = new Set(this.#elements.keys());
     const newElements = [...elementsAfter].filter((e) => !elementsBefore.has(e));
     this.#contexts.push({ name, elements: newElements });

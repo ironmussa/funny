@@ -925,7 +925,8 @@ export const ThreadControls = memo(function ThreadControls({
   const [pending, setPending] = useState(false);
   const canSteer = !viewerShareLevel || viewerShareLevel === 'steer';
   const active = ['setting_up', 'pending', 'running'].includes(run?.status ?? '');
-  const waiting = run?.status === 'waiting' && !!run.runId;
+  const waitingRunId = run?.status === 'waiting' && run.runId ? run.runId : null;
+  const waiting = waitingRunId !== null;
   const lifecycle = !canSteer
     ? 'read-only'
     : pending
@@ -939,10 +940,10 @@ export const ThreadControls = memo(function ThreadControls({
     const trimmed = submittedContent.trim();
     if (!trimmed || pending || !canSteer) return;
     await whilePending(setPending, async () => {
-      const ok = waiting
+      const ok = waitingRunId
         ? await application.commands.resumeRun({
             threadId,
-            runId: run.runId as string,
+            runId: waitingRunId,
             content: trimmed,
           })
         : await application.commands.submitPrompt({

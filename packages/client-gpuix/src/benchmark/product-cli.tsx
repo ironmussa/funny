@@ -76,10 +76,10 @@ const threads = (['a', 'b'] as const).map((key) => ({
   status: 'idle' as const,
   stage: 'backlog' as const,
   provider: 'claude' as const,
-  permissionMode: 'default' as const,
+  permissionMode: 'ask' as const,
   model: 'sonnet' as const,
   cost: 0,
-  source: 'funny' as const,
+  source: 'web' as const,
   runtime: 'local' as const,
   createdAt: new Date(0).toISOString(),
   updatedAt: new Date(0).toISOString(),
@@ -92,11 +92,11 @@ application.authState.getState().authenticate({
   role: 'user',
 });
 application.navigationState.getState().replaceProjects([project]);
-application.navigationState.getState().replaceProjectThreads(project.id, threads as never);
+application.navigationState.getState().replaceProjectThreads(project.id, threads);
 for (const key of ['a', 'b'] as const) {
   const fixture = fixtures[key];
   application.workspaceState.getState().replaceInitialPage(fixture.threadId, {
-    messages: fixture.messages as never,
+    messages: fixture.messages,
     hasMore: false,
     total: fixture.counts.messages,
     windowStart: 0,
@@ -156,6 +156,8 @@ function delay(durationMs: number): Promise<void> {
 }
 
 function automationTree(): ProductAutomationTreeNode | null {
+  // SAFETY: getAutomationTree() is the renderer's JSON dump of its own automation tree (null
+  // before the first frame); ProductAutomationTreeNode names the node fields this profile reads.
   return JSON.parse(renderer.getAutomationTree()) as ProductAutomationTreeNode | null;
 }
 

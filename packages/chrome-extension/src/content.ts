@@ -20,7 +20,7 @@ import {
 } from '@funny/shared/dom/extract';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 
-import { hasProjectDefaults, isPermissionError, threadUrl } from './api';
+import { hasProjectDefaults, isPermissionError, type ProviderInfo, threadUrl } from './api';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -473,8 +473,8 @@ function onScrollOrResize() {
 // ---------------------------------------------------------------------------
 
 function resetDetailsCollapsed() {
-  const body = popover.querySelector('.popover-details-body') as HTMLDivElement;
-  const arrow = popover.querySelector('.popover-details-arrow') as SVGElement;
+  const body = popover.querySelector<HTMLDivElement>('.popover-details-body');
+  const arrow = popover.querySelector<SVGElement>('.popover-details-arrow');
   if (body) body.style.display = 'none';
   if (arrow) arrow.classList.remove('popover-details-arrow-open');
 }
@@ -574,14 +574,14 @@ function createPopover(): HTMLDivElement {
   `;
 
   // Cache element refs
-  popoverTextarea = pop.querySelector('.popover-textarea') as HTMLTextAreaElement;
-  popoverError = pop.querySelector('.popover-error') as HTMLDivElement;
-  popoverElementName = pop.querySelector('.popover-element-name') as HTMLSpanElement;
-  popoverElementList = pop.querySelector('.popover-element-list') as HTMLDivElement;
-  popoverAddBtn = pop.querySelector('.popover-add') as HTMLButtonElement;
-  popoverDeleteBtn = pop.querySelector('.popover-delete') as HTMLButtonElement;
-  popoverProjectName = pop.querySelector('.popover-project-name') as HTMLSpanElement;
-  popoverSendBtn = pop.querySelector('.popover-send-btn') as HTMLButtonElement;
+  popoverTextarea = pop.querySelector<HTMLTextAreaElement>('.popover-textarea')!;
+  popoverError = pop.querySelector<HTMLDivElement>('.popover-error')!;
+  popoverElementName = pop.querySelector<HTMLSpanElement>('.popover-element-name')!;
+  popoverElementList = pop.querySelector<HTMLDivElement>('.popover-element-list')!;
+  popoverAddBtn = pop.querySelector<HTMLButtonElement>('.popover-add')!;
+  popoverDeleteBtn = pop.querySelector<HTMLButtonElement>('.popover-delete')!;
+  popoverProjectName = pop.querySelector<HTMLSpanElement>('.popover-project-name')!;
+  popoverSendBtn = pop.querySelector<HTMLButtonElement>('.popover-send-btn')!;
 
   // Send to Funny from popover
   popoverSendBtn.addEventListener('click', () => {
@@ -593,9 +593,9 @@ function createPopover(): HTMLDivElement {
   });
 
   // Element name toggles details
-  const elementToggle = pop.querySelector('.popover-element-toggle') as HTMLButtonElement;
-  const detailsBody = pop.querySelector('.popover-details-body') as HTMLDivElement;
-  const detailsArrow = pop.querySelector('.popover-details-arrow') as SVGElement;
+  const elementToggle = pop.querySelector<HTMLButtonElement>('.popover-element-toggle')!;
+  const detailsBody = pop.querySelector<HTMLDivElement>('.popover-details-body')!;
+  const detailsArrow = pop.querySelector<SVGElement>('.popover-details-arrow')!;
   elementToggle.addEventListener('click', () => {
     const open = detailsBody.style.display !== 'none';
     detailsBody.style.display = open ? 'none' : 'block';
@@ -637,24 +637,24 @@ function populateElementDetails(el: Element) {
   const a11y = formatAccessibility(el);
 
   // Selector
-  (popover.querySelector('.popover-detail-selector') as HTMLElement).textContent =
+  popover.querySelector<HTMLElement>('.popover-detail-selector')!.textContent =
     tag + (el.id ? `#${el.id}` : '');
 
   // Classes
-  const classesEl = popover.querySelector('.popover-detail-classes') as HTMLElement;
+  const classesEl = popover.querySelector<HTMLElement>('.popover-detail-classes')!;
   classesEl.textContent = classes || 'none';
 
   // Component tree (only show if detected)
-  const compRow = popover.querySelector('.popover-detail-component-row') as HTMLDivElement;
+  const compRow = popover.querySelector<HTMLDivElement>('.popover-detail-component-row')!;
   if (component) {
     compRow.style.display = '';
-    (popover.querySelector('.popover-detail-component') as HTMLElement).textContent = component;
+    popover.querySelector<HTMLElement>('.popover-detail-component')!.textContent = component;
   } else {
     compRow.style.display = 'none';
   }
 
   // Computed styles as individual rows
-  const stylesContainer = popover.querySelector('.popover-detail-styles') as HTMLDivElement;
+  const stylesContainer = popover.querySelector<HTMLDivElement>('.popover-detail-styles')!;
   stylesContainer.innerHTML = '';
   const cs = window.getComputedStyle(el);
   const styleGroups = [
@@ -703,10 +703,10 @@ function populateElementDetails(el: Element) {
   }
 
   // Accessibility (only show if meaningful)
-  const a11yRow = popover.querySelector('.popover-detail-a11y-row') as HTMLDivElement;
+  const a11yRow = popover.querySelector<HTMLDivElement>('.popover-detail-a11y-row')!;
   if (a11y && a11y !== 'none') {
     a11yRow.style.display = '';
-    (popover.querySelector('.popover-detail-a11y') as HTMLElement).textContent = a11y;
+    popover.querySelector<HTMLElement>('.popover-detail-a11y')!.textContent = a11y;
   } else {
     a11yRow.style.display = 'none';
   }
@@ -727,7 +727,7 @@ function showPopoverForElement(el: Element, clickX: number, clickY: number) {
   popoverAddBtn.textContent = 'Add';
   popoverDeleteBtn.style.display = 'none';
   resetDetailsCollapsed();
-  const header = popover.querySelector('.popover-header') as HTMLDivElement;
+  const header = popover.querySelector<HTMLDivElement>('.popover-header');
   if (header) header.style.display = '';
   populateElementDetails(el);
 
@@ -761,7 +761,7 @@ function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clic
       chip.appendChild(nameSpan);
       popoverElementList.appendChild(chip);
     });
-    const header = popover.querySelector('.popover-header') as HTMLDivElement;
+    const header = popover.querySelector<HTMLDivElement>('.popover-header');
     if (header) header.style.display = 'none';
   } else {
     // Single-element annotation
@@ -773,7 +773,7 @@ function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clic
     popoverElementList.style.display = 'none';
     popoverElementList.innerHTML = '';
     resetDetailsCollapsed();
-    const header = popover.querySelector('.popover-header') as HTMLDivElement;
+    const header = popover.querySelector<HTMLDivElement>('.popover-header');
     if (header) header.style.display = '';
     populateElementDetails(elemData.domElement);
   }
@@ -821,7 +821,7 @@ function showPopoverForMultiSelect(clickX: number, clickY: number) {
   popoverDeleteBtn.style.display = 'none';
 
   // Hide element header (not useful for multi-select, chips are shown instead)
-  const header = popover.querySelector('.popover-header') as HTMLDivElement;
+  const header = popover.querySelector<HTMLDivElement>('.popover-header');
   if (header) header.style.display = 'none';
 
   loadPopoverProjectName();
@@ -1076,14 +1076,15 @@ function createToolbar(): HTMLDivElement {
   `;
 
   tb.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
+    if (!(e.target instanceof Element)) return;
+    const btn = e.target.closest<HTMLElement>('[data-action]');
     if (!btn) return;
     e.stopPropagation();
     handleToolbarAction(btn.dataset.action!);
   });
 
   // Drag to reposition (only from the drag handle)
-  const dragHandle = tb.querySelector('.toolbar-drag-handle') as HTMLDivElement;
+  const dragHandle = tb.querySelector<HTMLDivElement>('.toolbar-drag-handle')!;
   dragHandle.addEventListener('mousedown', (e) => {
     e.preventDefault();
     isDragging = true;
@@ -1116,8 +1117,8 @@ function createToolbar(): HTMLDivElement {
 }
 
 function updateToolbarCount() {
-  const count = toolbarEl.querySelector('.toolbar-count') as HTMLSpanElement;
-  const label = toolbarEl.querySelector('.toolbar-send-label') as HTMLSpanElement;
+  const count = toolbarEl.querySelector<HTMLSpanElement>('.toolbar-count')!;
+  const label = toolbarEl.querySelector<HTMLSpanElement>('.toolbar-send-label')!;
   if (annotations.length > 0) {
     count.textContent = String(annotations.length);
     count.style.display = 'inline-flex';
@@ -1139,7 +1140,7 @@ function loadToolbarProjectName() {
 }
 
 function updateToolbarProjectName(name: string) {
-  const el = toolbarEl.querySelector('.toolbar-project') as HTMLSpanElement;
+  const el = toolbarEl.querySelector<HTMLSpanElement>('.toolbar-project');
   if (!el) return;
   if (name) {
     el.textContent = name;
@@ -1199,7 +1200,7 @@ function handleToolbarAction(action: string) {
 }
 
 function updateVisibilityButton() {
-  const btn = toolbarEl.querySelector('[data-action="toggle-visibility"]') as HTMLButtonElement;
+  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="toggle-visibility"]')!;
   if (annotationsVisible) {
     btn.classList.remove('toolbar-btn-active');
     btn.innerHTML = `
@@ -1219,7 +1220,7 @@ function updateVisibilityButton() {
 
 function togglePauseAnimations() {
   isPaused = !isPaused;
-  const btn = toolbarEl.querySelector('[data-action="pause"]') as HTMLButtonElement;
+  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="pause"]')!;
   if (isPaused) {
     document.getAnimations().forEach((a) => a.pause());
     btn.classList.add('toolbar-btn-active');
@@ -1234,7 +1235,7 @@ function togglePauseAnimations() {
 
 function toggleBrowseMode() {
   isBrowsing = !isBrowsing;
-  const btn = toolbarEl.querySelector('[data-action="browse"]') as HTMLButtonElement;
+  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="browse"]')!;
   if (isBrowsing) {
     btn.classList.add('toolbar-btn-active');
     btn.title = 'Annotate mode — select elements';
@@ -1253,7 +1254,7 @@ function toggleBrowseMode() {
 
 function toggleTestIdLabels() {
   testIdLabelsVisible = !testIdLabelsVisible;
-  const btn = toolbarEl.querySelector('[data-action="show-testids"]') as HTMLButtonElement;
+  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="show-testids"]')!;
 
   if (testIdLabelsVisible) {
     btn.classList.add('toolbar-btn-active');
@@ -1414,7 +1415,7 @@ function createDrawToolbar(): HTMLDivElement {
   bar.appendChild(sep2);
 
   // Prompt input
-  drawPromptInput = createElement('textarea', 'draw-prompt-input') as HTMLTextAreaElement;
+  drawPromptInput = createElement('textarea', 'draw-prompt-input');
   drawPromptInput.placeholder = 'Describe what you want to change...';
   drawPromptInput.rows = 1;
   drawPromptInput.addEventListener('keydown', (e) => {
@@ -1491,7 +1492,7 @@ function createDrawToolbar(): HTMLDivElement {
 
 function toggleDrawMode() {
   isDrawing = !isDrawing;
-  const btn = toolbarEl.querySelector('[data-action="draw"]') as HTMLButtonElement;
+  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="draw"]')!;
 
   if (isDrawing) {
     // Exit browse mode if active
@@ -1706,21 +1707,22 @@ function createSettingsPanel(): HTMLDivElement {
   });
 
   // Auto-save on change
-  panel.querySelectorAll('.settings-select, .settings-input').forEach((el) => {
-    el.addEventListener('change', (e) => {
-      e.stopPropagation();
-      const target = el as HTMLSelectElement | HTMLInputElement;
-      // If provider changed, repopulate models
-      if (target.dataset.key === 'provider') {
-        populateSettingsModels(target.value);
-      }
-      // If project changed, apply project defaults to provider/model/mode
-      if (target.dataset.key === 'projectId') {
-        applyProjectDefaults(target.value);
-      }
-      saveSettings();
+  panel
+    .querySelectorAll<HTMLSelectElement | HTMLInputElement>('.settings-select, .settings-input')
+    .forEach((target) => {
+      target.addEventListener('change', (e) => {
+        e.stopPropagation();
+        // If provider changed, repopulate models
+        if (target.dataset.key === 'provider') {
+          populateSettingsModels(target.value);
+        }
+        // If project changed, apply project defaults to provider/model/mode
+        if (target.dataset.key === 'projectId') {
+          applyProjectDefaults(target.value);
+        }
+        saveSettings();
+      });
     });
-  });
 
   // Prevent clicks inside panel from triggering annotation
   panel.addEventListener('click', (e) => e.stopPropagation());
@@ -1730,7 +1732,8 @@ function createSettingsPanel(): HTMLDivElement {
 }
 
 // Cached provider data for the settings panel
-let settingsProviderData: Record<string, any> | null = null;
+// (`models`: a plain model id list, read as a fallback for `modelsWithLabels`).
+let settingsProviderData: Record<string, ProviderInfo & { models?: string[] }> | null = null;
 // Cached projects data (includes per-project defaults)
 let settingsProjectsData: Array<{
   id: string;
@@ -1772,7 +1775,7 @@ function detectFramework(): string {
 }
 
 function updateFrameworkStatus() {
-  const el = settingsPanel.querySelector('.settings-react-status') as HTMLDivElement;
+  const el = settingsPanel.querySelector<HTMLDivElement>('.settings-react-status')!;
   const frameworks = detectFramework();
   if (frameworks) {
     el.style.display = 'none';
@@ -1790,7 +1793,7 @@ function hideSettingsPanel() {
 }
 
 function positionSettingsPanel() {
-  const settingsBtn = toolbarEl.querySelector('[data-action="settings"]') as HTMLButtonElement;
+  const settingsBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="settings"]')!;
   const btnRect = settingsBtn.getBoundingClientRect();
   const panelWidth = 340;
   const gap = 12;
@@ -1810,7 +1813,7 @@ function positionSettingsPanel() {
 }
 
 async function loadSettingsData() {
-  const statusEl = settingsPanel.querySelector('.settings-status') as HTMLDivElement;
+  const statusEl = settingsPanel.querySelector<HTMLDivElement>('.settings-status')!;
   statusEl.textContent = 'Loading...';
   statusEl.className = 'settings-status';
 
@@ -1828,15 +1831,13 @@ async function loadSettingsData() {
     const config = data.config || {};
 
     // Populate server URL
-    const serverInput = settingsPanel.querySelector('[data-key="serverUrl"]') as HTMLInputElement;
+    const serverInput = settingsPanel.querySelector<HTMLInputElement>('[data-key="serverUrl"]')!;
     serverInput.value = config.serverUrl || 'http://localhost:3001';
     updateTokenState(Boolean(config.hasApiToken));
 
     // Populate projects
     settingsProjectsData = data.projects || [];
-    const projectSelect = settingsPanel.querySelector(
-      '[data-key="projectId"]',
-    ) as HTMLSelectElement;
+    const projectSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="projectId"]')!;
     projectSelect.innerHTML = '<option value="">Select a project...</option>';
     settingsProjectsData.forEach((p) => {
       const opt = document.createElement('option');
@@ -1852,19 +1853,15 @@ async function loadSettingsData() {
       : null;
 
     // Populate mode — project default > fallback
-    const modeSelect = settingsPanel.querySelector('[data-key="mode"]') as HTMLSelectElement;
+    const modeSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="mode"]')!;
     const effectiveMode = selectedProject?.defaultMode || config.mode || DEFAULT_THREAD_MODE;
     modeSelect.value = effectiveMode;
 
     // Populate providers
     settingsProviderData = data.providers || {};
-    const providerSelect = settingsPanel.querySelector(
-      '[data-key="provider"]',
-    ) as HTMLSelectElement;
+    const providerSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="provider"]')!;
     providerSelect.innerHTML = '';
-    const available = Object.entries(settingsProviderData!).filter(
-      ([, info]) => (info as any).available,
-    );
+    const available = Object.entries(settingsProviderData!).filter(([, info]) => info.available);
 
     if (available.length === 0) {
       providerSelect.innerHTML = '<option value="">No providers</option>';
@@ -1880,7 +1877,7 @@ async function loadSettingsData() {
       available.forEach(([key, info]) => {
         const opt = document.createElement('option');
         opt.value = key;
-        opt.textContent = (info as any).label || key;
+        opt.textContent = info.label || key;
         if (key === effectiveProvider) opt.selected = true;
         providerSelect.appendChild(opt);
       });
@@ -1891,8 +1888,8 @@ async function loadSettingsData() {
     }
 
     // Connection state (dot + connect button + status text)
-    const dot = settingsPanel.querySelector('.settings-dot') as HTMLSpanElement;
-    const connectBtn = settingsPanel.querySelector('.settings-connect-btn') as HTMLButtonElement;
+    const dot = settingsPanel.querySelector<HTMLSpanElement>('.settings-dot')!;
+    const connectBtn = settingsPanel.querySelector<HTMLButtonElement>('.settings-connect-btn')!;
     if (data.connected) {
       dot.className = 'settings-dot settings-dot-ok';
       dot.title = 'Connected';
@@ -1914,15 +1911,15 @@ async function loadSettingsData() {
 }
 
 function updateTokenState(hasToken: boolean) {
-  const state = settingsPanel.querySelector('.settings-token-state') as HTMLSpanElement;
-  const btn = settingsPanel.querySelector('.settings-token-btn') as HTMLButtonElement;
+  const state = settingsPanel.querySelector<HTMLSpanElement>('.settings-token-state')!;
+  const btn = settingsPanel.querySelector<HTMLButtonElement>('.settings-token-btn')!;
   state.textContent = hasToken ? 'Saved' : 'Not set';
   state.classList.toggle('settings-token-missing', !hasToken);
   btn.textContent = hasToken ? 'Change token' : 'Set token';
 }
 
 function showGrantButton(show: boolean) {
-  const btn = settingsPanel.querySelector('.settings-grant-btn') as HTMLButtonElement;
+  const btn = settingsPanel.querySelector<HTMLButtonElement>('.settings-grant-btn')!;
   btn.style.display = show ? 'block' : 'none';
 }
 
@@ -1931,14 +1928,12 @@ function applyProjectDefaults(projectId: string) {
   // The public API's projects carry no defaults: keep the saved choices.
   if (!hasProjectDefaults(project) || !settingsProviderData) return;
 
-  const available = Object.entries(settingsProviderData).filter(
-    ([, info]) => (info as any).available,
-  );
+  const available = Object.entries(settingsProviderData).filter(([, info]) => info.available);
   if (available.length === 0) return;
 
   // Resolve provider: project default > 'claude'
   const effectiveProvider = project.defaultProvider || 'claude';
-  const providerSelect = settingsPanel.querySelector('[data-key="provider"]') as HTMLSelectElement;
+  const providerSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="provider"]')!;
   if (settingsProviderData[effectiveProvider]?.available) {
     providerSelect.value = effectiveProvider;
   }
@@ -1948,12 +1943,12 @@ function applyProjectDefaults(projectId: string) {
   populateSettingsModels(providerSelect.value, effectiveModel);
 
   // Resolve mode: project default > 'local'
-  const modeSelect = settingsPanel.querySelector('[data-key="mode"]') as HTMLSelectElement;
+  const modeSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="mode"]')!;
   modeSelect.value = project.defaultMode || DEFAULT_THREAD_MODE;
 }
 
 function populateSettingsModels(provider: string, selectedModel?: string) {
-  const modelSelect = settingsPanel.querySelector('[data-key="model"]') as HTMLSelectElement;
+  const modelSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="model"]')!;
   modelSelect.innerHTML = '';
 
   if (!settingsProviderData || !settingsProviderData[provider]) {
@@ -1982,10 +1977,12 @@ function populateSettingsModels(provider: string, selectedModel?: string) {
 
 function saveSettings() {
   const config: Record<string, string> = {};
-  settingsPanel.querySelectorAll('[data-key]').forEach((el) => {
-    const input = el as HTMLSelectElement | HTMLInputElement;
-    config[input.dataset.key!] = input.value;
-  });
+  // Every [data-key] element in the settings panel is a <select> or an <input>.
+  settingsPanel
+    .querySelectorAll<HTMLSelectElement | HTMLInputElement>('[data-key]')
+    .forEach((input) => {
+      config[input.dataset.key!] = input.value;
+    });
   safeSendMessage({ type: 'SAVE_CONFIG', config });
 
   // Update the project name in the toolbar
@@ -1995,11 +1992,11 @@ function saveSettings() {
 }
 
 async function testSettingsConnection() {
-  const statusEl = settingsPanel.querySelector('.settings-status') as HTMLDivElement;
-  const connectBtn = settingsPanel.querySelector('.settings-connect-btn') as HTMLButtonElement;
-  const serverUrl = (
-    settingsPanel.querySelector('[data-key="serverUrl"]') as HTMLInputElement
-  ).value.trim();
+  const statusEl = settingsPanel.querySelector<HTMLDivElement>('.settings-status')!;
+  const connectBtn = settingsPanel.querySelector<HTMLButtonElement>('.settings-connect-btn')!;
+  const serverUrl = settingsPanel
+    .querySelector<HTMLInputElement>('[data-key="serverUrl"]')!
+    .value.trim();
   statusEl.textContent = 'Connecting...';
   statusEl.className = 'settings-status';
   connectBtn.className = 'settings-connect-btn';
@@ -2009,7 +2006,7 @@ async function testSettingsConnection() {
       safeSendMessage({ type: 'TEST_CONNECTION', serverUrl }, resolve);
     });
 
-    const dot = settingsPanel.querySelector('.settings-dot') as HTMLSpanElement;
+    const dot = settingsPanel.querySelector<HTMLSpanElement>('.settings-dot')!;
     if (result?.success) {
       dot.className = 'settings-dot settings-dot-ok';
       connectBtn.className = 'settings-connect-btn settings-connect-btn-ok';
@@ -2085,7 +2082,7 @@ function hideHistoryPanel() {
 }
 
 function positionHistoryPanel() {
-  const historyBtn = toolbarEl.querySelector('[data-action="history"]') as HTMLButtonElement;
+  const historyBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="history"]')!;
   const btnRect = historyBtn.getBoundingClientRect();
   const panelWidth = 360;
   const gap = 12;
@@ -2102,10 +2099,10 @@ function positionHistoryPanel() {
 }
 
 function loadHistoryData() {
-  const body = historyPanel.querySelector('.history-body') as HTMLDivElement;
+  const body = historyPanel.querySelector<HTMLDivElement>('.history-body')!;
 
-  chrome.storage.local.get('funnyHistory', (result) => {
-    const history = (result.funnyHistory ?? []) as any[];
+  chrome.storage.local.get<FunnyHistoryStorage>('funnyHistory', (result) => {
+    const history = result.funnyHistory ?? [];
 
     if (history.length === 0) {
       body.innerHTML = '<div class="history-empty">No annotations sent yet</div>';
@@ -2140,13 +2137,11 @@ function loadHistoryData() {
       `;
 
       // Click to open thread in Funny if threadId exists
-      if (entry.threadId && entry.serverUrl) {
+      const { threadId, serverUrl, projectId } = entry;
+      if (threadId && serverUrl) {
         item.title = 'Open thread in Funny';
         item.addEventListener('click', () => {
-          window.open(
-            threadUrl(entry.serverUrl, { id: entry.threadId, projectId: entry.projectId }),
-            '_blank',
-          );
+          window.open(threadUrl(serverUrl, { id: threadId, projectId }), '_blank');
         });
       }
 
@@ -2269,7 +2264,7 @@ async function sendToFunny() {
     return;
   }
 
-  const sendBtn = toolbarEl.querySelector('[data-action="send"]') as HTMLButtonElement;
+  const sendBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="send"]')!;
   sendBtn.classList.add('toolbar-btn-loading');
   sendBtn.setAttribute('disabled', 'true');
 
@@ -2352,8 +2347,25 @@ async function sendToFunny() {
 // ---------------------------------------------------------------------------
 // Annotation history
 // ---------------------------------------------------------------------------
+/** An entry of `funnyHistory` in chrome.storage.local, written only by saveToHistory. */
+interface HistoryEntry {
+  id: string;
+  timestamp: number;
+  url: string;
+  title: string;
+  threadId: string | null;
+  projectId: string | null;
+  annotationCount: number;
+  annotations: any[];
+  serverUrl?: string;
+}
+
+interface FunnyHistoryStorage {
+  funnyHistory?: HistoryEntry[];
+}
+
 function saveToHistory(serializedAnnotations: any[], threadId?: string, projectId?: string) {
-  const entry: any = {
+  const entry: HistoryEntry = {
     id: `hist_${Date.now()}`,
     timestamp: Date.now(),
     url: window.location.href,
@@ -2369,8 +2381,8 @@ function saveToHistory(serializedAnnotations: any[], threadId?: string, projectI
     entry.serverUrl = serverUrl;
 
     // Store in chrome.storage.local (keep last 50 entries)
-    chrome.storage.local.get('funnyHistory', (result) => {
-      const history = (result.funnyHistory ?? []) as any[];
+    chrome.storage.local.get<FunnyHistoryStorage>('funnyHistory', (result) => {
+      const history = result.funnyHistory ?? [];
       history.unshift(entry);
       if (history.length > 50) history.length = 50;
       chrome.storage.local.set({ funnyHistory: history });

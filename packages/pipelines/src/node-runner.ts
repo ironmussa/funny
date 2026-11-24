@@ -54,6 +54,8 @@ async function releaseHeldSlot(
 
 /** Any promise-like value, not only a native Promise. */
 const isThenable = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
+  // SAFETY: only reads `then` through optional chaining, so a nullish value or a value without
+  // `then` yields undefined and fails the typeof check.
   typeof (value as { then?: unknown } | null)?.then === 'function';
 
 /** The message of whatever an Effect failed with. */

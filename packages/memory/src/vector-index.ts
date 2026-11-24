@@ -114,7 +114,7 @@ export class VectorIndex {
   async getFactCount(): Promise<number> {
     try {
       const result = await this.db.execute('SELECT count(*) as c FROM fact_embeddings');
-      return (result.rows[0]?.c as number) ?? 0;
+      return Number(result.rows[0]?.c ?? 0);
     } catch {
       return 0;
     }

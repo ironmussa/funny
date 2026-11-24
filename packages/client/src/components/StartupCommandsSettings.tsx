@@ -1,28 +1,18 @@
 import type { StartupCommand } from '@funny/shared';
-import { Play, Plus, Pencil, Trash2, X, Check, Square, Loader2 } from 'lucide-react';
+import { Plus, X, Check } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { CommandHighlight } from '@/components/CommandHighlight';
+import { StartupCommandEditForm } from '@/components/startup-commands-settings/StartupCommandEditForm';
+import { StartupCommandRow } from '@/components/startup-commands-settings/StartupCommandRow';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
-import { sendTerminalRealtime } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
-
-function stopStartupCommand(cmd: StartupCommand) {
-  const store = useTerminalStore.getState();
-  const tab = store.tabs.find((candidate) => candidate.commandId === cmd.id && candidate.alive);
-  if (!tab) return;
-
-  sendTerminalRealtime(tab.id, { case: 'close', reason: 'startup-command-stopped' });
-  store.removeTab(tab.id);
-}
 
 export function StartupCommandsSettings() {
   const { t } = useTranslation();
@@ -186,122 +176,28 @@ export function StartupCommandsSettings() {
 
         if (editingId === cmd.id) {
           return (
-            <div key={cmd.id} className="settings-form-panel">
-              <div className="grid grid-cols-4 gap-2">
-                <div>
-                  <label htmlFor={`startup-label-${cmd.id}`} className="settings-label">
-                    {t('startup.label')}
-                  </label>
-                  <Input
-                    id={`startup-label-${cmd.id}`}
-                    className="settings-form-input"
-                    placeholder={t('startup.label')}
-                    value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <div className="col-span-3">
-                  <label htmlFor={`startup-command-${cmd.id}`} className="settings-label">
-                    {t('startup.command')}
-                  </label>
-                  <Input
-                    mono
-                    id={`startup-command-${cmd.id}`}
-                    className="settings-form-input"
-                    placeholder={t('startup.command')}
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.nativeEvent.isComposing) return;
-                      if (e.key === 'Enter') handleUpdate(cmd.id);
-                      if (e.key === 'Escape') cancelEdit();
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <Button variant="ghost" size="sm" onClick={cancelEdit}>
-                  <X className="icon-sm mr-1" />
-                  {t('common.cancel')}
-                </Button>
-                <Button size="sm" onClick={() => handleUpdate(cmd.id)}>
-                  <Check className="icon-sm mr-1" />
-                  {t('common.save')}
-                </Button>
-              </div>
-            </div>
+            <StartupCommandEditForm
+              key={cmd.id}
+              cmdId={cmd.id}
+              label={label}
+              setLabel={setLabel}
+              command={command}
+              setCommand={setCommand}
+              onSave={handleUpdate}
+              onCancel={cancelEdit}
+            />
           );
         }
 
         return (
-          <div
+          <StartupCommandRow
             key={cmd.id}
-            className="settings-item-card group flex items-center justify-between gap-3"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                {isRunning && (
-                  <Loader2 className="icon-sm text-status-success shrink-0 animate-spin" />
-                )}
-                <span className="truncate text-sm font-medium">{cmd.label}</span>
-              </div>
-              <CommandHighlight command={cmd.command} />
-            </div>
-
-            {/* Actions */}
-            <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-              {isRunning ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => stopStartupCommand(cmd)}
-                      className="text-status-error hover:text-status-error/80"
-                    >
-                      <Square className="icon-sm" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('startup.stop')}</TooltipContent>
-                </Tooltip>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleRun(cmd)}
-                      className="text-status-success hover:text-status-success/80"
-                    >
-                      <Play className="icon-sm" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('startup.run')}</TooltipContent>
-                </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="muted" size="icon-sm" onClick={() => startEditing(cmd)}>
-                    <Pencil className="icon-sm" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('startup.edit')}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="muted-destructive"
-                    size="icon-sm"
-                    onClick={() => handleDelete(cmd.id)}
-                  >
-                    <Trash2 className="icon-sm" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('startup.delete')}</TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+            cmd={cmd}
+            isRunning={isRunning}
+            onRun={handleRun}
+            onEdit={startEditing}
+            onDelete={handleDelete}
+          />
         );
       })}
 

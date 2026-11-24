@@ -50,57 +50,56 @@ function openProjectWorktrees(activity: Activity, deps: RetryDeps): boolean {
 }
 
 /** Retry handlers, keyed by activity kind. */
-interface RetryTargets {
-  [kind: string]: RetryTarget;
-}
-
-const RETRY_TARGETS: RetryTargets = {
-  'project.clone': (activity, deps) => {
-    const parsed = ACTIVITY_KINDS['project.clone'].input.safeParse(activity.input);
-    if (!parsed.success) return false;
-    deps.openCloneForm(parsed.data);
-    return true;
-  },
-  'worktree.setup': (activity, deps) => openThreadOrProject(activity, deps) !== null,
-  'git.workflow': (activity, deps) => {
-    const opened = openThreadOrProject(activity, deps);
-    if (opened === 'thread') deps.openReviewPane();
-    return opened !== null;
-  },
-  'workspace.cleanup': openProjectWorktrees,
-  'workspace.prune': openProjectWorktrees,
-  'checkout.switch': (activity, deps) => openThreadOrProject(activity, deps) !== null,
-  // track-user-and-scheduled-actions: where each new kind is redone.
-  'automation.unscheduled': (activity, deps) => {
-    if (!activity.projectId) return false;
-    deps.navigate(buildPath(`/projects/${activity.projectId}/settings/automations`));
-    return true;
-  },
-  'github.write': (activity, deps) => {
-    if (!activity.projectId) return false;
-    deps.navigate(buildPath(`/projects/${activity.projectId}`));
-    // A pull request write is redone from its pull request; a publish or an issue delete from the project.
-    if (activity.input.action === 'pr-merge' || activity.input.action === 'pr-revert-file') {
-      deps.openPullRequests();
-    }
-    return true;
-  },
-  'sandbox.provision': (activity, deps) => openThreadOrProject(activity, deps) !== null,
-};
+const RETRY_TARGETS = new Map<string, RetryTarget>(
+  Object.entries({
+    'project.clone': (activity, deps) => {
+      const parsed = ACTIVITY_KINDS['project.clone'].input.safeParse(activity.input);
+      if (!parsed.success) return false;
+      deps.openCloneForm(parsed.data);
+      return true;
+    },
+    'worktree.setup': (activity, deps) => openThreadOrProject(activity, deps) !== null,
+    'git.workflow': (activity, deps) => {
+      const opened = openThreadOrProject(activity, deps);
+      if (opened === 'thread') deps.openReviewPane();
+      return opened !== null;
+    },
+    'workspace.cleanup': openProjectWorktrees,
+    'workspace.prune': openProjectWorktrees,
+    'checkout.switch': (activity, deps) => openThreadOrProject(activity, deps) !== null,
+    // track-user-and-scheduled-actions: where each new kind is redone.
+    'automation.unscheduled': (activity, deps) => {
+      if (!activity.projectId) return false;
+      deps.navigate(buildPath(`/projects/${activity.projectId}/settings/automations`));
+      return true;
+    },
+    'github.write': (activity, deps) => {
+      if (!activity.projectId) return false;
+      deps.navigate(buildPath(`/projects/${activity.projectId}`));
+      // A pull request write is redone from its pull request; a publish or an issue delete from the project.
+      if (activity.input.action === 'pr-merge' || activity.input.action === 'pr-revert-file') {
+        deps.openPullRequests();
+      }
+      return true;
+    },
+    'sandbox.provision': (activity, deps) => openThreadOrProject(activity, deps) !== null,
+  } satisfies Record<string, RetryTarget>),
+);
 
 /** Whether the panel offers a retry for this activity. */
 export function canRetryActivity(activity: Activity): boolean {
   return (
     (activity.status === 'failed' || activity.status === 'interrupted') &&
     isActivityKind(activity.kind) &&
-    Object.hasOwn(RETRY_TARGETS, activity.kind)
+    RETRY_TARGETS.has(activity.kind)
   );
 }
 
 /** Opens the retry target; false when there is none to open. */
 export function retryActivity(activity: Activity, deps: RetryDeps): boolean {
   if (!canRetryActivity(activity)) return false;
-  return RETRY_TARGETS[activity.kind](activity, deps);
+  const open = RETRY_TARGETS.get(activity.kind);
+  return open ? open(activity, deps) : false;
 }
 
 /** How long a runner keeps undo snapshots (`git-undo.ts`, 30 days). */

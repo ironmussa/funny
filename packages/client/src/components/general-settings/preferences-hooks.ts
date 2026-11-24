@@ -21,15 +21,13 @@ export function toastSettingsSaved(t: (key: string) => string) {
 // ── Provider keys (GitHub token, AI provider keys, AssemblyAI) ────────
 
 /** A value per provider id. */
-interface KeyMap<T> {
-  [providerId: string]: T;
-}
+type KeyMap<T> = Record<string, T>;
 
 const NO_KEYS: KeyMap<boolean> = {};
 
 /** Updater that sets one provider id in a per-key map. */
 function withKey<T>(id: string, value: T) {
-  return (prev: KeyMap<T>): KeyMap<T> => ({ ...prev, [id]: value });
+  return (prev: KeyMap<T>) => ({ ...prev, [id]: value });
 }
 
 export function useProviderKeys() {

@@ -161,47 +161,44 @@ export const gitSyncStateConfig: Record<
   clean: { icon: CheckCircle2, className: 'text-muted-foreground', labelKey: 'gitStatus.clean' },
 };
 
-/** Friendly model keys, keyed by full model ID. */
-interface ModelKeyById {
-  [modelId: string]: string;
-}
-
 /** Map full model IDs (from Claude SDK / Gemini CLI) back to friendly keys used in translations. */
-const MODEL_ID_TO_KEY: ModelKeyById = {
-  'claude-opus-4-6': 'opus',
-  'claude-opus-4-6[1m]': 'opus',
-  'claude-opus-4-7': 'opus47',
-  'claude-opus-4-7[1m]': 'opus47',
-  'claude-opus-4-8': 'opus48',
-  'claude-opus-4-8[1m]': 'opus48',
-  'claude-opus-5': 'opus5',
-  'claude-opus-5-5': 'opus55',
-  'claude-mythos-5-2': 'mythos52',
-  'claude-mythos-5-2[1m]': 'mythos52',
-  'claude-fable-5-2': 'fable52',
-  'claude-fable-5-2[1m]': 'fable52',
-  'claude-fable-5-1': 'fable51',
-  'claude-fable-5-1[1m]': 'fable51',
-  'claude-fable-5': 'fable5',
-  'claude-fable-5[1m]': 'fable5',
-  'claude-sonnet-4-5-20250929': 'sonnet',
-  'claude-sonnet-4-6': 'sonnet46',
-  'claude-sonnet-4-6[1m]': 'sonnet46',
-  'claude-haiku-4-5-20251001': 'haiku',
-  'gemini-2.0-flash': 'gemini20flash',
-  'gemini-2.5-flash': 'gemini25flash',
-  'gemini-2.5-pro': 'gemini25pro',
-  'gemini-3.1-pro-preview': 'gemini31pro',
-  'gemini-3-flash-preview': 'gemini3flash',
-  'gemini-3.1-flash-lite-preview': 'gemini31flashLite',
-  // Legacy model IDs (threads created with previous IDs — fall back to current labels)
-  'gemini-3-pro-preview': 'gemini31pro',
-  'gemini-3.1-pro': 'gemini31pro',
-  'gemini-3-flash': 'gemini3flash',
-};
+const MODEL_ID_TO_KEY = new Map<string, string>(
+  Object.entries({
+    'claude-opus-4-6': 'opus',
+    'claude-opus-4-6[1m]': 'opus',
+    'claude-opus-4-7': 'opus47',
+    'claude-opus-4-7[1m]': 'opus47',
+    'claude-opus-4-8': 'opus48',
+    'claude-opus-4-8[1m]': 'opus48',
+    'claude-opus-5': 'opus5',
+    'claude-opus-5-5': 'opus55',
+    'claude-mythos-5-2': 'mythos52',
+    'claude-mythos-5-2[1m]': 'mythos52',
+    'claude-fable-5-2': 'fable52',
+    'claude-fable-5-2[1m]': 'fable52',
+    'claude-fable-5-1': 'fable51',
+    'claude-fable-5-1[1m]': 'fable51',
+    'claude-fable-5': 'fable5',
+    'claude-fable-5[1m]': 'fable5',
+    'claude-sonnet-4-5-20250929': 'sonnet',
+    'claude-sonnet-4-6': 'sonnet46',
+    'claude-sonnet-4-6[1m]': 'sonnet46',
+    'claude-haiku-4-5-20251001': 'haiku',
+    'gemini-2.0-flash': 'gemini20flash',
+    'gemini-2.5-flash': 'gemini25flash',
+    'gemini-2.5-pro': 'gemini25pro',
+    'gemini-3.1-pro-preview': 'gemini31pro',
+    'gemini-3-flash-preview': 'gemini3flash',
+    'gemini-3.1-flash-lite-preview': 'gemini31flashLite',
+    // Legacy model IDs (threads created with previous IDs — fall back to current labels)
+    'gemini-3-pro-preview': 'gemini31pro',
+    'gemini-3.1-pro': 'gemini31pro',
+    'gemini-3-flash': 'gemini3flash',
+  } satisfies Record<string, string>),
+);
 
 export function resolveModelLabel(modelId: string, t: (key: string, opts?: any) => string): string {
-  const key = MODEL_ID_TO_KEY[modelId] ?? modelId;
+  const key = MODEL_ID_TO_KEY.get(modelId) ?? modelId;
   return t(`thread.model.${key}`, { defaultValue: modelId });
 }
 

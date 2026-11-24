@@ -48,11 +48,7 @@ export const ALL_STANDARD_TOOLS = [
 ] as const;
 
 /** i18n keys of tool labels, keyed by tool name. */
-interface ToolLabels {
-  [tool: string]: string;
-}
-
-export const TOOL_LABELS: ToolLabels = {
+export const TOOL_LABELS = {
   Read: 'tools.readFile',
   Edit: 'tools.editFile',
   Write: 'tools.writeFile',
@@ -64,7 +60,7 @@ export const TOOL_LABELS: ToolLabels = {
   Task: 'tools.subagent',
   TodoWrite: 'tools.todos',
   NotebookEdit: 'tools.editNotebook',
-};
+} satisfies Record<(typeof ALL_STANDARD_TOOLS)[number], string>;
 
 const DEFAULT_TOOL_PERMISSIONS: Record<string, ToolPermission> = Object.fromEntries(
   ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),

@@ -56,15 +56,13 @@ const END_LABELS: Partial<Record<ThreadStatus, string>> = {
 };
 
 /** Milestone types, keyed by tool name. */
-interface MilestoneTypeByTool {
-  [toolName: string]: MilestoneType;
-}
-
-const TOOL_CALL_TYPES: MilestoneTypeByTool = {
-  TodoWrite: 'todo',
-  AskUserQuestion: 'question',
-  ExitPlanMode: 'plan',
-};
+const TOOL_CALL_TYPES = new Map<string, MilestoneType>(
+  Object.entries({
+    TodoWrite: 'todo',
+    AskUserQuestion: 'question',
+    ExitPlanMode: 'plan',
+  } satisfies Record<string, MilestoneType>),
+);
 
 function parseToolInput(input: string): Record<string, unknown> | null {
   try {
@@ -226,7 +224,7 @@ function createTodoEmitter(index: TodoIndex, finished: boolean) {
 }
 
 function toolCallMilestone(tc: ToolCall, timestamp: string): MilestoneDraft | null {
-  const type = TOOL_CALL_TYPES[tc.name];
+  const type = TOOL_CALL_TYPES.get(tc.name);
   if (!type) return null;
   const parsed = parseToolInput(tc.input);
   if (!parsed) return null;

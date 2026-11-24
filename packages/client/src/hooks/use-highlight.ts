@@ -10,124 +10,120 @@ export const HIGHLIGHT_MAX_LINES = 50_000;
 
 /* ── Language registry ── */
 
-/** highlight.js language names, keyed by file extension. */
-interface LanguageByExtension {
-  [extension: string]: string;
-}
-
-/** Lazy highlight.js language modules, keyed by language name. */
-interface LanguageImports {
-  [language: string]: () => Promise<{ default: unknown }>;
-}
-
 /**
  * Map file extensions to highlight.js language names.
  * Languages are registered lazily on first use.
  */
-const EXT_TO_HLJS_LANG: LanguageByExtension = {
-  ts: 'typescript',
-  tsx: 'typescript',
-  js: 'javascript',
-  jsx: 'javascript',
-  mjs: 'javascript',
-  cjs: 'javascript',
-  py: 'python',
-  rb: 'ruby',
-  rs: 'rust',
-  go: 'go',
-  java: 'java',
-  kt: 'kotlin',
-  swift: 'swift',
-  c: 'c',
-  cpp: 'cpp',
-  h: 'c',
-  hpp: 'cpp',
-  cs: 'csharp',
-  md: 'markdown',
-  mdx: 'markdown',
-  markdown: 'markdown',
-  json: 'json',
-  yaml: 'yaml',
-  yml: 'yaml',
-  toml: 'ini',
-  xml: 'xml',
-  html: 'xml',
-  css: 'css',
-  scss: 'scss',
-  less: 'less',
-  sql: 'sql',
-  sh: 'bash',
-  bash: 'bash',
-  zsh: 'bash',
-  ps1: 'powershell',
-  dockerfile: 'dockerfile',
-  makefile: 'makefile',
-  lua: 'lua',
-  php: 'php',
-  vue: 'xml',
-  svelte: 'xml',
-  graphql: 'graphql',
-  gql: 'graphql',
-  proto: 'protobuf',
-  ini: 'ini',
-  env: 'ini',
-  tf: 'ini',
-  zig: 'plaintext',
-  ex: 'elixir',
-  exs: 'elixir',
-  erl: 'erlang',
-  hs: 'haskell',
-  dart: 'dart',
-  r: 'r',
-  scala: 'scala',
-  clj: 'clojure',
-};
+/** highlight.js language names, keyed by file extension. */
+const EXT_TO_HLJS_LANG = new Map<string, string>(
+  Object.entries({
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    mjs: 'javascript',
+    cjs: 'javascript',
+    py: 'python',
+    rb: 'ruby',
+    rs: 'rust',
+    go: 'go',
+    java: 'java',
+    kt: 'kotlin',
+    swift: 'swift',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c',
+    hpp: 'cpp',
+    cs: 'csharp',
+    md: 'markdown',
+    mdx: 'markdown',
+    markdown: 'markdown',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'ini',
+    xml: 'xml',
+    html: 'xml',
+    css: 'css',
+    scss: 'scss',
+    less: 'less',
+    sql: 'sql',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    ps1: 'powershell',
+    dockerfile: 'dockerfile',
+    makefile: 'makefile',
+    lua: 'lua',
+    php: 'php',
+    vue: 'xml',
+    svelte: 'xml',
+    graphql: 'graphql',
+    gql: 'graphql',
+    proto: 'protobuf',
+    ini: 'ini',
+    env: 'ini',
+    tf: 'ini',
+    zig: 'plaintext',
+    ex: 'elixir',
+    exs: 'elixir',
+    erl: 'erlang',
+    hs: 'haskell',
+    dart: 'dart',
+    r: 'r',
+    scala: 'scala',
+    clj: 'clojure',
+  } satisfies Record<string, string>),
+);
 
 /**
  * Map hljs language name → dynamic import.
  * We only import what we need, avoiding the full 2MB+ hljs bundle.
  */
-const LANG_IMPORTS: LanguageImports = {
-  typescript: () => import('highlight.js/lib/languages/typescript'),
-  javascript: () => import('highlight.js/lib/languages/javascript'),
-  python: () => import('highlight.js/lib/languages/python'),
-  ruby: () => import('highlight.js/lib/languages/ruby'),
-  rust: () => import('highlight.js/lib/languages/rust'),
-  go: () => import('highlight.js/lib/languages/go'),
-  java: () => import('highlight.js/lib/languages/java'),
-  kotlin: () => import('highlight.js/lib/languages/kotlin'),
-  swift: () => import('highlight.js/lib/languages/swift'),
-  c: () => import('highlight.js/lib/languages/c'),
-  cpp: () => import('highlight.js/lib/languages/cpp'),
-  csharp: () => import('highlight.js/lib/languages/csharp'),
-  markdown: () => import('highlight.js/lib/languages/markdown'),
-  json: () => import('highlight.js/lib/languages/json'),
-  yaml: () => import('highlight.js/lib/languages/yaml'),
-  xml: () => import('highlight.js/lib/languages/xml'),
-  css: () => import('highlight.js/lib/languages/css'),
-  scss: () => import('highlight.js/lib/languages/scss'),
-  less: () => import('highlight.js/lib/languages/less'),
-  sql: () => import('highlight.js/lib/languages/sql'),
-  bash: () => import('highlight.js/lib/languages/bash'),
-  powershell: () => import('highlight.js/lib/languages/powershell'),
-  dockerfile: () => import('highlight.js/lib/languages/dockerfile'),
-  makefile: () => import('highlight.js/lib/languages/makefile'),
-  lua: () => import('highlight.js/lib/languages/lua'),
-  php: () => import('highlight.js/lib/languages/php'),
-  graphql: () => import('highlight.js/lib/languages/graphql'),
-  protobuf: () => import('highlight.js/lib/languages/protobuf'),
-  ini: () => import('highlight.js/lib/languages/ini'),
-  // hcl not available in highlight.js; tf files map to 'ini' instead
-  elixir: () => import('highlight.js/lib/languages/elixir'),
-  erlang: () => import('highlight.js/lib/languages/erlang'),
-  haskell: () => import('highlight.js/lib/languages/haskell'),
-  dart: () => import('highlight.js/lib/languages/dart'),
-  r: () => import('highlight.js/lib/languages/r'),
-  scala: () => import('highlight.js/lib/languages/scala'),
-  clojure: () => import('highlight.js/lib/languages/clojure'),
-  diff: () => import('highlight.js/lib/languages/diff'),
-  plaintext: () => import('highlight.js/lib/languages/plaintext'),
-};
+/** Lazy highlight.js language modules, keyed by language name. */
+const LANG_IMPORTS = new Map<string, () => Promise<{ default: unknown }>>(
+  Object.entries({
+    typescript: () => import('highlight.js/lib/languages/typescript'),
+    javascript: () => import('highlight.js/lib/languages/javascript'),
+    python: () => import('highlight.js/lib/languages/python'),
+    ruby: () => import('highlight.js/lib/languages/ruby'),
+    rust: () => import('highlight.js/lib/languages/rust'),
+    go: () => import('highlight.js/lib/languages/go'),
+    java: () => import('highlight.js/lib/languages/java'),
+    kotlin: () => import('highlight.js/lib/languages/kotlin'),
+    swift: () => import('highlight.js/lib/languages/swift'),
+    c: () => import('highlight.js/lib/languages/c'),
+    cpp: () => import('highlight.js/lib/languages/cpp'),
+    csharp: () => import('highlight.js/lib/languages/csharp'),
+    markdown: () => import('highlight.js/lib/languages/markdown'),
+    json: () => import('highlight.js/lib/languages/json'),
+    yaml: () => import('highlight.js/lib/languages/yaml'),
+    xml: () => import('highlight.js/lib/languages/xml'),
+    css: () => import('highlight.js/lib/languages/css'),
+    scss: () => import('highlight.js/lib/languages/scss'),
+    less: () => import('highlight.js/lib/languages/less'),
+    sql: () => import('highlight.js/lib/languages/sql'),
+    bash: () => import('highlight.js/lib/languages/bash'),
+    powershell: () => import('highlight.js/lib/languages/powershell'),
+    dockerfile: () => import('highlight.js/lib/languages/dockerfile'),
+    makefile: () => import('highlight.js/lib/languages/makefile'),
+    lua: () => import('highlight.js/lib/languages/lua'),
+    php: () => import('highlight.js/lib/languages/php'),
+    graphql: () => import('highlight.js/lib/languages/graphql'),
+    protobuf: () => import('highlight.js/lib/languages/protobuf'),
+    ini: () => import('highlight.js/lib/languages/ini'),
+    // hcl not available in highlight.js; tf files map to 'ini' instead
+    elixir: () => import('highlight.js/lib/languages/elixir'),
+    erlang: () => import('highlight.js/lib/languages/erlang'),
+    haskell: () => import('highlight.js/lib/languages/haskell'),
+    dart: () => import('highlight.js/lib/languages/dart'),
+    r: () => import('highlight.js/lib/languages/r'),
+    scala: () => import('highlight.js/lib/languages/scala'),
+    clojure: () => import('highlight.js/lib/languages/clojure'),
+    diff: () => import('highlight.js/lib/languages/diff'),
+    plaintext: () => import('highlight.js/lib/languages/plaintext'),
+  } satisfies Record<string, () => Promise<{ default: unknown }>>),
+);
 
 const registeredLangs = new Set<string>();
 const pendingRegistrations = new Map<string, Promise<void>>();
@@ -149,7 +145,7 @@ export async function ensureLanguage(lang: string): Promise<boolean> {
     return registeredLangs.has(resolved);
   }
 
-  const importFn = LANG_IMPORTS[resolved];
+  const importFn = LANG_IMPORTS.get(resolved);
   if (!importFn) return false;
 
   const promise = importFn()
@@ -182,8 +178,8 @@ export async function ensureHighlight(code: string, lang: string): Promise<boole
  * Resolve a language name or extension alias to a registered hljs language.
  */
 function resolveLang(lang: string): string {
-  if (LANG_IMPORTS[lang]) return lang;
-  return EXT_TO_HLJS_LANG[lang] ?? lang;
+  if (LANG_IMPORTS.get(lang)) return lang;
+  return EXT_TO_HLJS_LANG.get(lang) ?? lang;
 }
 
 /**
@@ -242,7 +238,7 @@ export async function detectLanguageFromContent(content: string): Promise<string
  * Resolve a file extension to an hljs language name.
  */
 export function extToHljsLang(ext: string): string {
-  return EXT_TO_HLJS_LANG[ext.toLowerCase()] ?? 'plaintext';
+  return EXT_TO_HLJS_LANG.get(ext.toLowerCase()) ?? 'plaintext';
 }
 
 /**

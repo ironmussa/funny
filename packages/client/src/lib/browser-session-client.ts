@@ -112,33 +112,29 @@ function answerAs<Answer>(request: Promise<BrowserSessionResult>): Promise<Answe
 type RealtimeFrame = Parameters<typeof sendBrowserSessionRealtime>[1];
 
 /** Builders of the frames sent without waiting for an answer, keyed by message type. */
-interface FireAndForgetFrames {
-  [type: string]: (extra: Record<string, unknown>) => RealtimeFrame;
-}
-
-const FIRE_AND_FORGET_FRAMES: FireAndForgetFrames = {
-  'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
-  'browser-session:navigate': (extra) => ({
-    case: 'navigate',
-    targetUrl: String(extra.url ?? ''),
-  }),
-  'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
-  'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
-  'browser-session:close': (extra) => ({
-    case: 'close',
-    reason: String(extra.reason ?? 'user'),
-    closeId: typeof extra.closeId === 'string' ? extra.closeId : undefined,
-  }),
-};
+const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: Record<string, unknown>) => RealtimeFrame>(
+  Object.entries({
+    'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
+    'browser-session:navigate': (extra) => ({
+      case: 'navigate',
+      targetUrl: String(extra.url ?? ''),
+    }),
+    'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
+    'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
+    'browser-session:close': (extra) => ({
+      case: 'close',
+      reason: String(extra.reason ?? 'user'),
+      closeId: typeof extra.closeId === 'string' ? extra.closeId : undefined,
+    }),
+  } satisfies Record<string, (extra: Record<string, unknown>) => RealtimeFrame>),
+);
 
 function sendFireAndForget(
   type: string,
   sessionId: string,
   extra: Record<string, unknown> = {},
 ): void {
-  const frame = Object.hasOwn(FIRE_AND_FORGET_FRAMES, type)
-    ? FIRE_AND_FORGET_FRAMES[type](extra)
-    : null;
+  const frame = FIRE_AND_FORGET_FRAMES.get(type)?.(extra) ?? null;
   if (!frame) return;
   const sent = sendBrowserSessionRealtime(sessionId, frame);
   // Only `open` reports a lost connection: the others are best-effort.

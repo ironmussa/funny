@@ -8,20 +8,18 @@ let unavailable = false;
 let queue: Promise<unknown> = Promise.resolve();
 
 /** highlight.js class names, keyed by GPU span type. */
-interface SpanClasses {
-  [spanType: string]: string;
-}
-
-const classes: SpanClasses = {
-  comment: 'hljs-comment',
-  string: 'hljs-string',
-  number: 'hljs-number',
-  keyword: 'hljs-keyword',
-  type: 'hljs-type',
-  function: 'hljs-title function_',
-  constant: 'hljs-literal',
-  operator: 'hljs-operator',
-};
+const classes = new Map<string, string>(
+  Object.entries({
+    comment: 'hljs-comment',
+    string: 'hljs-string',
+    number: 'hljs-number',
+    keyword: 'hljs-keyword',
+    type: 'hljs-type',
+    function: 'hljs-title function_',
+    constant: 'hljs-literal',
+    operator: 'hljs-operator',
+  } satisfies Record<string, string>),
+);
 
 function escape(text: string): string {
   return text
@@ -81,7 +79,7 @@ export function prepareGpuHighlight(code: string): Promise<boolean> {
           }
           html += escape(code.slice(offset, span.start));
           const text = escape(code.slice(span.start, span.end));
-          const className = Object.hasOwn(classes, span.type) ? classes[span.type] : undefined;
+          const className = classes.get(span.type);
           // Close spans at newlines so each diff/read row has self-contained markup.
           html += className
             ? text

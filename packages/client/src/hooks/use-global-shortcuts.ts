@@ -209,42 +209,40 @@ function startNewScratchThread(e: KeyboardEvent, ctx: ShortcutContext): void {
 type UIState = ReturnType<typeof useUIStore.getState>;
 
 /** Alt+key pane toggles, keyed by the lower-cased key. */
-interface PanelToggles {
-  [key: string]: (ui: UIState) => void;
-}
-
-const PANEL_TOGGLES: PanelToggles = {
-  g: (ui) => {
-    log.info('shortcut.toggle_review');
-    ui.setReviewPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'review'));
-  },
-  f: (ui) => {
-    log.info('shortcut.toggle_files');
-    ui.setFilesPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'files'));
-  },
-  m: (ui) => {
-    log.info('shortcut.toggle_comments');
-    ui.setCommentsPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'comments'));
-  },
-  h: (ui) => {
-    // Share is owner-only: the dialog mounts (with its hidden marker) only on
-    // a thread the user owns. Gate on the marker so we never strand a stale
-    // `shareDialogOpen` flag on a thread with no share dialog.
-    if (document.querySelector('[data-testid="share-thread-available"]')) {
-      log.info('shortcut.toggle_share');
-      ui.toggleShareDialog();
-    }
-  },
-};
+const PANEL_TOGGLES = new Map<string, (ui: UIState) => void>(
+  Object.entries({
+    g: (ui) => {
+      log.info('shortcut.toggle_review');
+      ui.setReviewPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'review'));
+    },
+    f: (ui) => {
+      log.info('shortcut.toggle_files');
+      ui.setFilesPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'files'));
+    },
+    m: (ui) => {
+      log.info('shortcut.toggle_comments');
+      ui.setCommentsPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'comments'));
+    },
+    h: (ui) => {
+      // Share is owner-only: the dialog mounts (with its hidden marker) only on
+      // a thread the user owns. Gate on the marker so we never strand a stale
+      // `shareDialogOpen` flag on a thread with no share dialog.
+      if (document.querySelector('[data-testid="share-thread-available"]')) {
+        log.info('shortcut.toggle_share');
+        ui.toggleShareDialog();
+      }
+    },
+  } satisfies Record<string, (ui: UIState) => void>),
+);
 
 function isPanelToggle(e: KeyboardEvent): boolean {
-  return hasModifiers(e, ALT_ONLY) && Object.hasOwn(PANEL_TOGGLES, e.key.toLowerCase());
+  return hasModifiers(e, ALT_ONLY) && PANEL_TOGGLES.has(e.key.toLowerCase());
 }
 
 function togglePanel(e: KeyboardEvent): void {
   const ui = useUIStore.getState();
   consume(e);
-  PANEL_TOGGLES[e.key.toLowerCase()](ui);
+  PANEL_TOGGLES.get(e.key.toLowerCase())?.(ui);
 }
 
 /** The active thread, falling back to the selected sidebar thread. */

@@ -149,6 +149,7 @@ function FontSizeCard() {
 
   const handleFontSizeChange = useCallback(
     (v: string) => {
+      // SAFETY: v comes from this Select, whose items are only 'small', 'default' and 'large', the FontSize values.
       setFontSize(v as FontSize);
       toastSettingsSaved(t);
     },
@@ -192,7 +193,11 @@ function ThreadViewerCard() {
           'Frozen renders messages in normal document flow (native scroll, find-in-page across the whole thread). Virtual is the current renderer.',
         )}
       >
-        <Select value={threadViewer} onValueChange={(v) => setThreadViewer(v as ThreadViewer)}>
+        <Select
+          value={threadViewer}
+          // SAFETY: v comes from this Select, whose items are only 'virtual' and 'frozen', the ThreadViewer values.
+          onValueChange={(v) => setThreadViewer(v as ThreadViewer)}
+        >
           <SelectTrigger className="w-[140px]" data-testid="preferences-thread-viewer-select">
             <SelectValue />
           </SelectTrigger>

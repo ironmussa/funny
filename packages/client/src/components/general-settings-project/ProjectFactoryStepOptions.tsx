@@ -54,6 +54,7 @@ export function withStepOverride(
   const { [stepId]: current = {}, ...others } = overrides;
   const next: FactoryStepOverride = { ...current };
   if (value === null) delete next[field];
+  // SAFETY: the effort select only offers EFFORT_LEVELS values, which are the step override's effort enum.
   else if (field === 'effort') next.effort = value as FactoryStepOverride['effort'];
   else next[field] = value;
   if (field === 'provider' && next.model && next.provider) {

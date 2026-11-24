@@ -33,6 +33,7 @@ import type {
   RunnerResponse,
   RunnerTerminalEvent,
   RunnerTerminalPort,
+  RunnerTerminalSession,
 } from '../runner-ports.js';
 import type { RunnerActor, RunnerId } from './runner-actor.js';
 import type { OAuthCallbackRunner, RunnerFor } from './runner-for.js';
@@ -211,7 +212,7 @@ class AuthorizedRunnerTerminal {
     actor: Named<A, RunnerActor>,
     runner: Named<R, RunnerId>,
     _proof: RunnerFor<A, R>,
-  ): Promise<Array<Record<string, unknown>>> {
+  ): Promise<RunnerTerminalSession[]> {
     if (!this.port) throw new Error('Runner terminal transport is not available');
     return this.port.listSessions(runner.value, actor.value.userId);
   }

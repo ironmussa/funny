@@ -28,7 +28,11 @@ import {
   runnerActor,
   type RunnerAccess,
 } from '../runner-access/index.js';
-import type { RunnerPresencePort, RunnerTerminalPort } from '../runner-ports.js';
+import type {
+  RunnerPresencePort,
+  RunnerTerminalPort,
+  RunnerTerminalSession,
+} from '../runner-ports.js';
 import { canUserViewThread } from '../thread-access-check.js';
 import {
   browserV1IdempotencyStore,
@@ -140,7 +144,7 @@ async function executePtyList(
   type Listed =
     | { kind: 'aborted' }
     | { kind: 'unavailable' }
-    | { kind: 'ok'; sessions: Array<Record<string, unknown>> };
+    | { kind: 'ok'; sessions: RunnerTerminalSession[] };
   const listed = await access.withRunnerFor(
     runnerActor({ userId: principalUserId }),
     requestedRunnerId

@@ -83,14 +83,26 @@ type AuditAction =
   /** ADMIN_PASSWORD env failed the password policy on first-run bootstrap. */
   | 'auth.weak_admin_password_rejected';
 
+/** A value of an audit record's metadata: what the log transports serialize. */
+export type AuditMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly (string | number)[];
+
+/** Structured metadata of an audit record, spread into the log entry. */
+export type AuditMeta = Record<string, AuditMetaValue>;
+
 interface AuditEntry {
   action: AuditAction;
   /** The user performing the action (null for unauthenticated actions like failed login). */
   actorId: string | null;
   /** Human-readable description. */
   detail?: string;
-  /** Arbitrary structured metadata. */
-  meta?: Record<string, unknown>;
+  /** Structured metadata. */
+  meta?: AuditMeta;
 }
 
 /**

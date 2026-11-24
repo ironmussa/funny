@@ -154,7 +154,7 @@ function sessionHeadersFrom(signInHeaders: Headers): Headers {
  * membership already exists, so a failure only costs the user an org switch.
  */
 async function setActiveOrg(orgId: string, headers: Headers): Promise<string[]> {
-  let failure: Record<string, unknown>;
+  let failure: { status: number } | { error: string };
   try {
     const res: Response = await orgApi().setActiveOrganization({
       headers,

@@ -13,7 +13,7 @@ import {
   validateProjectPathLexical,
   validateProjectRootContainment,
 } from '@funny/core/git/path-validation';
-import type { Project, FollowUpMode, ProjectUpdateFields } from '@funny/shared';
+import type { Project, ProjectUpdateFields } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
@@ -76,30 +76,40 @@ const OPTIONAL_FIELDS = [
 /** 0/1 columns carried only when on. */
 const ON_FLAGS = ['closed', 'fastMode'] as const;
 
-type FlagValue = number | boolean | null | undefined;
+/** A project being mapped from its row: each field holds its column's value or the API's. */
+type ProjectDraft = {
+  [K in keyof ProjectRow | keyof Project]?:
+    | (K extends keyof ProjectRow ? ProjectRow[K] : never)
+    | (K extends keyof Project ? Project[K] : never);
+};
 
 function toProject(row: ProjectRow): Project {
-  const source = row as ProjectRow & Record<string, unknown>;
-  const project: Record<string, unknown> = { ...source };
-  for (const field of [...OPTIONAL_FIELDS, ...ON_FLAGS, 'urls', 'followUpMode', 'redirectChecks']) {
+  const project: ProjectDraft = { ...row };
+  for (const field of [
+    ...OPTIONAL_FIELDS,
+    ...ON_FLAGS,
+    'urls',
+    'followUpMode',
+    'redirectChecks',
+  ] as const) {
     delete project[field];
   }
-  for (const field of OPTIONAL_FIELDS) if (source[field] != null) project[field] = source[field];
-  for (const flag of ON_FLAGS) if (source[flag]) project[flag] = true;
+  for (const field of OPTIONAL_FIELDS) if (row[field] != null) project[field] = row[field];
+  for (const flag of ON_FLAGS) if (row[flag]) project[flag] = true;
   // On by default: only an explicit off is carried.
-  const redirectChecks = source.redirectChecks as FlagValue;
+  const redirectChecks = row.redirectChecks;
   if (redirectChecks != null && !redirectChecks) project.redirectChecks = false;
-  if (source.followUpMode && source.followUpMode !== DEFAULT_FOLLOW_UP_MODE) {
-    project.followUpMode = source.followUpMode as FollowUpMode;
+  if (row.followUpMode && row.followUpMode !== DEFAULT_FOLLOW_UP_MODE) {
+    project.followUpMode = row.followUpMode;
   }
-  if (source.urls != null) {
-    const urls = parseStoredJson(z.array(z.string()), source.urls as string, 'project urls');
+  if (row.urls != null) {
+    const urls = parseStoredJson(z.array(z.string()), row.urls, 'project urls');
     if (urls.ok) project.urls = urls.value;
   }
   // SAFETY: `project` is built from a DB row with optional fields
-  // selectively restored above — structurally a Project.
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- deliberate DB-row-to-domain mapping
-  return project as unknown as Project;
+  // selectively restored above — structurally a Project (its enum-like
+  // settings are the stored strings, as before).
+  return project as Project;
 }
 
 export async function listProjects(userId: string): Promise<Project[]> {
@@ -338,19 +348,22 @@ export async function createProject(
   return ok(project);
 }
 
-/** Settings a PATCH writes as given (`null` clears them). */
-const UPDATABLE_FIELDS = ['name', 'followUpMode', ...OPTIONAL_FIELDS] as const;
-
 /** Boolean settings stored as 0/1. */
 const UPDATABLE_FLAGS = [...ON_FLAGS, 'redirectChecks'] as const;
+
+/** Columns a project update may set. */
+type ProjectColumnUpdates = Partial<typeof schema.projects.$inferInsert>;
 
 /** The columns a PATCH changes: only the fields it names. */
 function projectUpdateData(
   fields: ProjectUpdateFields,
   resolvedPath: string | undefined,
-): Record<string, unknown> {
-  const updateData: Record<string, unknown> = {};
-  for (const field of UPDATABLE_FIELDS) {
+): ProjectColumnUpdates {
+  const updateData: ProjectColumnUpdates = {};
+  // Settings a PATCH writes as given (`null` clears the optional ones).
+  if (fields.name !== undefined) updateData.name = fields.name;
+  if (fields.followUpMode !== undefined) updateData.followUpMode = fields.followUpMode;
+  for (const field of OPTIONAL_FIELDS) {
     if (fields[field] !== undefined) updateData[field] = fields[field];
   }
   for (const flag of UPDATABLE_FLAGS) {
@@ -413,7 +426,7 @@ export async function updateProject(
   const updateData = projectUpdateData(fields, resolvedPath);
 
   await dbRun(db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)));
-  return ok(toProject({ ...project, ...updateData } as ProjectRow));
+  return ok(toProject({ ...project, ...updateData }));
 }
 
 export async function addProjectToOrg(projectId: string, orgId: string): Promise<void> {

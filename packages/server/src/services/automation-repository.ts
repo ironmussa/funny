@@ -8,6 +8,12 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 
+/** Columns an automation update may set. */
+export type AutomationRowUpdate = Partial<typeof schema.automations.$inferInsert>;
+
+/** Columns a run update may set. */
+export type AutomationRunUpdate = Partial<typeof schema.automationRuns.$inferInsert>;
+
 // ── Automation CRUD ──────────────────────────────────────────────
 
 export async function listAutomations(projectId?: string, userId?: string) {
@@ -36,7 +42,7 @@ export async function getAutomation(id: string) {
 }
 
 /** Raw DB update — no scheduler hooks. */
-export async function updateAutomationRow(id: string, updates: Record<string, any>) {
+export async function updateAutomationRow(id: string, updates: AutomationRowUpdate) {
   updates.updatedAt = new Date().toISOString();
   await dbRun(db.update(schema.automations).set(updates).where(eq(schema.automations.id, id)));
 }
@@ -78,7 +84,7 @@ export async function createRun(data: {
   await dbRun(db.insert(schema.automationRuns).values(data));
 }
 
-export async function updateRun(id: string, updates: Record<string, any>) {
+export async function updateRun(id: string, updates: AutomationRunUpdate) {
   await dbRun(
     db.update(schema.automationRuns).set(updates).where(eq(schema.automationRuns.id, id)),
   );
@@ -89,7 +95,7 @@ export async function updateRun(id: string, updates: Record<string, any>) {
  * false when the run is no longer `running` (the stale sweep or another
  * completion got there first), in which case nothing is written.
  */
-export async function finishRunningRun(id: string, updates: Record<string, any>): Promise<boolean> {
+export async function finishRunningRun(id: string, updates: AutomationRunUpdate): Promise<boolean> {
   const rows = await dbAll<{ id: string }>(
     db
       .update(schema.automationRuns)

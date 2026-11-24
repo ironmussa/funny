@@ -197,7 +197,7 @@ export async function registerRunner(
 
     // Update existing runner — mark online, refresh heartbeat.
     // Also update userId if provided (backfills runners registered without one).
-    const updateFields: Record<string, any> = {
+    const updateFields: Partial<typeof runners.$inferInsert> = {
       name: req.name,
       status: 'online',
       os: req.os,

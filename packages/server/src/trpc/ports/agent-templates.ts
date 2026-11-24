@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { agentTemplates, threads } from '../../db/schema.js';
+import { definedFields } from './defined-fields.js';
 
 type TemplateRow = typeof agentTemplates.$inferSelect;
 
@@ -67,17 +68,15 @@ async function readRow(id: string): Promise<TemplateRow | undefined> {
   return rows[0];
 }
 
-const SCALAR_FIELDS = [
-  'name',
-  'description',
-  'icon',
-  'color',
-  'model',
-  'systemPromptMode',
-  'systemPrompt',
-  'agentName',
-  'shared',
-] as const;
+/** Columns a template update may set. */
+type TemplateUpdate = Partial<typeof agentTemplates.$inferInsert>;
+
+/** The columns a duplicate copies from its source; the copy gets its own id, owner and dates. */
+type TemplateCopyColumns = Omit<
+  typeof agentTemplates.$inferInsert,
+  'id' | 'userId' | 'createdAt' | 'updatedAt'
+>;
+
 const JSON_FIELDS = [
   'disallowedTools',
   'mcpServers',
@@ -87,15 +86,23 @@ const JSON_FIELDS = [
 ] as const;
 
 /** Column writes for a PATCH body: scalars as given, list fields as JSON. */
-function templateUpdates(body: UpdateAgentTemplateBody): Record<string, unknown> {
-  const updates: Record<string, unknown> = {};
-  for (const key of SCALAR_FIELDS) if (body[key] !== undefined) updates[key] = body[key];
-  for (const key of JSON_FIELDS) if (body[key] !== undefined) updates[key] = toJson(body[key]);
+function templateUpdates(body: UpdateAgentTemplateBody): TemplateUpdate {
+  const {
+    disallowedTools,
+    mcpServers,
+    builtinSkillsDisabled,
+    customSkillPaths,
+    variables,
+    ...scalars
+  } = body;
+  const updates: TemplateUpdate = definedFields(scalars);
+  const lists = { disallowedTools, mcpServers, builtinSkillsDisabled, customSkillPaths, variables };
+  for (const key of JSON_FIELDS) if (lists[key] !== undefined) updates[key] = toJson(lists[key]);
   return updates;
 }
 
 /** The columns a duplicate copies from a built-in template. */
-function builtinColumns(builtin: AgentTemplate): Record<string, unknown> {
+function builtinColumns(builtin: AgentTemplate): TemplateCopyColumns {
   return {
     name: builtin.name,
     description: builtin.description ?? null,
@@ -185,7 +192,7 @@ export const agentTemplatesPort: AgentTemplatesPort = {
 
   async duplicate(userId, sourceId) {
     const builtin = BUILTIN_AGENT_TEMPLATES.find((t) => t.id === sourceId);
-    let source: Record<string, unknown>;
+    let source: TemplateCopyColumns;
     if (builtin) {
       source = builtinColumns(builtin);
     } else {
@@ -197,7 +204,7 @@ export const agentTemplatesPort: AgentTemplatesPort = {
     const id = nanoid();
     const now = new Date().toISOString();
     await db.insert(agentTemplates).values({
-      ...(source as typeof agentTemplates.$inferInsert),
+      ...source,
       id,
       userId,
       // A copy starts private, even when duplicated from someone's shared template.

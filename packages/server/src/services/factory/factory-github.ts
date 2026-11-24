@@ -121,7 +121,7 @@ export interface FactoryGithubPort {
   relabelIssue(
     reader: FactoryRepoReader,
     issueNumber: number,
-    labels: { remove?: string; add: string },
+    labels: { remove?: string; add?: string },
   ): ResultAsync<void, GithubCallError>;
   /** The name of the repository's DEFAULT branch: what a run's worktree starts from. */
   defaultBranch(reader: FactoryRepoReader): ResultAsync<string, GithubCallError>;

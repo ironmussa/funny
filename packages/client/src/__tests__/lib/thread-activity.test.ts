@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { ThreadStatus } from '@funny/shared';
 import type { FactoryRun } from '@funny/shared/contracts/factory';
 
-import { threadActivity } from '@/lib/thread-activity';
+import { hasLaterRunOfIssue, threadActivity } from '@/lib/thread-activity';
 
 const thread = (status: ThreadStatus) => ({ status });
 const run = (state: FactoryRun['state'], failureReason: string | null = null) => ({
@@ -49,10 +49,52 @@ describe('threadActivity', () => {
     }
   });
 
-  test('an ended or queued run adds nothing', () => {
-    // `no_change` too: the agent found nothing to change, which is not an error.
-    for (const state of ['merged', 'no_change', 'stopped', 'requested'] as const) {
+  test('a run stopped after a failure still reads as failed', () => {
+    expect(
+      threadActivity(
+        thread('completed'),
+        run('stopped', 'Regression proof failed: Tests fail on the head commit'),
+      ),
+    ).toBe('factory-failed');
+  });
+
+  test('a run that ended without a merge and without an error does not read as done', () => {
+    expect(threadActivity(thread('completed'), run('stopped'))).toBe('factory-ended');
+    // The agent found nothing to change: not an error, but not a merge either.
+    expect(threadActivity(thread('completed'), run('no_change'))).toBe('factory-ended');
+  });
+
+  test('a merged or queued run adds nothing', () => {
+    for (const state of ['merged', 'requested'] as const) {
       expect(threadActivity(thread('completed'), run(state))).toBe('none');
     }
+  });
+});
+
+describe('hasLaterRunOfIssue', () => {
+  const r = (id: string, issueNumber: number, startedAt: string, factoryId = 'f1') => ({
+    id,
+    factoryId,
+    issueNumber,
+    startedAt,
+  });
+  const old = r('a', 434, '2026-11-23T22:02:14.146Z');
+
+  test('the same issue sent again to the same factory later', () => {
+    expect(hasLaterRunOfIssue([old, r('b', 434, '2026-11-23T22:56:22.751Z')], old)).toBe(true);
+  });
+
+  test('not an earlier run, another issue, another factory or the run itself', () => {
+    expect(
+      hasLaterRunOfIssue(
+        [
+          old,
+          r('b', 434, '2026-11-23T21:00:00.000Z'),
+          r('c', 435, '2026-11-23T23:00:00.000Z'),
+          r('d', 434, '2026-11-23T23:00:00.000Z', 'f2'),
+        ],
+        old,
+      ),
+    ).toBe(false);
   });
 });

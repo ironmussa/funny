@@ -1,6 +1,6 @@
 /**
- * The error of a factory thread's pipeline, as a card at the end of the
- * thread: where the run stopped, why, and the member's controls. The footer
+ * The error of a factory thread's pipeline, as a card in the thread at the
+ * time it happened: where the run stopped, why, and the member's controls. The footer
  * indicator shows the same failure, but only when its popover is opened; this
  * card makes it visible without looking for it. It goes away once the run is
  * retried (the failure is cleared) or moves on.
@@ -12,6 +12,8 @@ import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { useFactoryRunForThread } from '@/data/factory/hooks';
 import {
   factoryRunFailedStep,
+  factoryRunReasonDetail,
+  factoryRunReasonText,
   isFactoryRunFailed,
   isFactoryRunNoChange,
   isFactoryRunUnsavedWork,
@@ -30,14 +32,25 @@ export function FactoryRunFailureCard({
 }) {
   const thread = useThreadById(threadId);
   if (agentRunning || !threadId || !thread?.projectId || !isFactoryThread(thread)) return null;
-  return <RunFailure projectId={thread.projectId} threadId={threadId} />;
+  return <FactoryRunFailure projectId={thread.projectId} threadId={threadId} />;
 }
 
-function RunFailure({ projectId, threadId }: { projectId: string; threadId: string }) {
+/** The failure (or "no change") card of the run that started `threadId`, while it shows one. */
+export function FactoryRunFailure({
+  projectId,
+  threadId,
+}: {
+  projectId: string;
+  threadId: string;
+}) {
   const { t } = useTranslation();
   const run = useFactoryRunForThread(projectId, threadId);
   if (!run || !(isFactoryRunFailed(run) || isFactoryRunNoChange(run))) return null;
   const step = factoryRunFailedStep(run);
+  // A merge gate's hold (high risk, no review, …) reads as what it is, with why.
+  const shortReason = run.failureReason ? factoryRunReasonText(t, run.failureReason) : null;
+  const heldReason = shortReason !== run.failureReason ? shortReason : null;
+  const detail = factoryRunReasonDetail(t, run);
   const controls = (
     <div className="flex items-center justify-end gap-1">
       <FactoryRunControls
@@ -90,14 +103,22 @@ function RunFailure({ projectId, threadId }: { projectId: string; threadId: stri
       <div className="flex items-center gap-2">
         <CircleX className="text-destructive icon-sm shrink-0" />
         <span className="text-destructive font-medium">
-          {step
-            ? t('factory.failure.titleAtStep', 'The factory pipeline stopped at {{step}}', { step })
-            : t('factory.failure.title', 'The factory pipeline stopped on an error')}
+          {heldReason ??
+            (step
+              ? t('factory.failure.titleAtStep', 'The factory pipeline stopped at {{step}}', {
+                  step,
+                })
+              : t('factory.failure.title', 'The factory pipeline stopped on an error'))}
         </span>
         <span className="text-muted-foreground ml-auto">{factoryRunBanner(t, run)}</span>
       </div>
-      {run.failureReason && (
-        <p className="text-foreground break-words whitespace-pre-wrap">{run.failureReason}</p>
+      {detail && (
+        <p
+          className="text-foreground break-words whitespace-pre-wrap"
+          data-testid="factory-run-failure-detail"
+        >
+          {detail}
+        </p>
       )}
       {controls}
     </div>

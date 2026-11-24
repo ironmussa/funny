@@ -2439,6 +2439,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('user_profiles', 'thread_recap_enabled', 'INTEGER NOT NULL', '1');
     },
   },
+  {
+    // A member's approval to merge a high-risk change the factory held (JSON:
+    // the approved head commit, who, when). Numbered after master's 119-121
+    // and #443's 122, so the two sides keep distinct names when merged.
+    name: '123_factory_runs_merge_approval',
+    async up() {
+      await ctx().addColumn('factory_runs', 'merge_approval', 'TEXT');
+    },
+  },
 ];
 
 /**

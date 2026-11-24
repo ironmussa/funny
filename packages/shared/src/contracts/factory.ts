@@ -81,6 +81,19 @@ export const factoryStackedOnSchema = z.object({
 });
 export type FactoryStackedOn = z.infer<typeof factoryStackedOnSchema>;
 
+/**
+ * A member's approval to merge a high-risk change the factory held: for one
+ * commit only, so a later push needs a new one.
+ */
+export const factoryMergeApprovalSchema = z.object({
+  /** The head commit approved; the merge gate lets only this commit through. */
+  sha: z.string().min(7),
+  /** Who approved it. */
+  userId: z.string(),
+  at: z.string(),
+});
+export type FactoryMergeApproval = z.infer<typeof factoryMergeApprovalSchema>;
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,
@@ -218,6 +231,8 @@ export interface FactoryRun {
   flowCommit: string | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
+  /** A member's approval to merge its high-risk head commit, or null. */
+  mergeApproval: FactoryMergeApproval | null;
   /**
    * Each execution of a node of the run's flow, in the order they started
    * (openspec factory-step-timings), from the workflow engine's journal.

@@ -1,5 +1,5 @@
 import type { VirtualItem } from '@tanstack/react-virtual';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GraphEntry } from '@/components/commit-graph/graph-entry';
@@ -15,6 +15,7 @@ import {
 import type { GraphView } from '@/components/commit-graph/use-graph-view';
 import { LoadingState } from '@/components/ui/loading-state';
 import type { GitRebaseReflogEventDTO } from '@/lib/api/git';
+import { syncRunCounts } from '@/lib/git-sync-runs';
 
 const NO_REBASE_EVENTS: GitRebaseReflogEventDTO[] = [];
 
@@ -87,6 +88,15 @@ export function GraphCommitList({
 }) {
   const { t } = useTranslation();
   const { displayEntries, layout } = view;
+  // Each run of unpushed / unpulled commits shows its size once, on its newest commit.
+  const unpushedCounts = useMemo(
+    () => syncRunCounts(displayEntries, unpushed),
+    [displayEntries, unpushed],
+  );
+  const unpulledCounts = useMemo(
+    () => syncRunCounts(displayEntries, new Set([...unpulled, ...view.inferredUnpulled])),
+    [displayEntries, unpulled, view.inferredUnpulled],
+  );
   return (
     <div
       style={{
@@ -149,6 +159,8 @@ export function GraphCommitList({
             parentLabel={view.parentLabelByHash.get(entry.hash) ?? null}
             unpushed={unpushed.has(entry.hash)}
             unpulled={unpulled.has(entry.hash) || view.inferredUnpulled.has(entry.hash)}
+            unpushedCount={unpushedCounts.get(entry.hash)}
+            unpulledCount={unpulledCounts.get(entry.hash)}
             connectToWip={virtualRow.index <= lastWipRowIndex}
             transform={virtualRow.start}
             rowHeight={rowHeightFor(entry)}

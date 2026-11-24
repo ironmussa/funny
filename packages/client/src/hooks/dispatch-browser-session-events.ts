@@ -13,6 +13,7 @@ import {
   threadIdFromBrowserSessionId,
   type WSBrowserSessionAudioData,
   type WSBrowserSessionNavigatedData,
+  type WSBrowserSessionAgentActionData,
   type WSBrowserSessionPointerData,
 } from '@funny/shared';
 
@@ -124,6 +125,13 @@ const BROWSER_SESSION_HANDLERS: Record<string, (data: any) => void> = {
 
   'browser-session:pointer': (d: WSBrowserSessionPointerData) =>
     useBrowserPointerStore.getState().setPointer(d.sessionId, { x: d.x, y: d.y, kind: d.kind }),
+
+  'browser-session:agent-action': ({
+    sessionId,
+    threadId: _threadId,
+    ...action
+  }: WSBrowserSessionAgentActionData) =>
+    useBrowserPointerStore.getState().setAction(sessionId, action),
 
   'browser-session:audio': (d: WSBrowserSessionAudioData) =>
     useBrowserPanelStore.getState().setSessionAudio(d.sessionId, d.muted),

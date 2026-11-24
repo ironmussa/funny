@@ -68,6 +68,9 @@ export interface GraphCommitRowProps {
   branchColorByLabel: ReadonlyMap<string, string>;
   unpushed: boolean;
   unpulled: boolean;
+  /** The size of the run of unpushed / unpulled commits this commit is the newest of (see `syncRunCounts`). */
+  unpushedCount?: number;
+  unpulledCount?: number;
   /** HEAD row with a dirty tree → draw the dashed stub up to the WIP node. */
   connectToWip: boolean;
   /** Active filter query — highlights matching substrings in the title & refs. */
@@ -91,6 +94,8 @@ type GraphCommitRowOwnKeys =
   | 'parentLabel'
   | 'unpushed'
   | 'unpulled'
+  | 'unpushedCount'
+  | 'unpulledCount'
   | 'connectToWip'
   | 'transform'
   | 'rowHeight'
@@ -256,6 +261,8 @@ export function GraphCommitRow({
     branchColorByLabel,
     unpushed,
     unpulled,
+    unpushedCount,
+    unpulledCount,
     connectToWip,
     searchQuery,
     threadBranch,
@@ -402,6 +409,8 @@ export function GraphCommitRow({
             <GraphCommitSyncMarkers
               unpushed={unpushed}
               unpulled={unpulled}
+              unpushedCount={unpushedCount}
+              unpulledCount={unpulledCount}
               shortHash={entry.shortHash}
               className="ml-auto"
             />
@@ -612,7 +621,9 @@ function GraphCommitRefsLine({
           prNumber={pr.number}
           prState={pr.state}
           prUrl={pr.url}
-          size="compact"
+          // The same plain chip as the sidebar's thread rows (`ThreadItemTitleRow`).
+          variant="plain"
+          showExternalIcon={false}
           className="ml-1"
           data-testid={`graph-pr-badge-${pr.number}`}
         />

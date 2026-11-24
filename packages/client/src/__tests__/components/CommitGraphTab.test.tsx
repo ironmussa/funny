@@ -51,18 +51,21 @@ describe('GraphCommitTime', () => {
 });
 
 describe('GraphCommitSyncMarkers', () => {
-  test('shows an unpushed arrow for local-only commits', () => {
-    renderWithProviders(<GraphCommitSyncMarkers unpushed shortHash="1111111" />);
+  test("shows an unpushed commit like the sidebar's chip: an arrow, and the run's size on its newest commit", () => {
+    renderWithProviders(<GraphCommitSyncMarkers unpushed unpushedCount={16} shortHash="1111111" />);
 
-    expect(screen.getByTestId('graph-unpushed-1111111')).toBeInTheDocument();
-    expect(screen.getByTestId('graph-unpushed-icon-1111111')).toHaveClass('lucide-circle-arrow-up');
-    expect(screen.getByTestId('graph-unpushed-icon-1111111')).toHaveClass('icon-sm');
-    expect(screen.getByTestId('graph-unpushed-icon-1111111')).toHaveClass(
-      '[&_circle]:fill-current',
-    );
-    expect(screen.getByTestId('graph-unpushed-icon-1111111')).toHaveClass(
-      '[&_path]:stroke-primary-foreground',
-    );
+    const chip = screen.getByTestId('graph-unpushed-1111111');
+    expect(chip).toHaveClass('text-git-icon-unpushed');
+    expect(chip.querySelector('svg')).toHaveClass('lucide-arrow-up');
+    expect(chip).toHaveTextContent('16');
+  });
+
+  test('an older commit of the run shows only the arrow', () => {
+    renderWithProviders(<GraphCommitSyncMarkers unpushed shortHash="1111112" />);
+
+    const chip = screen.getByTestId('graph-unpushed-1111112');
+    expect(chip.querySelector('svg')).toHaveClass('lucide-arrow-up');
+    expect(chip).toHaveTextContent('');
   });
 
   test('does not render when the commit has no sync markers', () => {
@@ -75,14 +78,14 @@ describe('GraphCommitSyncMarkers', () => {
     expect(screen.queryByTestId('graph-unpulled-1111111')).not.toBeInTheDocument();
   });
 
-  test('shows an unpulled arrow for remote-only commits', () => {
-    renderWithProviders(<GraphCommitSyncMarkers unpushed={false} unpulled shortHash="2222222" />);
-
-    expect(screen.getByTestId('graph-unpulled-2222222')).toBeInTheDocument();
-    expect(screen.getByTestId('graph-unpulled-icon-2222222')).toHaveClass(
-      'lucide-circle-arrow-down',
+  test('shows an unpulled commit as a down arrow with its run size', () => {
+    renderWithProviders(
+      <GraphCommitSyncMarkers unpushed={false} unpulled unpulledCount={2} shortHash="2222222" />,
     );
-    expect(screen.getByTestId('graph-unpulled-icon-2222222')).toHaveClass('icon-sm');
+
+    const chip = screen.getByTestId('graph-unpulled-2222222');
+    expect(chip.querySelector('svg')).toHaveClass('lucide-arrow-down');
+    expect(chip).toHaveTextContent('2');
     expect(screen.queryByTestId('graph-unpushed-2222222')).not.toBeInTheDocument();
   });
 });

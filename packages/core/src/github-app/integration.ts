@@ -11,6 +11,7 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 
 import { enqueuePullRequest, mergeQueueState, type EnqueueResult } from './merge-queue.js';
+import { retargetPullRequestsOn } from './pull-request-base.js';
 import type { CiState, MergeMethod, PullRequestCi } from './pull-requests.js';
 import { createPullRequestCi } from './pull-requests.js';
 import type { GithubCallError, RepoGithub } from './repo-github.js';
@@ -98,7 +99,16 @@ export interface IntegrationProvider {
     sha: string,
   ): ResultAsync<HostQueueResult, GithubCallError>;
   /** Delete a branch; one already gone is not an error. */
-  deleteBranch(repo: string, branch: string): ResultAsync<void, GithubCallError>;
+  /**
+   * Delete a branch; one already gone is fine. With `retargetTo`, the open
+   * pull requests based on it move there first (the branch stays when they
+   * cannot): GitHub closes them otherwise.
+   */
+  deleteBranch(
+    repo: string,
+    branch: string,
+    retargetTo?: string,
+  ): ResultAsync<void, GithubCallError>;
   /** The paths changed between commits `from` and `to` (at most 300, GitHub's compare). */
   changedPaths(repo: string, from: string, to: string): ResultAsync<string[], GithubCallError>;
 }
@@ -314,11 +324,17 @@ export function createGithubIntegration(
         .map((compare) => (compare.files ?? []).map((file) => file.filename));
     },
 
-    deleteBranch(repo, branch) {
-      return github
-        .json(repo, 'DELETE', `/repos/${repo}/git/refs/heads/${refPath(branch)}`)
-        .map(() => undefined)
-        .orElse((e) => (e.status === 404 || e.status === 422 ? okAsync(undefined) : errAsync(e)));
+    deleteBranch(repo, branch, retargetTo) {
+      const moved = retargetTo
+        ? retargetPullRequestsOn(github, repo, branch, retargetTo).map(() => undefined)
+        : okAsync<void, GithubCallError>(undefined);
+      // Only the deletion may find the branch already gone; a refused retarget keeps it.
+      return moved.andThen(() =>
+        github
+          .json(repo, 'DELETE', `/repos/${repo}/git/refs/heads/${refPath(branch)}`)
+          .map(() => undefined)
+          .orElse((e) => (e.status === 404 || e.status === 422 ? okAsync(undefined) : errAsync(e))),
+      );
     },
   };
 }

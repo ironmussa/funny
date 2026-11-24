@@ -1143,7 +1143,8 @@
     "loadingWorktrees": "Cargando worktrees...",
     "noWorktrees": "No se encontraron worktrees. Crea uno para comenzar.",
     "loadFailed": "No se pudieron cargar los worktrees",
-    "openThread": "Abrir hilo: {{title}}"
+    "openThread": "Abrir hilo: {{title}}",
+    "noThread": "sin hilo"
   },
   "common": {
     "cancel": "Cancelar",
@@ -1748,7 +1749,7 @@
     "stopAll": "Detener todo",
     "stopAllTitle": "¿Detener el factory?",
     "stopAllDesc": "Vacía la cola y detiene todas las runs en curso y sus threads de agente.",
-    "runs": "Runs del factory",
+    "stopAllProjectsDesc": "Vacía la cola y detiene todas las runs en curso y sus threads de agente, en {{count}} proyectos.",
     "state": {
       "requested": "En cola",
       "queued": "En espera",
@@ -1800,8 +1801,10 @@
       "title": "El pipeline del factory se detuvo por un error"
     },
     "activity": {
-      "tooltip": "Factory · #{{issue}} · {{state}}",
-      "failedTooltip": "Factory · #{{issue}} · Falló en {{step}}",
+      "failedAt": "{{run}} · Falló en {{step}}",
+      "stoppedAfterFailure": "{{run}} · Detenido tras fallar en {{step}}",
+      "stoppedWithReason": "{{run}} · Detenido: {{reason}}",
+      "resentTooltip": "{{label}} · Enviado de nuevo como otro run",
       "stopRun": "Detener el factory run"
     },
     "indicator": {
@@ -1839,7 +1842,25 @@
     "risk": {
       "low": "Riesgo bajo",
       "high": "Riesgo alto"
-    }
+    },
+    "reason": {
+      "noReview": "Sin merge: este commit no tiene review",
+      "reviewFailed": "Sin merge: su review no pasó",
+      "highRisk": "Sin merge: riesgo alto, te necesita",
+      "rewritten": "Sin merge: la rama fue reescrita"
+    },
+    "reasonDetail": {
+      "highRisk": "Este factory solo hace merge por sí mismo de cambios de riesgo bajo, y este es de riesgo alto: {{reasons}}. Revisa el pull request y haz el merge tú, o cambia \"Merge automático\" a \"Todos\" en los ajustes del factory.",
+      "highRiskUnknown": "Este factory solo hace merge por sí mismo de cambios de riesgo bajo, y este es de riesgo alto. Revisa el pull request y haz el merge tú, o cambia \"Merge automático\" a \"Todos\" en los ajustes del factory.",
+      "noReview": "El commit que se fusionaría no tiene veredicto del paso de review del flujo, así que nadie lo revisó. Revisa el pull request y haz el merge tú.",
+      "reviewFailed": "La review del commit que se fusionaría no pasó. Lee sus hallazgos en el pull request y luego pide en este hilo que los arregle, o haz el merge tú.",
+      "rewritten": "La rama ya no contiene el commit que se revisó (un rebase o un force push), así que lo que se fusionaría no se revisó. Mira el nuevo head en el pull request antes de hacer el merge tú.",
+      "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú."
+    },
+    "viewPullRequest": "Ver PR",
+    "approveMerge": "Aprobar y hacer merge",
+    "approveMergeTitle": "¿Hacer merge de este cambio de riesgo alto?",
+    "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación."
   },
   "projectSecrets": {
     "title": "Secretos",

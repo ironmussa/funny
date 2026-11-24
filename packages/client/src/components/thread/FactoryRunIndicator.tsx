@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useFactoryRunForThread } from '@/data/factory/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
 import {
+  factoryRunReasonDetail,
   factoryRunStateLabel,
   factoryRunStateVariant,
   factoryRunSteps,
@@ -143,7 +144,7 @@ export function FactoryRunIndicator({
           <StepList run={run} />
           {run.failureReason && (
             <p className="text-status-error break-words" data-testid="factory-run-failure">
-              {run.failureReason}
+              {factoryRunReasonDetail(t, run)}
             </p>
           )}
           <div className="flex items-center justify-end gap-1">

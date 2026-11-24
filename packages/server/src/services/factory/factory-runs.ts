@@ -18,12 +18,14 @@ import {
   EMPTY_FACTORY_RUN_METRICS,
   factoryRegressionProofSchema,
   factoryReviewVerdictSchema,
+  factoryMergeApprovalSchema,
   factoryRiskSchema,
   factoryStackedOnSchema,
   factoryStepOptionsRecordSchema,
   factoryTriageSchema,
   MAX_STORED_REVIEWS,
   type FactoryFlowSource,
+  type FactoryMergeApproval,
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
   type FactoryRisk,
@@ -140,6 +142,9 @@ const PARKED: ReadonlySet<FactoryRunState> = new Set(PARKED_STATES);
 /** A sent issue waiting in the factory's queue: no flow, no slot. */
 const WAITING_STATES = ['requested'] as const satisfies FactoryRunState[];
 
+/** How a run ends without merging: what a thread must not show as done. */
+const UNMERGED_END_STATES = ['failed', 'stopped', 'no_change'] as const satisfies FactoryRunState[];
+
 /**
  * The queue's transitions, each written as a compare-and-set from the stored
  * state. Once `queued`, the flow drives the run through its own states
@@ -209,6 +214,13 @@ const RETRYABLE_STATES = [...REOPENABLE_STATES, 'no_change'] as const satisfies 
  * window only bounds what every list poll reads.
  */
 const FAILED_RUN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * The reason a run waits for a person because its change is high risk and the
+ * factory merges only low-risk changes by itself: the one hold a member's
+ * merge approval answers.
+ */
+export const HIGH_RISK_HOLD = 'high risk';
 
 /** The branch a run's agent pushes and opens its pull request from. */
 export const factoryRunBranch = (run: Pick<FactoryRunView, 'id' | 'issueNumber'>): string =>
@@ -293,6 +305,8 @@ export interface FactoryRunView {
   regenerateNode: string | null;
   /** The run this one is stacked on (D10), or null. */
   stackedOn: FactoryStackedOn | null;
+  /** A member's approval to merge its high-risk head commit, or null. */
+  mergeApproval: FactoryMergeApproval | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
   /** Each flow node execution, in start order; only the run lists read it (openspec factory-step-timings). */
@@ -355,7 +369,15 @@ const queueAndFlowOf = (row: Row) => ({
   flowCommit: row.flowCommit ?? null,
   regenerateNode: row.regenerateNode ?? null,
   stackedOn: parseStackedOn(row.stackedOn ?? null),
+  mergeApproval: parseMergeApproval(row.mergeApproval ?? null),
 });
+
+/** The stored merge approval, or null (none, or no longer readable: nothing is approved). */
+function parseMergeApproval(raw: string | null): FactoryMergeApproval | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryMergeApprovalSchema, raw, 'factory_runs.merge_approval');
+  return parsed.ok ? parsed.value : null;
+}
 
 /** The stored blocker of a stacked run, or null (none, or no longer readable). */
 function parseStackedOn(raw: string | null): FactoryStackedOn | null {
@@ -678,6 +700,7 @@ function newRunRow(
     regenerateNode: null,
     integrationPendingAt: null,
     stackedOn: null,
+    mergeApproval: null,
     triggerId: null,
     triggerName: null,
     inputs: null,
@@ -981,9 +1004,12 @@ export function createFactoryRunsRepository(
     /**
      * The runs of every factory `userId` owns that the thread lists show on
      * their threads: not ended (in flight, or parked waiting for the member),
-     * or failed within `FAILED_RUN_WINDOW_MS`. A thread shows busy while its run
-     * works outside the agent (CI, merge), and the error icon once it failed.
-     * Queued (`requested`) runs have no thread yet.
+     * or ended without a merge (failed, stopped, no change) within
+     * `FAILED_RUN_WINDOW_MS`. A thread shows busy while its run works outside
+     * the agent (CI, merge), the error icon once it failed, and that it ended
+     * when it was stopped: its agent's own "completed" would read as done.
+     * Queued (`requested`) runs have no thread yet; they are returned once
+     * admitted, so a thread can say its issue was sent again.
      */
     activeForOwner(
       userId: string,
@@ -1000,7 +1026,10 @@ export function createFactoryRunsRepository(
               eq(factorySettings.userId, userId),
               or(
                 notInArray(factoryRuns.state, [...TERMINAL_STATES, ...WAITING_STATES]),
-                and(eq(factoryRuns.state, 'failed'), gte(factoryRuns.completedAt, failedSince)),
+                and(
+                  inArray(factoryRuns.state, [...UNMERGED_END_STATES]),
+                  gte(factoryRuns.completedAt, failedSince),
+                ),
               ),
             ),
           ),
@@ -1301,6 +1330,32 @@ export function createFactoryRunsRepository(
         db.select().from(factoryRuns).where(eq(factoryRuns.id, runId)),
         storage,
       ).map((rows) => (rows[0] ? toView(rows[0]) : null));
+    },
+
+    /**
+     * Record a member's approval to merge the run's held high-risk commit:
+     * only while the run waits for a person because of that risk (a
+     * compare-and-set on the stored state and reason). Resolves whether it
+     * was written.
+     */
+    approveMerge(
+      runId: string,
+      approval: FactoryMergeApproval,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set({ mergeApproval: JSON.stringify(approval) })
+          .where(
+            and(
+              eq(factoryRuns.id, runId),
+              eq(factoryRuns.state, 'waiting_human'),
+              eq(factoryRuns.failureReason, HIGH_RISK_HOLD),
+            ),
+          )
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
     },
 
     /** The parked or failed runs a thread belongs to (a member following up on it). */

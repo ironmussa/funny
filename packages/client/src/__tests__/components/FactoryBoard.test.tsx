@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, mock, test, vi } from 'bun:test';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
@@ -31,7 +31,10 @@ mock.module('@/data/projects/hooks', () => ({
     { id: 'p2', name: 'other' },
   ],
 }));
-mock.module('@/data/factory/actions', () => ({ controlFactoryRun: () => okAsync(null) }));
+mock.module('@/data/factory/actions', () => ({
+  controlFactoryRun: () => okAsync(null),
+  emptyFactory: () => okAsync({ cleared: 0, stopped: 0 }),
+}));
 mock.module('@/hooks/use-stable-navigate', () => ({ useStableNavigate: () => mocks.navigate }));
 mock.module('@/hooks/use-minute-tick', () => ({ useMinuteTick: () => Date.now() }));
 mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));
@@ -227,5 +230,37 @@ describe('FactoryQueueView layouts', () => {
     expect(JSON.parse(localStorage.getItem('funny:factory-view-layout') ?? '{}').state.layout).toBe(
       'board',
     );
+  });
+
+  test('a link names the filters and the layout, and changing them updates the link', () => {
+    mocks.queue = [
+      queueRun('busy', 'working'),
+      queueRun('broken', 'failed'),
+      queueRun('other', 'failed', { projectId: 'p2' }),
+    ];
+    function LocationProbe() {
+      return <output data-testid="location">{useLocation().search}</output>;
+    }
+    const search = () => new URLSearchParams(screen.getByTestId('location').textContent ?? '');
+    render(
+      <MemoryRouter initialEntries={['/factory?project=p1&status=failed&view=board']}>
+        <TooltipProvider>
+          <FactoryQueueView />
+          <LocationProbe />
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('factory-board')).toBeTruthy();
+    expect(screen.getByTestId('factory-board-card-broken')).toBeTruthy();
+    expect(screen.queryByTestId('factory-board-card-busy')).toBeNull();
+    expect(screen.queryByTestId('factory-board-card-other')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('factory-view-show-active'));
+    expect(search().get('active')).toBe('1');
+    fireEvent.click(screen.getByTestId('factory-view-clear-filters'));
+    const params = search();
+    expect(params.get('project')).toBeNull();
+    expect(params.get('status')).toBeNull();
+    expect(params.get('view')).toBe('board');
   });
 });

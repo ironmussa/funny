@@ -19,8 +19,6 @@ import { toastError } from '@/lib/toast-error';
 
 import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
-import { ProjectFactoryMetrics } from './ProjectFactoryMetrics';
-import { ProjectFactoryRuns } from './ProjectFactoryRuns';
 import { ProjectFactoryStepOptions } from './ProjectFactoryStepOptions';
 import { ProjectFactoryTriggers } from './ProjectFactoryTriggers';
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
@@ -285,10 +283,6 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
           <AlertDescription>{settings.blockedReason}</AlertDescription>
         </Alert>
       )}
-
-      {/* A paused factory still finishes its runs in flight: they stay listed. */}
-      {settings && <ProjectFactoryMetrics projectId={projectId} />}
-      {settings && <ProjectFactoryRuns projectId={projectId} />}
     </>
   );
 }

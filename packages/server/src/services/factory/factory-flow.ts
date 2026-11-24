@@ -22,7 +22,11 @@ import { dirname, join } from 'node:path';
 
 import type { GithubCallError } from '@funny/core/github-app';
 import type { PipelineDefinition } from '@funny/pipelines';
-import type { FactoryBatchSettings, FactoryFlowDefinition } from '@funny/shared/contracts/factory';
+import type {
+  FactoryBatchSettings,
+  FactoryDependencies,
+  FactoryFlowDefinition,
+} from '@funny/shared/contracts/factory';
 import {
   EMPTY_INTEGRATE_CONFIG,
   formatParseError,
@@ -93,6 +97,8 @@ export function flowReadsOf(
 export interface FactoryFlowContext {
   /** The factory's merge queue batches: the `merge` group batches when its size is over 1. */
   batch?: FactoryBatchSettings;
+  /** The factory stacks dependent issues (D10): a flow whose prompts ignore it is warned about. */
+  dependencies?: FactoryDependencies;
   overrides?: StepOverrides;
   project?: ProjectAgentDefaults;
 }
@@ -198,6 +204,29 @@ function staleBranchWordingIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
 }
 
 /**
+ * A factory that stacks dependent issues (D10) passes the blocker's branch as
+ * `{{stack_branch}}`; a repository copy of the prompts made before stacking
+ * never uses it, so a stacked run starts from the default branch and its pull
+ * request carries the blocker's change too. Warn so the copy gets the
+ * built-in's stacking sections.
+ */
+function staleStackingIssues(
+  workflow: ParsedWorkflow,
+  dependencies: FactoryDependencies | undefined,
+): WorkflowIssue[] {
+  if (dependencies !== 'stack') return [];
+  const prompts = workflow.nodes.flatMap((node, index) => agentPrompts(node, index));
+  if (prompts.some(({ prompt }) => prompt.includes('stack_branch'))) return [];
+  return [
+    {
+      path: 'nodes',
+      message:
+        "The factory stacks dependent issues, but no agent prompt of this flow uses {{stack_branch}}: a stacked run starts from the default branch and its pull request also carries its blocker's change. Copy the stacking sections of the built-in implement prompt.",
+    },
+  ];
+}
+
+/**
  * The merge lane (change factory-agent-roles, D8): the concurrency group every
  * `merge` node of a factory flow runs in, one per repository and base branch,
  * shared by every factory on that repository.
@@ -268,7 +297,11 @@ async function compile(
       pipeline: compileYamlPipeline(withMergeLane(workflow, context.batch)),
       warnings:
         source === 'repository'
-          ? [...parsed.warnings, ...staleBranchWordingIssues(workflow)]
+          ? [
+              ...parsed.warnings,
+              ...staleBranchWordingIssues(workflow),
+              ...staleStackingIssues(workflow, context.dependencies),
+            ]
           : parsed.warnings,
       proofReady: isProofReady(workflow),
       regressionProof: proofConfigOf(workflow),

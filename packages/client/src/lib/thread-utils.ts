@@ -18,7 +18,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 
-import { GIT_CHANGES_ICON, GIT_COMMIT_ICON } from '@/lib/git-icons';
+import { GIT_CHANGES_ICON, GIT_UNPUSHED_ICON } from '@/lib/git-icons';
 import type { RunnerStatus } from '@/stores/runner-status-store';
 
 /**
@@ -148,7 +148,7 @@ export const gitSyncStateConfig: Record<
     labelKey: 'gitStatus.dirty',
   },
   unpushed: {
-    icon: GIT_COMMIT_ICON,
+    icon: GIT_UNPUSHED_ICON,
     className: 'text-git-icon-unpushed',
     labelKey: 'gitStatus.unpushed',
   },

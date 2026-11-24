@@ -12,6 +12,7 @@ import { AuthorAvatar } from './AuthorAvatar';
 import { AutoResumeMarker } from './AutoResumeMarker';
 import { ChangedFilesSummary } from './ChangedFilesSummary';
 import { CompactionEventCard } from './CompactionEventCard';
+import { FactoryTimelineCardView } from './FactoryTimelineCards';
 import { FrozenViewerContext } from './frozen-message-context';
 import { FrozenMessage } from './FrozenMessage';
 import { GitEventCard } from './GitEventCard';
@@ -189,6 +190,14 @@ function NonUserItemRenderer({
     return (
       <div data-item-key={key}>
         <CompactionEventCard event={item.event} />
+      </div>
+    );
+  }
+
+  if (item.type === 'factory-card') {
+    return (
+      <div data-item-key={key}>
+        <FactoryTimelineCardView card={item.card} />
       </div>
     );
   }

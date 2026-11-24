@@ -83,12 +83,18 @@ describe('WorktreeSettings refresh', () => {
     expect(screen.getAllByText(/No runner connected/)).toHaveLength(1);
   });
 
-  test('clicking a worktree path opens it in the system file manager', async () => {
+  test('the link icon beside delete opens a worktree in the system file manager', async () => {
     mockListWorktrees.mockReturnValueOnce(okAsync([main, feature]));
     mockOpenDirectory.mockReturnValue(okAsync({ ok: true }));
     renderSettings();
 
-    fireEvent.click(await screen.findByTestId('worktree-open-directory-feature-x'));
+    const open = await screen.findByTestId('worktree-open-directory-feature-x');
+    // Grouped with the delete action, like the toolbar's icons.
+    const actions = screen.getByTestId('worktree-actions-feature-x');
+    expect(actions).toContainElement(open);
+    expect(actions).toContainElement(screen.getByTestId('worktree-delete-feature-x'));
+    expect(screen.queryByText('/repo/.worktrees/feature-x')).not.toBeInTheDocument();
+    fireEvent.click(open);
 
     expect(mockOpenDirectory).toHaveBeenCalledWith({ path: '/repo/.worktrees/feature-x' });
   });

@@ -2,22 +2,12 @@ import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:tes
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { MemoryRouter } from 'react-router-dom';
 
-import { buildFactoryRun } from '@/data/factory/testing';
-import type {
-  FactoryFlowValidation,
-  FactoryReadiness,
-  FactoryRun,
-  FactorySettings,
-} from '@/lib/api/factory';
+import type { FactoryFlowValidation, FactoryReadiness, FactorySettings } from '@/lib/api/factory';
 
 interface FactoryMocks {
   settings: FactorySettings | null;
   save: Mock<(...args: any[]) => any>;
-  runs: FactoryRun[];
-  control: Mock<(...args: any[]) => any>;
-  empty: Mock<(...args: any[]) => any>;
   closeIncident: Mock<(...args: any[]) => any>;
   proposeQueueCi: Mock<(...args: any[]) => any>;
   toastError: Mock<(...args: any[]) => any>;
@@ -33,9 +23,6 @@ interface FactoryMocks {
 const mocks = ((): FactoryMocks => ({
   settings: null,
   save: vi.fn(),
-  runs: [],
-  control: vi.fn(),
-  empty: vi.fn(),
   closeIncident: vi.fn(),
   proposeQueueCi: vi.fn(),
   toastError: vi.fn(),
@@ -50,7 +37,6 @@ mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.ca
 mock.module('@/data/factory/hooks', () => ({
   useFactoryReadiness: () => mocks.readiness,
   useFactorySettings: () => mocks.settings,
-  useFactoryRuns: () => mocks.runs,
   useFactoryFlowDefinition: (_projectId: string, name: string) => ({
     definition: {
       name,
@@ -70,8 +56,6 @@ mock.module('@/data/factory/hooks', () => ({
 }));
 mock.module('@/data/factory/actions', () => ({
   saveFactorySettings: (input: unknown) => mocks.save(input),
-  controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
-  emptyFactory: (...args: unknown[]) => mocks.empty(...args),
   closeFactoryIncident: (...args: unknown[]) => mocks.closeIncident(...args),
   proposeQueueCi: (...args: unknown[]) => mocks.proposeQueueCi(...args),
 }));
@@ -114,9 +98,6 @@ beforeEach(() => {
   mocks.canSteer = true;
   mocks.sameReviewer = undefined;
   mocks.validation = undefined;
-  mocks.runs = [];
-  mocks.control.mockImplementation(() => okAsync({}));
-  mocks.empty.mockImplementation(() => okAsync({ cleared: 0, stopped: 0 }));
   mocks.closeIncident.mockImplementation(() => okAsync(configured()));
   mocks.save.mockImplementation((input: Record<string, unknown>) =>
     okAsync({ ...configured(), ...input }),
@@ -193,26 +174,6 @@ describe('ProjectFactorySetting', () => {
     );
   });
 });
-
-const runOf = (over: Partial<FactoryRun>): FactoryRun =>
-  buildFactoryRun({
-    id: 'r1',
-    issueNumber: 7,
-    state: 'working',
-    currentStep: 'implement',
-    threadIds: ['t1'],
-    startedAt: '2026-11-16T00:00:00.000Z',
-    completedAt: null,
-    flowName: null,
-    ...over,
-  });
-
-const renderRuns = () =>
-  render(
-    <MemoryRouter>
-      <ProjectFactorySetting projectId="p1" />
-    </MemoryRouter>,
-  );
 
 describe('factory blocked reason', () => {
   test('why the factory cannot make progress is shown, and nothing when it can', () => {
@@ -495,46 +456,7 @@ describe('an incident', () => {
   });
 });
 
-describe('factory runs', () => {
-  test('a run in flight can be stopped; its thread is linked', () => {
-    mocks.settings = configured();
-    mocks.runs = [runOf({})];
-    renderRuns();
-    expect(screen.getByTestId('factory-run-thread-r1')).toHaveAttribute(
-      'href',
-      '/projects/p1/threads/t1',
-    );
-    expect(screen.queryByTestId('factory-run-retry-r1')).toBeNull();
-    fireEvent.click(screen.getByTestId('factory-run-stop-r1'));
-    expect(mocks.control).toHaveBeenCalledWith('stop', 'p1', 'r1');
-  });
-
-  test('a run waiting for the member is called out and can be retried or stopped', () => {
-    mocks.settings = configured({ enabled: false });
-    mocks.runs = [
-      runOf({ state: 'waiting_human', currentStep: 'ci', prUrl: 'https://github.com/o/r/pull/9' }),
-    ];
-    renderRuns();
-    expect(screen.getByTestId('factory-runs-waiting')).toHaveTextContent('1 waiting for you');
-    expect(screen.getByTestId('factory-run-pr-r1')).toHaveAttribute(
-      'href',
-      'https://github.com/o/r/pull/9',
-    );
-    fireEvent.click(screen.getByTestId('factory-run-retry-r1'));
-    expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
-    expect(screen.getByTestId('factory-run-stop-r1')).toBeInTheDocument();
-  });
-
-  test('an ended run has no controls, and a refused one shows the error', async () => {
-    mocks.settings = configured();
-    mocks.runs = [runOf({ id: 'r2', state: 'merged' }), runOf({ state: 'failed' })];
-    mocks.control.mockImplementation(() => errAsync({ type: 'CONFLICT', message: 'nope' }));
-    renderRuns();
-    expect(screen.queryByTestId('factory-run-stop-r2')).toBeNull();
-    expect(screen.queryByTestId('factory-run-retry-r2')).toBeNull();
-    fireEvent.click(screen.getByTestId('factory-run-retry-r1'));
-    await waitFor(() => expect(mocks.toastError).toHaveBeenCalled());
-  });
+describe('factory mode', () => {
   test('manual mode hides the label; switching the mode saves it with the enabled flag', () => {
     mocks.settings = configured({ mode: 'manual' });
     render(<ProjectFactorySetting projectId="p1" />);
@@ -545,43 +467,6 @@ describe('factory runs', () => {
     expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: true, mode: 'automatic' });
   });
 
-  test('queued issues come first with why they wait, and the queue can be cleared', () => {
-    mocks.settings = configured();
-    mocks.runs = [
-      runOf({ id: 'w', issueNumber: 5 }),
-      runOf({
-        id: 'q2',
-        issueNumber: 3,
-        state: 'requested',
-        currentStep: null,
-        queueOrder: 2,
-        waitReason: { kind: 'blocker-not-sent', blockers: [9] },
-      }),
-      runOf({ id: 'q1', issueNumber: 4, state: 'requested', currentStep: null, queueOrder: 1 }),
-    ];
-    renderRuns();
-
-    const rows = screen.getAllByTestId(/^factory-run-(w|q1|q2)$/).map((el) => el.dataset.testid);
-    expect(rows).toEqual(['factory-run-q1', 'factory-run-q2', 'factory-run-w']);
-    expect(screen.getByTestId('factory-run-wait-q2')).toHaveTextContent(
-      'Blocked by #9, which is not in the factory',
-    );
-
-    fireEvent.click(screen.getByTestId('factory-clear-queue'));
-    expect(mocks.empty).toHaveBeenCalledWith('clear-queue', 'p1');
-  });
-
-  test('stop all asks for a confirmation first', () => {
-    mocks.settings = configured();
-    mocks.runs = [runOf({ id: 'w' })];
-    renderRuns();
-
-    fireEvent.click(screen.getByTestId('factory-stop-all'));
-    expect(mocks.empty).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
-    expect(mocks.empty).toHaveBeenCalledWith('stop-all', 'p1');
-  });
-
   test('the mode can change while the factory is paused, keeping it paused', () => {
     mocks.settings = configured({ enabled: false, mode: 'automatic' });
     render(<ProjectFactorySetting projectId="p1" />);
@@ -590,103 +475,8 @@ describe('factory runs', () => {
 
     expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: false, mode: 'manual' });
   });
-
-  // Change factory-agent-roles: why a run is not merged shows in its row.
-  test('a run held at the merge shows its review, its risk and the reason', () => {
-    mocks.settings = configured();
-    mocks.runs = [
-      runOf({
-        state: 'waiting_human',
-        currentStep: 'merge',
-        failureReason: 'high risk',
-        reviews: [
-          {
-            sha: 'a'.repeat(40),
-            verdict: 'pass',
-            findings: [],
-            reviewedAt: '2026-11-22T00:00:00Z',
-          },
-        ],
-        risk: { headSha: 'a'.repeat(40), level: 'high', reasons: ['touches .github/'] },
-      }),
-    ];
-    renderRuns();
-    expect(screen.getByTestId('factory-run-review-r1')).toHaveTextContent('Review passed');
-    expect(screen.getByTestId('factory-run-risk-r1')).toHaveAttribute('title', 'touches .github/');
-    expect(screen.getByTestId('factory-run-reason-r1')).toHaveTextContent(
-      'Not merged: high risk, it needs you',
-    );
-  });
-
-  test('a failed review is shown as failed, and a run in the lane says so', () => {
-    mocks.settings = configured();
-    mocks.runs = [
-      runOf({
-        state: 'merging',
-        currentStep: 'merge',
-        reviews: [
-          {
-            sha: 'a'.repeat(40),
-            verdict: 'fail',
-            findings: [{ severity: 'high', title: 'Wrong' }],
-            reviewedAt: '2026-11-22T00:00:00Z',
-          },
-        ],
-      }),
-    ];
-    renderRuns();
-    expect(screen.getByTestId('factory-run-review-r1')).toHaveTextContent('Review failed');
-    expect(screen.getByTestId('factory-run-r1')).toHaveTextContent('In the merge lane');
-    expect(screen.queryByTestId('factory-run-reason-r1')).toBeNull();
-  });
-
-  // Change factory-agent-roles, phase 2: triage in the run's row.
-  test('a run parked on its issue says so and can be retried; its contract shows when it has one', () => {
-    mocks.settings = configured();
-    mocks.runs = [
-      runOf({
-        state: 'needs_info',
-        failureReason: 'needs info',
-        triage: { decision: 'needs_info', at: '2026-11-22T00:00:00Z', items: ['Which endpoint?'] },
-      }),
-    ];
-    const { unmount } = renderRuns();
-    expect(screen.getByTestId('factory-run-r1')).toHaveTextContent('Needs info');
-    expect(screen.getByTestId('factory-run-reason-r1')).toHaveTextContent('Asked on the issue');
-    expect(screen.queryByTestId('factory-run-contract-r1')).toBeNull();
-    fireEvent.click(screen.getByTestId('factory-run-retry-r1'));
-    expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
-    unmount();
-
-    mocks.runs = [
-      runOf({
-        triage: {
-          decision: 'ready',
-          at: '2026-11-22T00:00:00Z',
-          contract: {
-            acceptanceCriteria: ['Negative numbers are summed'],
-            likelyPaths: [],
-            riskHints: [],
-          },
-        },
-      }),
-    ];
-    renderRuns();
-    expect(screen.getByTestId('factory-run-contract-r1')).toHaveAttribute(
-      'title',
-      'Negative numbers are summed',
-    );
-  });
-
-  test('a run that went on without a contract shows "No contract"', () => {
-    mocks.settings = configured();
-    mocks.runs = [runOf({ triage: { decision: 'none', at: '2026-11-22T00:00:00Z' } })];
-    renderRuns();
-    expect(screen.getByTestId('factory-run-contract-r1')).toHaveTextContent('No contract');
-  });
 });
 
-// openspec factory-flow-step-options, 6.1-6.3.
 describe('agent step options', () => {
   const agentStep = (stepId: string, over: Record<string, unknown> = {}) => ({
     stepId,
@@ -756,46 +546,5 @@ describe('agent step options', () => {
     expect(
       withStepOverride({ a: { model: 'haiku', effort: 'low' } }, 'a', 'provider', 'codex'),
     ).toEqual({ a: { provider: 'codex', effort: 'low' } });
-  });
-
-  test("a run row shows its flow's source and commit, and each step's options", () => {
-    mocks.settings = configured();
-    mocks.runs = [
-      buildFactoryRun({
-        id: 'run-1',
-        prUrl: 'https://github.com/o/r/pull/9',
-        flowName: 'issue-to-merge',
-        flowSource: 'repository',
-        flowCommit: 'abc1234def',
-        stepOptions: [
-          {
-            stepId: 'implement',
-            threadId: 't1',
-            provider: 'claude',
-            model: 'opus',
-            effort: 'high',
-            permissionMode: 'autoEdit',
-            allowedTools: null,
-            disallowedTools: null,
-            thread: 'continue',
-          },
-        ],
-      }),
-    ];
-    render(
-      <MemoryRouter>
-        <ProjectFactorySetting projectId="p1" />
-      </MemoryRouter>,
-    );
-    expect(screen.getByTestId('factory-run-flow-run-1').textContent).toBe(
-      'issue-to-merge · repository',
-    );
-    expect(screen.getByTestId('factory-run-flow-commit-run-1').getAttribute('href')).toBe(
-      'https://github.com/o/r/blob/abc1234def/.funny/workflows/issue-to-merge.yaml',
-    );
-    fireEvent.click(screen.getByTestId('factory-run-flow-toggle-run-1'));
-    expect(screen.getByTestId('factory-run-step-run-1-implement').textContent).toBe(
-      'implementclaude · opus · high · autoEdit',
-    );
   });
 });

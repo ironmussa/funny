@@ -38,6 +38,7 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     flowSource: null,
     flowCommit: null,
     stepOptions: [],
+    mergeApproval: null,
     ...over,
   };
 }

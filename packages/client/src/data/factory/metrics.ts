@@ -35,7 +35,11 @@ export interface FactoryMetricsSummary {
   medianBatchWaitMs: number | null;
 }
 
-export const DEFAULT_METRICS_WINDOW_DAYS = 30;
+/**
+ * The factory view's period: it lists the runs that ended in the last 14 days
+ * (the server's `FAILED_RUN_WINDOW_MS`), so a longer period would miss runs.
+ */
+export const FACTORY_METRICS_WINDOW_DAYS = 14;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -60,7 +64,7 @@ export function summarizeFactoryRuns(
   options: { now?: number; windowDays?: number } = {},
 ): FactoryMetricsSummary {
   const now = options.now ?? Date.now();
-  const since = now - (options.windowDays ?? DEFAULT_METRICS_WINDOW_DAYS) * DAY_MS;
+  const since = now - (options.windowDays ?? FACTORY_METRICS_WINDOW_DAYS) * DAY_MS;
   const inWindow = runs.filter((run) => Date.parse(run.startedAt) >= since);
 
   const count = (state: FactoryRun['state']) => inWindow.filter((r) => r.state === state).length;

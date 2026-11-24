@@ -14,9 +14,10 @@ Specs: `openspec/specs/issue-factory/spec.md`. Changes: `openspec/changes/issue-
 dependencies).
 
 All code is in `packages/server/src/services/factory/`. The client part is the factory row in a
-project's settings (`components/general-settings-project/ProjectFactorySetting.tsx`,
-`ProjectFactoryRuns.tsx`, data in `data/factory/`) and the factory view (`/factory`,
-`components/FactoryQueueView.tsx`), served over the `factory` tRPC group. See
+project's settings (`components/general-settings-project/ProjectFactorySetting.tsx`, the
+configuration only; data in `data/factory/`) and the factory view (`/factory`,
+`components/FactoryQueueView.tsx`: the runs, their controls, Clear queue / Stop all and the
+integration figures), served over the `factory` tRPC group. See
 [The factory view](#the-factory-view).
 
 ## Pieces
@@ -170,7 +171,8 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    the queue; a conflict goes to the implementer at once. With `dependencies: stack` (factory
    setting, default `wait`), an issue whose one blocker is in flight with a pull request starts on
    the blocker's branch and opens its pull request against it (`stacked_on`, the prompts'
-   `{{stack_branch}}`; its merge group stays the base's). It waits for the blocker at the end of
+   `{{stack_branch}}`; its merge group stays the base's; a repository flow whose prompts never use
+   it gets a warning in Validate flow, `staleStackingIssues` in `factory-flow.ts`). It waits for the blocker at the end of
    `ci` (never inside `merge`, whose slot is the blocker's way in), parks when the blocker ends
    without merging, and at `merge` is retargeted to the default branch and sent round to
    `integrate` first (`factory-stacking.ts`). Each push to the blocker's branch integrates the runs
@@ -359,6 +361,9 @@ reads the role's prose as a decision:
   flight.
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
+  A run the factory took by its label has that label taken off its issue (`releaseStoppedIssue`
+  in `factory-run-control.ts`), so automatic mode does not admit it again; putting the label back
+  admits it.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
   branch and PR; a completed implement step is kept, later steps run again. Refused (409) while
   the factory already runs `maxConcurrent` runs. A `no_change` run (or one parked with reason `no change`)
@@ -399,6 +404,15 @@ The search, project and state filters and the **Active** filter (hides `merged`,
   Merge says one at a time per repository. Across projects there is no shared limit, so only counts
   show.
 - The column layout is `components/board/BoardColumn.tsx`, shared with the thread kanban.
+- **Clear queue / Stop all** (`components/factory-board/FactoryQueueActions.tsx`) sit in the
+  toolbar and act on the projects the project filter keeps (every project with runs when it keeps
+  all): one `clearQueue` / `stopAll` per project that has something to clear or stop. Stop all asks
+  for a confirmation first.
+- **Integration figures** (`FactoryIntegrationStats.tsx`, folded under the header): merge rate,
+  time in the queue and to merge, CI rounds, red rounds, conflicts, agent fixes and merge queue
+  batches, from `summarizeFactoryRuns` (`data/factory/metrics.ts`) over the filtered runs of the
+  last 14 days (the view lists runs that ended within 14 days). The project settings no longer
+  list runs or figures.
 - **Run detail panel** (openspec `factory-run-detail`, `components/factory-board/run-detail/`): a
   board card, or a list row's details button, opens a side panel named by the `run` search
   parameter (`/factory?run=<id>`, `use-selected-factory-run.ts`), so it can be linked; an id that

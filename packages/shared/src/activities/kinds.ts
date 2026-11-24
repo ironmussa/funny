@@ -167,6 +167,30 @@ export const ACTIVITY_KINDS = {
     record: 'always',
     input: z.object({ reason: z.enum(['access-lost']) }),
   },
+  // A member's controls over one of their factory's runs.
+  'factory.stop': {
+    scope: 'project',
+    // Stopping a run stops its agents.
+    destructive: true,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
+  'factory.retry': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
+  'factory.approve-merge': {
+    scope: 'project',
+    // The merge it allows is recorded as its own `factory.merge`.
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      issueNumber: z.number().int().optional(),
+      sha: z.string().max(64).optional(),
+    }),
+  },
   // flow-triggers: a schedule occurrence that started no run.
   'factory.trigger_skipped': {
     scope: 'project',

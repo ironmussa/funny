@@ -363,7 +363,7 @@ function merge(
     requireReview: opts.require_review ?? true,
     regenerate: opts.regenerate,
     regressionProof: proofNode
-      ? regressionProofOpts(interpolateObject(proofNode.regression_proof!, scope))
+      ? regressionProofOpts(interpolateProofStep(proofNode.regression_proof!, scope))
       : undefined,
   });
 }
@@ -406,8 +406,22 @@ function regressionProof(yamlNode: ParsedNode, ctx: YamlPipelineContext, scope: 
   if (!ctx.provider.regressionProof) {
     throw new Error(`regression_proof[${yamlNode.id}]: the provider does not support this action`);
   }
-  const opts = interpolateObject(yamlNode.regression_proof!, scope);
+  const opts = interpolateProofStep(yamlNode.regression_proof!, scope);
   return ctx.provider.regressionProof(regressionProofOpts(opts));
+}
+
+/**
+ * A `regression_proof` step with its fields interpolated, except the rules:
+ * their `{{files}}` is the proof's own placeholder, filled by the runner with
+ * the changed test files. Rendered as a flow template it became empty, and
+ * the command ran the whole suite.
+ */
+function interpolateProofStep(
+  step: NonNullable<ParsedNode['regression_proof']>,
+  scope: TemplateScope,
+): NonNullable<ParsedNode['regression_proof']> {
+  const { rules, ...rest } = step;
+  return { ...interpolateObject(rest, scope), rules };
 }
 
 /** A `regression_proof` step's YAML configuration as provider options. */

@@ -5,6 +5,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { browserSessionClient } from '@/lib/browser-session-client';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
+import { AgentActionEffects } from './AgentActionEffects';
 import { AgentPointer } from './AgentPointer';
 import { BrowserSessionCanvas } from './BrowserSessionCanvas';
 import { InspectOverlay } from './InspectOverlay';
@@ -119,7 +120,10 @@ function ActiveBrowserViewport() {
       </div>
 
       {!userControls && sessionLive && sessionId && (
-        <AgentPointer sessionId={sessionId} viewport={viewport} />
+        <>
+          <AgentActionEffects sessionId={sessionId} viewport={viewport} />
+          <AgentPointer sessionId={sessionId} viewport={viewport} />
+        </>
       )}
     </div>
   );

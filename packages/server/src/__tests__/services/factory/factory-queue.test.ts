@@ -221,6 +221,7 @@ async function setUp(
     maxConcurrent?: number;
     flowName?: string;
     stepOverrides?: Record<string, { provider?: string; model?: string }>;
+    dependencies?: 'wait' | 'stack';
     script?: Script;
     launcher?: ReturnType<typeof fakeLauncher>;
     waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
@@ -236,6 +237,7 @@ async function setUp(
     maxConcurrent: opts.maxConcurrent,
     flowName: opts.flowName,
     stepOverrides: opts.stepOverrides,
+    dependencies: opts.dependencies,
     // One merge at a time: the batched merge queue has its own tests.
     batch: { size: 1, waitSeconds: 0 },
   });
@@ -582,6 +584,39 @@ describe('validating a flow', () => {
     expect(answer.unusedOverrides).toEqual(['review']);
     // A cheaper model on the continuing thread replays its context: said so.
     expect(answer.warnings.join('\n')).toContain('ci.before_retry');
+  });
+
+  // Found in the stacked E2E: test-funny's prompt copy predated stacking, so a stacked run started from main.
+  test('a factory that stacks is warned about a repository flow whose prompts never use stack_branch', async () => {
+    const custom =
+      'name: custom\nnodes:\n  - id: implement\n    spawn_agent: { prompt: Implement the issue. }\n';
+    const stacking = await setUp({
+      dependencies: 'stack',
+      script: { repoFiles: { '.funny/workflows/custom.yaml': custom } },
+    });
+    const stale = (
+      await stacking.queue.validateFlow(stacking.factoryId, 'p1', 'custom')
+    )._unsafeUnwrap();
+    if (!stale.ok) throw new Error(stale.message);
+    expect(stale.warnings.join('\n')).toContain('{{stack_branch}}');
+    // The built-in prompts (copied into the repository here) have the stacking sections.
+    const current = (
+      await stacking.queue.validateFlow(stacking.factoryId, 'p1', 'issue-to-merge')
+    )._unsafeUnwrap();
+    if (!current.ok) throw new Error(current.message);
+    expect(current.warnings.join('\n')).not.toContain('{{stack_branch}}');
+  });
+
+  test('a factory that waits for blockers is not warned about stack_branch', async () => {
+    const custom =
+      'name: custom\nnodes:\n  - id: implement\n    spawn_agent: { prompt: Implement the issue. }\n';
+    const { factoryId, queue } = await setUp({
+      dependencies: 'wait',
+      script: { repoFiles: { '.funny/workflows/custom.yaml': custom } },
+    });
+    const answer = (await queue.validateFlow(factoryId, 'p1', 'custom'))._unsafeUnwrap();
+    if (!answer.ok) throw new Error(answer.message);
+    expect(answer.warnings.join('\n')).not.toContain('{{stack_branch}}');
   });
 
   test('without a factory, a built-in validates with no overrides', async () => {

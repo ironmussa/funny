@@ -81,6 +81,16 @@ describeWithChromium('BrowserHost (real Chromium)', () => {
     expect(ua).toMatch(/Chrome\/\d+\.0\.0\.0/);
     await host.closeTab(tab);
   }, 30_000);
+
+  test('pages can create a WebGL context', async () => {
+    const tab = unwrap(await host.newTab('persistent'));
+    const webgl = await tab.page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      return !!canvas.getContext('webgl');
+    });
+    expect(webgl).toBe(true);
+    await host.closeTab(tab);
+  }, 30_000);
 });
 
 describeWithChromium('BrowserHost after an abrupt stop (real Chromium)', () => {

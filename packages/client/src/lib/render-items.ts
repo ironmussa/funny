@@ -3,6 +3,7 @@ import type { ThreadEvent } from '@funny/shared';
 import { isTodoToolName } from '@/components/tool-cards/utils';
 import type { CompactionEvent } from '@/stores/thread-store';
 
+import { isTrailingFactoryCard, type FactoryTimelineCard } from './factory-timeline';
 import { isGitTimelineEventType } from './git-timeline-events';
 
 export type ToolItem =
@@ -43,7 +44,8 @@ export type RenderItem =
   | { type: 'toolcall-run'; items: ToolItem[] }
   | { type: 'thread-event'; event: ThreadEvent }
   | { type: 'compaction-event'; event: CompactionEvent }
-  | { type: 'workflow-event-group'; events: ThreadEvent[] };
+  | { type: 'workflow-event-group'; events: ThreadEvent[] }
+  | { type: 'factory-card'; card: FactoryTimelineCard };
 
 /**
  * Which sides of the loaded message window are truncated by pagination.
@@ -96,19 +98,37 @@ export function clipEventsToMessageWindow(
   };
 }
 
+/** When a tool item happened: its call, or the first call of its group. */
+function toolItemTimestamp(item: ToolItem): string | undefined {
+  return item.type === 'toolcall' ? item.tc.timestamp : item.calls[0]?.timestamp;
+}
+
 /** Get timestamp for a render item (used for chronological interleaving with events) */
 export function getItemTimestamp(item: RenderItem): string {
-  if (item.type === 'message') return item.msg.timestamp || '';
-  if (item.type === 'thread-event') return item.event.createdAt || '';
-  if (item.type === 'compaction-event') return item.event.timestamp || '';
-  if (item.type === 'toolcall') return item.tc.timestamp || '';
-  if (item.type === 'toolcall-group') return item.calls[0]?.timestamp || '';
-  if (item.type === 'toolcall-run') {
-    const first = item.items[0];
-    return first.type === 'toolcall' ? first.tc.timestamp || '' : first.calls[0]?.timestamp || '';
+  return rawItemTimestamp(item) || '';
+}
+
+function rawItemTimestamp(item: RenderItem): string | null | undefined {
+  if (isToolItem(item)) return toolItemTimestamp(item);
+  if (item.type === 'toolcall-run') return toolItemTimestamp(item.items[0]);
+  return eventItemTimestamp(item);
+}
+
+function eventItemTimestamp(
+  item: Exclude<RenderItem, ToolItem | { type: 'toolcall-run' }>,
+): string | null | undefined {
+  switch (item.type) {
+    case 'message':
+      return item.msg.timestamp;
+    case 'thread-event':
+      return item.event.createdAt;
+    case 'compaction-event':
+      return item.event.timestamp;
+    case 'workflow-event-group':
+      return item.events[0]?.createdAt;
+    case 'factory-card':
+      return item.card.at;
   }
-  if (item.type === 'workflow-event-group') return item.events[0]?.createdAt || '';
-  return '';
 }
 
 /** Get a stable key for a render item */
@@ -123,6 +143,7 @@ export function getItemKey(item: RenderItem): string {
   if (item.type === 'thread-event') return item.event.id;
   if (item.type === 'compaction-event') return `compact-${item.event.timestamp}`;
   if (item.type === 'workflow-event-group') return `workflow-${item.events[0]?.id}`;
+  if (item.type === 'factory-card') return `factory-${item.card.kind}`;
   return '';
 }
 
@@ -481,18 +502,27 @@ function compareByTimestamp(a: RenderItem, b: RenderItem): number {
   return tsA.localeCompare(tsB);
 }
 
+/**
+ * The thread's items in order: messages and tool calls, with thread events
+ * (git operations, sandbox errors), compactions and a factory run's cards
+ * interleaved by time. A factory card newer than every message is left out:
+ * the stream shows it below the latest turn's status (`isTrailingFactoryCard`).
+ */
 export function buildGroupedRenderItems(
   messages: any[],
   threadEvents?: ThreadEvent[],
   compactionEvents?: CompactionEvent[],
   threadStatus?: string,
+  factoryCards?: FactoryTimelineCard[],
 ): RenderItem[] {
   const relations = collectAgentRelations(messages);
   const flat = flattenMessages(messages, relations);
   const final = wrapToolCallRuns(dedupeTodoItems(groupFlatItems(flat)));
 
-  // Interleave thread events (git operations) and compaction events chronologically
-  const hasEvents = threadEvents?.length || compactionEvents?.length;
+  const factoryItems: RenderItem[] = (factoryCards ?? [])
+    .filter((card) => !isTrailingFactoryCard(card, messages))
+    .map((card) => ({ type: 'factory-card' as const, card }));
+  const hasEvents = threadEvents?.length || compactionEvents?.length || factoryItems.length;
   if (!hasEvents) return final;
 
   const eventItems = buildThreadEventItems(withoutPendingStop(threadEvents ?? [], threadStatus));
@@ -501,7 +531,7 @@ export function buildGroupedRenderItems(
     event: e,
   }));
 
-  const merged = [...final, ...eventItems, ...compactionItems];
+  const merged = [...final, ...eventItems, ...compactionItems, ...factoryItems];
   merged.sort(compareByTimestamp);
   return merged;
 }

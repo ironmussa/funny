@@ -60,6 +60,13 @@ export const factoryRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.retryRun(ctx.userId, input.projectId, input.runId)),
     ),
+  // A member's approval of a high-risk change the factory held: the factory
+  // then merges that commit in their name, like everything else it does.
+  approveMerge: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.approveMerge(ctx.userId, input.projectId, input.runId)),
+    ),
   // The queue (change factory-manual-queue). Sending starts threads in the
   // caller's name, like saving: `steer`. A waiting issue is cancelled with
   // `stopRun`.

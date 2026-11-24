@@ -11,6 +11,7 @@ import {
 import type { RefObject } from 'react';
 import { flushSync } from 'react-dom';
 
+import { useFactoryTimelineCards } from '@/hooks/use-factory-timeline-cards';
 import {
   ensurePretextLoaded,
   getCachedPrepared,
@@ -46,16 +47,23 @@ export function useListFontConfig(): { fontSize: FontSize; fontConfig: FontConfi
   return { fontSize, fontConfig };
 }
 
-/** The list's render items; the thread status decides whether its latest stop gets a row. */
+/**
+ * The list's render items; the thread status decides whether its latest stop
+ * gets a row. A factory thread's run cards (proof, failure) sit among them by
+ * time.
+ */
 export function useGroupedRenderItems(
   messages: any[],
   threadEvents: ThreadEvent[] | undefined,
   compactionEvents: CompactionEvent[] | undefined,
   threadStatus: string | undefined,
+  threadId: string | undefined,
 ): RenderItem[] {
+  const factoryCards = useFactoryTimelineCards(threadId, threadStatus === 'running');
   return useMemo(
-    () => buildGroupedRenderItems(messages, threadEvents, compactionEvents, threadStatus),
-    [messages, threadEvents, compactionEvents, threadStatus],
+    () =>
+      buildGroupedRenderItems(messages, threadEvents, compactionEvents, threadStatus, factoryCards),
+    [messages, threadEvents, compactionEvents, threadStatus, factoryCards],
   );
 }
 

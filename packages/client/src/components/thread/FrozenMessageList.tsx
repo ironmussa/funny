@@ -67,6 +67,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
     threadEvents,
     compactionEvents,
     threadStatus,
+    threadId,
   );
   const virtualRows = useMemo(
     () => buildVirtualRows(groupedItems, sessionChanges),

@@ -64,10 +64,14 @@ function reviewHold(run: FactoryRunView, sha: string): string | null {
   return reviewAllowsMerge(verdict) ? null : `the review of commit ${sha} did not pass`;
 }
 
-/** `sha` is high risk and the factory merges only low-risk changes by itself. */
+/**
+ * `sha` is high risk and the factory merges only low-risk changes by itself,
+ * unless a member approved merging that very commit.
+ */
 function riskHold(run: FactoryRunView, sha: string, mergesAll: boolean): string | null {
   const risk = run.risk;
   if (mergesAll || risk?.headSha !== sha || risk.level !== 'high') return null;
+  if (run.mergeApproval?.sha === sha) return null;
   return `the change is high risk (${risk.reasons.join('; ')})`;
 }
 
@@ -238,7 +242,12 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
     async deleteMergedBranch(member: QueueMember): Promise<void> {
       const run = await deps.run(member.runId);
       if (!run) return;
-      const deleted = await providerFor(member).deleteBranch(member.repo, factoryRunBranch(run));
+      // Pull requests stacked on it move to the base it landed on first (D10).
+      const deleted = await providerFor(member).deleteBranch(
+        member.repo,
+        factoryRunBranch(run),
+        member.baseBranch,
+      );
       if (deleted.isErr()) {
         log.warn('Issue factory batch: a merged branch could not be deleted', {
           namespace: 'factory',

@@ -7,7 +7,9 @@
  * A member's controls over their factory's runs (issue-factory phase 4):
  *
  * - **Stop** a run: it becomes `stopped`, its flow stops in this process and
- *   its running agent threads are stopped on the enabler's runner.
+ *   its running agent threads are stopped on the enabler's runner. A run the
+ *   factory took by its label has the label taken off its issue, so automatic
+ *   mode does not take it again.
  * - **Retry** a failed or parked run: it goes back in flight on the same
  *   branch and pull request, when the factory has a free slot (`maxConcurrent`,
  *   checked in the same step as the write; refused otherwise). A completed implement step is kept (its thread
@@ -15,6 +17,10 @@
  *   back. A "no change" run keeps nothing: a new agent implements the issue.
  *   The threads a retry does not keep are archived, so the list does not
  *   show the old failed thread next to the new one with the same title.
+ * - **Approve the merge** of a run held because its change is high risk: the
+ *   member's approval of that head commit is recorded, and the run is retried.
+ *   The merge gate lets only the approved commit through, so a later push
+ *   needs a new approval; every other gate (review, proof, CI) still applies.
  * - **Take over** a run: a member follows up on the run's last agent thread;
  *   when that thread completes again, a failed or parked run goes back in
  *   flight with all its steps replayed, so the flow continues from that step
@@ -35,14 +41,18 @@ import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
 import {
   createFactoryRunsRepository,
+  HIGH_RISK_HOLD,
   NO_FREE_SLOT,
   threadsOf,
   type FactoryRunView,
 } from './factory-runs.js';
+import { getWatchedFactory } from './factory-settings.js';
 import { archiveReplacedFactoryThreads, stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
 import {
+  checkFactoryTarget,
   factoryBrowserEvents,
+  factoryGithubPort,
   factoryRunnerPorts,
   pokeFactory,
   stopFactoryFlow,
@@ -68,6 +78,31 @@ function wake(factoryId: string): void {
       error: error instanceof Error ? error.message : String(error),
     }),
   );
+}
+
+/**
+ * A stopped run that the factory took by its label: take the label off the
+ * issue, so automatic mode does not admit it again at the next poll. A person
+ * who wants it run again puts the label back (or retries the run). Best
+ * effort: the stop has happened either way, and a failure is logged.
+ */
+async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
+  if (run.source !== 'label' || run.issueNumber === null) return;
+  const factory = await getWatchedFactory(run.factoryId);
+  const port = factoryGithubPort();
+  if (!factory?.label || !port) return;
+  const target = await checkFactoryTarget(factory);
+  if (!target || 'reason' in target) return;
+  const reader = { repo: target.repo, ownerId: factory.userId, projectId: factory.projectId };
+  const removed = await port.relabelIssue(reader, run.issueNumber, { remove: factory.label });
+  if (removed.isErr()) {
+    log.warn("Issue factory could not take the label off a stopped run's issue", {
+      namespace: 'factory',
+      runId: run.id,
+      issue: run.issueNumber,
+      error: removed.error.message,
+    });
+  }
 }
 
 /** A reopen the unique index refused: another run of the issue is in flight. */
@@ -124,6 +159,31 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
       .mapErr(storage)
       .andThen((run) => (run ? okAsync(run) : errAsync(notFound)));
 
+  /** Put a failed or parked run back in flight, as a retry does. */
+  const reopened = (run: FactoryRunView): ResultAsync<undefined, FactoryRunControlError> =>
+    ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
+      runs
+        .reopen(run, kept)
+        .mapErr(reopenRefused)
+        .andThen((outcome) => {
+          if (outcome === 'reopened') {
+            return ResultAsync.fromSafePromise(
+              archiveReplacedFactoryThreads(
+                run.threadIds.filter((id) => !kept.includes(id)),
+                factoryBrowserEvents(),
+              ),
+            ).map(() => undefined);
+          }
+          return errAsync<undefined, FactoryRunControlError>({
+            kind: 'conflict',
+            message:
+              outcome === NO_FREE_SLOT
+                ? 'The factory is already running as many runs as it may at once. Retry when one of them finishes.'
+                : 'Only a failed run, or one waiting for you, can be retried.',
+          });
+        }),
+    );
+
   return {
     stop(
       userId: string,
@@ -148,7 +208,9 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             const threadsStopped = ports
               ? stopFactoryThreads(ports, userId, threadsOf(run))
               : Promise.resolve();
-            return ResultAsync.fromSafePromise(threadsStopped).andThen(() => reread(run.id));
+            return ResultAsync.fromSafePromise(
+              Promise.all([threadsStopped, releaseStoppedIssue(run)]),
+            ).andThen(() => reread(run.id));
           }),
       );
     },
@@ -157,35 +219,50 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
       return runOf(factoryId, runId)
         .andThen((run) =>
           // A run parked on its issue has done no work to keep: it is triaged again.
-          run.state === 'needs_info'
-            ? retriaged(run)
-            : ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
-                runs
-                  .reopen(run, kept)
-                  .mapErr(reopenRefused)
-                  .andThen((reopened) => {
-                    if (reopened === 'reopened') {
-                      return ResultAsync.fromSafePromise(
-                        archiveReplacedFactoryThreads(
-                          run.threadIds.filter((id) => !kept.includes(id)),
-                          factoryBrowserEvents(),
-                        ),
-                      );
-                    }
-                    return errAsync<undefined, FactoryRunControlError>({
-                      kind: 'conflict',
-                      message:
-                        reopened === NO_FREE_SLOT
-                          ? 'The factory is already running as many runs as it may at once. Retry when one of them finishes.'
-                          : 'Only a failed run, or one waiting for you, can be retried.',
-                    });
-                  }),
-              ),
+          run.state === 'needs_info' ? retriaged(run) : reopened(run),
         )
         .andThen(() => {
           wake(factoryId);
           return reread(runId);
         });
+    },
+
+    /**
+     * Approve merging the run's held high-risk head commit, then retry it.
+     * Refused unless the run waits for a person because of that risk. When
+     * the factory has no free slot the approval stays recorded, so a later
+     * Retry merges the same commit.
+     */
+    approveMerge(
+      userId: string,
+      factoryId: string,
+      runId: string,
+    ): ResultAsync<{ run: FactoryRunView; sha: string }, FactoryRunControlError> {
+      return runOf(factoryId, runId).andThen((run) => {
+        const sha = run.risk?.level === 'high' ? run.risk.headSha : null;
+        if (run.state !== 'waiting_human' || run.failureReason !== HIGH_RISK_HOLD || !sha) {
+          return errAsync<{ run: FactoryRunView; sha: string }, FactoryRunControlError>({
+            kind: 'conflict',
+            message: 'Only a run waiting for your approval of a high-risk change can be approved.',
+          });
+        }
+        return runs
+          .approveMerge(run.id, { sha, userId, at: new Date().toISOString() })
+          .mapErr(storage)
+          .andThen((written) =>
+            written
+              ? reopened(run)
+              : errAsync<undefined, FactoryRunControlError>({
+                  kind: 'conflict',
+                  message: 'The run is no longer waiting for your approval.',
+                }),
+          )
+          .andThen(() => {
+            wake(factoryId);
+            return reread(runId);
+          })
+          .map((current) => ({ run: current, sha }));
+      });
     },
   };
 }

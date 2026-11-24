@@ -165,7 +165,7 @@ type FakeGithub = FactoryGithubPort & {
   merges: number;
   comments: Array<{ issue: number; body: string }>;
   /** Label swaps on issues (a run that ended with no change). */
-  relabels: Array<{ issue: number; remove?: string; add: string }>;
+  relabels: Array<{ issue: number; remove?: string; add?: string }>;
   checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
 };
@@ -186,7 +186,9 @@ function fakeGithub(
     checks: [],
     prLookups: [],
     resolveRepo: async () => repo,
-    listReadyIssues: () => okAsync(issues),
+    // An issue whose label was taken off is no longer listed, as on GitHub.
+    listReadyIssues: () =>
+      okAsync(issues.filter((i) => !port.relabels.some((r) => r.issue === i.number && r.remove))),
     getIssue: (_reader: unknown, number: number) =>
       script.issuesUnreadable
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
@@ -226,7 +228,7 @@ function fakeGithub(
     issueText: (_reader: unknown, issue: number) =>
       okAsync({ title: `Issue ${issue}`, body: `The text of issue ${issue}.`, comments: [] }),
     revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
-    relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add: string }) => {
+    relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add?: string }) => {
       port.relabels.push({ issue, ...labels });
       return okAsync(undefined);
     },
@@ -2341,7 +2343,7 @@ describe('factory operator controls', () => {
 
   test('stopping a run ends it and its flow does not go on', async () => {
     const factoryId = await enableFactory();
-    const { poll, launcher } = await watch();
+    const { poll, launcher, github } = await watch();
     await poll.ticks[0]!();
     const running = await eventually(factoryId, (r) => r.state === 'working');
 
@@ -2351,6 +2353,10 @@ describe('factory operator controls', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     const [after] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
     expect(after!.state).toBe('stopped');
+    expect(launcher.calls).toHaveLength(1);
+    // Found in the E2E: the label stayed on, and automatic mode took the issue again.
+    expect(github.relabels).toContainEqual({ issue: 7, remove: 'ready-for-agent' });
+    await poll.ticks[0]!();
     expect(launcher.calls).toHaveLength(1);
     // Stopping twice is refused: the run already ended.
     const again = await createFactoryRunControl().stop('alice', factoryId, running.id);
@@ -2385,6 +2391,51 @@ describe('factory operator controls', () => {
     });
     await eventually(factoryId, (r) => r.state === 'merged');
     expect(launcher.calls).toHaveLength(1);
+  });
+
+  test('approving a held high-risk merge records the approved commit and retries the run', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-ok', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const run = await seedRun(factoryId, 'waiting_human', ['t-ok']);
+    await createFactoryRunsRepository().update(run.id, {
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c51b2e',
+        level: 'high',
+        reasons: ['touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)'],
+        changedLines: 10,
+        paths: ['packages/server/src/db/migrate.ts'],
+      },
+    });
+
+    const approved = await createFactoryRunControl().approveMerge('alice', factoryId, run.id);
+
+    const { run: after, sha } = approved._unsafeUnwrap();
+    expect(sha).toBe('c2b585c51b2e');
+    expect(after).toMatchObject({ state: 'queued', failureReason: null, threadIds: ['t-ok'] });
+    expect(after.mergeApproval).toMatchObject({ sha: 'c2b585c51b2e', userId: 'alice' });
+  });
+
+  test('only a run held for its high risk can be approved', async () => {
+    const factoryId = await enableFactory();
+    const failed = await seedRun(factoryId, 'failed', []);
+    const parked = (
+      await createFactoryRunsRepository().start({
+        factoryId,
+        issueNumber: 8,
+        threadIds: [],
+        state: 'waiting_human',
+      })
+    )._unsafeUnwrap();
+    await createFactoryRunsRepository().update(parked.id, { failureReason: 'review failed' });
+    const control = createFactoryRunControl();
+
+    for (const run of [failed, parked]) {
+      const approved = await control.approveMerge('alice', factoryId, run.id);
+      expect(approved.isErr() && approved.error.kind).toBe('conflict');
+    }
+    const rows = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(rows.map((row) => row.mergeApproval)).toEqual([null, null]);
   });
 
   test('retrying keeps a completed implement step and runs the later steps again', async () => {

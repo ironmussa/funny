@@ -409,6 +409,34 @@ describe('ThreadItem', () => {
       expect(screen.getByText('2m')).toBeInTheDocument();
     });
 
+    test('a run stopped after a failure keeps the error icon, not a done check', () => {
+      seedActiveRuns([
+        run({
+          state: 'stopped',
+          currentStep: 'regression-proof',
+          failureReason: 'Regression proof failed: Tests fail on the head commit',
+          completedAt: '2026-11-19T19:00:00.000Z',
+        }),
+      ]);
+      renderThread();
+
+      expect(screen.getByTestId('thread-factory-activity-t-factory')).toHaveAttribute(
+        'data-activity',
+        'factory-failed',
+      );
+    });
+
+    test('a run stopped without an error reads as ended, with its state for the time', () => {
+      seedActiveRuns([run({ state: 'stopped', completedAt: '2026-11-19T19:00:00.000Z' })]);
+      renderThread();
+
+      expect(screen.getByTestId('thread-factory-activity-t-factory')).toHaveAttribute(
+        'data-activity',
+        'factory-ended',
+      );
+      expect(screen.queryByText('2m')).not.toBeInTheDocument();
+    });
+
     test('a thread whose agent is running keeps its own status', () => {
       seedActiveRuns([run({ state: 'fixing' })]);
       renderThread({ status: 'running' });

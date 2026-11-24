@@ -6,6 +6,7 @@ import { okAsync, ResultAsync } from 'neverthrow';
 
 import { WorktreesPanel } from '@/components/review-pane/panels/WorktreesPanel';
 import { buildSettingsItems, routableSettingsIds } from '@/components/settings/items';
+import { seedGitStatus } from '@/data/git-status/testing';
 import { buildProject, withProjects } from '@/data/projects/testing';
 import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 import { api } from '@/lib/api';
@@ -50,6 +51,7 @@ beforeEach(() => {
       { path: '/second/feature', branch: 'feature/test', commit: 'abcdef12', isMain: false },
     ]),
   );
+  seedGitStatus({ statusByBranch: {}, threadToBranchKey: {} });
   mocked(api.listBranches).mockReturnValue(
     okAsync({
       branches: ['main'],
@@ -127,7 +129,8 @@ describe('Worktrees sidebar', () => {
     renderWithProviders(<WorktreesPanel />);
     const label = await screen.findByTestId('worktree-detached-1234567');
     expect(label).toHaveTextContent('1234567');
-    expect(screen.getByText('/tmp/detached')).toBeInTheDocument();
+    // The path is no longer a row of its own; the open-directory icon carries it.
+    expect(screen.getByTestId('worktree-open-directory-1234567')).toBeInTheDocument();
   });
 
   test('distinguishes the main checkout from the active linked worktree', async () => {
@@ -139,11 +142,16 @@ describe('Worktrees sidebar', () => {
     );
     const view = renderWithProviders(<WorktreesPanel />);
     await screen.findByText('feature/test');
-    // The original checkout is marked by a house icon on its path, not a chip.
+    // The original checkout is marked by a house icon beside its branch, not a chip.
     expect(screen.getAllByTestId('worktree-main-icon')).toHaveLength(1);
-    expect(screen.getByTestId('worktree-open-directory-main')).toContainElement(
+    expect(screen.getByTestId('worktree-row-main')).toContainElement(
       screen.getByTestId('worktree-main-icon'),
     );
+    // It can be opened, but not deleted: its actions hold only the open icon.
+    expect(screen.getByTestId('worktree-actions-main')).toContainElement(
+      screen.getByTestId('worktree-open-directory-main'),
+    );
+    expect(screen.queryByTestId('worktree-delete-main')).not.toBeInTheDocument();
     expect(screen.queryByTestId('worktree-badge-main')).not.toBeInTheDocument();
     // The active worktree shows as a selected row (like the sidebar's selected
     // thread), not as an outlined branch chip or a separate "Current" badge.
@@ -166,51 +174,116 @@ describe('Worktrees sidebar', () => {
     expect(screen.getByTestId('worktree-row-feature/test')).not.toHaveAttribute('data-active');
   });
 
-  test("shows a worktree's thread title the way the sidebar does", async () => {
+  test("draws a worktree's thread with the sidebar's own row", async () => {
     seedProjectThreads({
       p2: [
         buildThread({
           id: 't-wt',
           projectId: 'p2',
           title: 'mover comment y share',
+          status: 'stopped',
+          branch: 'feature/test',
           worktreePath: '/second/feature',
         }),
       ],
     });
     renderWithProviders(<WorktreesPanel />);
 
-    const link = await screen.findByTestId('worktree-thread-link-t-wt');
-    const title = within(link).getByText('mover comment y share');
-    // Same treatment as the sidebar's ThreadTitle: first letter capitalized.
-    expect(title).toHaveClass('first-letter:uppercase');
-    expect(link).toHaveClass('text-thread-title', 'text-sm');
+    const item = await screen.findByTestId('thread-item-t-wt');
+    expect(screen.getByTestId('worktree-row-feature/test')).toContainElement(item);
+    expect(within(item).getByText('mover comment y share')).toBeInTheDocument();
+    // The branch is the sidebar's powerline, not a second label of the worktree's.
+    expect(within(item).getByTestId('thread-powerline-t-wt')).toBeInTheDocument();
+    expect(screen.queryByTestId('worktree-branch-feature/test')).not.toBeInTheDocument();
+    // The worktree row keeps its own actions: the thread's menu is hidden.
+    expect(screen.queryByTestId('thread-item-more-t-wt')).not.toBeInTheDocument();
   });
 
-  test("shows a worktree's thread status with the sidebar's glyph, without the unread dot", async () => {
+  test("shows a worktree's git state with the sidebar's chips", async () => {
+    seedProjectThreads({
+      p2: [buildThread({ id: 't-wt', projectId: 'p2', worktreePath: '/second/feature' })],
+    });
+    seedGitStatus({
+      threadToBranchKey: { 't-wt': 'bk-feature' },
+      statusByBranch: {
+        'bk-feature': {
+          threadId: 't-wt',
+          branchKey: 'bk-feature',
+          state: 'dirty',
+          dirtyFileCount: 3,
+          unpushedCommitCount: 2,
+          unpulledCommitCount: 0,
+          hasRemoteBranch: true,
+          isMergedIntoBase: false,
+          linesAdded: 10,
+          linesDeleted: 1,
+          prNumber: 440,
+          prState: 'OPEN',
+        },
+      },
+    });
+    renderWithProviders(<WorktreesPanel />);
+
+    expect(await screen.findByTestId('thread-git-dirty-t-wt')).toHaveTextContent('3');
+    expect(screen.getByTestId('thread-git-sync-t-wt')).toHaveTextContent('2');
+    expect(screen.getByTestId('thread-pr-badge-t-wt')).toHaveTextContent('440');
+  });
+
+  test('orders the main checkout, then working threads, then by activity, then worktrees with no thread', async () => {
+    mocked(api.listWorktrees).mockReturnValue(
+      okAsync([
+        { path: '/second/orphan', branch: 'orphan', commit: 'a1', isMain: false },
+        { path: '/second/old', branch: 'old', commit: 'a2', isMain: false },
+        { path: '/second', branch: 'main', commit: 'a3', isMain: true },
+        { path: '/second/recent', branch: 'recent', commit: 'a4', isMain: false },
+        { path: '/second/busy', branch: 'busy', commit: 'a5', isMain: false },
+      ]),
+    );
     seedProjectThreads({
       p2: [
         buildThread({
-          id: 't-stopped',
-          projectId: 'p2',
-          status: 'stopped',
-          worktreePath: '/second/feature',
-        }),
-        buildThread({
-          id: 't-done',
+          id: 't-old',
           projectId: 'p2',
           status: 'completed',
-          // Finished and never opened: the sidebar shows it as unread.
-          completedAt: new Date().toISOString(),
-          worktreePath: '/second/feature',
+          worktreePath: '/second/old',
+          updatedAt: '2026-01-01T00:00:00Z',
+        }),
+        buildThread({
+          id: 't-recent',
+          projectId: 'p2',
+          status: 'completed',
+          worktreePath: '/second/recent',
+          updatedAt: '2026-06-01T00:00:00Z',
+        }),
+        buildThread({
+          id: 't-busy',
+          projectId: 'p2',
+          status: 'running',
+          worktreePath: '/second/busy',
+          updatedAt: '2025-01-01T00:00:00Z',
         }),
       ],
     });
     renderWithProviders(<WorktreesPanel />);
 
-    const stopped = await screen.findByTestId('worktree-thread-status-t-stopped');
-    expect(within(stopped).getByTestId('thread-stopped-dot-t-stopped')).toBeInTheDocument();
-    expect(stopped).toHaveClass('status-glyph-dots');
-    expect(screen.queryByTestId('thread-unread-dot-t-done')).not.toBeInTheDocument();
+    await screen.findByTestId('worktree-row-orphan');
+    const rows = screen
+      .getAllByTestId(/^worktree-row-/)
+      .map((row) => row.getAttribute('data-testid'));
+    expect(rows).toEqual([
+      'worktree-row-main',
+      'worktree-row-busy',
+      'worktree-row-recent',
+      'worktree-row-old',
+      'worktree-row-orphan',
+    ]);
+    // A worktree no thread works in says so, its name in the same column as the titles.
+    const orphan = screen.getByTestId('worktree-row-orphan');
+    expect(within(orphan).getByTestId('worktree-no-thread-icon')).toBeInTheDocument();
+    expect(orphan).toHaveTextContent('no thread');
+    expect(
+      within(screen.getByTestId('worktree-row-busy')).queryByTestId('worktree-no-thread-icon'),
+    ).toBeNull();
   });
 
   test('removes worktrees from project settings', () => {

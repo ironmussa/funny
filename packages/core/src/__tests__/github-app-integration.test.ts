@@ -152,6 +152,34 @@ describe('batch branches', () => {
     });
     expect((await provider.deleteBranch('o/r', 'factory/staging/b1')).isOk()).toBe(true);
   });
+
+  // Found in the stacked E2E: deleting a merged blocker's branch closed the pull request stacked on it.
+  const LIST_STACKED = 'GET /repos/o/r/pulls?base=factory%2Fissue-86-r&state=open&per_page=100';
+  const DELETE_86 = 'DELETE /repos/o/r/git/refs/heads/factory/issue-86-r';
+
+  test('the pull requests based on a merged branch move to its base before it is deleted', async () => {
+    const { provider, requests } = github({
+      [LIST_STACKED]: { status: 200, body: [{ number: 90 }] },
+      'PATCH /repos/o/r/pulls/90': { status: 200, body: { number: 90 } },
+      [DELETE_86]: { status: 204 },
+    });
+    expect((await provider.deleteBranch('o/r', 'factory/issue-86-r', 'main')).isOk()).toBe(true);
+    expect(requests.map((r) => r.key)).toEqual([
+      LIST_STACKED,
+      'PATCH /repos/o/r/pulls/90',
+      DELETE_86,
+    ]);
+    expect(requests[1]!.body).toEqual({ base: 'main' });
+  });
+
+  test('a branch whose dependent pull request cannot move is kept', async () => {
+    const { provider, requests } = github({
+      [LIST_STACKED]: { status: 200, body: [{ number: 90 }] },
+      'PATCH /repos/o/r/pulls/90': { status: 422, body: { message: 'Validation Failed' } },
+    });
+    expect((await provider.deleteBranch('o/r', 'factory/issue-86-r', 'main')).isErr()).toBe(true);
+    expect(requests.map((r) => r.key)).not.toContain(DELETE_86);
+  });
 });
 
 describe('what changed on the base', () => {

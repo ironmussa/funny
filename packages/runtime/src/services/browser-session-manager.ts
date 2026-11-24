@@ -26,6 +26,7 @@ import { join } from 'path';
 import type { ChromeSession } from '@funny/core/chrome';
 import type {
   BrowserSessionClosedReason,
+  BrowserSessionAgentAction,
   BrowserSessionPointerKind,
   WSBrowserSessionInputData,
   WSBrowserSessionResultData,
@@ -1007,6 +1008,11 @@ class BrowserSessionManager {
       y: Math.round(point.y),
       kind,
     });
+  }
+
+  /** Tell the panel what the agent does, so it can show it over the page. */
+  emitAgentAction(s: BrowserSession, action: BrowserSessionAgentAction): void {
+    this.emit(s, 'browser-session:agent-action', { sessionId: s.sessionId, ...action });
   }
 
   /** Accept or dismiss the pending dialog. Returns false when none is open. */

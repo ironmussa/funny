@@ -93,6 +93,7 @@ import { withBatchStats, type FactoryQueuePort } from './factory-queue-port.js';
 import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
 import { classifyRisk } from './factory-risk.js';
 import {
+  HIGH_RISK_HOLD,
   factoryRunLabel,
   type FactoryRunStage,
   type RegressionProofRecord,
@@ -147,8 +148,8 @@ export const MERGE_HOLD_REASONS = {
   noReview: 'no review',
   /** Its verdict does not allow a merge. */
   reviewFailed: 'review failed',
-  /** The change is high risk and the factory merges only low-risk changes. */
-  highRisk: 'high risk',
+  /** The change is high risk and the factory merges only low-risk changes; a member may approve it. */
+  highRisk: HIGH_RISK_HOLD,
   /** Its merge rounds that reached the implementing agent are spent. */
   mergeRounds: 'merge rounds spent',
   /** A stacked run whose blocker has not landed, or whose pull request could not be retargeted. */
@@ -214,6 +215,11 @@ export interface FactoryActionProviderDeps {
   sensitivePaths?: readonly string[];
   /** Which reviewed changes the factory merges by itself (default: only low-risk ones). */
   autoMerge?: FactoryAutoMerge;
+  /**
+   * Whether a member approved merging `sha` although it is high risk, read
+   * when the merge gate runs (the approval is written while the run waits).
+   */
+  mergeApproved?: (sha: string) => Promise<boolean>;
   /** The review verdicts the run already has (a resumed run). */
   reviews?: readonly FactoryReviewVerdict[];
   /** What the run already stores of its triage (a resumed run, or one back from a path hold). */
@@ -1284,7 +1290,12 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       }
     }
     const change = await classifyHead();
-    if (change?.sha === sha && change.risk.level === 'high' && deps.autoMerge !== 'all') {
+    if (
+      change?.sha === sha &&
+      change.risk.level === 'high' &&
+      deps.autoMerge !== 'all' &&
+      !(await deps.mergeApproved?.(sha))
+    ) {
       return holdMerge(
         MERGE_HOLD_REASONS.highRisk,
         `Not merged: the change is high risk (${change.risk.reasons.join('; ')}). This factory merges only low-risk changes by itself.`,

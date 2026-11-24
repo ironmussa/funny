@@ -157,11 +157,14 @@ export type {
   WSBrowserSessionControllerData,
   WSBrowserSessionDialogData,
   WSBrowserSessionPointerData,
+  WSBrowserSessionAgentActionData,
   WSBrowserSessionNavigatedData,
   WSBrowserSessionAudioData,
   BrowserSessionController,
   BrowserSessionCloseRequestReason,
   BrowserSessionPointerKind,
+  BrowserSessionAgentAction,
+  BrowserSessionAgentActionKind,
 } from './types/browser-session.js';
 export { threadBrowserSessionId, threadIdFromBrowserSessionId } from './types/browser-session.js';
 
@@ -1216,6 +1219,11 @@ export type WSEvent =
   | { type: 'browser-session:controller'; threadId: ''; data: WSBrowserSessionControllerData }
   | { type: 'browser-session:dialog'; threadId: ''; data: WSBrowserSessionDialogData }
   | { type: 'browser-session:pointer'; threadId: ''; data: WSBrowserSessionPointerData }
+  | {
+      type: 'browser-session:agent-action';
+      threadId: '';
+      data: WSBrowserSessionAgentActionData;
+    }
   | { type: 'browser-session:navigated'; threadId: ''; data: WSBrowserSessionNavigatedData }
   | { type: 'browser-session:audio'; threadId: ''; data: WSBrowserSessionAudioData };
 
@@ -1356,6 +1364,7 @@ import type {
   WSBrowserSessionControllerData,
   WSBrowserSessionDialogData,
   WSBrowserSessionPointerData,
+  WSBrowserSessionAgentActionData,
   WSBrowserSessionNavigatedData,
   WSBrowserSessionAudioData,
 } from './types/browser-session.js';

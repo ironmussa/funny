@@ -399,7 +399,8 @@ export function DockviewLayout({
   // ── Right-pane management ──
   const addRightPanels = useCallback(
     (api: DockviewApi, widthOverride?: number) => {
-      const desiredWidth = widthOverride ?? initialRightWidthRef.current;
+      const desiredWidth =
+        widthOverride ?? readStoredSize(STORAGE_KEY_RIGHT_WIDTH) ?? initialRightWidthRef.current;
       const tabs = rightTabsRef.current;
       if (tabs && tabs.length > 0) {
         let firstPanel: IDockviewPanel | null = null;
@@ -463,7 +464,10 @@ export function DockviewLayout({
       // direction (root level), the new browser panel slots between the center
       // column and the right group → [left | center | browser | right].
       position: { direction: 'right', referencePanel: PANEL_CENTER },
-      initialWidth: initialBrowserWidthRef.current,
+      // Read the stored width, not the mount-time ref: the browser opens per
+      // thread, so it is closed and re-added on every thread switch and must
+      // come back at the width the user last dragged it to.
+      initialWidth: readStoredSize(STORAGE_KEY_BROWSER_WIDTH) ?? initialBrowserWidthRef.current,
     });
   }, []);
 
@@ -484,7 +488,12 @@ export function DockviewLayout({
         title: tab.title,
         params: { hostId: bottomPanelId(tab.id) },
         position: { direction: 'below', referencePanel: PANEL_CENTER },
-        initialHeight: heightOverride ?? initialBottomHeightRef.current,
+        // Stored height, not the mount-time ref: the bottom group is removed
+        // when the terminal scope has no tabs and re-added on the way back.
+        initialHeight:
+          heightOverride ??
+          readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT) ??
+          initialBottomHeightRef.current,
         renderer: 'always',
       });
     },
@@ -910,8 +919,7 @@ export function DockviewLayout({
   const getRightOpenSize = useCallback(() => {
     // Prefer the freshly-persisted value over the mount-time ref — honors a
     // mid-session drag if the user closes and reopens within the same session.
-    const stored = readStoredSize(STORAGE_KEY_RIGHT_WIDTH);
-    return stored ?? initialRightWidthRef.current;
+    return readStoredSize(STORAGE_KEY_RIGHT_WIDTH) ?? initialRightWidthRef.current;
   }, []);
   const onRightAnimating = useCallback((animating: boolean, api: DockviewApi) => {
     isAnimatingRef.current = animating;
@@ -1042,7 +1050,8 @@ export function DockviewLayout({
             group: api.addGroup({
               direction: 'below',
               referencePanel: PANEL_CENTER,
-              initialHeight: initialBottomHeightRef.current,
+              initialHeight:
+                readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT) ?? initialBottomHeightRef.current,
             }),
           });
         }
@@ -1054,7 +1063,10 @@ export function DockviewLayout({
         void api.addPopoutGroup(panel, {
           position: {
             width: 720,
-            height: Math.max(initialBottomHeightRef.current, 360),
+            height: Math.max(
+              readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT) ?? initialBottomHeightRef.current,
+              360,
+            ),
             left: window.screenX + 80,
             top: window.screenY + 80,
           },

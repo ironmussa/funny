@@ -1,6 +1,7 @@
 import {
+  ArrowDown,
+  ArrowUp,
   FileDiff,
-  GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -14,8 +15,11 @@ import {
 /** Uncommitted changes in the working tree. */
 export const GIT_CHANGES_ICON = FileDiff;
 
-/** A commit (made, unpushed, listed). */
-export const GIT_COMMIT_ICON = GitCommitHorizontal;
+/** Commits made but not pushed yet: what a push would send up. */
+export const GIT_UNPUSHED_ICON = ArrowUp;
+
+/** Commits on the remote not pulled yet: what a pull would bring down. */
+export const GIT_UNPULLED_ICON = ArrowDown;
 
 export type PRState = 'OPEN' | 'MERGED' | 'CLOSED';
 

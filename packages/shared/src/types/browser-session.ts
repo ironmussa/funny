@@ -225,6 +225,43 @@ export interface WSBrowserSessionPointerData {
   kind: BrowserSessionPointerKind;
 }
 
+/** What the agent does in the page, so the panel can show it. */
+export type BrowserSessionAgentActionKind =
+  | 'click'
+  | 'double_click'
+  | 'hover'
+  | 'type'
+  | 'fill'
+  | 'select'
+  | 'press'
+  | 'scroll'
+  | 'drag'
+  | 'upload'
+  | 'screenshot';
+
+/**
+ * One agent action, in page viewport pixels. `x`/`y` is where it happens
+ * (absent for an action on the whole page), `toX`/`toY` where a drag ends,
+ * `deltaX`/`deltaY` how far a scroll moves, `detail` a short label (the key
+ * pressed, the options selected, the file count).
+ */
+export interface BrowserSessionAgentAction {
+  kind: BrowserSessionAgentActionKind;
+  x?: number;
+  y?: number;
+  toX?: number;
+  toY?: number;
+  deltaX?: number;
+  deltaY?: number;
+  detail?: string;
+}
+
+/** `browser-session:agent-action`: the panel draws the action over the screencast. */
+export interface WSBrowserSessionAgentActionData extends BrowserSessionAgentAction {
+  sessionId: string;
+  threadId?: string;
+}
+
 export interface WSBrowserSessionFrameData {
   sessionId: string;
   /** base64-encoded JPEG payload from CDP `Page.screencastFrame`. */

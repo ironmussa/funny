@@ -198,7 +198,8 @@ export function CenterDockview({
 
   const addRightPanels = useCallback(
     (api: DockviewApi, widthOverride?: number) => {
-      const desiredWidth = widthOverride ?? initialRightWidthRef.current;
+      const desiredWidth =
+        widthOverride ?? readStoredSize(STORAGE_KEY_RIGHT_WIDTH) ?? initialRightWidthRef.current;
       const tabs = rightTabsRef.current;
       isMutatingRightRef.current = true;
       return withCleanupSync(

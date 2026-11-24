@@ -118,24 +118,29 @@ function estimateAssistantMessageHeight(
   return 120;
 }
 
+function estimateMessageHeight(
+  item: Extract<RenderItem, { type: 'message' }>,
+  containerWidth: number,
+  fonts?: FontConfig,
+): number {
+  if (item.msg.role !== 'user') return estimateAssistantMessageHeight(item, containerWidth, fonts);
+  if (item.msg.author === AUTO_RESUME_MESSAGE_AUTHOR) return AUTO_RESUME_MARKER_PX;
+  return estimateUserMessageHeight(item.msg, containerWidth, fonts);
+}
+
 export function estimateItemHeight(
   item: RenderItem,
   containerWidth = 0,
   fonts?: FontConfig,
 ): number {
-  if (item.type === 'message') {
-    if (item.msg.role === 'user' && item.msg.author === AUTO_RESUME_MESSAGE_AUTHOR) {
-      return AUTO_RESUME_MARKER_PX;
-    }
-    if (item.msg.role === 'user') return estimateUserMessageHeight(item.msg, containerWidth, fonts);
-    return estimateAssistantMessageHeight(item, containerWidth, fonts);
-  }
+  if (item.type === 'message') return estimateMessageHeight(item, containerWidth, fonts);
   if (item.type === 'toolcall') return 44;
   if (item.type === 'toolcall-group') return 44;
   if (item.type === 'toolcall-run') return 44 * item.items.length;
   if (item.type === 'thread-event') return item.event.type === 'sandbox:error' ? 80 : 32;
   if (item.type === 'compaction-event') return 32;
   if (item.type === 'workflow-event-group') return 32;
+  if (item.type === 'factory-card') return item.card.kind === 'proof' ? 140 : 100;
   return 60;
 }
 

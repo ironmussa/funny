@@ -184,3 +184,56 @@ describe('DockviewLayout bottom pane visibility', () => {
     expect(bottomPanels[0].group.height).toBe(280);
   });
 });
+
+describe('DockviewLayout keeps dragged sizes across thread switches', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    dockviewMock.api = createMockDockviewApi();
+    dockviewMock.readyCalled = false;
+  });
+
+  /** Simulates the user dragging a splitter: dockview resizes the group and
+   *  fires `onDidLayoutChange`, which DockviewLayout persists. */
+  function fireLayoutChange(api: MockDockviewApi) {
+    for (const call of api.onDidLayoutChange.mock.calls) (call[0] as () => void)();
+  }
+
+  function lastAddOptions(api: MockDockviewApi, id: string) {
+    const calls = api.addPanel.mock.calls.filter((c) => (c[0] as { id: string }).id === id);
+    return calls[calls.length - 1]?.[0] as { initialWidth?: number; initialHeight?: number };
+  }
+
+  test('re-opens the browser at the width the user dragged it to', () => {
+    const props = { left: <div />, center: <div />, browser: <div />, initialBrowserWidth: 480 };
+    const { rerender } = render(<DockviewLayout {...props} browserOpen />);
+    const api = dockviewMock.api!;
+    expect(lastAddOptions(api, 'browser').initialWidth).toBe(480);
+
+    api.getPanel('browser')!.group.width = 900;
+    fireLayoutChange(api);
+
+    // Switching to a thread without the browser closes it; coming back re-adds it.
+    rerender(<DockviewLayout {...props} browserOpen={false} />);
+    expect(api.getPanel('browser')).toBeUndefined();
+    rerender(<DockviewLayout {...props} browserOpen />);
+
+    expect(lastAddOptions(api, 'browser').initialWidth).toBe(900);
+  });
+
+  test('re-adds the terminal group at the height the user dragged it to', () => {
+    const tabs = terminalTabs();
+    const props = { left: <div />, center: <div />, bottomPaneOpen: true };
+    const { rerender } = render(<DockviewLayout {...props} bottomTabs={tabs} />);
+    const api = dockviewMock.api!;
+
+    api.panels.find((p) => p.id.startsWith('bottom:'))!.group.height = 520;
+    fireLayoutChange(api);
+
+    // A thread in a project with no terminals removes the bottom group.
+    rerender(<DockviewLayout {...props} bottomTabs={[]} />);
+    expect(api.panels.some((p) => p.id.startsWith('bottom:'))).toBe(false);
+    rerender(<DockviewLayout {...props} bottomTabs={tabs} />);
+
+    expect(lastAddOptions(api, 'bottom:one').initialHeight).toBe(520);
+  });
+});

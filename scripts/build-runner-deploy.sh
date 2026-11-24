@@ -8,6 +8,12 @@
 #
 # A missing native build fails the deploy. Set FUNNY_NATIVE_GIT_OPTIONAL=1 to
 # deploy with the CLI fallback anyway (the runner then warns at startup).
+#
+# Then builds weave's merge driver (weave-driver, pinned to FUNNY_WEAVE_VERSION)
+# into packages/runtime/dist/tools/bin, which the start script puts on PATH: the
+# issue factory's integrate step uses it to settle conflicts between separate
+# edits of one file without an agent. It is optional: a failed build only
+# warns, and integrations then use git's own merge driver.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -55,6 +61,23 @@ native_ok=1
 build_native || native_ok=0
 
 bun run --cwd packages/runtime build
+
+WEAVE_VERSION="${FUNNY_WEAVE_VERSION:-v0.7.1}"
+build_weave() {
+  command -v cargo >/dev/null 2>&1 || [ ! -f "$HOME/.cargo/env" ] || . "$HOME/.cargo/env"
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "WARNING: cargo not found; deploying without weave (git's own merge driver)" >&2
+    return 0
+  fi
+  if ! cargo install --locked --quiet --root packages/runtime/dist/tools \
+    --git https://github.com/Ataraxy-Labs/weave --tag "$WEAVE_VERSION" weave-driver; then
+    echo "WARNING: weave-driver $WEAVE_VERSION did not build; deploying without it" >&2
+    return 0
+  fi
+  packages/runtime/dist/tools/bin/weave-driver --version ||
+    echo "WARNING: weave-driver was built but does not run" >&2
+}
+build_weave
 
 if [ "$native_ok" = 1 ] && ! ls packages/runtime/dist/native-git.*.node >/dev/null 2>&1; then
   fail_native "the runtime bundle does not contain the native-git binary"

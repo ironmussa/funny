@@ -421,10 +421,19 @@ export function busyPathsOf(
     issueNumber: number | null;
     state: string;
     triage: FactoryTriage | null;
+    stackedOn?: { runId: string } | null;
   }>,
   exceptRunId: string,
+  /**
+   * The run `exceptRunId` is stacked on (D10): it builds on that run's branch
+   * on purpose, so sharing its files is the point and its paths do not count.
+   */
+  stackedOnRunId: string | null = null,
 ): Array<{ issue: number; paths: string[] }> {
   return runs.flatMap((run) => {
+    // Neither way round: a blocker is not held by the runs stacked on it
+    // either, since they wait for it to merge (holding it would deadlock).
+    if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
     const paths = run.triage?.decision === 'ready' ? (run.triage.contract?.likelyPaths ?? []) : [];
     // A run without an issue has no triage contract, so no likely paths.
     return run.issueNumber !== null &&

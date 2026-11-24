@@ -1145,7 +1145,8 @@
     "loadingWorktrees": "Loading worktrees...",
     "noWorktrees": "No worktrees found. Create one to get started.",
     "loadFailed": "Could not load worktrees",
-    "openThread": "Open thread: {{title}}"
+    "openThread": "Open thread: {{title}}",
+    "noThread": "no thread"
   },
   "common": {
     "cancel": "Cancel",
@@ -1755,7 +1756,7 @@
     "stopAll": "Stop all",
     "stopAllTitle": "Stop the factory?",
     "stopAllDesc": "This clears the queue and stops every run in progress and its agent threads.",
-    "runs": "Factory runs",
+    "stopAllProjectsDesc": "This clears the queue and stops every run in progress and its agent threads, in {{count}} projects.",
     "state": {
       "requested": "In queue",
       "queued": "Queued",
@@ -1807,8 +1808,10 @@
       "title": "The factory pipeline stopped on an error"
     },
     "activity": {
-      "tooltip": "Factory · #{{issue}} · {{state}}",
-      "failedTooltip": "Factory · #{{issue}} · Failed at {{step}}",
+      "failedAt": "{{run}} · Failed at {{step}}",
+      "stoppedAfterFailure": "{{run}} · Stopped after failing at {{step}}",
+      "stoppedWithReason": "{{run}} · Stopped: {{reason}}",
+      "resentTooltip": "{{label}} · Sent again as a new run",
       "stopRun": "Stop factory run"
     },
     "indicator": {
@@ -1846,7 +1849,25 @@
     "risk": {
       "low": "Low risk",
       "high": "High risk"
-    }
+    },
+    "reason": {
+      "noReview": "Not merged: this commit has no review",
+      "reviewFailed": "Not merged: its review did not pass",
+      "highRisk": "Not merged: high risk, it needs you",
+      "rewritten": "Not merged: the branch was rewritten"
+    },
+    "reasonDetail": {
+      "highRisk": "This factory merges only low-risk changes by itself, and this one is high risk: {{reasons}}. Review the pull request and merge it yourself, or set \"Merges by itself\" to \"All\" in the factory settings.",
+      "highRiskUnknown": "This factory merges only low-risk changes by itself, and this one is high risk. Review the pull request and merge it yourself, or set \"Merges by itself\" to \"All\" in the factory settings.",
+      "noReview": "The commit it would merge has no verdict from the flow's review step, so nothing checked it. Review the pull request and merge it yourself.",
+      "reviewFailed": "The review of the commit it would merge did not pass. Read its findings on the pull request, then follow up on this thread to fix them or merge it yourself.",
+      "rewritten": "The branch no longer contains the commit that was reviewed (a rebase or a force push), so what would be merged was not checked. Look at the new head on the pull request before merging it yourself.",
+      "mergeRounds": "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself."
+    },
+    "viewPullRequest": "View PR",
+    "approveMerge": "Approve and merge",
+    "approveMergeTitle": "Merge this high-risk change?",
+    "approveMergeBody": "The factory will merge commit {{sha}} of issue #{{issue}} once its checks, review and regression proof still pass. A new commit on the branch needs a new approval."
   },
   "projectSecrets": {
     "title": "Secrets",

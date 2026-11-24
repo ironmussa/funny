@@ -769,6 +769,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       project: projectDefaults,
       overrides: job.factory.stepOverrides,
       batch: job.factory.batch,
+      dependencies: job.factory.dependencies,
     });
     if (flow.isErr()) {
       await flowUnavailable(job, flow.error);
@@ -854,11 +855,18 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       ...issueDepsOf(job, scope),
       sensitivePaths: job.factory.sensitivePaths,
       autoMerge: job.factory.autoMerge,
+      // Read from the row: the member approves while the run waits.
+      mergeApproved: async (sha) => {
+        const run = await deps.runs.get(job.run.id);
+        return run.isOk() && run.value?.mergeApproval?.sha === sha;
+      },
       triage: job.run.triage,
       findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
       busyPaths: async () => {
         const others = await deps.runs.inFlight(job.factory.id);
-        return others.isOk() ? busyPathsOf(others.value, job.run.id) : [];
+        return others.isOk()
+          ? busyPathsOf(others.value, job.run.id, job.run.stackedOn?.runId ?? null)
+          : [];
       },
       holdForPaths: async (blockers) => {
         const held = await deps.runs.holdForPaths(job.run.id, blockers);

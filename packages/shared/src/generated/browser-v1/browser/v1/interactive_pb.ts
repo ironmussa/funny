@@ -19,10 +19,12 @@ import { file_browser_v1_common } from './common_pb.js';
 /**
  * Describes the file browser/v1/interactive.proto.
  */
-export const file_browser_v1_interactive: GenFile /*@__PURE__*/ = fileDesc(
-  'Chxicm93c2VyL3YxL2ludGVyYWN0aXZlLnByb3RvEgpicm93c2VyLnYxIqACCg1UZXJtaW5hbFNwYXduEhMKC3Rlcm1pbmFsX2lkGAEgASgJEgsKA2N3ZBgCIAEoCRIPCgdjb2x1bW5zGAMgASgNEgwKBHJvd3MYBCABKA0SEgoFc2hlbGwYBSABKAlIAIgBARIXCgpwcm9qZWN0X2lkGAYgASgJSAGIAQESEgoFbGFiZWwYByABKAlIAogBARIeChFzY3JhdGNoX3RocmVhZF9pZBgIIAEoCUgDiAEBEh4KEXNhbmRib3hfdGhyZWFkX2lkGAkgASgJSASIAQFCCAoGX3NoZWxsQg0KC19wcm9qZWN0X2lkQggKBl9sYWJlbEIUChJfc2NyYXRjaF90aHJlYWRfaWRCFAoSX3NhbmRib3hfdGhyZWFkX2lkIjQKDVRlcm1pbmFsV3JpdGUSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBIMCgRkYXRhGAIgASgMIi8KDlRlcm1pbmFsUmVzaXplEg8KB2NvbHVtbnMYASABKA0SDAoEcm93cxgCIAEoDSIgCg5UZXJtaW5hbFNpZ25hbBIOCgZzaWduYWwYASABKAkiHwoOVGVybWluYWxSZW5hbWUSDQoFdGl0bGUYASABKAkiNgoRVGVybWluYWxSZWNvbm5lY3QSIQoZbGFzdF9zZWVuX291dHB1dF9zZXF1ZW5jZRgBIAEoBCIRCg9UZXJtaW5hbFJlc3RvcmUiHwoNVGVybWluYWxDbG9zZRIOCgZyZWFzb24YASABKAkiMAoOVGVybWluYWxPdXRwdXQSEAoIc2VxdWVuY2UYASABKAQSDAoEZGF0YRgCIAEoDCJUCgxUZXJtaW5hbEV4aXQSFgoJZXhpdF9jb2RlGAEgASgFSACIAQESEwoGc2lnbmFsGAIgASgJSAGIAQFCDAoKX2V4aXRfY29kZUIJCgdfc2lnbmFsIjMKDVRlcm1pbmFsRXJyb3ISIgoGc3RhdHVzGAEgASgLMhIuYnJvd3Nlci52MS5TdGF0dXMipwQKD1Rlcm1pbmFsTWVzc2FnZRITCgt0ZXJtaW5hbF9pZBgBIAEoCRIqCgVzcGF3bhgKIAEoCzIZLmJyb3dzZXIudjEuVGVybWluYWxTcGF3bkgAEioKBXdyaXRlGAsgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbFdyaXRlSAASLAoGcmVzaXplGAwgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbFJlc2l6ZUgAEiwKBnNpZ25hbBgNIAEoCzIaLmJyb3dzZXIudjEuVGVybWluYWxTaWduYWxIABIsCgZyZW5hbWUYDiABKAsyGi5icm93c2VyLnYxLlRlcm1pbmFsUmVuYW1lSAASMgoJcmVjb25uZWN0GA8gASgLMh0uYnJvd3Nlci52MS5UZXJtaW5hbFJlY29ubmVjdEgAEi4KB3Jlc3RvcmUYECABKAsyGy5icm93c2VyLnYxLlRlcm1pbmFsUmVzdG9yZUgAEioKBWNsb3NlGBEgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbENsb3NlSAASLAoGb3V0cHV0GBIgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbE91dHB1dEgAEigKBGV4aXQYEyABKAsyGC5icm93c2VyLnYxLlRlcm1pbmFsRXhpdEgAEioKBWVycm9yGBQgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbEVycm9ySABCCQoHcGF5bG9hZCJQChJCcm93c2VyU2Vzc2lvbk9wZW4SEgoKdGFyZ2V0X3VybBgBIAEoCRIXCgpwcm9qZWN0X2lkGAIgASgJSACIAQFCDQoLX3Byb2plY3RfaWQiLAoWQnJvd3NlclNlc3Npb25OYXZpZ2F0ZRISCgp0YXJnZXRfdXJsGAEgASgJIlUKE0Jyb3dzZXJTZXNzaW9uSW5wdXQSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBInCgZhY3Rpb24YAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IkIKFUJyb3dzZXJTZXNzaW9uSW5zcGVjdBIpCghzZWxlY3RvchgBIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QiKwoVQnJvd3NlclNlc3Npb25FeGVjdXRlEhIKCmV4cHJlc3Npb24YASABKAkiKgoXQnJvd3NlclNlc3Npb25IZWFydGJlYXQSDwoHb3JkaW5hbBgBIAEoBCIxCh9Ccm93c2VyU2Vzc2lvbkhpc3RvcnlOYXZpZ2F0aW9uEg4KBmFjdGlvbhgBIAEoCSIaChhCcm93c2VyU2Vzc2lvblNjcmVlbnNob3QiNwoWQnJvd3NlclNlc3Npb25WaWV3cG9ydBINCgV3aWR0aBgBIAEoDRIOCgZoZWlnaHQYAiABKA0iwAEKE0Jyb3dzZXJTZXNzaW9uUmVhZHkSEgoKdGFyZ2V0X3VybBgBIAEoCRI5Cgh2aWV3cG9ydBgCIAEoCzIiLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25WaWV3cG9ydEgAiAEBEjgKCmNvbnRyb2xsZXIYAyABKA4yJC5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ29udHJvbGxlchITCgthdWRpb19tdXRlZBgEIAEoCEILCglfdmlld3BvcnQiJAoTQnJvd3NlclNlc3Npb25BdWRpbxINCgVtdXRlZBgBIAEoCCImChdCcm93c2VyU2Vzc2lvbk5hdmlnYXRlZBILCgN1cmwYASABKAkiWwofQnJvd3NlclNlc3Npb25Db250cm9sbGVyQ2hhbmdlZBI4Cgpjb250cm9sbGVyGAEgASgOMiQuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkNvbnRyb2xsZXIiYwoUQnJvd3NlclNlc3Npb25EaWFsb2cSDAoEdHlwZRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhoKDWRlZmF1bHRfdmFsdWUYAyABKAlIAIgBAUIQCg5fZGVmYXVsdF92YWx1ZSJfChtCcm93c2VyU2Vzc2lvbkRpYWxvZ0NoYW5nZWQSNQoGZGlhbG9nGAEgASgLMiAuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkRpYWxvZ0gAiAEBQgkKB19kaWFsb2ciOwoZQnJvd3NlclNlc3Npb25BZ2VudE9wZW5lZBIRCgl0aHJlYWRfaWQYASABKAkSCwoDdXJsGAIgASgJImIKFUJyb3dzZXJTZXNzaW9uUG9pbnRlchIJCgF4GAEgASgFEgkKAXkYAiABKAUSMwoEa2luZBgDIAEoDjIlLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25Qb2ludGVyS2luZCKiAQoVQnJvd3NlclNlc3Npb25Db25zb2xlEg0KBWxldmVsGAEgASgJEgwKBHRleHQYAiABKAkSEAoDdXJsGAMgASgJSACIAQESEQoEbGluZRgEIAEoDUgBiAEBEhMKBmNvbHVtbhgFIAEoDUgCiAEBEhYKDm9jY3VycmVkX2F0X21zGAYgASgEQgYKBF91cmxCBwoFX2xpbmVCCQoHX2NvbHVtbiJaChNCcm93c2VyU2Vzc2lvbkZyYW1lEhAKCHNlcXVlbmNlGAEgASgEEjEKBWZyYW1lGAIgASgLMiIuYnJvd3Nlci52MS5MYXJnZVJlc291cmNlUmVmZXJlbmNlIkkKE0Jyb3dzZXJTZXNzaW9uQ2xvc2USDgoGcmVhc29uGAEgASgJEhUKCGNsb3NlX2lkGAIgASgJSACIAQFCCwoJX2Nsb3NlX2lkIj4KFEJyb3dzZXJTZXNzaW9uUmVzdWx0EiYKBXZhbHVlGAEgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdCLCCQoVQnJvd3NlclNlc3Npb25NZXNzYWdlEhoKEmJyb3dzZXJfc2Vzc2lvbl9pZBgBIAEoCRIuCgRvcGVuGAogASgLMh4uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbk9wZW5IABI2CghuYXZpZ2F0ZRgLIAEoCzIiLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25OYXZpZ2F0ZUgAEjAKBWlucHV0GAwgASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbklucHV0SAASNAoHaW5zcGVjdBgNIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25JbnNwZWN0SAASNAoHZXhlY3V0ZRgOIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25FeGVjdXRlSAASOAoJaGVhcnRiZWF0GA8gASgLMiMuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkhlYXJ0YmVhdEgAEjAKBWZyYW1lGBAgASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkZyYW1lSAASMAoFY2xvc2UYESABKAsyHy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ2xvc2VIABIyCgZyZXN1bHQYEiABKAsyIC5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uUmVzdWx0SAASJAoGc3RhdHVzGBMgASgLMhIuYnJvd3Nlci52MS5TdGF0dXNIABJJChJoaXN0b3J5X25hdmlnYXRpb24YFCABKAsyKy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uSGlzdG9yeU5hdmlnYXRpb25IABI6CgpzY3JlZW5zaG90GBUgASgLMiQuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvblNjcmVlbnNob3RIABIwCgVyZWFkeRgWIAEoCzIfLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25SZWFkeUgAEjQKB2NvbnNvbGUYFyABKAsyIS5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ29uc29sZUgAEjYKCHZpZXdwb3J0GBggASgLMiIuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvblZpZXdwb3J0SAASOAoJbmF2aWdhdGVkGBkgASgLMiMuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbk5hdmlnYXRlZEgAEkEKCmNvbnRyb2xsZXIYGiABKAsyKy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ29udHJvbGxlckNoYW5nZWRIABI5CgZkaWFsb2cYGyABKAsyJy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uRGlhbG9nQ2hhbmdlZEgAEj0KDGFnZW50X29wZW5lZBgcIAEoCzIlLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25BZ2VudE9wZW5lZEgAEjQKB3BvaW50ZXIYHSABKAsyIS5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uUG9pbnRlckgAEjAKBWF1ZGlvGB4gASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkF1ZGlvSABCCQoHcGF5bG9hZCKgAgoTSW50ZXJhY3RpdmVFbnZlbG9wZRItCghtZXRhZGF0YRgBIAEoCzIbLmJyb3dzZXIudjEuUmVxdWVzdE1ldGFkYXRhEi4KCGRlbGl2ZXJ5GAIgASgLMhwuYnJvd3Nlci52MS5EZWxpdmVyeU1ldGFkYXRhEjAKCXJlc291cmNlcxgDIAMoCzIdLmJyb3dzZXIudjEuUmVzb3VyY2VSZWZlcmVuY2USLwoIdGVybWluYWwYCiABKAsyGy5icm93c2VyLnYxLlRlcm1pbmFsTWVzc2FnZUgAEjwKD2Jyb3dzZXJfc2Vzc2lvbhgLIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25NZXNzYWdlSABCCQoHcGF5bG9hZCqRAQoYQnJvd3NlclNlc3Npb25Db250cm9sbGVyEioKJkJST1dTRVJfU0VTU0lPTl9DT05UUk9MTEVSX1VOU1BFQ0lGSUVEEAASJAogQlJPV1NFUl9TRVNTSU9OX0NPTlRST0xMRVJfQUdFTlQQARIjCh9CUk9XU0VSX1NFU1NJT05fQ09OVFJPTExFUl9VU0VSEAIq5AEKGUJyb3dzZXJTZXNzaW9uUG9pbnRlcktpbmQSLAooQlJPV1NFUl9TRVNTSU9OX1BPSU5URVJfS0lORF9VTlNQRUNJRklFRBAAEiUKIUJST1dTRVJfU0VTU0lPTl9QT0lOVEVSX0tJTkRfTU9WRRABEiYKIkJST1dTRVJfU0VTU0lPTl9QT0lOVEVSX0tJTkRfQ0xJQ0sQAhIlCiFCUk9XU0VSX1NFU1NJT05fUE9JTlRFUl9LSU5EX0RPV04QAxIjCh9CUk9XU0VSX1NFU1NJT05fUE9JTlRFUl9LSU5EX1VQEARiBnByb3RvMw',
-  [file_browser_v1_common, file_google_protobuf_struct],
-);
+export const file_browser_v1_interactive: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'Chxicm93c2VyL3YxL2ludGVyYWN0aXZlLnByb3RvEgpicm93c2VyLnYxIqACCg1UZXJtaW5hbFNwYXduEhMKC3Rlcm1pbmFsX2lkGAEgASgJEgsKA2N3ZBgCIAEoCRIPCgdjb2x1bW5zGAMgASgNEgwKBHJvd3MYBCABKA0SEgoFc2hlbGwYBSABKAlIAIgBARIXCgpwcm9qZWN0X2lkGAYgASgJSAGIAQESEgoFbGFiZWwYByABKAlIAogBARIeChFzY3JhdGNoX3RocmVhZF9pZBgIIAEoCUgDiAEBEh4KEXNhbmRib3hfdGhyZWFkX2lkGAkgASgJSASIAQFCCAoGX3NoZWxsQg0KC19wcm9qZWN0X2lkQggKBl9sYWJlbEIUChJfc2NyYXRjaF90aHJlYWRfaWRCFAoSX3NhbmRib3hfdGhyZWFkX2lkIjQKDVRlcm1pbmFsV3JpdGUSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBIMCgRkYXRhGAIgASgMIi8KDlRlcm1pbmFsUmVzaXplEg8KB2NvbHVtbnMYASABKA0SDAoEcm93cxgCIAEoDSIgCg5UZXJtaW5hbFNpZ25hbBIOCgZzaWduYWwYASABKAkiHwoOVGVybWluYWxSZW5hbWUSDQoFdGl0bGUYASABKAkiNgoRVGVybWluYWxSZWNvbm5lY3QSIQoZbGFzdF9zZWVuX291dHB1dF9zZXF1ZW5jZRgBIAEoBCIRCg9UZXJtaW5hbFJlc3RvcmUiHwoNVGVybWluYWxDbG9zZRIOCgZyZWFzb24YASABKAkiMAoOVGVybWluYWxPdXRwdXQSEAoIc2VxdWVuY2UYASABKAQSDAoEZGF0YRgCIAEoDCJUCgxUZXJtaW5hbEV4aXQSFgoJZXhpdF9jb2RlGAEgASgFSACIAQESEwoGc2lnbmFsGAIgASgJSAGIAQFCDAoKX2V4aXRfY29kZUIJCgdfc2lnbmFsIjMKDVRlcm1pbmFsRXJyb3ISIgoGc3RhdHVzGAEgASgLMhIuYnJvd3Nlci52MS5TdGF0dXMipwQKD1Rlcm1pbmFsTWVzc2FnZRITCgt0ZXJtaW5hbF9pZBgBIAEoCRIqCgVzcGF3bhgKIAEoCzIZLmJyb3dzZXIudjEuVGVybWluYWxTcGF3bkgAEioKBXdyaXRlGAsgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbFdyaXRlSAASLAoGcmVzaXplGAwgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbFJlc2l6ZUgAEiwKBnNpZ25hbBgNIAEoCzIaLmJyb3dzZXIudjEuVGVybWluYWxTaWduYWxIABIsCgZyZW5hbWUYDiABKAsyGi5icm93c2VyLnYxLlRlcm1pbmFsUmVuYW1lSAASMgoJcmVjb25uZWN0GA8gASgLMh0uYnJvd3Nlci52MS5UZXJtaW5hbFJlY29ubmVjdEgAEi4KB3Jlc3RvcmUYECABKAsyGy5icm93c2VyLnYxLlRlcm1pbmFsUmVzdG9yZUgAEioKBWNsb3NlGBEgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbENsb3NlSAASLAoGb3V0cHV0GBIgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbE91dHB1dEgAEigKBGV4aXQYEyABKAsyGC5icm93c2VyLnYxLlRlcm1pbmFsRXhpdEgAEioKBWVycm9yGBQgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbEVycm9ySABCCQoHcGF5bG9hZCJQChJCcm93c2VyU2Vzc2lvbk9wZW4SEgoKdGFyZ2V0X3VybBgBIAEoCRIXCgpwcm9qZWN0X2lkGAIgASgJSACIAQFCDQoLX3Byb2plY3RfaWQiLAoWQnJvd3NlclNlc3Npb25OYXZpZ2F0ZRISCgp0YXJnZXRfdXJsGAEgASgJIlUKE0Jyb3dzZXJTZXNzaW9uSW5wdXQSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBInCgZhY3Rpb24YAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IkIKFUJyb3dzZXJTZXNzaW9uSW5zcGVjdBIpCghzZWxlY3RvchgBIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QiKwoVQnJvd3NlclNlc3Npb25FeGVjdXRlEhIKCmV4cHJlc3Npb24YASABKAkiKgoXQnJvd3NlclNlc3Npb25IZWFydGJlYXQSDwoHb3JkaW5hbBgBIAEoBCIxCh9Ccm93c2VyU2Vzc2lvbkhpc3RvcnlOYXZpZ2F0aW9uEg4KBmFjdGlvbhgBIAEoCSIaChhCcm93c2VyU2Vzc2lvblNjcmVlbnNob3QiNwoWQnJvd3NlclNlc3Npb25WaWV3cG9ydBINCgV3aWR0aBgBIAEoDRIOCgZoZWlnaHQYAiABKA0iwAEKE0Jyb3dzZXJTZXNzaW9uUmVhZHkSEgoKdGFyZ2V0X3VybBgBIAEoCRI5Cgh2aWV3cG9ydBgCIAEoCzIiLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25WaWV3cG9ydEgAiAEBEjgKCmNvbnRyb2xsZXIYAyABKA4yJC5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ29udHJvbGxlchITCgthdWRpb19tdXRlZBgEIAEoCEILCglfdmlld3BvcnQiJAoTQnJvd3NlclNlc3Npb25BdWRpbxINCgVtdXRlZBgBIAEoCCImChdCcm93c2VyU2Vzc2lvbk5hdmlnYXRlZBILCgN1cmwYASABKAkiWwofQnJvd3NlclNlc3Npb25Db250cm9sbGVyQ2hhbmdlZBI4Cgpjb250cm9sbGVyGAEgASgOMiQuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkNvbnRyb2xsZXIiYwoUQnJvd3NlclNlc3Npb25EaWFsb2cSDAoEdHlwZRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhoKDWRlZmF1bHRfdmFsdWUYAyABKAlIAIgBAUIQCg5fZGVmYXVsdF92YWx1ZSJfChtCcm93c2VyU2Vzc2lvbkRpYWxvZ0NoYW5nZWQSNQoGZGlhbG9nGAEgASgLMiAuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkRpYWxvZ0gAiAEBQgkKB19kaWFsb2ciOwoZQnJvd3NlclNlc3Npb25BZ2VudE9wZW5lZBIRCgl0aHJlYWRfaWQYASABKAkSCwoDdXJsGAIgASgJImIKFUJyb3dzZXJTZXNzaW9uUG9pbnRlchIJCgF4GAEgASgFEgkKAXkYAiABKAUSMwoEa2luZBgDIAEoDjIlLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25Qb2ludGVyS2luZCKcAgoZQnJvd3NlclNlc3Npb25BZ2VudEFjdGlvbhI3CgRraW5kGAEgASgOMikuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkFnZW50QWN0aW9uS2luZBIOCgF4GAIgASgFSACIAQESDgoBeRgDIAEoBUgBiAEBEhEKBHRvX3gYBCABKAVIAogBARIRCgR0b195GAUgASgFSAOIAQESFAoHZGVsdGFfeBgGIAEoBUgEiAEBEhQKB2RlbHRhX3kYByABKAVIBYgBARITCgZkZXRhaWwYCCABKAlIBogBAUIECgJfeEIECgJfeUIHCgVfdG9feEIHCgVfdG9feUIKCghfZGVsdGFfeEIKCghfZGVsdGFfeUIJCgdfZGV0YWlsIqIBChVCcm93c2VyU2Vzc2lvbkNvbnNvbGUSDQoFbGV2ZWwYASABKAkSDAoEdGV4dBgCIAEoCRIQCgN1cmwYAyABKAlIAIgBARIRCgRsaW5lGAQgASgNSAGIAQESEwoGY29sdW1uGAUgASgNSAKIAQESFgoOb2NjdXJyZWRfYXRfbXMYBiABKARCBgoEX3VybEIHCgVfbGluZUIJCgdfY29sdW1uIloKE0Jyb3dzZXJTZXNzaW9uRnJhbWUSEAoIc2VxdWVuY2UYASABKAQSMQoFZnJhbWUYAiABKAsyIi5icm93c2VyLnYxLkxhcmdlUmVzb3VyY2VSZWZlcmVuY2UiSQoTQnJvd3NlclNlc3Npb25DbG9zZRIOCgZyZWFzb24YASABKAkSFQoIY2xvc2VfaWQYAiABKAlIAIgBAUILCglfY2xvc2VfaWQiPgoUQnJvd3NlclNlc3Npb25SZXN1bHQSJgoFdmFsdWUYASABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IoEKChVCcm93c2VyU2Vzc2lvbk1lc3NhZ2USGgoSYnJvd3Nlcl9zZXNzaW9uX2lkGAEgASgJEi4KBG9wZW4YCiABKAsyHi5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uT3BlbkgAEjYKCG5hdmlnYXRlGAsgASgLMiIuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbk5hdmlnYXRlSAASMAoFaW5wdXQYDCABKAsyHy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uSW5wdXRIABI0CgdpbnNwZWN0GA0gASgLMiEuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkluc3BlY3RIABI0CgdleGVjdXRlGA4gASgLMiEuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkV4ZWN1dGVIABI4CgloZWFydGJlYXQYDyABKAsyIy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uSGVhcnRiZWF0SAASMAoFZnJhbWUYECABKAsyHy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uRnJhbWVIABIwCgVjbG9zZRgRIAEoCzIfLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25DbG9zZUgAEjIKBnJlc3VsdBgSIAEoCzIgLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25SZXN1bHRIABIkCgZzdGF0dXMYEyABKAsyEi5icm93c2VyLnYxLlN0YXR1c0gAEkkKEmhpc3RvcnlfbmF2aWdhdGlvbhgUIAEoCzIrLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25IaXN0b3J5TmF2aWdhdGlvbkgAEjoKCnNjcmVlbnNob3QYFSABKAsyJC5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uU2NyZWVuc2hvdEgAEjAKBXJlYWR5GBYgASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvblJlYWR5SAASNAoHY29uc29sZRgXIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25Db25zb2xlSAASNgoIdmlld3BvcnQYGCABKAsyIi5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uVmlld3BvcnRIABI4CgluYXZpZ2F0ZWQYGSABKAsyIy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uTmF2aWdhdGVkSAASQQoKY29udHJvbGxlchgaIAEoCzIrLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25Db250cm9sbGVyQ2hhbmdlZEgAEjkKBmRpYWxvZxgbIAEoCzInLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25EaWFsb2dDaGFuZ2VkSAASPQoMYWdlbnRfb3BlbmVkGBwgASgLMiUuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkFnZW50T3BlbmVkSAASNAoHcG9pbnRlchgdIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25Qb2ludGVySAASMAoFYXVkaW8YHiABKAsyHy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQXVkaW9IABI9CgxhZ2VudF9hY3Rpb24YHyABKAsyJS5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQWdlbnRBY3Rpb25IAEIJCgdwYXlsb2FkIqACChNJbnRlcmFjdGl2ZUVudmVsb3BlEi0KCG1ldGFkYXRhGAEgASgLMhsuYnJvd3Nlci52MS5SZXF1ZXN0TWV0YWRhdGESLgoIZGVsaXZlcnkYAiABKAsyHC5icm93c2VyLnYxLkRlbGl2ZXJ5TWV0YWRhdGESMAoJcmVzb3VyY2VzGAMgAygLMh0uYnJvd3Nlci52MS5SZXNvdXJjZVJlZmVyZW5jZRIvCgh0ZXJtaW5hbBgKIAEoCzIbLmJyb3dzZXIudjEuVGVybWluYWxNZXNzYWdlSAASPAoPYnJvd3Nlcl9zZXNzaW9uGAsgASgLMiEuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbk1lc3NhZ2VIAEIJCgdwYXlsb2FkKpEBChhCcm93c2VyU2Vzc2lvbkNvbnRyb2xsZXISKgomQlJPV1NFUl9TRVNTSU9OX0NPTlRST0xMRVJfVU5TUEVDSUZJRUQQABIkCiBCUk9XU0VSX1NFU1NJT05fQ09OVFJPTExFUl9BR0VOVBABEiMKH0JST1dTRVJfU0VTU0lPTl9DT05UUk9MTEVSX1VTRVIQAirkAQoZQnJvd3NlclNlc3Npb25Qb2ludGVyS2luZBIsCihCUk9XU0VSX1NFU1NJT05fUE9JTlRFUl9LSU5EX1VOU1BFQ0lGSUVEEAASJQohQlJPV1NFUl9TRVNTSU9OX1BPSU5URVJfS0lORF9NT1ZFEAESJgoiQlJPV1NFUl9TRVNTSU9OX1BPSU5URVJfS0lORF9DTElDSxACEiUKIUJST1dTRVJfU0VTU0lPTl9QT0lOVEVSX0tJTkRfRE9XThADEiMKH0JST1dTRVJfU0VTU0lPTl9QT0lOVEVSX0tJTkRfVVAQBCrNBAodQnJvd3NlclNlc3Npb25BZ2VudEFjdGlvbktpbmQSMQotQlJPV1NFUl9TRVNTSU9OX0FHRU5UX0FDVElPTl9LSU5EX1VOU1BFQ0lGSUVEEAASKwonQlJPV1NFUl9TRVNTSU9OX0FHRU5UX0FDVElPTl9LSU5EX0NMSUNLEAESMgouQlJPV1NFUl9TRVNTSU9OX0FHRU5UX0FDVElPTl9LSU5EX0RPVUJMRV9DTElDSxACEisKJ0JST1dTRVJfU0VTU0lPTl9BR0VOVF9BQ1RJT05fS0lORF9IT1ZFUhADEioKJkJST1dTRVJfU0VTU0lPTl9BR0VOVF9BQ1RJT05fS0lORF9UWVBFEAQSKgomQlJPV1NFUl9TRVNTSU9OX0FHRU5UX0FDVElPTl9LSU5EX0ZJTEwQBRIsCihCUk9XU0VSX1NFU1NJT05fQUdFTlRfQUNUSU9OX0tJTkRfU0VMRUNUEAYSKwonQlJPV1NFUl9TRVNTSU9OX0FHRU5UX0FDVElPTl9LSU5EX1BSRVNTEAcSLAooQlJPV1NFUl9TRVNTSU9OX0FHRU5UX0FDVElPTl9LSU5EX1NDUk9MTBAIEioKJkJST1dTRVJfU0VTU0lPTl9BR0VOVF9BQ1RJT05fS0lORF9EUkFHEAkSLAooQlJPV1NFUl9TRVNTSU9OX0FHRU5UX0FDVElPTl9LSU5EX1VQTE9BRBAKEjAKLEJST1dTRVJfU0VTU0lPTl9BR0VOVF9BQ1RJT05fS0lORF9TQ1JFRU5TSE9UEAtiBnByb3RvMw',
+    [file_browser_v1_common, file_google_protobuf_struct],
+  );
 
 /**
  * @generated from message browser.v1.TerminalSpawn
@@ -81,10 +83,9 @@ export type TerminalSpawn = Message<'browser.v1.TerminalSpawn'> & {
  * Describes the message browser.v1.TerminalSpawn.
  * Use `create(TerminalSpawnSchema)` to create a new message.
  */
-export const TerminalSpawnSchema: GenMessage<TerminalSpawn> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  0,
-);
+export const TerminalSpawnSchema: GenMessage<TerminalSpawn> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 0);
 
 /**
  * @generated from message browser.v1.TerminalWrite
@@ -105,10 +106,9 @@ export type TerminalWrite = Message<'browser.v1.TerminalWrite'> & {
  * Describes the message browser.v1.TerminalWrite.
  * Use `create(TerminalWriteSchema)` to create a new message.
  */
-export const TerminalWriteSchema: GenMessage<TerminalWrite> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  1,
-);
+export const TerminalWriteSchema: GenMessage<TerminalWrite> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 1);
 
 /**
  * @generated from message browser.v1.TerminalResize
@@ -129,10 +129,9 @@ export type TerminalResize = Message<'browser.v1.TerminalResize'> & {
  * Describes the message browser.v1.TerminalResize.
  * Use `create(TerminalResizeSchema)` to create a new message.
  */
-export const TerminalResizeSchema: GenMessage<TerminalResize> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  2,
-);
+export const TerminalResizeSchema: GenMessage<TerminalResize> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 2);
 
 /**
  * @generated from message browser.v1.TerminalSignal
@@ -148,10 +147,9 @@ export type TerminalSignal = Message<'browser.v1.TerminalSignal'> & {
  * Describes the message browser.v1.TerminalSignal.
  * Use `create(TerminalSignalSchema)` to create a new message.
  */
-export const TerminalSignalSchema: GenMessage<TerminalSignal> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  3,
-);
+export const TerminalSignalSchema: GenMessage<TerminalSignal> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 3);
 
 /**
  * @generated from message browser.v1.TerminalRename
@@ -167,10 +165,9 @@ export type TerminalRename = Message<'browser.v1.TerminalRename'> & {
  * Describes the message browser.v1.TerminalRename.
  * Use `create(TerminalRenameSchema)` to create a new message.
  */
-export const TerminalRenameSchema: GenMessage<TerminalRename> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  4,
-);
+export const TerminalRenameSchema: GenMessage<TerminalRename> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 4);
 
 /**
  * @generated from message browser.v1.TerminalReconnect
@@ -186,10 +183,9 @@ export type TerminalReconnect = Message<'browser.v1.TerminalReconnect'> & {
  * Describes the message browser.v1.TerminalReconnect.
  * Use `create(TerminalReconnectSchema)` to create a new message.
  */
-export const TerminalReconnectSchema: GenMessage<TerminalReconnect> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  5,
-);
+export const TerminalReconnectSchema: GenMessage<TerminalReconnect> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 5);
 
 /**
  * @generated from message browser.v1.TerminalRestore
@@ -200,10 +196,9 @@ export type TerminalRestore = Message<'browser.v1.TerminalRestore'> & {};
  * Describes the message browser.v1.TerminalRestore.
  * Use `create(TerminalRestoreSchema)` to create a new message.
  */
-export const TerminalRestoreSchema: GenMessage<TerminalRestore> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  6,
-);
+export const TerminalRestoreSchema: GenMessage<TerminalRestore> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 6);
 
 /**
  * @generated from message browser.v1.TerminalClose
@@ -219,10 +214,9 @@ export type TerminalClose = Message<'browser.v1.TerminalClose'> & {
  * Describes the message browser.v1.TerminalClose.
  * Use `create(TerminalCloseSchema)` to create a new message.
  */
-export const TerminalCloseSchema: GenMessage<TerminalClose> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  7,
-);
+export const TerminalCloseSchema: GenMessage<TerminalClose> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 7);
 
 /**
  * @generated from message browser.v1.TerminalOutput
@@ -243,10 +237,9 @@ export type TerminalOutput = Message<'browser.v1.TerminalOutput'> & {
  * Describes the message browser.v1.TerminalOutput.
  * Use `create(TerminalOutputSchema)` to create a new message.
  */
-export const TerminalOutputSchema: GenMessage<TerminalOutput> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  8,
-);
+export const TerminalOutputSchema: GenMessage<TerminalOutput> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 8);
 
 /**
  * @generated from message browser.v1.TerminalExit
@@ -267,10 +260,9 @@ export type TerminalExit = Message<'browser.v1.TerminalExit'> & {
  * Describes the message browser.v1.TerminalExit.
  * Use `create(TerminalExitSchema)` to create a new message.
  */
-export const TerminalExitSchema: GenMessage<TerminalExit> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  9,
-);
+export const TerminalExitSchema: GenMessage<TerminalExit> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 9);
 
 /**
  * @generated from message browser.v1.TerminalError
@@ -286,10 +278,9 @@ export type TerminalError = Message<'browser.v1.TerminalError'> & {
  * Describes the message browser.v1.TerminalError.
  * Use `create(TerminalErrorSchema)` to create a new message.
  */
-export const TerminalErrorSchema: GenMessage<TerminalError> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  10,
-);
+export const TerminalErrorSchema: GenMessage<TerminalError> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 10);
 
 /**
  * @generated from message browser.v1.TerminalMessage
@@ -388,10 +379,9 @@ export type TerminalMessage = Message<'browser.v1.TerminalMessage'> & {
  * Describes the message browser.v1.TerminalMessage.
  * Use `create(TerminalMessageSchema)` to create a new message.
  */
-export const TerminalMessageSchema: GenMessage<TerminalMessage> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  11,
-);
+export const TerminalMessageSchema: GenMessage<TerminalMessage> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 11);
 
 /**
  * @generated from message browser.v1.BrowserSessionOpen
@@ -412,10 +402,9 @@ export type BrowserSessionOpen = Message<'browser.v1.BrowserSessionOpen'> & {
  * Describes the message browser.v1.BrowserSessionOpen.
  * Use `create(BrowserSessionOpenSchema)` to create a new message.
  */
-export const BrowserSessionOpenSchema: GenMessage<BrowserSessionOpen> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  12,
-);
+export const BrowserSessionOpenSchema: GenMessage<BrowserSessionOpen> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 12);
 
 /**
  * @generated from message browser.v1.BrowserSessionNavigate
@@ -431,7 +420,8 @@ export type BrowserSessionNavigate = Message<'browser.v1.BrowserSessionNavigate'
  * Describes the message browser.v1.BrowserSessionNavigate.
  * Use `create(BrowserSessionNavigateSchema)` to create a new message.
  */
-export const BrowserSessionNavigateSchema: GenMessage<BrowserSessionNavigate> /*@__PURE__*/ =
+export const BrowserSessionNavigateSchema: GenMessage<BrowserSessionNavigate> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 13);
 
 /**
@@ -453,10 +443,9 @@ export type BrowserSessionInput = Message<'browser.v1.BrowserSessionInput'> & {
  * Describes the message browser.v1.BrowserSessionInput.
  * Use `create(BrowserSessionInputSchema)` to create a new message.
  */
-export const BrowserSessionInputSchema: GenMessage<BrowserSessionInput> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  14,
-);
+export const BrowserSessionInputSchema: GenMessage<BrowserSessionInput> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 14);
 
 /**
  * @generated from message browser.v1.BrowserSessionInspect
@@ -472,7 +461,8 @@ export type BrowserSessionInspect = Message<'browser.v1.BrowserSessionInspect'> 
  * Describes the message browser.v1.BrowserSessionInspect.
  * Use `create(BrowserSessionInspectSchema)` to create a new message.
  */
-export const BrowserSessionInspectSchema: GenMessage<BrowserSessionInspect> /*@__PURE__*/ =
+export const BrowserSessionInspectSchema: GenMessage<BrowserSessionInspect> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 15);
 
 /**
@@ -489,7 +479,8 @@ export type BrowserSessionExecute = Message<'browser.v1.BrowserSessionExecute'> 
  * Describes the message browser.v1.BrowserSessionExecute.
  * Use `create(BrowserSessionExecuteSchema)` to create a new message.
  */
-export const BrowserSessionExecuteSchema: GenMessage<BrowserSessionExecute> /*@__PURE__*/ =
+export const BrowserSessionExecuteSchema: GenMessage<BrowserSessionExecute> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 16);
 
 /**
@@ -506,7 +497,8 @@ export type BrowserSessionHeartbeat = Message<'browser.v1.BrowserSessionHeartbea
  * Describes the message browser.v1.BrowserSessionHeartbeat.
  * Use `create(BrowserSessionHeartbeatSchema)` to create a new message.
  */
-export const BrowserSessionHeartbeatSchema: GenMessage<BrowserSessionHeartbeat> /*@__PURE__*/ =
+export const BrowserSessionHeartbeatSchema: GenMessage<BrowserSessionHeartbeat> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 17);
 
 /**
@@ -524,7 +516,8 @@ export type BrowserSessionHistoryNavigation =
  * Describes the message browser.v1.BrowserSessionHistoryNavigation.
  * Use `create(BrowserSessionHistoryNavigationSchema)` to create a new message.
  */
-export const BrowserSessionHistoryNavigationSchema: GenMessage<BrowserSessionHistoryNavigation> /*@__PURE__*/ =
+export const BrowserSessionHistoryNavigationSchema: GenMessage<BrowserSessionHistoryNavigation> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 18);
 
 /**
@@ -536,7 +529,8 @@ export type BrowserSessionScreenshot = Message<'browser.v1.BrowserSessionScreens
  * Describes the message browser.v1.BrowserSessionScreenshot.
  * Use `create(BrowserSessionScreenshotSchema)` to create a new message.
  */
-export const BrowserSessionScreenshotSchema: GenMessage<BrowserSessionScreenshot> /*@__PURE__*/ =
+export const BrowserSessionScreenshotSchema: GenMessage<BrowserSessionScreenshot> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 19);
 
 /**
@@ -558,7 +552,8 @@ export type BrowserSessionViewport = Message<'browser.v1.BrowserSessionViewport'
  * Describes the message browser.v1.BrowserSessionViewport.
  * Use `create(BrowserSessionViewportSchema)` to create a new message.
  */
-export const BrowserSessionViewportSchema: GenMessage<BrowserSessionViewport> /*@__PURE__*/ =
+export const BrowserSessionViewportSchema: GenMessage<BrowserSessionViewport> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 20);
 
 /**
@@ -592,10 +587,9 @@ export type BrowserSessionReady = Message<'browser.v1.BrowserSessionReady'> & {
  * Describes the message browser.v1.BrowserSessionReady.
  * Use `create(BrowserSessionReadySchema)` to create a new message.
  */
-export const BrowserSessionReadySchema: GenMessage<BrowserSessionReady> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  21,
-);
+export const BrowserSessionReadySchema: GenMessage<BrowserSessionReady> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 21);
 
 /**
  * The page's audio was turned on or off (sessions start muted).
@@ -613,10 +607,9 @@ export type BrowserSessionAudio = Message<'browser.v1.BrowserSessionAudio'> & {
  * Describes the message browser.v1.BrowserSessionAudio.
  * Use `create(BrowserSessionAudioSchema)` to create a new message.
  */
-export const BrowserSessionAudioSchema: GenMessage<BrowserSessionAudio> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  22,
-);
+export const BrowserSessionAudioSchema: GenMessage<BrowserSessionAudio> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 22);
 
 /**
  * The page changed (link, redirect, agent action, popup, previous tab).
@@ -634,7 +627,8 @@ export type BrowserSessionNavigated = Message<'browser.v1.BrowserSessionNavigate
  * Describes the message browser.v1.BrowserSessionNavigated.
  * Use `create(BrowserSessionNavigatedSchema)` to create a new message.
  */
-export const BrowserSessionNavigatedSchema: GenMessage<BrowserSessionNavigated> /*@__PURE__*/ =
+export const BrowserSessionNavigatedSchema: GenMessage<BrowserSessionNavigated> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 23);
 
 /**
@@ -652,7 +646,8 @@ export type BrowserSessionControllerChanged =
  * Describes the message browser.v1.BrowserSessionControllerChanged.
  * Use `create(BrowserSessionControllerChangedSchema)` to create a new message.
  */
-export const BrowserSessionControllerChangedSchema: GenMessage<BrowserSessionControllerChanged> /*@__PURE__*/ =
+export const BrowserSessionControllerChangedSchema: GenMessage<BrowserSessionControllerChanged> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 24);
 
 /**
@@ -679,7 +674,8 @@ export type BrowserSessionDialog = Message<'browser.v1.BrowserSessionDialog'> & 
  * Describes the message browser.v1.BrowserSessionDialog.
  * Use `create(BrowserSessionDialogSchema)` to create a new message.
  */
-export const BrowserSessionDialogSchema: GenMessage<BrowserSessionDialog> /*@__PURE__*/ =
+export const BrowserSessionDialogSchema: GenMessage<BrowserSessionDialog> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 25);
 
 /**
@@ -698,7 +694,8 @@ export type BrowserSessionDialogChanged = Message<'browser.v1.BrowserSessionDial
  * Describes the message browser.v1.BrowserSessionDialogChanged.
  * Use `create(BrowserSessionDialogChangedSchema)` to create a new message.
  */
-export const BrowserSessionDialogChangedSchema: GenMessage<BrowserSessionDialogChanged> /*@__PURE__*/ =
+export const BrowserSessionDialogChangedSchema: GenMessage<BrowserSessionDialogChanged> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 26);
 
 /**
@@ -722,7 +719,8 @@ export type BrowserSessionAgentOpened = Message<'browser.v1.BrowserSessionAgentO
  * Describes the message browser.v1.BrowserSessionAgentOpened.
  * Use `create(BrowserSessionAgentOpenedSchema)` to create a new message.
  */
-export const BrowserSessionAgentOpenedSchema: GenMessage<BrowserSessionAgentOpened> /*@__PURE__*/ =
+export const BrowserSessionAgentOpenedSchema: GenMessage<BrowserSessionAgentOpened> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 27);
 
 /**
@@ -751,8 +749,72 @@ export type BrowserSessionPointer = Message<'browser.v1.BrowserSessionPointer'> 
  * Describes the message browser.v1.BrowserSessionPointer.
  * Use `create(BrowserSessionPointerSchema)` to create a new message.
  */
-export const BrowserSessionPointerSchema: GenMessage<BrowserSessionPointer> /*@__PURE__*/ =
+export const BrowserSessionPointerSchema: GenMessage<BrowserSessionPointer> =
+  /*@__PURE__*/
   messageDesc(file_browser_v1_interactive, 28);
+
+/**
+ * What the agent does, so the panel can show it (a label by the cursor, the
+ * key pressed, a drag trail, a capture flash). Points are page viewport
+ * pixels; an action on the whole page (a screenshot) has none.
+ *
+ * @generated from message browser.v1.BrowserSessionAgentAction
+ */
+export type BrowserSessionAgentAction = Message<'browser.v1.BrowserSessionAgentAction'> & {
+  /**
+   * @generated from field: browser.v1.BrowserSessionAgentActionKind kind = 1;
+   */
+  kind: BrowserSessionAgentActionKind;
+
+  /**
+   * @generated from field: optional int32 x = 2;
+   */
+  x?: number | undefined;
+
+  /**
+   * @generated from field: optional int32 y = 3;
+   */
+  y?: number | undefined;
+
+  /**
+   * Where a drag ends.
+   *
+   * @generated from field: optional int32 to_x = 4;
+   */
+  toX?: number | undefined;
+
+  /**
+   * @generated from field: optional int32 to_y = 5;
+   */
+  toY?: number | undefined;
+
+  /**
+   * How far a scroll moves.
+   *
+   * @generated from field: optional int32 delta_x = 6;
+   */
+  deltaX?: number | undefined;
+
+  /**
+   * @generated from field: optional int32 delta_y = 7;
+   */
+  deltaY?: number | undefined;
+
+  /**
+   * A short detail: the key pressed, the options selected, the file count.
+   *
+   * @generated from field: optional string detail = 8;
+   */
+  detail?: string | undefined;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionAgentAction.
+ * Use `create(BrowserSessionAgentActionSchema)` to create a new message.
+ */
+export const BrowserSessionAgentActionSchema: GenMessage<BrowserSessionAgentAction> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 29);
 
 /**
  * @generated from message browser.v1.BrowserSessionConsole
@@ -793,8 +855,9 @@ export type BrowserSessionConsole = Message<'browser.v1.BrowserSessionConsole'> 
  * Describes the message browser.v1.BrowserSessionConsole.
  * Use `create(BrowserSessionConsoleSchema)` to create a new message.
  */
-export const BrowserSessionConsoleSchema: GenMessage<BrowserSessionConsole> /*@__PURE__*/ =
-  messageDesc(file_browser_v1_interactive, 29);
+export const BrowserSessionConsoleSchema: GenMessage<BrowserSessionConsole> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 30);
 
 /**
  * @generated from message browser.v1.BrowserSessionFrame
@@ -815,10 +878,9 @@ export type BrowserSessionFrame = Message<'browser.v1.BrowserSessionFrame'> & {
  * Describes the message browser.v1.BrowserSessionFrame.
  * Use `create(BrowserSessionFrameSchema)` to create a new message.
  */
-export const BrowserSessionFrameSchema: GenMessage<BrowserSessionFrame> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  30,
-);
+export const BrowserSessionFrameSchema: GenMessage<BrowserSessionFrame> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 31);
 
 /**
  * @generated from message browser.v1.BrowserSessionClose
@@ -843,10 +905,9 @@ export type BrowserSessionClose = Message<'browser.v1.BrowserSessionClose'> & {
  * Describes the message browser.v1.BrowserSessionClose.
  * Use `create(BrowserSessionCloseSchema)` to create a new message.
  */
-export const BrowserSessionCloseSchema: GenMessage<BrowserSessionClose> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  31,
-);
+export const BrowserSessionCloseSchema: GenMessage<BrowserSessionClose> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 32);
 
 /**
  * @generated from message browser.v1.BrowserSessionResult
@@ -862,8 +923,9 @@ export type BrowserSessionResult = Message<'browser.v1.BrowserSessionResult'> & 
  * Describes the message browser.v1.BrowserSessionResult.
  * Use `create(BrowserSessionResultSchema)` to create a new message.
  */
-export const BrowserSessionResultSchema: GenMessage<BrowserSessionResult> /*@__PURE__*/ =
-  messageDesc(file_browser_v1_interactive, 32);
+export const BrowserSessionResultSchema: GenMessage<BrowserSessionResult> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 33);
 
 /**
  * @generated from message browser.v1.BrowserSessionMessage
@@ -1025,6 +1087,13 @@ export type BrowserSessionMessage = Message<'browser.v1.BrowserSessionMessage'> 
         value: BrowserSessionAudio;
         case: 'audio';
       }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionAgentAction agent_action = 31;
+         */
+        value: BrowserSessionAgentAction;
+        case: 'agentAction';
+      }
     | { case: undefined; value?: undefined };
 };
 
@@ -1032,8 +1101,9 @@ export type BrowserSessionMessage = Message<'browser.v1.BrowserSessionMessage'> 
  * Describes the message browser.v1.BrowserSessionMessage.
  * Use `create(BrowserSessionMessageSchema)` to create a new message.
  */
-export const BrowserSessionMessageSchema: GenMessage<BrowserSessionMessage> /*@__PURE__*/ =
-  messageDesc(file_browser_v1_interactive, 33);
+export const BrowserSessionMessageSchema: GenMessage<BrowserSessionMessage> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 34);
 
 /**
  * @generated from message browser.v1.InteractiveEnvelope
@@ -1079,10 +1149,9 @@ export type InteractiveEnvelope = Message<'browser.v1.InteractiveEnvelope'> & {
  * Describes the message browser.v1.InteractiveEnvelope.
  * Use `create(InteractiveEnvelopeSchema)` to create a new message.
  */
-export const InteractiveEnvelopeSchema: GenMessage<InteractiveEnvelope> /*@__PURE__*/ = messageDesc(
-  file_browser_v1_interactive,
-  34,
-);
+export const InteractiveEnvelopeSchema: GenMessage<InteractiveEnvelope> =
+  /*@__PURE__*/
+  messageDesc(file_browser_v1_interactive, 35);
 
 /**
  * @generated from enum browser.v1.BrowserSessionController
@@ -1107,7 +1176,8 @@ export enum BrowserSessionController {
 /**
  * Describes the enum browser.v1.BrowserSessionController.
  */
-export const BrowserSessionControllerSchema: GenEnum<BrowserSessionController> /*@__PURE__*/ =
+export const BrowserSessionControllerSchema: GenEnum<BrowserSessionController> =
+  /*@__PURE__*/
   enumDesc(file_browser_v1_interactive, 0);
 
 /**
@@ -1143,5 +1213,78 @@ export enum BrowserSessionPointerKind {
 /**
  * Describes the enum browser.v1.BrowserSessionPointerKind.
  */
-export const BrowserSessionPointerKindSchema: GenEnum<BrowserSessionPointerKind> /*@__PURE__*/ =
+export const BrowserSessionPointerKindSchema: GenEnum<BrowserSessionPointerKind> =
+  /*@__PURE__*/
   enumDesc(file_browser_v1_interactive, 1);
+
+/**
+ * @generated from enum browser.v1.BrowserSessionAgentActionKind
+ */
+export enum BrowserSessionAgentActionKind {
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_CLICK = 1;
+   */
+  CLICK = 1,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_DOUBLE_CLICK = 2;
+   */
+  DOUBLE_CLICK = 2,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_HOVER = 3;
+   */
+  HOVER = 3,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_TYPE = 4;
+   */
+  TYPE = 4,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_FILL = 5;
+   */
+  FILL = 5,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_SELECT = 6;
+   */
+  SELECT = 6,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_PRESS = 7;
+   */
+  PRESS = 7,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_SCROLL = 8;
+   */
+  SCROLL = 8,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_DRAG = 9;
+   */
+  DRAG = 9,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_UPLOAD = 10;
+   */
+  UPLOAD = 10,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_AGENT_ACTION_KIND_SCREENSHOT = 11;
+   */
+  SCREENSHOT = 11,
+}
+
+/**
+ * Describes the enum browser.v1.BrowserSessionAgentActionKind.
+ */
+export const BrowserSessionAgentActionKindSchema: GenEnum<BrowserSessionAgentActionKind> =
+  /*@__PURE__*/
+  enumDesc(file_browser_v1_interactive, 2);

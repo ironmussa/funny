@@ -113,6 +113,13 @@ export function factoryQueueRunsQuery() {
   };
 }
 
+/** What a thread that is not a factory thread reads instead of a project's runs: never fetched. */
+export const NO_PROJECT_FACTORY_RUNS = {
+  queryKey: ['factory', 'runs', 'none'] as const,
+  queryFn: (): Promise<FactoryRun[]> => Promise.resolve([]),
+  enabled: false,
+};
+
 /** What a thread that is not a factory thread reads instead: never fetched. */
 export const NO_ACTIVE_FACTORY_RUNS = {
   queryKey: ['factory', 'active-runs', 'none'] as const,

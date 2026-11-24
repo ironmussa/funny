@@ -91,6 +91,15 @@ describe('regression proof run', () => {
     expect(result.outputTail).toContain('assertion failed: expected 2');
   });
 
+  test('a rule command without {{files}} is refused, never run as the whole suite', async () => {
+    const result = await prove(repoWithFix({ 'lib.test.sh': ASSERTS_FIX }), {
+      rules: [{ globs: ['**/*.test.sh'], command: 'sh lib.test.sh ' }],
+    });
+    expect(result.verdict).toBe('fail');
+    expect(result.finding).toContain('no {{files}} placeholder');
+    expect(result.commands).toEqual([]);
+  });
+
   test('a test that also passes on the base does not catch the bug', async () => {
     const result = await prove(repoWithFix({ 'lib.test.sh': '[ -f lib.sh ]\n' }));
     expect(result.verdict).toBe('fail');

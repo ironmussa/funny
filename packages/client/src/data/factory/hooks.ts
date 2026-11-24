@@ -12,10 +12,13 @@ import type {
   FactoryTrigger,
 } from '@funny/shared/contracts/factory';
 
+import { hasLaterRunOfIssue } from '@/lib/thread-activity';
+
 import { useDataQuery } from '../hooks';
 import {
   activeFactoryRunsQuery,
   NO_ACTIVE_FACTORY_RUNS,
+  NO_PROJECT_FACTORY_RUNS,
   factoryBlockersQuery,
   factoryFlowDefinitionQuery,
   factoryFlowValidationQuery,
@@ -62,19 +65,37 @@ export function useFactoryRunForThread(
 }
 
 /**
- * The unended factory run a thread belongs to, from any project, or null. Only
- * a factory thread reads the caller's active runs (polled while shown); any
- * other thread answers null without a request.
+ * The run a factory thread belongs to, from its project's run list (polled
+ * while shown), or null; `undefined` while loading. Any other thread answers
+ * null without a request.
+ */
+export function useFactoryRunOfThread(
+  thread: { id: string; projectId?: string; source?: string } | null | undefined,
+): FactoryRun | null | undefined {
+  const projectId = thread?.source === 'factory' ? thread.projectId : undefined;
+  const runs = useDataQuery(projectId ? factoryRunsQuery(projectId) : NO_PROJECT_FACTORY_RUNS).data;
+  if (!projectId || !thread) return null;
+  return runs && (runs.find((run) => run.threadIds.includes(thread.id)) ?? null);
+}
+
+/**
+ * The factory run a thread belongs to, from any project, or null: unended, or
+ * ended without merging lately (failed, stopped, no change). `resent` says the
+ * same issue went into the factory again as a later run. Only a factory thread
+ * reads the caller's active runs (polled while shown); any other thread
+ * answers null without a request.
  */
 export function useActiveFactoryRunForThread(thread: {
   id: string;
   source?: string;
-}): FactoryRun | null {
+}): { run: FactoryRun; resent: boolean } | null {
   const isFactoryThread = thread.source === 'factory';
   const runs = useDataQuery(
     isFactoryThread ? activeFactoryRunsQuery() : NO_ACTIVE_FACTORY_RUNS,
   ).data;
-  return runs?.find((run) => run.threadIds.includes(thread.id)) ?? null;
+  const run = runs?.find((r) => r.threadIds.includes(thread.id));
+  if (!runs || !run) return null;
+  return { run, resent: hasLaterRunOfIssue(runs, run) };
 }
 
 /** The factory view's runs across projects, newest first; `undefined` while loading. */

@@ -301,11 +301,20 @@ async function mergeBase(
   return { kind: 'settled', regenerated: produced.paths };
 }
 
-/** Commit a merge left open (it needed regenerated files); the error, or null. */
+/**
+ * Commit a merge left open (it needed regenerated files); the error, or null.
+ * Without the repository's pre-commit hooks, as `git merge` does when it
+ * commits by itself: the same integration must not succeed or fail on whether
+ * a file was regenerated, and its checks are the ones `integrate` declares.
+ */
 async function commitOpenMerge(cwd: string, env: Record<string, string>): Promise<string | null> {
   const open = await gitRead(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd, reject: false });
   if (open.exitCode !== 0) return null;
-  const committed = await gitWrite(['commit', '--no-edit'], { cwd, env, reject: false });
+  const committed = await gitWrite(['commit', '--no-edit', '--no-verify'], {
+    cwd,
+    env,
+    reject: false,
+  });
   if (committed.exitCode === 0) return null;
   await gitWrite(['merge', '--abort'], { cwd, env, reject: false });
   return `Could not commit the merge: ${committed.stderr.trim()}`;

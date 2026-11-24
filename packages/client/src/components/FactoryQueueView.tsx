@@ -15,11 +15,14 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
+import { useFactoryViewParams } from '@/components/factory-board/factory-view-params';
 import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
 import {
   FactoryHealthStats,
   FactoryIncidentBanners,
 } from '@/components/factory-board/FactoryHealthHeader';
+import { FactoryIntegrationStats } from '@/components/factory-board/FactoryIntegrationStats';
+import { FactoryQueueActions } from '@/components/factory-board/FactoryQueueActions';
 import {
   FactoryActiveToggle,
   FactoryLayoutToggle,
@@ -54,7 +57,7 @@ import { timeAgo } from '@/lib/thread-utils';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { type FactoryViewLayout, useFactoryViewStore } from '@/stores/factory-view-store';
+import type { FactoryViewLayout } from '@/stores/factory-view-store';
 
 interface RowProps {
   run: FactoryQueueRun;
@@ -301,6 +304,7 @@ interface ToolbarProps {
   onStateFilterChange: (states: Set<string>) => void;
   projectFilter: Set<string>;
   onProjectFilterChange: (projectIds: Set<string>) => void;
+  onClearFilters: () => void;
   /** The projects that have runs, by name. */
   projectOptions: { value: string; label: string }[];
   projectCounts: Record<string, number>;
@@ -312,6 +316,8 @@ interface ToolbarProps {
   onActiveOnlyChange: (activeOnly: boolean) => void;
   layout: FactoryViewLayout;
   onLayoutChange: (layout: FactoryViewLayout) => void;
+  /** Every listed run, unfiltered: what the queue controls act on. */
+  runs: readonly FactoryQueueRun[];
 }
 
 function FactoryQueueSearch({
@@ -389,7 +395,7 @@ function FactoryQueueFilters({
 }
 
 function FactoryQueueToolbar(props: ToolbarProps) {
-  const { stateFilter, projectFilter, onStateFilterChange, onProjectFilterChange } = props;
+  const { stateFilter, projectFilter } = props;
   return (
     <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
       <FactoryQueueSearch {...props} />
@@ -398,73 +404,68 @@ function FactoryQueueToolbar(props: ToolbarProps) {
       <FactoryActiveToggle activeOnly={props.activeOnly} onChange={props.onActiveOnlyChange} />
       <ClearFilters
         shown={stateFilter.size > 0 || projectFilter.size > 0}
-        onClear={() => {
-          onStateFilterChange(new Set());
-          onProjectFilterChange(new Set());
-        }}
+        onClear={props.onClearFilters}
       />
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        <FactoryQueueActions runs={props.runs} projectFilter={projectFilter} />
         <FactoryLayoutToggle layout={props.layout} onChange={props.onLayoutChange} />
       </div>
     </div>
   );
 }
 
-/** The view's filters and the runs they keep (both layouts show the same runs). */
+/** The view's filters (kept in the URL, so a filtered view can be linked) and the runs they keep. */
 function useFactoryQueueFilters(
   runs: FactoryQueueRun[] | undefined,
   projectNameById: ReadonlyMap<string, string>,
 ) {
-  const [search, setSearch] = useState('');
-  const [caseSensitive, setCaseSensitive] = useState(false);
-  const [stateFilter, setStateFilter] = useState<Set<string>>(() => new Set());
-  const [projectFilter, setProjectFilter] = useState<Set<string>>(() => new Set());
-  const [activeOnly, setActiveOnly] = useState(false);
+  const { filters, layout, update } = useFactoryViewParams();
+  const { search, caseSensitive, states, projectIds, activeOnly } = filters;
   const filtered = useMemo(
     () =>
       runs &&
       filterFactoryRuns(runs, {
         search,
         caseSensitive,
-        states: stateFilter,
-        projectIds: projectFilter,
+        states,
+        projectIds,
         projectNameById,
         activeOnly,
       }),
-    [runs, search, caseSensitive, stateFilter, projectFilter, projectNameById, activeOnly],
+    [runs, search, caseSensitive, states, projectIds, projectNameById, activeOnly],
+  );
+  const toolbar = useMemo(
+    () => ({
+      search,
+      onSearchChange: (value: string) => update({ search: value }),
+      caseSensitive,
+      onCaseSensitiveChange: (value: boolean) => update({ caseSensitive: value }),
+      stateFilter: states,
+      onStateFilterChange: (value: Set<string>) => update({ states: value }),
+      projectFilter: projectIds,
+      onProjectFilterChange: (value: Set<string>) => update({ projectIds: value }),
+      onClearFilters: () => update({ states: new Set(), projectIds: new Set() }),
+      activeOnly,
+      onActiveOnlyChange: (value: boolean) => update({ activeOnly: value }),
+      layout,
+      onLayoutChange: (value: FactoryViewLayout) => update({ layout: value }),
+    }),
+    [search, caseSensitive, states, projectIds, activeOnly, layout, update],
+  );
+  // Shows, in the list, the finished runs the board's Done column hides (one write: the router does not queue them).
+  const showOlderDone = useCallback(
+    () =>
+      update({ activeOnly: false, states: new Set(['merged', 'done', 'stopped']), layout: 'list' }),
+    [update],
   );
   return {
     filtered,
-    toolbar: {
-      search,
-      onSearchChange: setSearch,
-      caseSensitive,
-      onCaseSensitiveChange: setCaseSensitive,
-      stateFilter,
-      onStateFilterChange: setStateFilter,
-      projectFilter,
-      onProjectFilterChange: setProjectFilter,
-      activeOnly,
-      onActiveOnlyChange: setActiveOnly,
-    },
-    singleProjectId: projectFilter.size === 1 ? [...projectFilter][0]! : null,
+    toolbar,
+    layout,
+    showOlderDone,
+    singleProjectId: projectIds.size === 1 ? [...projectIds][0]! : null,
     shown: filtered?.length ?? 0,
   };
-}
-
-/** Shows, in the list, the finished runs the board's Done column hides. */
-function useShowOlderDone(
-  {
-    onActiveOnlyChange,
-    onStateFilterChange,
-  }: Pick<ToolbarProps, 'onActiveOnlyChange' | 'onStateFilterChange'>,
-  setLayout: (layout: FactoryViewLayout) => void,
-) {
-  return useCallback(() => {
-    onActiveOnlyChange(false);
-    onStateFilterChange(new Set(['merged', 'done', 'stopped']));
-    setLayout('list');
-  }, [onActiveOnlyChange, onStateFilterChange, setLayout]);
 }
 
 /** What the view shows under its toolbar: the board or the list, and the open run's panel. */
@@ -520,33 +521,22 @@ export function FactoryQueueView() {
   const runs = useFactoryQueueRuns();
   const projects = useProjects();
   const now = useMinuteTick();
-  const layout = useFactoryViewStore((state) => state.layout);
-  const setLayout = useFactoryViewStore((state) => state.setLayout);
 
   const projectNameById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
     [projects],
   );
   const counts = useFactoryQueueCounts(runs, projectNameById);
-  const { filtered, toolbar, singleProjectId, shown } = useFactoryQueueFilters(
-    runs,
-    projectNameById,
-  );
-  const showOlderDone = useShowOlderDone(toolbar, setLayout);
+  const { filtered, toolbar, layout, showOlderDone, singleProjectId, shown } =
+    useFactoryQueueFilters(runs, projectNameById);
   const all = runs ?? [];
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="factory-view">
       <FactoryQueueHeader runs={runs} now={now} projects={projects} />
       <FactoryIncidentBanners runs={all} />
-      <FactoryQueueToolbar
-        {...toolbar}
-        {...counts}
-        shown={shown}
-        total={all.length}
-        layout={layout}
-        onLayoutChange={setLayout}
-      />
+      <FactoryIntegrationStats runs={filtered ?? []} now={now} />
+      <FactoryQueueToolbar {...toolbar} {...counts} runs={all} shown={shown} total={all.length} />
       <FactoryQueueContent
         runs={runs}
         filtered={filtered}

@@ -47,6 +47,7 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
   const navigate = useNavigate();
   const parsed = parseRoute(location.pathname);
   const candidate = parsed.settingsPage;
+  // SAFETY: every key of settingsLabelKeys is a SettingsItemId, so a candidate that is one of its own keys is a SettingsItemId.
   const page =
     candidate && Object.hasOwn(settingsLabelKeys, candidate) ? (candidate as SettingsItemId) : null;
   const setPage = (next: SettingsItemId | null) => {

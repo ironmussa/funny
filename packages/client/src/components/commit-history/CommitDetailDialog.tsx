@@ -226,6 +226,7 @@ export function CommitDetailDialog({
   const treeFiles = useMemo<FileDiffSummary[]>(() => {
     const all = commitFiles.map((f) => ({
       path: f.path,
+      // SAFETY: the runner sends CommitFileEntry statuses (added, modified, deleted, renamed, copied); with copied mapped to renamed, each is a FileStatus.
       status: (f.status === 'copied' ? 'renamed' : f.status) as FileStatus,
       staged: false,
       additions: f.additions,

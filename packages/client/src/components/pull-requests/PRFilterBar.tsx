@@ -114,7 +114,11 @@ export function PRFilterBar({
       data-testid="prs-filter-bar"
     >
       {showState && (
-        <Select value={state} onValueChange={(v) => onStateChange(v as PRStateFilter)}>
+        <Select
+          value={state}
+          // SAFETY: v comes from this Select, whose items are only STATE_KEYS, a PRStateFilter[].
+          onValueChange={(v) => onStateChange(v as PRStateFilter)}
+        >
           <SelectTrigger size="xs" className="w-auto gap-1" data-testid="prs-state-trigger">
             <CircleDot className="icon-xs opacity-70" />
             <span>{stateLabel(state)}</span>
@@ -131,6 +135,7 @@ export function PRFilterBar({
 
       <Select
         value={value.sort}
+        // SAFETY: v comes from this Select, whose items are only SORT_KEYS, a PRSortKey[].
         onValueChange={(v) => onChange({ ...value, sort: v as PRSortKey })}
       >
         <SelectTrigger size="xs" className="w-auto gap-1" data-testid="prs-sort-trigger">

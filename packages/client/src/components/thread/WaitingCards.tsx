@@ -280,10 +280,10 @@ export function PermissionApprovalCard({
               <pre
                 data-testid="permission-card-tool-input"
                 style={{
-                  fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
-                  lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
+                  '--permission-input-font-size': `${CODE_FONT_SIZE_PX[fontSize]}px`,
+                  '--permission-input-line-height': `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
                 }}
-                className="hljs p-2 font-mono break-all whitespace-pre-wrap"
+                className="hljs p-2 font-mono text-[length:var(--permission-input-font-size)] leading-[var(--permission-input-line-height)] break-all whitespace-pre-wrap"
                 dangerouslySetInnerHTML={{ __html: highlightedBash }}
               />
             </ScrollArea>
@@ -292,10 +292,10 @@ export function PermissionApprovalCard({
               <pre
                 data-testid="permission-card-tool-input"
                 style={{
-                  fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
-                  lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
+                  '--permission-input-font-size': `${CODE_FONT_SIZE_PX[fontSize]}px`,
+                  '--permission-input-line-height': `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
                 }}
-                className="text-muted-foreground p-2 font-mono break-all whitespace-pre-wrap"
+                className="text-muted-foreground p-2 font-mono text-[length:var(--permission-input-font-size)] leading-[var(--permission-input-line-height)] break-all whitespace-pre-wrap"
               >
                 {displayedInput}
               </pre>

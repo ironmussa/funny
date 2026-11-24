@@ -226,8 +226,7 @@ describe('MessageStream sticky bottom', () => {
       vi.runOnlyPendingTimers();
     });
 
-    expect(viewport.style.overflowAnchor).toBe('none');
-    expect(viewport.style.overscrollBehaviorY).toBe('contain');
+    expect(viewport).toHaveClass('[overflow-anchor:none]', 'overscroll-y-contain');
   });
 
   test('top-aligns the conversation and pushes only the prompt dock to the bottom', () => {

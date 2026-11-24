@@ -368,8 +368,7 @@ describe('UserMessageCard', () => {
       renderWithProviders(<UserMessageCard content={'line\n'.repeat(20)} data-testid="msg-8" />);
 
       const content = screen.getByTestId('msg-8').querySelector('pre');
-      expect(content).toHaveStyle({ maxHeight: '48px' });
-      expect(content).toHaveClass('overflow-hidden');
+      expect(content).toHaveClass('max-h-12', 'overflow-hidden');
     });
   });
 });

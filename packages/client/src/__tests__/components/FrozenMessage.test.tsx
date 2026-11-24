@@ -140,6 +140,8 @@ describe('FrozenMessage', () => {
 
     act(() => setIntersecting(false));
 
-    expect(getByTestId('frozen-message')).toHaveStyle({ height: '96px' });
+    const frozen = getByTestId('frozen-message');
+    expect(frozen).toHaveClass('h-[var(--frozen-message-height)]');
+    expect(frozen.style.getPropertyValue('--frozen-message-height')).toBe('96px');
   });
 });

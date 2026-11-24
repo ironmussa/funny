@@ -64,7 +64,7 @@ export function useFrozenScroll({
     const hasOverflow = viewport.scrollHeight > viewport.clientHeight + 10;
     const atBottom = getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX;
     if (scrollDownRef.current) {
-      scrollDownRef.current.style.display = hasOverflow && !atBottom ? '' : 'none';
+      scrollDownRef.current.style.display = hasOverflow && !atBottom ? 'block' : 'none';
     }
   }, []);
 

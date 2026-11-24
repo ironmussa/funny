@@ -75,7 +75,7 @@ function Harness({
   const fx = makeLongThread({ messageCount: 10, seed: 5, toolCallRatio: 1 });
   return (
     <TooltipProvider>
-      <div ref={scrollRef} style={{ overflow: 'auto' }}>
+      <div ref={scrollRef} className="overflow-auto">
         <FrozenMessageList
           ref={handleRef}
           messages={messages ?? fx.messages}
@@ -131,8 +131,8 @@ describe('FrozenMessageList', () => {
 
     const list = getByTestId('frozen-message-list');
     // In-flow container: flex column, not a positioned virtualizer.
-    expect(list.style.position).toBe('');
-    expect(list.style.display).toBe('flex');
+    expect(list.className).not.toMatch(/\b(absolute|relative)\b/);
+    expect(list).toHaveClass('flex', 'flex-col');
 
     const rows = container.querySelectorAll('[data-virtual-row-key]');
     // 10 messages, each assistant with tool calls → at least one row per message.
@@ -143,8 +143,9 @@ describe('FrozenMessageList', () => {
     rows.forEach((row) => {
       const el = expectInstance(row, HTMLElement);
       if (el.hasAttribute('data-section-msg-id')) return; // sticky user rows
-      expect(el.style.contentVisibility).toBe('auto');
-      expect(el.style.containIntrinsicSize).toContain('auto');
+      expect(el).toHaveClass('[content-visibility:auto]');
+      expect(el).toHaveClass('[contain-intrinsic-size:auto_var(--frozen-row-estimate)]');
+      expect(el.style.getPropertyValue('--frozen-row-estimate')).toMatch(/^\d+px$/);
     });
   });
 
@@ -181,13 +182,12 @@ describe('FrozenMessageList', () => {
     expect(userRows.length).toBeGreaterThan(0);
     // Native sticky section headers: no per-frame JS, no content-visibility.
     userRows.forEach((row) => {
-      expect(row.style.position).toBe('sticky');
-      expect(row.style.top).toBe('0px');
-      expect(row.style.contentVisibility).toBe('');
+      expect(row).toHaveClass('sticky', 'top-0');
+      expect(row).not.toHaveClass('[content-visibility:auto]');
       // Opaque bg + own paint layer so the stuck header does not ghost/bleed
       // as content scrolls under it.
       expect(row.className).toContain('bg-background');
-      expect(row.style.transform).toBe('translateZ(0)');
+      expect(row).toHaveClass('[transform:translateZ(0)]');
       // Each header must live inside its OWN section container so it is bounded
       // by that section and scrolls out with it — otherwise sibling stickies
       // pile up at top:0. The header is the section's first element child.
@@ -232,8 +232,7 @@ describe('FrozenMessageList', () => {
 
     const context = getByTestId('frozen-last-user-context');
     expect(context).toHaveTextContent('latest question outside the loaded page');
-    expect(context.style.position).toBe('sticky');
-    expect(context.style.top).toBe('0px');
+    expect(context).toHaveClass('sticky', 'top-0');
   });
 
   test('keeps the latest question when it is the leading context of a newer page', () => {

@@ -17,6 +17,7 @@ import { useAgentTemplate } from '@/data/templates/hooks';
 import { useResettableState } from '@/hooks/use-resettable-state';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
+import { cn } from '@/lib/utils';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -210,20 +211,24 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
               <BreadcrumbSeparator />
               <BreadcrumbItem className="shrink-0">
                 <span
-                  className="text-2xs flex items-center gap-1 rounded px-1.5 py-0.5 font-medium"
-                  style={{
-                    backgroundColor: activeTemplate.color
-                      ? `${activeTemplate.color}22`
-                      : 'hsl(var(--muted))',
-                    color: activeTemplate.color ?? 'hsl(var(--muted-foreground))',
-                  }}
+                  className={cn(
+                    'text-2xs flex items-center gap-1 rounded px-1.5 py-0.5 font-medium',
+                    activeTemplate.color
+                      ? 'bg-[color:var(--template-badge-bg)] text-[color:var(--template-badge-color)]'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                  style={
+                    activeTemplate.color
+                      ? {
+                          '--template-badge-bg': `${activeTemplate.color}22`,
+                          '--template-badge-color': activeTemplate.color,
+                        }
+                      : undefined
+                  }
                   data-testid="project-header-template-badge"
                 >
                   {activeTemplate.color && (
-                    <span
-                      className="inline-block size-2 rounded-full"
-                      style={{ backgroundColor: activeTemplate.color }}
-                    />
+                    <span className="inline-block size-2 rounded-full bg-[color:var(--template-badge-color)]" />
                   )}
                   {activeTemplate.name}
                 </span>

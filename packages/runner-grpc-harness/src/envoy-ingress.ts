@@ -211,6 +211,8 @@ export async function startEnvoyIngress(
         containerId,
       ]);
       if (result.code === 0 && result.stdout.trim()) {
+        // SAFETY: `docker stats --format '{{json .}}'` prints one JSON object per container;
+        // DockerStats only names two of its fields, both optional.
         samples.push(JSON.parse(result.stdout.trim()) as DockerStats);
       }
       await Bun.sleep(100);

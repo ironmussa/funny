@@ -1,15 +1,4 @@
-import type {
-  EventModelData,
-  CommandDef,
-  EventDef,
-  ReadModelDef,
-  AutomationDef,
-  AggregateDef,
-  ScreenDef,
-  ExternalDef,
-  SagaDef,
-  ElementDef,
-} from '../types.js';
+import type { EventModelData, ElementDef, ElementKind } from '../types.js';
 
 /**
  * Generate a structured AI prompt from an EventModel.
@@ -28,14 +17,14 @@ export function generateAIPrompt(model: EventModelData): string {
   lines.push('Use this as the specification to implement the system.');
   lines.push('');
 
-  const commands = byKind<CommandDef>(model, 'command');
-  const events = byKind<EventDef>(model, 'event');
-  const readModels = byKind<ReadModelDef>(model, 'readModel');
-  const automations = byKind<AutomationDef>(model, 'automation');
-  const aggregates = byKind<AggregateDef>(model, 'aggregate');
-  const screens = byKind<ScreenDef>(model, 'screen');
-  const externals = byKind<ExternalDef>(model, 'external');
-  const sagas = byKind<SagaDef>(model, 'saga');
+  const commands = byKind(model, 'command');
+  const events = byKind(model, 'event');
+  const readModels = byKind(model, 'readModel');
+  const automations = byKind(model, 'automation');
+  const aggregates = byKind(model, 'aggregate');
+  const screens = byKind(model, 'screen');
+  const externals = byKind(model, 'external');
+  const sagas = byKind(model, 'saga');
 
   // Commands
   if (commands.length > 0) {
@@ -273,6 +262,11 @@ export function generateAIPrompt(model: EventModelData): string {
   return lines.join('\n');
 }
 
-function byKind<T extends ElementDef>(model: EventModelData, kind: string): T[] {
-  return [...model.elements.values()].filter((e) => e.kind === kind) as T[];
+function byKind<K extends ElementKind>(
+  model: EventModelData,
+  kind: K,
+): Extract<ElementDef, { kind: K }>[] {
+  return [...model.elements.values()].filter(
+    (e): e is Extract<ElementDef, { kind: K }> => e.kind === kind,
+  );
 }

@@ -34,7 +34,7 @@ export function getEvflowDiagnostics(
       return;
     }
 
-    const call = node as ts.CallExpression;
+    const call = node;
     const method = getMethodName(ts, call);
     if (!method) {
       ts.forEachChild(node, visit);

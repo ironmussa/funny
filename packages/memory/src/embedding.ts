@@ -31,7 +31,7 @@ class OllamaEmbeddingProvider implements EmbeddingProvider {
       throw new Error(`Ollama embed failed: ${resp.status} ${await resp.text()}`);
     }
 
-    const data = (await resp.json()) as { embeddings: number[][] };
+    const data: { embeddings: number[][] } = await resp.json();
     return new Float32Array(data.embeddings[0]);
   }
 
@@ -47,7 +47,7 @@ class OllamaEmbeddingProvider implements EmbeddingProvider {
       throw new Error(`Ollama embedBatch failed: ${resp.status} ${await resp.text()}`);
     }
 
-    const data = (await resp.json()) as { embeddings: number[][] };
+    const data: { embeddings: number[][] } = await resp.json();
     return data.embeddings.map((e) => new Float32Array(e));
   }
 
@@ -84,7 +84,7 @@ class OpenAIEmbeddingProvider implements EmbeddingProvider {
       throw new Error(`OpenAI embed failed: ${resp.status} ${await resp.text()}`);
     }
 
-    const data = (await resp.json()) as { data: Array<{ embedding: number[] }> };
+    const data: { data: Array<{ embedding: number[] }> } = await resp.json();
     return new Float32Array(data.data[0].embedding);
   }
 
@@ -102,7 +102,7 @@ class OpenAIEmbeddingProvider implements EmbeddingProvider {
       throw new Error(`OpenAI embedBatch failed: ${resp.status} ${await resp.text()}`);
     }
 
-    const data = (await resp.json()) as { data: Array<{ embedding: number[] }> };
+    const data: { data: Array<{ embedding: number[] }> } = await resp.json();
     // OpenAI returns sorted by index
     return data.data
       .sort((a: any, b: any) => a.index - b.index)

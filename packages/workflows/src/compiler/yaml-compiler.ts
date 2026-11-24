@@ -254,10 +254,18 @@ function compileConcurrency(
   };
 }
 
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** The output a batch leader settled for a member, as this node's output. */
 function asNodeOutput(output: unknown): NodeOutput {
-  if (output !== null && typeof output === 'object' && 'output' in output) {
-    return output as NodeOutput;
+  if (isObject(output) && 'output' in output) {
+    return output;
   }
   return { output };
 }
@@ -613,7 +621,7 @@ function compileRetry(
             depends_on: [],
             on_error: 'fail' as const,
             spawn_agent: cfg.before_retry,
-          } satisfies Partial<ParsedNode> as ParsedNode;
+          } satisfies ParsedNode;
 
           const augmentedScope: YamlPipelineContext = {
             ...ctx,
@@ -630,7 +638,7 @@ function compileRetry(
 
 function resolveThreadId(ctx: YamlPipelineContext): string {
   const raw = ctx.inputs.threadId;
-  if (typeof raw !== 'string' || raw.length === 0) {
+  if (!isString(raw) || raw.length === 0) {
     throw new Error(
       'set_status / set_stage actions require inputs.threadId — the dispatcher must seed it on YamlPipelineContext.inputs',
     );

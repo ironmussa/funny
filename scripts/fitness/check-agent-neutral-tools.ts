@@ -31,7 +31,7 @@ function isTest(path: string): boolean {
 
 function sourceFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
-  return (readdirSync(dir, { recursive: true }) as string[])
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
     .filter((f) => /\.tsx?$/.test(f) && !/(^|\/)(node_modules|dist)\//.test(f))
     .map((f) => join(dir, f));
 }

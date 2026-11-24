@@ -63,7 +63,7 @@ export async function llmComplete(
         throw new Error(`LLM request failed (${resp.status}): ${text}`);
       }
 
-      const run = (await resp.json()) as ChatResponse;
+      const run: ChatResponse = await resp.json();
 
       if (run.error) {
         throw new Error(`LLM completion failed: ${run.error?.message ?? 'unknown error'}`);

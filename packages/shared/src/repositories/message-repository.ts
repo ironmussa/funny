@@ -62,6 +62,17 @@ async function findPendingWaitState(deps: MessageRepositoryDeps, threadId: strin
   };
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+/** New content for a message: the text alone, or the text with its images. */
+type MessageUpdate = string | { content: string; images?: string | null };
+
+function isTextOnly(update: MessageUpdate): update is string {
+  return typeof update === 'string';
+}
+
 export function createMessageRepository(deps: MessageRepositoryDeps) {
   const { db, schema, dbAll, dbGet, dbRun } = deps;
 
@@ -133,12 +144,11 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     if (messageLimit) {
       const maxStart = Math.max(0, (total ?? 0) - messageLimit);
       let targetIndex: number | undefined;
-      const progress =
-        typeof opts.messageProgress === 'number'
-          ? Math.min(1, Math.max(0, opts.messageProgress))
-          : 1;
+      const progress = isNumber(opts.messageProgress)
+        ? Math.min(1, Math.max(0, opts.messageProgress))
+        : 1;
       const anchorId =
-        opts.messageAnchorId && !(typeof opts.messageProgress === 'number' && progress >= 0.999)
+        opts.messageAnchorId && !(isNumber(opts.messageProgress) && progress >= 0.999)
           ? opts.messageAnchorId
           : undefined;
       if (anchorId) {
@@ -422,18 +432,14 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
   }
 
   /** Update message content (and optionally images) */
-  async function updateMessage(
-    id: string,
-    data: string | { content: string; images?: string | null },
-  ): Promise<void> {
-    const updates =
-      typeof data === 'string'
-        ? { content: data, timestamp: new Date().toISOString() }
-        : {
-            content: data.content,
-            images: data.images ?? null,
-            timestamp: new Date().toISOString(),
-          };
+  async function updateMessage(id: string, data: MessageUpdate): Promise<void> {
+    const updates = isTextOnly(data)
+      ? { content: data, timestamp: new Date().toISOString() }
+      : {
+          content: data.content,
+          images: data.images ?? null,
+          timestamp: new Date().toISOString(),
+        };
     await dbRun(db.update(schema.messages).set(updates).where(eq(schema.messages.id, id)));
   }
 

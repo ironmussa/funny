@@ -185,17 +185,30 @@ function buildThreadTitle(data: AnnotationData): string {
     : `UI Review: ${pageTitle}`.slice(0, 100);
 }
 
+/** The fields of `POST /api/v1/threads` (`createThreadInput`) the extension sends. */
+export interface CreateThreadBody {
+  projectId: string;
+  prompt: string;
+  title: string;
+  client: 'chrome_extension';
+  mode?: 'local' | 'worktree';
+  provider?: string;
+  model?: string;
+  permissionMode?: PublicPermissionMode;
+  images?: Array<{ mediaType: ImageMediaType; data: string }>;
+}
+
 /** The body of `POST /api/v1/threads`. `screenshot` is the (possibly re-encoded) data URL. */
 export function buildCreateThreadBody(
   config: ThreadConfig,
   data: AnnotationData,
   screenshot: string | undefined = data.screenshot,
-): Record<string, unknown> {
+): CreateThreadBody {
   if (!config.projectId) {
     throw new Error('No project selected. Open settings in the toolbar and select a project.');
   }
   const image = dataUrlToImage(screenshot);
-  const body: Record<string, unknown> = {
+  const body: CreateThreadBody = {
     projectId: config.projectId,
     prompt: data.markdown,
     title: buildThreadTitle(data),

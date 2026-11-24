@@ -356,6 +356,53 @@ function SymbolKindIcon({ kind, className }: { kind?: string; className?: string
   }
 }
 
+interface SuggestionPopupPosition {
+  left: number;
+  bottom: number;
+  width?: number;
+}
+
+/**
+ * The fixed, portalled box of the suggestion popup. `position` null keeps it
+ * hidden until there is a rect to anchor it to; a measured width wins over the
+ * `w-80` fallback, as the inline width did.
+ */
+function SuggestionPopupFrame({
+  position,
+  fallbackWidth,
+  ref,
+  children,
+}: {
+  position: SuggestionPopupPosition | null;
+  fallbackWidth: boolean;
+  ref?: React.Ref<HTMLDivElement>;
+  children: React.ReactNode;
+}) {
+  const width = position?.width;
+  return createPortal(
+    <div
+      ref={ref}
+      data-suggestion-popup
+      style={{
+        '--suggestion-popup-left': position ? `${position.left}px` : undefined,
+        '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
+        '--suggestion-popup-width': width === undefined ? undefined : `${width}px`,
+      }}
+      className={cn(
+        'fixed z-50 max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
+        position
+          ? 'bottom-[var(--suggestion-popup-bottom)] left-[var(--suggestion-popup-left)]'
+          : 'invisible',
+        fallbackWidth && 'w-80',
+        width !== undefined && 'w-[var(--suggestion-popup-width)]',
+      )}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 function SuggestionPopup({
   items,
   selectedIndex,
@@ -374,7 +421,7 @@ function SuggestionPopup({
   // Compute position synchronously to avoid flash/jump.
   // We recalculate on every render that changes rect or items.
   // `null` keeps the popup hidden until there is a rect to anchor it to.
-  const position = useMemo<{ left: number; bottom: number; width?: number } | null>(() => {
+  const position = useMemo<SuggestionPopupPosition | null>(() => {
     if (!rect) return null;
     const r = rect();
     if (!r) return null;
@@ -388,14 +435,8 @@ function SuggestionPopup({
       bottom: window.innerHeight - (containerRect ? containerRect.top : r.top) + 4,
     };
   }, [rect, containerRef]);
-  const popupClassName = cn(
-    'fixed z-50 max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-    position
-      ? 'bottom-[var(--suggestion-popup-bottom)] left-[var(--suggestion-popup-left)]'
-      : 'invisible',
-    position?.width !== undefined && 'w-[var(--suggestion-popup-width)]',
-    !containerRef?.current && 'w-80',
-  );
+  // No container to match: the popup takes the fixed w-80 width.
+  const fallbackWidth = !containerRef?.current;
 
   // Scroll selected into view — use scrollTop manipulation instead of
   // scrollIntoView which can scroll parent containers and cause jumps.
@@ -415,38 +456,19 @@ function SuggestionPopup({
 
   if (loading && items.length === 0) {
     const loadingLabel = getSuggestionLoadingLabel(type);
-    return createPortal(
-      <div
-        data-suggestion-popup
-        style={{
-          '--suggestion-popup-left': position ? `${position.left}px` : undefined,
-          '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
-          '--suggestion-popup-width':
-            position?.width === undefined ? undefined : `${position.width}px`,
-        }}
-        className={popupClassName}
-      >
+    return (
+      <SuggestionPopupFrame position={position} fallbackWidth={fallbackWidth}>
         <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
           <Loader2 className="icon-xs animate-spin" />
           {t(loadingLabel.key, loadingLabel.fallback)}
         </div>
-      </div>,
-      document.body,
+      </SuggestionPopupFrame>
     );
   }
 
   if (items.length === 0) {
-    return createPortal(
-      <div
-        data-suggestion-popup
-        style={{
-          '--suggestion-popup-left': position ? `${position.left}px` : undefined,
-          '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
-          '--suggestion-popup-width':
-            position?.width === undefined ? undefined : `${position.width}px`,
-        }}
-        className={popupClassName}
-      >
+    return (
+      <SuggestionPopupFrame position={position} fallbackWidth={fallbackWidth}>
         <div className="text-muted-foreground px-3 py-2 text-xs">
           {
             // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
@@ -459,23 +481,12 @@ function SuggestionPopup({
                   : t('skills.noSkillsFound', 'No skills found')
           }
         </div>
-      </div>,
-      document.body,
+      </SuggestionPopupFrame>
     );
   }
 
-  return createPortal(
-    <div
-      ref={popupRef}
-      data-suggestion-popup
-      style={{
-        '--suggestion-popup-left': position ? `${position.left}px` : undefined,
-        '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
-        '--suggestion-popup-width':
-          position?.width === undefined ? undefined : `${position.width}px`,
-      }}
-      className={popupClassName}
-    >
+  return (
+    <SuggestionPopupFrame ref={popupRef} position={position} fallbackWidth={fallbackWidth}>
       {items.map((item, i) => (
         <button
           type="button"
@@ -554,8 +565,7 @@ function SuggestionPopup({
           {t('prompt.moreFilesHint', 'Type to narrow results\u2026')}
         </div>
       )}
-    </div>,
-    document.body,
+    </SuggestionPopupFrame>
   );
 }
 

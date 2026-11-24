@@ -17,25 +17,15 @@ const COLORS: Record<string, string> = {
   archived: '#8b5cf6',
 };
 
-/** Legend class for a stage: the COLORS value, as a theme token in globals.css. */
-function legendBgClass(stage: string): string | undefined {
-  switch (stage) {
-    case 'backlog':
-      return 'bg-stage-backlog';
-    case 'planning':
-      return 'bg-stage-planning';
-    case 'in_progress':
-      return 'bg-stage-in-progress';
-    case 'review':
-      return 'bg-stage-review';
-    case 'done':
-      return 'bg-stage-done';
-    case 'archived':
-      return 'bg-stage-archived';
-    default:
-      return undefined;
-  }
-}
+/** Legend class per stage: the COLORS values, as theme tokens in globals.css. */
+const LEGEND_BG = new Map([
+  ['backlog', 'bg-stage-backlog'],
+  ['planning', 'bg-stage-planning'],
+  ['in_progress', 'bg-stage-in-progress'],
+  ['review', 'bg-stage-review'],
+  ['done', 'bg-stage-done'],
+  ['archived', 'bg-stage-archived'],
+]);
 
 // Hoisted tooltip styles to avoid re-creating objects on every render (rerender-memo-with-default-value)
 const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
@@ -103,7 +93,7 @@ export function StageDistributionChart({ data }: Props) {
             className="flex items-center gap-3"
             style={{ '--stage-share': `${(entry.value / total) * 100}%` }}
           >
-            <div className={cn('size-3 shrink-0 rounded-full', legendBgClass(entry.stage))} />
+            <div className={cn('size-3 shrink-0 rounded-full', LEGEND_BG.get(entry.stage))} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground text-xs">{entry.name}</span>
@@ -113,7 +103,7 @@ export function StageDistributionChart({ data }: Props) {
                 <div
                   className={cn(
                     'h-full w-[var(--stage-share)] rounded-full transition-[width,background-color]',
-                    legendBgClass(entry.stage),
+                    LEGEND_BG.get(entry.stage),
                   )}
                 />
               </div>

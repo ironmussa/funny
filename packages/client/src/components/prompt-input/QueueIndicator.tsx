@@ -13,7 +13,7 @@ interface QueueIconButtonProps {
   label: string;
   onClick: () => void;
   disabled: boolean;
-  variant?: 'ghost' | 'ghost-destructive';
+  variant?: 'ghost-destructive' | 'muted-strong';
   className?: string;
   children: React.ReactNode;
 }
@@ -95,10 +95,9 @@ function QueueItemEditor({ message, index, queue }: QueueItemProps) {
         <QueueIconButton
           testId={`queue-cancel-edit-${message.id}`}
           label={t('prompt.cancelQueuedEdit', 'Cancel')}
-          variant="ghost"
+          variant="muted-strong"
           onClick={queue.cancelEdit}
           disabled={isBusy}
-          className="text-muted-foreground hover:text-foreground"
         >
           <X className="icon-xs" />
         </QueueIconButton>
@@ -126,10 +125,9 @@ function QueueItemView({ message, index, queue }: QueueItemProps) {
         <QueueIconButton
           testId={`queue-edit-${message.id}`}
           label={t('prompt.editQueuedMessage', 'Edit')}
-          variant="ghost"
+          variant="muted-strong"
           onClick={() => queue.startEdit(message)}
           disabled={actionsDisabled}
-          className="text-muted-foreground hover:text-foreground"
         >
           <Pencil className="icon-xs" />
         </QueueIconButton>

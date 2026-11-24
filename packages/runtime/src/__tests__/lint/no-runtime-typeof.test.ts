@@ -6,6 +6,9 @@ import { join } from 'path';
 // `value is T` guard. Lint the package and require zero findings.
 const ROOT = join(import.meta.dir, '../../../../..');
 const GUARDS = join(import.meta.dir, '../../lib/value-guards.ts');
+// Linting spawns oxlint with the JS plugins; under the parallel suite that can
+// take longer than the default per-test timeout.
+const LINT_TIMEOUT_MS = 120_000;
 const SAMPLES = [
   '',
   'text',
@@ -22,16 +25,20 @@ const SAMPLES = [
 ];
 
 describe('no-runtime-typeof in packages/runtime', () => {
-  test('lint reports no inline typeof checks', () => {
-    const run = Bun.spawnSync(
-      ['bun', 'scripts/bun-lint.ts', 'packages/runtime/src', '--format', 'unix'],
-      { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
-    );
-    const output = run.stdout.toString() + run.stderr.toString();
-    const findings = output.split('\n').filter((line) => line.includes('no-runtime-typeof'));
-    expect(run.exitCode).toBe(0);
-    expect(findings).toEqual([]);
-  });
+  test(
+    'lint reports no inline typeof checks',
+    () => {
+      const run = Bun.spawnSync(
+        ['bun', 'scripts/bun-lint.ts', 'packages/runtime/src', '--format', 'unix'],
+        { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
+      );
+      const output = run.stdout.toString() + run.stderr.toString();
+      const findings = output.split('\n').filter((line) => line.includes('no-runtime-typeof'));
+      expect(run.exitCode).toBe(0);
+      expect(findings).toEqual([]);
+    },
+    LINT_TIMEOUT_MS,
+  );
 
   test('value guards accept exactly what the typeof they replace accepted', async () => {
     const guards = await import(GUARDS).catch(() => undefined);

@@ -69,6 +69,7 @@ export class AgentEventRouter {
     if (!userMessageId) return;
 
     const createdAt = new Date().toISOString();
+    // An inferred object type (unlike the interface) is assignable to the event's record.
     const data = {
       userMessageId,
       status: event.status,

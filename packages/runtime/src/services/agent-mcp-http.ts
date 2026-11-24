@@ -154,6 +154,14 @@ function tokenFor(ctx: AgentToolContext): string {
   return token;
 }
 
+/** A funny MCP server's entry in the internal (Claude-shaped) MCP format. */
+export interface AgentMcpHttpEntry {
+  type: 'http';
+  url: string;
+  headers: Record<string, string>;
+  alwaysLoad?: true;
+}
+
 /**
  * Grant a spawn access to one funny MCP server. Returns its entry in the
  * internal (Claude-shaped) MCP format.
@@ -161,7 +169,7 @@ function tokenFor(ctx: AgentToolContext): string {
 export function grantAgentMcpHttp(
   spec: AgentMcpServerSpec,
   ctx: AgentToolContext,
-): { type: 'http'; url: string; headers: Record<string, string>; alwaysLoad?: true } {
+): AgentMcpHttpEntry {
   const port = ensureListener().port;
   servers.set(spec.name, spec);
   return {

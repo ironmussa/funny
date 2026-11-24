@@ -14,6 +14,11 @@ import { factoryGitConfigEnv } from '@funny/core/git';
 /** Where the factory's git configuration files live on this runner. */
 export const factoryGitDir = () => join(homedir(), '.funny', 'factory-git');
 
+/** An agent's environment variables, `GIT_CONFIG_*` entries included. */
+interface GitConfigEnv {
+  [name: string]: string;
+}
+
 /**
  * `extra`'s `GIT_CONFIG_*` entries added after the ones `env` already has (or,
  * without them, the runner's own, which the agent inherits), so neither set
@@ -22,10 +27,10 @@ export const factoryGitDir = () => join(homedir(), '.funny', 'factory-git');
 export function appendGitConfigEnv(
   env: Record<string, string> | undefined,
   extra: Record<string, string>,
-): Record<string, string> {
+): GitConfigEnv {
   const base = Number(env?.GIT_CONFIG_COUNT ?? process.env.GIT_CONFIG_COUNT ?? 0) || 0;
   const count = Number(extra.GIT_CONFIG_COUNT ?? 0) || 0;
-  const merged: Record<string, string> = { ...env };
+  const merged: GitConfigEnv = { ...env };
   for (let i = 0; i < count; i++) {
     const key = extra[`GIT_CONFIG_KEY_${i}`];
     const value = extra[`GIT_CONFIG_VALUE_${i}`];

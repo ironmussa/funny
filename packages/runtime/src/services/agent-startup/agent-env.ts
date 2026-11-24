@@ -6,7 +6,10 @@ import { errorMessage } from '@funny/shared/errors';
 import { log } from '../../lib/logger.js';
 import { getServices } from '../service-registry.js';
 
-type EnvVars = Record<string, string>;
+/** Environment variables an agent subprocess is started with. */
+interface EnvVars {
+  [name: string]: string;
+}
 
 async function loadProviderKeyEnv(userId: string, provider: AgentProvider): Promise<EnvVars> {
   const { PROVIDER_KEY_REGISTRY } = await import('@funny/shared/models');

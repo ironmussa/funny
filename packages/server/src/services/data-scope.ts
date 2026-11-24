@@ -43,7 +43,12 @@ export type DataScopeRule = 'refs' | 'projectless' | 'user' | 'list';
 /** Types only a sandbox runner may send, and only about its own thread (`refs`). */
 const SANDBOX_ONLY_TYPES = new Set(['data:get_github_app_token']);
 
-export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
+/** `data:*` message type → the scope rule its data is checked against. */
+interface DataScopeRules {
+  [type: string]: DataScopeRule;
+}
+
+export const DATA_SCOPE_RULES: DataScopeRules = {
   'data:insert_message': 'refs',
   'data:insert_tool_call': 'refs',
   'data:update_thread': 'refs',

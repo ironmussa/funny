@@ -169,6 +169,11 @@ function registerResponse(
   };
 }
 
+/** Column name → the value re-registering a runner writes to it. */
+interface RunnerColumnUpdates {
+  [column: string]: any;
+}
+
 export async function registerRunner(
   req: RunnerRegisterRequest,
   userId?: string,
@@ -197,7 +202,7 @@ export async function registerRunner(
 
     // Update existing runner — mark online, refresh heartbeat.
     // Also update userId if provided (backfills runners registered without one).
-    const updateFields: Record<string, any> = {
+    const updateFields: RunnerColumnUpdates = {
       name: req.name,
       status: 'online',
       os: req.os,

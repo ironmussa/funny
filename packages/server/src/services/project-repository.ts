@@ -78,9 +78,19 @@ const ON_FLAGS = ['closed', 'fastMode'] as const;
 
 type FlagValue = number | boolean | null | undefined;
 
+/** Field name → value, while a row is reshaped into a `Project`. */
+interface ProjectFields {
+  [field: string]: unknown;
+}
+
+/** Column name → the value a project update writes to it. */
+interface ProjectColumnUpdates {
+  [column: string]: unknown;
+}
+
 function toProject(row: ProjectRow): Project {
   const source = row as ProjectRow & Record<string, unknown>;
-  const project: Record<string, unknown> = { ...source };
+  const project: ProjectFields = { ...source };
   for (const field of [...OPTIONAL_FIELDS, ...ON_FLAGS, 'urls', 'followUpMode', 'redirectChecks']) {
     delete project[field];
   }
@@ -348,8 +358,8 @@ const UPDATABLE_FLAGS = [...ON_FLAGS, 'redirectChecks'] as const;
 function projectUpdateData(
   fields: ProjectUpdateFields,
   resolvedPath: string | undefined,
-): Record<string, unknown> {
-  const updateData: Record<string, unknown> = {};
+): ProjectColumnUpdates {
+  const updateData: ProjectColumnUpdates = {};
   for (const field of UPDATABLE_FIELDS) {
     if (fields[field] !== undefined) updateData[field] = fields[field];
   }

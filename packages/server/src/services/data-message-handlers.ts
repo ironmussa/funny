@@ -49,13 +49,18 @@ const RUNNER_IMMUTABLE_THREAD_FIELDS = new Set([
   'createdAt',
 ]);
 
+/** Thread field → the value a runner asks to write to it. */
+interface ThreadFieldUpdates {
+  [field: string]: unknown;
+}
+
 function stripRunnerImmutableThreadFields(
   runnerUserId: string | null,
   threadId: string,
   updates: unknown,
-): Record<string, unknown> {
+): ThreadFieldUpdates {
   if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return {};
-  const allowed: Record<string, unknown> = {};
+  const allowed: ThreadFieldUpdates = {};
   const refused: string[] = [];
   for (const [key, value] of Object.entries(updates)) {
     if (RUNNER_IMMUTABLE_THREAD_FIELDS.has(key)) refused.push(key);
@@ -238,8 +243,13 @@ function pickJobPatch(raw: unknown): JobPatch {
  */
 const OWNER_SCOPED_LIST_FALLBACK = [] as const;
 
+/** `data:*` message type → the executor that answers it. */
+interface DataMessageHandlers {
+  readonly [type: string]: DataMessageHandler;
+}
+
 /** Dispatch table: one executor per `data:*` message type. */
-const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
+const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   'data:insert_message': async ({ data }) => {
     const messageRepo = repos.messages();
     const messageId = await messageRepo.insertMessage(data.payload);

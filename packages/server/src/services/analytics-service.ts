@@ -154,6 +154,11 @@ export interface OverviewParams {
   offsetMinutes?: number;
 }
 
+/** Stage → how many threads are in it now (every stage present, 0 when empty). */
+interface StageDistribution {
+  [stage: string]: number;
+}
+
 export async function getOverview(params: OverviewParams): Promise<AnalyticsOverview> {
   const { userId, projectId, timeRange, offsetMinutes = 0 } = params;
   const range = getDateRange(timeRange, offsetMinutes);
@@ -247,7 +252,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
     countTransitionsTo('archived', filters, range),
   ]);
 
-  const distribution: Record<string, number> = {
+  const distribution: StageDistribution = {
     backlog: 0,
     planning: 0,
     in_progress: 0,

@@ -43,7 +43,7 @@ export function graphListStatus({
             variant="outline"
             size="sm"
             onClick={onRetry}
-            className="gap-1.5"
+            gap="snug"
             data-testid="graph-retry"
           >
             <RefreshCw className="icon-xs" />

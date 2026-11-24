@@ -14,7 +14,8 @@ export function RebaseEventDialog({
   return (
     <Dialog open={!!event} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-h-[80vh] max-w-2xl overflow-hidden p-0"
+        flush
+        className="max-h-[80vh] max-w-2xl overflow-hidden"
         data-testid="rebase-event-dialog"
       >
         {event &&
@@ -27,7 +28,7 @@ export function RebaseEventDialog({
                   <DialogTitle size="sm" className="leading-tight">
                     {t('graph.rebaseDetailsTitle', 'Rebase details')}
                   </DialogTitle>
-                  <DialogDescription className="text-muted-foreground mt-1 text-xs">
+                  <DialogDescription className="mt-1 text-xs">
                     {event.completed
                       ? t('graph.rebaseDetailsDescription', {
                           count: replayedCount,

@@ -32,6 +32,16 @@ const sizeStyles = {
   md: { icon: ICON_SIZE.sm, text: 'text-sm', chip: 'px-2 py-0.5' },
 };
 
+const BRANCH_COLOR_CLASSES =
+  'bg-[color:var(--branch-badge-bg)] text-[color:var(--branch-badge-fg)]';
+const BRANCH_OUTLINE_CLASS = '[box-shadow:0_0_0_1.5px_var(--branch-badge-outline)]';
+
+/** Classes that read the branch color variables set in the chip's style. */
+function branchColorClasses(bg: string | undefined, outlined: boolean) {
+  if (!bg) return undefined;
+  return outlined ? [BRANCH_COLOR_CLASSES, BRANCH_OUTLINE_CLASS] : BRANCH_COLOR_CLASSES;
+}
+
 /**
  * The one way a git branch name is shown in the UI: branch icon, monospace
  * name truncated to the available width, full name in a tooltip.
@@ -65,8 +75,7 @@ export function BranchBadge({
             className,
             // Last, so the branch color wins over a caller's color classes
             // (it used to be an inline style).
-            bg && 'bg-[color:var(--branch-badge-bg)] text-[color:var(--branch-badge-fg)]',
-            outlined && '[box-shadow:0_0_0_1.5px_var(--branch-badge-outline)]',
+            branchColorClasses(bg, outlined),
           )}
           style={
             bg

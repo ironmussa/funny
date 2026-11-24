@@ -333,7 +333,10 @@ async function checkAndPush(
 ): Promise<string | null> {
   let failure = await runChecks(cwd, request.checks, signal, request.timeoutMs, env);
   if (!failure) {
-    const pushed = await gitNetwork(['push', 'origin', `HEAD:${request.branch}`], {
+    // --no-verify like the merge and commit above: the repository's pre-push
+    // hook repeats what implement's push, regression-proof and CI check, and on
+    // a merge that brings the base in it outlasts the push's timeout.
+    const pushed = await gitNetwork(['push', '--no-verify', 'origin', `HEAD:${request.branch}`], {
       cwd,
       env,
       reject: false,

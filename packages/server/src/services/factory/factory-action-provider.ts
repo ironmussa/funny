@@ -73,6 +73,7 @@ import type { StartedThread, StartThreadError } from '../runner-thread-launcher.
 import {
   approvalCovers,
   approvalMoveComment,
+  type ApprovalCoverage,
   type ApprovalMove,
 } from './factory-approval-carry.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
@@ -1441,26 +1442,26 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       approvedRiskKeys: approval.riskKeys,
       riskKeys,
     });
-    if (coverage.covers) {
-      const { kind, lines, files } = coverage;
-      await deps.carryMergeApproval?.(approval.sha, sha, { kind, lines, files });
-      await count(metrics, { event: `merge_approval_moved_${kind}` });
-      // The move is a compare-and-set: a new approval written meanwhile wins.
-      if (await deps.mergeApproved?.(sha)) {
-        await announceApprovalMove({
-          userId: approval.userId,
-          from: approved,
-          to: sha,
-          kind,
-          lines,
-          files,
-        });
-        return null;
-      }
-    }
-    const reason = coverage.covers ? 'the approval changed meanwhile' : coverage.reason;
-    approvalRefusals.set(asked, reason);
+    const reason = coverage.covers ? await moveApproval(approval, sha, coverage) : coverage.reason;
+    if (reason !== null) approvalRefusals.set(asked, reason);
     return reason;
+  }
+
+  /**
+   * Move `approval` to `sha`, which it covers. Null when `sha` is approved now;
+   * the move is a compare-and-set, so a new approval written meanwhile wins.
+   */
+  async function moveApproval(
+    approval: FactoryMergeApproval,
+    sha: string,
+    { kind, lines, files }: Extract<ApprovalCoverage, { covers: true }>,
+  ): Promise<string | null> {
+    await deps.carryMergeApproval?.(approval.sha, sha, { kind, lines, files });
+    await count(metrics, { event: `merge_approval_moved_${kind}` });
+    if (!(await deps.mergeApproved?.(sha))) return 'the approval changed meanwhile';
+    const from = approval.carriedFrom ?? approval.sha;
+    await announceApprovalMove({ userId: approval.userId, from, to: sha, kind, lines, files });
+    return null;
   }
 
   /**

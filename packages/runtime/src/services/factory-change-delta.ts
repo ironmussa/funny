@@ -71,48 +71,92 @@ function pathOf(header: string): string | null {
   return unquoted.replace(/^[ab]\//, '');
 }
 
+/** Where the parser is in a diff: the file being read, and whether its hunks started. */
+interface ParseState {
+  change: Change;
+  file: FileChange | null;
+  oldPath: string | null;
+  blob: string;
+  inHunk: boolean;
+}
+
+function fileOf(change: Change, path: string): FileChange {
+  const existing = change.get(path);
+  if (existing) return existing;
+  const created: FileChange = { added: new Map(), removed: new Map() };
+  change.set(path, created);
+  return created;
+}
+
+/** A line inside a hunk: content the file adds or removes. */
+function readHunkLine(state: ParseState, line: string): void {
+  if (!state.file) return;
+  if (line.startsWith('+')) bump(state.file.added, line.slice(1));
+  else if (line.startsWith('-')) bump(state.file.removed, line.slice(1));
+}
+
+/** A binary file counts as one line naming the blob it ends as. */
+function readBinary(state: ParseState, line: string): void {
+  const named = /^Binary files (.+) and (.+) differ$/.exec(line);
+  const path = named ? (pathOf(named[2]!) ?? pathOf(named[1]!)) : null;
+  if (!path) return;
+  const blob = state.blob.split('..')[1] ?? state.blob;
+  bump(fileOf(state.change, path).added, `\0binary ${blob}`);
+}
+
+/** What each line of a file's header does, by how it starts. */
+const HEADER_LINES: ReadonlyArray<[string, (state: ParseState, line: string) => void]> = [
+  [
+    'index ',
+    (state, line) => {
+      state.blob = line.slice('index '.length).split(' ')[0] ?? '';
+    },
+  ],
+  [
+    '--- ',
+    (state, line) => {
+      state.oldPath = pathOf(line.slice(4));
+    },
+  ],
+  [
+    '+++ ',
+    (state, line) => {
+      const path = pathOf(line.slice(4)) ?? state.oldPath;
+      if (path) state.file = fileOf(state.change, path);
+    },
+  ],
+  [
+    '@@',
+    (state) => {
+      state.inHunk = state.file !== null;
+    },
+  ],
+  ['Binary files ', readBinary],
+];
+
 /**
  * The change a `git diff -U0 --no-renames` describes. A binary file counts as
  * one line naming the blob it ends as, so the same result is the same change.
+ * Inside a hunk every line is content, also one that looks like a header.
  */
 export function parseChange(diff: string): Change {
-  const change: Change = new Map();
-  let file: FileChange | null = null;
-  let oldPath: string | null = null;
-  let blob = '';
-  let inHunk = false;
-  const open = (path: string): FileChange => {
-    const existing = change.get(path);
-    if (existing) return existing;
-    const created: FileChange = { added: new Map(), removed: new Map() };
-    change.set(path, created);
-    return created;
+  const state: ParseState = {
+    change: new Map(),
+    file: null,
+    oldPath: null,
+    blob: '',
+    inHunk: false,
   };
   for (const line of diff.split('\n')) {
     if (line.startsWith('diff --git ')) {
-      file = null;
-      oldPath = null;
-      blob = '';
-      inHunk = false;
-    } else if (inHunk) {
-      if (line.startsWith('+')) bump(file!.added, line.slice(1));
-      else if (line.startsWith('-')) bump(file!.removed, line.slice(1));
-    } else if (line.startsWith('index ')) {
-      blob = line.slice('index '.length).split(' ')[0] ?? '';
-    } else if (line.startsWith('--- ')) {
-      oldPath = pathOf(line.slice(4));
-    } else if (line.startsWith('+++ ')) {
-      const path = pathOf(line.slice(4)) ?? oldPath;
-      if (path) file = open(path);
-    } else if (line.startsWith('@@')) {
-      inHunk = file !== null;
-    } else if (line.startsWith('Binary files ')) {
-      const named = /^Binary files (.+) and (.+) differ$/.exec(line);
-      const path = named ? (pathOf(named[2]!) ?? pathOf(named[1]!)) : null;
-      if (path) bump(open(path).added, `\0binary ${blob.split('..')[1] ?? blob}`);
+      Object.assign(state, { file: null, oldPath: null, blob: '', inHunk: false });
+    } else if (state.inHunk) {
+      readHunkLine(state, line);
+    } else {
+      HEADER_LINES.find(([prefix]) => line.startsWith(prefix))?.[1](state, line);
     }
   }
-  return change;
+  return state.change;
 }
 
 /** How many entries of `a` are not in `b`, counting repeats. */

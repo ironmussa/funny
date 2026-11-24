@@ -286,19 +286,21 @@ app.post('/open-in-editor', async (c) => {
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;
 
-  const editorCommands: Record<string, { cmd: string; args: string[] }> = {
-    vscode: { cmd: 'code', args: [dirPath] },
-    cursor: { cmd: 'cursor', args: [dirPath] },
-    windsurf: { cmd: 'windsurf', args: [dirPath] },
-    zed: { cmd: 'zed', args: [dirPath] },
-    sublime: { cmd: 'subl', args: [dirPath] },
-    vim:
-      platform() === 'win32'
-        ? { cmd: 'cmd', args: ['/c', 'start', 'cmd', '/k', 'vim', dirPath] }
-        : { cmd: 'x-terminal-emulator', args: ['-e', 'vim', dirPath] },
-  };
+  const editorCommands = new Map(
+    Object.entries({
+      vscode: { cmd: 'code', args: [dirPath] },
+      cursor: { cmd: 'cursor', args: [dirPath] },
+      windsurf: { cmd: 'windsurf', args: [dirPath] },
+      zed: { cmd: 'zed', args: [dirPath] },
+      sublime: { cmd: 'subl', args: [dirPath] },
+      vim:
+        platform() === 'win32'
+          ? { cmd: 'cmd', args: ['/c', 'start', 'cmd', '/k', 'vim', dirPath] }
+          : { cmd: 'x-terminal-emulator', args: ['-e', 'vim', dirPath] },
+    }),
+  );
 
-  const editorConfig = editorCommands[editor];
+  const editorConfig = editorCommands.get(editor);
   if (!editorConfig) return c.json({ error: `Unknown editor: ${editor}` }, 400);
 
   try {
@@ -341,6 +343,12 @@ function scoreCandidate(name: string, fullPath: string, lowerQuery: string): num
   return -1;
 }
 
+/** The best matches of a file search, and whether more matched than were kept. */
+interface FileSearchResult {
+  files: BrowseItem[];
+  truncated: boolean;
+}
+
 /**
  * Scored search over a flat file list. Folders are derived from the file paths
  * and matched too, so a query like `@somedir` surfaces the directory itself as
@@ -352,7 +360,7 @@ export function searchFilesAndFolders(
   allFiles: string[],
   query: string,
   limit = FILE_SEARCH_LIMIT,
-): { files: BrowseItem[]; truncated: boolean } {
+): FileSearchResult {
   const lowerQuery = query.toLowerCase();
   const scored: Array<{ item: BrowseItem; score: number }> = [];
 

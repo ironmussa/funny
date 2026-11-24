@@ -450,4 +450,10 @@ describe('files routes — rawFileHeaders (inline active content)', () => {
     }
     expect(rawFileHeaders('/p/unknown.html')['Content-Type']).toBe('application/octet-stream');
   });
+
+  test('an extension named like an inherited object member is an unknown type', () => {
+    for (const path of ['/p/a.constructor', '/p/a.__proto__']) {
+      expect(rawFileHeaders(path)['Content-Type']).toBe('application/octet-stream');
+    }
+  });
 });

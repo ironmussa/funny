@@ -68,6 +68,12 @@ logRoutes.use('/:threadId/commit/:hash/*', validateCommitHashParam);
 // differ. These helpers hold the parsing, tracing, and response-shaping logic
 // so the handlers below stay thin and the response shape lives in one place.
 
+/** One page of a log request: how many entries, after how many. */
+interface LogPaging {
+  limit: number;
+  skip: number;
+}
+
 /**
  * Pure paging parse: `limit` defaults to 50 and is capped at 200; an unparseable
  * value falls back to 20. `skip` defaults to 0 and is floored at 0. Exported for
@@ -76,15 +82,23 @@ logRoutes.use('/:threadId/commit/:hash/*', validateCommitHashParam);
 export function parseLogPagingFrom(
   limitRaw: string | undefined,
   skipRaw: string | undefined,
-): { limit: number; skip: number } {
+): LogPaging {
   const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 200) : 50;
   const skip = skipRaw ? Math.max(parseInt(skipRaw, 10) || 0, 0) : 0;
   return { limit, skip };
 }
 
 /** Parse the shared `limit` and `skip` query params off a request context. */
-function parseLogPaging(c: Context<HonoEnv>): { limit: number; skip: number } {
+function parseLogPaging(c: Context<HonoEnv>): LogPaging {
   return parseLogPagingFrom(c.req.query('limit'), c.req.query('skip'));
+}
+
+/** A page of log entries, whether more follow, and which of them are unpushed / unpulled. */
+interface LogPayload<E> {
+  entries: E[];
+  hasMore: boolean;
+  unpushedHashes: string[];
+  unpulledHashes: string[];
 }
 
 /**
@@ -98,12 +112,7 @@ export function buildLogPayload<E extends { hash: string }>(
   unpushedSet: Set<string>,
   unpulledSet: Set<string>,
   limit: number,
-): {
-  entries: E[];
-  hasMore: boolean;
-  unpushedHashes: string[];
-  unpulledHashes: string[];
-} {
+): LogPayload<E> {
   const hasMore = entries.length > limit;
   const trimmed = hasMore ? entries.slice(0, limit) : entries;
   const unpushedHashes = trimmed.filter((e) => unpushedSet.has(e.hash)).map((e) => e.hash);

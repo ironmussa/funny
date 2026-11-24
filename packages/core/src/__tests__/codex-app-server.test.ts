@@ -3,6 +3,8 @@ import { chmod, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { z } from 'zod';
+
 import { CodexAppServer, codexReviewTarget } from '../agents/codex-app-server.js';
 
 let directory: string;
@@ -86,7 +88,7 @@ describe('Codex App Server', () => {
       const turn = server.runTurn('wait', { threadId: 'session' });
       abort.abort();
       await expect(turn).rejects.toThrow('cancelled');
-      await expect(server.request('wait', {})).rejects.toThrow('cancelled');
+      await expect(server.request('wait', {}, z.unknown())).rejects.toThrow('cancelled');
     });
   });
 
@@ -98,9 +100,20 @@ describe('Codex App Server', () => {
     });
   });
 
+  test('parses the result with the caller schema and rejects one that does not match', async () => {
+    await withServer(async (server) => {
+      await expect(server.request('initialize', {}, z.object({}))).resolves.toEqual({});
+      await expect(
+        server.request('initialize', {}, z.object({ id: z.string() })),
+      ).rejects.toBeInstanceOf(z.ZodError);
+    });
+  });
+
   test('returns an explicit error for interactive approval requests', async () => {
     await withServer(async (server) => {
-      await expect(server.request('approval', {})).resolves.toMatchObject({ code: -32601 });
+      await expect(
+        server.request('approval', {}, z.object({ code: z.number() }).passthrough()),
+      ).resolves.toMatchObject({ code: -32601 });
     });
   });
 });

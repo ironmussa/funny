@@ -150,13 +150,14 @@ export function isImpactMap(value: unknown): value is ImpactMap {
   const map: Partial<Record<keyof ImpactMap, unknown>> = value;
   const isRecord = (v: unknown): v is object =>
     typeof v === 'object' && v !== null && !Array.isArray(v);
+  const isString = (v: unknown): v is string => typeof v === 'string';
   return (
-    typeof map.package === 'string' &&
-    typeof map.commit === 'string' &&
+    isString(map.package) &&
+    isString(map.commit) &&
     /^[0-9a-f]{40}$/.test(map.commit) &&
     isRecord(map.tests) &&
     Object.values(map.tests).every(
-      (sources) => Array.isArray(sources) && sources.every((s) => typeof s === 'string'),
+      (sources) => Array.isArray(sources) && sources.every(isString),
     ) &&
     isRecord(map.alwaysRun) &&
     isRecord(map.durationsMs)

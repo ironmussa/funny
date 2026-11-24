@@ -107,11 +107,15 @@ function readManifests(root: string): { dir: string; manifest: PackageManifest }
     .map(({ dir, path }) => ({ dir, manifest: JSON.parse(readFileSync(path, 'utf8')) }));
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function discoverPackages(root = ROOT): TestPackage[] {
   const manifests = readManifests(root);
   const nameToDir = new Map<string, string>();
   for (const { dir, manifest } of manifests) {
-    if (typeof manifest.name === 'string') nameToDir.set(manifest.name, dir);
+    if (isString(manifest.name)) nameToDir.set(manifest.name, dir);
   }
 
   return manifests

@@ -42,9 +42,13 @@ function tryParse(text: string | null): { ok: true; value: any } | { ok: false }
   }
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** `name` from a lock entry's `name@version` (scoped names keep their `@`). */
 function entryName(key: string, entry: LockEntry): string {
-  const spec = typeof entry[0] === 'string' ? entry[0] : '';
+  const spec = isString(entry[0]) ? entry[0] : '';
   const at = spec.lastIndexOf('@');
   return at > 0 ? spec.slice(0, at) : key;
 }
@@ -52,6 +56,7 @@ function entryName(key: string, entry: LockEntry): string {
 /** The metadata object of a lock entry: its dependency maps (`name → range`) by field. */
 type EntryMeta = { [Field in (typeof DEPENDENCY_FIELDS)[number]]?: Record<string, string> };
 
+/** A non-null, non-array object: the metadata part of a lock entry. */
 function isEntryMeta(part: unknown): part is EntryMeta {
   return Boolean(part) && typeof part === 'object' && !Array.isArray(part);
 }

@@ -4,6 +4,10 @@ import { getEvflowCompletions } from './completions.js';
 import { getEvflowDiagnostics } from './diagnostics.js';
 import { buildProjectRegistry } from './registry.js';
 
+function isFunction<T>(value: T): value is Extract<T, CallableFunction> {
+  return typeof value === 'function';
+}
+
 function init(modules: { typescript: typeof ts }) {
   const tsModule = modules.typescript;
 
@@ -14,12 +18,8 @@ function init(modules: { typescript: typeof ts }) {
     // Pass through all methods by default
     for (const k in oldLS) {
       // SAFETY: k is produced by for-in over oldLS, so it is an enumerable key of that LanguageService object
-      const x: unknown = oldLS[k as keyof ts.LanguageService];
-      Reflect.set(
-        proxy,
-        k,
-        typeof x === 'function' ? (...args: unknown[]) => x.apply(oldLS, args) : x,
-      );
+      const x = oldLS[k as keyof ts.LanguageService];
+      Reflect.set(proxy, k, isFunction(x) ? (...args: unknown[]) => x.apply(oldLS, args) : x);
     }
 
     info.project.projectService.logger.info('[evflow] Plugin loaded');

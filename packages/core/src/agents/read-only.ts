@@ -198,6 +198,11 @@ async function probeNestedUserNamespace(): Promise<boolean> {
   );
 }
 
+/** Any non-null object (arrays included). */
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
 /**
  * The flag settings of a read-only agent: the ones it already has, with the
  * hooks of the settings files and plugins off. Those run on the host, outside
@@ -206,13 +211,17 @@ async function probeNestedUserNamespace(): Promise<boolean> {
  * is an SDK callback, not a settings hook, and keeps running.
  */
 export function withSettingsHooksOff(settings: unknown): Record<string, unknown> {
-  const current = settings && typeof settings === 'object' ? settings : {};
+  const current = isObject(settings) ? settings : {};
   return { ...current, disableAllHooks: true };
 }
 
 const ALLOWED = new Set(READ_ONLY_AGENT_TOOLS);
 
-const text = (value: unknown) => (typeof value === 'string' && value.length > 0 ? value : null);
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+const text = (value: unknown) => (isNonEmptyString(value) ? value : null);
 
 /** The folder an absolute glob pattern starts in (its part before the first wildcard). */
 function patternRoot(pattern: string | null): string[] {
@@ -263,10 +272,7 @@ export function readOnlyDenial(
   if (!ALLOWED.has(toolName)) {
     return `This thread may only read: ${toolName} is not available. Use ${READ_ONLY_AGENT_TOOLS.join(', ')}.`;
   }
-  const input = (toolInput && typeof toolInput === 'object' ? toolInput : {}) as Record<
-    string,
-    unknown
-  >;
+  const input = (isObject(toolInput) ? toolInput : {}) as Record<string, unknown>;
   if (toolName === 'Bash' && input.dangerouslyDisableSandbox) {
     return 'This thread may only read: commands run in the sandbox, without network or writes.';
   }

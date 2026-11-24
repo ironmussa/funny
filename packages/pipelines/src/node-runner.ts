@@ -59,6 +59,11 @@ const isThenable = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
   typeof (value as { then?: unknown } | null)?.then === 'function';
 
 /** The message of whatever an Effect failed with. */
+/** Narrows a value-or-resolver option to its resolver member. */
+function isResolver<V>(value: V): value is Extract<V, (...args: never[]) => void> {
+  return typeof value === 'function';
+}
+
 export function causeMessage(cause: Cause.Cause<unknown>): string {
   const squashed = Cause.squash(cause);
   return squashed instanceof Error ? squashed.message : String(squashed);
@@ -202,7 +207,7 @@ class NodeExecution<T> {
   private attempts(): Effect.Effect<Ending, Error> {
     const retry = this.node.retry;
     const max = retry?.maxAttempts;
-    const maxAttempts = Math.max(1, (typeof max === 'function' ? max(this.ctx) : max) ?? 1);
+    const maxAttempts = Math.max(1, (isResolver(max) ? max(this.ctx) : max) ?? 1);
     return Effect.gen({ self: this }, function* () {
       for (let attempt = 1; ; attempt++) {
         const result = yield* Effect.result(this.attempt());
@@ -244,7 +249,7 @@ class NodeExecution<T> {
       if (shouldRetry && !(yield* invoke(() => shouldRetry(error, this.ctx, attempt))))
         return false;
       if (beforeRetry) this.ctx = yield* invoke(() => beforeRetry(error, this.ctx, attempt));
-      const delay = typeof delayMs === 'function' ? delayMs(this.ctx) : (delayMs ?? 0);
+      const delay = isResolver(delayMs) ? delayMs(this.ctx) : (delayMs ?? 0);
       if (delay > 0) yield* Effect.sleep(delay);
       return true;
     });

@@ -199,7 +199,7 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private handleSessionEvent(event: unknown): void {
-    if (!event || typeof event !== 'object') return;
+    if (!isObject(event)) return;
     const e = event as Record<string, any>;
     switch (e.type) {
       case 'message_update':
@@ -241,9 +241,9 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private handleMessageUpdate(event: unknown): void {
-    if (!event || typeof event !== 'object') return;
+    if (!isObject(event)) return;
     const e = event as Record<string, any>;
-    if (e.type === 'text_delta' && typeof e.delta === 'string' && e.delta) {
+    if (e.type === 'text_delta' && isNonEmptyString(e.delta)) {
       this.flushPendingThought();
       this.accumulatedText += e.delta;
       this.emit('message', {
@@ -255,7 +255,7 @@ export class PiSDKProcess extends BaseAgentProcess {
       } as CLIMessage);
       return;
     }
-    if (e.type === 'thinking_delta' && typeof e.delta === 'string' && e.delta) {
+    if (e.type === 'thinking_delta' && isNonEmptyString(e.delta)) {
       if (!this.pendingThought) this.pendingThought = { id: randomUUID(), text: '' };
       this.pendingThought.text += e.delta;
       return;
@@ -266,7 +266,7 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private emitToolUse(toolCallId: unknown, toolName: unknown, input: unknown): void {
-    const id = typeof toolCallId === 'string' && toolCallId ? toolCallId : randomUUID();
+    const id = isNonEmptyString(toolCallId) ? toolCallId : randomUUID();
     if (this.seenToolCalls.has(id)) return;
     const normalized = normalizePiToolCall(toolName, input);
     this.flushPendingThought();
@@ -293,7 +293,7 @@ export class PiSDKProcess extends BaseAgentProcess {
     result: unknown,
     isError: boolean,
   ): void {
-    const id = typeof toolCallId === 'string' && toolCallId ? toolCallId : randomUUID();
+    const id = isNonEmptyString(toolCallId) ? toolCallId : randomUUID();
     this.emitToolUse(id, toolName, {});
     this.emit('message', {
       type: 'user',
@@ -346,9 +346,9 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private captureUsage(message: unknown): void {
-    if (!message || typeof message !== 'object') return;
+    if (!isObject(message)) return;
     const usage = (message as Record<string, any>).usage;
-    if (!usage || typeof usage !== 'object') return;
+    if (!isPiUsage(usage)) return;
     const input = Number(usage.input ?? 0);
     const output = Number(usage.output ?? 0);
     const cacheRead = Number(usage.cacheRead ?? 0);
@@ -390,8 +390,32 @@ function normalizePiToolCall(toolName: unknown, input: unknown): { name: string;
   }
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/** Any non-null object (arrays included). */
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A pi message's usage block: any non-null object, its fields read through `Number`. */
+function isPiUsage(value: unknown): value is {
+  input?: unknown;
+  output?: unknown;
+  cacheRead?: unknown;
+  cacheWrite?: unknown;
+  cost?: { total?: unknown };
+} {
+  return typeof value === 'object' && value !== null;
+}
+
 function normalizePiToolName(toolName: unknown): string {
-  if (typeof toolName !== 'string' || !toolName) return 'Tool';
+  if (!isNonEmptyString(toolName)) return 'Tool';
   switch (toolName) {
     case 'bash':
     case 'shell':
@@ -419,7 +443,7 @@ function normalizePiToolName(toolName: unknown): string {
 }
 
 function normalizeCommandInput(input: unknown): unknown {
-  if (typeof input === 'string') return { command: input };
+  if (isString(input)) return { command: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
 
@@ -431,7 +455,7 @@ function normalizeCommandInput(input: unknown): unknown {
 }
 
 function normalizeFileInput(input: unknown): unknown {
-  if (typeof input === 'string') return { file_path: input };
+  if (isString(input)) return { file_path: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
 
@@ -450,7 +474,7 @@ function normalizeSearchInput(input: unknown): unknown {
 }
 
 function cloneRecord(input: unknown): Record<string, unknown> | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  if (!isObject(input) || Array.isArray(input)) return null;
   return { ...(input as Record<string, unknown>) };
 }
 
@@ -766,14 +790,14 @@ function toPiImages(images: unknown): any[] {
 
 function stringifyToolResult(result: unknown): string {
   if (result == null) return '';
-  if (typeof result === 'string') return result;
-  if (typeof result !== 'object') return String(result);
+  if (isString(result)) return result;
+  if (!isObject(result)) return String(result);
   const content = (result as Record<string, any>).content;
   if (Array.isArray(content)) {
     const text = content
       .map((block) => {
-        if (typeof block === 'string') return block;
-        if (block?.type === 'text' && typeof block.text === 'string') return block.text;
+        if (isString(block)) return block;
+        if (block?.type === 'text' && isString(block.text)) return block.text;
         if (block?.type === 'image') return '[image]';
         return '';
       })

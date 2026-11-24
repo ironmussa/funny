@@ -222,7 +222,7 @@ export class LLMApiProcess extends BaseAgentProcess {
               {
                 type: 'tool_result' as const,
                 tool_use_id: tr.toolCallId,
-                content: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result),
+                content: isString(tr.result) ? tr.result : JSON.stringify(tr.result),
               },
             ],
           },
@@ -247,4 +247,8 @@ export class LLMApiProcess extends BaseAgentProcess {
 
     return (input * 3 + output * 15) / 1_000_000;
   }
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
 }

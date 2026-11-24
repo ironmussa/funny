@@ -79,6 +79,14 @@ export async function extractFactsFromConversation(
 }
 
 /** Parse LLM response into ExtractedFact array, tolerant of formatting issues */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function parseFactsResponse(raw: string): ExtractedFact[] {
   // Strip markdown code fences if present
   let cleaned = raw.trim();
@@ -94,9 +102,9 @@ function parseFactsResponse(raw: string): ExtractedFact[] {
       content: f.content,
       type: validateFactType(f.type),
       tags: Array.isArray(f.tags) ? f.tags.map((t) => String(t).toLowerCase()) : [],
-      confidence: typeof f.confidence === 'number' ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
-      validFrom: typeof f.validFrom === 'string' ? f.validFrom : undefined,
-      supersedes: typeof f.supersedes === 'string' ? f.supersedes : undefined,
+      confidence: isNumber(f.confidence) ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
+      validFrom: isString(f.validFrom) ? f.validFrom : undefined,
+      supersedes: isString(f.supersedes) ? f.supersedes : undefined,
     }));
   } catch {
     // Try to extract JSON array from mixed content

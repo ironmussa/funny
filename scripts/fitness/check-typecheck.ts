@@ -139,6 +139,10 @@ interface Workspace {
   deps: Map<string, Set<string>>;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function readWorkspace(root: string): Workspace {
   const nameToDir = new Map<string, string>();
   const rawDeps = new Map<string, string[]>();
@@ -148,7 +152,7 @@ function readWorkspace(root: string): Workspace {
     if (!existsSync(manifest)) continue;
     const pkg: Record<string, any> = JSON.parse(readFileSync(manifest, 'utf-8'));
     const dir = `packages/${entry}`;
-    if (typeof pkg.name === 'string') nameToDir.set(pkg.name, dir);
+    if (isString(pkg.name)) nameToDir.set(pkg.name, dir);
     rawDeps.set(
       dir,
       Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies }),

@@ -6,6 +6,14 @@ import { defineConfig, type Plugin } from 'vite';
 
 const WORKSPACE_PKG = path.resolve(__dirname, '..', '..', 'runtime');
 
+function isFunction<T>(value: T): value is Extract<T, CallableFunction> {
+  return typeof value === 'function';
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
 /**
  * Vite plugin that adds a POST /api/convert endpoint.
  * Accepts a .ts evflow model file content, writes it as a temp file inside
@@ -48,7 +56,7 @@ function evflowConvertPlugin(): Plugin {
             // 2. Named export function that returns an EventModel
             if (!model) {
               for (const val of Object.values(mod)) {
-                if (typeof val === 'function') {
+                if (isFunction(val)) {
                   try {
                     const result = val();
                     if (result?.toJSON) {
@@ -63,7 +71,7 @@ function evflowConvertPlugin(): Plugin {
             // 3. Named export that IS an EventModel instance
             if (!model) {
               for (const val of Object.values(mod)) {
-                if (val && typeof val === 'object' && typeof val.toJSON === 'function') {
+                if (isObject(val) && 'toJSON' in val && isFunction(val.toJSON)) {
                   model = val;
                   break;
                 }

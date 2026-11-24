@@ -97,7 +97,7 @@ export function interpolate(
  */
 export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: InterpolateOptions): T {
   if (value === null || value === undefined) return value;
-  if (typeof value === 'string') {
+  if (isString(value)) {
     // SAFETY: `value` is a string here, and rendering a string template yields a string.
     return interpolate(value, scope, opts) as T & string;
   }
@@ -105,7 +105,7 @@ export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: Inte
     // SAFETY: `value` is an array here; the result maps it element by element, keeping its shape.
     return value.map((v) => interpolateObject(v, scope, opts)) as T & unknown[];
   }
-  if (typeof value === 'object') {
+  if (isObject(value)) {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
       out[k] = interpolateObject(v, scope, opts);
@@ -114,6 +114,14 @@ export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: Inte
     return out as T & Record<string, unknown>;
   }
   return value;
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }
 
 // ── Internal helpers ────────────────────────────────────────
@@ -144,7 +152,7 @@ function resolvePath(scope: TemplateScope, path: string): unknown {
   let current: unknown = scope;
   for (const seg of segments) {
     if (current === null || current === undefined) return undefined;
-    if (typeof current !== 'object') return undefined;
+    if (!isObject(current)) return undefined;
     // SAFETY: `current` is a non-null object here (both checked above); a missing key reads as
     // undefined, which ends the path.
     current = (current as Record<string, unknown>)[seg];

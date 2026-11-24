@@ -254,9 +254,17 @@ function compileConcurrency(
   };
 }
 
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** The output a batch leader settled for a member, as this node's output. */
 function asNodeOutput(output: unknown): NodeOutput {
-  if (output !== null && typeof output === 'object' && 'output' in output) {
+  if (isObject(output) && 'output' in output) {
     return output;
   }
   return { output };
@@ -630,7 +638,7 @@ function compileRetry(
 
 function resolveThreadId(ctx: YamlPipelineContext): string {
   const raw = ctx.inputs.threadId;
-  if (typeof raw !== 'string' || raw.length === 0) {
+  if (!isString(raw) || raw.length === 0) {
     throw new Error(
       'set_status / set_stage actions require inputs.threadId — the dispatcher must seed it on YamlPipelineContext.inputs',
     );

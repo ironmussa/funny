@@ -408,8 +408,12 @@ export async function setupWSIntercept(page: Page) {
  * Several mocks can share a procedure (one per thread): a handler that does not
  * own the call must `route.fallback()` to the next one, not `route.continue()`.
  */
+function isProcedureName(procedure: string | ((name: string) => boolean)): procedure is string {
+  return typeof procedure === 'string';
+}
+
 export function trpcProcedure(procedure: string | ((name: string) => boolean)) {
-  const matches = typeof procedure === 'string' ? (name: string) => name === procedure : procedure;
+  const matches = isProcedureName(procedure) ? (name: string) => name === procedure : procedure;
   return (url: URL) =>
     url.pathname.startsWith('/api/trpc/') && matches(url.pathname.slice('/api/trpc/'.length));
 }

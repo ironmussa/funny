@@ -12,6 +12,12 @@
 if (!window.__funnyBridgeLoaded) {
   window.__funnyBridgeLoaded = true;
 
+  type FiberType = ReactFiber['type'];
+  const isComponentFunction = (type: FiberType): type is Extract<FiberType, CallableFunction> =>
+    typeof type === 'function';
+  const isObjectType = (type: FiberType): type is { displayName?: string } =>
+    typeof type === 'object' && type !== null;
+
   console.info('[Funny Bridge] v2.2 loaded in MAIN world');
 
   // -------------------------------------------------------------------------
@@ -148,14 +154,14 @@ if (!window.__funnyBridgeLoaded) {
       // Component name
       let f: ReactFiber | null = fiber;
       while (f) {
-        if (f.type && typeof f.type === 'function') {
+        if (f.type && isComponentFunction(f.type)) {
           const n = f.type.displayName || f.type.name;
           if (n) {
             componentName = n;
             break;
           }
         }
-        if (f.type && typeof f.type === 'object' && f.type.displayName) {
+        if (f.type && isObjectType(f.type) && f.type.displayName) {
           componentName = f.type.displayName;
           break;
         }
@@ -166,8 +172,8 @@ if (!window.__funnyBridgeLoaded) {
       f = fiber;
       while (f) {
         let name: string | null | undefined = null;
-        if (f.type && typeof f.type === 'function') name = f.type.displayName || f.type.name;
-        else if (f.type && typeof f.type === 'object') name = f.type.displayName;
+        if (f.type && isComponentFunction(f.type)) name = f.type.displayName || f.type.name;
+        else if (f.type && isObjectType(f.type)) name = f.type.displayName;
         if (name) names.push(name);
         f = f.return;
       }

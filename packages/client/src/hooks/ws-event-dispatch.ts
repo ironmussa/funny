@@ -174,15 +174,15 @@ function scheduleFlush() {
   }
 }
 
-/**
- * Dispatch a received event (from Socket.IO or raw WS) to the appropriate
- * store. The event object has { type, threadId, data } shape.
- */
 /** Every realtime event carries its fields as an object; the dispatcher only types it `unknown`. */
 function hasEventFields(data: unknown): data is BrowserSessionRealtimeEvent['data'] {
   return typeof data === 'object' && data !== null;
 }
 
+/**
+ * Dispatch a received event (from Socket.IO or raw WS) to the appropriate
+ * store. The event object has { type, threadId, data } shape.
+ */
 const applyThroughWebStore = (event: RealtimeEvent): void => {
   applyWebEvent(event.type, event.threadId, event.data);
 };

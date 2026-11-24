@@ -14,7 +14,7 @@ import {
 export const BROWSER_V1_PROTOCOL_MAJOR = 1;
 export const BROWSER_V1_PROTOCOL_MINOR = 0;
 export const BROWSER_V1_SCHEMA_FINGERPRINT =
-  'browser.v1:sha256:a7dc62c7208ac6c132dab0d9ba524a98638f017dd5c531ffee1fa245adce52d5';
+  'browser.v1:sha256:3d8f7a82ae70f4394454d9f11a715b06cf76582e84e36f57ac5cf318355d0336';
 
 export const BROWSER_V1_CARRIER_EVENTS = {
   negotiate: 'browser:v1:negotiate',

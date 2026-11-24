@@ -175,6 +175,38 @@ message BrowserSessionPointer {
   BrowserSessionPointerKind kind = 3;
 }
 
+enum BrowserSessionAgentActionKind {
+  BROWSER_SESSION_AGENT_ACTION_KIND_UNSPECIFIED = 0;
+  BROWSER_SESSION_AGENT_ACTION_KIND_CLICK = 1;
+  BROWSER_SESSION_AGENT_ACTION_KIND_DOUBLE_CLICK = 2;
+  BROWSER_SESSION_AGENT_ACTION_KIND_HOVER = 3;
+  BROWSER_SESSION_AGENT_ACTION_KIND_TYPE = 4;
+  BROWSER_SESSION_AGENT_ACTION_KIND_FILL = 5;
+  BROWSER_SESSION_AGENT_ACTION_KIND_SELECT = 6;
+  BROWSER_SESSION_AGENT_ACTION_KIND_PRESS = 7;
+  BROWSER_SESSION_AGENT_ACTION_KIND_SCROLL = 8;
+  BROWSER_SESSION_AGENT_ACTION_KIND_DRAG = 9;
+  BROWSER_SESSION_AGENT_ACTION_KIND_UPLOAD = 10;
+  BROWSER_SESSION_AGENT_ACTION_KIND_SCREENSHOT = 11;
+}
+
+// What the agent does, so the panel can show it (a label by the cursor, the
+// key pressed, a drag trail, a capture flash). Points are page viewport
+// pixels; an action on the whole page (a screenshot) has none.
+message BrowserSessionAgentAction {
+  BrowserSessionAgentActionKind kind = 1;
+  optional int32 x = 2;
+  optional int32 y = 3;
+  // Where a drag ends.
+  optional int32 to_x = 4;
+  optional int32 to_y = 5;
+  // How far a scroll moves.
+  optional int32 delta_x = 6;
+  optional int32 delta_y = 7;
+  // A short detail: the key pressed, the options selected, the file count.
+  optional string detail = 8;
+}
+
 message BrowserSessionConsole {
   string level = 1;
   string text = 2;
@@ -225,6 +257,7 @@ message BrowserSessionMessage {
     BrowserSessionAgentOpened agent_opened = 28;
     BrowserSessionPointer pointer = 29;
     BrowserSessionAudio audio = 30;
+    BrowserSessionAgentAction agent_action = 31;
   }
 }
 

@@ -17,7 +17,7 @@ import {
   resolve as resolvePath,
 } from 'path';
 
-import type { BrowserSessionPointerKind } from '@funny/shared';
+import type { BrowserSessionAgentAction, BrowserSessionPointerKind } from '@funny/shared';
 import { ResultAsync } from 'neverthrow';
 import type { Locator, Page } from 'playwright';
 import { z } from 'zod';
@@ -425,6 +425,7 @@ export function browserSnapshot(
         text(`Snapshot (use the [ref=…] ids with browser_act):\n${snapshot}`),
       ];
       if (args.screenshot) {
+        browserSessionManager.emitAgentAction(s, { kind: 'screenshot' });
         const shot = await page.screenshot({
           type: 'jpeg',
           quality: 70,
@@ -484,7 +485,11 @@ async function centerOf(locator: Locator): Promise<{ x: number; y: number } | nu
  * Best effort: a missing box leaves the cursor where it was, and the action
  * reports its own error.
  */
-async function showPointer(ctx: ActionContext, kind: BrowserSessionPointerKind): Promise<void> {
+async function showPointer(
+  ctx: ActionContext,
+  kind: BrowserSessionPointerKind,
+  action?: Omit<BrowserSessionAgentAction, 'x' | 'y'>,
+): Promise<void> {
   let point: { x: number; y: number } | null = null;
   if (ctx.target) {
     point = await ctx.target
@@ -495,10 +500,11 @@ async function showPointer(ctx: ActionContext, kind: BrowserSessionPointerKind):
     point = { x: ctx.args.x, y: ctx.args.y };
   }
   if (point) browserSessionManager.emitPointer(ctx.s, point, kind);
+  if (action) browserSessionManager.emitAgentAction(ctx.s, { ...action, ...point });
 }
 
 async function clickAction(ctx: ActionContext, clickCount: 1 | 2): Promise<string> {
-  await showPointer(ctx, 'click');
+  await showPointer(ctx, 'click', { kind: clickCount === 2 ? 'double_click' : 'click' });
   if (ctx.target) {
     await (clickCount === 2 ? ctx.target.dblclick({ timeout }) : ctx.target.click({ timeout }));
   } else {
@@ -509,7 +515,7 @@ async function clickAction(ctx: ActionContext, clickCount: 1 | 2): Promise<strin
 }
 
 async function hoverAction(ctx: ActionContext): Promise<string> {
-  await showPointer(ctx, 'move');
+  await showPointer(ctx, 'move', { kind: 'hover' });
   if (ctx.target) await ctx.target.hover({ timeout });
   else {
     const p = requirePoint(ctx.args, 'hover');
@@ -520,19 +526,23 @@ async function hoverAction(ctx: ActionContext): Promise<string> {
 
 async function typeAction(ctx: ActionContext): Promise<string> {
   const text = requireText(ctx);
+  await showPointer(ctx, 'move', { kind: 'type' });
   if (ctx.target) await ctx.target.pressSequentially(text, { timeout });
   else await ctx.page.keyboard.type(text);
   return `Typed ${text.length} characters${ctx.target ? ` into ${ctx.label}` : ''}.`;
 }
 
 async function fillAction(ctx: ActionContext): Promise<string> {
-  await requireTarget(ctx).fill(requireText(ctx), { timeout });
+  const target = requireTarget(ctx);
+  await showPointer(ctx, 'move', { kind: 'fill' });
+  await target.fill(requireText(ctx), { timeout });
   return `Filled ${ctx.label}.`;
 }
 
 async function selectAction(ctx: ActionContext): Promise<string> {
   const target = requireTarget(ctx);
   if (!ctx.args.values?.length) throw new ToolFailure('invalid-arguments', 'select needs values.');
+  await showPointer(ctx, 'move', { kind: 'select', detail: ctx.args.values.join(', ') });
   const selected = await target.selectOption(ctx.args.values, { timeout });
   return `Selected ${selected.join(', ')} in ${ctx.label}.`;
 }
@@ -540,6 +550,7 @@ async function selectAction(ctx: ActionContext): Promise<string> {
 async function pressAction(ctx: ActionContext): Promise<string> {
   const key = ctx.args.key;
   if (!key) throw new ToolFailure('invalid-arguments', 'press needs key.');
+  await showPointer(ctx, 'move', { kind: 'press', detail: key });
   if (ctx.target) await ctx.target.press(key, { timeout });
   else await ctx.page.keyboard.press(key);
   return `Pressed ${key}${ctx.target ? ` on ${ctx.label}` : ''}.`;
@@ -554,23 +565,43 @@ async function scrollAction(ctx: ActionContext): Promise<string> {
   } else if (args.x !== undefined && args.y !== undefined) {
     at = { x: args.x, y: args.y };
   }
+  const dx = args.deltaX ?? 0;
+  const dy = args.deltaY ?? 0;
+  browserSessionManager.emitAgentAction(ctx.s, { kind: 'scroll', ...at, deltaX: dx, deltaY: dy });
   if (at) {
     browserSessionManager.emitPointer(ctx.s, at, 'move');
     await page.mouse.move(at.x, at.y);
   }
-  const dx = args.deltaX ?? 0;
-  const dy = args.deltaY ?? 0;
   await page.mouse.wheel(dx, dy);
   return `Scrolled${at ? ` at ${ctx.label}` : ''} by (${dx}, ${dy}).`;
+}
+
+/** Show a drag: press at the start, release at the end, with the trail between. */
+function emitDrag(
+  ctx: ActionContext,
+  start: { x: number; y: number },
+  end: { x: number; y: number } | null,
+): void {
+  browserSessionManager.emitPointer(ctx.s, start, 'down');
+  const action: BrowserSessionAgentAction = { kind: 'drag', ...start };
+  if (end) {
+    action.toX = end.x;
+    action.toY = end.y;
+  }
+  browserSessionManager.emitAgentAction(ctx.s, action);
+  if (end) browserSessionManager.emitPointer(ctx.s, end, 'up');
 }
 
 async function dragAction(ctx: ActionContext): Promise<string> {
   const to = ctx.args.to;
   if (!to) throw new ToolFailure('invalid-arguments', 'drag needs to.');
   if (ctx.target && 'ref' in to) {
-    await showPointer(ctx, 'down');
+    const start = await ctx.target
+      .scrollIntoViewIfNeeded({ timeout })
+      .then(() => centerOf(ctx.target!))
+      .catch(() => null);
     const end = await centerOf(locatorFor(ctx.s, to.ref)).catch(() => null);
-    if (end) browserSessionManager.emitPointer(ctx.s, end, 'up');
+    if (start) emitDrag(ctx, start, end);
     await ctx.target.dragTo(locatorFor(ctx.s, to.ref), { timeout });
     return `Dragged ${ctx.label}.`;
   }
@@ -578,10 +609,9 @@ async function dragAction(ctx: ActionContext): Promise<string> {
   const end = 'ref' in to ? await centerOf(locatorFor(ctx.s, to.ref)) : to;
   if (!start || !end)
     throw new ToolFailure('action-failed', 'Drag source or target is not visible.');
-  browserSessionManager.emitPointer(ctx.s, start, 'down');
+  emitDrag(ctx, start, end);
   await ctx.page.mouse.move(start.x, start.y);
   await ctx.page.mouse.down();
-  browserSessionManager.emitPointer(ctx.s, end, 'up');
   await ctx.page.mouse.move(end.x, end.y, { steps: 10 });
   await ctx.page.mouse.up();
   return `Dragged ${ctx.label}.`;
@@ -610,6 +640,7 @@ async function uploadAction(ctx: ActionContext): Promise<string> {
   const target = requireTarget(ctx);
   if (!ctx.args.paths?.length) throw new ToolFailure('invalid-arguments', 'upload needs paths.');
   const files = resolveUploadPaths(ctx.cwd, ctx.args.paths);
+  await showPointer(ctx, 'move', { kind: 'upload', detail: String(files.length) });
   await target.setInputFiles(files, { timeout });
   return `Attached ${files.length} file(s) to ${ctx.label}.`;
 }

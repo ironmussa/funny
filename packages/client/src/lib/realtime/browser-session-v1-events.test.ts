@@ -4,6 +4,7 @@ import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import {
   BrowserSessionController,
   BrowserSessionMessageSchema,
+  BrowserSessionAgentActionKind,
   BrowserSessionPointerKind,
   type BrowserSessionMessage,
 } from '@funny/shared/browser-v1/interactive';
@@ -87,6 +88,22 @@ describe('browserSessionEventFromV1', () => {
       'pointer',
       { case: 'pointer', value: { x: 10, y: 20, kind: BrowserSessionPointerKind.CLICK } },
       { type: 'browser-session:pointer', data: { sessionId: 's1', x: 10, y: 20, kind: 'click' } },
+    ],
+    [
+      'agent action with a point and a detail',
+      {
+        case: 'agentAction',
+        value: { kind: BrowserSessionAgentActionKind.PRESS, x: 4, y: 5, detail: 'Enter' },
+      },
+      {
+        type: 'browser-session:agent-action',
+        data: { sessionId: 's1', kind: 'press', x: 4, y: 5, detail: 'Enter' },
+      },
+    ],
+    [
+      'agent action on the whole page',
+      { case: 'agentAction', value: { kind: BrowserSessionAgentActionKind.SCREENSHOT } },
+      { type: 'browser-session:agent-action', data: { sessionId: 's1', kind: 'screenshot' } },
     ],
     [
       'close',

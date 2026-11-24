@@ -443,6 +443,40 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     expect(pointers()).toEqual([expect.objectContaining({ x: 40, y: 50, kind: 'move' })]);
   }, 60_000);
 
+  test('actions tell the panel what the agent does', async () => {
+    unwrap(await browserOpen(ctx, { url: `${base}/login` }));
+    const emitToUser = mocked(wsBroker.emitToUser);
+    const actions = () =>
+      emitToUser.mock.calls
+        .map(([, event]) => event)
+        .filter((event) => event.type === 'browser-session:agent-action')
+        .map((event) => event.data);
+
+    emitToUser.mockClear();
+    const snap = allText(unwrap(await browserSnapshot(ctx, { screenshot: true })));
+    expect(actions()).toEqual([expect.objectContaining({ kind: 'screenshot' })]);
+    expect(actions()[0]).not.toHaveProperty('x');
+
+    const email = refOf(snap, /textbox "Email" \[ref=(e\d+)\]/);
+    emitToUser.mockClear();
+    unwrap(await browserAct(ctx, { action: 'press', ref: email, key: 'Enter' }));
+    const [press] = actions();
+    expect(press).toMatchObject({ kind: 'press', detail: 'Enter' });
+    expect(press.x).toBeGreaterThan(0);
+
+    emitToUser.mockClear();
+    unwrap(await browserAct(ctx, { action: 'scroll', x: 30, y: 40, deltaY: 200 }));
+    expect(actions()).toEqual([
+      expect.objectContaining({ kind: 'scroll', x: 30, y: 40, deltaX: 0, deltaY: 200 }),
+    ]);
+
+    emitToUser.mockClear();
+    unwrap(await browserAct(ctx, { action: 'drag', x: 10, y: 20, to: { x: 110, y: 120 } }));
+    expect(actions()).toEqual([
+      expect.objectContaining({ kind: 'drag', x: 10, y: 20, toX: 110, toY: 120 }),
+    ]);
+  }, 60_000);
+
   test('navigations tell the panel the new URL', async () => {
     unwrap(await browserOpen(ctx, { url: `${base}/login` }));
     const snap = allText(unwrap(await browserSnapshot(ctx, {})));

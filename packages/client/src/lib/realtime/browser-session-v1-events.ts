@@ -1,4 +1,5 @@
 import {
+  BrowserSessionAgentActionKind,
   BrowserSessionController,
   BrowserSessionPointerKind,
   type BrowserSessionMessage,
@@ -21,6 +22,20 @@ const POINTER_KINDS: Partial<Record<BrowserSessionPointerKind, string>> = {
   [BrowserSessionPointerKind.CLICK]: 'click',
   [BrowserSessionPointerKind.DOWN]: 'down',
   [BrowserSessionPointerKind.UP]: 'up',
+};
+
+const AGENT_ACTION_KINDS: Partial<Record<BrowserSessionAgentActionKind, string>> = {
+  [BrowserSessionAgentActionKind.CLICK]: 'click',
+  [BrowserSessionAgentActionKind.DOUBLE_CLICK]: 'double_click',
+  [BrowserSessionAgentActionKind.HOVER]: 'hover',
+  [BrowserSessionAgentActionKind.TYPE]: 'type',
+  [BrowserSessionAgentActionKind.FILL]: 'fill',
+  [BrowserSessionAgentActionKind.SELECT]: 'select',
+  [BrowserSessionAgentActionKind.PRESS]: 'press',
+  [BrowserSessionAgentActionKind.SCROLL]: 'scroll',
+  [BrowserSessionAgentActionKind.DRAG]: 'drag',
+  [BrowserSessionAgentActionKind.UPLOAD]: 'upload',
+  [BrowserSessionAgentActionKind.SCREENSHOT]: 'screenshot',
 };
 
 type PayloadCase = NonNullable<BrowserSessionMessage['payload']['case']>;
@@ -83,6 +98,27 @@ function pointerEvent(
   return kind
     ? { type: 'browser-session:pointer', data: { sessionId, x: value.x, y: value.y, kind } }
     : null;
+}
+
+function agentActionEvent(
+  sessionId: string,
+  value: PayloadValue<'agentAction'>,
+): BrowserSessionRealtimeEvent | null {
+  const kind = AGENT_ACTION_KINDS[value.kind];
+  if (!kind) return null;
+  // Optional proto fields arrive as `undefined` when unset: keep them out.
+  const fields = {
+    x: value.x,
+    y: value.y,
+    toX: value.toX,
+    toY: value.toY,
+    deltaX: value.deltaX,
+    deltaY: value.deltaY,
+    detail: value.detail,
+  };
+  const data: Record<string, unknown> = { sessionId, kind };
+  for (const [key, field] of Object.entries(fields)) if (field !== undefined) data[key] = field;
+  return { type: 'browser-session:agent-action', data };
 }
 
 function resultEvent(
@@ -156,6 +192,8 @@ export function browserSessionEventFromV1(
       return { type: 'browser-session:audio', data: { sessionId, muted: payload.value.muted } };
     case 'pointer':
       return pointerEvent(sessionId, payload.value);
+    case 'agentAction':
+      return agentActionEvent(sessionId, payload.value);
     case 'result':
       return resultEvent(sessionId, payload.value, requestId);
     case 'status':

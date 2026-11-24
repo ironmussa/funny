@@ -19,6 +19,7 @@ import {
   StatusSchema,
 } from '@funny/shared/browser-v1/common';
 import {
+  BrowserSessionAgentActionKind,
   BrowserSessionController,
   BrowserSessionPointerKind,
   InteractiveEnvelopeSchema,
@@ -144,6 +145,38 @@ const POINTER_KINDS: Record<string, BrowserSessionPointerKind> = {
   down: BrowserSessionPointerKind.DOWN,
   up: BrowserSessionPointerKind.UP,
 };
+
+const AGENT_ACTION_KINDS: Record<string, BrowserSessionAgentActionKind> = {
+  click: BrowserSessionAgentActionKind.CLICK,
+  double_click: BrowserSessionAgentActionKind.DOUBLE_CLICK,
+  hover: BrowserSessionAgentActionKind.HOVER,
+  type: BrowserSessionAgentActionKind.TYPE,
+  fill: BrowserSessionAgentActionKind.FILL,
+  select: BrowserSessionAgentActionKind.SELECT,
+  press: BrowserSessionAgentActionKind.PRESS,
+  scroll: BrowserSessionAgentActionKind.SCROLL,
+  drag: BrowserSessionAgentActionKind.DRAG,
+  upload: BrowserSessionAgentActionKind.UPLOAD,
+  screenshot: BrowserSessionAgentActionKind.SCREENSHOT,
+};
+
+/** A whole pixel, or absent when the runner did not send a number. */
+function optionalPixel(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
+}
+
+function agentActionValue(data: Record<string, unknown>) {
+  return {
+    kind: AGENT_ACTION_KINDS[String(data.kind)] ?? BrowserSessionAgentActionKind.UNSPECIFIED,
+    x: optionalPixel(data.x),
+    y: optionalPixel(data.y),
+    toX: optionalPixel(data.toX),
+    toY: optionalPixel(data.toY),
+    deltaX: optionalPixel(data.deltaX),
+    deltaY: optionalPixel(data.deltaY),
+    detail: typeof data.detail === 'string' ? data.detail.slice(0, 80) : undefined,
+  };
+}
 
 function viewportOf(value: unknown): { width: number; height: number } | undefined {
   if (!value || typeof value !== 'object') return undefined;
@@ -309,6 +342,10 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
         },
         VOLATILE,
       ),
+  ],
+  [
+    'browser-session:agent-action',
+    ({ data }) => sessionMapping({ case: 'agentAction', value: agentActionValue(data) }, VOLATILE),
   ],
   [
     'browser-session:result',

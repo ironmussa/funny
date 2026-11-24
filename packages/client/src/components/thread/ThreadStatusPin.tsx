@@ -142,32 +142,6 @@ export function ThreadStatusPin({
   );
 }
 
-/**
- * A thread's status as every list shows it: its factory activity while a run
- * works on it, otherwise its display status (runner offline included). Without
- * the pin and unread affordances of `ThreadStatusPin`. A theme that shows dots
- * swaps them in inside a `.status-glyph-dots` container.
- */
-export function ThreadStatusIndicator({
-  thread,
-  withTooltip = false,
-}: {
-  thread: Thread;
-  withTooltip?: boolean;
-}) {
-  const runnerStatus = useRunnerStatusStore((s) => s.status);
-  const displayStatus = getDisplayThreadStatus(thread.status, runnerStatus);
-  const activity = useThreadActivity(thread);
-  return (
-    <ThreadStatusGlyph
-      thread={thread}
-      displayStatus={displayStatus}
-      activity={activity}
-      withTooltip={withTooltip}
-    />
-  );
-}
-
 function ThreadStatusGlyph({
   thread,
   displayStatus,

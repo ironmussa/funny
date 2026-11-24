@@ -108,7 +108,7 @@ function lastActivity(threads: Thread[]): string {
  * agent is working, then the rest with threads by latest activity, then the
  * ones no thread works in. Stable within each rank.
  */
-export function orderWorktrees(
+function orderWorktrees(
   worktrees: WorktreeInfo[],
   threadsByWorktree: Map<string, Thread[]>,
 ): WorktreeInfo[] {

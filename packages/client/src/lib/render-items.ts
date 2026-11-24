@@ -98,20 +98,37 @@ export function clipEventsToMessageWindow(
   };
 }
 
+/** When a tool item happened: its call, or the first call of its group. */
+function toolItemTimestamp(item: ToolItem): string | undefined {
+  return item.type === 'toolcall' ? item.tc.timestamp : item.calls[0]?.timestamp;
+}
+
 /** Get timestamp for a render item (used for chronological interleaving with events) */
 export function getItemTimestamp(item: RenderItem): string {
-  if (item.type === 'message') return item.msg.timestamp || '';
-  if (item.type === 'thread-event') return item.event.createdAt || '';
-  if (item.type === 'compaction-event') return item.event.timestamp || '';
-  if (item.type === 'toolcall') return item.tc.timestamp || '';
-  if (item.type === 'toolcall-group') return item.calls[0]?.timestamp || '';
-  if (item.type === 'toolcall-run') {
-    const first = item.items[0];
-    return first.type === 'toolcall' ? first.tc.timestamp || '' : first.calls[0]?.timestamp || '';
+  return rawItemTimestamp(item) || '';
+}
+
+function rawItemTimestamp(item: RenderItem): string | null | undefined {
+  if (isToolItem(item)) return toolItemTimestamp(item);
+  if (item.type === 'toolcall-run') return toolItemTimestamp(item.items[0]);
+  return eventItemTimestamp(item);
+}
+
+function eventItemTimestamp(
+  item: Exclude<RenderItem, ToolItem | { type: 'toolcall-run' }>,
+): string | null | undefined {
+  switch (item.type) {
+    case 'message':
+      return item.msg.timestamp;
+    case 'thread-event':
+      return item.event.createdAt;
+    case 'compaction-event':
+      return item.event.timestamp;
+    case 'workflow-event-group':
+      return item.events[0]?.createdAt;
+    case 'factory-card':
+      return item.card.at;
   }
-  if (item.type === 'workflow-event-group') return item.events[0]?.createdAt || '';
-  if (item.type === 'factory-card') return item.card.at || '';
-  return '';
 }
 
 /** Get a stable key for a render item */

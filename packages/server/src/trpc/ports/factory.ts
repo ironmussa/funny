@@ -156,6 +156,179 @@ function recordRunControl(
   );
 }
 
+/** The services the port answers with; the defaults are the server's. */
+interface PortDeps {
+  settings: ReturnType<typeof createFactorySettingsService>;
+  runs: ReturnType<typeof createFactoryRunsRepository>;
+  control: ReturnType<typeof createFactoryRunControl>;
+  queue: ReturnType<typeof createFactoryQueue>;
+  incidents: ReturnType<typeof createFactoryIncidentsRepository>;
+}
+
+/** The caller's factory for the project; 404 with `missing` when they have none. */
+function factoryOf(deps: PortDeps, userId: string, projectId: string, missing: string) {
+  return deps.settings
+    .factoryId(userId, projectId)
+    .mapErr(settingsFailure)
+    .andThen((factoryId) =>
+      factoryId ? okAsync(factoryId) : errAsync<string, ApiFailure>(failure(404, missing)),
+    );
+}
+
+const configuredFactory = (deps: PortDeps, userId: string, projectId: string) =>
+  factoryOf(deps, userId, projectId, 'Set up the issue factory first.');
+
+/** The caller's settings with the incident that pauses their factory, when one does. */
+function settingsWithIncident(deps: PortDeps, userId: string, projectId: string) {
+  const { settings, incidents } = deps;
+  return settings
+    .get(userId, projectId)
+    .mapErr(settingsFailure)
+    .andThen((view) => {
+      if (!view) return okAsync(null);
+      return settings
+        .factoryId(userId, projectId)
+        .mapErr(settingsFailure)
+        .andThen((factoryId) =>
+          factoryId ? incidents.activeForFactory(factoryId).mapErr(storageFailure) : okAsync(null),
+        )
+        .map((incident) => ({ ...view, incident: incident ? publicIncident(incident) : null }));
+    });
+}
+
+/** Audit a queue action and pass its result on. */
+const audited =
+  <T>(
+    action:
+      | 'factory.issues_sent'
+      | 'factory.queue_ci_proposed'
+      | 'factory.queue_cleared'
+      | 'factory.stopped_all'
+      | 'factory.trigger_saved'
+      | 'factory.trigger_removed'
+      | 'factory.flow_started',
+    userId: string,
+    detail: (result: T) => string,
+    meta: (result: T) => Record<string, unknown>,
+  ) =>
+  (result: T): T => {
+    audit({ action, actorId: userId, detail: detail(result), meta: meta(result) });
+    return result;
+  };
+
+/**
+ * A member's control over one run (stop, retry, approve a held merge): run,
+ * audited, and shown in their activities whether it worked or not
+ * (track-funny-actions).
+ */
+function controlled(
+  deps: PortDeps,
+  action: RunControlAction,
+  userId: string,
+  projectId: string,
+  runId: string,
+): ResultAsync<FactoryRunView, ApiFailure> {
+  const { control, runs } = deps;
+  return factoryOf(deps, userId, projectId, 'Run not found')
+    .andThen((factoryId) => {
+      const run = {
+        stop: () => control.stop(userId, factoryId, runId).map(withoutSha),
+        retry: () => control.retry(factoryId, runId).map(withoutSha),
+        'approve-merge': () => control.approveMerge(userId, factoryId, runId),
+      }[action];
+      return run().mapErr(controlFailure);
+    })
+    .andTee(({ run, sha }) => {
+      audit({
+        action: RUN_CONTROL[action].audit,
+        actorId: userId,
+        detail: RUN_CONTROL[action].auditDetail(factoryRunLabel(run), sha),
+        meta: { projectId, runId, issueNumber: run.issueNumber, ...(sha && { sha }) },
+      });
+      void recordRunControl(action, userId, projectId, run.issueNumber, sha, { ok: true });
+    })
+    .orTee((error) => {
+      // The run's issue, when the run can still be read, names the failed action.
+      void runs.get(runId).map((run) =>
+        recordRunControl(action, userId, projectId, run?.issueNumber, null, {
+          ok: false,
+          error: error.message,
+        }),
+      );
+    })
+    .map(({ run }) => run);
+}
+
+/** Close the factory's open incident, unblock it and answer the settings that hold now. */
+function closeIncident(deps: PortDeps, userId: string, projectId: string) {
+  const { incidents } = deps;
+  return configuredFactory(deps, userId, projectId)
+    .andThen((factoryId) =>
+      incidents
+        .activeForFactory(factoryId)
+        .mapErr(storageFailure)
+        .andThen((incident) =>
+          incident
+            ? okAsync({ factoryId, incident })
+            : errAsync<never, ApiFailure>(failure(404, 'No incident is open for this factory.')),
+        ),
+    )
+    .andThen(({ factoryId, incident }) =>
+      incidents
+        .close(incident.id, userId)
+        .mapErr(storageFailure)
+        .map(() => {
+          audit({
+            action: 'factory.incident_closed',
+            actorId: userId,
+            detail: `Incident on ${incident.baseBranch} of ${incident.repo} closed by a member`,
+            meta: { projectId, incidentId: incident.id, repo: incident.repo },
+          });
+          return factoryId;
+        }),
+    )
+    .andThen((factoryId) =>
+      // The reason the watcher wrote goes with the incident; the next tick writes what holds now.
+      ResultAsync.fromSafePromise(
+        setFactoryBlocked(factoryId, null).then(() => reschedule(factoryId, projectId)),
+      ),
+    )
+    .andThen(() => settingsWithIncident(deps, userId, projectId))
+    .andThen((view) =>
+      view ? okAsync(view) : errAsync<never, ApiFailure>(failure(404, 'Factory not found')),
+    );
+}
+
+/** Save the settings, reschedule the watcher, and answer them with any open incident. */
+async function saveSettings(
+  deps: PortDeps,
+  userId: string,
+  projectId: string,
+  data: Parameters<FactoryPort['save']>[2],
+) {
+  const { settings, incidents } = deps;
+  const saved = await settings.save(userId, projectId, data).mapErr(settingsFailure);
+  if (saved.isErr()) return saved;
+  audit({
+    action: 'factory.settings_set',
+    actorId: userId,
+    detail: `Project ${projectId} factory ${saved.value.enabled ? 'enabled' : 'disabled'}`,
+    meta: {
+      projectId,
+      enabled: saved.value.enabled,
+      mode: saved.value.mode,
+      label: saved.value.label,
+    },
+  });
+  const factoryId = await settings.factoryId(userId, projectId);
+  if (factoryId.isOk() && factoryId.value) await reschedule(factoryId.value, projectId);
+  // An open incident stays shown after a save: the answer carries it too.
+  const incident =
+    factoryId.isOk() && factoryId.value ? await incidents.activeForFactory(factoryId.value) : null;
+  const paused = incident?.isOk() && incident.value ? publicIncident(incident.value) : null;
+  return saved.map((view) => ({ ...view, incident: paused }));
+}
+
 function createFactoryPort(
   settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
@@ -163,177 +336,33 @@ function createFactoryPort(
   queue = createFactoryQueue({ runs, control }),
   incidents = createFactoryIncidentsRepository(),
 ): FactoryPort {
-  /** The caller's factory for the project; 404 with `missing` when they have none. */
-  const factoryOf = (userId: string, projectId: string, missing: string) =>
-    settings
-      .factoryId(userId, projectId)
-      .mapErr(settingsFailure)
-      .andThen((factoryId) =>
-        factoryId ? okAsync(factoryId) : errAsync<string, ApiFailure>(failure(404, missing)),
-      );
-  const ownFactory = (userId: string, projectId: string) =>
-    factoryOf(userId, projectId, 'Run not found');
+  const deps: PortDeps = { settings, runs, control, queue, incidents };
   const configured = (userId: string, projectId: string) =>
-    factoryOf(userId, projectId, 'Set up the issue factory first.');
-
-  /** The caller's settings with the incident that pauses their factory, when one does. */
-  const settingsWithIncident = (userId: string, projectId: string) =>
-    settings
-      .get(userId, projectId)
-      .mapErr(settingsFailure)
-      .andThen((view) => {
-        if (!view) return okAsync(null);
-        return settings
-          .factoryId(userId, projectId)
-          .mapErr(settingsFailure)
-          .andThen((factoryId) =>
-            factoryId
-              ? incidents.activeForFactory(factoryId).mapErr(storageFailure)
-              : okAsync(null),
-          )
-          .map((incident) => ({ ...view, incident: incident ? publicIncident(incident) : null }));
-      });
-
-  /** Audit a queue action and pass its result on. */
-  const audited =
-    <T>(
-      action:
-        | 'factory.issues_sent'
-        | 'factory.queue_ci_proposed'
-        | 'factory.queue_cleared'
-        | 'factory.stopped_all'
-        | 'factory.trigger_saved'
-        | 'factory.trigger_removed'
-        | 'factory.flow_started',
-      userId: string,
-      detail: (result: T) => string,
-      meta: (result: T) => Record<string, unknown>,
-    ) =>
-    (result: T): T => {
-      audit({ action, actorId: userId, detail: detail(result), meta: meta(result) });
-      return result;
-    };
-
-  /**
-   * A member's control over one run (stop, retry, approve a held merge): run,
-   * audited, and shown in their activities whether it worked or not
-   * (track-funny-actions).
-   */
-  const controlled = (
-    action: RunControlAction,
-    userId: string,
-    projectId: string,
-    runId: string,
-  ): ResultAsync<FactoryRunView, ApiFailure> =>
-    ownFactory(userId, projectId)
-      .andThen((factoryId) => {
-        const run = {
-          stop: () => control.stop(userId, factoryId, runId).map(withoutSha),
-          retry: () => control.retry(factoryId, runId).map(withoutSha),
-          'approve-merge': () => control.approveMerge(userId, factoryId, runId),
-        }[action];
-        return run().mapErr(controlFailure);
-      })
-      .andTee(({ run, sha }) => {
-        audit({
-          action: RUN_CONTROL[action].audit,
-          actorId: userId,
-          detail: RUN_CONTROL[action].auditDetail(factoryRunLabel(run), sha),
-          meta: { projectId, runId, issueNumber: run.issueNumber, ...(sha && { sha }) },
-        });
-        void recordRunControl(action, userId, projectId, run.issueNumber, sha, { ok: true });
-      })
-      .orTee((error) => {
-        // The run's issue, when the run can still be read, names the failed action.
-        void runs.get(runId).map((run) =>
-          recordRunControl(action, userId, projectId, run?.issueNumber, null, {
-            ok: false,
-            error: error.message,
-          }),
-        );
-      })
-      .map(({ run }) => run);
+    configuredFactory(deps, userId, projectId);
 
   return {
     async settings(userId, projectId) {
-      return settingsWithIncident(userId, projectId);
+      return settingsWithIncident(deps, userId, projectId);
     },
 
     async closeIncident(userId, projectId) {
-      return configured(userId, projectId)
-        .andThen((factoryId) =>
-          incidents
-            .activeForFactory(factoryId)
-            .mapErr(storageFailure)
-            .andThen((incident) =>
-              incident
-                ? okAsync({ factoryId, incident })
-                : errAsync<never, ApiFailure>(
-                    failure(404, 'No incident is open for this factory.'),
-                  ),
-            ),
-        )
-        .andThen(({ factoryId, incident }) =>
-          incidents
-            .close(incident.id, userId)
-            .mapErr(storageFailure)
-            .map(() => {
-              audit({
-                action: 'factory.incident_closed',
-                actorId: userId,
-                detail: `Incident on ${incident.baseBranch} of ${incident.repo} closed by a member`,
-                meta: { projectId, incidentId: incident.id, repo: incident.repo },
-              });
-              return factoryId;
-            }),
-        )
-        .andThen((factoryId) =>
-          // The reason the watcher wrote goes with the incident; the next tick writes what holds now.
-          ResultAsync.fromSafePromise(
-            setFactoryBlocked(factoryId, null).then(() => reschedule(factoryId, projectId)),
-          ),
-        )
-        .andThen(() => settingsWithIncident(userId, projectId))
-        .andThen((view) =>
-          view ? okAsync(view) : errAsync<never, ApiFailure>(failure(404, 'Factory not found')),
-        );
+      return closeIncident(deps, userId, projectId);
     },
 
     async save(userId, projectId, data) {
-      const saved = await settings.save(userId, projectId, data).mapErr(settingsFailure);
-      if (saved.isErr()) return saved;
-      audit({
-        action: 'factory.settings_set',
-        actorId: userId,
-        detail: `Project ${projectId} factory ${saved.value.enabled ? 'enabled' : 'disabled'}`,
-        meta: {
-          projectId,
-          enabled: saved.value.enabled,
-          mode: saved.value.mode,
-          label: saved.value.label,
-        },
-      });
-      const factoryId = await settings.factoryId(userId, projectId);
-      if (factoryId.isOk() && factoryId.value) await reschedule(factoryId.value, projectId);
-      // An open incident stays shown after a save: the answer carries it too.
-      const incident =
-        factoryId.isOk() && factoryId.value
-          ? await incidents.activeForFactory(factoryId.value)
-          : null;
-      const paused = incident?.isOk() && incident.value ? publicIncident(incident.value) : null;
-      return saved.map((view) => ({ ...view, incident: paused }));
+      return saveSettings(deps, userId, projectId, data);
     },
 
     async stopRun(userId, projectId, runId) {
-      return controlled('stop', userId, projectId, runId);
+      return controlled(deps, 'stop', userId, projectId, runId);
     },
 
     async retryRun(userId, projectId, runId) {
-      return controlled('retry', userId, projectId, runId);
+      return controlled(deps, 'retry', userId, projectId, runId);
     },
 
     async approveMerge(userId, projectId, runId) {
-      return controlled('approve-merge', userId, projectId, runId);
+      return controlled(deps, 'approve-merge', userId, projectId, runId);
     },
 
     async submitIssues(userId, projectId, input) {

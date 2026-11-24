@@ -40,8 +40,20 @@ const step = (
   thread,
 });
 
-const run = (over: Partial<FactoryRun>) =>
-  buildFactoryRun({ startedAt: hoursAgo(10), admittedAt: hoursAgo(9), completedAt: null, ...over });
+// Each run its own id and issue: the board places runs by id, and a later run
+// of the same issue supersedes an ended one.
+let runs = 0;
+const run = (over: Partial<FactoryRun>) => {
+  runs += 1;
+  return buildFactoryRun({
+    id: `run-${runs}`,
+    issueNumber: runs,
+    startedAt: hoursAgo(10),
+    admittedAt: hoursAgo(9),
+    completedAt: null,
+    ...over,
+  });
+};
 
 describe('summarizeFactoryHealth', () => {
   test('counts what is in flight, waiting for a person and merged in the last day', () => {

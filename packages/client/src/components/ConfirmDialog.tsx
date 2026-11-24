@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -17,8 +18,8 @@ export interface ConfirmDialogProps {
   onOpenChange?: (open: boolean) => void;
   title: string;
   description: string;
-  /** Optional warning banner (e.g. worktree deletion warning) */
-  warning?: string;
+  /** Optional warning banner (e.g. worktree deletion warning); a node for a list of several. */
+  warning?: ReactNode;
   /** Label for the cancel button */
   cancelLabel?: string;
   /** Label for the confirm button */
@@ -45,10 +46,11 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-sm">
+      {/* One column that may shrink: a long path in the text wraps instead of widening the dialog. */}
+      <AlertDialogContent className="max-w-sm grid-cols-[minmax(0,1fr)]">
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription className="break-all">{description}</AlertDialogDescription>
+          <AlertDialogDescription className="break-words">{description}</AlertDialogDescription>
         </AlertDialogHeader>
         {warning && (
           <Alert
@@ -56,7 +58,7 @@ export function ConfirmDialog({
             className="border-status-warning/30 bg-status-warning/10 text-status-warning [&>svg]:text-status-warning"
           >
             <AlertTriangle className="icon-base" />
-            <AlertDescription className="text-xs">{warning}</AlertDescription>
+            <AlertDescription className="min-w-0 text-xs break-words">{warning}</AlertDescription>
           </Alert>
         )}
         <AlertDialogFooter>

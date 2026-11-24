@@ -36,7 +36,9 @@ export type BrowserSessionInputKind =
   /** Answer the pending JavaScript dialog (`accept`, optional `promptText`). */
   | 'dialog'
   /** Turn the page's audio on or off (`muted`). Sessions start muted. */
-  | 'audio';
+  | 'audio'
+  /** Resize the page viewport from the panel (`width`, `height`), e.g. to a phone size. */
+  | 'viewport';
 
 export interface WSBrowserSessionInputData {
   sessionId: string;
@@ -68,6 +70,9 @@ export interface WSBrowserSessionInputData {
   promptText?: string;
   /** For `audio`: mute (true) or unmute (false) the page. */
   muted?: boolean;
+  /** For `viewport`: the new page viewport size in CSS pixels. */
+  width?: number;
+  height?: number;
 }
 
 export interface WSBrowserSessionInspectAtData {

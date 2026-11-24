@@ -1,5 +1,5 @@
-/** The factory view's Active filter and list / board switch (openspec factory-pipeline-board). */
-import { KanbanSquare, List } from 'lucide-react';
+/** The factory view's Active filter and list / board / analytics switch (openspec factory-pipeline-board). */
+import { BarChart3, KanbanSquare, List } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -41,6 +41,7 @@ export function FactoryLayoutToggle({
   const { t } = useTranslation();
   const list = t('factoryView.layoutList', 'List');
   const board = t('factoryView.layoutBoard', 'Board');
+  const analytics = t('factoryView.layoutAnalytics', 'Analytics');
   return (
     <ToggleGroup
       type="single"
@@ -48,7 +49,7 @@ export function FactoryLayoutToggle({
       variant="outline"
       value={layout}
       onValueChange={(value) => {
-        if (value === 'list' || value === 'board') onChange(value);
+        if (value === 'list' || value === 'board' || value === 'analytics') onChange(value);
       }}
     >
       <ToggleGroupItem
@@ -66,6 +67,14 @@ export function FactoryLayoutToggle({
         data-testid="factory-view-layout-board"
       >
         <KanbanSquare className="icon-sm" />
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="analytics"
+        aria-label={analytics}
+        title={analytics}
+        data-testid="factory-view-layout-analytics"
+      >
+        <BarChart3 className="icon-sm" />
       </ToggleGroupItem>
     </ToggleGroup>
   );

@@ -34,10 +34,13 @@ const DEFAULT_FORM = {
   maxConcurrent: 2,
   autoMerge: 'low_risk' as FactorySettings['autoMerge'],
   sensitivePaths: [] as string[],
+  maxLowRiskLines: 400,
+  sizeIgnoredPaths: [] as string[],
   stageLimits: {} as Record<string, number>,
   stepOverrides: {} as FactorySettings['stepOverrides'],
   batch: { size: 5, waitSeconds: 60 } as FactorySettings['batch'],
   dependencies: 'wait' as FactorySettings['dependencies'],
+  tooBig: 'ask' as FactorySettings['tooBig'],
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
@@ -45,6 +48,7 @@ function formValues(settings: FactorySettings | null | undefined) {
   if (!settings) return DEFAULT_FORM;
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
   const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch, dependencies } = settings;
+  const { maxLowRiskLines, sizeIgnoredPaths, tooBig } = settings;
   return {
     enabled,
     mode,
@@ -53,10 +57,13 @@ function formValues(settings: FactorySettings | null | undefined) {
     maxConcurrent,
     autoMerge,
     sensitivePaths,
+    maxLowRiskLines,
+    sizeIgnoredPaths,
     stageLimits,
     stepOverrides,
     batch,
     dependencies,
+    tooBig,
   };
 }
 

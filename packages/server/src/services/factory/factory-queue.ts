@@ -64,7 +64,7 @@ import {
   readinessOf,
   readWorkflowFiles,
 } from './factory-readiness.js';
-import { createFactoryRunControl } from './factory-run-control.js';
+import { createFactoryRunControl, releaseStoppedIssue } from './factory-run-control.js';
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
 import {
   getWatchedFactory,
@@ -107,6 +107,8 @@ export interface FactoryQueueDeps {
   /** Look at the factory now instead of at its next poll. */
   wake?: (factoryId: string) => Promise<void>;
   triggers?: FactoryTriggersRepository;
+  /** Take the factory's label off the issue of a labelled run taken out of the queue. */
+  releaseIssue?: (run: FactoryRunView) => Promise<void>;
 }
 
 const NOT_RUNNING_HERE = 'The issue factory is not running on this server.';
@@ -202,6 +204,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const loadFactory = deps.factory ?? getWatchedFactory;
   const wake = deps.wake ?? pokeFactory;
   const triggers = deps.triggers ?? createFactoryTriggersRepository();
+  const release = deps.releaseIssue ?? releaseStoppedIssue;
 
   /** The factory and where it runs now, or why a send cannot go in. */
   async function workingFactory(
@@ -265,6 +268,21 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     );
     if (accepted.length > 0) wakeFactory(factoryId);
     return ok({ accepted, refused: [...refused, ...queued.value.duplicates.map(alreadyIn)] });
+  }
+
+  /**
+   * Take every waiting run out of the queue; the ids taken out. An issue the
+   * factory queued by its label loses the label, as a stopped run's does, so
+   * the next poll does not queue it again.
+   */
+  function emptyQueue(factoryId: string) {
+    return runs.queue(factoryId).andThen((waiting) =>
+      runs.cancel(factoryId).andThen((ids) => {
+        const taken = new Set(ids);
+        const released = waiting.filter((run) => taken.has(run.id)).map(release);
+        return ResultAsync.fromSafePromise(Promise.all(released)).map(() => ids);
+      }),
+    );
   }
 
   /** Look at the factory now instead of at its next poll; best-effort. */
@@ -653,8 +671,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
 
     /** Remove every waiting issue from the queue; runs in progress go on. */
     clearQueue(factoryId: string): ResultAsync<FactoryQueueClearResult, FactoryQueueError> {
-      return runs
-        .cancel(factoryId)
+      return emptyQueue(factoryId)
         .mapErr((e): FactoryQueueError => ({ kind: 'storage', message: e.message }))
         .map((ids) => ({ cleared: ids.length, stopped: 0 }));
     },
@@ -668,8 +685,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
         kind: 'storage',
         message: e.message,
       });
-      return runs
-        .cancel(factoryId)
+      return emptyQueue(factoryId)
         .mapErr(storage)
         .andThen((cleared) =>
           runs

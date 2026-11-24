@@ -18,6 +18,13 @@ import { useProjectStore } from '@/stores/project-store';
 
 import { SettingAnchor, SettingRow } from './settings/SettingRow';
 
+type PromptField =
+  | 'reviewerPrompt'
+  | 'correctorPrompt'
+  | 'precommitFixerPrompt'
+  | 'commitMessagePrompt'
+  | 'testFixerPrompt';
+
 /** Model selector matching the PromptInput pattern — grouped by provider */
 const ModelSelect = memo(function ModelSelect({
   value,
@@ -179,10 +186,9 @@ export function PipelineSettings() {
   );
 
   // Save prompt on blur
-  const handlePromptBlur = (field: string, value: string) => {
+  const handlePromptBlur = (field: PromptField, value: string) => {
     if (!pipeline) return;
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    const currentValue = (pipeline as unknown as Record<string, unknown>)[field] ?? '';
+    const currentValue = pipeline[field] ?? '';
     if (value !== currentValue) {
       saveField({ [field]: value || null });
     }
@@ -232,7 +238,7 @@ export function PipelineSettings() {
               description="Model for auto-fixing lint errors"
             >
               <ModelSelect
-                value={(pipeline.precommitFixModel as string) || 'sonnet'}
+                value={pipeline.precommitFixModel || 'sonnet'}
                 onChange={handlePrecommitFixModelChange}
                 testId="pipeline-precommit-model"
               />
@@ -282,7 +288,7 @@ export function PipelineSettings() {
               description="Model for analyzing code (read-only)"
             >
               <ModelSelect
-                value={(pipeline.reviewModel as string) || 'sonnet'}
+                value={pipeline.reviewModel || 'sonnet'}
                 onChange={handleReviewModelChange}
                 testId="pipeline-review-model"
               />
@@ -293,7 +299,7 @@ export function PipelineSettings() {
               description="Model for fixing issues (worktree)"
             >
               <ModelSelect
-                value={(pipeline.fixModel as string) || 'sonnet'}
+                value={pipeline.fixModel || 'sonnet'}
                 onChange={handleFixModelChange}
                 testId="pipeline-fix-model"
               />
@@ -369,7 +375,7 @@ export function PipelineSettings() {
                   description="Model for fixing test failures"
                 >
                   <ModelSelect
-                    value={(pipeline.testFixModel as string) || 'sonnet'}
+                    value={pipeline.testFixModel || 'sonnet'}
                     onChange={handleTestFixModelChange}
                     testId="pipeline-test-fix-model"
                   />

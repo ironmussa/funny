@@ -58,6 +58,9 @@ export function readPackageJson(pkgDir: string): Record<string, any> | null {
   try {
     const pkgPath = join(pkgDir, 'package.json');
     if (!existsSync(pkgPath)) return null;
+    // SAFETY: a valid package.json is a JSON object (npm's format); invalid
+    // JSON throws and returns null below. A non-object value is not checked
+    // here, so callers get it as-is, as before.
     return JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<string, any>;
   } catch {
     return null;

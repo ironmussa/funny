@@ -359,6 +359,9 @@ reads the role's prose as a decision:
   flight.
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
+  A run the factory took by its label has that label taken off its issue (`releaseStoppedIssue`
+  in `factory-run-control.ts`), so automatic mode does not admit it again; putting the label back
+  admits it.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
   branch and PR; a completed implement step is kept, later steps run again. Refused (409) while
   the factory already runs `maxConcurrent` runs. A `no_change` run (or one parked with reason `no change`)

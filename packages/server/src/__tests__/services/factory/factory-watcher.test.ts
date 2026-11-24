@@ -165,7 +165,7 @@ type FakeGithub = FactoryGithubPort & {
   merges: number;
   comments: Array<{ issue: number; body: string }>;
   /** Label swaps on issues (a run that ended with no change). */
-  relabels: Array<{ issue: number; remove?: string; add: string }>;
+  relabels: Array<{ issue: number; remove?: string; add?: string }>;
   checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
 };
@@ -186,7 +186,9 @@ function fakeGithub(
     checks: [],
     prLookups: [],
     resolveRepo: async () => repo,
-    listReadyIssues: () => okAsync(issues),
+    // An issue whose label was taken off is no longer listed, as on GitHub.
+    listReadyIssues: () =>
+      okAsync(issues.filter((i) => !port.relabels.some((r) => r.issue === i.number && r.remove))),
     getIssue: (_reader: unknown, number: number) =>
       script.issuesUnreadable
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
@@ -226,7 +228,7 @@ function fakeGithub(
     issueText: (_reader: unknown, issue: number) =>
       okAsync({ title: `Issue ${issue}`, body: `The text of issue ${issue}.`, comments: [] }),
     revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
-    relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add: string }) => {
+    relabelIssue: (_reader: unknown, issue: number, labels: { remove?: string; add?: string }) => {
       port.relabels.push({ issue, ...labels });
       return okAsync(undefined);
     },
@@ -2341,7 +2343,7 @@ describe('factory operator controls', () => {
 
   test('stopping a run ends it and its flow does not go on', async () => {
     const factoryId = await enableFactory();
-    const { poll, launcher } = await watch();
+    const { poll, launcher, github } = await watch();
     await poll.ticks[0]!();
     const running = await eventually(factoryId, (r) => r.state === 'working');
 
@@ -2351,6 +2353,10 @@ describe('factory operator controls', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     const [after] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
     expect(after!.state).toBe('stopped');
+    expect(launcher.calls).toHaveLength(1);
+    // Found in the E2E: the label stayed on, and automatic mode took the issue again.
+    expect(github.relabels).toContainEqual({ issue: 7, remove: 'ready-for-agent' });
+    await poll.ticks[0]!();
     expect(launcher.calls).toHaveLength(1);
     // Stopping twice is refused: the run already ended.
     const again = await createFactoryRunControl().stop('alice', factoryId, running.id);

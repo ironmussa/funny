@@ -6,11 +6,13 @@
 // It runs the repository's linter (`bun lint`, through scripts/bun-lint.ts),
 // which only exists from Bun 1.4.6; on an older Bun (the CI test shards) it
 // is skipped, and the CI lint job, on canary, still runs the linter itself.
+// It lives in core, where most of the fixes are, so the core suite runs it.
 import { describe, expect, test } from 'bun:test';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOT = join(import.meta.dir, '..', '..');
+// packages/core/src/__tests__ → the repository root.
+const ROOT = join(import.meta.dir, '..', '..', '..', '..');
 const HAS_BUN_LINT = Bun.semver.order(Bun.version, '1.4.6') >= 0;
 const OUT_OF_SCOPE = /^(client.*|server|runtime)$/;
 

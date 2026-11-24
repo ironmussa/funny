@@ -8,22 +8,22 @@
  * Groups by type, includes confidence and age, enforces token budget.
  */
 
-import type { MemoryFact, OperatorProfile } from './types.js';
+import type { FactType, MemoryFact, OperatorProfile } from './types.js';
 
 // ─── Configuration ─────────────────────────────────────
 
 const MAX_CHARS = 8000; // ~2000 tokens at ~4 chars/token
 
-const TYPE_LABELS: Record<string, string> = {
+const TYPE_LABELS = {
   decision: 'Decisions',
   bug: 'Known Issues',
   pattern: 'Patterns',
   convention: 'Conventions',
   insight: 'Insights',
   context: 'Active Context',
-};
+} satisfies Record<FactType, string>;
 
-const TYPE_ORDER = ['decision', 'bug', 'pattern', 'convention', 'insight', 'context'];
+const TYPE_ORDER: FactType[] = ['decision', 'bug', 'pattern', 'convention', 'insight', 'context'];
 
 // ─── Main formatter ────────────────────────────────────
 

@@ -42,6 +42,8 @@ export function resolveSort(
   kind: 'pulls' | 'search',
 ): { sort: string; direction: string } {
   const commentSort = kind === 'pulls' ? 'popularity' : 'comments';
+  // SAFETY: only lets the case labels be checked against PRSortKey; a key outside it (or
+  // undefined) matches no case and takes the `default` branch.
   switch (key as PRSortKey) {
     case 'oldest':
       return { sort: 'created', direction: 'asc' };
@@ -156,6 +158,8 @@ async function anonymousPRList(
   );
   if (!res.ok) return { status: res.status };
   const prs = await addLastCommitToPRs(
+    // SAFETY: GitHub REST GET /repos/{o}/{r}/pulls answers an array of pull requests (res.ok
+    // above), the shape GitHubPR describes.
     (await res.json()) as GitHubPR[],
     owner,
     repo,
@@ -237,6 +241,8 @@ prRoutes.get('/prs-search', async (c) => {
       return c.json({ error: `GitHub API error: ${res.status}` }, 502);
     }
 
+    // SAFETY: GitHub REST GET /search/issues response (res.ok above); `items` is checked with
+    // Array.isArray below and each goes through mapSearchItemToPR.
     const body = (await res.json()) as { total_count: number; items: any[] };
     const items = Array.isArray(body.items) ? body.items : [];
     const prs = items.map(mapSearchItemToPR);
@@ -295,9 +301,13 @@ prRoutes.get('/pr-filter-options', async (c) => {
       fetchPath(`/repos/${owner}/${repo}/assignees?per_page=100`),
     ]);
 
+    // SAFETY: GitHub REST GET /labels answers an array of labels when ok; only `name` and
+    // `color` are read.
     const labels = labelsRes.ok
       ? ((await labelsRes.json()) as any[]).map((l) => ({ name: l.name, color: l.color }))
       : [];
+    // SAFETY: GitHub REST GET /assignees answers an array of users when ok; only `login` and
+    // `avatar_url` are read.
     const users: GitHubUserRef[] = usersRes.ok
       ? ((await usersRes.json()) as any[]).map((u) => ({
           login: u.login,
@@ -384,6 +394,8 @@ async function mergePullRequest(
     });
 
     if (!res.ok) {
+      // SAFETY: GitHub REST error body (or {} when it is not JSON); only the optional `message`
+      // is read, with a fallback text.
       const body = (await res.json().catch(() => ({}))) as { message?: string };
       const message = body.message || `GitHub API error: ${res.status}`;
       // 405 = not mergeable, 409 = head changed/merge conflict — surface as 409
@@ -391,6 +403,8 @@ async function mergePullRequest(
       return c.json({ error: message }, status);
     }
 
+    // SAFETY: GitHub REST PUT /pulls/{n}/merge success response (res.ok above); its documented
+    // `sha`, `merged` and `message` are relayed unchanged.
     const data = (await res.json()) as { sha: string; merged: boolean; message: string };
     return c.json({ merged: data.merged, sha: data.sha, message: data.message });
   } catch (error: any) {

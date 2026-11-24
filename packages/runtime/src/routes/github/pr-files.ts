@@ -57,7 +57,10 @@ prFileRoutes.get('/pr-files', async (c) => {
       if (!res.ok) {
         return c.json({ error: `GitHub API error: ${res.status}` }, 502);
       }
+      // SAFETY: GitHub REST GET /commits/{sha} response (res.ok above); `files` is its documented
+      // array of changed files, falling back to [], and each goes through mapPrFile.
       const data = (await res.json()) as any;
+      // SAFETY: `files` of the commit response above is an array of file objects (or absent).
       return c.json({ files: ((data.files as any[]) ?? []).map(mapPrFile) });
     }
 
@@ -129,7 +132,10 @@ prFileRoutes.get('/commit-authors', async (c) => {
           },
         });
     if (!res.ok) return c.json({ authors: [] });
+    // SAFETY: GitHub REST GET /pulls/{n}/commits answers an array of commits (res.ok above).
     const data = (await res.json()) as any[];
+    // SAFETY: commit objects from that response carry `sha` and an optional `author` with
+    // `login` / `avatar_url` strings; entries missing sha or avatar are filtered out below.
     const authors = data
       .map((c: any) => ({
         sha: c.sha as string,
@@ -162,6 +168,8 @@ prFileRoutes.get('/pr-file-content', async (c) => {
     if (!prRes.ok) {
       return c.json({ error: `Failed to fetch PR: ${prRes.status}` }, 502);
     }
+    // SAFETY: GitHub REST GET /pulls/{n} response (prRes.ok above); only `base.ref` and
+    // `head.ref` are read, with optional chaining.
     const prData = (await prRes.json()) as any;
     const baseRef = prData.base?.ref;
     const headRef = prData.head?.ref;
@@ -231,6 +239,8 @@ async function revertPullRequestFile(
     if (!prRes.ok) {
       return c.json({ error: `Failed to fetch PR: ${prRes.status}` }, 502);
     }
+    // SAFETY: GitHub REST GET /pulls/{n} response (prRes.ok above); only `base.ref` and
+    // `head.ref` are read, with optional chaining.
     const prData = (await prRes.json()) as any;
     const baseRef = prData.base?.ref;
     const headRef = prData.head?.ref;
@@ -251,6 +261,8 @@ async function revertPullRequestFile(
     if (!baseFileRes.ok) {
       return c.json({ error: `Failed to fetch base file: ${baseFileRes.status}` }, 502);
     }
+    // SAFETY: GitHub REST GET /contents/{path} for a file (ok above); only its base64 `content`
+    // is passed on, as before.
     const baseFileData = (await baseFileRes.json()) as any;
     return restoreBaseFile(c, file, baseRef, baseFileData.content);
   } catch (error: any) {
@@ -274,6 +286,8 @@ async function headFileSha(c: Context<HonoEnv>, f: PullRequestFile): Promise<str
   );
   if (res.status === 404) return c.json({ error: 'File not found on head branch' }, 404);
   if (!res.ok) return c.json({ error: `Failed to fetch head file: ${res.status}` }, 502);
+  // SAFETY: GitHub REST GET /contents/{path} for a file (res.ok above) carries its blob `sha`;
+  // the caller checks it is a string.
   return ((await res.json()) as any).sha;
 }
 
@@ -297,6 +311,8 @@ async function writeHeadFile(
     },
   );
   if (!res.ok) {
+    // SAFETY: GitHub REST error body (or {} when it is not JSON); only the optional `message`
+    // is read, with a fallback text.
     const errBody = (await res.json().catch(() => ({}))) as any;
     const verb = method === 'DELETE' ? 'delete' : 'update';
     return c.json({ error: errBody.message || `Failed to ${verb} file: ${res.status}` }, 502);

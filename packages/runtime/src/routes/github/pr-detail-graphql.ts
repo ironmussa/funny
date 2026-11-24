@@ -138,6 +138,8 @@ function mapCheckRun(run: CheckRunNode, appName: string | null): CICheck {
     id: run.databaseId,
     name: run.name,
     status: checkStatus(run.status),
+    // SAFETY: GitHub GraphQL CheckConclusionState is the upper-case form of the REST
+    // conclusions CICheckConclusion lists; lower-casing it gives one of them (or null).
     conclusion: (run.conclusion?.toLowerCase() ?? null) as CICheck['conclusion'],
     html_url: run.url,
     started_at: run.startedAt,
@@ -146,13 +148,13 @@ function mapCheckRun(run: CheckRunNode, appName: string | null): CICheck {
   };
 }
 
-const PASSING_CONCLUSIONS = new Set(['success', 'neutral', 'skipped']);
+const PASSING_CONCLUSIONS = new Set<CICheck['conclusion']>(['success', 'neutral', 'skipped']);
 
 function tallyChecks(checks: CICheck[]) {
   const tally = { passed: 0, failed: 0, pending: 0 };
   for (const ck of checks) {
     if (ck.status !== 'completed') tally.pending++;
-    else if (PASSING_CONCLUSIONS.has(ck.conclusion as string)) tally.passed++;
+    else if (PASSING_CONCLUSIONS.has(ck.conclusion)) tally.passed++;
     else tally.failed++;
   }
   return tally;

@@ -68,7 +68,9 @@ repoRoutes.get('/repos', async (c) => {
       if (!userRes.ok) {
         return c.json({ error: 'Failed to fetch GitHub user for search' }, 502);
       }
+      // SAFETY: GitHub REST GET /user response (userRes.ok above); only `login` is read.
       const user = (await userRes.json()) as { login: string };
+      // SAFETY: GitHub REST GET /user/orgs answers an array of orgs when ok; only `login` is read.
       const orgLogins: string[] = orgsRes.ok
         ? ((await orgsRes.json()) as Array<{ login: string }>).map((o) => o.login)
         : [];
@@ -88,6 +90,8 @@ repoRoutes.get('/repos', async (c) => {
       if (!searchRes.ok) {
         return c.json({ error: 'GitHub search failed' }, 502);
       }
+      // SAFETY: GitHub REST GET /search/repositories response (searchRes.ok above); `items` are
+      // repository objects as GitHubRepo describes, relayed to the client.
       const data = (await searchRes.json()) as { items: GitHubRepo[]; total_count: number };
       repos = data.items;
       hasMore = data.total_count > page * perPage;
@@ -100,6 +104,8 @@ repoRoutes.get('/repos', async (c) => {
       if (!res.ok) {
         return c.json({ error: 'Failed to fetch repos' }, 502);
       }
+      // SAFETY: GitHub REST GET /user/repos answers an array of repositories (res.ok above), the
+      // shape GitHubRepo describes, relayed to the client.
       repos = (await res.json()) as GitHubRepo[];
       // GitHub uses Link header for pagination
       const linkHeader = res.headers.get('Link') || '';

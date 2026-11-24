@@ -101,6 +101,8 @@ prThreadRoutes.get('/pr-threads', async (c) => {
       return c.json({ error: `GitHub API error: ${res.status}` }, 502);
     }
 
+    // SAFETY: GitHub REST GET /pulls/{n}/comments answers an array of review comments (res.ok
+    // above); fields are read with optional chaining and defaults below.
     const rawComments = (await res.json()) as any[];
 
     // Group comments into threads: root comments (no in_reply_to_id) start threads,
@@ -222,7 +224,9 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
     if (!commentsRes.ok) return c.json({ error: `GitHub API error: ${commentsRes.status}` }, 502);
     if (!reviewsRes.ok) return c.json({ error: `GitHub API error: ${reviewsRes.status}` }, 502);
 
+    // SAFETY: GitHub REST GET /issues/{n}/comments answers an array of comments (ok above).
     const rawComments = (await commentsRes.json()) as any[];
+    // SAFETY: GitHub REST GET /pulls/{n}/reviews answers an array of reviews (ok above).
     const rawReviews = (await reviewsRes.json()) as any[];
 
     const comments: PRIssueComment[] = rawComments.map(mapIssueComment);
@@ -234,6 +238,8 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
         author: rv.user?.login ?? '',
         author_avatar_url: rv.user?.avatar_url ?? '',
         body: rv.body ?? '',
+        // SAFETY: GitHub REST review `state` is one of APPROVED / CHANGES_REQUESTED / COMMENTED /
+        // DISMISSED (PENDING filtered out above), the values PRReview['state'] lists.
         state: (rv.state ?? 'COMMENTED') as PRReview['state'],
         submitted_at: rv.submitted_at ?? '',
         html_url: rv.html_url ?? '',
@@ -297,6 +303,8 @@ prThreadRoutes.post('/pr-review-reply', async (c) => {
       { body: raw.body },
     );
     if (!res.ok) return githubErrorWithBody(c, res);
+    // SAFETY: GitHub REST POST .../replies answers the created review comment (res.ok above);
+    // its fields are read with defaults below.
     const cm = (await res.json()) as any;
     const comment: PRThreadComment = {
       id: cm.id,
@@ -363,6 +371,8 @@ prThreadRoutes.post('/pr-reaction', async (c) => {
   try {
     const res = await sendGithubJson(path, ctx.token, 'POST', { content: raw.content });
     if (!res.ok) return githubErrorWithBody(c, res);
+    // SAFETY: GitHub REST POST .../reactions answers the reaction (res.ok above); its
+    // documented `id` and `content` are relayed unchanged.
     const reaction = (await res.json()) as { id: number; content: string };
     return c.json({ id: reaction.id, content: reaction.content });
   } catch (error: any) {
@@ -387,6 +397,8 @@ prThreadRoutes.patch('/pr-comment', async (c) => {
   try {
     const res = await sendGithubJson(path, ctx.token, 'PATCH', { body: raw.body });
     if (!res.ok) return githubErrorWithBody(c, res);
+    // SAFETY: GitHub REST PATCH of a comment answers the updated comment (res.ok above); its
+    // fields are read with defaults and mapReactions.
     const cm = (await res.json()) as any;
     return c.json({
       id: cm.id,

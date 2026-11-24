@@ -82,7 +82,7 @@ const positiveInt = z.coerce.number().int().positive();
  */
 export function positiveIntParam(c: Context, name: string): number {
   const parsed = parseQuery(c, z.object({ [name]: positiveInt }));
-  return parsed.isOk() ? (parsed.value[name] as number) : 0;
+  return parsed.isOk() ? parsed.value[name] : 0;
 }
 
 /** `kind` of a PR comment, or `undefined` when missing or not one of the two kinds. */

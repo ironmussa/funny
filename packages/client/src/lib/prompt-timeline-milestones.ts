@@ -55,7 +55,12 @@ const END_LABELS: Partial<Record<ThreadStatus, string>> = {
   stopped: 'Stopped',
 };
 
-const TOOL_CALL_TYPES: Record<string, MilestoneType> = {
+/** Milestone types, keyed by tool name. */
+interface MilestoneTypeByTool {
+  [toolName: string]: MilestoneType;
+}
+
+const TOOL_CALL_TYPES: MilestoneTypeByTool = {
   TodoWrite: 'todo',
   AskUserQuestion: 'question',
   ExitPlanMode: 'plan',

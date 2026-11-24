@@ -49,7 +49,12 @@ function openProjectWorktrees(activity: Activity, deps: RetryDeps): boolean {
   return true;
 }
 
-const RETRY_TARGETS: Record<string, RetryTarget> = {
+/** Retry handlers, keyed by activity kind. */
+interface RetryTargets {
+  [kind: string]: RetryTarget;
+}
+
+const RETRY_TARGETS: RetryTargets = {
   'project.clone': (activity, deps) => {
     const parsed = ACTIVITY_KINDS['project.clone'].input.safeParse(activity.input);
     if (!parsed.success) return false;

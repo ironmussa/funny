@@ -2,7 +2,12 @@ import { isMarkdownFile } from '@/lib/markdown-file';
 
 export type MediaKind = 'image' | 'audio' | 'video' | 'pdf' | 'markdown' | 'text' | 'unknown';
 
-const EXT_TO_KIND: Record<string, MediaKind> = {
+/** Media kinds, keyed by lower-case file extension. */
+interface MediaKindByExtension {
+  [extension: string]: MediaKind;
+}
+
+const EXT_TO_KIND: MediaKindByExtension = {
   png: 'image',
   jpg: 'image',
   jpeg: 'image',

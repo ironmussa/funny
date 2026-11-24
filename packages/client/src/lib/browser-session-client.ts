@@ -100,7 +100,12 @@ function sendRequest(
 
 type RealtimeFrame = Parameters<typeof sendBrowserSessionRealtime>[1];
 
-const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) => RealtimeFrame> = {
+/** Builders of the frames sent without waiting for an answer, keyed by message type. */
+interface FireAndForgetFrames {
+  [type: string]: (extra: Record<string, unknown>) => RealtimeFrame;
+}
+
+const FIRE_AND_FORGET_FRAMES: FireAndForgetFrames = {
   'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
   'browser-session:navigate': (extra) => ({
     case: 'navigate',

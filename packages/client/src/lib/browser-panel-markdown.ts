@@ -2,7 +2,12 @@ import type { ImageAttachment } from '@funny/shared';
 
 import type { Annotation } from '@/stores/browser-panel-store';
 
-const COLOR_NAMES: Record<string, string> = {
+/** Annotation color names, keyed by lower-case hex color. */
+interface ColorNames {
+  [hex: string]: string;
+}
+
+const COLOR_NAMES: ColorNames = {
   '#ef4444': 'red',
   '#f59e0b': 'amber',
   '#22c55e': 'green',

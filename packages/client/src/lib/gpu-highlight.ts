@@ -7,7 +7,12 @@ let unavailable = false;
 // The package shares GPU buffers, so do not overlap inference calls.
 let queue: Promise<unknown> = Promise.resolve();
 
-const classes: Record<string, string> = {
+/** highlight.js class names, keyed by GPU span type. */
+interface SpanClasses {
+  [spanType: string]: string;
+}
+
+const classes: SpanClasses = {
   comment: 'hljs-comment',
   string: 'hljs-string',
   number: 'hljs-number',

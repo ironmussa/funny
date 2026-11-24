@@ -5,7 +5,12 @@ addCollection(vscodeIcons);
 
 const DEFAULT_FILE_ICON = 'vscode-icons:default-file';
 
-const FILE_NAME_ICON_MAP: Record<string, string> = {
+/** Iconify icon names, keyed by file name or extension. */
+interface IconMap {
+  [key: string]: string;
+}
+
+const FILE_NAME_ICON_MAP: IconMap = {
   '.dockerignore': 'vscode-icons:file-type-docker',
   '.env': 'vscode-icons:file-type-dotenv',
   '.gitattributes': 'vscode-icons:file-type-git',
@@ -24,7 +29,7 @@ const FILE_NAME_ICON_MAP: Record<string, string> = {
   'tsconfig.json': 'vscode-icons:file-type-tsconfig',
 };
 
-const FILE_EXTENSION_ICON_MAP: Record<string, string> = {
+const FILE_EXTENSION_ICON_MAP: IconMap = {
   cjs: 'vscode-icons:file-type-js',
   css: 'vscode-icons:file-type-css',
   go: 'vscode-icons:file-type-go',

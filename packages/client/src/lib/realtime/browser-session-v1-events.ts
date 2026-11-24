@@ -116,7 +116,9 @@ function agentActionEvent(
     deltaY: value.deltaY,
     detail: value.detail,
   };
-  const data: Record<string, unknown> = { sessionId, kind };
+  const data: Record<string, unknown> = {};
+  data.sessionId = sessionId;
+  data.kind = kind;
   for (const [key, field] of Object.entries(fields)) if (field !== undefined) data[key] = field;
   return { type: 'browser-session:agent-action', data };
 }

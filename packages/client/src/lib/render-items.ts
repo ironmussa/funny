@@ -74,6 +74,12 @@ function messageTimeRange(messages: any[]): { min: string; max: string } | null 
   return min ? { min, max } : null;
 }
 
+/** The thread and compaction events that fall inside the loaded message window. */
+interface WindowEvents {
+  threadEvents?: ThreadEvent[];
+  compactionEvents?: CompactionEvent[];
+}
+
 /**
  * Keep only the events whose timestamp falls inside the loaded message window.
  * With the full history loaded every event is kept.
@@ -83,7 +89,7 @@ export function clipEventsToMessageWindow(
   threadEvents: ThreadEvent[] | undefined,
   compactionEvents: CompactionEvent[] | undefined,
   bounds: MessageWindowBounds | undefined,
-): { threadEvents?: ThreadEvent[]; compactionEvents?: CompactionEvent[] } {
+): WindowEvents {
   if (!bounds?.hasOlder && !bounds?.hasNewer) return { threadEvents, compactionEvents };
   const range = messageTimeRange(messages);
   // Nothing to anchor the events to yet — show none until messages load.

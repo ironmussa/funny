@@ -161,8 +161,13 @@ export const gitSyncStateConfig: Record<
   clean: { icon: CheckCircle2, className: 'text-muted-foreground', labelKey: 'gitStatus.clean' },
 };
 
+/** Friendly model keys, keyed by full model ID. */
+interface ModelKeyById {
+  [modelId: string]: string;
+}
+
 /** Map full model IDs (from Claude SDK / Gemini CLI) back to friendly keys used in translations. */
-const MODEL_ID_TO_KEY: Record<string, string> = {
+const MODEL_ID_TO_KEY: ModelKeyById = {
   'claude-opus-4-6': 'opus',
   'claude-opus-4-6[1m]': 'opus',
   'claude-opus-4-7': 'opus47',

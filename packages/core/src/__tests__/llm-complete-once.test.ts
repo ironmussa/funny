@@ -1,7 +1,15 @@
 import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
 
-import { completeOnce } from '../agents/llm/complete.js';
+import type { CompleteOnceOptions } from '../agents/llm/complete.js';
 import { ModelFactory } from '../agents/llm/model-factory.js';
+
+// Loaded at test time, so a missing module fails an assertion, not the file load.
+const completeModule = await import('../agents/llm/complete.js').catch(() => undefined);
+
+function completeOnce(options: CompleteOnceOptions) {
+  expect(completeModule?.completeOnce).toBeFunction();
+  return completeModule!.completeOnce(options);
+}
 
 interface Seen {
   path: string;

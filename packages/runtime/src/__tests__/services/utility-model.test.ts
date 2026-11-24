@@ -16,7 +16,15 @@ mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ profile: { getProviderKey: h.getProviderKey } }),
 }));
 
-import { runUtilityGeneration } from '../../services/utility-model.js';
+import type { UtilityGenerationOptions } from '../../services/utility-model.js';
+
+// Loaded at test time, so a missing module fails an assertion, not the file load.
+const utilityModule = await import('../../services/utility-model.js').catch(() => undefined);
+
+function runUtilityGeneration(options: UtilityGenerationOptions) {
+  expect(utilityModule?.runUtilityGeneration).toBeFunction();
+  return utilityModule!.runUtilityGeneration(options);
+}
 
 const base = { userId: 'user-1', system: 'sys', prompt: 'hello' };
 

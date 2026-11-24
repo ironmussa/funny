@@ -60,9 +60,14 @@ function UsageRing({ clamped }: { clamped: number }) {
   );
 }
 
+/** True for a number value. */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 /** Tokens used and left, when both counts are known. */
 function TokenLine({ usedTokens, maxTokens }: { usedTokens?: number; maxTokens?: number }) {
-  if (typeof usedTokens !== 'number' || typeof maxTokens !== 'number' || maxTokens <= 0) {
+  if (!isNumber(usedTokens) || !isNumber(maxTokens) || maxTokens <= 0) {
     return null;
   }
   return (

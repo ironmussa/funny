@@ -53,6 +53,17 @@ function useSidebar() {
   return context;
 }
 
+function isOpenUpdater(
+  value: boolean | ((value: boolean) => boolean),
+): value is (value: boolean) => boolean {
+  return typeof value === 'function';
+}
+
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -97,7 +108,7 @@ function SidebarProvider({
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === 'function' ? value(open) : value;
+      const openState = isOpenUpdater(value) ? value(open) : value;
       if (setOpenProp) {
         setOpenProp(openState);
       } else {
@@ -655,7 +666,7 @@ function SidebarMenuButton({
     return button;
   }
 
-  if (typeof tooltip === 'string') {
+  if (isString(tooltip)) {
     tooltip = {
       children: tooltip,
     };

@@ -40,6 +40,15 @@ interface Refs {
   streamRef: RefObject<MessageStreamHandle | null>;
 }
 
+function isUpdater(value: SetStateAction<boolean>): value is (prev: boolean) => boolean {
+  return typeof value === 'function';
+}
+
+/** True for a number value. */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 /**
  * Messaging-only logic for ThreadChatView: send, stop, permission approval,
  * tool respond. Fork / rewind / fork-and-rewind live in
@@ -52,7 +61,7 @@ export function useThreadHandlers(refs: Refs) {
   const inFlightRef = useRef(false);
 
   const setSendingSafely = useCallback((value: SetStateAction<boolean>) => {
-    const next = typeof value === 'function' ? value(inFlightRef.current) : value;
+    const next = isUpdater(value) ? value(inFlightRef.current) : value;
     inFlightRef.current = next;
     setSending(next);
   }, []);
@@ -213,7 +222,7 @@ export function useThreadHandlers(refs: Refs) {
 }
 
 function applyQueuedCount(threadId: string, responseQueuedCount: unknown) {
-  if (typeof responseQueuedCount !== 'number') return;
+  if (!isNumber(responseQueuedCount)) return;
   applyQueueCount(threadId, responseQueuedCount);
 }
 

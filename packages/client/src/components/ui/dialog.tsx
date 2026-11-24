@@ -33,6 +33,8 @@ function DialogContent({
   overlayClassName,
   flush = false,
   square = false,
+  compact = false,
+  instant = false,
   children,
   ref,
   ...props
@@ -44,10 +46,19 @@ function DialogContent({
   flush?: boolean;
   /** Square corners for a full-screen dialog: always, or only below the `md` breakpoint. */
   square?: boolean | 'below-md';
+  /** Tighter padding and gap (16px / 12px) for a preview dialog. */
+  compact?: boolean;
+  /** Open and close at once, with no fade or zoom on the content or the overlay. */
+  instant?: boolean;
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay className={overlayClassName} />
+      <DialogOverlay
+        className={cn(
+          instant && 'data-[state=closed]:animate-none data-[state=open]:animate-none',
+          overlayClassName,
+        )}
+      />
       <DialogPrimitive.Content
         ref={ref}
         aria-describedby={undefined}
@@ -56,6 +67,8 @@ function DialogContent({
           flush && 'gap-0 p-0',
           square === true && 'rounded-none',
           square === 'below-md' && 'rounded-none md:rounded-lg',
+          compact && 'gap-3 p-4',
+          instant && 'duration-0 data-[state=closed]:animate-none data-[state=open]:animate-none',
           className,
         )}
         {...props}
@@ -136,15 +149,23 @@ DialogHeader.displayName = 'DialogHeader';
 const DialogFooter = ({
   className,
   bordered = false,
+  spaced = false,
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & {
-  /** A footer section of a flush dialog: padded, with a rule above it (DialogHeader's `bordered`). */
-  bordered?: boolean;
+  /**
+   * A footer section of a flush dialog: padded, with a rule above it (DialogHeader's `bordered`).
+   * `roomy` pads 16px on every side.
+   */
+  bordered?: boolean | 'roomy';
+  /** An 8px gap between the buttons, on top of the desktop `space-x-2`. */
+  spaced?: boolean;
 }) => (
   <div
     className={cn(
       'flex flex-col-reverse pt-4 sm:flex-row sm:justify-end sm:space-x-2',
-      bordered && 'shrink-0 gap-2 border-t border-border px-4 py-3 sm:space-x-0',
+      bordered === true && 'shrink-0 gap-2 border-t border-border px-4 py-3 sm:space-x-0',
+      bordered === 'roomy' && 'border-t border-border p-4',
+      spaced && 'gap-2 sm:gap-2',
       className,
     )}
     {...props}
@@ -158,6 +179,8 @@ function DialogTitle({
   withIcon = false,
   mono = false,
   leading = 'none',
+  weight = 'semibold',
+  truncate = false,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title> & {
@@ -170,6 +193,10 @@ function DialogTitle({
   mono?: boolean;
   /** Line height for a title that may wrap (default `none`). */
   leading?: 'none' | 'tight' | 'snug';
+  /** `medium` for a file name as the title. */
+  weight?: 'semibold' | 'medium';
+  /** Clip a long title with an ellipsis. */
+  truncate?: boolean;
 }) {
   return (
     <DialogPrimitive.Title
@@ -181,6 +208,8 @@ function DialogTitle({
         mono && 'font-mono',
         leading === 'tight' && 'leading-tight',
         leading === 'snug' && 'leading-snug',
+        weight === 'medium' && 'font-medium',
+        truncate && 'truncate',
         className,
       )}
       {...props}

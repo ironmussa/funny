@@ -41,7 +41,14 @@ const buttonVariants = cva(
         'ghost-primary': 'text-primary hover:bg-accent hover:text-primary',
         // An outlined action that needs attention (a server that needs auth).
         'outline-warning':
-          'border border-status-warning/30 bg-background text-status-warning hover:bg-status-warning/10',
+          'border border-status-warning/30 bg-background text-status-warning hover:bg-status-warning/10 hover:text-accent-foreground',
+        // An outlined secondary action (cancel) that stays quiet until hovered.
+        'outline-muted':
+          'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground',
+        // A run action tinted green, brightening on hover.
+        'ghost-success-soft': 'text-status-success/80 hover:bg-accent hover:text-status-success',
+        // A red text action whose label turns neutral on hover (stop all).
+        'destructive-text': 'text-destructive hover:bg-accent hover:text-accent-foreground',
       },
       // Field heights / padding / text come from the shared control scale so a
       // text button lines up with an input or select of the same `size`. The
@@ -64,12 +71,28 @@ const buttonVariants = cva(
         'sm-tight': cn('h-8 px-2 text-sm', CONTROL_ICON.sm),
         // A full-height, square-cornered button in a tab strip.
         strip: cn('h-full rounded-none px-2.5 text-sm', CONTROL_ICON.sm),
+        // A 24px toolbar chip with tiny text (the grid size picker).
+        chip: cn('h-6 px-2 text-2xs', CONTROL_ICON.sm),
+        // A 24px square icon button inside a dense list row.
+        'icon-2xs': cn('size-6 p-0 text-sm', CONTROL_ICON.sm),
+      },
+      // The right half of a split control: square left corners, ruled off.
+      segment: {
+        none: '',
+        end: 'rounded-l-none border-l border-border',
+      },
+      // A picker trigger showing a value rather than an action label.
+      weight: {
+        default: '',
+        normal: 'font-normal',
       },
       // Row actions that stay hidden until the pointer is over the row (`group`).
       reveal: {
         none: '',
         hover: 'opacity-0 group-hover:opacity-100',
         'hover-fade': 'opacity-0 transition-opacity group-hover:opacity-100',
+        // Same, for a parent marked `group/col` (a live column).
+        'col-hover-fade': 'opacity-0 transition-opacity group-hover/col:opacity-100',
       },
       // Space between the icon and the label: tighter than the default 8px in
       // dense toolbars and chips.
@@ -84,6 +107,8 @@ const buttonVariants = cva(
       size: 'default',
       gap: 'default',
       reveal: 'none',
+      segment: 'none',
+      weight: 'default',
     },
   },
 );
@@ -100,6 +125,8 @@ function Button({
   size,
   gap,
   reveal,
+  segment,
+  weight,
   asChild = false,
   loading = false,
   children,
@@ -110,7 +137,7 @@ function Button({
   const Comp = asChild ? Slot : 'button';
   return (
     <Comp
-      className={cn(buttonVariants({ variant, size, gap, reveal, className }))}
+      className={cn(buttonVariants({ variant, size, gap, reveal, segment, weight, className }))}
       ref={ref}
       disabled={disabled || loading}
       {...props}

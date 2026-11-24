@@ -28,6 +28,7 @@ function TabsList({
   className,
   variant = 'default',
   size = 'default',
+  corners = 'default',
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
@@ -35,6 +36,8 @@ function TabsList({
   variant?: TabsVariant;
   /** `sm`: a 28px track for pane headers and compact dialogs. */
   size?: 'default' | 'sm';
+  /** `md`: the 6px corners of the controls around it. */
+  corners?: 'default' | 'md';
 }) {
   return (
     <TabsPrimitive.List
@@ -43,6 +46,7 @@ function TabsList({
         'inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
         size === 'sm' && 'h-7 p-0.5',
         TABS_LIST_VARIANT[variant],
+        corners === 'md' && 'rounded-md',
         className,
       )}
       {...props}
@@ -53,6 +57,7 @@ function TabsTrigger({
   className,
   variant = 'default',
   size = 'default',
+  focusRing = true,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
@@ -60,6 +65,8 @@ function TabsTrigger({
   variant?: TabsVariant;
   /** `sm`: a 24px tab for a `size="sm"` list, with a lighter active shadow. */
   size?: 'default' | 'sm';
+  /** `false` drops the focus ring (tabs inside a pane header that shows focus itself). */
+  focusRing?: boolean;
 }) {
   return (
     <TabsPrimitive.Trigger
@@ -68,6 +75,7 @@ function TabsTrigger({
         'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all hover:bg-muted-foreground/10 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm',
         size === 'sm' && 'h-6 px-2.5 data-[state=active]:shadow-xs',
         TABS_TRIGGER_VARIANT[variant],
+        !focusRing && 'focus-visible:ring-0',
         className,
       )}
       {...props}

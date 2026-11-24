@@ -19,21 +19,44 @@ const inputVariants = cva(
         'sm-tight': 'h-8 px-2 text-sm',
         // Grows with its text: the fields of the settings edit forms.
         form: 'h-auto px-3 py-1.5 text-sm',
+        // The edit-form field at the `xs` size.
+        'form-xs': 'h-auto px-2 py-1.5 text-xs',
+        // A 20px field edited in place (renaming a tab).
+        inline: 'h-5 px-1 py-0 text-xs',
       },
       // Paths, commands, branch names and other values read character by character.
       mono: {
         true: 'font-mono',
         false: '',
+        // The file explorer's monospace font.
+        explorer: 'font-mono-explorer',
       },
       // Room on the left for a search (or other) icon drawn over the field.
       inset: {
         none: '',
         icon: 'pl-8',
+        // A smaller leading icon.
+        'icon-sm': 'pl-7',
+        // A trailing button over the field (show password).
+        'icon-end': 'pr-10',
       },
       // Inline field drawn inside another control (a picker's search row).
       variant: {
         default: '',
         bare: 'rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0',
+        'bare-strong':
+          'rounded-none border-0 bg-transparent p-0 text-foreground shadow-none focus-visible:ring-0',
+      },
+      // A name the row is about (a group name), not a value.
+      weight: {
+        default: '',
+        medium: 'font-medium',
+      },
+      // A field on a phone: a 48px target, and 16px text so iOS Safari does not zoom in.
+      touch: {
+        // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
+        true: 'min-h-[48px] text-[16px]',
+        false: '',
       },
       // Text size only, keeping the size's height and padding.
       textSize: {
@@ -50,6 +73,8 @@ const inputVariants = cva(
       inset: 'none',
       variant: 'default',
       textSize: 'default',
+      weight: 'default',
+      touch: false,
     },
   },
 );
@@ -62,6 +87,8 @@ function Input({
   inset,
   variant,
   textSize,
+  weight,
+  touch,
   ref,
   ...props
 }: Omit<React.ComponentProps<'input'>, 'size'> &
@@ -69,7 +96,10 @@ function Input({
   return (
     <input
       type={type}
-      className={cn(inputVariants({ size, mono, inset, variant, textSize }), className)}
+      className={cn(
+        inputVariants({ size, mono, inset, variant, textSize, weight, touch }),
+        className,
+      )}
       ref={ref}
       {...props}
     />

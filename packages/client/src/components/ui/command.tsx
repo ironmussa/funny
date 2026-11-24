@@ -106,11 +106,18 @@ function CommandList({
 }
 const CommandEmpty = React.forwardRef<
   React.ComponentRef<typeof CommandPrimitive.Empty>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
->((props, ref) => (
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> & {
+    /** `xs` for pickers inside dense popovers. */
+    textSize?: 'default' | 'xs';
+  }
+>(({ className, textSize = 'default', ...props }, ref) => (
   <CommandPrimitive.Empty
     ref={ref}
-    className="text-muted-foreground py-6 text-center text-sm"
+    className={cn(
+      'text-muted-foreground py-6 text-center text-sm',
+      textSize === 'xs' && 'py-3 text-xs',
+      className,
+    )}
     {...props}
   />
 ));

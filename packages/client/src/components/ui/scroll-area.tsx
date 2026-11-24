@@ -13,6 +13,10 @@ const SCROLL_AREA_VARIANT = {
   'divided-end': 'border-r',
   // The output well of a failed step.
   destructive: 'rounded bg-destructive/5',
+  // A short list with a little room above and below it.
+  'inset-y': 'py-1',
+  // A log or console: small monospace text, inherited by everything inside.
+  code: 'font-mono text-xs',
 } as const;
 
 interface ScrollAreaProps extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {

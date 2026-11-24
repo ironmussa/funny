@@ -20,5 +20,8 @@ export const listRowTitleClassName = 'text-foreground text-xs leading-5 font-med
 export const listRowActionClassName =
   'text-muted-foreground hover:text-foreground shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 disabled:opacity-0 group-hover:disabled:opacity-50';
 
+/** A row action that deletes its row: the same reveal, red on hover. */
+export const listRowDestructiveActionClassName = `${listRowActionClassName} hover:text-destructive`;
+
 /** Keeps a row action on screen while it works (its spinner), even though it is disabled meanwhile. */
 export const listRowActionBusyClassName = 'opacity-100 disabled:opacity-100';

@@ -45,6 +45,7 @@ function ToggleGroupItem({
   children,
   variant,
   size,
+  truncate,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> &
@@ -60,6 +61,7 @@ function ToggleGroupItem({
         toggleVariants({
           variant: variant || context.variant,
           size: size || context.size,
+          truncate,
         }),
         className,
       )}

@@ -121,7 +121,7 @@ function AvatarFallback({
 }: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & {
   name?: string;
   /** Initials size: `xs` for the small avatars in lists and menus. Defaults to the inherited size. */
-  textSize?: 'default' | 'xs';
+  textSize?: 'default' | 'xs' | 'micro';
 } & {
   ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Fallback>>;
 }) {
@@ -132,6 +132,8 @@ function AvatarFallback({
         'flex h-full w-full items-center justify-center rounded-full',
         !name && 'bg-muted',
         textSize === 'xs' && 'text-xs',
+        // The 16px avatars on commit-graph nodes.
+        textSize === 'micro' && 'text-[0.5rem] font-semibold',
         className,
       )}
       style={

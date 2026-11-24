@@ -6,6 +6,7 @@ export const STATE_TEXT_CLASS = 'text-sm font-normal';
 export const STATE_PADDING = {
   sm: 'py-3',
   md: 'py-6',
+  roomy: 'py-8',
   lg: 'py-12',
 } as const;
 

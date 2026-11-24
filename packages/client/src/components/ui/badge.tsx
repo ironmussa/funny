@@ -26,6 +26,9 @@ const badgeVariants = cva(
         muted: 'border-transparent bg-muted text-muted-foreground hover:bg-secondary/80',
         // The muted pill with no hover: a label that does nothing when pointed at.
         subtle: 'border-transparent bg-muted text-muted-foreground',
+        // An outlined pill that reads as secondary (read-only).
+        'outline-muted':
+          'border-border text-muted-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
       },
       size: {
         default: 'px-2.5 py-0.5 text-base',
@@ -34,6 +37,8 @@ const badgeVariants = cva(
         xxs: 'px-1 py-0 text-2xs [&>svg]:size-2',
         // Status chips in dense panels (the background-activity list).
         '3xs': 'rounded px-1 py-0 text-3xs leading-none',
+        // A count beside a label (unread items).
+        count: 'px-1 py-0.5 text-base leading-none',
       },
       // A pill that labels metadata (a path, a filter) rather than a state.
       weight: {
@@ -55,6 +60,11 @@ const badgeVariants = cva(
         true: 'uppercase tracking-wider',
         false: '',
       },
+      // A chip that removes its item when clicked.
+      removable: {
+        true: 'cursor-pointer hover:bg-destructive/10 hover:text-status-error',
+        false: '',
+      },
     },
     defaultVariants: {
       variant: 'default',
@@ -63,6 +73,7 @@ const badgeVariants = cva(
       mono: false,
       corners: 'pill',
       caps: false,
+      removable: false,
     },
   },
 );
@@ -70,11 +81,24 @@ const badgeVariants = cva(
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, size, weight, mono, corners, caps, ...props }: BadgeProps) {
+function Badge({
+  className,
+  variant,
+  size,
+  weight,
+  mono,
+  corners,
+  caps,
+  removable,
+  ...props
+}: BadgeProps) {
   return (
     <div
       data-slot="badge"
-      className={cn(badgeVariants({ variant, size, weight, mono, corners, caps }), className)}
+      className={cn(
+        badgeVariants({ variant, size, weight, mono, corners, caps, removable }),
+        className,
+      )}
       {...props}
     />
   );

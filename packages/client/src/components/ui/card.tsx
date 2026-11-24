@@ -35,27 +35,51 @@ Card.displayName = 'Card';
 /** `sm`: 16px padding for the compact cards of a grid. */
 type CardSectionSize = { size?: 'default' | 'sm' };
 
-const CardHeader = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & CardSectionSize
->(({ className, size = 'default', ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn('flex flex-col space-y-1.5 p-6', size === 'sm' && 'p-4 pb-2', className)}
-    {...props}
-  />
-));
+type CardHeaderProps = React.HTMLAttributes<HTMLDivElement> &
+  CardSectionSize & {
+    /** `row`: the title block and the actions side by side. */
+    layout?: 'stack' | 'row';
+    /** `loose`: 8px between the stacked lines. */
+    spacing?: 'default' | 'loose';
+  };
+
+const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
+  ({ className, size = 'default', layout = 'stack', spacing = 'default', ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(
+        'flex flex-col space-y-1.5 p-6',
+        size === 'sm' && 'p-4 pb-2',
+        spacing === 'loose' && 'space-y-2',
+        layout === 'row' && 'flex-row items-start gap-3 space-y-0',
+        className,
+      )}
+      {...props}
+    />
+  ),
+);
 CardHeader.displayName = 'CardHeader';
+
+type CardTextProps = React.HTMLAttributes<HTMLDivElement> &
+  CardSectionSize & {
+    /** Clip to one line with an ellipsis. */
+    truncate?: boolean;
+  };
 
 const CardTitle = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & CardSectionSize
->(({ className, size = 'default', ...props }, ref) => (
+  CardTextProps & {
+    /** The item is off: the title fades to the muted color. */
+    muted?: boolean;
+  }
+>(({ className, size = 'default', truncate = false, muted = false, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
       'text-2xl font-semibold leading-none tracking-tight',
       size === 'sm' && 'text-sm font-medium leading-snug',
+      truncate && 'truncate',
+      muted && 'text-muted-foreground',
       className,
     )}
     {...props}
@@ -65,11 +89,20 @@ CardTitle.displayName = 'CardTitle';
 
 const CardDescription = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & CardSectionSize
->(({ className, size = 'default', ...props }, ref) => (
+  CardTextProps & {
+    /** Clamp a long description to three relaxed lines. */
+    clamp?: boolean;
+  }
+>(({ className, size = 'default', truncate = false, clamp = false, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('text-sm text-muted-foreground', size === 'sm' && 'text-xs', className)}
+    className={cn(
+      'text-sm text-muted-foreground',
+      size === 'sm' && 'text-xs',
+      truncate && 'truncate',
+      clamp && 'line-clamp-3 leading-relaxed',
+      className,
+    )}
     {...props}
   />
 ));
@@ -77,11 +110,20 @@ CardDescription.displayName = 'CardDescription';
 
 const CardFooter = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & CardSectionSize
->(({ className, size = 'default', ...props }, ref) => (
+  React.HTMLAttributes<HTMLDivElement> &
+    CardSectionSize & {
+      /** `stack`: full-width rows, 8px apart. */
+      layout?: 'row' | 'stack';
+    }
+>(({ className, size = 'default', layout = 'row', ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex items-center p-6 pt-0', size === 'sm' && 'p-4 pt-0', className)}
+    className={cn(
+      'flex items-center p-6 pt-0',
+      size === 'sm' && 'p-4 pt-0',
+      layout === 'stack' && 'flex-col items-stretch gap-2',
+      className,
+    )}
     {...props}
   />
 ));

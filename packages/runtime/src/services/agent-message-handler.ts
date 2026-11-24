@@ -7,116 +7,35 @@
  * @domain depends: AgentStateTracker, ThreadManager, WSBroker, ThreadEventBus
  */
 
-import { isAbsolute } from 'node:path';
-
 import type { CLIMessage } from '@funny/core/agents';
-import {
-  getStatusSummary,
-  deriveGitSyncState,
-  getDiffSummary,
-  getIgnoredFileStats,
-  getExternalRepoFileStats,
-} from '@funny/core/git';
-import type { FileDiffSummary, ThreadStatus, WaitingReason, WSEvent } from '@funny/shared';
-import { latestSessionChanges } from '@funny/shared';
+import type { ThreadStatus, WaitingReason, WSEvent } from '@funny/shared';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
-import { computeBranchKey } from '../utils/git-status-helpers.js';
+import {
+  emitGitStatus,
+  LATEST_TURN_WINDOW,
+  persistChangedFilesSummary,
+} from './agent-message-handler/changed-files-summary.js';
+import type { HandlerContext } from './agent-message-handler/context.js';
+import {
+  assistantUsage,
+  decodeUnicodeEscapes,
+  normalizeToolResultContent,
+  resultErrorFields,
+  resultEventType,
+  serializeToolInput,
+} from './agent-message-handler/message-helpers.js';
+import { applyToolUseWaitState } from './agent-message-handler/tool-use-wait.js';
 import { redactDeep } from './agent-startup/project-secrets.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { recordBashCheck } from './checks/bash-check-metric.js';
 import { flushPendingMessageUpdates } from './remote-thread-data-client.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
-import { canDoGitOps } from './thread-context.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
-
-/**
- * Decode literal Unicode escape sequences (\uXXXX) that may appear
- * in CLI output when the text was double-encoded or the CLI emits
- * escaped Unicode instead of raw UTF-8 characters.
- */
-function decodeUnicodeEscapes(str: string): string {
-  return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-}
-
-/**
- * Normalize a tool_result `content` field to a string. The Anthropic SDK may
- * deliver it as a plain string or as an array of content blocks
- * (`[{ type: 'text', text: '…' }, …]`). Image / non-text blocks are rendered
- * as a placeholder so callers always see a non-empty string when there is
- * any payload at all.
- */
-function normalizeToolResultContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((b: any) => {
-        if (typeof b === 'string') return b;
-        if (b && typeof b === 'object') {
-          if (typeof b.text === 'string') return b.text;
-          if (b.type === 'image') return '[image]';
-        }
-        return '';
-      })
-      .join('');
-  }
-  return '';
-}
-
-/**
- * Serialize a tool's input to a short string for client display in the
- * permission approval card. Bash gets its raw command; other tools get
- * a truncated JSON representation.
- */
-function serializeToolInput(toolName: string, input: unknown): string | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-  if (toolName === 'Bash' && 'command' in input && typeof (input as any).command === 'string') {
-    return (input as any).command as string;
-  }
-  try {
-    const s = JSON.stringify(input);
-    return s.length > 2000 ? s.slice(0, 2000) + '…' : s;
-  } catch {
-    return undefined;
-  }
-}
-
-type ResultMessage = CLIMessage & { type: 'result' };
-
-/** Machine event for a result: a wait wins, then success without a provider error. */
-function resultEventType(
-  isWaitingForUser: boolean,
-  subtype: ResultMessage['subtype'],
-  providerError: string | undefined,
-): 'WAIT' | 'COMPLETE' | 'FAIL' {
-  if (isWaitingForUser) return 'WAIT';
-  return subtype === 'success' && providerError === undefined ? 'COMPLETE' : 'FAIL';
-}
-
-/** `errorReason` + `error` for a failed result: the provider error, else the result or errors array. */
-function resultErrorFields(
-  msg: ResultMessage,
-  providerError: string | undefined,
-): { errorReason: string; error: string | undefined } {
-  if (providerError !== undefined) return { errorReason: 'provider_error', error: providerError };
-  const error = msg.result ? decodeUnicodeEscapes(msg.result) : (msg.errors?.[0] ?? undefined);
-  return { errorReason: msg.subtype, error };
-}
-
-/** Fill +/- for stat-less files from `stats`; files that already have stats are kept. */
-function backfillStats(
-  files: FileDiffSummary[],
-  stats: Map<string, { additions: number; deletions: number }>,
-): FileDiffSummary[] {
-  return files.map((f) => {
-    const s = f.additions == null ? stats.get(f.path) : undefined;
-    return s ? { ...f, additions: s.additions, deletions: s.deletions } : f;
-  });
-}
 
 /**
  * Handles all CLI messages from Claude processes — system init,
@@ -126,6 +45,8 @@ export type ProjectLookup = (id: string) => { path: string; [key: string]: any }
 
 export class AgentMessageHandler {
   private projectLookup: ProjectLookup | undefined;
+  /** This handler as the split-out modules use it. */
+  private readonly ctx: HandlerContext;
 
   constructor(
     private state: AgentStateTracker,
@@ -134,6 +55,13 @@ export class AgentMessageHandler {
     getProject?: ProjectLookup,
   ) {
     this.projectLookup = getProject;
+    this.ctx = {
+      state,
+      threadManager,
+      getProject: (id) => this.getProject(id),
+      emitWS: (threadId, type, data) => this.emitWS(threadId, type, data),
+      threadCtx: (threadId) => this.threadCtx(threadId),
+    };
   }
 
   /** Lazy-load project lookup to avoid importing the singleton DB in tests */
@@ -169,16 +97,6 @@ export class AgentMessageHandler {
         sessionId: '',
       };
     }
-  }
-
-  /** Tools that require user approval in confirmEdit mode */
-  private static readonly CONFIRM_EDIT_TOOLS = new Set(['Edit', 'Write', 'Bash', 'NotebookEdit']);
-
-  /** Check if the tool_use requires user approval (confirmEdit mode + file-editing tool) */
-  private async isConfirmEditTool(threadId: string, toolName: string): Promise<boolean> {
-    if (!AgentMessageHandler.CONFIRM_EDIT_TOOLS.has(toolName)) return false;
-    const thread = await this.threadManager.getThread(threadId);
-    return thread?.permissionMode === 'confirmEdit';
   }
 
   private async emitWS(threadId: string, type: WSEvent['type'], data: unknown): Promise<void> {
@@ -563,71 +481,7 @@ export class AgentMessageHandler {
       cliMap.set(cliMsgId, msgId);
     }
 
-    // Emit per-message context usage if available.
-    // With prompt caching, the Anthropic API splits input tokens across:
-    //   input_tokens — uncached (new) tokens only (often very small, e.g. 1-4)
-    //   cache_read_input_tokens — tokens served from cache (the bulk)
-    //   cache_creation_input_tokens — tokens being cached for the first time
-    // The total = input_tokens + cache_read + cache_creation represents the
-    // **full context window size** for this API call, not an incremental addition.
-    // So we use the latest totalInputTokens directly as the context window usage
-    // rather than accumulating across messages (which would vastly overcount).
-    // The compaction-summary assistant message carries a `compaction` content
-    // block and reports `usage` equal to the FULL pre-compaction context it
-    // just read to build the summary. The SDK emits it AFTER the
-    // `compact_boundary` system message, so forwarding its usage as an
-    // `agent:context_usage` event would clobber the reset the client just
-    // applied on the boundary — leaving the context-usage ring frozen at the
-    // pre-compaction value (the "compacted but the meter didn't move" bug).
-    // The boundary is authoritative for post-compaction usage, so skip this.
-    const isCompactionSummary = msg.message.content.some(
-      (b: any) => b && typeof b === 'object' && 'type' in b && b.type === 'compaction',
-    );
-    const usage = isCompactionSummary
-      ? undefined
-      : (msg.message.usage as Record<string, unknown> | undefined);
-    if (usage) {
-      const inputTokens =
-        (usage.input_tokens as number) ??
-        (usage.inputTokens as number) ??
-        (usage.used as number) ??
-        0;
-      const cacheRead =
-        (usage.cache_read_input_tokens as number) ??
-        (usage.cachedReadTokens as number) ??
-        (usage.cacheReadTokens as number) ??
-        0;
-      const cacheCreation =
-        (usage.cache_creation_input_tokens as number) ??
-        (usage.cachedWriteTokens as number) ??
-        (usage.cacheWriteTokens as number) ??
-        0;
-      const outputTokens = (usage.output_tokens as number) ?? (usage.outputTokens as number) ?? 0;
-      const totalInputTokens = inputTokens + cacheRead + cacheCreation;
-
-      log.info('Assistant message usage (DEBUG)', {
-        namespace: 'agent',
-        threadId,
-        rawUsageKeys: Object.keys(usage).join(','),
-        rawUsage: JSON.stringify(usage),
-        inputTokens,
-        cacheRead,
-        cacheCreation,
-        totalInputTokens,
-        outputTokens,
-      });
-
-      // Each API response reports the full context window size (not a delta),
-      // so just store the latest value instead of accumulating.
-      this.state.cumulativeInputTokens.set(threadId, totalInputTokens);
-      void this.emitWS(threadId, 'agent:context_usage', {
-        inputTokens: totalInputTokens,
-        outputTokens,
-        cumulativeInputTokens: totalInputTokens,
-      });
-    } else {
-      log.debug('No usage data in assistant message', { namespace: 'agent', threadId });
-    }
+    this.emitAssistantContextUsage(threadId, msg);
 
     // Handle tool calls (deduplicate — streaming sends cumulative content)
     // Register the map up front: `ownMessageIds` relies on every inserted tool
@@ -755,95 +609,46 @@ export class AgentMessageHandler {
           this.state.providerErrorPending.delete(threadId);
         }
 
-        // Track if this tool call means Claude is waiting for user input
-        if (block.name === 'AskUserQuestion') {
-          log.info('AskUserQuestion detected — transitioning to waiting', {
-            ...(await this.threadCtx(threadId)),
-            previousPendingInput: this.state.pendingUserInput.get(threadId) ?? 'none',
-            inputPreview: JSON.stringify(block.input).slice(0, 300),
-          });
-          this.state.pendingUserInput.set(threadId, 'question');
-          const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
-          const { status } = transitionStatus(
-            threadId,
-            { type: 'WAIT' },
-            currentStatus as ThreadStatus,
-          );
-          log.debug('AskUserQuestion status transition', {
-            namespace: 'agent',
-            threadId,
-            from: currentStatus,
-            to: status,
-          });
-          await this.threadManager.updateThread(threadId, { status });
-          await this.emitWS(threadId, 'agent:status', { status, waitingReason: 'question' });
-        } else if (block.name === 'ExitPlanMode') {
-          log.info('ExitPlanMode detected — transitioning to waiting', {
-            ...(await this.threadCtx(threadId)),
-            previousPendingInput: this.state.pendingUserInput.get(threadId) ?? 'none',
-          });
-          this.state.pendingUserInput.set(threadId, 'plan');
-          const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
-          const { status } = transitionStatus(
-            threadId,
-            { type: 'WAIT' },
-            currentStatus as ThreadStatus,
-          );
-          log.debug('ExitPlanMode status transition', {
-            namespace: 'agent',
-            threadId,
-            from: currentStatus,
-            to: status,
-          });
-          await this.threadManager.updateThread(threadId, { status });
-          await this.emitWS(threadId, 'agent:status', { status, waitingReason: 'plan' });
-        } else if (await this.isConfirmEditTool(threadId, block.name)) {
-          // In confirmEdit mode, the preToolUseHook pauses the SDK for
-          // Edit/Write/Bash/NotebookEdit until the user approves. Transition
-          // the thread to "waiting" immediately when we see the tool_use block
-          // so the client can show the PermissionApprovalCard.
-          const dbToolCallId = seen.get(block.id);
-          log.info(`confirmEdit: ${block.name} detected — transitioning to waiting`, {
-            ...(await this.threadCtx(threadId)),
-            tool: block.name,
-            toolCallId: dbToolCallId ?? 'unknown',
-          });
-          const serializedInput = serializeToolInput(block.name, block.input);
-          this.state.pendingPermissionRequest.set(threadId, {
-            toolName: block.name,
-            toolUseId: block.id,
-            toolInput: serializedInput,
-          });
-          const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
-          const { status } = transitionStatus(
-            threadId,
-            { type: 'WAIT' },
-            currentStatus as ThreadStatus,
-          );
-          await this.threadManager.updateThread(threadId, { status });
-          await this.emitWS(threadId, 'agent:status', {
-            status,
-            waitingReason: 'permission',
-            permissionRequest: { toolName: block.name, toolInput: serializedInput },
-          });
-        } else {
-          if (this.state.pendingUserInput.has(threadId)) {
-            log.warn(
-              'BUG-HUNT: Clearing pendingUserInput due to non-interactive tool call — may cause plan/question auto-continue',
-              {
-                ...(await this.threadCtx(threadId)),
-                tool: block.name,
-                wasPending: this.state.pendingUserInput.get(threadId),
-              },
-            );
-          }
-          this.state.pendingUserInput.delete(threadId);
-        }
+        await applyToolUseWaitState(this.ctx, threadId, block, seen);
 
         // Reset currentAssistantMsgId — next CLI message's text should be a new DB message
         this.state.currentAssistantMsgId.delete(threadId);
       }
     }
+  }
+
+  /**
+   * Emit the message's context usage, when it reports one (see
+   * `assistantUsage`). Each API response reports the full context window
+   * size (not a delta), so the latest value is stored instead of accumulated.
+   */
+  private emitAssistantContextUsage(
+    threadId: string,
+    msg: CLIMessage & { type: 'assistant' },
+  ): void {
+    const usage = assistantUsage(msg.message);
+    if (!usage) {
+      log.debug('No usage data in assistant message', { namespace: 'agent', threadId });
+      return;
+    }
+    const { raw, inputTokens, cacheRead, cacheCreation, totalInputTokens, outputTokens } = usage;
+    log.info('Assistant message usage (DEBUG)', {
+      namespace: 'agent',
+      threadId,
+      rawUsageKeys: Object.keys(raw).join(','),
+      rawUsage: JSON.stringify(raw),
+      inputTokens,
+      cacheRead,
+      cacheCreation,
+      totalInputTokens,
+      outputTokens,
+    });
+    this.state.cumulativeInputTokens.set(threadId, totalInputTokens);
+    void this.emitWS(threadId, 'agent:context_usage', {
+      inputTokens: totalInputTokens,
+      outputTokens,
+      cumulativeInputTokens: totalInputTokens,
+    });
   }
 
   // ── Tool result handling ───────────────────────────────────────
@@ -1201,170 +1006,16 @@ export class AgentMessageHandler {
 
   // ── Changed-files session summary ──────────────────────────────
 
-  /**
-   * The thread with enough recent history to cover its latest user turn,
-   * which is all `latestSessionChanges` reads. Fetching the whole history at
-   * every turn end moved megabytes over the runner tunnel on long threads.
-   * The newest window is enough when it holds a user message (the newest one
-   * in the window is then the newest overall, and its turn follows it inside
-   * the window); otherwise the turn started earlier and the full history is
-   * loaded as before.
-   */
-  private async loadLatestTurn(threadId: string): Promise<any> {
-    const recent = await this.threadManager.getThreadWithMessages(
-      threadId,
-      AgentMessageHandler.LATEST_TURN_WINDOW,
-    );
-    const messages: { role?: string }[] = recent?.messages ?? [];
-    if (!recent || !recent.hasMore || messages.some((m) => m.role === 'user')) return recent;
-    return this.threadManager.getThreadWithMessages(threadId);
-  }
+  static readonly LATEST_TURN_WINDOW = LATEST_TURN_WINDOW;
 
-  static readonly LATEST_TURN_WINDOW = 100;
-
-  /**
-   * Claims this run's changed-files summary. A run can end through more than
-   * one path (result, then stop/exit); only the first claim persists it.
-   */
-  private claimChangedFilesSummary(threadId: string): boolean {
-    if (this.state.changedFilesSummaryPersisted.has(threadId)) return false;
-    this.state.changedFilesSummaryPersisted.add(threadId);
-    return true;
-  }
-
-  /** The thread's worktree, else its project directory; '' when neither is known. */
-  private async summaryCwd(data: {
-    projectId?: string;
-    worktreePath?: string | null;
-  }): Promise<string> {
-    const project = data.projectId ? await this.getProject(data.projectId) : null;
-    return data.worktreePath || project?.path || '';
-  }
-
-  /** The working-tree diff taken when the run started, if the scan succeeded. */
-  private async runDiffBaseline(threadId: string): Promise<FileDiffSummary[] | undefined> {
-    return (await this.state.runDiffBaselines.get(threadId)) ?? undefined;
-  }
-
-  /**
-   * Snapshot the files modified during the just-completed session and persist
-   * them as a `changed_files_summary` thread event, keyed by the session's
-   * user-message id. Called once per run from every terminal path (result,
-   * stop, failure). The file list comes from the session's file-mutating tool
-   * calls plus, when it ran shell commands, the working-tree changes since the
-   * run's baseline; +/- stats from a one-shot working-tree diff at completion. The
-   * snapshot is frozen — the client renders it verbatim on reload instead of
-   * recomputing against the live working tree.
-   */
+  /** See `persistChangedFilesSummary` in agent-message-handler/changed-files-summary.ts. */
   async persistChangedFilesSummary(threadId: string): Promise<void> {
-    if (!this.claimChangedFilesSummary(threadId)) return;
-
-    const data = await this.loadLatestTurn(threadId);
-    if (!data) return;
-    // Scratch threads have no repo — nothing to diff or summarize.
-    if (!canDoGitOps(data as { isScratch?: boolean })) return;
-
-    const messages = (data as { messages?: any[] }).messages ?? [];
-    if (messages.length === 0) return;
-
-    const cwd = await this.summaryCwd(data);
-    if (!cwd) return;
-
-    // Best-effort working-tree diff for +/- stats. A failure (or a clean tree)
-    // just yields stat-less rows — the file list still comes from tool calls.
-    let changedFiles: import('@funny/shared').FileDiffSummary[] = [];
-    const diffResult = await getDiffSummary(cwd);
-    if (diffResult.isOk()) changedFiles = diffResult.value.files;
-
-    const baseline = await this.runDiffBaseline(threadId);
-    const summary = latestSessionChanges(messages, changedFiles, cwd, baseline);
-    if (!summary) return;
-
-    // Gitignored files (e.g. openspec/ docs) never appear in the working-tree
-    // diff above, so latestSessionChanges leaves them stat-less and the in-chat
-    // summary shows no +/-. Backfill line counts for the ignored subset only —
-    // tracked stat-less files (committed/reverted) stay stat-less, as they
-    // should. See getIgnoredFileStats for why ignored files count as additions.
-    const statless = summary.files.filter((f) => f.additions == null).map((f) => f.path);
-    if (statless.length > 0) {
-      const ignoredStats = await getIgnoredFileStats(cwd, statless);
-      if (ignoredStats.isOk() && ignoredStats.value.size > 0) {
-        summary.files = backfillStats(summary.files, ignoredStats.value);
-      }
-    }
-
-    // Files the agent edited by ABSOLUTE path outside the thread's repo (e.g. a
-    // sibling repo) never appear in the in-repo diff above, so they stay
-    // stat-less with their absolute path preserved. Backfill +/- from each
-    // file's OWN enclosing git repo so the row carries stats like any other.
-    const externalStatless = summary.files
-      .filter((f) => f.additions == null && isAbsolute(f.path))
-      .map((f) => f.path);
-    if (externalStatless.length > 0) {
-      const externalStats = await getExternalRepoFileStats(externalStatless, cwd);
-      if (externalStats.isOk() && externalStats.value.size > 0) {
-        summary.files = backfillStats(summary.files, externalStats.value);
-      }
-    }
-
-    const id = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
-    // Persist via saveThreadEvent — the runtime proxies this to the server's DB
-    // (RunnerServiceProvider.createThreadEvent is a no-op, so the explicit-id
-    // path would silently drop the event and the card would vanish on reload).
-    await getServices().threadEvents.saveThreadEvent(
-      threadId,
-      'changed_files_summary',
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      summary as unknown as Record<string, unknown>,
-    );
-
-    await this.emitWS(threadId, 'thread:event', {
-      event: {
-        id,
-        threadId,
-        type: 'changed_files_summary',
-        data: JSON.stringify(summary),
-        createdAt,
-      },
-    });
-
-    log.info('Persisted changed-files summary', {
-      namespace: 'agent',
-      threadId,
-      userMessageId: summary.userMessageId,
-      fileCount: String(summary.files.length),
-    });
+    await persistChangedFilesSummary(this.ctx, threadId);
   }
 
   // ── Git status emission ────────────────────────────────────────
 
   async emitGitStatus(threadId: string): Promise<void> {
-    const thread = await this.threadManager.getThread(threadId);
-    if (!thread?.worktreePath || thread.mode !== 'worktree') return;
-
-    const project = await this.getProject(thread.projectId);
-    if (!project) return;
-
-    const summaryResult = await getStatusSummary(
-      thread.worktreePath,
-      thread.baseBranch ?? undefined,
-      project.path,
-    );
-    if (summaryResult.isErr()) return;
-    const summary = summaryResult.value;
-
-    const branchKey = computeBranchKey(thread);
-
-    await this.emitWS(threadId, 'git:status', {
-      statuses: [
-        {
-          threadId,
-          branchKey,
-          state: deriveGitSyncState(summary),
-          ...summary,
-        },
-      ],
-    });
+    await emitGitStatus(this.ctx, threadId);
   }
 }

@@ -12,9 +12,15 @@ const textareaVariants = cva(
         xs: 'min-h-[60px] px-2 py-1 text-xs',
         sm: 'min-h-[70px] px-3 py-1.5 text-sm',
       },
+      // Code, prompts and config: values read character by character.
+      mono: {
+        true: 'font-mono',
+        false: '',
+      },
     },
     defaultVariants: {
       size: 'default',
+      mono: false,
     },
   },
 );
@@ -25,9 +31,12 @@ export interface TextareaProps
 function Textarea({
   className,
   size,
+  mono,
   ref,
   ...props
 }: TextareaProps & { ref?: React.Ref<HTMLTextAreaElement> }) {
-  return <textarea className={cn(textareaVariants({ size }), className)} ref={ref} {...props} />;
+  return (
+    <textarea className={cn(textareaVariants({ size, mono }), className)} ref={ref} {...props} />
+  );
 }
 export { Textarea };

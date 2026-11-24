@@ -4,8 +4,10 @@ import type { ReactNode } from 'react';
 import {
   STATE_ICON_CLASS,
   STATE_PADDING,
+  STATE_SURFACE,
   STATE_TEXT_CLASS,
   type StatePadding,
+  type StateSurface,
 } from '@/components/ui/state-styles';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +26,8 @@ interface LoadingStateProps {
   fill?: boolean;
   /** Vertical padding: sm (12px), md (24px), lg (48px). */
   padding?: StatePadding;
+  /** Surface around the placeholder (a settings card, a dashed outline). */
+  surface?: StateSurface;
 }
 
 /**
@@ -39,6 +43,7 @@ export function LoadingState({
   layout = 'stack',
   fill = true,
   padding,
+  surface = 'default',
 }: LoadingStateProps) {
   const isInline = layout === 'inline';
 
@@ -51,6 +56,7 @@ export function LoadingState({
         fill && 'h-full w-full min-h-0 flex-1 p-4',
         'gap-2',
         padding && STATE_PADDING[padding],
+        STATE_SURFACE[surface],
         className,
       )}
     >

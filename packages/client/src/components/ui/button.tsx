@@ -23,6 +23,16 @@ const buttonVariants = cva(
         // A text action that destroys something (delete, discard).
         'ghost-destructive': 'text-destructive hover:bg-accent hover:text-destructive',
         link: 'text-primary underline-offset-4 hover:underline',
+        // A ghost toolbar button for the view or panel that is showing now.
+        active: 'text-foreground hover:bg-accent hover:text-accent-foreground',
+        // A ghost toggle button that is on (a view mode, a search option).
+        pressed: 'bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground',
+        // Ghost buttons tinted by a status: a running command, stop, an open browser.
+        'ghost-success': 'text-status-success hover:bg-accent hover:text-status-success/80',
+        'ghost-error': 'text-status-error hover:bg-accent hover:text-status-error/80',
+        'ghost-info': 'text-status-info hover:bg-accent hover:text-status-info/80',
+        // The full-width action closing a list (view all, clear finished), ruled off above.
+        'ghost-divided': 'border-t hover:bg-accent hover:text-accent-foreground',
       },
       // Field heights / padding / text come from the shared control scale so a
       // text button lines up with an input or select of the same `size`. The
@@ -39,10 +49,18 @@ const buttonVariants = cva(
         'icon-sm': cn(ICON_SIZE.sm, CONTROL_ICON.md),
         'icon-md': cn(ICON_SIZE.md, CONTROL_ICON.md),
       },
+      // Space between the icon and the label: tighter than the default 8px in
+      // dense toolbars and chips.
+      gap: {
+        default: '',
+        tight: 'gap-1',
+        snug: 'gap-1.5',
+      },
     },
     defaultVariants: {
       variant: 'default',
       size: 'default',
+      gap: 'default',
     },
   },
 );
@@ -57,6 +75,7 @@ function Button({
   className,
   variant,
   size,
+  gap,
   asChild = false,
   loading = false,
   children,
@@ -67,7 +86,7 @@ function Button({
   const Comp = asChild ? Slot : 'button';
   return (
     <Comp
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size, gap, className }))}
       ref={ref}
       disabled={disabled || loading}
       {...props}

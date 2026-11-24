@@ -140,8 +140,8 @@ export async function persistChangedFilesSummary(
   await getServices().threadEvents.saveThreadEvent(
     threadId,
     'changed_files_summary',
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    summary as unknown as Record<string, unknown>,
+    // A spread copy is an object type, which a string-keyed record accepts.
+    { ...summary },
   );
 
   await ctx.emitWS(threadId, 'thread:event', {

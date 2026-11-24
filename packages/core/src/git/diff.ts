@@ -298,7 +298,9 @@ async function readWorkingTreeFiles(cwd: string): Promise<{
     gitRead(['ls-files', '--others', '--exclude-standard'], { cwd, reject: false }),
   ]);
   const parse = (result: { exitCode: number; stdout: string }) =>
-    statusLines(result).map(parseStatusLine).filter(Boolean) as StatusEntry[];
+    statusLines(result)
+      .map(parseStatusLine)
+      .filter((entry): entry is StatusEntry => entry !== null);
   const stagedFiles = parse(stagedStatusResult);
   const untrackedFiles = statusLines(untrackedResult).map((p) => ({
     status: 'added' as const,
@@ -534,6 +536,9 @@ async function nativeBaseFiles(
     );
     const baseFiles = r.files.map((f) => ({
       path: f.path,
+      // SAFETY: the native summary (native-git/src/diff_summary.rs) only
+      // emits 'added' | 'modified' | 'deleted' | 'renamed' | 'conflicted',
+      // the FileStatus values; napi types the field as a plain string.
       status: f.status as FileDiffSummary['status'],
       staged: f.staged,
       additions: f.additions,

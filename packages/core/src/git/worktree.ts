@@ -341,7 +341,11 @@ export function createWorktree(
       return worktreePath;
     })(),
     (error) => {
-      if ((error as DomainError).type) return error as DomainError;
+      // SAFETY: the block above throws DomainErrors (internal / badRequest /
+      // a Result's error); anything else comes from fs or the process helpers
+      // as an Error, which has no `type` field and falls through to internal().
+      const candidate = error as DomainError;
+      if (candidate.type) return candidate;
       return internal(String(error));
     },
   );
@@ -463,7 +467,12 @@ export function parseWorktreeListPorcelain(output: string): WorktreeEntry[] {
   for (const raw of output.split('\n')) {
     const line = raw.replace(/\r$/, '');
     if (line.startsWith('worktree ')) {
-      if (current.path) entries.push(current as WorktreeEntry);
+      if (current.path) {
+        // SAFETY: an entry with a path is complete; its `branch` stays
+        // undefined for a detached HEAD (no `branch` line), which callers only
+        // compare against a branch name.
+        entries.push(current as WorktreeEntry);
+      }
       current = { path: line.slice('worktree '.length) };
     } else if (line.startsWith('HEAD ')) {
       current.commit = line.slice('HEAD '.length);
@@ -472,7 +481,10 @@ export function parseWorktreeListPorcelain(output: string): WorktreeEntry[] {
     }
   }
 
-  if (current.path) entries.push(current as WorktreeEntry);
+  if (current.path) {
+    // SAFETY: same as inside the loop: the last entry, `branch` undefined when detached.
+    entries.push(current as WorktreeEntry);
+  }
   return entries;
 }
 
@@ -493,6 +505,8 @@ function readWorktreeEntries(projectPath: string): ResultAsync<WorktreeEntry[], 
     if (!native) return cli();
     return ResultAsync.fromPromise(native.listWorktrees(cwd), toDomainError)
       .map((list) =>
+        // SAFETY: `branch` is undefined for a detached HEAD, as in the
+        // porcelain parser; callers only compare it against a branch name.
         list.map((w) => ({ path: w.path, commit: w.commit, branch: w.branch }) as WorktreeEntry),
       )
       .orElse(() => cli());
@@ -662,7 +676,11 @@ export function worktreeUnsavedWork(
       };
     })(),
     (error) => {
-      if ((error as DomainError).type) return error as DomainError;
+      // SAFETY: the block above throws DomainErrors (internal / badRequest /
+      // a Result's error); anything else comes from fs or the process helpers
+      // as an Error, which has no `type` field and falls through to internal().
+      const candidate = error as DomainError;
+      if (candidate.type) return candidate;
       return internal(String(error));
     },
   );
@@ -713,7 +731,11 @@ export function removeWorktree(
       await forgetSafeDirectory(worktreePath);
     })(),
     (error) => {
-      if ((error as DomainError).type) return error as DomainError;
+      // SAFETY: the block above throws DomainErrors (internal / badRequest /
+      // a Result's error); anything else comes from fs or the process helpers
+      // as an Error, which has no `type` field and falls through to internal().
+      const candidate = error as DomainError;
+      if (candidate.type) return candidate;
       return internal(String(error));
     },
   );

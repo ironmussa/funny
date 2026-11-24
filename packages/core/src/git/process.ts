@@ -402,8 +402,8 @@ async function executeRawBun(
         if (signal.aborted) abort();
         try {
           return await Promise.all([
-            readCapped(proc.stdout as ReadableStream<Uint8Array>),
-            readCapped(proc.stderr as ReadableStream<Uint8Array>, options.onStderr),
+            readCapped(proc.stdout),
+            readCapped(proc.stderr, options.onStderr),
             proc.exited,
           ]);
         } finally {

@@ -7,7 +7,11 @@ import { ProcessExecutionError } from './process.js';
  * Reused across all git modules to avoid duplicating the same pattern.
  */
 export function toDomainError(error: unknown): DomainError {
-  if ((error as DomainError).type) return error as DomainError;
+  // SAFETY: a value with a truthy `type` is taken as a DomainError. The git
+  // modules reject with DomainErrors, ProcessExecutionError or plain Errors,
+  // and neither Error class has a `type` field.
+  const candidate = error as DomainError;
+  if (candidate.type) return candidate;
   if (error instanceof ProcessExecutionError) {
     return processError(error.message, error.exitCode, error.stderr);
   }

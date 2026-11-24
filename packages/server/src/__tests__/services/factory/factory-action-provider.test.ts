@@ -871,3 +871,71 @@ describe('factory action provider: the proof check (task 4.4)', () => {
     expect(merges[0]).toMatchObject({ sha: 'sha-head', autoMergeWhenHeld: true });
   });
 });
+
+describe('factory action provider: a head that merged the base after the review', () => {
+  /**
+   * The run reviewed `sha-reviewed`; the pull request's head is now
+   * `sha-merge`, whose parents are `parents`. Nothing carried the review to it
+   * (the merge lane's step ended before the checks on the merge were green).
+   */
+  function resumed(parents: string[]) {
+    const merges: Array<FactoryMergeOptions | undefined> = [];
+    const recorded: Array<{ reviews?: ReadonlyArray<{ sha: string }> }> = [];
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      prUrl: 'https://github.com/o/r/pull/9',
+      reviews: [reviewed('sha-reviewed')],
+      record: async (patch: { reviews?: ReadonlyArray<{ sha: string }> }) => {
+        recorded.push(patch);
+      },
+      github: {
+        branchAhead: () => okAsync(true),
+        commentOnIssue: () => okAsync(undefined),
+        findPullRequest: () => okAsync(null),
+        pullRequests: {
+          prState: () => okAsync('open' as const),
+          changedFiles: () => okAsync({ files: [], truncated: false }),
+          publishReview: () => okAsync({ status: true }),
+          // Up to date, and the second parent is a commit of the base branch.
+          baseDistance: () => okAsync({ behindBy: 0, aheadBy: 0 }),
+          updateBranch: () => okAsync({ kind: 'updating' as const }),
+          commitParents: () => okAsync(parents),
+          baseChanges: () => okAsync({ commits: [], files: [] }),
+          mergeQueueRequired: () => okAsync(false),
+          enqueue: () => okAsync({ kind: 'queued' as const }),
+          queueState: () => okAsync('merged' as const),
+          pullHead: () => okAsync({ sha: 'sha-merge', baseRef: 'main', autoMerge: false }),
+          publishProofCheck: () => okAsync(undefined),
+          ciState: () => okAsync({ kind: 'green' as const }),
+          merge: (_pr: unknown, options?: FactoryMergeOptions) => {
+            merges.push(options);
+            return okAsync({
+              kind: 'merged' as const,
+              method: 'squash' as const,
+              branchDeleted: false,
+            });
+          },
+        },
+      },
+    });
+    return { provider, merges, recorded };
+  }
+
+  test('a base merge of the reviewed commit keeps its review and merges', async () => {
+    const { provider, merges, recorded } = resumed(['sha-reviewed', 'sha-base']);
+    const merged = await provider.merge({ requireRegressionProof: false });
+    expect(merged.error).toBeUndefined();
+    expect(merged.ok).toBe(true);
+    expect(merges[0]?.sha).toBe('sha-merge');
+    const stored = recorded.flatMap((patch) => patch.reviews ?? []);
+    expect(stored.map((review) => review.sha)).toContain('sha-merge');
+  });
+
+  test('a head that is not a merge of the reviewed commit still has no review', async () => {
+    const { provider, merges } = resumed(['sha-other', 'sha-base']);
+    const merged = await provider.merge({ requireRegressionProof: false });
+    expect(merged.ok).toBe(false);
+    expect(merged.error).toContain('has no review');
+    expect(merges).toHaveLength(0);
+  });
+});

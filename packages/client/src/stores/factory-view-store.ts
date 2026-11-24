@@ -1,11 +1,11 @@
 /**
- * The factory view's layout, list or board (openspec factory-pipeline-board,
- * D4), kept across visits in localStorage.
+ * The factory view's layout, list, board or analytics (openspec
+ * factory-pipeline-board, D4), kept across visits in localStorage.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type FactoryViewLayout = 'list' | 'board';
+export type FactoryViewLayout = 'list' | 'board' | 'analytics';
 
 interface FactoryViewState {
   layout: FactoryViewLayout;

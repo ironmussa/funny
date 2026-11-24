@@ -6,7 +6,8 @@
  * global search view (search bar and a status filter on top, one row per run
  * with its thread's status icon); a row opens the run's last agent thread, and
  * carries the run's controls (PR, retry, stop). The board layout (openspec
- * factory-pipeline-board) shows the same filtered runs in stage columns.
+ * factory-pipeline-board) shows the same filtered runs in stage columns, and
+ * the analytics layout the factory's health and integration figures.
  */
 import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
@@ -16,17 +17,15 @@ import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
 import { useFactoryViewParams } from '@/components/factory-board/factory-view-params';
+import { FactoryAnalytics } from '@/components/factory-board/FactoryAnalytics';
 import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
-import {
-  FactoryHealthStats,
-  FactoryIncidentBanners,
-} from '@/components/factory-board/FactoryHealthHeader';
-import { FactoryIntegrationStats } from '@/components/factory-board/FactoryIntegrationStats';
+import { FactoryIncidentBanners } from '@/components/factory-board/FactoryHealthHeader';
 import { FactoryQueueActions } from '@/components/factory-board/FactoryQueueActions';
 import {
   FactoryActiveToggle,
   FactoryLayoutToggle,
 } from '@/components/factory-board/FactoryViewToggles';
+import { factoryRunDependencies } from '@/components/factory-board/run-dependencies';
 import { FactoryRunDetail } from '@/components/factory-board/run-detail/FactoryRunDetail';
 import { useSelectedFactoryRun } from '@/components/factory-board/use-selected-factory-run';
 import { RunFactoryFlowDialog } from '@/components/factory-flows/RunFactoryFlowDialog';
@@ -211,11 +210,9 @@ function FactoryQueueBody({
 
 function FactoryQueueHeader({
   runs,
-  now,
   projects,
 }: {
   runs: FactoryQueueRun[] | undefined;
-  now: number;
   projects: ReadonlyArray<{ id: string; name: string }>;
 }) {
   const { t } = useTranslation();
@@ -235,7 +232,6 @@ function FactoryQueueHeader({
           })}
         </p>
       </div>
-      <FactoryHealthStats runs={all} now={now} />
       {projects.length > 0 && (
         <Button
           variant="outline"
@@ -487,11 +483,14 @@ function FactoryQueueContent({
   onShowOlderDone: () => void;
 }) {
   const selection = useSelectedFactoryRun(runs);
+  const dependencies = useMemo(() => factoryRunDependencies(runs ?? []), [runs]);
   const boardRuns = layout === 'board' && (runs?.length ?? 0) > 0 ? filtered : undefined;
   const selectedProject = selection.run ? projectNameById.get(selection.run.projectId) : undefined;
   return (
     <>
-      {boardRuns ? (
+      {layout === 'analytics' ? (
+        <FactoryAnalytics runs={runs} filtered={filtered} now={now} />
+      ) : boardRuns ? (
         <FactoryBoard
           runs={boardRuns}
           projectNameById={projectNameById}
@@ -499,6 +498,7 @@ function FactoryQueueContent({
           singleProjectId={singleProjectId}
           onSelect={selection.select}
           onShowOlderDone={onShowOlderDone}
+          dependencies={dependencies}
         />
       ) : (
         <FactoryQueueBody
@@ -512,6 +512,8 @@ function FactoryQueueContent({
         run={selection.run}
         projectName={selectedProject}
         onClose={selection.close}
+        dependencies={dependencies}
+        onSelect={selection.select}
       />
     </>
   );
@@ -533,9 +535,8 @@ export function FactoryQueueView() {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="factory-view">
-      <FactoryQueueHeader runs={runs} now={now} projects={projects} />
+      <FactoryQueueHeader runs={runs} projects={projects} />
       <FactoryIncidentBanners runs={all} />
-      <FactoryIntegrationStats runs={filtered ?? []} now={now} />
       <FactoryQueueToolbar {...toolbar} {...counts} runs={all} shown={shown} total={all.length} />
       <FactoryQueueContent
         runs={runs}

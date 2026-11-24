@@ -1,6 +1,8 @@
 import { lt, valid } from 'semver';
 import { z } from 'zod';
 
+import { asCanonicalLeaf, type CanonicalValue } from './lib/canonical-json.js';
+
 export const REMOTE_CONNECTOR_PROTOCOL_VERSION = 1 as const;
 export const REMOTE_CONNECTOR_PROTOCOL_VERSIONS = [REMOTE_CONNECTOR_PROTOCOL_VERSION] as const;
 export const REMOTE_CONNECTOR_MAX_OUTPUT_BYTES = 256 * 1024;
@@ -630,7 +632,7 @@ export type ConnectorErrorResult = z.infer<typeof connectorErrorResultSchema>;
 export type ConnectorIpcRequest = z.infer<typeof connectorIpcRequestSchema>;
 export type ConnectorIpcResponse = z.infer<typeof connectorIpcResponseSchema>;
 
-function isNonNullObject(value: unknown): value is object {
+function isNonNullObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
@@ -646,7 +648,7 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
 }
 
-function canonicalize(value: unknown): unknown {
+function canonicalize<T>(value: T): CanonicalValue {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (isNonNullObject(value)) {
     return Object.fromEntries(
@@ -655,10 +657,10 @@ function canonicalize(value: unknown): unknown {
         .map(([key, entry]) => [key, canonicalize(entry)]),
     );
   }
-  return value;
+  return asCanonicalLeaf(value);
 }
 
-export function canonicalJson(value: unknown): string {
+export function canonicalJson<T>(value: T): string {
   return JSON.stringify(canonicalize(value));
 }
 
@@ -668,7 +670,7 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
-export async function sha256Digest(value: unknown): Promise<string> {
+export async function sha256Digest<T>(value: T): Promise<string> {
   const encoded = new TextEncoder().encode(canonicalJson(value));
   const digest = await crypto.subtle.digest('SHA-256', encoded);
   return toBase64Url(new Uint8Array(digest));

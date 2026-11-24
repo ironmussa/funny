@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import type { ReactNode } from 'react';
 
 import { ToolCallGroup, type ToolCallItem } from '@/components/ToolCallGroup';
@@ -18,7 +19,7 @@ import { WriteFileCard } from './WriteFileCard';
 
 interface Args {
   name: string;
-  parsed: Record<string, any>;
+  parsed: JsonObject;
   output?: string;
   author?: string;
   onRespond?: (answer: string) => void;

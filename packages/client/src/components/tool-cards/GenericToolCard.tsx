@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { Check, ChevronRight, ListTodo, Wrench } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +17,7 @@ import { ToolContentArea } from './MobileContentPreview';
 
 interface Props {
   name: string;
-  parsed: Record<string, any>;
+  parsed: JsonObject;
   output?: string;
   onRespond?: (answer: string) => void;
   hideLabel?: boolean;

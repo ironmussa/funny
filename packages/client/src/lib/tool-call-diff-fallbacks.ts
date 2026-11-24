@@ -1,4 +1,5 @@
 import type { FileDiffSummary } from '@funny/shared';
+import { isJsonObject, type JsonObject, type JsonValue } from '@funny/shared/json';
 
 type ToolCallLike = {
   name?: string;
@@ -10,16 +11,16 @@ type ToolItemLike =
   | { type: 'toolcall-group'; calls: ToolCallLike[] }
   | { type: 'toolcall-run'; items: ToolItemLike[] };
 
-function inputRecord(input: unknown): Record<string, unknown> | null {
+function inputRecord(input: unknown): JsonObject | null {
   if (typeof input === 'string') {
     try {
-      const parsed = JSON.parse(input);
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+      const parsed: JsonValue = JSON.parse(input);
+      return isJsonObject(parsed) ? parsed : null;
     } catch {
       return null;
     }
   }
-  return input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
+  return input && typeof input === 'object' ? (input as JsonObject) : null;
 }
 
 function matchesPath(toolPath: string, summaryPath: string): boolean {
@@ -106,7 +107,7 @@ function collectFromToolCall(
 
   if (toolCall.name === 'MultiEdit' && Array.isArray(input.edits)) {
     for (const edit of input.edits) {
-      const record = edit && typeof edit === 'object' ? (edit as Record<string, unknown>) : null;
+      const record = isJsonObject(edit) ? edit : null;
       addDiff(diffs, key, record?.old_string, record?.new_string);
     }
     return;

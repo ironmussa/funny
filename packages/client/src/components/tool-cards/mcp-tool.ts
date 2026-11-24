@@ -5,6 +5,8 @@
  * into renderable parts instead of raw JSON.
  */
 
+import { isJsonObject, type JsonObject, type JsonValue } from '@funny/shared/json';
+
 export interface McpToolName {
   server: string;
   tool: string;
@@ -71,19 +73,19 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-type Summarizer = (parsed: Record<string, unknown>) => string | null;
+type Summarizer = (parsed: JsonObject) => string | null;
 
 function num(value: unknown): number | null {
   return typeof value === 'number' ? value : null;
 }
 
-function actTarget(parsed: Record<string, unknown>): string | null {
+function actTarget(parsed: JsonObject): string | null {
   const x = num(parsed.x);
   const y = num(parsed.y);
   return str(parsed.ref) ?? (x !== null && y !== null ? `(${x}, ${y})` : null);
 }
 
-function actDetail(parsed: Record<string, unknown>): string | null {
+function actDetail(parsed: JsonObject): string | null {
   const text = str(parsed.text);
   if (text) return `"${firstLine(text, 60)}"`;
   if (Array.isArray(parsed.paths)) return parsed.paths.join(', ');
@@ -195,7 +197,7 @@ const SUMMARY_KEYS = [
 
 /** A one-line description of the call for the card header, with the input it came from. */
 export function getMcpSummary(
-  parsed: Record<string, unknown>,
+  parsed: JsonObject,
   mcp?: McpToolName,
 ): { key: string; text: string } | null {
   if (mcp && isBrowserTool(mcp)) {
@@ -231,22 +233,20 @@ function textPart(text: string): McpResultPart {
   return { kind: 'text', text, markdown: MARKDOWN_HINT.test(text) };
 }
 
-type ContentBlock = Record<string, any>;
-
-function imagePart(b: ContentBlock): McpResultPart | null {
+function imagePart(b: JsonObject): McpResultPart | null {
   const mimeType = typeof b.mimeType === 'string' ? b.mimeType : 'image/png';
   // Only inline raster/vector data the browser renders as an image.
   if (typeof b.data !== 'string' || !/^image\/[a-z0-9.+-]+$/i.test(mimeType)) return null;
   return { kind: 'image', src: `data:${mimeType};base64,${b.data}`, mimeType };
 }
 
-function resourcePart(b: ContentBlock): McpResultPart | null {
-  const r = b.resource ?? {};
+function resourcePart(b: JsonObject): McpResultPart | null {
+  const r = isJsonObject(b.resource) ? b.resource : {};
   if (typeof r.uri !== 'string') return null;
   return { kind: 'resource', uri: r.uri, text: typeof r.text === 'string' ? r.text : null };
 }
 
-const CONTENT_PARSERS: Record<string, (b: ContentBlock) => McpResultPart | null> = {
+const CONTENT_PARSERS: Record<string, (b: JsonObject) => McpResultPart | null> = {
   text: (b) => (typeof b.text === 'string' ? textPart(b.text) : null),
   image: imagePart,
   resource: resourcePart,
@@ -254,9 +254,8 @@ const CONTENT_PARSERS: Record<string, (b: ContentBlock) => McpResultPart | null>
     typeof b.uri === 'string' ? { kind: 'resource', uri: b.uri, text: null } : null,
 };
 
-function contentPart(block: unknown): McpResultPart | null {
-  if (!block || typeof block !== 'object') return null;
-  const b = block as ContentBlock;
+function contentPart(b: JsonValue): McpResultPart | null {
+  if (!isJsonObject(b)) return null;
   const parse =
     typeof b.type === 'string' && Object.hasOwn(CONTENT_PARSERS, b.type)
       ? CONTENT_PARSERS[b.type]
@@ -282,14 +281,14 @@ export function parseMcpResult(output: string | undefined): McpResult | null {
   if (!output) return null;
   const trimmed = output.trim();
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
-  let value: unknown;
+  let value: JsonValue;
   try {
     value = JSON.parse(trimmed);
   } catch {
     return null;
   }
-  const envelope = Array.isArray(value) ? { content: value } : (value as Record<string, any>);
-  if (!envelope || typeof envelope !== 'object' || !Array.isArray(envelope.content)) return null;
+  const envelope: JsonValue = Array.isArray(value) ? { content: value } : value;
+  if (!isJsonObject(envelope) || !Array.isArray(envelope.content)) return null;
   const parts = envelope.content.map(contentPart);
   // Not an MCP envelope if any block is unrecognized: show the raw output instead.
   if (parts.some((p: McpResultPart | null) => p === null)) return null;

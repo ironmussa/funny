@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import {
   MessageCircleQuestion,
   Check,
@@ -101,7 +102,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   onRespond?: (answer: string) => void;
   output?: string;
   hideLabel?: boolean;

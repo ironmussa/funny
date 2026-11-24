@@ -1,10 +1,11 @@
+import type { JsonObject } from '@funny/shared/json';
 import { create } from 'zustand';
 
 import { omitThread } from './by-thread';
 
 export interface ActiveTool {
   name: string;
-  input: Record<string, unknown>;
+  input: JsonObject;
 }
 
 interface ThreadActiveToolState {
@@ -35,7 +36,7 @@ export function useThreadActiveTool(threadId: string): ActiveTool | undefined {
 }
 
 /** Tool call input arrives as an object or as its JSON string. */
-export function parseToolInput(input: unknown): Record<string, unknown> {
+export function parseToolInput(input: unknown): JsonObject {
   if (typeof input === 'string') {
     try {
       const parsed = JSON.parse(input);
@@ -44,5 +45,6 @@ export function parseToolInput(input: unknown): Record<string, unknown> {
       return {};
     }
   }
-  return input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  // SAFETY: a tool call's input object arrives in a Socket.IO event, decoded from JSON.
+  return input && typeof input === 'object' ? (input as JsonObject) : {};
 }

@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +20,7 @@ import { timeAgo } from '@/lib/thread-utils';
 
 interface ToolCallCardProps {
   name: string;
-  input: string | Record<string, unknown>;
+  input: string | JsonObject;
   output?: string;
   author?: string;
   onRespond?: (answer: string) => void;
@@ -39,7 +40,7 @@ function normalizeProviderErrorText(text: string): string {
 
 function shouldSuppressDuplicateProviderErrorOutput(
   name: string,
-  parsed: Record<string, unknown>,
+  parsed: JsonObject,
   output: string | undefined,
 ): boolean {
   if (name !== 'ProviderError' || !output || typeof parsed.error !== 'string') return false;

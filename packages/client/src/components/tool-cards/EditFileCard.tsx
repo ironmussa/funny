@@ -1,4 +1,5 @@
 import type { FileDiffSummary, FileStatus } from '@funny/shared';
+import { isJsonObject, type JsonObject, type JsonValue } from '@funny/shared/json';
 import { ChevronRight, FilePen, Loader2, Maximize2 } from 'lucide-react';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,10 +38,6 @@ interface EditChangeEntry {
   status: FileStatus;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
 function normalizeUnifiedDiff(filePath: string, diff: string): string {
   if (diff.startsWith('diff --git') || diff.startsWith('--- ')) return diff;
   return `--- a/${filePath}\n+++ b/${filePath}\n${diff}`;
@@ -51,19 +48,19 @@ function hasUnifiedDiffHunk(diff: string | undefined): boolean {
   return !!diff && diff.split('\n').some((line) => line.startsWith('@@'));
 }
 
-function statusForChangeType(type: unknown): FileStatus {
+function statusForChangeType(type: JsonValue | undefined): FileStatus {
   if (type === 'add' || type === 'create') return 'added';
   if (type === 'delete' || type === 'remove') return 'deleted';
   if (type === 'move' || type === 'rename') return 'renamed';
   return 'modified';
 }
 
-function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[] {
+function getEditChangeEntries(parsed: JsonObject): EditChangeEntry[] {
   const changes = parsed.changes;
-  if (isRecord(changes)) {
+  if (isJsonObject(changes)) {
     const entries: EditChangeEntry[] = [];
     for (const [filePath, rawChange] of Object.entries(changes)) {
-      if (!filePath || !isRecord(rawChange)) continue;
+      if (!filePath || !isJsonObject(rawChange)) continue;
 
       const status = statusForChangeType(rawChange.type);
       const unifiedDiff = rawChange.unified_diff;
@@ -101,7 +98,7 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
   // patch text, so retain the paths here and load the actual diff on demand.
   if (Array.isArray(changes)) {
     return changes.flatMap((change) => {
-      if (!isRecord(change) || typeof change.path !== 'string' || !change.path) return [];
+      if (!isJsonObject(change) || typeof change.path !== 'string' || !change.path) return [];
       return [{ filePath: change.path, status: statusForChangeType(change.kind) }];
     });
   }
@@ -147,7 +144,7 @@ export function EditFileCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   hideLabel?: boolean;
   displayTime?: string | null;
 }) {

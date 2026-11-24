@@ -1,3 +1,5 @@
+import { isJsonObject, type JsonObject, type JsonValue } from '@funny/shared/json';
+
 import { mcpToolTitle, parseMcpToolName } from './mcp-tool';
 
 export interface TodoItem {
@@ -6,17 +8,19 @@ export interface TodoItem {
   activeForm?: string;
 }
 
-export interface QuestionOption {
+// Type aliases, not interfaces: they come from a tool call's JSON input, and an
+// alias stays comparable with `JsonValue` (an interface has no index signature).
+export type QuestionOption = {
   label: string;
   description: string;
-}
+};
 
-export interface Question {
+export type Question = {
   question: string;
   header: string;
   options: QuestionOption[];
   multiSelect: boolean;
-}
+};
 
 /** Cursor ACP `updateTodos` / `todo_write` and Claude `TodoWrite` share the checklist card. */
 export function isTodoToolName(name: string): boolean {
@@ -24,11 +28,10 @@ export function isTodoToolName(name: string): boolean {
   return n === 'todowrite' || n === 'updatetodos' || n === 'towrite';
 }
 
-function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
+function normalizeTodoItems(arr: JsonValue[]): TodoItem[] | null {
   const todos: TodoItem[] = [];
-  for (const raw of arr) {
-    if (!raw || typeof raw !== 'object') continue;
-    const e = raw as Record<string, unknown>;
+  for (const e of arr) {
+    if (!isJsonObject(e)) continue;
     const content =
       (typeof e.content === 'string' && e.content) ||
       // Codex SDK todo_list items use `{ text, completed }`, unlike the
@@ -55,9 +58,7 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
   return todos.length > 0 ? todos : null;
 }
 
-export function formatInput(
-  input: string | Record<string, unknown> | null | undefined,
-): Record<string, unknown> {
+export function formatInput(input: string | JsonObject | null | undefined): JsonObject {
   if (!input) return {};
   if (typeof input === 'string') {
     try {
@@ -69,7 +70,7 @@ export function formatInput(
   return input;
 }
 
-export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
+export function getTodos(parsed: JsonObject): TodoItem[] | null {
   for (const key of ['todos', 'entries', 'items'] as const) {
     const arr = parsed[key];
     if (Array.isArray(arr)) {
@@ -78,30 +79,29 @@ export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
     }
   }
   const outcome = parsed.outcome;
-  if (outcome && typeof outcome === 'object') {
-    const o = outcome as Record<string, unknown>;
-    if (Array.isArray(o.todos)) {
-      const normalized = normalizeTodoItems(o.todos);
+  if (isJsonObject(outcome)) {
+    if (Array.isArray(outcome.todos)) {
+      const normalized = normalizeTodoItems(outcome.todos);
       if (normalized) return normalized;
     }
   }
   return null;
 }
 
-export function getFilePath(name: string, parsed: Record<string, unknown>): string | null {
+export function getFilePath(name: string, parsed: JsonObject): string | null {
   if (name === 'Read' || name === 'Write' || name === 'Edit') {
     return (parsed.file_path as string) ?? null;
   }
   return null;
 }
 
-export function getQuestions(parsed: Record<string, unknown>): Question[] | null {
+export function getQuestions(parsed: JsonObject): Question[] | null {
   const questions = parsed.questions;
   if (!Array.isArray(questions)) return null;
   return questions as Question[];
 }
 
-type SummaryFn = (parsed: Record<string, unknown>, t: (key: string) => string) => string | null;
+type SummaryFn = (parsed: JsonObject, t: (key: string) => string) => string | null;
 
 /** Summary that is just one input field (or null). */
 const field =
@@ -109,23 +109,20 @@ const field =
   (parsed) =>
     (parsed[key] as string) ?? null;
 
-function todoSummary(parsed: Record<string, unknown>, t: (key: string) => string): string | null {
+function todoSummary(parsed: JsonObject, t: (key: string) => string): string | null {
   const todos = getTodos(parsed);
   if (!todos) return null;
   const done = todos.filter((tc) => tc.status === 'completed').length;
   return `${done}/${todos.length} ${t('tools.done')}`;
 }
 
-function questionSummary(
-  parsed: Record<string, unknown>,
-  t: (key: string) => string,
-): string | null {
+function questionSummary(parsed: JsonObject, t: (key: string) => string): string | null {
   const questions = getQuestions(parsed);
   if (!questions) return null;
   return `${questions.length} ${questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}`;
 }
 
-function thinkSummary(parsed: Record<string, unknown>): string | null {
+function thinkSummary(parsed: JsonObject): string | null {
   const thought = (parsed.content as string) ?? (parsed.description as string) ?? '';
   const firstLine = thought
     .split('\n')
@@ -135,13 +132,13 @@ function thinkSummary(parsed: Record<string, unknown>): string | null {
   return firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine;
 }
 
-function taskUpdateSummary(parsed: Record<string, unknown>): string | null {
+function taskUpdateSummary(parsed: JsonObject): string | null {
   if (!parsed.taskId) return null;
   const status = parsed.status ? ` → ${String(parsed.status)}` : '';
   return `#${String(parsed.taskId)}${status}`;
 }
 
-function backgroundSummary(parsed: Record<string, unknown>): string | null {
+function backgroundSummary(parsed: JsonObject): string | null {
   return (
     (parsed.label as string) ??
     (parsed.command as string) ??
@@ -155,10 +152,10 @@ const SUMMARIES: Record<string, SummaryFn> = {
   Read: filePathSummary,
   Write: filePathSummary,
   Edit: filePathSummary,
-  Bash: (parsed) =>
+  Bash: (parsed, t) =>
     typeof parsed.command === 'string'
       ? unwrapShellCommand(parsed.command)
-      : ((parsed.command as string) ?? null),
+      : field('command')(parsed, t),
   Glob: field('pattern'),
   Grep: field('pattern'),
   Task: field('description'),
@@ -203,7 +200,7 @@ const defaultSummary = field('description');
 
 export function getSummary(
   name: string,
-  parsed: Record<string, unknown>,
+  parsed: JsonObject,
   t: (key: string) => string,
 ): string | null {
   const summarize = Object.hasOwn(SUMMARIES, name) ? SUMMARIES[name] : defaultSummary;
@@ -224,7 +221,7 @@ export function unwrapShellCommand(command: string): string {
 }
 
 /** The file(s) a patch touches: the first path, plus how many more. */
-function patchSummary(parsed: Record<string, unknown>): string | null {
+function patchSummary(parsed: JsonObject): string | null {
   const paths: string[] = [];
   if (typeof parsed.input === 'string') {
     for (const m of parsed.input.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)) {
@@ -233,7 +230,7 @@ function patchSummary(parsed: Record<string, unknown>): string | null {
   }
   if (Array.isArray(parsed.changes)) {
     for (const change of parsed.changes) {
-      if (change && typeof change.path === 'string') paths.push(change.path);
+      if (isJsonObject(change) && typeof change.path === 'string') paths.push(change.path);
     }
   }
   if (paths.length === 0) return null;

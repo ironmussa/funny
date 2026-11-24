@@ -141,13 +141,13 @@ function httpError(body: Record<string, unknown>, status: number, message: strin
     : { type, message };
 }
 
-function asApiError(error: unknown): ApiClientError {
-  if (error && typeof error === 'object' && 'type' in error && 'message' in error) {
+function asApiError(cause: unknown): ApiClientError {
+  if (cause && typeof cause === 'object' && 'type' in cause && 'message' in cause) {
     // SAFETY: the only objects with `type` and `message` that reach this catch are the
     // ApiClientError values this client throws itself (httpError and the network branch).
-    return error as ApiClientError;
+    return cause as ApiClientError;
   }
-  return { type: 'INTERNAL', message: String(error) };
+  return { type: 'INTERNAL', message: String(cause) };
 }
 
 export function createApiClient(dependencies: ApiClientDependencies): ApiClient {

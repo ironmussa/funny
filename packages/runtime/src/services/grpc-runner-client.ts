@@ -73,6 +73,7 @@ export function grpcMethodDefinition(
     // In-memory events may contain undefined, which protobuf JSON cannot represent.
     Buffer.from(toBinary(schema, fromJsonString(schema, JSON.stringify(value))));
   const decode = (schema: DescMessage, value: Buffer): RunnerGrpcWireMessage =>
+    // SAFETY: toJson of a decoded protobuf message (not a well-known scalar wrapper) is always a JSON object.
     toJson(schema, fromBinary(schema, value), { enumAsInteger: true }) as RunnerGrpcWireMessage;
   return {
     path: `/${RunnerTransportService.typeName}/${method.name}`,
@@ -85,9 +86,13 @@ export function grpcMethodDefinition(
   };
 }
 
+// SAFETY: one MethodDefinition per RunnerTransportService method, keyed by its local name, is
+// exactly a grpc ServiceDefinition; Object.fromEntries loses the key and value types.
 const runnerTransportDefinition = Object.fromEntries(
   RunnerTransportService.methods.map((method) => [
     method.localName,
+    // SAFETY: every runner.v2 RunnerTransport method is declared `stream ... returns (stream ...)`
+    // in the proto, so each is a bidi-streaming method.
     grpcMethodDefinition(method as DescMethodStreaming),
   ]),
 ) as grpc.ServiceDefinition;
@@ -114,6 +119,8 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
   const { address, secure } = bridge
     ? { address: bridge.address, secure: false }
     : normalizeEndpoint(endpoint);
+  // SAFETY: makeGenericClientConstructor adds one method per runnerTransportDefinition entry; each is
+  // bidi-streaming, so calling it with metadata returns a duplex stream (open() checks it is a function).
   const client = new service(
     address,
     secure ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
@@ -146,6 +153,8 @@ function durationMilliseconds(value: unknown, fallback: number): number {
     }
     return fallback;
   }
+  // SAFETY: a non-string protobuf JSON Duration is `{ seconds, nanos }`; both fields go through
+  // Number() and a non-finite result falls back below.
   const duration = value as { seconds?: string | number; nanos?: number } | undefined;
   if (!duration) return fallback;
   const milliseconds = Number(duration.seconds ?? 0) * 1_000 + Number(duration.nanos ?? 0) / 1e6;
@@ -277,6 +286,8 @@ export class RunnerGrpcClient {
         },
       });
     } catch (error) {
+      // SAFETY: what the transport factory, open() or the hello write throws (grpc-js, protobuf-es, our own
+      // `method ... is unavailable`) is an Error; disconnect only logs it and schedules a reconnect.
       this.disconnect(generation, error as Error);
     }
   }

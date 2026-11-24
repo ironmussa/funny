@@ -1064,6 +1064,8 @@ function userMessageParts(
 }
 
 function withoutEmptyLists<T extends Record<string, unknown>>(parts: T): Partial<T> {
+  // SAFETY: the entries are `parts`' own entries with some keys dropped, which is exactly a Partial<T>;
+  // Object.fromEntries loses the key types.
   return Object.fromEntries(
     Object.entries(parts).filter(([, value]) => !Array.isArray(value) || value.length > 0),
   ) as Partial<T>;
@@ -1080,6 +1082,8 @@ function extractToolCalls(
   const toolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
     if (!block || typeof block !== 'object') return;
+    // SAFETY: the line above leaves only non-null objects (a parsed JSONL content block); every
+    // field read from `record` is type-checked before use.
     const record = block as Record<string, unknown>;
     if (record.type !== 'tool_use') return;
 
@@ -1109,6 +1113,8 @@ function applyToolResults(
   const orphanToolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
     if (!block || typeof block !== 'object') return;
+    // SAFETY: the line above leaves only non-null objects (a parsed JSONL content block); every
+    // field read from `record` is type-checked before use.
     const record = block as Record<string, unknown>;
     if (record.type !== 'tool_result') return;
 
@@ -1159,6 +1165,7 @@ function blockToText(block: unknown): string {
   if (typeof block === 'string') return block;
   if (!block || typeof block !== 'object') return stringifyUnknown(block);
 
+  // SAFETY: the line above leaves only non-null objects; every field read from `record` is type-checked before use.
   const record = block as Record<string, unknown>;
   const type = typeof record.type === 'string' ? record.type : null;
 
@@ -1181,6 +1188,7 @@ function contentLooksLikeToolResult(content: unknown): boolean {
       (block) =>
         !!block &&
         typeof block === 'object' &&
+        // SAFETY: `block` is a non-null object (checked just above); only `type` is read and compared to a literal.
         (block as Record<string, unknown>).type === 'tool_result',
     )
   );

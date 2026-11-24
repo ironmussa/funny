@@ -142,6 +142,8 @@ export class RunnerTerminalAdapter {
   }
 
   publish(event: WSEvent): void {
+    // SAFETY: terminal events (pty:*) carry an object `data` with `ptyId`; anything else yields an
+    // empty terminalId and returns below, and `data?.` tolerates a missing payload.
     const data = event.data as Record<string, any>;
     const terminalId = String(data?.ptyId ?? '');
     if (!terminalId) return;

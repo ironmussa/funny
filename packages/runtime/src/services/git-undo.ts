@@ -111,6 +111,8 @@ export function saveUndoSnapshot(params: {
       );
       return { ref: ref.value };
     })(),
+    // SAFETY: the body above throws DomainErrors (badRequest / notFound / an Err's error) or plain
+    // Errors from git; only a thrown value with a `type` field is passed on as the DomainError it is.
     (error) =>
       (error as DomainError)?.type
         ? (error as DomainError)
@@ -165,6 +167,8 @@ export function restoreUndoSnapshot(params: {
       }
       return { ref: saved.value.ref, kind };
     })(),
+    // SAFETY: the body above throws DomainErrors (badRequest / notFound / an Err's error) or plain
+    // Errors from git; only a thrown value with a `type` field is passed on as the DomainError it is.
     (error) =>
       (error as DomainError)?.type
         ? (error as DomainError)

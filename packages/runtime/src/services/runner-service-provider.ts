@@ -167,6 +167,8 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         const response = await remoteCreateProject(name, path, userId, orgId);
         if (response?.error) {
           return err({
+            // SAFETY: the server's create-project route answers errorType 'BAD_REQUEST' | 'CONFLICT' |
+            // 'INTERNAL' with an error; a missing one falls back to INTERNAL.
             type: (response.errorType as 'BAD_REQUEST' | 'CONFLICT' | 'INTERNAL') || 'INTERNAL',
             message: response.error,
           });

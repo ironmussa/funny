@@ -377,7 +377,7 @@ export async function runCheck(plan: CheckPlan, options: RunCheckOptions): Promi
   const started = now();
   const run = new RunProgress(plan, options.progressPath, now);
   let stopped: CheckRunResult['stopped'];
-  let outcome: { exitCode: number; tail: string[] } = { exitCode: 1, tail: [] };
+  let outcome = { exitCode: 1, tail: new Array<string>() };
   let inflight: Promise<unknown> = Promise.resolve();
   try {
     outcome = await runAsync(

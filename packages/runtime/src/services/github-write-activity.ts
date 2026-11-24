@@ -32,6 +32,8 @@ export interface GithubWrite {
 async function jsonOf(res: Response): Promise<Record<string, unknown>> {
   try {
     const body = await res.clone().json();
+    // SAFETY: GitHub REST JSON body narrowed to a non-null object here; `effectsOf` / `resultRefOf`
+    // read its fields defensively, and a non-object body becomes `{}`.
     return body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   } catch {
     return {};

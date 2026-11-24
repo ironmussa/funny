@@ -84,6 +84,8 @@ async function startEnrollment(serverUrl: string): Promise<EnrollStartResponse> 
   if (!res.ok) {
     throw new Error(`enroll/start failed: ${res.status}`);
   }
+  // SAFETY: 2xx body of the server's POST /api/runners/enroll/start, which answers EnrollStartResponse
+  // (shared contract); not validated here (trust boundary kept as is).
   return (await res.json()) as EnrollStartResponse;
 }
 
@@ -98,6 +100,8 @@ async function pollOnce(serverUrl: string, pollToken: string): Promise<EnrollPol
   if (res.status === 404) return null; // expired / unknown — restart enrollment
   if (res.status === 429) return { status: 'pending' }; // backoff, treat as pending
   if (!res.ok) throw new Error(`enroll/poll failed: ${res.status}`);
+  // SAFETY: 2xx body of the server's POST /api/runners/enroll/poll, which answers EnrollPollResponse
+  // (shared contract); the caller switches on its `status`.
   return (await res.json()) as EnrollPollResponse;
 }
 

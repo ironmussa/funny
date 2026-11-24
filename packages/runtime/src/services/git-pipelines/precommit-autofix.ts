@@ -26,6 +26,8 @@ export class HookFailedError extends Error {
   }
 }
 
+type HookSubItem = NonNullable<GitWorkflowProgressStep['subItems']>[number];
+
 interface AutoFixParams {
   cwd: string;
   userId: string;
@@ -69,13 +71,10 @@ export async function attemptPrecommitAutoFix(params: AutoFixParams): Promise<bo
   });
 
   for (let attempt = 1; attempt <= maxIterations; attempt++) {
-    const fixingSubItems = params.hooks.map((h, idx) => ({
+    const fixingSubItems = params.hooks.map((h, idx): HookSubItem => ({
       label: idx === params.hookIndex ? `${h.label} (auto-fixing, attempt ${attempt})` : h.label,
-      status: (idx < params.hookIndex
-        ? 'completed'
-        : idx === params.hookIndex
-          ? 'running'
-          : 'pending') as 'pending' | 'running' | 'completed' | 'failed',
+      status:
+        idx < params.hookIndex ? 'completed' : idx === params.hookIndex ? 'running' : 'pending',
     }));
     params.setStep('hooks', { status: 'running', subItems: fixingSubItems });
 

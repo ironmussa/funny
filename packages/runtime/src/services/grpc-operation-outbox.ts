@@ -62,6 +62,8 @@ function assertDurableJson(
         continue;
       }
       if (Object.prototype.propertyIsEnumerable.call(value, key)) {
+        // SAFETY: `value` is a non-null, non-array plain object (checked above) and `key` is one of its
+        // own enumerable string keys, so indexing it as a string record reads that property.
         assertDurableJson((value as Record<string, unknown>)[key], `${path}.${key}`, ancestors);
       }
     }

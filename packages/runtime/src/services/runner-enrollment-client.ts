@@ -95,8 +95,10 @@ export class RunnerEnrollmentClient {
       while: (error) => error instanceof RegistrationRetry,
       // Re-enrollment already did its slow work; retry registration immediately.
       delayMs: (retry, error) =>
+        // SAFETY: retryAsync only retries (and asks for a delay) when `while` held, i.e. error instanceof RegistrationRetry.
         (error as RegistrationRetry).reenrolled ? 0 : Math.min(2000 * retry, 15_000),
       onRetry: (error, retry, delayMs) => {
+        // SAFETY: onRetry runs only for errors that passed `while` (instanceof RegistrationRetry).
         if ((error as RegistrationRetry).reenrolled) return;
         log.warn(`Registration failed, retrying in ${delayMs / 1000}s (attempt ${retry})`, {
           namespace: 'runner',
@@ -128,6 +130,7 @@ export class RunnerEnrollmentClient {
   private async centralFetch(path: string, options: RequestInit = {}): Promise<Response> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      // SAFETY: both callers in this class pass `headers` as a plain string record (registrationHeaders()) or omit it.
       ...(options.headers as Record<string, string>),
     };
     if (this.session?.token) headers.Authorization = `Bearer ${this.session.token}`;
@@ -160,6 +163,8 @@ export class RunnerEnrollmentClient {
         return { session: null, authFailed: res.status === 401 || res.status === 403 };
       }
 
+      // SAFETY: 2xx body of the server's POST /api/runners/register, which answers RunnerRegisterResponse;
+      // not validated here (trust boundary kept as is), the fields are only copied into the session.
       const data = (await res.json()) as RunnerRegisterResponse;
       const session = this.makeSession({
         runnerId: data.runnerId,

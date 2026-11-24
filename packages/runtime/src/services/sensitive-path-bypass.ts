@@ -34,6 +34,7 @@ const NAMESPACE = 'sensitive-path-bypass';
 
 export async function runSensitivePathBypass(query: BypassQuery): Promise<BypassResult | null> {
   const { toolName, toolInput, cwd } = query;
+  // SAFETY: a tool call's input is the agent's argument object; every field is typeof-checked before use.
   const ti = (toolInput ?? {}) as Record<string, unknown>;
 
   if (toolName === 'Write') {

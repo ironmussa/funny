@@ -63,6 +63,7 @@ export async function createPermissionRule(
   } catch (err) {
     log.warn('createPermissionRule failed', {
       namespace: 'permission-rules-client',
+      // SAFETY: logging only; optional chaining tolerates a non-Error rejection (logs undefined).
       error: (err as Error)?.message,
     });
     return null;
@@ -83,6 +84,7 @@ export async function findPermissionRule(
   } catch (err) {
     log.warn('findPermissionRule failed', {
       namespace: 'permission-rules-client',
+      // SAFETY: logging only; optional chaining tolerates a non-Error rejection (logs undefined).
       error: (err as Error)?.message,
     });
     return null;
@@ -105,6 +107,7 @@ export async function listPermissionRules(query: {
   } catch (err) {
     log.warn('listPermissionRules failed', {
       namespace: 'permission-rules-client',
+      // SAFETY: logging only; optional chaining tolerates a non-Error rejection (logs undefined).
       error: (err as Error)?.message,
     });
     return [];

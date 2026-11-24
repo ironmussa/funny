@@ -59,6 +59,8 @@ export class RunnerEventPublisher {
     const stored = this.store.append({
       scope: { threadId, executionId: this.executions.get(threadId)! },
       eventType: event.type,
+      // SAFETY: every thread-scoped WSEvent variant carries an object `data` payload; the store
+      // only serializes it to protobuf Struct JSON.
       data: event.data as Record<string, unknown>,
       durability: runnerEventDurability(event),
     });
@@ -79,7 +81,7 @@ export class RunnerEventPublisher {
   private publishUserEvent(event: WSEvent): void {
     if (!this.userEventsEnabled || !isRunnerUserEventType(event.type)) return;
     this.sender.send('events', {
-      userEvent: { eventType: event.type, data: (event as { data?: unknown }).data ?? {} },
+      userEvent: { eventType: event.type, data: event.data ?? {} },
     });
   }
 

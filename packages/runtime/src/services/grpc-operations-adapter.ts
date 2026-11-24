@@ -142,6 +142,8 @@ export function normalizeRunnerOperationValue(
   kind: string,
   value: Record<string, any>,
 ): Record<string, any> {
+  // SAFETY: normalizeProtobufJson maps an object to a plain object with the same keys, and
+  // `value` is an object here, so the result is a record of normalized JSON values.
   const normalized = normalizeProtobufJson(value) as Record<string, any>;
   switch (kind) {
     case 'insertMessage': {
@@ -400,6 +402,7 @@ function missingOperationResult(kind: string): unknown | undefined {
 }
 
 function isRunnerOperationEventType(value: string): value is RunnerOperationEventType {
+  // SAFETY: widening the literal tuple to readonly string[] only lets `includes` take an arbitrary string.
   return (RUNNER_OPERATION_EVENT_TYPES as readonly string[]).includes(value);
 }
 
@@ -544,6 +547,8 @@ export class GrpcOperationsAdapter {
         deadline: new Date(Date.now() + OPERATION_TIMEOUT_MS).toISOString(),
         ...(idempotencyKey ? { idempotencyKey } : undefined),
       },
+      // SAFETY: every caller passes an operation's `value` / outbox `payload`, which the operation
+      // builders create as a plain object keyed by the protobuf field names of `kind`.
       [kind]: normalizeRunnerOperationValue(kind, value as Record<string, any>),
     });
     if (sent) {

@@ -70,6 +70,7 @@ export class IdleReaper {
     }
     // Dedupe across bun --watch reloads: a fresh module instance stops the
     // previous one's schedule so we never run two sweeps in parallel.
+    // SAFETY: only this module writes `__funnyIdleReaperSchedule` on globalThis, always a SweepSchedule or undefined.
     const g = globalThis as { __funnyIdleReaperSchedule?: SweepSchedule };
     g.__funnyIdleReaperSchedule?.stop();
 
@@ -95,6 +96,7 @@ export class IdleReaper {
   stop(): void {
     if (!this.schedule) return;
     this.schedule.stop();
+    // SAFETY: as in start(), the slot only ever holds this module's SweepSchedule or undefined.
     const g = globalThis as { __funnyIdleReaperSchedule?: SweepSchedule };
     if (g.__funnyIdleReaperSchedule === this.schedule) g.__funnyIdleReaperSchedule = undefined;
     this.schedule = null;

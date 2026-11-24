@@ -73,6 +73,8 @@ export const gitWatcherStopOnAgentCompletedHandler: EventHandler<'agent:complete
 
   action(event: AgentCompletedEvent) {
     // Waiting status means the agent will resume — keep watching
+    // SAFETY: widened to string only to compare it: emitters may still send 'waiting', which the
+    // declared status union no longer lists.
     if ((event.status as string) === 'waiting') return;
     stopWatching(event.projectId, event.threadId);
   },

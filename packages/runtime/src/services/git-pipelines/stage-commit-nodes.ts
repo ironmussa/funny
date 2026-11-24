@@ -15,6 +15,7 @@ import {
   gitRead,
 } from '@funny/core/git';
 import { node, type PipelineNode } from '@funny/pipelines';
+import type { GitWorkflowProgressStep } from '@funny/shared';
 
 import {
   stage as gitServiceStage,
@@ -26,6 +27,8 @@ import { emitWorkflowEvent } from '../workflow-event-helpers.js';
 import type { GitPipelineContext } from './context.js';
 import { unwrapGit } from './node-helpers.js';
 import { attemptPrecommitAutoFix, HookFailedError } from './precommit-autofix.js';
+
+type HookSubItem = NonNullable<GitWorkflowProgressStep['subItems']>[number];
 
 // ── Stage nodes ──────────────────────────────────────────────
 
@@ -84,13 +87,9 @@ async function hooksNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   if (ctx.hooks.length > 0) {
     for (let i = 0; i < ctx.hooks.length; i++) {
       // Mark current hook running, previous completed
-      const subItems = ctx.hooks.map((h, idx) => ({
+      const subItems = ctx.hooks.map((h, idx): HookSubItem => ({
         label: h.label,
-        status: (idx < i ? 'completed' : idx === i ? 'running' : 'pending') as
-          | 'pending'
-          | 'running'
-          | 'completed'
-          | 'failed',
+        status: idx < i ? 'completed' : idx === i ? 'running' : 'pending',
       }));
       ctx.setStep('hooks', { status: 'running', subItems });
 
@@ -125,13 +124,9 @@ async function hooksNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
         }
 
         // Not auto-fixable or auto-fix failed
-        const failedSubItems = ctx.hooks.map((h, idx) => ({
+        const failedSubItems = ctx.hooks.map((h, idx): HookSubItem => ({
           label: h.label,
-          status: (idx < i ? 'completed' : idx === i ? 'failed' : 'pending') as
-            | 'pending'
-            | 'running'
-            | 'completed'
-            | 'failed',
+          status: idx < i ? 'completed' : idx === i ? 'failed' : 'pending',
           error: idx === i ? hookResult.output : undefined,
         }));
         ctx.setStep('hooks', {

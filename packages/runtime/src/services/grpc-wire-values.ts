@@ -12,6 +12,8 @@ export function binary(value: unknown): Uint8Array | null {
 
 export function unsigned(value: unknown): bigint | null {
   try {
+    // SAFETY: BigInt converts any wire value it can and throws on the rest (objects, fractions,
+    // non-numeric strings), which the catch below turns into null.
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n ? parsed : null;
   } catch {

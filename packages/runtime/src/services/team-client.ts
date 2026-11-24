@@ -137,7 +137,7 @@ async function assignLocalProjects(): Promise<void> {
   } catch (err) {
     log.warn('Failed to assign local projects', {
       namespace: 'runner',
-      error: err as any,
+      error: err,
     });
   }
 }
@@ -173,6 +173,8 @@ function handleBrowserWSMessage(
   grpcRespond?: (responseData: unknown) => void,
 ): void {
   if (!state.browserWSHandler) {
+    // SAFETY: logging only; a browser WS message is a `{ type, data }` object (or null via `?.`), and a
+    // missing type logs 'unknown'.
     const type = (data as { type?: string } | null)?.type ?? 'unknown';
     log.warn('No browser WS handler registered — dropping message', {
       namespace: 'runner',
@@ -264,6 +266,8 @@ async function handleGrpcControl(
   if (signal.aborted) throw new Error('runner command cancelled');
 
   if (command.startAgent) {
+    // SAFETY: runner.v2 `startAgent` control command, decoded by protobuf-es toJson into an object;
+    // startAgentForControl String()-coerces each field it reads (trust boundary: not validated here).
     await startAgentForControl(command.startAgent as Record<string, any>, signal);
     return {};
   }
@@ -276,6 +280,8 @@ async function handleGrpcControl(
   }
 
   if (command.sendAgentMessage) {
+    // SAFETY: runner.v2 `sendAgentMessage` control command, decoded by protobuf-es toJson into an object;
+    // its fields are String()-coerced or passed as optional below (trust boundary: not validated here).
     const input = command.sendAgentMessage as Record<string, any>;
     const { sendMessage } = await import('./thread-service/messaging.js');
     const result = await sendMessage({
@@ -290,6 +296,8 @@ async function handleGrpcControl(
       images: input.images,
     });
     if (result.isErr()) throw new Error(result.error.message);
+    // SAFETY: sendMessage's success value is a plain JSON object; the control channel only serializes it
+    // as a protobuf Struct, so the record view is all the caller needs.
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
     return result.value as unknown as Record<string, unknown>;
   }
@@ -336,6 +344,7 @@ async function connectGrpc(endpoint: string): Promise<void> {
     handleTerminal: (command: GrpcTerminalCommand, respond) => {
       if (!command.userId) return;
       handleBrowserWSMessage(command.userId, { type: command.type, data: command.data }, (event) =>
+        // SAFETY: the browser WS handler responds with the WSEvent it built for this terminal command.
         respond(event as WSEvent),
       );
     },

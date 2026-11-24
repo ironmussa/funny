@@ -103,7 +103,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
                 onSave(projectId, { color: hex });
               }}
             >
-              <ColorPickerSelection className="h-40 rounded-lg" />
+              <ColorPickerSelection corners="lg" className="h-40" />
               <ColorPickerHue />
               <ColorPickerAlpha />
               <div className="flex items-center gap-2">

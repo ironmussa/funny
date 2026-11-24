@@ -163,6 +163,11 @@ export async function stopFactoryThreads(
   }
 }
 
+/** Field → value of a follow-up message body sent to the runner. */
+interface FollowUpMessageBody {
+  [field: string]: unknown;
+}
+
 /**
  * Send `content` as a follow-up to the enabler's thread, which runs its agent
  * again. With `expectedBranch` (the run's branch) the runner refuses it when
@@ -187,7 +192,7 @@ export async function sendFactoryFollowUp(
     .where(and(eq(threads.id, threadId), eq(threads.userId, userId)));
   if (!thread) return err('the thread no longer exists');
   const path = `/api/threads/${threadId}/message`;
-  const message: Record<string, unknown> = { ...options, content };
+  const message: FollowUpMessageBody = { ...options, content };
   if (expectedBranch) message.expectedBranch = expectedBranch;
   const sent = await postToThread(ports, userId, path, message);
   if (sent.isOk() || !sent.error.sandboxAsleep) return sent.mapErr((e) => e.message);

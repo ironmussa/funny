@@ -154,12 +154,18 @@ const isSplitPart = (issue: FactoryIssueText | null): boolean =>
 /** Mentions turned into plain text, so copying a description pings nobody again. */
 const withoutMentions = (text: string): string => text.replace(/@(?=[\w-])/g, '');
 
+/** The title and body of an issue to open. */
+interface SplitPartIssue {
+  title: string;
+  body: string;
+}
+
 /** The issue opened for part `index` (from 0) of `parts`, already sanitized by `publicItems`. */
 export function splitPartIssue(input: {
   parent: { number: number; title: string; body: string | null };
   parts: readonly string[];
   index: number;
-}): { title: string; body: string } {
+}): SplitPartIssue {
   const { parent, parts, index } = input;
   const part = parts[index];
   const position = `${index + 1}/${parts.length}`;

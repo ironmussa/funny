@@ -288,6 +288,11 @@ export type FactoryRunStart = 'started' | 'not-started';
 const subjectOf = (job: FactoryRunJob): string =>
   job.issue ? `Issue #${job.issue.number}` : `"${job.run.triggerName ?? flowOf(job)}"`;
 
+/** Flow input name → value. */
+interface FlowInputs {
+  [name: string]: string;
+}
+
 /**
  * The flow's inputs for a run: the issue's for an issue run, what its trigger
  * recorded otherwise, then the factory's own, which always win.
@@ -300,7 +305,7 @@ export function flowInputsOf(
   // What the host's concurrency groups are named by (the merge lane, stage limits),
   // and a stacked run's blocker branch (empty otherwise).
   at: { branch: string; baseBranch: string; stackBranch?: string },
-): Record<string, string> {
+): FlowInputs {
   const subject = job.issue
     ? {
         issue_number: String(job.issue.number),
@@ -341,11 +346,17 @@ const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineConte
   decode: (stored) => ({ ...live, outputs: stored as Record<string, NodeOutput> }),
 });
 
+/** The gate a flow run waits on, and how to stop renewing its leases. */
+interface FlowGate {
+  gate: ConcurrencyGate;
+  stop: () => void;
+}
+
 /** The given gate, or this server's lease gate with how to stop renewing its leases. */
 function flowGate(
   given: ConcurrencyGate | undefined,
   rules: Pick<MemoryGateOptions, 'resolveLimit' | 'priority'>,
-): { gate: ConcurrencyGate; stop: () => void } {
+): FlowGate {
   if (given) return { gate: given, stop: () => {} };
   const leases = createLeaseGate(rules);
   return { gate: leases, stop: () => leases.stop() };

@@ -66,8 +66,13 @@ const QUEUE_INTERVAL_MS = 30 * 1000;
 const QUEUE_READ_RETRIES = 5;
 const QUEUE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
+/** Merge queue state → where it leaves the pull request, for the final states only. */
+interface QueueEnds {
+  [state: string]: QueueEnd | undefined;
+}
+
 /** Where each final queue state leaves the pull request (`queued` is not final). */
-const QUEUE_ENDS: Partial<Record<string, QueueEnd>> = {
+const QUEUE_ENDS: QueueEnds = {
   merged: { kind: 'merged' },
   'not-queued': { kind: 'removed' },
   closed: { kind: 'failed', error: 'The pull request was closed while in the merge queue.' },

@@ -70,6 +70,11 @@ export const REVIEWER_DISALLOWED_TOOLS: readonly string[] = [
   'AskUserQuestion',
 ];
 
+/** Field → value of a read-only role thread's creation body. */
+interface RoleThreadBody {
+  [field: string]: unknown;
+}
+
 /**
  * The launch body of a read-only role's thread (reviewer, triage): fixed by
  * the server, whatever the flow says, as a new thread that cannot write.
@@ -84,7 +89,7 @@ export function readOnlyRoleLaunch(input: {
   opts: { provider?: string | null; model?: string | null; effort?: string | null };
   issue: FactoryIssueText | null;
   prompt: string;
-}): Record<string, unknown> {
+}): RoleThreadBody {
   return {
     projectId: input.scope.projectId,
     title: input.title.slice(0, 200),

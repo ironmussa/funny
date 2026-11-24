@@ -112,7 +112,6 @@ const meta: Meta<typeof IssuesFactoryBar> = {
     settings: settings(),
     selected: [12, 15],
     onSent: () => {},
-    onClear: () => {},
   },
   decorators: [
     (Story) => (

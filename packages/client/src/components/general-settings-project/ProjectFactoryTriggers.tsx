@@ -122,7 +122,7 @@ function TriggerDialog({
             <Input
               value={draft.schedule}
               placeholder="0 3 * * *"
-              className="font-mono"
+              mono
               onChange={(e) => setDraft({ ...draft, schedule: e.target.value })}
               data-testid="settings-factory-trigger-schedule"
             />

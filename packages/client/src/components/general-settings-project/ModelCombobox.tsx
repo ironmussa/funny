@@ -46,7 +46,7 @@ export function ModelCombobox({ value, onChange, options, placeholder, searchPla
           <ChevronsUpDown className="icon-xs ml-1 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0" align="start">
+      <PopoverContent className="w-[200px]" padding="none" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} className="h-8 text-xs" />
           <CommandList id={listId}>

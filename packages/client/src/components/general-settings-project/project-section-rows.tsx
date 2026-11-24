@@ -159,7 +159,8 @@ export function ProjectSystemPrompt({
           'settings.systemPromptPlaceholder',
           "e.g. Always use TypeScript strict mode. Follow the repository's existing patterns...",
         )}
-        className="min-h-[120px] resize-y font-mono text-xs"
+        mono
+        className="min-h-[120px] resize-y text-xs"
         data-testid="settings-system-prompt"
       />
     </SettingAnchor>

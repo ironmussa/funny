@@ -10,6 +10,10 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import {
+  recordServerActivity,
+  type ServerActivityOutcome,
+} from '../../services/activities/server-activities.js';
 import { BUILT_IN_FACTORY_FLOWS } from '../../services/factory/factory-flow.js';
 import {
   createFactoryIncidentsRepository,
@@ -88,28 +92,66 @@ type RunControlAction = 'stop' | 'retry' | 'approve-merge';
 
 const withoutSha = (run: FactoryRunView) => ({ run, sha: null as string | null });
 
-/** How each run control is audited. */
+/** How each run control is audited and titled in the member's activities. */
 const RUN_CONTROL: Record<
   RunControlAction,
   {
     audit: 'factory.run_stopped' | 'factory.run_retried' | 'factory.merge_approved';
+    kind: 'factory.stop' | 'factory.retry' | 'factory.approve-merge';
     auditDetail: (issue: number, sha: string | null) => string;
+    /** Past tense when it worked; what was asked when it did not (the row shows why). */
+    title: (issue: number | undefined, sha: string | null, done: boolean) => string;
   }
 > = {
   stop: {
     audit: 'factory.run_stopped',
+    kind: 'factory.stop',
     auditDetail: (issue) => `Factory run for issue #${issue} stopped`,
+    title: (issue, _sha, done) =>
+      `${done ? 'Stopped' : 'Stop'} the factory run${issue ? ` for #${issue}` : ''}`,
   },
   retry: {
     audit: 'factory.run_retried',
+    kind: 'factory.retry',
     auditDetail: (issue) => `Factory run for issue #${issue} retried`,
+    title: (issue, _sha, done) =>
+      `${done ? 'Retried' : 'Retry'} the factory run${issue ? ` for #${issue}` : ''}`,
   },
   'approve-merge': {
     audit: 'factory.merge_approved',
+    kind: 'factory.approve-merge',
     auditDetail: (issue, sha) =>
       `Merge of the high-risk change for issue #${issue} approved at ${sha ?? 'unknown commit'}`,
+    title: (issue, sha, done) =>
+      `${done ? 'Approved merging' : 'Approve merging'}${issue ? ` #${issue}` : ''}, a high-risk change${sha ? ` (${sha.slice(0, 7)})` : ''}`,
   },
 };
+
+/** The run control as a row of the member's activities; recording never fails the control. */
+function recordRunControl(
+  action: RunControlAction,
+  userId: string,
+  projectId: string,
+  issueNumber: number | undefined,
+  sha: string | null,
+  outcome: ServerActivityOutcome,
+): Promise<void> {
+  const { kind, title } = RUN_CONTROL[action];
+  return recordServerActivity(
+    {
+      kind,
+      userId,
+      projectId,
+      title: title(issueNumber, sha, outcome.ok),
+      input: {
+        ...(issueNumber !== undefined && { issueNumber }),
+        ...(action === 'approve-merge' && sha && { sha }),
+      },
+      origin: 'user',
+    },
+    outcome,
+  );
+}
 
 function createFactoryPort(
   settings = createFactorySettingsService(),
@@ -163,8 +205,9 @@ function createFactoryPort(
     };
 
   /**
-   * A member's control over one run (stop, retry, approve a held merge): run
-   * and audited.
+   * A member's control over one run (stop, retry, approve a held merge): run,
+   * audited, and shown in their activities whether it worked or not
+   * (track-funny-actions).
    */
   const controlled = (
     action: RunControlAction,
@@ -188,6 +231,16 @@ function createFactoryPort(
           detail: RUN_CONTROL[action].auditDetail(run.issueNumber, sha),
           meta: { projectId, runId, issueNumber: run.issueNumber, ...(sha && { sha }) },
         });
+        void recordRunControl(action, userId, projectId, run.issueNumber, sha, { ok: true });
+      })
+      .orTee((error) => {
+        // The run's issue, when the run can still be read, names the failed action.
+        void runs.get(runId).map((run) =>
+          recordRunControl(action, userId, projectId, run?.issueNumber, null, {
+            ok: false,
+            error: error.message,
+          }),
+        );
       })
       .map(({ run }) => run);
 

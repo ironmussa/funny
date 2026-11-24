@@ -10,7 +10,8 @@ describe('VisualParityFixtureHost', () => {
   test('renders the shared desktop structure and tokens', () => {
     render(<VisualParityFixtureHost fixture={desktopParityFixture} />);
     const root = screen.getByTestId(`parity-fixture-${desktopParityFixture.id}`);
-    expect(root).toHaveStyle({ background: referenceDark.colors.canvas });
+    expect(root.style.getPropertyValue('--parity-canvas')).toBe(referenceDark.colors.canvas);
+    expect(root).toHaveClass('[background:var(--parity-canvas)]');
     expect(root.querySelectorAll('[data-parity-role="navigation"] [data-parity-id]')).toHaveLength(
       desktopParityFixture.navigation.length,
     );

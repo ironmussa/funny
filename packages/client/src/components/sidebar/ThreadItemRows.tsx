@@ -66,18 +66,21 @@ function AgentTemplateBadge({ thread }: { thread: Thread }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="text-2xs flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 leading-none font-medium"
-          style={{
-            backgroundColor: color ? `${color}22` : 'hsl(var(--muted))',
-            color: color ?? 'hsl(var(--muted-foreground))',
-          }}
+          className={cn(
+            'text-2xs flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 leading-none font-medium',
+            color
+              ? 'bg-[color:var(--thread-template-tint)] text-[color:var(--thread-template-color)]'
+              : 'bg-muted text-muted-foreground',
+          )}
+          style={
+            color
+              ? { '--thread-template-tint': `${color}22`, '--thread-template-color': color }
+              : undefined
+          }
           data-testid={`thread-template-badge-${thread.id}`}
         >
           {color && (
-            <span
-              className="inline-block size-1.5 rounded-full"
-              style={{ backgroundColor: color }}
-            />
+            <span className="inline-block size-1.5 rounded-full bg-[color:var(--thread-template-color)]" />
           )}
           {agentTemplate.name}
         </span>

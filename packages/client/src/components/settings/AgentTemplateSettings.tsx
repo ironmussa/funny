@@ -325,8 +325,8 @@ function TemplateCardSummary({
     <>
       {template.color && (
         <span
-          className="size-3 shrink-0 rounded-full"
-          style={{ backgroundColor: template.color }}
+          className="size-3 shrink-0 rounded-full bg-[color:var(--agent-template-color)]"
+          style={{ '--agent-template-color': template.color }}
         />
       )}
       <span className="min-w-0 flex-1">
@@ -524,8 +524,9 @@ function IdentitySection({
               className={cn(
                 'size-5 rounded-full border-2 transition-all',
                 template.color === color ? 'border-foreground scale-110' : 'border-transparent',
+                'bg-[color:var(--agent-template-swatch)]',
               )}
-              style={{ backgroundColor: color }}
+              style={{ '--agent-template-swatch': color }}
               onClick={() => onSave({ color })}
               aria-label={`Set color ${color}`}
               aria-pressed={template.color === color}

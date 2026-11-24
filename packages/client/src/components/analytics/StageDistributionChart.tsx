@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { EmptyState } from '@/components/ui/empty-state';
+import { cn } from '@/lib/utils';
 
 interface Props {
   data: Record<string, number>;
@@ -15,6 +16,26 @@ const COLORS: Record<string, string> = {
   done: '#22c55e',
   archived: '#8b5cf6',
 };
+
+/** Legend class for a stage: the COLORS value, as a theme token in globals.css. */
+function legendBgClass(stage: string): string | undefined {
+  switch (stage) {
+    case 'backlog':
+      return 'bg-stage-backlog';
+    case 'planning':
+      return 'bg-stage-planning';
+    case 'in_progress':
+      return 'bg-stage-in-progress';
+    case 'review':
+      return 'bg-stage-review';
+    case 'done':
+      return 'bg-stage-done';
+    case 'archived':
+      return 'bg-stage-archived';
+    default:
+      return undefined;
+  }
+}
 
 // Hoisted tooltip styles to avoid re-creating objects on every render (rerender-memo-with-default-value)
 const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
@@ -77,11 +98,12 @@ export function StageDistributionChart({ data }: Props) {
 
       <div className="flex-1 space-y-2">
         {chartData.map((entry) => (
-          <div key={entry.stage} className="flex items-center gap-3">
-            <div
-              className="size-3 shrink-0 rounded-full"
-              style={{ backgroundColor: COLORS[entry.stage] }}
-            />
+          <div
+            key={entry.stage}
+            className="flex items-center gap-3"
+            style={{ '--stage-share': `${(entry.value / total) * 100}%` }}
+          >
+            <div className={cn('size-3 shrink-0 rounded-full', legendBgClass(entry.stage))} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground text-xs">{entry.name}</span>
@@ -89,11 +111,10 @@ export function StageDistributionChart({ data }: Props) {
               </div>
               <div className="bg-muted mt-1 h-1.5 overflow-hidden rounded-full">
                 <div
-                  className="h-full rounded-full transition-[width,background-color]"
-                  style={{
-                    width: `${(entry.value / total) * 100}%`,
-                    backgroundColor: COLORS[entry.stage],
-                  }}
+                  className={cn(
+                    'h-full w-[var(--stage-share)] rounded-full transition-[width,background-color]',
+                    legendBgClass(entry.stage),
+                  )}
                 />
               </div>
             </div>

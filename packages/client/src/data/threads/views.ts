@@ -38,8 +38,8 @@ export function groupThreadsByStage(threads: readonly Thread[]): ThreadsByStage 
     }
     return time;
   };
-  for (const stage of Object.keys(columns) as ThreadStage[]) {
-    columns[stage].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || timeOf(b) - timeOf(a));
+  for (const column of Object.values(columns)) {
+    column.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || timeOf(b) - timeOf(a));
   }
   return columns;
 }

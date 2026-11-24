@@ -6,7 +6,7 @@ import { useStore } from 'zustand';
 
 import { useDataLayer } from '../hooks';
 import { liveQueryKey } from '../live-query-key';
-import type { ThreadListMetaState, ThreadSourceKey } from './list-meta';
+import { projectSource, type ThreadListMetaState, type ThreadSourceKey } from './list-meta';
 import { getThreadsData, type ThreadsData } from './store';
 import { boardThreadIds, deriveOrderedThreads, unionIds } from './views';
 
@@ -77,7 +77,7 @@ export function useThreadById(threadId: string | null | undefined): Thread | und
 
 /** Ordered rows of a project's list (server order). */
 export function useThreadsForProject(projectId: string): Thread[] {
-  return useSourceThreads(`${PROJECT_PREFIX}${projectId}` as ThreadSourceKey);
+  return useSourceThreads(projectSource(projectId));
 }
 
 /** Ordered scratch list (most recent first). */
@@ -101,7 +101,10 @@ export function useThreadsByProject(): Record<string, Thread[]> {
   const data = useThreadsData();
   const members = useMembers(data);
   const projectSources = useMemo(
-    () => (Object.keys(members) as ThreadSourceKey[]).filter((s) => s.startsWith(PROJECT_PREFIX)),
+    () =>
+      // SAFETY: members is keyed by ThreadSourceKey, and list-meta.ts writes it
+      // only with ThreadSourceKey keys.
+      (Object.keys(members) as ThreadSourceKey[]).filter((s) => s.startsWith(PROJECT_PREFIX)),
     [members],
   );
   const ids = useStableIds(

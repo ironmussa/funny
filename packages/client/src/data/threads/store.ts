@@ -2,6 +2,7 @@ import type { Thread } from '@funny/shared';
 import type { Collection } from '@tanstack/db';
 
 import type { DataLayer } from '../data-layer';
+import { stripVirtualProps } from '../entities';
 import { getDataLayer } from '../runtime';
 import {
   createSyncedCollection,
@@ -33,23 +34,15 @@ import {
  * the optimistic row.
  */
 
-type CollectionRow = Thread & { $hasPendingWrites?: boolean };
-
 const plainCopies = new WeakMap<object, Thread>();
 
 /** Strip TanStack DB virtual props (`$…` keys). Memoized per collection row. */
 function toPlainThread(row: Thread): Thread {
   const cached = plainCopies.get(row);
   if (cached) return cached;
-  const plain = {} as Record<string, unknown>;
-  for (const key of Object.keys(row)) {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    if (!key.startsWith('$')) plain[key] = (row as unknown as Record<string, unknown>)[key];
-  }
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-  plainCopies.set(row, plain as unknown as Thread);
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-  return plain as unknown as Thread;
+  const plain = stripVirtualProps(row);
+  plainCopies.set(row, plain);
+  return plain;
 }
 
 type SyncParams = SyncedCollectionParams<Thread>;
@@ -133,6 +126,8 @@ function createThreadsData(layer: DataLayer): ThreadsData {
   let batchDepth = 0;
 
   function messageKey(message: Message): string {
+    // SAFETY: this store builds delete messages as { type: 'delete', key } and
+    // every other message with a Thread `value`, so the type picks the shape.
     return message.type === 'delete'
       ? String((message as { key: string }).key)
       : (message as { value: Thread }).value.id;
@@ -147,9 +142,9 @@ function createThreadsData(layer: DataLayer): ThreadsData {
     } else if (prev.type === 'insert' && message.type === 'delete') {
       held!.delete(key); // inserted and removed inside the scope: never visible
     } else if (prev.type === 'insert' && message.type === 'update') {
-      held!.set(key, { type: 'insert', value: (message as { value: Thread }).value });
+      held!.set(key, { type: 'insert', value: message.value });
     } else if (prev.type === 'delete' && message.type === 'insert') {
-      held!.set(key, { type: 'update', value: (message as { value: Thread }).value });
+      held!.set(key, { type: 'update', value: message.value });
     } else {
       held!.set(key, message);
     }
@@ -200,15 +195,15 @@ function createThreadsData(layer: DataLayer): ThreadsData {
     fromRow(row) {
       const cached = fromRowCache.get(row);
       if (cached) return cached;
-      const pending = (row as CollectionRow).$hasPendingWrites;
+      const pending = '$hasPendingWrites' in row && row.$hasPendingWrites;
       const plain = (!pending && synced.get(row.id)) || toPlainThread(row);
       fromRowCache.set(row, plain);
       return plain;
     },
     readThread(threadId) {
-      const row = collection.get(threadId) as CollectionRow | undefined;
+      const row = collection.get(threadId);
       if (!row) return undefined;
-      if (!row.$hasPendingWrites) {
+      if (!('$hasPendingWrites' in row && row.$hasPendingWrites)) {
         const confirmed = synced.get(threadId);
         if (confirmed) return confirmed;
       }
@@ -262,6 +257,7 @@ function createThreadsData(layer: DataLayer): ThreadsData {
     },
 
     confirmWrite(threadId, fields) {
+      // SAFETY: the keys come from Object.keys(fields), and fields is a Partial<Thread>.
       fenceFields(fences, threadId, Object.keys(fields) as (keyof Thread)[], layer.nextSeq());
       const prev = synced.get(threadId);
       if (!prev) return;

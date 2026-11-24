@@ -221,6 +221,8 @@ const DETAIL_PAYLOAD_KEYS = new Set([
 
 /** The thread row part of a detail response (`api.getThread`). */
 function threadRowOfDetail(detail: Thread): Thread {
+  // SAFETY: the result keeps every field of `detail` (a Thread) except the
+  // detail payload keys, none of which is a Thread field.
   return Object.fromEntries(
     Object.entries(detail).filter(([key]) => !DETAIL_PAYLOAD_KEYS.has(key)),
   ) as Thread;
@@ -244,6 +246,7 @@ export function adoptThreadDetail(detail: Thread, layer: DataLayer = getDataLaye
   }
   data.patchSynced(row.id, (prev) => {
     const missing = Object.entries(row).filter(
+      // SAFETY: `key` comes from Object.entries(row), and row is a Thread.
       ([key, value]) => value !== undefined && prev[key as keyof Thread] === undefined,
     );
     return missing.length > 0 ? { ...prev, ...Object.fromEntries(missing) } : prev;

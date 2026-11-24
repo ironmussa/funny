@@ -20,7 +20,6 @@ import { createSyncedCollection, type SyncParams } from './synced-collection';
  */
 
 type Entity = { id: string };
-type CollectionRow<T> = T & { $hasPendingWrites?: boolean };
 
 export interface EntityStore<T extends Entity> {
   readonly collection: Collection<T, string>;
@@ -45,11 +44,16 @@ export interface EntityStore<T extends Entity> {
   remove(ids: readonly string[]): void;
 }
 
-function stripVirtualProps<T>(row: T): T {
-  const plain = {} as Record<string, unknown>;
-  for (const key of Object.keys(row as object)) {
-    if (!key.startsWith('$')) plain[key] = (row as Record<string, unknown>)[key];
+/** A plain copy of `row` without TanStack DB's `$…` virtual props. */
+export function stripVirtualProps<T extends Entity>(row: T): T {
+  const plain: Record<string, unknown> = {};
+  for (const key of Object.keys(row)) {
+    if (key.startsWith('$')) continue;
+    // SAFETY: `key` comes from Object.keys(row), so it is an own field of row.
+    plain[key] = (row as Record<string, unknown>)[key];
   }
+  // SAFETY: plain holds every own field of row except TanStack DB's `$…`
+  // virtual props, which are not part of T.
   return plain as T;
 }
 
@@ -84,15 +88,15 @@ export function createEntityStore<T extends Entity>(
     const prev = synced.get(next.id);
     if (prev === next) return;
     synced.set(next.id, next);
-    out.push({ type: prev ? 'update' : 'insert', value: next } as Message);
+    out.push({ type: prev ? 'update' : 'insert', value: next });
   }
 
   function plainOf(row: T): T {
-    const cached = plainCopies.get(row as object);
+    const cached = plainCopies.get(row);
     if (cached) return cached;
-    const pending = (row as CollectionRow<T>).$hasPendingWrites;
+    const pending = '$hasPendingWrites' in row && row.$hasPendingWrites;
     const plain = (!pending && synced.get(row.id)) || stripVirtualProps(row);
-    plainCopies.set(row as object, plain);
+    plainCopies.set(row, plain);
     return plain;
   }
 
@@ -102,7 +106,7 @@ export function createEntityStore<T extends Entity>(
       for (const [id, row] of [...synced]) {
         if (keep.has(id) || !inScope(row)) continue;
         synced.delete(id);
-        out.push({ type: 'delete', key: id } as Message);
+        out.push({ type: 'delete', key: id });
       }
       for (const row of rows) pushRow(out, row);
     });
@@ -137,7 +141,7 @@ export function createEntityStore<T extends Entity>(
       commit((out) => {
         for (const id of ids) {
           if (!synced.delete(id)) continue;
-          out.push({ type: 'delete', key: id } as Message);
+          out.push({ type: 'delete', key: id });
         }
       });
     },

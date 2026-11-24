@@ -208,7 +208,7 @@ export function DraggableTerminalTab({
         {isPty && tab.alive && (
           <ContextMenuItem
             onSelect={() => onKill()}
-            className="text-destructive focus:text-destructive"
+            variant="destructive"
             data-testid={`terminal-tab-context-kill-${tab.id}`}
           >
             {t('terminal.kill')}

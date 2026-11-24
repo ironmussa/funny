@@ -106,8 +106,27 @@ export const factoryMergeApprovalSchema = z.object({
    * branch that settled nothing: the change the member approved is the same.
    */
   carriedFrom: z.string().optional(),
+  /** The stable keys of the risk reasons the approved commit had (`factory-risk`). */
+  riskKeys: z.array(z.string()).optional(),
+  /**
+   * Each time the approval moved to another commit (openspec
+   * factory-approval-survives-integration): `same`, the pull request's change
+   * did not differ; `adjustment`, it differed by `lines` in `files`.
+   */
+  moves: z
+    .array(
+      z.object({
+        to: z.string(),
+        at: z.string(),
+        kind: z.enum(['same', 'adjustment']),
+        lines: z.number().int().min(0),
+        files: z.array(z.string()),
+      }),
+    )
+    .optional(),
 });
 export type FactoryMergeApproval = z.infer<typeof factoryMergeApprovalSchema>;
+export type FactoryApprovalMove = NonNullable<FactoryMergeApproval['moves']>[number];
 
 /** What the factory does with an issue triage finds too large for one change. */
 export type FactoryTooBig = 'ask' | 'split';

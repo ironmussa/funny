@@ -45,7 +45,9 @@ import {
   contractOf,
   EMPTY_FACTORY_RUN_METRICS,
   reviewAllowsMerge,
+  type FactoryApprovalMove,
   type FactoryAutoMerge,
+  type FactoryMergeApproval,
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRunMetrics,
@@ -68,6 +70,7 @@ import { z } from 'zod';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
+import { approvalCovers } from './factory-approval-carry.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import {
   createEarlyIntegration,
@@ -106,7 +109,12 @@ import {
   type ResolvedStepOptions,
   type StepOverrides,
 } from './factory-step-options.js';
-import { runStepOnRunner, type FactoryStepDeps } from './factory-step-runner.js';
+import {
+  changeDeltaOnRunner,
+  runStepOnRunner,
+  type ChangeDelta,
+  type FactoryStepDeps,
+} from './factory-step-runner.js';
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -224,11 +232,20 @@ export interface FactoryActionProviderDeps {
    * when the merge gate runs (the approval is written while the run waits).
    */
   mergeApproved?: (sha: string) => Promise<boolean>;
+  /** The member's merge approval the run has, of whatever commit; read like `mergeApproved`. */
+  mergeApproval?: () => Promise<FactoryMergeApproval | null>;
   /**
-   * Move a member's merge approval of `from` to `to`, a merge of `from` with
-   * the base branch that settled nothing (as the review and the proof move).
+   * Move a member's merge approval of `from` to `to`: a merge of `from` with
+   * the base branch that settled nothing (as the review and the proof move),
+   * or, with `move`, a commit whose change `approvalCovers` found covered.
    */
-  carryMergeApproval?: (from: string, to: string) => Promise<void>;
+  carryMergeApproval?: (
+    from: string,
+    to: string,
+    move?: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'>,
+  ) => Promise<void>;
+  /** The largest adjustment an approval follows, in lines (default 0: only the same change). */
+  approvalAdjustMaxLines?: number;
   /** The review verdicts the run already has (a resumed run). */
   reviews?: readonly FactoryReviewVerdict[];
   /** The regression proof the run already has (a resumed run). */
@@ -1332,6 +1349,11 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
    * Null when the merge may go on.
    */
   async function mergeHeld(opts: MergeOpts, sha: string): Promise<ActionResult | null> {
+    return (await reviewHeld(opts, sha)) ?? (await riskHeld(sha));
+  }
+
+  /** The review gate of `mergeHeld`: the commit's history and its verdict. */
+  async function reviewHeld(opts: MergeOpts, sha: string): Promise<ActionResult | null> {
     // A regenerated change (D9) is produced again on each new base: its
     // history may be rewritten, and its review gate still applies.
     const rewritten = opts.regenerate ? null : await historyRewritten(sha);
@@ -1351,19 +1373,114 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         );
       }
     }
-    const change = await classifyHead();
-    if (
-      change?.sha === sha &&
-      change.risk.level === 'high' &&
-      deps.autoMerge !== 'all' &&
-      !(await deps.mergeApproved?.(sha))
-    ) {
-      return holdMerge(
-        MERGE_HOLD_REASONS.highRisk,
-        `Not merged: the change is high risk (${change.risk.reasons.join('; ')}). This factory merges only low-risk changes by itself.`,
-      );
-    }
     return null;
+  }
+
+  /**
+   * Why the factory does not merge `sha` by itself: the reasons its change is
+   * high risk, when no member approved it. Null when it may.
+   */
+  async function riskReasons(sha: string): Promise<string[] | null> {
+    if (deps.autoMerge === 'all') return null;
+    const change = await classifyHead();
+    if (change?.sha !== sha || change.risk.level !== 'high') return null;
+    if (await deps.mergeApproved?.(sha)) return null;
+    const refusal = await approvalNotMoved(sha);
+    if (refusal === null) return null;
+    return refusal
+      ? [...change.risk.reasons, `a member approved another commit, and ${refusal}`]
+      : change.risk.reasons;
+  }
+
+  /** Why the approval of another commit does not cover a head, by `approved..head`: asked once. */
+  const approvalRefusals = new Map<string, string>();
+
+  /**
+   * A member approved another commit of this pull request: move the approval
+   * to `sha` when it covers it (openspec factory-approval-survives-integration,
+   * D3). Null when `sha` is approved now; else why not ('' when there is no
+   * approval to move). The delta is always taken from the commit the member
+   * approved, so adjustments cannot add up.
+   */
+  async function approvalNotMoved(sha: string): Promise<string | null> {
+    const approval = (await deps.mergeApproval?.()) ?? null;
+    if (!approval || approval.sha === sha) return '';
+    const approved = approval.carriedFrom ?? approval.sha;
+    const asked = `${approved}..${sha}`;
+    const known = approvalRefusals.get(asked);
+    if (known !== undefined) return known;
+    const coverage = approvalCovers({
+      delta: await changeSince(approved, sha),
+      maxAdjustLines: deps.approvalAdjustMaxLines ?? 0,
+      approvedRiskKeys: approval.riskKeys,
+    });
+    if (coverage.covers) {
+      const { kind, lines, files } = coverage;
+      await deps.carryMergeApproval?.(approval.sha, sha, { kind, lines, files });
+      await count(metrics, { event: `merge_approval_moved_${kind}` });
+      // The move is a compare-and-set: a new approval written meanwhile wins.
+      if (await deps.mergeApproved?.(sha)) return null;
+    }
+    const reason = coverage.covers ? 'the approval changed meanwhile' : coverage.reason;
+    approvalRefusals.set(asked, reason);
+    return reason;
+  }
+
+  /** How the pull request's change differs at `from` and at `to`, from the run's runner; null when it cannot say. */
+  async function changeSince(from: string, to: string): Promise<ChangeDelta | null> {
+    const pr = pullRequest();
+    const threadId = threadIds[0];
+    if (!pr || !threadId || !deps.steps) return null;
+    const head = await deps.github.pullRequests.pullHead(pr);
+    if (head.isErr()) return null;
+    const delta = await changeDeltaOnRunner(
+      deps.steps,
+      threadId,
+      { from, to, baseBranch: head.value.baseRef, branch: scope.branch },
+      deps.signal,
+    );
+    if (delta.isErr()) {
+      log.warn('Issue factory could not compare a change with its approved commit', {
+        namespace: 'factory',
+        runId: scope.runId,
+        from,
+        to,
+        error: delta.error,
+      });
+      return null;
+    }
+    return delta.value;
+  }
+
+  /** The risk gate of `mergeHeld`: a high-risk change waits for a member's approval. */
+  async function riskHeld(sha: string): Promise<ActionResult | null> {
+    const reasons = await riskReasons(sha);
+    if (!reasons) return null;
+    return holdMerge(
+      MERGE_HOLD_REASONS.highRisk,
+      `Not merged: the change is high risk (${reasons.join('; ')}). This factory merges only low-risk changes by itself.`,
+    );
+  }
+
+  /**
+   * The head a high-risk change is held on (openspec
+   * factory-approval-survives-integration, D1): the base is brought in first,
+   * without waiting for the new head's checks, so the commit a member approves
+   * already has it. Approving a head that is behind made a new commit, which
+   * waited for a person again. Resolves with the hold, or with what the update
+   * ended in when it could not be made; null when `sha` is not held for its risk.
+   */
+  async function heldOnCurrentBase(sha: string, baseRef: string): Promise<ActionResult | null> {
+    if (!(await riskReasons(sha))) return null;
+    const pr = pullRequest();
+    // GitHub's merge queue tests the change on the current base itself.
+    const queue = pr ? await deps.github.pullRequests.mergeQueueRequired(pr, baseRef) : null;
+    if (!queue || queue.isErr() || queue.value) return riskHeld(sha);
+    const current = await lane.updateBase();
+    if (current.kind === 'failed') return { ok: false, error: current.error };
+    if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
+    for (const step of current.carried) await carryChecks(step.from, step.to);
+    return riskHeld(current.sha);
   }
 
   /**
@@ -1517,6 +1634,15 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return null;
   }
 
+  /** `mergeHeld` on entry to `merge`, with the risk hold on a head that includes the base. */
+  async function heldOnEntry(
+    opts: MergeOpts,
+    sha: string,
+    baseRef: string,
+  ): Promise<ActionResult | null> {
+    return (await reviewHeld(opts, sha)) ?? (await heldOnCurrentBase(sha, baseRef));
+  }
+
   async function provedMerge(opts: MergeOpts): Promise<ActionResult> {
     const settled = await beforeMerge(opts);
     if (settled) return settled;
@@ -1526,7 +1652,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     if (head.isErr()) {
       return { ok: false, error: head.error.message, metadata: { kind: head.error.kind } };
     }
-    const held = await mergeHeld(opts, head.value.sha);
+    const held = await heldOnEntry(opts, head.value.sha, head.value.baseRef);
     if (held) return held;
     const batched = await asBatchLeader(opts, head.value.baseRef);
     if (batched) return batched;

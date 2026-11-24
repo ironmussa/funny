@@ -931,10 +931,14 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         const run = await deps.runs.get(job.run.id);
         return run.isOk() && run.value?.mergeApproval?.sha === sha;
       },
-      carryMergeApproval: async (from, to) => {
-        const carried = await deps.runs.carryMergeApproval(job.run.id, from, to);
+      mergeApproval: async () => {
+        const run = await deps.runs.get(job.run.id);
+        return run.isOk() ? (run.value?.mergeApproval ?? null) : null;
+      },
+      carryMergeApproval: async (from, to, move) => {
+        const carried = await deps.runs.carryMergeApproval(job.run.id, from, to, move);
         if (carried.isErr()) {
-          log.warn('Issue factory could not carry the merge approval to the merged base', {
+          log.warn('Issue factory could not move the merge approval to the new commit', {
             namespace: 'factory',
             runId: job.run.id,
             from,

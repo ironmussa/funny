@@ -14,6 +14,10 @@ export type ToolItem =
 const NO_GROUP = new Set(['AskUserQuestion', 'ExitPlanMode']);
 
 /** Group consecutive tool calls with the same name into toolcall-group items. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function groupConsecutiveToolCalls(items: { tc: any }[]): ToolItem[] {
   const grouped: ToolItem[] = [];
   for (const item of items) {
@@ -232,9 +236,9 @@ function isPlanFilePath(fp: string): boolean {
 /** Return the content written by a Write tool call when it targets a plan file. */
 function extractWrittenPlanContent(tc: any): string | undefined {
   try {
-    const inp = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input;
+    const inp = isString(tc.input) ? JSON.parse(tc.input) : tc.input;
     const fp = (inp?.file_path || '') as string;
-    if (isPlanFilePath(fp) && typeof inp?.content === 'string') return inp.content;
+    if (isPlanFilePath(fp) && isString(inp?.content)) return inp.content;
   } catch {
     /* ignore parse errors */
   }
@@ -437,7 +441,7 @@ function withoutPendingStop(events: ThreadEvent[], threadStatus?: string): Threa
 function isStoppedOutcome(e: ThreadEvent): boolean {
   if (e.type !== 'turn_outcome') return false;
   try {
-    const data = typeof e.data === 'string' ? JSON.parse(e.data) : (e.data as any);
+    const data = isString(e.data) ? JSON.parse(e.data) : (e.data as any);
     return data?.status === 'stopped';
   } catch {
     return false;
@@ -538,7 +542,7 @@ export function buildGroupedRenderItems(
 
 /** Parse event data string or object */
 function parseEventDataCompat(data: string | Record<string, unknown>): Record<string, any> {
-  if (typeof data === 'string') {
+  if (isString(data)) {
     try {
       return JSON.parse(data);
     } catch {

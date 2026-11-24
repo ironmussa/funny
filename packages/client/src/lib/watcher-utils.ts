@@ -11,13 +11,17 @@ import type { Job, Watcher, WatcherStatus } from '@funny/shared';
  */
 export const ACTIVE_WATCHER_STATUSES: WatcherStatus[] = ['pending'];
 
+function isEpochMs(when: number | string): when is number {
+  return typeof when === 'number';
+}
+
 /**
  * Absolute wall-clock timestamp for hover tooltips (e.g. "Jun 13, 14:32:07").
  * Used to expose the exact "hora" behind the relative "5m ago" labels.
  * Accepts an epoch-ms number or an ISO date string; returns '' for invalid input.
  */
 export function formatClock(when: number | string): string {
-  const ms = typeof when === 'number' ? when : new Date(when).getTime();
+  const ms = isEpochMs(when) ? when : new Date(when).getTime();
   if (!Number.isFinite(ms)) return '';
   return new Date(ms).toLocaleString([], {
     month: 'short',

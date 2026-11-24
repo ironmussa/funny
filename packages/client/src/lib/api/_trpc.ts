@@ -15,6 +15,11 @@ class RequestFailure extends Error {
   }
 }
 
+/** A tRPC response body: anything else (a proxy page, a REST answer) has no `result`. */
+function hasResult(value: unknown): value is { result: { data: unknown } } {
+  return !!value && typeof value === 'object' && 'result' in value;
+}
+
 /**
  * Sends each procedure call through `request()`, so auth, telemetry, the
  * circuit breaker, endpoint selection and cancellation apply exactly as for
@@ -45,7 +50,7 @@ const requestLink: TRPCLink<AppRouter> =
         (response) => {
           // A body without `result` (a proxy page, a REST answer) must fail the
           // call: throwing here would leave it pending forever.
-          if (!response || typeof response !== 'object' || !('result' in response)) {
+          if (!hasResult(response)) {
             observer.error(
               TRPCClientError.from(
                 new RequestFailure({

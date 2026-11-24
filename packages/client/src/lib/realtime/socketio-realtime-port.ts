@@ -54,6 +54,10 @@ interface SocketLike {
 
 const DEFAULT_ACK_TIMEOUT_MS = 7_000;
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function scopeKey(scope: ScopeReference): string {
   return `${scope.kind}:${scope.parentId ?? ''}:${scope.id}`;
 }
@@ -479,14 +483,14 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
         );
       }
       const terminals = (response.sessions ?? []).flatMap((session) => {
-        if (typeof session.ptyId !== 'string' || typeof session.cwd !== 'string') return [];
+        if (!isString(session.ptyId) || !isString(session.cwd)) return [];
         return [
           {
             ptyId: session.ptyId,
             cwd: session.cwd,
-            projectId: typeof session.projectId === 'string' ? session.projectId : undefined,
-            label: typeof session.label === 'string' ? session.label : undefined,
-            shell: typeof session.shell === 'string' ? session.shell : undefined,
+            projectId: isString(session.projectId) ? session.projectId : undefined,
+            label: isString(session.label) ? session.label : undefined,
+            shell: isString(session.shell) ? session.shell : undefined,
             connected: true,
           },
         ];

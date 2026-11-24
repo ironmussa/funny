@@ -31,7 +31,6 @@ import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEditorDictation } from '@/hooks/use-editor-dictation';
-import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
@@ -51,7 +50,7 @@ const LazyMarkdown = lazy(() =>
   })),
 );
 import { PlanReviewDialog, type PlanComment } from './PlanReviewDialog';
-import { useCurrentProjectId, useCurrentProjectPath, useCurrentThreadProviderModel } from './utils';
+import { useThreadSlashSkills } from './use-thread-slash-skills';
 
 const cardLog = createClientLogger('ExitPlanMode');
 
@@ -347,19 +346,8 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   const [submitted, setSubmitted] = useState(alreadyAnswered);
   const editorRef = useRef<PromptEditorHandle>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const cwd = useCurrentProjectPath();
-  const projectId = useCurrentProjectId();
-  const { provider: threadProvider, model: threadModel } = useCurrentThreadProviderModel();
-
-  // Provider-scoped skills/commands for slash commands (single cache; lazy —
-  // these cards mount in bulk, so only fetch on the first `/`).
-  const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
-    projectPath: cwd,
-    projectId,
-    provider: threadProvider,
-    model: threadModel,
-    mode: 'lazy',
-  });
+  // Provider-scoped skills/commands for slash commands.
+  const { cwd, slashSkills, slashSkillsLoading, ensureSlashSkills } = useThreadSlashSkills();
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
   const { hasAssemblyaiKey, isRecording, isTranscribing, toggleRecording } = useEditorDictation(

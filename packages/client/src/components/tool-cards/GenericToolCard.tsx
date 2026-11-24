@@ -253,14 +253,18 @@ export function ToolValue({ value, language }: { value: unknown; language?: stri
   );
 }
 
-function FileLink({
+/** A file path that opens the file in the user's editor. */
+export function FileLink({
   filePath,
   displayPath,
   defaultEditor,
+  buttonClassName = 'text-muted-foreground hover:text-primary min-w-0 truncate text-left font-mono text-xs hover:underline',
 }: {
   filePath: string;
-  displayPath: string | null;
+  displayPath: string | null | undefined;
   defaultEditor: Editor;
+  /** Classes of the fallback button, used when the editor has no URI scheme. */
+  buttonClassName?: string;
 }) {
   const { t } = useTranslation();
   const editorUri = toEditorUri(filePath, defaultEditor);
@@ -286,7 +290,7 @@ function FileLink({
               e.stopPropagation();
               openFileInEditor(filePath, defaultEditor);
             }}
-            className="text-muted-foreground hover:text-primary min-w-0 truncate text-left font-mono text-xs hover:underline"
+            className={buttonClassName}
           >
             {displayPath}
           </button>

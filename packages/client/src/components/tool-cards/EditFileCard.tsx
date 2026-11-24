@@ -1,387 +1,29 @@
-import type { FileDiffSummary, FileStatus } from '@funny/shared';
 import { ChevronRight, FilePen, Loader2, Maximize2 } from 'lucide-react';
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { VirtualDiff } from '@/components/VirtualDiff';
-import { api } from '@/lib/api';
-import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { buildSections, buildVirtualRows } from '@/lib/diff/layout';
 import { parseUnifiedDiff } from '@/lib/diff/parse';
-import { computeUnifiedDiff } from '@/lib/snippet-unified-diff';
 import { cn } from '@/lib/utils';
 import { DIFF_ROW_HEIGHT_PX, useSettingsStore } from '@/stores/settings-store';
-import { useThreadId } from '@/stores/thread-context';
 
 import { ExpandedDiffDialog } from './ExpandedDiffDialog';
+import { FileLink } from './GenericToolCard';
 import { MobileContentPreview } from './MobileContentPreview';
-import {
-  toEditorUri,
-  openFileInEditor,
-  getEditorLabel,
-  isPathWithin,
-  useCurrentProjectPath,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- plain utility function, not an Effect service constructor
-  makeRelativePath,
-} from './utils';
+import { useDiffMountOnVisible, useEditFileDiff } from './use-edit-file-diff';
 
 const INLINE_DIFF_CONTEXT_LINES = 3;
 
-interface EditChangeEntry {
-  filePath: string;
-  oldValue?: string;
-  newValue?: string;
-  rawDiff?: string;
-  status: FileStatus;
-}
+const PATH_BUTTON_CLASS =
+  'text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-xs hover:underline';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function normalizeUnifiedDiff(filePath: string, diff: string): string {
-  if (diff.startsWith('diff --git') || diff.startsWith('--- ')) return diff;
-  return `--- a/${filePath}\n+++ b/${filePath}\n${diff}`;
-}
-
-/** A diff viewer needs at least one hunk to produce visible rows. */
-function hasUnifiedDiffHunk(diff: string | undefined): boolean {
-  return !!diff && diff.split('\n').some((line) => line.startsWith('@@'));
-}
-
-/** The file status a change reports in `change[key]` (`type` in Claude edits, `kind` in Codex). */
-function statusForChangeType(
-  change: { type?: unknown; kind?: unknown },
-  key: 'type' | 'kind',
-): FileStatus {
-  const type = change[key];
-  if (type === 'add' || type === 'create') return 'added';
-  if (type === 'delete' || type === 'remove') return 'deleted';
-  if (type === 'move' || type === 'rename') return 'renamed';
-  return 'modified';
-}
-
-function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[] {
-  const changes = parsed.changes;
-  if (isRecord(changes)) {
-    const entries: EditChangeEntry[] = [];
-    for (const [filePath, rawChange] of Object.entries(changes)) {
-      if (!filePath || !isRecord(rawChange)) continue;
-
-      const status = statusForChangeType(rawChange, 'type');
-      const unifiedDiff = rawChange.unified_diff;
-      if (typeof unifiedDiff === 'string' && unifiedDiff.trim()) {
-        const rawDiff = normalizeUnifiedDiff(filePath, unifiedDiff);
-        entries.push({
-          filePath,
-          oldValue: parseDiffOld(rawDiff),
-          newValue: parseDiffNew(rawDiff),
-          rawDiff,
-          status,
-        });
-        continue;
-      }
-
-      const content = rawChange.content;
-      if (typeof content === 'string') {
-        entries.push({
-          filePath,
-          oldValue: status === 'deleted' ? content : '',
-          newValue: status === 'deleted' ? '' : content,
-          status,
-        });
-      } else {
-        // Keep entries without a captured patch so the client can still
-        // request the live diff for legacy SDK events.
-        entries.push({ filePath, status });
-      }
-    }
-    if (entries.length > 0) return entries;
-  }
-
-  // `@openai/codex-sdk` reports a completed file change as a lightweight
-  // array of `{ path, kind }` objects. It intentionally does not include the
-  // patch text, so retain the paths here and load the actual diff on demand.
-  if (Array.isArray(changes)) {
-    return changes.flatMap((change) => {
-      if (!isRecord(change) || typeof change.path !== 'string' || !change.path) return [];
-      return [{ filePath: change.path, status: statusForChangeType(change, 'kind') }];
-    });
-  }
-
-  const filePath = parsed.file_path;
-  const oldString = parsed.old_string;
-  const newString = parsed.new_string;
-  if (typeof filePath !== 'string' || typeof newString !== 'string') return [];
-  const oldValue = typeof oldString === 'string' ? oldString : '';
-  if (oldValue === newString) return [];
-  return [
-    {
-      filePath,
-      oldValue,
-      newValue: newString,
-      status: typeof oldString === 'string' ? 'modified' : 'added',
-    },
-  ];
-}
-
-function getDialogDiffData(changeEntries: EditChangeEntry[]): {
-  dialogFiles?: FileDiffSummary[];
-  diffCache?: Map<string, string>;
-} {
-  const dialogFiles =
-    changeEntries.length > 1
-      ? changeEntries.map((entry) => ({
-          path: entry.filePath,
-          status: entry.status,
-          staged: false,
-        }))
-      : undefined;
-  const entriesWithRawDiff = changeEntries.filter((entry) => entry.rawDiff);
-  const diffCache =
-    entriesWithRawDiff.length > 0
-      ? new Map(entriesWithRawDiff.map((entry) => [entry.filePath, entry.rawDiff!]))
-      : undefined;
-  return { dialogFiles, diffCache };
-}
-
-export function EditFileCard({
-  parsed,
-  hideLabel,
-  displayTime,
-}: {
-  parsed: Record<string, unknown>;
-  hideLabel?: boolean;
-  displayTime?: string | null;
-}) {
-  const { t } = useTranslation();
-  const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+/** Height reserved for the inline diff: the rows VirtualDiff renders with folding on. */
+function useInlineDiffSlotHeight(unifiedDiff: string): number {
   const fontSize = useSettingsStore((s) => s.fontSize);
-  const projectPath = useCurrentProjectPath();
-  const changeEntries = useMemo(() => getEditChangeEntries(parsed), [parsed]);
-  const [requestedFilePath, setRequestedFilePath] = useState<string | null>(null);
-  const [loadedDiffs, setLoadedDiffs] = useState<
-    Map<string, Omit<EditChangeEntry, 'filePath' | 'status'>>
-  >(() => new Map());
-  const requestedDiffPathsRef = useRef(new Set<string>());
-  const activeEntry =
-    changeEntries.find((entry) => entry.filePath === requestedFilePath) ?? changeEntries[0];
-  const loadedDiff = activeEntry ? loadedDiffs.get(activeEntry.filePath) : undefined;
-  const filePath = activeEntry?.filePath;
-  // Codex reports absolute paths when its working directory is absolute, while
-  // the Git endpoint (and native Git implementation) expects a path relative
-  // to the thread worktree.
-  const diffFilePath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
-  const oldString = loadedDiff?.oldValue ?? activeEntry?.oldValue;
-  const newString = loadedDiff?.newValue ?? activeEntry?.newValue;
-  const rawDiff = loadedDiff?.rawDiff ?? activeEntry?.rawDiff;
-  const hasCapturedDiff = hasUnifiedDiffHunk(rawDiff);
-  const displayPath = filePath
-    ? `${makeRelativePath(filePath, projectPath)}${changeEntries.length > 1 ? ` +${changeEntries.length - 1}` : ''}`
-    : undefined;
-  const { dialogFiles, diffCache } = useMemo(
-    () => getDialogDiffData(changeEntries),
-    [changeEntries],
-  );
-
-  const threadId = useThreadId();
-
-  // hideLabel selects the initial uncontrolled state; user toggles own expansion after mount.
-  // react-doctor-disable-next-line no-derived-useState
-  const [expanded, setExpanded] = useState(!hideLabel);
-  const [showExpandedDiff, setShowExpandedDiff] = useState(false);
-  const [diffMounted, setDiffMounted] = useState(false);
-  const [isDiffLoading, setIsDiffLoading] = useState(false);
-  const [isDiffUnavailable, setIsDiffUnavailable] = useState(false);
-  const [diffRequestVersion, setDiffRequestVersion] = useState(0);
-  const [snippetBaseLine, setSnippetBaseLine] = useState<number>(1);
-  const diffObserverRef = useRef<IntersectionObserver | null>(null);
-  const diffMountFrameRef = useRef<number | null>(null);
-
-  // SDK file-change entries contain paths but no patch content. Resolve only
-  // expanded cards, so a long transcript does not issue a diff request for
-  // every historical edit.
-  useEffect(() => {
-    const needsLiveDiff = !hasCapturedDiff && (oldString == null || newString == null || !!rawDiff);
-    if (!expanded || !activeEntry || !filePath || !diffFilePath || !needsLiveDiff) return;
-    if (!threadId || requestedDiffPathsRef.current.has(filePath)) return;
-
-    requestedDiffPathsRef.current.add(filePath);
-    setIsDiffLoading(true);
-    setIsDiffUnavailable(false);
-    let cancelled = false;
-    api.getFileDiff(threadId, diffFilePath, false, undefined, 'full').then(
-      (result) => {
-        const rawDiff = result.isOk() ? result.value.diff : '';
-        const hasUsableDiff = hasUnifiedDiffHunk(rawDiff);
-        if (!cancelled && hasUsableDiff) {
-          setLoadedDiffs((current) => {
-            const next = new Map(current);
-            next.set(filePath, {
-              oldValue: parseDiffOld(rawDiff),
-              newValue: parseDiffNew(rawDiff),
-              rawDiff,
-            });
-            return next;
-          });
-        }
-        if (!cancelled) {
-          setIsDiffUnavailable(!hasUsableDiff);
-          setIsDiffLoading(false);
-        }
-      },
-      () => {
-        if (!cancelled) {
-          setIsDiffUnavailable(true);
-          setIsDiffLoading(false);
-        }
-      },
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeEntry,
-    diffFilePath,
-    diffRequestVersion,
-    expanded,
-    filePath,
-    hasCapturedDiff,
-    newString,
-    oldString,
-    rawDiff,
-    threadId,
-  ]);
-
-  // `snippetBaseLine` only feeds the rendered diff (computeUnifiedDiff /
-  // baseLine prop), which itself is gated behind `diffMounted`. Reading the
-  // file on mount for *every* card floods `/files/read` when a transcript has
-  // hundreds of Edit/Write cards (e.g. an imported Claude Code session). Gate
-  // the read on `diffMounted` so only cards whose diff is actually on-screen
-  // fetch the file.
-  useEffect(() => {
-    if (!diffMounted) return;
-    if (rawDiff) return;
-    if (!filePath || newString == null) return;
-    // The runtime only serves files inside the thread's project/worktree; a
-    // read outside it (e.g. `/tmp` scripts, Claude memory files) is a
-    // guaranteed 403 that only adds console noise. Scratch threads have no
-    // client-side base path, so they keep trying.
-    if (projectPath && !isPathWithin(filePath, projectPath)) return;
-    let cancelled = false;
-    api.readFile(filePath).then((result) => {
-      if (cancelled || result.isErr()) return;
-      const content = result.value.content;
-      const idx = content.indexOf(newString);
-      if (idx < 0) return;
-      const baseLine = content.slice(0, idx).split('\n').length;
-      setSnippetBaseLine(baseLine);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [diffMounted, filePath, newString, projectPath, rawDiff]);
-
-  const diffSlotRef = useCallback(
-    (el: HTMLDivElement | null) => {
-      diffObserverRef.current?.disconnect();
-      diffObserverRef.current = null;
-      if (diffMountFrameRef.current != null) {
-        window.cancelAnimationFrame(diffMountFrameRef.current);
-        diffMountFrameRef.current = null;
-      }
-
-      if (!el || !expanded || diffMounted) return;
-      if (typeof IntersectionObserver === 'undefined') {
-        setDiffMounted(true);
-        return;
-      }
-
-      // IntersectionObserver can miss a newly expanded element inside the
-      // transcript's nested scroller. Check its viewport position on the next
-      // frame as a fallback so the card cannot remain a blank placeholder.
-      diffMountFrameRef.current = window.requestAnimationFrame(() => {
-        diffMountFrameRef.current = null;
-        const rect = el.getBoundingClientRect();
-        const withinViewportMargin =
-          rect.width > 0 &&
-          rect.height > 0 &&
-          rect.bottom >= -600 &&
-          rect.top <= window.innerHeight + 600;
-        if (withinViewportMargin) setDiffMounted(true);
-      });
-
-      const io = new IntersectionObserver(
-        (entries) => {
-          if (entries.some((e) => e.isIntersecting)) {
-            setDiffMounted(true);
-            io.disconnect();
-          }
-        },
-        { rootMargin: '600px 0px' },
-      );
-      diffObserverRef.current = io;
-      // The observer is disconnected on intersection, callback-ref replacement, and component unmount.
-      // react-doctor-disable-next-line effect-needs-cleanup
-      io.observe(el);
-    },
-    [diffMounted, expanded],
-  );
-
-  useEffect(
-    () => () => {
-      diffObserverRef.current?.disconnect();
-      if (diffMountFrameRef.current != null) {
-        window.cancelAnimationFrame(diffMountFrameRef.current);
-      }
-    },
-    [],
-  );
-
-  const requestFullDiff = useCallback(
-    async (
-      path: string,
-    ): Promise<{ oldValue: string; newValue: string; rawDiff?: string } | null> => {
-      if (!threadId) return null;
-      const result = await api.getFileDiff(
-        threadId,
-        makeRelativePath(path, projectPath),
-        false,
-        undefined,
-        'full',
-      );
-      if (result.isOk()) {
-        return {
-          oldValue: parseDiffOld(result.value.diff),
-          newValue: parseDiffNew(result.value.diff),
-          rawDiff: result.value.diff,
-        };
-      }
-      return null;
-    },
-    [projectPath, threadId],
-  );
-
-  const hasDiff = useMemo(() => {
-    return (
-      !!activeEntry &&
-      oldString != null &&
-      newString != null &&
-      oldString !== newString &&
-      (!rawDiff || hasCapturedDiff)
-    );
-  }, [activeEntry, hasCapturedDiff, oldString, newString, rawDiff]);
-
-  const unifiedDiff = useMemo(() => {
-    if (!hasDiff) return '';
-    if (rawDiff) return rawDiff;
-    return computeUnifiedDiff(oldString || '', newString || '', snippetBaseLine);
-  }, [hasDiff, oldString, newString, rawDiff, snippetBaseLine]);
-  const inlineDiffSlotHeight = useMemo(() => {
-    if (!hasDiff) return undefined;
+  return useMemo(() => {
     const rowHeight = DIFF_ROW_HEIGHT_PX[fontSize];
     const parsedDiff = parseUnifiedDiff(unifiedDiff);
     const sections = buildSections(parsedDiff.lines, INLINE_DIFF_CONTEXT_LINES);
@@ -402,140 +44,229 @@ export function EditFileCard({
     ).length;
     const visibleRowCount = visibleRows.length + visibleConflictActions;
     return Math.max(64, visibleRowCount * rowHeight);
-  }, [fontSize, hasDiff, unifiedDiff]);
+  }, [fontSize, unifiedDiff]);
+}
+
+/**
+ * The card's file path. When a diff is available, clicking the path opens the
+ * diff popup. Otherwise fall back to opening the file in the editor.
+ */
+function EditFilePathLink({
+  filePath,
+  displayPath,
+  hasDiff,
+  onExpand,
+}: {
+  filePath: string;
+  displayPath: string | undefined;
+  hasDiff: boolean;
+  onExpand: () => void;
+}) {
+  const { t } = useTranslation();
+  const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+  if (hasDiff) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onExpand();
+            }}
+            className={PATH_BUTTON_CLASS}
+          >
+            {displayPath}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{t('review.expand', 'Expand')}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return (
+    <FileLink
+      filePath={filePath}
+      displayPath={displayPath}
+      defaultEditor={defaultEditor}
+      buttonClassName={PATH_BUTTON_CLASS}
+    />
+  );
+}
+
+function EditFileHeader({
+  expanded,
+  onToggle,
+  hideLabel,
+  filePath,
+  displayPath,
+  displayTime,
+  hasDiff,
+  onExpand,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  hideLabel?: boolean;
+  filePath: string | undefined;
+  displayPath: string | undefined;
+  displayTime?: string | null;
+  hasDiff: boolean;
+  onExpand: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex w-full items-center overflow-hidden">
+      <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={t('tools.editFile')}
+          className="hover:bg-accent/30 flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs"
+        >
+          <ChevronRight
+            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
+          />
+          {!hideLabel && <FilePen className="icon-xs text-muted-foreground shrink-0" />}
+          {!hideLabel && (
+            <span className="text-foreground shrink-0 font-mono font-medium">
+              {t('tools.editFile')}
+            </span>
+          )}
+        </button>
+        {filePath && (
+          <EditFilePathLink
+            filePath={filePath}
+            displayPath={displayPath}
+            hasDiff={hasDiff}
+            onExpand={onExpand}
+          />
+        )}
+        {displayTime && (
+          <span className="text-muted-foreground/50 text-2xs ml-auto shrink-0 tabular-nums">
+            {displayTime}
+          </span>
+        )}
+      </div>
+      {hasDiff && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="muted" size="icon-xs" onClick={onExpand} className="mr-1 shrink-0">
+              <Maximize2 className="icon-sm" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">{t('review.expand', 'Expand')}</TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  );
+}
+
+function EditFileInlineDiff({
+  diffMounted,
+  diffSlotRef,
+  onExpand,
+  unifiedDiff,
+  filePath,
+}: {
+  diffMounted: boolean;
+  diffSlotRef: (el: HTMLDivElement | null) => void;
+  onExpand: () => void;
+  unifiedDiff: string;
+  filePath: string | undefined;
+}) {
+  const { t } = useTranslation();
+  const inlineDiffSlotHeight = useInlineDiffSlotHeight(unifiedDiff);
+  return (
+    <MobileContentPreview onExpand={onExpand} label={t('tools.viewFullDiff')}>
+      <div
+        ref={diffSlotRef}
+        className="border-border/40 max-h-[50vh] overflow-hidden border-t"
+        style={{ height: inlineDiffSlotHeight }}
+      >
+        {diffMounted ? (
+          <VirtualDiff
+            unifiedDiff={unifiedDiff}
+            splitView={false}
+            filePath={filePath}
+            codeFolding={true}
+            contextLines={INLINE_DIFF_CONTEXT_LINES}
+            className="h-full max-h-[50vh]"
+            data-testid="edit-file-inline-diff"
+          />
+        ) : (
+          <div
+            className="text-muted-foreground flex h-16 items-center gap-2 px-3 text-xs"
+            data-testid="edit-file-inline-diff-placeholder"
+          >
+            <Loader2 className="icon-xs animate-spin" />
+            <span>{t('tools.loadingDiff', 'Loading diff…')}</span>
+          </div>
+        )}
+      </div>
+    </MobileContentPreview>
+  );
+}
+
+function EditFileDiffUnavailable({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="border-border/40 flex min-h-16 items-center justify-between gap-3 border-t px-3 py-2 text-xs"
+      data-testid="edit-file-inline-diff-unavailable"
+    >
+      <span className="text-muted-foreground">
+        {t(
+          'tools.diffUnavailableNoTracking',
+          'The diff cannot be shown because this file is not tracked by Git.',
+        )}
+      </span>
+      <Button variant="ghost" size="sm" onClick={onRetry}>
+        {t('common.retry', 'Retry')}
+      </Button>
+    </div>
+  );
+}
+
+export function EditFileCard({
+  parsed,
+  hideLabel,
+  displayTime,
+}: {
+  parsed: Record<string, unknown>;
+  hideLabel?: boolean;
+  displayTime?: string | null;
+}) {
+  // hideLabel selects the initial uncontrolled state; user toggles own expansion after mount.
+  // react-doctor-disable-next-line no-derived-useState
+  const [expanded, setExpanded] = useState(!hideLabel);
+  const [showExpandedDiff, setShowExpandedDiff] = useState(false);
+  const { diffMounted, diffSlotRef } = useDiffMountOnVisible(expanded);
+  const diff = useEditFileDiff(parsed, expanded, diffMounted);
+  const { filePath, hasDiff, isDiffLoading, isDiffUnavailable, dialogFiles } = diff;
+  const openExpandedDiff = () => setShowExpandedDiff(true);
 
   return (
     <div
       data-expanded={expanded}
       className="tool-card-frame w-full min-w-0 overflow-hidden rounded-lg text-sm"
     >
-      <div className="flex w-full items-center overflow-hidden">
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            aria-label={t('tools.editFile')}
-            className="hover:bg-accent/30 flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs"
-          >
-            <ChevronRight
-              className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
-            />
-            {!hideLabel && <FilePen className="icon-xs text-muted-foreground shrink-0" />}
-            {!hideLabel && (
-              <span className="text-foreground shrink-0 font-mono font-medium">
-                {t('tools.editFile')}
-              </span>
-            )}
-          </button>
-          {filePath &&
-            (() => {
-              // When a diff is available, clicking the path opens the diff
-              // popup. Otherwise fall back to opening the file in the editor.
-              if (hasDiff) {
-                return (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowExpandedDiff(true);
-                        }}
-                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-xs hover:underline"
-                      >
-                        {displayPath}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('review.expand', 'Expand')}</TooltipContent>
-                  </Tooltip>
-                );
-              }
-              const editorUri = toEditorUri(filePath, defaultEditor);
-              const editorTitle = t('tools.openInEditor', {
-                editor: getEditorLabel(defaultEditor),
-                path: filePath,
-              });
-              return (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    {editorUri ? (
-                      <a
-                        href={editorUri}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
-                      >
-                        {displayPath}
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openFileInEditor(filePath, defaultEditor);
-                        }}
-                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-xs hover:underline"
-                      >
-                        {displayPath}
-                      </button>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent>{editorTitle}</TooltipContent>
-                </Tooltip>
-              );
-            })()}
-          {displayTime && (
-            <span className="text-muted-foreground/50 text-2xs ml-auto shrink-0 tabular-nums">
-              {displayTime}
-            </span>
-          )}
-        </div>
-        {hasDiff && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-xs"
-                onClick={() => setShowExpandedDiff(true)}
-                className="mr-1 shrink-0"
-              >
-                <Maximize2 className="icon-sm" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">{t('review.expand', 'Expand')}</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
+      <EditFileHeader
+        expanded={expanded}
+        onToggle={() => setExpanded(!expanded)}
+        hideLabel={hideLabel}
+        filePath={filePath}
+        displayPath={diff.displayPath}
+        displayTime={displayTime}
+        hasDiff={hasDiff}
+        onExpand={openExpandedDiff}
+      />
       {expanded && hasDiff && (
-        <MobileContentPreview
-          onExpand={() => setShowExpandedDiff(true)}
-          label={t('tools.viewFullDiff')}
-        >
-          <div
-            ref={diffSlotRef}
-            className="border-border/40 max-h-[50vh] overflow-hidden border-t"
-            style={{ height: inlineDiffSlotHeight }}
-          >
-            {diffMounted ? (
-              <VirtualDiff
-                unifiedDiff={unifiedDiff}
-                splitView={false}
-                filePath={filePath}
-                codeFolding={true}
-                contextLines={INLINE_DIFF_CONTEXT_LINES}
-                className="h-full max-h-[50vh]"
-                data-testid="edit-file-inline-diff"
-              />
-            ) : (
-              <div
-                className="text-muted-foreground flex h-16 items-center gap-2 px-3 text-xs"
-                data-testid="edit-file-inline-diff-placeholder"
-              >
-                <Loader2 className="icon-xs animate-spin" />
-                <span>{t('tools.loadingDiff', 'Loading diff…')}</span>
-              </div>
-            )}
-          </div>
-        </MobileContentPreview>
+        <EditFileInlineDiff
+          diffMounted={diffMounted}
+          diffSlotRef={diffSlotRef}
+          onExpand={openExpandedDiff}
+          unifiedDiff={diff.unifiedDiff}
+          filePath={filePath}
+        />
       )}
       {expanded && !hasDiff && isDiffLoading && (
         <div
@@ -544,40 +275,20 @@ export function EditFileCard({
         />
       )}
       {expanded && !hasDiff && !isDiffLoading && isDiffUnavailable && filePath && (
-        <div
-          className="border-border/40 flex min-h-16 items-center justify-between gap-3 border-t px-3 py-2 text-xs"
-          data-testid="edit-file-inline-diff-unavailable"
-        >
-          <span className="text-muted-foreground">
-            {t(
-              'tools.diffUnavailableNoTracking',
-              'The diff cannot be shown because this file is not tracked by Git.',
-            )}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              requestedDiffPathsRef.current.delete(filePath);
-              setDiffRequestVersion((version) => version + 1);
-            }}
-          >
-            {t('common.retry', 'Retry')}
-          </Button>
-        </div>
+        <EditFileDiffUnavailable onRetry={() => diff.retryDiff(filePath)} />
       )}
       <ExpandedDiffDialog
         open={showExpandedDiff}
         onOpenChange={setShowExpandedDiff}
         filePath={filePath || ''}
-        oldValue={oldString || ''}
-        newValue={newString || ''}
-        baseLine={snippetBaseLine}
+        oldValue={diff.oldString || ''}
+        newValue={diff.newString || ''}
+        baseLine={diff.snippetBaseLine}
         files={dialogFiles}
-        onFileSelect={dialogFiles ? setRequestedFilePath : undefined}
-        diffCache={diffCache}
-        basePath={projectPath}
-        onRequestFullDiff={requestFullDiff}
+        onFileSelect={dialogFiles ? diff.setRequestedFilePath : undefined}
+        diffCache={diff.diffCache}
+        basePath={diff.projectPath}
+        onRequestFullDiff={diff.requestFullDiff}
       />
     </div>
   );

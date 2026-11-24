@@ -2517,5 +2517,5 @@ export async function backfillResourceGrants(
 }
 
 export async function autoMigrate() {
-  await runMigrations(db as any, migrations, log, 'central-db', dbDialect);
+  await runMigrations(db, migrations, log, 'central-db', dbDialect);
 }

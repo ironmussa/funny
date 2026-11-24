@@ -74,8 +74,6 @@ interface InviteLink {
 }
 
 export function TeamMembers() {
-  const { t } = useTranslation();
-  const now = useMinuteTick();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [removeConfirm, setRemoveConfirm] = useState<Member | null>(null);
@@ -91,10 +89,8 @@ export function TeamMembers() {
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
   // Invite link state
-  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
-  const [linkRole, setLinkRole] = useState<InviteRole>('member');
-  const [creatingLink, setCreatingLink] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const inviteLinkState = useInviteLinks();
+  const { loadInviteLinks } = inviteLinkState;
 
   const loadMembers = useCallback(async () => {
     return withCleanup(
@@ -126,13 +122,6 @@ export function TeamMembers() {
       }
     } catch (err) {
       console.error('[TeamMembers] Failed to load invitations:', err);
-    }
-  }, []);
-
-  const loadInviteLinks = useCallback(async () => {
-    const result = await api.listInviteLinks();
-    if (result.isOk()) {
-      setInviteLinks(result.value);
     }
   }, []);
 
@@ -196,6 +185,81 @@ export function TeamMembers() {
     });
   }, [inviteEmail, inviteRole, loadInvitations]);
 
+  const handleCancelInvitation = useCallback(async (invitationId: string) => {
+    try {
+      await authClient.organization.cancelInvitation({ invitationId });
+      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
+      toast.success('Invitation cancelled');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to cancel invitation');
+    }
+  }, []);
+
+  if (loading) {
+    return <LoadingState padding="lg" fill={false} label="Loading members…" />;
+  }
+
+  return (
+    <>
+      {/* Invite form */}
+      <InviteMemberSection
+        smtpConfigured={smtpConfigured}
+        inviteEmail={inviteEmail}
+        onInviteEmailChange={setInviteEmail}
+        inviteRole={inviteRole}
+        onInviteRoleChange={setInviteRole}
+        sending={sending}
+        onInvite={handleInvite}
+      />
+
+      {/* Invite link */}
+      <InviteLinkSection state={inviteLinkState} />
+
+      {/* Members list */}
+      <MembersSection
+        members={members}
+        currentUserId={currentUser?.id}
+        onRoleChange={handleRoleChange}
+        onRemove={setRemoveConfirm}
+      />
+
+      {/* Pending invitations */}
+      {invitations.length > 0 && (
+        <PendingInvitationsSection
+          invitations={invitations}
+          onCancelInvitation={handleCancelInvitation}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!removeConfirm}
+        onOpenChange={(open) => {
+          if (!open) setRemoveConfirm(null);
+        }}
+        title="Remove Member"
+        description={`Remove ${removeConfirm?.user.name} from this organization? They will lose access to all team projects.`}
+        cancelLabel="Cancel"
+        confirmLabel="Remove"
+        onCancel={() => setRemoveConfirm(null)}
+        onConfirm={handleRemove}
+      />
+    </>
+  );
+}
+
+function useInviteLinks() {
+  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
+  const [linkRole, setLinkRole] = useState<InviteRole>('member');
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const loadInviteLinks = useCallback(async () => {
+    const result = await api.listInviteLinks();
+    if (result.isOk()) {
+      setInviteLinks(result.value);
+    }
+  }, []);
+
   const handleCreateLink = useCallback(async () => {
     await whilePending(setCreatingLink, async () => {
       try {
@@ -230,25 +294,38 @@ export function TeamMembers() {
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
-  const handleCancelInvitation = useCallback(async (invitationId: string) => {
-    try {
-      await authClient.organization.cancelInvitation({ invitationId });
-      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
-      toast.success('Invitation cancelled');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to cancel invitation');
-    }
-  }, []);
+  return {
+    inviteLinks,
+    loadInviteLinks,
+    linkRole,
+    setLinkRole,
+    creatingLink,
+    copiedId,
+    handleCreateLink,
+    handleRevokeLink,
+    handleCopyLink,
+  };
+}
 
-  const ownerCount = members.filter((m) => m.role === 'owner').length;
-
-  if (loading) {
-    return <LoadingState padding="lg" fill={false} label="Loading members…" />;
-  }
-
+function InviteMemberSection({
+  smtpConfigured,
+  inviteEmail,
+  onInviteEmailChange,
+  inviteRole,
+  onInviteRoleChange,
+  sending,
+  onInvite,
+}: {
+  smtpConfigured: boolean | null;
+  inviteEmail: string;
+  onInviteEmailChange: (email: string) => void;
+  inviteRole: InviteRole;
+  onInviteRoleChange: (role: InviteRole) => void;
+  sending: boolean;
+  onInvite: () => Promise<void>;
+}) {
   return (
     <>
-      {/* Invite form */}
       <SettingsSection settingId="team-members.invite">Invite Member</SettingsSection>
       <div className="settings-card">
         <div className="px-4 py-3.5">
@@ -271,18 +348,18 @@ export function TeamMembers() {
             <Input
               type="email"
               value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
+              onChange={(e) => onInviteEmailChange(e.target.value)}
               placeholder="user@example.com"
               className="flex-1 text-sm"
               disabled={smtpConfigured === false}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && smtpConfigured) handleInvite();
+                if (e.key === 'Enter' && smtpConfigured) onInvite();
               }}
               data-testid="team-invite-email"
             />
             <Select
               value={inviteRole}
-              onValueChange={(v) => setInviteRole(v as InviteRole)}
+              onValueChange={(v) => onInviteRoleChange(v as InviteRole)}
               disabled={smtpConfigured === false}
             >
               <SelectTrigger className="w-[100px]" data-testid="team-invite-role">
@@ -298,7 +375,7 @@ export function TeamMembers() {
             </Select>
             <Button
               size="sm"
-              onClick={handleInvite}
+              onClick={onInvite}
               disabled={!inviteEmail.trim() || sending || smtpConfigured === false}
               data-testid="team-invite-send"
             >
@@ -308,8 +385,15 @@ export function TeamMembers() {
           </div>
         </div>
       </div>
+    </>
+  );
+}
 
-      {/* Invite link */}
+function InviteLinkSection({ state }: { state: ReturnType<typeof useInviteLinks> }) {
+  const { t } = useTranslation();
+  const now = useMinuteTick();
+  return (
+    <>
       <SettingsSection settingId="team-members.invite-link">Invite Link</SettingsSection>
       <div className="settings-card">
         <div className="px-4 py-3.5">
@@ -317,7 +401,10 @@ export function TeamMembers() {
             Generate a shareable link to invite people to this organization.
           </p>
           <div className="flex items-center gap-2">
-            <Select value={linkRole} onValueChange={(v) => setLinkRole(v as InviteRole)}>
+            <Select
+              value={state.linkRole}
+              onValueChange={(v) => state.setLinkRole(v as InviteRole)}
+            >
               <SelectTrigger className="w-[100px]" data-testid="team-link-role">
                 <SelectValue />
               </SelectTrigger>
@@ -331,17 +418,17 @@ export function TeamMembers() {
             </Select>
             <Button
               size="sm"
-              onClick={handleCreateLink}
-              disabled={creatingLink}
+              onClick={state.handleCreateLink}
+              disabled={state.creatingLink}
               data-testid="team-link-create"
             >
               <Link className="icon-sm mr-1.5" />
               Generate Link
             </Button>
           </div>
-          {inviteLinks.length > 0 && (
+          {state.inviteLinks.length > 0 && (
             <div className="mt-3 space-y-2">
-              {inviteLinks.map((link) => {
+              {state.inviteLinks.map((link) => {
                 const isExpired = link.expiresAt && new Date(link.expiresAt).getTime() < now;
                 const isMaxed = link.maxUses !== null && link.useCount >= link.maxUses;
                 const isActive = !isExpired && !isMaxed;
@@ -370,12 +457,12 @@ export function TeamMembers() {
                     <TooltipIconButton
                       size="icon"
                       className="size-7 shrink-0"
-                      onClick={() => handleCopyLink(link)}
+                      onClick={() => state.handleCopyLink(link)}
                       disabled={!isActive}
                       data-testid={`team-link-copy-${link.id}`}
                       tooltip={t('common.copyLink')}
                     >
-                      {copiedId === link.id ? (
+                      {state.copiedId === link.id ? (
                         <Check className="icon-sm text-status-success" />
                       ) : (
                         <Copy className="icon-sm" />
@@ -385,7 +472,7 @@ export function TeamMembers() {
                       variant="muted-destructive"
                       size="icon"
                       className="size-7 shrink-0"
-                      onClick={() => handleRevokeLink(link.id)}
+                      onClick={() => state.handleRevokeLink(link.id)}
                       data-testid={`team-link-revoke-${link.id}`}
                       tooltip={t('common.revoke')}
                     >
@@ -398,12 +485,28 @@ export function TeamMembers() {
           )}
         </div>
       </div>
+    </>
+  );
+}
 
-      {/* Members list */}
+function MembersSection({
+  members,
+  currentUserId,
+  onRoleChange,
+  onRemove,
+}: {
+  members: Member[];
+  currentUserId: string | undefined;
+  onRoleChange: (memberId: string, newRole: TeamRole) => Promise<void>;
+  onRemove: (member: Member) => void;
+}) {
+  const ownerCount = members.filter((m) => m.role === 'owner').length;
+  return (
+    <>
       <SettingsSection settingId="team-members.members">Members ({members.length})</SettingsSection>
       <div className="settings-card">
         {members.map((member) => {
-          const isCurrentUser = member.userId === currentUser?.id;
+          const isCurrentUser = member.userId === currentUserId;
           const isLastOwner = member.role === 'owner' && ownerCount <= 1;
 
           return (
@@ -436,7 +539,7 @@ export function TeamMembers() {
               <div className="flex items-center gap-2">
                 <Select
                   value={member.role}
-                  onValueChange={(v) => handleRoleChange(member.id, v as TeamRole)}
+                  onValueChange={(v) => onRoleChange(member.id, v as TeamRole)}
                   disabled={isLastOwner && member.role === 'owner'}
                 >
                   <SelectTrigger
@@ -457,7 +560,7 @@ export function TeamMembers() {
                   variant="muted-destructive"
                   size="icon"
                   className="size-8"
-                  onClick={() => setRemoveConfirm(member)}
+                  onClick={() => onRemove(member)}
                   disabled={isLastOwner}
                   data-testid={`team-member-remove-${member.userId}`}
                 >
@@ -468,52 +571,46 @@ export function TeamMembers() {
           );
         })}
       </div>
+    </>
+  );
+}
 
-      {/* Pending invitations */}
-      {invitations.length > 0 && (
-        <>
-          <SettingsSection settingId="team-members.pending">
-            Pending Invitations ({invitations.length})
-          </SettingsSection>
-          <div className="settings-card">
-            {invitations.map((inv) => (
-              <div key={inv.id} className="settings-row" data-testid={`team-invitation-${inv.id}`}>
-                <div className="min-w-0">
-                  <p className="text-foreground truncate text-sm">{inv.email}</p>
-                  <p className="text-muted-foreground text-xs">
-                    Expires {new Date(inv.expiresAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{inv.role}</Badge>
-                  <Button
-                    variant="muted-destructive"
-                    size="icon"
-                    className="size-7"
-                    onClick={() => handleCancelInvitation(inv.id)}
-                    data-testid={`team-invitation-cancel-${inv.id}`}
-                  >
-                    <X className="icon-sm" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+function PendingInvitationsSection({
+  invitations,
+  onCancelInvitation,
+}: {
+  invitations: PendingInvitation[];
+  onCancelInvitation: (invitationId: string) => Promise<void>;
+}) {
+  return (
+    <>
+      <SettingsSection settingId="team-members.pending">
+        Pending Invitations ({invitations.length})
+      </SettingsSection>
+      <div className="settings-card">
+        {invitations.map((inv) => (
+          <div key={inv.id} className="settings-row" data-testid={`team-invitation-${inv.id}`}>
+            <div className="min-w-0">
+              <p className="text-foreground truncate text-sm">{inv.email}</p>
+              <p className="text-muted-foreground text-xs">
+                Expires {new Date(inv.expiresAt).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{inv.role}</Badge>
+              <Button
+                variant="muted-destructive"
+                size="icon"
+                className="size-7"
+                onClick={() => onCancelInvitation(inv.id)}
+                data-testid={`team-invitation-cancel-${inv.id}`}
+              >
+                <X className="icon-sm" />
+              </Button>
+            </div>
           </div>
-        </>
-      )}
-
-      <ConfirmDialog
-        open={!!removeConfirm}
-        onOpenChange={(open) => {
-          if (!open) setRemoveConfirm(null);
-        }}
-        title="Remove Member"
-        description={`Remove ${removeConfirm?.user.name} from this organization? They will lose access to all team projects.`}
-        cancelLabel="Cancel"
-        confirmLabel="Remove"
-        onCancel={() => setRemoveConfirm(null)}
-        onConfirm={handleRemove}
-      />
+        ))}
+      </div>
     </>
   );
 }

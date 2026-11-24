@@ -2448,6 +2448,23 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'merge_approval', 'TEXT');
     },
   },
+  {
+    // The factory's own size limit for a low-risk change (null: 400) and the
+    // globs it leaves out of the size, besides tests, Markdown and the like.
+    name: '124_factory_settings_size_risk',
+    async up() {
+      await ctx().addColumn('factory_settings', 'max_low_risk_lines', 'INTEGER');
+      await ctx().addColumn('factory_settings', 'size_ignored_paths', 'TEXT');
+    },
+  },
+  {
+    // What the factory does with an issue triage finds too large: `split`
+    // opens its parts as issues; null (`ask`) comments the proposed split.
+    name: '125_factory_settings_too_big',
+    async up() {
+      await ctx().addColumn('factory_settings', 'too_big', 'TEXT');
+    },
+  },
 ];
 
 /**

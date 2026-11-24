@@ -5,6 +5,8 @@
  */
 import type { FactoryRun, FactoryRunState } from '@funny/shared/contracts/factory';
 
+import { isFactoryRunStoppedAfterFailure } from '@/lib/factory-run-labels';
+
 export type FactoryBoardColumnId =
   | 'queue'
   | 'triage'
@@ -55,6 +57,49 @@ export function factoryBoardColumn(state: string): FactoryBoardColumnId {
   return COLUMN_BY_STATE.get(state) ?? 'needs_person';
 }
 
+type PlacedRun = Pick<
+  FactoryRun,
+  'id' | 'factoryId' | 'issueNumber' | 'state' | 'failureReason' | 'startedAt'
+>;
+
+/** The runs a later-sent run of the same issue, in the same factory, replaced. */
+function supersededRuns(runs: readonly PlacedRun[]): ReadonlySet<string> {
+  const keyOf = (run: PlacedRun) => `${run.factoryId}#${run.issueNumber}`;
+  const latestStart = new Map<string, number>();
+  for (const run of runs) {
+    if (run.issueNumber === null) continue;
+    const key = keyOf(run);
+    latestStart.set(key, Math.max(latestStart.get(key) ?? -Infinity, Date.parse(run.startedAt)));
+  }
+  const superseded = new Set<string>();
+  for (const run of runs) {
+    if (run.issueNumber === null) continue;
+    if (Date.parse(run.startedAt) < latestStart.get(keyOf(run))!) superseded.add(run.id);
+  }
+  return superseded;
+}
+
+/**
+ * Each run's column among the listed runs. A run stopped after a failure still
+ * needs fixing, so it waits for a person, not in Done. A run a newer run of
+ * its issue replaced (the issue was sent again) asks nothing of anyone: an
+ * ended one goes to Done.
+ */
+export function placeFactoryRuns<R extends PlacedRun>(
+  runs: readonly R[],
+): Map<string, FactoryBoardColumnId> {
+  const superseded = supersededRuns(runs);
+  const placed = new Map<string, FactoryBoardColumnId>();
+  for (const run of runs) {
+    const column = isFactoryRunStoppedAfterFailure(run)
+      ? 'needs_person'
+      : factoryBoardColumn(run.state);
+    const ended = run.state === 'failed' || run.state === 'stopped' || run.state === 'no_change';
+    placed.set(run.id, ended && superseded.has(run.id) ? 'done' : column);
+  }
+  return placed;
+}
+
 /** How long a finished run stays in the Done column. */
 export const DONE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -87,8 +132,9 @@ export function layoutFactoryBoard<R extends FactoryRun>(
     done: [],
   };
   let hiddenDone = 0;
+  const placed = placeFactoryRuns(runs);
   for (const run of runs) {
-    const column = factoryBoardColumn(run.state);
+    const column = placed.get(run.id)!;
     if (column === 'done' && now - factoryRunActivityAt(run) > DONE_WINDOW_MS) {
       hiddenDone += 1;
       continue;

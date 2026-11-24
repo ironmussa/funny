@@ -179,6 +179,13 @@ interface RawIssue {
 }
 
 /** Open, labelled issues from GitHub, oldest first, with PRs filtered out. */
+/**
+ * The most labelled issues one listing returns (one page, oldest first). A
+ * listing this long may leave issues out, so the watcher does not read an
+ * issue's absence from it as its label having been taken off.
+ */
+export const READY_ISSUES_PAGE = 100;
+
 function fetchIssues(
   fetchImpl: typeof fetch,
   repoToken: RepoToken,
@@ -190,7 +197,7 @@ function fetchIssues(
     labels: label,
     sort: 'created',
     direction: 'asc',
-    per_page: '100',
+    per_page: String(READY_ISSUES_PAGE),
   });
   const githubError = (message: string): FactoryGithubError => ({ kind: 'github-error', message });
   return ResultAsync.fromPromise(

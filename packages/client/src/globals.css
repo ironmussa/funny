@@ -1039,7 +1039,7 @@ mark.md-search-match[data-active='true'] {
 
   /* Status glyphs (`StatusGlyph` in ThreadStatusPin.tsx): a status with a dot
      renders both the icon and the dot. The dot stays hidden unless a theme
-     swaps it in; Minimal does inside sidebar thread rows (`.status-glyph-dots`)
+     swaps it in; Minimal does inside sidebar thread rows, the factory list and board cards (`.status-glyph-dots`)
      for running (a blinking gray dot), completed, failed and interrupted /
      runner offline. */
   .status-glyph-dot {

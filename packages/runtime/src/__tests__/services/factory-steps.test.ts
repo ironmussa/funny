@@ -5,7 +5,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
  * and `integrate` merging the base in on temporary repositories.
  */
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -178,6 +186,26 @@ describe('integrate', () => {
     expect(readFileSync(join(work, '.git', 'config'), 'utf8')).not.toContain('rerere');
   });
 
+  test("the push skips the repository's pre-push hook", async () => {
+    // The hook re-runs checks the flow already runs (implement's own push,
+    // regression-proof, CI) and outlasted the push's timeout on a merge that
+    // brings the base's changes in.
+    const { seed, work, origin } = repos();
+    const hook = join(work, '.git', 'hooks', 'pre-push');
+    writeFileSync(hook, '#!/bin/sh\nexit 1\n');
+    chmodSync(hook, 0o755);
+    write(work, 'b.txt', 'mine\n');
+    commit(work, 'feature work');
+    write(seed, 'c.txt', 'theirs\n');
+    commit(seed, 'base moved');
+    git(seed, 'push', '-q', 'origin', 'main');
+
+    const result = await run(work, request());
+    if (result.kind !== 'integrate') throw new Error('expected an integrate result');
+    expect(result.outcome).toBe('merged');
+    expect(git(origin, 'rev-parse', 'feature')).toBe(result.headAfter);
+  });
+
   test('a conflicted lockfile is regenerated, not left to an agent', async () => {
     const { seed, work, origin } = repos();
     write(work, 'lock.json', '{"v":"feature"}\n');
@@ -234,6 +262,29 @@ describe('integrate', () => {
     if (result.kind !== 'integrate') throw new Error('expected an integrate result');
     expect(result.outcome).toBe('merged');
     expect(git(origin, 'rev-parse', 'feature')).toBe(result.headAfter);
+  });
+
+  // Found on issue #434: `git merge` runs commit-msg, which refused "Merge origin/main into …".
+  test("a clean merge runs none of the repository's hooks", async () => {
+    const { seed, work, origin } = repos();
+    write(work, 'feature.txt', 'feature\n');
+    commit(work, 'feature');
+    write(seed, 'base.txt', 'base\n');
+    commit(seed, 'base');
+    git(seed, 'push', '-q', 'origin', 'main');
+    const ran = join(work, '.git', 'hooks-ran');
+    mkdirSync(join(work, '.test-hooks'));
+    for (const hook of ['pre-merge-commit', 'commit-msg', 'pre-commit']) {
+      write(work, `.test-hooks/${hook}`, `#!/bin/sh\necho ${hook} >> "${ran}"\nexit 1\n`);
+      chmodSync(join(work, `.test-hooks/${hook}`), 0o755);
+    }
+    git(work, 'config', 'core.hooksPath', '.test-hooks');
+
+    const result = await run(work, request());
+    if (result.kind !== 'integrate') throw new Error('expected an integrate result');
+    expect(result.outcome).toBe('merged');
+    expect(git(origin, 'rev-parse', 'feature')).toBe(result.headAfter);
+    expect(existsSync(ran) ? readFileSync(ran, 'utf8') : '').toBe('');
   });
 
   test('a real conflict is aborted with its paths, and nothing is pushed', async () => {

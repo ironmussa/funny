@@ -1,10 +1,11 @@
 /**
  * How the caller's issue factory reviews and merges (change
  * factory-agent-roles): which reviewed changes it merges by itself, the paths
- * that always need a person, how many runs may be in a stage at once, and the
+ * that always need a person, how large a low-risk change may be, how many runs may be in a stage at once, and the
  * merge queue's batches (openspec factory-integration). One batch merges at a
  * time per repository; that is not a setting.
  */
+import { LOW_RISK_LINES_RANGE } from '@funny/shared/contracts/factory';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -23,10 +24,20 @@ import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 type AutoMerge = FactorySettings['autoMerge'];
 type MergeSettings = Pick<
   FactorySettings,
-  'autoMerge' | 'sensitivePaths' | 'stageLimits' | 'batch' | 'dependencies'
+  | 'autoMerge'
+  | 'sensitivePaths'
+  | 'maxLowRiskLines'
+  | 'sizeIgnoredPaths'
+  | 'stageLimits'
+  | 'batch'
+  | 'dependencies'
+  | 'tooBig'
 >;
+
+const { min: LOW_RISK_LINES_MIN, max: LOW_RISK_LINES_MAX } = LOW_RISK_LINES_RANGE;
 type BatchSettings = FactorySettings['batch'];
 type Dependencies = FactorySettings['dependencies'];
+type TooBig = FactorySettings['tooBig'];
 
 /** The input's whole number within `min`–`max`, or null when it is not one. */
 function wholeNumber(text: string, min: number, max: number): number | null {
@@ -275,6 +286,7 @@ export function ProjectFactoryMergeRows({
   const { t } = useTranslation();
   const { definition } = useFactoryFlowDefinition(projectId, flowName);
   const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
+  const { maxLowRiskLines, sizeIgnoredPaths, tooBig } = settings;
 
   return (
     <>
@@ -344,6 +356,50 @@ export function ProjectFactoryMergeRows({
       </ProjectSettingRow>
 
       <ProjectSettingRow
+        settingId="factory.maxLowRiskLines"
+        title={t('settings.projectFactoryMaxLowRiskLines', 'Size of a low-risk change')}
+        description={t(
+          'settings.projectFactoryMaxLowRiskLinesDesc',
+          'A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count',
+        )}
+      >
+        <Input
+          key={`max-lines-${rowKey}`}
+          type="number"
+          min={LOW_RISK_LINES_MIN}
+          max={LOW_RISK_LINES_MAX}
+          defaultValue={maxLowRiskLines}
+          className="w-[96px]"
+          data-testid="settings-factory-max-low-risk-lines"
+          onBlur={(e) => {
+            const next = wholeNumber(e.target.value, LOW_RISK_LINES_MIN, LOW_RISK_LINES_MAX);
+            if (next !== null && next !== maxLowRiskLines) onSave({ maxLowRiskLines: next });
+          }}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.sizeIgnoredPaths"
+        title={t('settings.projectFactorySizeIgnoredPaths', 'Not counted in size')}
+        description={t(
+          'settings.projectFactorySizeIgnoredPathsDesc',
+          'Globs, separated by commas. Their lines do not count toward the size of a change. Sensitive paths still apply to them',
+        )}
+      >
+        <Input
+          key={`size-ignored-${rowKey}`}
+          defaultValue={sizeIgnoredPaths.join(', ')}
+          placeholder="**/generated/**, *.json"
+          className="w-[220px]"
+          data-testid="settings-factory-size-ignored-paths"
+          onBlur={(e) => {
+            const next = parsePathList(e.target.value);
+            if (next.join('\n') !== sizeIgnoredPaths.join('\n')) onSave({ sizeIgnoredPaths: next });
+          }}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
         settingId="factory.stageLimits"
         title={t('settings.projectFactoryStageLimits', 'Runs per step')}
         description={t(
@@ -404,6 +460,39 @@ export function ProjectFactoryMergeRows({
               value: 'stack',
               label: t('settings.projectFactoryDependenciesStack', 'Stack'),
               testId: 'settings-factory-dependencies-stack',
+            },
+          ]}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.tooBig"
+        title={t('settings.projectFactoryTooBig', 'Issues too large for one change')}
+        description={
+          tooBig === 'split'
+            ? t(
+                'settings.projectFactoryTooBigSplitDesc',
+                'The factory opens each part triage proposes as its own issue and works on them; the original issue leaves the factory. A part is never split again by itself',
+              )
+            : t(
+                'settings.projectFactoryTooBigAskDesc',
+                'The factory comments the split triage proposes on the issue, and waits until a person changes the issue',
+              )
+        }
+      >
+        <SegmentedControl<TooBig>
+          value={tooBig}
+          onChange={(value) => onSave({ tooBig: value })}
+          options={[
+            {
+              value: 'ask',
+              label: t('settings.projectFactoryTooBigAsk', 'Ask'),
+              testId: 'settings-factory-too-big-ask',
+            },
+            {
+              value: 'split',
+              label: t('settings.projectFactoryTooBigSplit', 'Split'),
+              testId: 'settings-factory-too-big-split',
             },
           ]}
         />

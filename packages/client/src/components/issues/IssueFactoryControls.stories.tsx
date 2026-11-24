@@ -53,10 +53,13 @@ const settings = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  maxLowRiskLines: 400,
+  sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
+  tooBig: 'ask',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,
@@ -110,7 +113,6 @@ const meta: Meta<typeof IssuesFactoryBar> = {
     settings: settings(),
     selected: [12, 15],
     onSent: () => {},
-    onClear: () => {},
   },
   decorators: [
     (Story) => (

@@ -22,9 +22,17 @@ import {
   factoryRunRef,
 } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
+import { cn } from '@/lib/utils';
 
 import { factoryRunCardThread } from '../FactoryRunCard';
+import { FactoryRunDependencyNote } from '../FactoryRunDependencyNote';
 import { FactoryRunProgress } from '../FactoryRunProgress';
+import {
+  type FactoryRunDependencyLookup,
+  isFactoryRunStuck,
+  NO_FACTORY_RUN_DEPENDENCIES,
+  plainFactoryReason,
+} from '../run-dependencies';
 import { factoryRunWaitingText } from '../run-waiting';
 import { RunTimeline } from './RunTimeline';
 import {
@@ -115,13 +123,35 @@ function RunInputs({ run }: { run: FactoryQueueRun }) {
   );
 }
 
-function RunOutcome({ run }: { run: FactoryQueueRun }) {
+interface DependencyProps {
+  dependencies: FactoryRunDependencyLookup;
+  onSelect: (run: FactoryQueueRun) => void;
+}
+
+function RunOutcome({ run, dependencies, onSelect }: { run: FactoryQueueRun } & DependencyProps) {
   const { t } = useTranslation();
-  const text = factoryRunWaitingText(t, run);
-  if (!text) return null;
+  const waiting = factoryRunWaitingText(t, run);
+  const text = waiting ? plainFactoryReason(waiting) : null;
+  const deps = dependencies.of(run);
+  if (!text && deps.blockedBy.length === 0 && deps.blocks.length === 0) return null;
   return (
     <DetailSection id="outcome" title={t('factoryRunDetail.outcome', 'Why it stopped')}>
-      <p className="text-foreground">{text}</p>
+      {text && (
+        <p
+          className={cn(
+            'break-words whitespace-pre-wrap',
+            isFactoryRunStuck(run) ? 'text-status-warning' : 'text-foreground',
+          )}
+        >
+          {text}
+        </p>
+      )}
+      <FactoryRunDependencyNote
+        run={run}
+        dependencies={dependencies}
+        onSelect={onSelect}
+        testIdPrefix="factory-run-detail-deps"
+      />
     </DetailSection>
   );
 }
@@ -129,14 +159,16 @@ function RunOutcome({ run }: { run: FactoryQueueRun }) {
 function FactoryRunDetailBody({
   run,
   projectName,
+  dependencies,
+  onSelect,
 }: {
   run: FactoryQueueRun;
   projectName: string | undefined;
-}) {
+} & DependencyProps) {
   return (
     <div className="flex flex-col gap-4">
       <RunHeader run={run} projectName={projectName} />
-      <RunOutcome run={run} />
+      <RunOutcome run={run} dependencies={dependencies} onSelect={onSelect} />
       <RunFlow run={run} />
       <RunInputs run={run} />
       <RunTimeline run={run} />
@@ -154,14 +186,22 @@ function FactoryRunDetailBody({
   );
 }
 
+/** Without the run list there is no other run to open. */
+const ignoreSelect = () => {};
+
 export function FactoryRunDetail({
   run,
   projectName,
   onClose,
+  dependencies = NO_FACTORY_RUN_DEPENDENCIES,
+  onSelect = ignoreSelect,
 }: {
   run: FactoryQueueRun | undefined;
   projectName: string | undefined;
   onClose: () => void;
+  /** How the listed runs hold each other back, and how to open another run. */
+  dependencies?: FactoryRunDependencyLookup;
+  onSelect?: (run: FactoryQueueRun) => void;
 }) {
   return (
     <Sheet open={run !== undefined} onOpenChange={(open) => !open && onClose()}>
@@ -170,7 +210,14 @@ export function FactoryRunDetail({
         className="w-full overflow-y-auto sm:max-w-xl"
         data-testid="factory-run-detail"
       >
-        {run && <FactoryRunDetailBody run={run} projectName={projectName} />}
+        {run && (
+          <FactoryRunDetailBody
+            run={run}
+            projectName={projectName}
+            dependencies={dependencies}
+            onSelect={onSelect}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );

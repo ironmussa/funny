@@ -86,6 +86,21 @@
   --color-diff-added: hsl(var(--diff-added));
   --color-diff-removed: hsl(var(--diff-removed));
 
+  /* Fixed colors (the same in every theme) for components that used to set them in a style
+     prop: FileTree status letters, the merge-conflict action bar, the stage legend in
+     analytics (the pie slices use the same hex values). */
+  --color-file-status-added: hsl(142 40% 45%);
+  --color-file-status-modified: hsl(30 90% 55%);
+  --color-file-status-deleted: hsl(0 45% 55%);
+  --color-file-status-other: hsl(200 80% 60%);
+  --color-conflict-action-bar: hsl(210 80% 55% / 0.1);
+  --color-stage-backlog: #6b7280;
+  --color-stage-planning: #a78bfa;
+  --color-stage-in-progress: #3b82f6;
+  --color-stage-review: #f59e0b;
+  --color-stage-done: #22c55e;
+  --color-stage-archived: #8b5cf6;
+
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
 

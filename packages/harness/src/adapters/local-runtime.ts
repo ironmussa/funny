@@ -307,7 +307,19 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+/** The fields of an agent stream message, or of one of its content parts, that the harness reads. */
+interface AgentStreamRecord {
+  type?: unknown;
+  message?: unknown;
+  content?: unknown;
+  text?: unknown;
+  id?: unknown;
+  name?: unknown;
+  input?: unknown;
+  session_id?: unknown;
+}
+
+function isRecord(value: unknown): value is AgentStreamRecord {
   return typeof value === 'object' && value !== null;
 }
 

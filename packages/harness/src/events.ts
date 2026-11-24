@@ -1,3 +1,5 @@
+import type { JsonObject } from '@funny/shared/json';
+
 import type { HarnessError } from './errors.js';
 
 export type HarnessEvent =
@@ -16,7 +18,7 @@ export type HarnessEvent =
 export interface HarnessEventBase {
   type: string;
   timestamp: string;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface HarnessSessionStartedEvent extends HarnessEventBase {

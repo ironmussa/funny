@@ -560,7 +560,6 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
         <LoadingState
           fill={false}
           layout="inline"
-          className="text-sm"
           testId="clone-repo-waiting-auth"
           label={t('github.deviceFlow.waitingAuth')}
         />
@@ -664,7 +663,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
           ))}
 
           {loadingRepos && (
-            <LoadingState fill={false} className="py-4" testId="clone-repo-loading-repos" />
+            <LoadingState fill={false} className="my-4" testId="clone-repo-loading-repos" />
           )}
 
           {!loadingRepos && repos.length === 0 && (

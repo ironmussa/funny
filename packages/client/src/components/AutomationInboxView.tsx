@@ -112,7 +112,7 @@ export function AutomationInboxView() {
         <Button
           variant="muted"
           size="xs"
-          className="gap-1.5"
+          gap="snug"
           data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >
@@ -194,7 +194,7 @@ export function AutomationInboxView() {
                 <ChevronsUpDown className="icon-xs ml-2 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0" align="start">
+            <PopoverContent padding="none" className="w-[200px]" align="start">
               <Command>
                 <CommandInput placeholder="Search project..." className="h-8 text-xs" />
                 <CommandList id={filterListId}>

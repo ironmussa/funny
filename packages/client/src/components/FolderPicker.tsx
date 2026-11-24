@@ -1,6 +1,6 @@
 import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import {
-  Folder,
+  FolderIcon,
   ChevronRight,
   HardDrive,
   ArrowLeft,
@@ -365,7 +365,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('folderPicker.searchPlaceholder')}
-                className="pr-2 pl-7"
+                className="pl-7"
                 autoFocus={false}
               />
             </div>
@@ -427,26 +427,26 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               <p className="text-status-error px-2 text-center text-xs">{error}</p>
             </div>
           ) : loading ? (
-            <div className="flex flex-1 items-center justify-center">
-              <LoadingState fill={false} className="px-2" label={t('folderPicker.loading')} />
+            <div className="flex flex-1 items-center justify-center px-2">
+              <LoadingState fill={false} label={t('folderPicker.loading')} />
             </div>
           ) : dirs.length === 0 ? (
             <div className="flex flex-1 items-center justify-center">
-              <EmptyState fill={false} className="px-2" title={t('folderPicker.noSubdirs')} />
+              <EmptyState fill={false} inset="sm" title={t('folderPicker.noSubdirs')} />
             </div>
           ) : filteredDirs.length === 0 ? (
             <div className="flex flex-1 items-center justify-center">
-              <EmptyState fill={false} className="px-2" title={t('folderPicker.noResults')} />
+              <EmptyState fill={false} inset="sm" title={t('folderPicker.noResults')} />
             </div>
           ) : (
-            <ScrollArea className="-mx-2 min-h-0 flex-1 px-2">
+            <ScrollArea className="-mx-2 min-h-0 flex-1" viewportProps={{ className: 'px-2' }}>
               {filteredDirs.map((dir) => (
                 <button
                   key={dir.path}
                   onClick={() => loadDir(dir.path)}
                   className="text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
                 >
-                  <Folder className="icon-sm text-status-info shrink-0" />
+                  <FolderIcon className="icon-sm text-status-info shrink-0" />
                   <span className="font-mono-explorer truncate">{dir.name}</span>
                   <ChevronRight className="icon-xs ml-auto shrink-0 opacity-40" />
                 </button>

@@ -157,19 +157,26 @@ function McpProtocolBadge({ type }: { type: McpServerType }) {
 
 function McpStatusBadge({
   children,
-  className,
+  tone,
   testId,
 }: {
   children: ReactNode;
-  className?: string;
+  tone: 'error' | 'muted';
   testId?: string;
 }) {
+  if (tone === 'error') {
+    return (
+      <Badge variant="error" size="xs" data-testid={testId} className="rounded-md">
+        {children}
+      </Badge>
+    );
+  }
   return (
     <Badge
       variant="outline"
       size="xs"
       data-testid={testId}
-      className={cn('rounded-md border-transparent font-medium', className)}
+      className="bg-muted text-muted-foreground rounded-md border-transparent"
     >
       {children}
     </Badge>
@@ -232,27 +239,18 @@ function InstalledServerCard({
             </CardTitle>
             <McpProtocolBadge type={server.type} />
             {!isDisabled && server.status === 'error' && (
-              <McpStatusBadge
-                testId={`mcp-status-error-${server.name}`}
-                className="bg-status-error/15 text-status-error"
-              >
+              <McpStatusBadge testId={`mcp-status-error-${server.name}`} tone="error">
                 <XCircle className="icon-2xs" />
                 {t('mcp.failed')}
               </McpStatusBadge>
             )}
             {isDisabled && (
-              <McpStatusBadge
-                testId={`mcp-status-disabled-${server.name}`}
-                className="bg-muted text-muted-foreground"
-              >
+              <McpStatusBadge testId={`mcp-status-disabled-${server.name}`} tone="muted">
                 {t('mcp.disabled')}
               </McpStatusBadge>
             )}
             {server.toggleable === false && (
-              <McpStatusBadge
-                testId={`mcp-status-managed-${server.name}`}
-                className="bg-muted text-muted-foreground"
-              >
+              <McpStatusBadge testId={`mcp-status-managed-${server.name}`} tone="muted">
                 {t('mcp.managedExternally')}
               </McpStatusBadge>
             )}
@@ -861,7 +859,7 @@ export function McpServerSettings() {
             <AlertDialogAction
               data-testid="mcp-remove-confirm"
               onClick={confirmRemove}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
             >
               {t('common.delete')}
             </AlertDialogAction>

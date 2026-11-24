@@ -54,7 +54,8 @@ const ModelSelect = memo(function ModelSelect({
       <PopoverContent
         side="bottom"
         align="end"
-        className="w-auto min-w-40 p-1 data-[state=closed]:animate-none data-[state=open]:animate-none"
+        padding="xs"
+        className="w-auto min-w-40 data-[state=closed]:animate-none data-[state=open]:animate-none"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {PROVIDERS.map((provider) => {
@@ -401,11 +402,16 @@ export function PipelineSettings() {
       {/* Custom Prompts section */}
       <Collapsible>
         <div className="settings-card mb-0">
-          <CollapsibleTrigger className="bg-muted/30 hover:bg-muted/50 flex w-full items-center justify-between px-3 py-2 transition-colors">
-            <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-              Custom Prompts
-            </p>
-            <ChevronDown className="icon-sm text-muted-foreground transition-transform in-data-[state=open]:rotate-180" />
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="bg-muted/30 hover:bg-muted/50 flex w-full items-center justify-between px-3 py-2 transition-colors"
+            >
+              <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                Custom Prompts
+              </p>
+              <ChevronDown className="icon-sm text-muted-foreground transition-transform in-data-[state=open]:rotate-180" />
+            </button>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 p-3">

@@ -51,12 +51,9 @@ export function ConfirmDialog({
           <AlertDialogDescription className="break-all">{description}</AlertDialogDescription>
         </AlertDialogHeader>
         {warning && (
-          <Alert
-            variant="destructive"
-            className="border-status-warning/30 bg-status-warning/10 text-status-warning [&>svg]:text-status-warning"
-          >
+          <Alert variant="warning">
             <AlertTriangle className="icon-base" />
-            <AlertDescription className="text-xs">{warning}</AlertDescription>
+            <AlertDescription size="xs">{warning}</AlertDescription>
           </Alert>
         )}
         <AlertDialogFooter>
@@ -69,11 +66,7 @@ export function ConfirmDialog({
           </AlertDialogCancel>
           <AlertDialogAction
             data-testid="confirm-dialog-confirm"
-            className={
-              variant === 'destructive'
-                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                : undefined
-            }
+            variant={variant}
             onClick={onConfirm}
             disabled={loading}
           >

@@ -191,7 +191,7 @@ function IssuesToolbar({
       )}
 
       <Select value={state} onValueChange={(v) => onStateChange(v as IssueState)}>
-        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-state-trigger">
+        <SelectTrigger size="xs" className="w-auto" data-testid="issues-state-trigger">
           <CircleDot className="icon-xs opacity-70" />
           <span>{stateLabel(state)}</span>
         </SelectTrigger>

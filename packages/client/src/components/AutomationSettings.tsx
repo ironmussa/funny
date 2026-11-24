@@ -183,7 +183,7 @@ export function AutomationSettings() {
       {/* Header — hidden when empty state is shown */}
       {automations.length > 0 && (
         <div className="flex items-center justify-end">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+          <Button variant="outline" size="sm" gap="snug" onClick={openCreateDialog}>
             <Plus className="icon-sm" />
             Create
           </Button>
@@ -197,7 +197,7 @@ export function AutomationSettings() {
           fill={false}
           title="No automations yet."
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+            <Button variant="outline" size="sm" gap="snug" onClick={openCreateDialog}>
               <Plus className="icon-sm" />
               Create your first automation
             </Button>
@@ -448,7 +448,7 @@ export function AutomationSettings() {
               size="sm"
               onClick={() => handleSave(true)}
               disabled={!form.name.trim() || !form.prompt.trim()}
-              className="gap-1.5"
+              gap="snug"
             >
               <Play className="icon-xs" />
               {editingId ? 'Save & Test' : 'Create & Test'}

@@ -31,8 +31,8 @@ export function AppShellSkeleton() {
         <div className="flex items-center justify-between px-4 py-3">
           <Skeleton className="h-5 w-24" />
           <div className="flex gap-1">
-            <Skeleton className="size-7 rounded-md" />
-            <Skeleton className="size-7 rounded-md" />
+            <Skeleton className="size-7" />
+            <Skeleton className="size-7" />
           </div>
         </div>
 
@@ -41,22 +41,22 @@ export function AppShellSkeleton() {
           <Skeleton className="h-3 w-16" />
         </div>
         <div className="space-y-1 px-2">
-          <Skeleton className="h-8 w-full rounded-md" />
-          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
         </div>
 
         {/* "Projects" section */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <Skeleton className="h-3 w-16" />
-          <Skeleton className="size-5 rounded" />
+          <Skeleton corners="square" className="size-5" />
         </div>
         <div className="flex-1 space-y-1.5 px-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={`skeleton-${i}`} className="space-y-1">
-              <Skeleton className="h-7 w-full rounded-md" />
+              <Skeleton className="h-7 w-full" />
               <div className="space-y-1 pl-6">
-                <Skeleton className="h-6 w-4/5 rounded-md" />
-                <Skeleton className="h-6 w-3/5 rounded-md" />
+                <Skeleton className="h-6 w-4/5" />
+                <Skeleton className="h-6 w-3/5" />
               </div>
             </div>
           ))}

@@ -88,9 +88,11 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[80vh] max-w-lg flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CircleDot className="icon-base" />
-            {t('issues.title')}
+          <DialogTitle>
+            <span className="flex items-center gap-2">
+              <CircleDot className="icon-base" />
+              {t('issues.title')}
+            </span>
           </DialogTitle>
           <DialogDescription className="sr-only">{t('issues.title')}</DialogDescription>
         </DialogHeader>
@@ -118,7 +120,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
         </div>
 
         {/* Content */}
-        <ScrollArea className="-mx-6 min-h-0 flex-1 px-6">
+        <ScrollArea className="-mx-6 min-h-0 flex-1" viewportProps={{ className: 'px-6' }}>
           {loading && issues.length === 0 ? (
             <LoadingState
               padding="lg"

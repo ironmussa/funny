@@ -154,7 +154,7 @@ export function StartupCommandsSettings() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            gap="snug"
             onClick={() => {
               cancelEdit();
               setAdding(true);
@@ -173,7 +173,7 @@ export function StartupCommandsSettings() {
           fill={false}
           title={t('startup.noCommands')}
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
+            <Button variant="outline" size="sm" gap="snug" onClick={() => setAdding(true)}>
               <Plus className="icon-sm" />
               {t('startup.addFirst')}
             </Button>
@@ -255,10 +255,9 @@ export function StartupCommandsSettings() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="ghost"
+                      variant="ghost-error"
                       size="icon-sm"
                       onClick={() => stopStartupCommand(cmd)}
-                      className="text-status-error hover:text-status-error/80"
                     >
                       <Square className="icon-sm" />
                     </Button>
@@ -268,12 +267,7 @@ export function StartupCommandsSettings() {
               ) : (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleRun(cmd)}
-                      className="text-status-success hover:text-status-success/80"
-                    >
+                    <Button variant="ghost-success" size="icon-sm" onClick={() => handleRun(cmd)}>
                       <Play className="icon-sm" />
                     </Button>
                   </TooltipTrigger>

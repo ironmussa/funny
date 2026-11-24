@@ -1,9 +1,9 @@
 import {
   Activity,
   Bot,
-  Circle,
   CircleCheck,
   CircleDot,
+  CircleIcon,
   Cpu,
   FileCode,
   FilePlus,
@@ -179,7 +179,7 @@ function InlineTodoList({
               ) : todo.status === 'in_progress' ? (
                 <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0" />
               ) : (
-                <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
+                <CircleIcon className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
               )
             }
             <span
@@ -202,7 +202,7 @@ function InlineTodoList({
 /** Card for a single agent (main or sub-agent) with optional inline todos. */
 function AgentCard({
   testId,
-  icon: Icon,
+  icon: AgentIcon,
   label,
   isRunning,
   childToolCallCount,
@@ -222,7 +222,7 @@ function AgentCard({
       {/* Agent header */}
       <div className="flex items-center gap-2">
         {isRunning && <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />}
-        <Icon className="icon-sm text-muted-foreground shrink-0" />
+        <AgentIcon className="icon-sm text-muted-foreground shrink-0" />
         <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium">
           {label}
         </span>
@@ -242,7 +242,7 @@ function AgentCard({
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <SharedEmptyState fill={false} className="px-4 py-3" title={message} />;
+  return <SharedEmptyState fill={false} padding="sm" title={message} />;
 }
 
 // ─── Main Component ───────────────────────────────────────
@@ -444,7 +444,7 @@ export function ActivityPane() {
               <LoadingState
                 padding="sm"
                 fill={false}
-                className="px-4"
+                className="mx-4"
                 label={t('activity.loadingFiles', 'Loading...')}
               />
             ) : (

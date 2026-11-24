@@ -154,10 +154,9 @@ export function MarkdownImageCard({
                     variant="muted"
                     size="icon-sm"
                     onClick={pz.reset}
-                    className="text-xs"
                     data-testid="markdown-image-zoom-reset"
                   >
-                    1:1
+                    <span className="text-xs">1:1</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Reset zoom</TooltipContent>

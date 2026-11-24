@@ -98,7 +98,8 @@ export function CommentsPane() {
           ) : count === 0 ? (
             <EmptyState
               fill={false}
-              className="py-10"
+              padding="md"
+              className="my-4"
               icon={MessageSquare}
               title={t('comments.empty', 'No comments yet')}
               description={t('comments.emptyHint', 'Leave the first note below.')}
@@ -111,7 +112,7 @@ export function CommentsPane() {
                 <div key={c.id} className="group flex gap-2" data-testid={`comment-row-${c.id}`}>
                   <Avatar className="mt-0.5 h-7 w-7 shrink-0">
                     {c.user?.image && <AvatarImage src={c.user.image} alt={name} />}
-                    <AvatarFallback name={name} className="text-xs">
+                    <AvatarFallback name={name} textSize="xs">
                       {name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>

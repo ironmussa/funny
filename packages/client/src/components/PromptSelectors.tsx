@@ -275,18 +275,21 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          data-testid="prompt-model-select"
-          aria-label={t('prompt.mobileSelectors.model', 'Model')}
-          className="text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex h-7 w-auto cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
-        >
-          <span className="text-muted-foreground shrink-0">
-            {selectedGroup?.providerLabel ?? selProvider}
-          </span>
-          <span className="text-muted-foreground shrink-0">·</span>
-          <span className="truncate">{selected?.label ?? selModel}</span>
-          {selEffortLabel && <span className="text-muted-foreground">· {selEffortLabel}</span>}
-          <ChevronDown className="icon-xs opacity-50" />
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            data-testid="prompt-model-select"
+            aria-label={t('prompt.mobileSelectors.model', 'Model')}
+            className="text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex h-7 w-auto cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
+          >
+            <span className="text-muted-foreground shrink-0">
+              {selectedGroup?.providerLabel ?? selProvider}
+            </span>
+            <span className="text-muted-foreground shrink-0">·</span>
+            <span className="truncate">{selected?.label ?? selModel}</span>
+            {selEffortLabel && <span className="text-muted-foreground">· {selEffortLabel}</span>}
+            <ChevronDown className="icon-xs opacity-50" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="top"

@@ -161,10 +161,10 @@ function WorktreeThreadItem({ thread, projectPath }: { thread: Thread; projectPa
  */
 function WorktreeRowGlyph({ isMain }: { isMain: boolean }) {
   const { t } = useTranslation();
-  const Icon = isMain ? House : GitBranch;
+  const GlyphIcon = isMain ? House : GitBranch;
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center">
-      <Icon
+      <GlyphIcon
         className="icon-xs text-muted-foreground"
         role="img"
         aria-label={isMain ? t('worktreeSettings.main') : t('worktreeSettings.noThread')}

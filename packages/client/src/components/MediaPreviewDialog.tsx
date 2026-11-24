@@ -80,11 +80,12 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
 
   return (
     <DialogContent
+      flush
       className={cn(
         isFullscreen
           ? 'h-screen max-h-screen w-screen max-w-[100vw]'
           : 'h-[85vh] w-[90vw] max-w-5xl',
-        'flex flex-col gap-0 overflow-hidden p-0',
+        'flex flex-col overflow-hidden',
       )}
       onOpenAutoFocus={(e) => e.preventDefault()}
       data-testid="media-preview-dialog"
@@ -123,10 +124,9 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
                   variant="muted"
                   size="icon-sm"
                   onClick={pz.reset}
-                  className="text-xs"
                   data-testid="media-preview-zoom-reset"
                 >
-                  1:1
+                  <span className="text-xs">1:1</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Reset zoom</TooltipContent>

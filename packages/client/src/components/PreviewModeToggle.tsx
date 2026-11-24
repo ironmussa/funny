@@ -38,11 +38,11 @@ export function PreviewModeToggle({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="muted"
+          variant={previewing ? 'pressed' : 'muted'}
           size={size}
           onClick={onToggle}
           disabled={disabled || loading}
-          className={cn('shrink-0', previewing && 'bg-accent text-accent-foreground', className)}
+          className={cn('shrink-0', className)}
           data-testid={testId}
           aria-pressed={previewing}
           aria-label={label}

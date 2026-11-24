@@ -1,4 +1,4 @@
-import { Circle, CircleDot, CircleCheck } from 'lucide-react';
+import { CircleCheck, CircleDot, CircleIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -16,7 +16,7 @@ export function TodoList({ todos }: { todos: TodoItem[] }) {
             ) : todo.status === 'in_progress' ? (
               <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0" />
             ) : (
-              <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
+              <CircleIcon className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
             )
           }
           <span

@@ -132,12 +132,11 @@ function DictationButton({
         <Button
           data-testid="plan-dictate"
           onClick={onToggle}
-          variant="muted"
+          variant={isRecording ? 'ghost-destructive' : 'muted'}
           size="icon-sm"
           tabIndex={-1}
           aria-label={label}
           disabled={isTranscribing}
-          className={cn(isRecording && 'text-destructive hover:text-destructive')}
         >
           {isTranscribing ? (
             <Loader2 className="icon-xs animate-spin" />
@@ -299,7 +298,7 @@ function PlanResponseControls({
             size="xs"
             onClick={onSendComments}
             data-testid="plan-send-comments"
-            className="bg-primary shrink-0 px-3"
+            className="shrink-0 px-3"
           >
             {labels.sendComments}
           </Button>

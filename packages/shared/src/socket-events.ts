@@ -112,13 +112,13 @@ function isObject(value: unknown): value is object | null {
 }
 
 /** Normalize browser fire-and-forget payloads. Returns null when invalid. */
-export function parseObjectPayload(data: unknown): Record<string, unknown> | null {
+export function parseObjectPayload(data: unknown): SocketObjectPayload | null {
   if (data != null && (!isObject(data) || Array.isArray(data))) {
     return null;
   }
   const parsed = objectPayloadSchema.safeParse(data);
   if (!parsed.success) return null;
-  return (parsed.data ?? {}) as Record<string, unknown>;
+  return parsed.data ?? {};
 }
 
 export function parseSocketPayload<TSchema extends ZodTypeAny>(

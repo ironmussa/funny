@@ -642,7 +642,7 @@ export function providerModelProblem(
   if (provider === 'pi') return null;
   if (getManifest(provider)?.models.kind === 'dynamic') return null;
   if (!(provider in MODEL_REGISTRY)) return null;
-  const bucket = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY] as Record<string, unknown>;
+  const bucket: object = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY];
   return model in bucket ? null : `Invalid model "${model}" for provider "${provider}"`;
 }
 

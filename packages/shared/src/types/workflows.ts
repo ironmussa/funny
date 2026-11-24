@@ -1,3 +1,5 @@
+import type { JsonObject } from '../json.js';
+
 export type WorkflowSource = 'built-in' | 'user';
 
 export type WorkflowNodeRunStatus =
@@ -76,7 +78,7 @@ export interface WorkflowRunRequest {
   threadId: string;
   workflowName?: string;
   prompt?: string;
-  inputs?: Record<string, unknown>;
+  inputs?: JsonObject;
 }
 
 export interface WorkflowRunResponse {
@@ -95,5 +97,5 @@ export interface WorkflowNodeRunState {
   nodeId: string;
   status: WorkflowNodeRunStatus;
   message?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }

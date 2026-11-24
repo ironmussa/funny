@@ -60,7 +60,7 @@ const resultRefSchema = z.object({
   snapshot: z.string().optional(),
 });
 
-function parseInput(raw: string | null): Record<string, unknown> {
+function parseInput(raw: string | null): Activity['input'] {
   if (!raw) return {};
   const parsed = parseStoredJson(inputSchema, raw, 'activity input');
   return parsed.ok ? parsed.value : {};

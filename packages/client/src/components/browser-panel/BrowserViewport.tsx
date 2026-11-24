@@ -261,7 +261,7 @@ function useBrowserInputHandlers(
   const onBrowseWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     e.preventDefault();
-    const { x, y } = toViewportCoords(e as React.MouseEvent<HTMLDivElement>);
+    const { x, y } = toViewportCoords(e);
     browserSessionClient.input(sessionId!, {
       kind: 'wheel',
       x,
@@ -312,7 +312,7 @@ function useBrowserInputHandlers(
   // mouseDown also focuses the overlay so the keyboard listeners attach.
   const onBrowseMouseDownWithFocus = (e: React.MouseEvent<HTMLDivElement>) => {
     if (canForwardInput) {
-      (e.currentTarget as HTMLDivElement).focus();
+      e.currentTarget.focus();
     }
     onBrowseMouseDown(e);
   };

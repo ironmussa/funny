@@ -59,6 +59,8 @@ export function TestIdOverlay() {
       try {
         const result = await browserSessionClient.execute(sessionId, COLLECT_TESTIDS_EXPR);
         if (!cancelled && Array.isArray(result)) {
+          // SAFETY: COLLECT_TESTIDS_EXPR returns an array of { testid, x, y, w, h } objects, the
+          // TestIdLabel shape, and Array.isArray ruled out any other result.
           setLabels(result as TestIdLabel[]);
         }
       } catch (err) {

@@ -110,6 +110,8 @@ function ActiveInspectOverlay({
               cy,
               overlayWidth: rect.width,
               overlayHeight: rect.height,
+              // SAFETY: inspect-at evaluates window.__funnyElementInfo (extractElementInfo in
+              // @funny/shared/dom/extract), which returns an AnnotationDomInfo or null; null was ruled out above.
               info: info as AnnotationDomInfo,
             });
           } else {

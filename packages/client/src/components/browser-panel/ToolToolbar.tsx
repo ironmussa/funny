@@ -72,7 +72,7 @@ export function ToolToolbar() {
       return;
     }
     try {
-      const result = (await browserSessionClient.screenshot(sessionId)) as string;
+      const result = await browserSessionClient.screenshot(sessionId);
       if (typeof result !== 'string' || !result) {
         toast.error('Empty screenshot response');
         return;
@@ -82,8 +82,7 @@ export function ToolToolbar() {
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       const blob = new Blob([bytes], { type: 'image/png' });
       // ClipboardItem requires a Promise<Blob> in some browsers, plain Blob in others.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ClipboardItemCtor = (window as any).ClipboardItem;
+      const ClipboardItemCtor = window.ClipboardItem;
       if (ClipboardItemCtor && navigator.clipboard && 'write' in navigator.clipboard) {
         await navigator.clipboard.write([new ClipboardItemCtor({ 'image/png': blob })]);
         toast.success('Viewport copied to clipboard');

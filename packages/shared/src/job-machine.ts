@@ -16,8 +16,12 @@ import type { JobStatus } from './types.js';
  * Every other status is final: the first writer wins, so a cancel is not
  * overwritten by the scanner and a finished job cannot be cancelled.
  */
+interface JobMachineTypes {
+  events: { type: 'SPAWNED' | 'EXIT' | 'FAIL' | 'KILL' | 'CANCEL' };
+}
+
 const jobMachine = setup({
-  types: {} as { events: { type: 'SPAWNED' | 'EXIT' | 'FAIL' | 'KILL' | 'CANCEL' } },
+  types: {} as JobMachineTypes,
 }).createMachine({
   id: 'job',
   initial: 'running',

@@ -16,8 +16,12 @@ import type { ActivityStatus } from './types.js';
  *
  * `succeeded` and `failed` are final: the first terminal writer wins.
  */
+interface ActivityMachineTypes {
+  events: { type: 'STEP' | 'SUCCEED' | 'FAIL' | 'INTERRUPT' };
+}
+
 const activityMachine = setup({
-  types: {} as { events: { type: 'STEP' | 'SUCCEED' | 'FAIL' | 'INTERRUPT' } },
+  types: {} as ActivityMachineTypes,
 }).createMachine({
   id: 'activity',
   initial: 'running',

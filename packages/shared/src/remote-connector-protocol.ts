@@ -767,7 +767,7 @@ export function targetConfigSignaturePayload(
 export function validateRemoteOperationArguments(
   operation: RemoteOperation,
   values: Record<string, RemoteArgumentValue>,
-): Record<string, RemoteArgumentValue> {
+): RemoteExecutionRequest['arguments'] {
   const unknown = Object.keys(values).find((key) => !(key in operation.arguments));
   if (unknown) throw new Error(`Unknown operation argument: ${unknown}`);
 

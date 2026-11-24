@@ -16,10 +16,12 @@ import type { WatcherStatus } from './types.js';
  * `done`, `cancelled` and `expired` are final: a cancelled watcher is never
  * fired or re-armed; a new one is created instead.
  */
+interface WatcherMachineTypes {
+  events: { type: 'FIRE' | 'RESCHEDULE' | 'EXPIRE' | 'COMPLETE' | 'CANCEL' };
+}
+
 const watcherMachine = setup({
-  types: {} as {
-    events: { type: 'FIRE' | 'RESCHEDULE' | 'EXPIRE' | 'COMPLETE' | 'CANCEL' };
-  },
+  types: {} as WatcherMachineTypes,
 }).createMachine({
   id: 'watcher',
   initial: 'pending',

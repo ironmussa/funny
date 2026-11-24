@@ -28,6 +28,7 @@ const apiMock = (() => ({
   projectGetRemoteUrl: vi.fn(),
   githubIssuesEnriched: vi.fn(),
   githubIssueComments: vi.fn(),
+  githubDeleteIssues: vi.fn(),
 }))();
 const logError = (() => vi.fn())();
 mock.module('@/lib/client-logger', () => ({
@@ -347,11 +348,19 @@ describe('IssuesTab and the issue factory', () => {
     renderWithProviders(<IssuesTab visible />);
   };
 
-  test('without a factory, or without steer, issues have no checkbox', async () => {
-    factory.settings = null;
+  test('without steer, issues have no checkbox', async () => {
+    factory.canSteer = false;
     showIssues([issue(1)]);
     await screen.findByTestId('issue-item-1');
     expect(screen.queryByTestId('issue-select-1')).toBeNull();
+  });
+
+  test('without a factory, a selection can be deleted but not sent', async () => {
+    factory.settings = null;
+    showIssues([issue(1)]);
+    fireEvent.click(await screen.findByTestId('issue-select-1'));
+    expect(screen.getByTestId('issues-selection-delete')).toBeEnabled();
+    expect(screen.queryByTestId('issues-factory-bar')).toBeNull();
   });
 
   test('when the factory settings fail to load, the tab says so and retries on demand', async () => {
@@ -359,7 +368,6 @@ describe('IssuesTab and the issue factory', () => {
     factory.settingsFailed = true;
     showIssues([issue(1)]);
     await screen.findByTestId('issue-item-1');
-    expect(screen.queryByTestId('issue-select-1')).toBeNull();
 
     fireEvent.click(screen.getByTestId('issues-factory-retry'));
     expect(factory.retry).toHaveBeenCalledWith('project-1');
@@ -372,11 +380,11 @@ describe('IssuesTab and the issue factory', () => {
     expect(screen.queryByTestId('issues-factory-unavailable')).toBeNull();
   });
 
-  test('selected issues are sent with the chosen flow', async () => {
+  test('selected issues are sent with the chosen flow; a closed one is not sent', async () => {
     showIssues([issue(1), issue(2), issue(3, 'closed')]);
     fireEvent.click(await screen.findByTestId('issue-select-2'));
     fireEvent.click(screen.getByTestId('issue-select-1'));
-    expect(screen.queryByTestId('issue-select-3')).toBeNull();
+    fireEvent.click(screen.getByTestId('issue-select-3'));
 
     expect(screen.getByTestId('issues-factory-flow')).toHaveTextContent('issue-to-merge');
     fireEvent.click(screen.getByTestId('issues-factory-send'));
@@ -385,7 +393,11 @@ describe('IssuesTab and the issue factory', () => {
     // Settle the send inside act(): outside it, React's not-wrapped-in-act
     // path under bun stalls for tens of seconds re-reading react's jsx runtime.
     await act(async () => {});
+    // The sent issues leave the selection; the closed one stays, for a delete.
     await waitFor(() => expect(screen.queryByTestId('issues-factory-bar')).toBeNull());
+    expect(screen.getByTestId('issues-selection-count')).toHaveTextContent(
+      'issues.selectedCount:1',
+    );
   });
 
   test('an issue in the factory shows its state instead of a checkbox', async () => {
@@ -491,12 +503,50 @@ describe('IssuesTab and the issue factory', () => {
     expect(box(2)).toHaveClass('opacity-0');
   });
 
-  test('the factory bar sits above the issues', async () => {
+  test('the selection bar, with the factory controls, sits below the issues', async () => {
     showIssues([issue(1)]);
     fireEvent.click(await screen.findByTestId('issue-select-1'));
 
-    const bar = screen.getByTestId('issues-factory-bar');
+    const bar = screen.getByTestId('issues-selection-bar');
     const row = screen.getByTestId('issue-item-1');
-    expect(bar.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bar.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(within(bar).getByTestId('issues-factory-bar')).toBeInTheDocument();
+  });
+
+  test('selected issues are deleted after a confirmation, and the list reloads', async () => {
+    apiMock.githubDeleteIssues.mockReturnValue(okAsync({ deleted: [1, 3], failed: [] }));
+    showIssues([issue(1), issue(2), issue(3, 'closed')]);
+    fireEvent.click(await screen.findByTestId('issue-select-1'));
+    fireEvent.click(screen.getByTestId('issue-select-3'));
+    const loads = apiMock.githubIssuesEnriched.mock.calls.length;
+
+    fireEvent.click(screen.getByTestId('issues-selection-delete'));
+    expect(apiMock.githubDeleteIssues).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByTestId('confirm-dialog-confirm'));
+
+    expect(apiMock.githubDeleteIssues).toHaveBeenCalledWith('project-1', [1, 3]);
+    await act(async () => {});
+    await waitFor(() => expect(screen.queryByTestId('issues-selection-bar')).toBeNull());
+    expect(apiMock.githubIssuesEnriched.mock.calls.length).toBeGreaterThan(loads);
+  });
+
+  test('an issue GitHub refuses to delete stays selected', async () => {
+    apiMock.githubDeleteIssues.mockReturnValue(
+      okAsync({ deleted: [1], failed: [{ issueNumber: 2, message: 'Must be an admin' }] }),
+    );
+    showIssues([issue(1), issue(2)]);
+    fireEvent.click(await screen.findByTestId('issue-select-1'));
+    fireEvent.click(screen.getByTestId('issue-select-2'));
+
+    fireEvent.click(screen.getByTestId('issues-selection-delete'));
+    fireEvent.click(await screen.findByTestId('confirm-dialog-confirm'));
+    await act(async () => {});
+
+    await waitFor(() =>
+      expect(screen.getByTestId('issues-selection-count')).toHaveTextContent(
+        'issues.selectedCount:1',
+      ),
+    );
+    expect(screen.getByTestId('issue-select-2')).toBeChecked();
   });
 });

@@ -754,7 +754,7 @@ async function headOfQueue(factoryId: string): Promise<number> {
 function queueOperations(newId: () => string) {
   return {
     /**
-     * Queue sent issues, in the given order, behind the factory's queue, in one
+     * Queue issues (sent from funny, or found by their label), in the given order, behind the factory's queue, in one
      * statement: either every new row is written or none is. An issue the
      * one-run-per-issue index already holds (a run waiting, in flight or
      * parked) is skipped by the conflict clause and reported as a duplicate;
@@ -765,6 +765,8 @@ function queueOperations(newId: () => string) {
       factoryId: string;
       issueNumbers: number[];
       flowName: string;
+      /** `label`: an issue the watcher found by its label (automatic mode); default `manual`. */
+      source?: 'manual' | 'label';
     }): ResultAsync<{ queued: FactoryRunView[]; duplicates: number[] }, FactoryRunsError> {
       return ResultAsync.fromPromise(
         (async () => {
@@ -777,7 +779,7 @@ function queueOperations(newId: () => string) {
               issueNumber,
               state: 'requested',
               startedAt: now,
-              source: 'manual',
+              source: input.source ?? 'manual',
               flowName: input.flowName,
               queueOrder: first + index,
             }),

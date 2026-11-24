@@ -177,7 +177,7 @@ describe('paths that overlap', () => {
     ).toEqual([12]);
   });
 
-  test('only runs changing files hold their paths, and never the run itself', () => {
+  test('only runs changing files, or triaged and about to, hold their paths, never the run itself', () => {
     const triage = { decision: 'ready' as const, at: '2026-11-22T00:00:00Z', contract: CONTRACT };
     const run = (
       id: string,
@@ -200,12 +200,16 @@ describe('paths that overlap', () => {
           run('d', 5, 'requested'),
           run('e', 6, 'waiting_human'),
           run('f', 8, 'working', null),
+          // Still triaging, with no answer yet: nothing to hold.
+          run('g', 9, 'triaging', null),
         ],
         'me',
       ),
     ).toEqual([
       { issue: 2, paths: ['src/sum.ts'] },
       { issue: 3, paths: ['src/sum.ts'] },
+      // Triaged ready and going on to work: two triages that end together must see each other.
+      { issue: 4, paths: ['src/sum.ts'] },
     ]);
   });
 });

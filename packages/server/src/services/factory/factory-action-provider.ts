@@ -240,6 +240,8 @@ export interface FactoryActionProviderDeps {
   holdForPaths?(blockers: number[]): Promise<boolean>;
   /** Open a too-large issue's parts as issues (the factory's `split` setting); absent: comment the split. */
   split?: FactorySplitDeps;
+  /** Run `work` alone among the factory's runs (triage's contract and path check). */
+  exclusive?<T>(work: () => Promise<T>): Promise<T>;
   /** When the run was admitted: review threads from before are not this run's. */
   admittedAt?: string;
   /** The newest review thread of this run by its title prefix, since `since`. */
@@ -1018,6 +1020,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     issueText: deps.issueText,
     hold: deps.holdForPaths,
     split: deps.split,
+    exclusive: deps.exclusive,
     record: deps.record,
     count: (event) => count(metrics, { event }),
   });

@@ -1,10 +1,37 @@
-import { Bot, Hand, MessageSquareWarning, Square, Volume2, VolumeX } from 'lucide-react';
+import {
+  Bot,
+  Check,
+  Hand,
+  MessageSquareWarning,
+  Monitor,
+  Smartphone,
+  Square,
+  Tablet,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FIELD_SIZE } from '@/components/ui/control-size';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
+import {
+  BROWSER_SESSION_PHONE_PRESETS,
+  BROWSER_SESSION_TABLET_PRESETS,
+  BROWSER_SESSION_VIEWPORT_HEIGHT,
+  BROWSER_SESSION_VIEWPORT_WIDTH,
+  type BrowserViewportPreset,
+} from '@/lib/browser-session-viewport';
 import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
@@ -63,13 +90,35 @@ export function BrowserControlBar() {
   );
 }
 
-/** Page audio on/off and Stop, for any open session. */
+const DESKTOP_PRESET: BrowserViewportPreset = {
+  name: 'Desktop',
+  width: BROWSER_SESSION_VIEWPORT_WIDTH,
+  height: BROWSER_SESSION_VIEWPORT_HEIGHT,
+};
+
+const ALL_PRESETS = [
+  DESKTOP_PRESET,
+  ...BROWSER_SESSION_PHONE_PRESETS,
+  ...BROWSER_SESSION_TABLET_PRESETS,
+];
+
+/** The first preset of this size (several devices share one), or undefined for a custom size. */
+function presetOfSize(width: number, height: number): BrowserViewportPreset | undefined {
+  return ALL_PRESETS.find((p) => p.width === width && p.height === height);
+}
+
+function presetTestId(preset: BrowserViewportPreset): string {
+  return `browser-panel-viewport-${preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+/** Page audio on/off, the viewport size menu and Stop, for any open session. */
 function SessionActions() {
   const audioMuted = useBrowserPanelStore((s) => s.audioMuted);
   const setAudioMuted = useBrowserPanelStore((s) => s.setAudioMuted);
   const endBrowserSession = useBrowserPanelStore((s) => s.endBrowserSession);
   return (
     <div className="flex items-center">
+      <ViewportMenu />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -102,6 +151,74 @@ function SessionActions() {
         <TooltipContent side="bottom">Stop browser (closes the page)</TooltipContent>
       </Tooltip>
     </div>
+  );
+}
+
+/** Device size menu: desktop, or a phone / tablet preset like Chrome DevTools' device toolbar. */
+function ViewportMenu() {
+  const width = useBrowserPanelStore((s) => s.viewport.width);
+  const height = useBrowserPanelStore((s) => s.viewport.height);
+  const resizeViewport = useBrowserPanelStore((s) => s.resizeViewport);
+  const menu = useTooltipMenu();
+  const current = presetOfSize(width, height);
+  const Icon = BROWSER_SESSION_PHONE_PRESETS.some((p) => p.width === width)
+    ? Smartphone
+    : BROWSER_SESSION_TABLET_PRESETS.some((p) => p.width === width)
+      ? Tablet
+      : Monitor;
+
+  const item = (preset: BrowserViewportPreset) => {
+    const selected = preset === current;
+    return (
+      <DropdownMenuItem
+        key={preset.name}
+        onClick={() => void resizeViewport(preset.width, preset.height)}
+        aria-checked={selected}
+        role="menuitemradio"
+        data-testid={presetTestId(preset)}
+      >
+        <Check className={cn(!selected && 'invisible')} />
+        <span className="flex-1">{preset.name}</span>
+        <span className="text-muted-foreground ml-4 tabular-nums">
+          {preset.width}×{preset.height}
+        </span>
+      </DropdownMenuItem>
+    );
+  };
+
+  return (
+    <DropdownMenu {...menu.menuProps}>
+      <Tooltip {...menu.tooltipProps}>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="muted"
+              size="icon-xs"
+              aria-label="Viewport size"
+              data-testid="browser-panel-viewport-menu"
+            >
+              <Icon className="icon-xs" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {current ? `${current.name} (${width}×${height})` : `Viewport ${width}×${height}`}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-[70vh] overflow-y-auto"
+        {...menu.contentProps}
+      >
+        {item(DESKTOP_PRESET)}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Phones</DropdownMenuLabel>
+        {BROWSER_SESSION_PHONE_PRESETS.map(item)}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Tablets</DropdownMenuLabel>
+        {BROWSER_SESSION_TABLET_PRESETS.map(item)}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

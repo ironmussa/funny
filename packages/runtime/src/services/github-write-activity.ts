@@ -7,7 +7,7 @@
  *
  * Writes to GitHub a user starts from the review pane (track-user-and-
  * scheduled-actions, design D3): merging a pull request, reverting a file in
- * one and publishing a repository, each recorded as one `github.write`
+ * one, publishing a repository and deleting issues, each recorded as one `github.write`
  * activity once GitHub has answered. The route's own answer is unchanged.
  */
 import type { ActivityEffect, ActivityResultRef } from '@funny/shared';
@@ -19,7 +19,7 @@ export interface GithubWrite {
   projectId: string;
   title: string;
   input: {
-    action: 'pr-merge' | 'pr-revert-file' | 'repo-publish';
+    action: 'pr-merge' | 'pr-revert-file' | 'repo-publish' | 'issue-delete';
     prNumber?: number;
     filePath?: string;
     repo?: string;

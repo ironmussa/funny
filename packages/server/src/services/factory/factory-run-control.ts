@@ -81,12 +81,13 @@ function wake(factoryId: string): void {
 }
 
 /**
- * A stopped run that the factory took by its label: take the label off the
- * issue, so automatic mode does not admit it again at the next poll. A person
+ * A stopped run (or one taken out of the queue) that the factory took by its
+ * label: take the label off the issue, so automatic mode does not queue it
+ * again at the next poll. A person
  * who wants it run again puts the label back (or retries the run). Best
  * effort: the stop has happened either way, and a failure is logged.
  */
-async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
+export async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
   if (run.source !== 'label' || run.issueNumber === null) return;
   const factory = await getWatchedFactory(run.factoryId);
   const port = factoryGithubPort();

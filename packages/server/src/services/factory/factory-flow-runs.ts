@@ -374,6 +374,26 @@ export function admissionPriority(run: Pick<FactoryRunView, 'admittedAt' | 'star
 /** A blocker that ended in one of these will not merge: the runs stacked on it park (D10). */
 const GONE_STATES: ReadonlySet<string> = new Set(['failed', 'stopped', 'no_change']);
 
+/**
+ * Per factory, one triage contract-and-paths check at a time (in this process,
+ * like the watcher), as slot writes are serialized in `factory-runs.ts`: two
+ * runs triaged together would otherwise each miss the other's paths.
+ */
+const pathChecks = (() => {
+  const tails = new Map<string, Promise<unknown>>();
+  return {
+    run<T>(factoryId: string, work: () => Promise<T>): Promise<T> {
+      const result = (tails.get(factoryId) ?? Promise.resolve()).then(work);
+      const tail = result.catch(() => undefined);
+      tails.set(factoryId, tail);
+      void tail.then(() => {
+        if (tails.get(factoryId) === tail) tails.delete(factoryId);
+      });
+      return result;
+    },
+  };
+})();
+
 /** A bucket's weight in a merge priority: above any admission order (seconds since 2026). */
 const MERGE_BUCKET = 10_000_000_000;
 
@@ -925,6 +945,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         trace.held = true;
         return true;
       },
+      exclusive: (work) => pathChecks.run(job.factory.id, work),
       reviews: job.run.reviews,
       admittedAt: job.run.admittedAt ?? job.run.startedAt,
       findReviewThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),

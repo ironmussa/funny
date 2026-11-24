@@ -58,6 +58,7 @@ export function useFactoryRunActions(
   if (!canSteer) return { actions: [], dialog: null };
   // A high-risk change waits for the member's approval, which a retry would not give.
   const awaitsApproval = isFactoryRunAwaitingMergeApproval(run);
+  const reasons = run.risk?.reasons ?? [];
   const actions: FactoryRunAction[] = [];
   if (awaitsApproval) {
     actions.push({
@@ -82,7 +83,15 @@ export function useFactoryRunActions(
         'The factory will merge commit {{sha}} of issue #{{issue}} once its checks, review and regression proof still pass. A new commit on the branch needs a new approval.',
         { sha: run.risk?.headSha.slice(0, 7) ?? '', issue: run.issueNumber },
       )}
-      warning={run.risk?.reasons.join('; ')}
+      warning={
+        reasons.length > 0 ? (
+          <ul className="space-y-1.5" data-testid="factory-approve-merge-reasons">
+            {reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        ) : undefined
+      }
       confirmLabel={t('factory.approveMerge', 'Approve and merge')}
       cancelLabel={t('common.cancel', 'Cancel')}
       variant="default"

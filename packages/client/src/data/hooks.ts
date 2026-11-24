@@ -41,9 +41,13 @@ function observerFor<T>(client: QueryClient, options: DataQueryOptions<T>): Quer
     observers.set(client, byKey);
   }
   const keyHash = hashKey(options.queryKey);
+  // SAFETY: a query key is read with one data type T everywhere (the key names
+  // one request), and the observer under this hash was built from that key's options.
   let observer = byKey.get(keyHash) as QueryObserver<T> | undefined;
   if (!observer) {
     observer = new QueryObserver(client, options);
+    // SAFETY: the map only hands the observer back through the cast above,
+    // for the same key and so the same T.
     byKey.set(keyHash, observer as QueryObserver<unknown>);
   }
   return observer;
@@ -91,5 +95,7 @@ export function useDataQueries<T>(
   });
   const subscribe = useCallback((onChange: () => void) => shared.subscribe(onChange), [shared]);
   const current = useCallback(() => shared.getCurrentResult(), [shared]);
+  // SAFETY: the observer for this key list was set with `queries`, all
+  // DataQueryOptions<T>, so each result's data is a T.
   return useSyncExternalStore(subscribe, current, current) as QueryObserverResult<T>[];
 }

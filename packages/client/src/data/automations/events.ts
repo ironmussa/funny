@@ -40,13 +40,13 @@ export function handleRunCompleted(
   },
   layer: DataLayer = getDataLayer(),
 ): void {
-  const done: Partial<AutomationRun> = {
+  const done = {
     // The server reports a completed thread as findings, a failed one as none.
     status: data.hasFindings ? 'completed' : 'failed',
     hasFindings: data.hasFindings,
     summary: data.summary,
     completedAt: new Date().toISOString(),
-  };
+  } satisfies Partial<AutomationRun>;
   const runs = getRunsData(layer);
   const run = runs.patch(data.runId, (r) => ({ ...r, ...done })) ?? runs.getSynced(data.runId);
 
@@ -68,7 +68,7 @@ export function handleRunCompleted(
     startedAt: run?.startedAt ?? done.completedAt!,
     ...run,
     ...done,
-  } as AutomationRun;
+  };
   inbox.upsert([{ id: data.runId, run: inboxRun, automation, thread }]);
 }
 
@@ -77,8 +77,16 @@ export function handleRunUpdated(
   layer: DataLayer = getDataLayer(),
 ): void {
   const changes: Partial<AutomationRun> = {};
-  if (data.triageStatus) changes.triageStatus = data.triageStatus as RunTriageStatus;
-  if (data.status) changes.status = data.status as AutomationRun['status'];
+  if (data.triageStatus) {
+    // SAFETY: run_updated carries a run row's own triageStatus value;
+    // WSAutomationRunUpdatedData only types it as a plain string.
+    changes.triageStatus = data.triageStatus as RunTriageStatus;
+  }
+  if (data.status) {
+    // SAFETY: run_updated carries a run row's own status value;
+    // WSAutomationRunUpdatedData only types it as a plain string.
+    changes.status = data.status as AutomationRun['status'];
+  }
   getRunsData(layer).patch(data.runId, (r) => ({ ...r, ...changes }));
   const inbox = getInboxData(layer);
   // The inbox holds completed/failed runs only.

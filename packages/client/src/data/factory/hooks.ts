@@ -108,13 +108,27 @@ export function useFactoryFlows(projectId: string): FactoryFlowOption[] | undefi
   return useDataQuery(factoryFlowsQuery(projectId)).data;
 }
 
+/** What `useFactoryFlowDefinition` returns. */
+interface FactoryFlowDefinitionRead {
+  definition: FactoryFlowDefinition | undefined;
+  error: Error | null;
+}
+
 /** One flow's YAML while `flowName` is set; `undefined` while loading or none is chosen. */
 export function useFactoryFlowDefinition(
   projectId: string,
   flowName: string | null,
-): { definition: FactoryFlowDefinition | undefined; error: Error | null } {
+): FactoryFlowDefinitionRead {
   const { data, error } = useDataQuery(factoryFlowDefinitionQuery(projectId, flowName));
   return { definition: data, error: error ?? null };
+}
+
+/** What `useFactoryFlowValidation` returns. */
+interface FactoryFlowValidationRead {
+  validation: FactoryFlowValidation | undefined;
+  error: Error | null;
+  loading: boolean;
+  refresh: () => void;
 }
 
 /**
@@ -126,12 +140,7 @@ export function useFactoryFlowValidation(
   flowName: string,
   requested: boolean,
   overrides: FactoryStepOverrides,
-): {
-  validation: FactoryFlowValidation | undefined;
-  error: Error | null;
-  loading: boolean;
-  refresh: () => void;
-} {
+): FactoryFlowValidationRead {
   const { data, error, isFetching, refetch } = useDataQuery(
     factoryFlowValidationQuery(projectId, flowName, requested, overrides),
   );
@@ -161,11 +170,18 @@ export function useFactoryTriggers(projectId: string): FactoryTrigger[] | undefi
   return useDataQuery(factoryTriggersQuery(projectId)).data;
 }
 
+/** What `useFactoryIssuelessFlow` returns. */
+interface FactoryIssuelessFlowRead {
+  flow: FactoryIssuelessFlow | undefined;
+  error: Error | null;
+  loading: boolean;
+}
+
 /** Whether `flowName` can run without an issue and its inputs; `undefined` while loading. */
 export function useFactoryIssuelessFlow(
   projectId: string,
   flowName: string,
-): { flow: FactoryIssuelessFlow | undefined; error: Error | null; loading: boolean } {
+): FactoryIssuelessFlowRead {
   const { data, error, isFetching } = useDataQuery(factoryIssuelessFlowQuery(projectId, flowName));
   return { flow: data, error: error ?? null, loading: isFetching };
 }

@@ -11,6 +11,7 @@
 import type { SandboxError } from '@funny/sandbox';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import { saveThreadEvent } from '../thread-event-repository.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
 
@@ -46,7 +47,7 @@ export function sandboxErrorEventData(
   phase: SandboxErrorPhase,
   error: ProvisionError | string,
 ): SandboxErrorEventData {
-  if (typeof error === 'string') return { phase, message: error };
+  if (isString(error)) return { phase, message: error };
   const kind = error.kind === 'sandbox' ? error.cause : error.kind;
   const hint = HINTS[kind];
   return { phase, message: error.message, kind, hint: hint ?? undefined };

@@ -1,3 +1,4 @@
+import { isString } from '../../lib/value-guards.js';
 import type { RunnerTarget } from '../runner-access/index.js';
 
 /**
@@ -29,7 +30,7 @@ export interface TerminalRoute {
 }
 
 function text(value: unknown): string | null {
-  return typeof value === 'string' && value ? value : null;
+  return isString(value) && value ? value : null;
 }
 
 /** Target of a spawn: the sandbox thread's runner, the project's checkout, or projectless. */

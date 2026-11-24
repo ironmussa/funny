@@ -4,6 +4,7 @@ import webpush from 'web-push';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import { pushSubscriptions, threads } from '../db/schema.js';
+import { isString } from '../lib/value-guards.js';
 
 // The endpoint check is shared with the tRPC inputs (`@funny/shared/contracts/push`).
 export { isPushEndpoint };
@@ -77,7 +78,7 @@ export async function sendPush(
 }
 
 export async function pushAgentResult(userId: string, event: Record<string, unknown>) {
-  if (!pushConfig() || event.type !== 'agent:result' || typeof event.threadId !== 'string') return;
+  if (!pushConfig() || event.type !== 'agent:result' || !isString(event.threadId)) return;
   const data = event.data as { status?: string } | undefined;
   if (!['completed', 'failed', 'error'].includes(data?.status ?? '')) return;
   const thread = await dbGet<typeof threads.$inferSelect>(

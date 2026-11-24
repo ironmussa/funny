@@ -21,6 +21,7 @@ import { eq } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import * as schema from '../db/schema.js';
+import { isString } from '../lib/value-guards.js';
 import {
   canRunnerAccessProject,
   canRunnerServeProjectless,
@@ -184,7 +185,7 @@ async function firstRowId(query: Promise<Array<{ id: string }>>): Promise<string
   return row ? row.id : undefined;
 }
 
-const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+const str = (v: unknown): string | undefined => (isString(v) && v ? v : undefined);
 
 /**
  * An indirect thread reference: `key` extracts the entity id from the request
@@ -465,7 +466,7 @@ export async function filterDataResponse(runnerId: string, type: string, respons
     return projectAllowed.get(projectId)!;
   };
   const allowThread = async (threadId: unknown) =>
-    typeof threadId === 'string' &&
+    isString(threadId) &&
     (boundThread ? threadId === boundThread : allowProject(await projectOfThread(threadId)));
 
   const filterBy = async <T>(items: T[] | undefined, keep: (item: T) => Promise<boolean>) => {

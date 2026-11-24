@@ -2,6 +2,7 @@ import { runAsync } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { log } from '../../lib/logger.js';
+import { isBoolean, isNumber, isObject, isString } from '../../lib/value-guards.js';
 import { handleDataMessageWithAck } from '../data-handler.js';
 import type { RunnerGrpcConfig } from './config.js';
 import {
@@ -146,12 +147,28 @@ const OPERATION_KINDS = [
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
-  if (typeof request.operation === 'string') return request.operation;
+  if (isString(request.operation)) return request.operation;
   return OPERATION_KINDS.find((key) => request[key] !== undefined);
 }
 
+/** A decoded protobuf `Value` or `Struct` message, as the gRPC loader hands it over. */
+type WireMessage = {
+  kind?: any;
+  fields?: any;
+  numberValue?: any;
+  stringValue?: any;
+  boolValue?: any;
+  structValue?: any;
+  listValue?: any;
+};
+
+/** A decoded protobuf message: a non-null object whose fields are read by name. */
+function isWireMessage(value: any): value is WireMessage {
+  return isObject(value);
+}
+
 function decodeValue(value: any): WireValue {
-  if (!value || typeof value !== 'object' || typeof value.kind !== 'string') return value;
+  if (!isWireMessage(value) || !isString(value.kind)) return value;
   switch (value.kind) {
     case 'nullValue':
       return null;
@@ -171,8 +188,8 @@ function decodeValue(value: any): WireValue {
 }
 
 function decodeStruct(value: any): Record<string, WireValue> {
-  if (!value || typeof value !== 'object') return {};
-  if (!value.fields || typeof value.fields !== 'object') return value;
+  if (!isWireMessage(value)) return {};
+  if (!isWireMessage(value.fields)) return value;
   return Object.fromEntries(
     Object.entries(value.fields).map(([key, field]) => [key, decodeValue(field)]),
   );
@@ -180,15 +197,15 @@ function decodeStruct(value: any): Record<string, WireValue> {
 
 function encodeValue(value: unknown): Record<string, unknown> {
   if (value === null || value === undefined) return { nullValue: 0 };
-  if (typeof value === 'number') return { numberValue: value };
-  if (typeof value === 'string') return { stringValue: value };
-  if (typeof value === 'boolean') return { boolValue: value };
+  if (isNumber(value)) return { numberValue: value };
+  if (isString(value)) return { stringValue: value };
+  if (isBoolean(value)) return { boolValue: value };
   if (Array.isArray(value)) return { listValue: { values: value.map(encodeValue) } };
   return { structValue: encodeStruct(value) };
 }
 
 function encodeStruct(value: unknown): Record<string, unknown> {
-  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const record = isObject(value) ? (value as Record<string, unknown>) : {};
   return {
     fields: Object.fromEntries(
       Object.entries(record).map(([key, field]) => [key, encodeValue(field)]),
@@ -497,13 +514,13 @@ function success(epoch: bigint, correlationId: string, result: any): Record<stri
     payload = { toolCall: result.toolCall ?? {} };
   } else if (result?.type?.startsWith('data:get_thread')) {
     payload = { thread: { value: result.thread ? encodeStruct(result.thread) : undefined } };
-  } else if (typeof result?.messageId === 'string') {
+  } else if (isString(result?.messageId)) {
     payload = { insertedRecord: { id: result.messageId } };
-  } else if (typeof result?.toolCallId === 'string') {
+  } else if (isString(result?.toolCallId)) {
     payload = { insertedRecord: { id: result.toolCallId } };
-  } else if (typeof result?.commentId === 'string') {
+  } else if (isString(result?.commentId)) {
     payload = { insertedRecord: { id: result.commentId } };
-  } else if (typeof result?.deletedCount === 'number') {
+  } else if (isNumber(result?.deletedCount)) {
     payload = { deletedRecords: { count: String(result.deletedCount) } };
   } else {
     payload = { operationResponse: encodeStruct(result ?? { success: true }) };
@@ -513,7 +530,7 @@ function success(epoch: bigint, correlationId: string, result: any): Record<stri
 
 function deadlineMs(request: WireRequest): number | null {
   const deadline = request.metadata?.deadline;
-  if (typeof deadline === 'string') {
+  if (isString(deadline)) {
     const value = Date.parse(deadline);
     return Number.isFinite(value) ? value : null;
   }
@@ -611,7 +628,7 @@ export function createOperationsHandler(
         const persistentMutation = PERSISTENT_MUTATIONS.has(kind);
         if (
           persistentMutation &&
-          (typeof idempotencyKey !== 'string' || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
+          (!isString(idempotencyKey) || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
         ) {
           sendFailure(
             FailureCode.INVALID_ARGUMENT,

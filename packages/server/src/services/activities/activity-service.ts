@@ -24,6 +24,7 @@ import type { ActivityInsert, ActivityPatch } from '@funny/shared/repositories';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
+import { isObject, isString } from '../../lib/value-guards.js';
 import { relayToUser } from '../browser-events.js';
 
 const SNAPSHOT_REF = /^refs\/funny\/undo\/[A-Za-z0-9_-]{1,128}$/;
@@ -31,13 +32,13 @@ const ID_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,127}$/;
 const REPORTED_STATUSES = new Set<ActivityStatus>(['running', 'succeeded', 'failed']);
 
 function text(value: unknown, max: number): string | null {
-  if (typeof value !== 'string') return null;
+  if (!isString(value)) return null;
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, max) : null;
 }
 
 function optionalId(value: unknown): string | null {
-  return typeof value === 'string' && ID_PATTERN.test(value) ? value : null;
+  return isString(value) && ID_PATTERN.test(value) ? value : null;
 }
 
 /** Each field a reported result may carry, and how it is checked. */
@@ -50,12 +51,12 @@ const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string |
 
 function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
   if (value === undefined) return undefined;
-  if (!value || typeof value !== 'object') return null;
+  if (!isObject(value)) return null;
   const raw = value as Record<string, unknown>;
   const ref: ActivityResultRef = {};
   for (const [field, check] of RESULT_REF_FIELDS) {
     const given = raw[field];
-    const kept = typeof given === 'string' ? check(given) : null;
+    const kept = isString(given) ? check(given) : null;
     if (kept) ref[field] = kept;
   }
   return Object.keys(ref).length > 0 ? ref : null;
@@ -84,7 +85,7 @@ export async function startActivityFromRunner(args: {
 }): Promise<ActivityWriteResult> {
   const { runnerId, ownerId, payload } = args;
   const id = optionalId(payload.id);
-  const kind = typeof payload.kind === 'string' ? payload.kind : '';
+  const kind = isString(payload.kind) ? payload.kind : '';
   const title = text(payload.title, ACTIVITY_TITLE_MAX);
   if (!id) return { ok: false, error: 'activity id is invalid' };
   if (!title) return { ok: false, error: 'activity title is required' };
@@ -122,14 +123,14 @@ export async function startActivityFromRunner(args: {
 }
 
 function reportedStatus(value: unknown): ActivityStatus | undefined {
-  return typeof value === 'string' && REPORTED_STATUSES.has(value as ActivityStatus)
+  return isString(value) && REPORTED_STATUSES.has(value as ActivityStatus)
     ? (value as ActivityStatus)
     : undefined;
 }
 
 /** The fields a runner may change on its own activity; never `origin`. */
 function pickActivityPatch(raw: unknown): ActivityPatch {
-  if (!raw || typeof raw !== 'object') return {};
+  if (!isObject(raw)) return {};
   const value = raw as Record<string, unknown>;
   const patch: ActivityPatch = {};
   const status = reportedStatus(value.status);
@@ -170,7 +171,7 @@ export async function reconcileRunnerActivities(
   liveIds: unknown,
 ): Promise<Activity[]> {
   const ids = Array.isArray(liveIds)
-    ? liveIds.filter((v): v is string => typeof v === 'string' && ID_PATTERN.test(v))
+    ? liveIds.filter((v): v is string => isString(v) && ID_PATTERN.test(v))
     : [];
   const changed = await repos.activities().reconcile(runnerId, ids);
   for (const row of changed) broadcastActivity(row);

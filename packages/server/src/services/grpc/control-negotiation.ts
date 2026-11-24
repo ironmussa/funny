@@ -7,6 +7,7 @@ import type {
 } from '@funny/shared/runner-v2/control';
 
 import { log } from '../../lib/logger.js';
+import { isNumber, isString } from '../../lib/value-guards.js';
 import type { RunnerGrpcConfig } from './config.js';
 import type {
   RunnerGrpcCall,
@@ -85,7 +86,7 @@ const DEFAULT_SUPPORTED_CAPABILITIES = [
 ];
 
 function requestKind(request: ControlRequestWire): string | undefined {
-  if (typeof request.message === 'string') return request.message;
+  if (isString(request.message)) return request.message;
   if (request.hello) return 'hello';
   if (request.heartbeat) return 'heartbeat';
   if (request.commandOutcome) return 'commandOutcome';
@@ -118,12 +119,12 @@ function enabledCapabilities(
   const available = new Set(supported);
   const normalized = offered.flatMap((capability) => {
     let value: number;
-    if (typeof capability === 'number') {
+    if (isNumber(capability)) {
       value = capability;
     } else {
       const generatedName = capability.replace(/^RUNNER_CAPABILITY_/, '');
       const resolved = RunnerCapability[generatedName as keyof typeof RunnerCapability];
-      value = typeof resolved === 'number' ? resolved : RunnerCapability.UNSPECIFIED;
+      value = isNumber(resolved) ? resolved : RunnerCapability.UNSPECIFIED;
     }
     return Number.isInteger(value) ? [value as RunnerCapability] : [];
   });

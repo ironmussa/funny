@@ -6,6 +6,15 @@ import {
 import type { Socket } from 'socket.io';
 import type { z, ZodTypeAny } from 'zod';
 
+import { isPlainObject, isString } from '../../lib/value-guards.js';
+
+/** Whether the client passed an acknowledgement callback (Socket.IO passes data arguments too). */
+function isAckCallback<T>(
+  value: ((response: T) => void) | undefined,
+): value is (response: T) => void {
+  return typeof value === 'function';
+}
+
 export interface SocketHandlerContext {
   socket: Socket;
   eventName: string;
@@ -75,20 +84,16 @@ export function registerSocketRpc<
     const schema = (spec.payloadSchema ?? socketObjectPayloadSchema) as TSchema;
     const payload = parseSocketPayload(schema, data);
     const requestId =
-      data != null &&
-      typeof data === 'object' &&
-      !Array.isArray(data) &&
-      typeof (data as { _requestId?: unknown })._requestId === 'string'
+      isPlainObject(data) && isString((data as { _requestId?: unknown })._requestId)
         ? (data as { _requestId: string })._requestId
         : null;
-    const respond =
-      typeof ack === 'function'
-        ? ack
-        : requestId
-          ? (response: TResponse) => {
-              socket.emit('data:response', { requestId, response });
-            }
-          : null;
+    const respond = isAckCallback(ack)
+      ? ack
+      : requestId
+        ? (response: TResponse) => {
+            socket.emit('data:response', { requestId, response });
+          }
+        : null;
     if (!respond) return;
     const ctx: SocketHandlerContext = { socket, eventName };
     for (const mw of spec.middleware ?? []) {

@@ -4,6 +4,7 @@ import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { db } from '../../db/index.js';
 import { threadEvents } from '../../db/schema.js';
+import { isObject, isString } from '../../lib/value-guards.js';
 import { relayToThreadStream, relayToUser } from '../browser-events.js';
 import { canRunnerActOnThread } from '../data-scope.js';
 import {
@@ -87,8 +88,24 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
   relayToThreadStream(event.scope.threadId, browserEvent);
 }
 
+/** A decoded protobuf `Value` or `Struct` message, as the gRPC loader hands it over. */
+type WireMessage = {
+  kind?: any;
+  fields?: any;
+  numberValue?: any;
+  stringValue?: any;
+  boolValue?: any;
+  structValue?: any;
+  listValue?: any;
+};
+
+/** A decoded protobuf message: a non-null object whose fields are read by name. */
+function isWireMessage(value: any): value is WireMessage {
+  return isObject(value);
+}
+
 function decodeValue(value: any): unknown {
-  if (!value || typeof value !== 'object' || typeof value.kind !== 'string') return value;
+  if (!isWireMessage(value) || !isString(value.kind)) return value;
   switch (value.kind) {
     case 'nullValue':
       return null;
@@ -108,8 +125,8 @@ function decodeValue(value: any): unknown {
 }
 
 function decodeStruct(value: any): Record<string, unknown> {
-  if (!value || typeof value !== 'object') return {};
-  if (!value.fields || typeof value.fields !== 'object') return value;
+  if (!isWireMessage(value)) return {};
+  if (!isWireMessage(value.fields)) return value;
   return Object.fromEntries(
     Object.entries(value.fields).map(([key, field]) => [key, decodeValue(field)]),
   );
@@ -206,7 +223,7 @@ export function createEventsHandler(
       const type = userEvent.eventType ?? '';
       if (!userId || !isRunnerUserEventType(type)) return;
       const data = decodeStruct(userEvent.data);
-      const threadId = typeof data.threadId === 'string' ? data.threadId : '';
+      const threadId = isString(data.threadId) ? data.threadId : '';
       if (threadId && !(await userEventThreadAllowed(threadId))) return;
       publishUserEvent(userId, { type, threadId: '', data });
     };

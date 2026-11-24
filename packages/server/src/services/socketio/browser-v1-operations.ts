@@ -22,6 +22,7 @@ import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 import type { Socket } from 'socket.io';
 
 import { authorizer } from '../../lib/server-authorizer.js';
+import { isString } from '../../lib/value-guards.js';
 import {
   authorizedRunnerTerminal,
   runnerAccess,
@@ -186,14 +187,14 @@ async function executePtyList(
     onlyRunnerId: requestedRunnerId,
   });
   const terminals = sessions.flatMap((session) => {
-    if (typeof session.ptyId !== 'string' || typeof session.cwd !== 'string') return [];
+    if (!isString(session.ptyId) || !isString(session.cwd)) return [];
     return [
       {
         ptyId: session.ptyId,
         cwd: session.cwd,
-        projectId: typeof session.projectId === 'string' ? session.projectId : undefined,
-        label: typeof session.label === 'string' ? session.label : undefined,
-        shell: typeof session.shell === 'string' ? session.shell : undefined,
+        projectId: isString(session.projectId) ? session.projectId : undefined,
+        label: isString(session.label) ? session.label : undefined,
+        shell: isString(session.shell) ? session.shell : undefined,
         connected: true,
       },
     ];

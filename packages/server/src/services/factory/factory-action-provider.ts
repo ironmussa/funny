@@ -67,6 +67,7 @@ import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { isString } from '../../lib/value-guards.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import {
@@ -1450,7 +1451,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
         'The pull request it was stacked on merged: this pull request now targets the default branch, and the base is merged in before it merges.',
       );
     }
-    if (typeof retarget === 'object') return holdMerge(MERGE_HOLD_REASONS.stacked, retarget.error);
+    if (retarget !== 'not-stacked') return holdMerge(MERGE_HOLD_REASONS.stacked, retarget.error);
     if (opts.regenerate && regenerating !== opts.regenerate) {
       regenerating = opts.regenerate;
       await deps.record({ regenerateNode: opts.regenerate });
@@ -1479,7 +1480,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       return { ok: false, error: queue.error.message, metadata: { kind: queue.error.kind } };
     }
     const sha = queue.value ? head.value.sha : await upToDate(opts, head.value.sha);
-    if (typeof sha !== 'string') return sha;
+    if (!isString(sha)) return sha;
     if (queue.value) return throughQueue(opts, sha);
     if (opts.requireRegressionProof === false) {
       // A reviewed commit is merged as that commit; without the review gate, as before.

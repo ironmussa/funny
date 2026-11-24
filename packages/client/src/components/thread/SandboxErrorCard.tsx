@@ -26,8 +26,14 @@ const TITLES: Record<NonNullable<SandboxErrorData['phase']>, string> = {
 };
 
 function parseData(data: ThreadEvent['data']): SandboxErrorData {
-  if (typeof data !== 'string') return (data ?? {}) as SandboxErrorData;
+  if (typeof data !== 'string') {
+    // SAFETY: only sandbox:error events reach this card, and the server writes
+    // their data as SandboxErrorEventData (thread-sandboxes/sandbox-events.ts),
+    // a superset of SandboxErrorData. A live event may carry it already parsed.
+    return (data ?? {}) as SandboxErrorData;
+  }
   try {
+    // SAFETY: same invariant as above, for data stored as a JSON string.
     return JSON.parse(data) as SandboxErrorData;
   } catch {
     return {};

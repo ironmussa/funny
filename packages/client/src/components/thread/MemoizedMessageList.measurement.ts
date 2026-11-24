@@ -204,6 +204,8 @@ export function createRowEstimateCache(): RowEstimateCache {
 }
 
 export function getObservedBlockSize(entry: ResizeObserverEntry | undefined) {
+  // SAFETY: lib.dom types borderBoxSize as an array, but older Firefox returns a
+  // single ResizeObserverSize; the widened union lets the check below handle both.
   const size = entry?.borderBoxSize as
     | ResizeObserverSize
     | readonly ResizeObserverSize[]

@@ -263,7 +263,7 @@ export const MemoizedMessageList = memo(
       scrollTopAtLastScrollEventRef,
     );
 
-    const rowVirtualizer = useVirtualizer({
+    const rowVirtualizer = useVirtualizer<HTMLElement, HTMLElement>({
       count: virtualRows.length,
       getScrollElement: () => scrollRef.current,
       getItemKey: (index) => virtualRows[index]?.key ?? index,
@@ -278,13 +278,12 @@ export const MemoizedMessageList = memo(
       overscan: VIRTUAL_OVERSCAN,
       scrollMargin: listScrollMargin,
       measureElement: (element, entry) => {
-        const key = (element as HTMLElement).dataset.virtualRowKey;
-        const height =
-          getObservedBlockSize(entry) ?? (element as HTMLElement).getBoundingClientRect().height;
+        const key = element.dataset.virtualRowKey;
+        const height = getObservedBlockSize(entry) ?? element.getBoundingClientRect().height;
         if (key && height > 0) {
           heightCache.set(key, height);
 
-          const bottom = getRowBottomFromRenderedOffset(element as HTMLElement, height);
+          const bottom = getRowBottomFromRenderedOffset(element, height);
           if (bottom !== undefined && bottom > 0) {
             measuredRowBottomCache.set(key, bottom);
             scheduleMeasuredContentBottom();
@@ -725,7 +724,7 @@ export const MemoizedMessageList = memo(
     );
 
     const measureVirtualRowElement = useCallback(
-      (element: Element | null) => {
+      (element: HTMLElement | null) => {
         if (!element) return;
         rowVirtualizer.measureElement(element);
         updateMountedSectionVisibility();

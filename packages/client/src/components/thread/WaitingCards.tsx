@@ -206,7 +206,7 @@ export function PermissionApprovalCard({
   const bashCommand = useMemo(() => {
     if (toolName !== 'Bash' || !toolInput) return null;
     try {
-      const parsed = JSON.parse(toolInput) as { command?: unknown };
+      const parsed: { command?: unknown } = JSON.parse(toolInput);
       return typeof parsed.command === 'string' ? parsed.command : null;
     } catch {
       return null;

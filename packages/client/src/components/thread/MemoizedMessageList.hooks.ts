@@ -209,8 +209,7 @@ export function usePretextWarmup(
     const idleId =
       typeof requestIdleCallback === 'function'
         ? requestIdleCallback(runPrepare, { timeout: 2000 })
-        : // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-          (setTimeout(runPrepare, 0) as unknown as number);
+        : window.setTimeout(runPrepare, 0);
 
     return () => {
       cancelled = true;

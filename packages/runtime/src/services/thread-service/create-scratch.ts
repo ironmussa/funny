@@ -45,8 +45,13 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
   const { scratchCwd, params } = await prepareScratchThread(rawParams, threadId);
   const titleSource = params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
 
+  // SAFETY: params.provider / model / permissionMode are checked against the
+  // model registry by the create-thread schema (validation/schemas.ts) before a
+  // thread is created; the fallbacks are registry values.
   const resolvedProvider = (params.provider || 'claude') as AgentProvider;
+  // SAFETY: see above; params.model is a validated registry model id.
   const resolvedModel = (params.model || DEFAULT_MODEL) as AgentModel;
+  // SAFETY: see above; params.permissionMode is a validated PermissionMode.
   const resolvedPermissionMode = (params.permissionMode || 'autoEdit') as PermissionMode;
 
   log.info('createAndStartScratchThread called', {
@@ -59,6 +64,8 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
 
   const thread = {
     id: threadId,
+    // SAFETY: an assertion on `null` itself; it widens the scratch thread's
+    // missing project to the row's `string | null` type.
     projectId: null as string | null,
     userId: params.userId,
     title: titleSource,
@@ -69,8 +76,12 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
     model: resolvedModel,
     source: params.source || 'web',
     status: 'pending' as const,
+    // SAFETY: assertions on `undefined` itself; scratch threads have no git, and
+    // these widen the empty placeholders to the row's `string | undefined` types.
     branch: undefined as string | undefined,
+    // SAFETY: as above, widening an `undefined` placeholder.
     baseBranch: undefined as string | undefined,
+    // SAFETY: as above, widening an `undefined` placeholder.
     worktreePath: undefined as string | undefined,
     parentThreadId: params.parentThreadId,
     designId: params.designId,
@@ -95,7 +106,7 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
     });
   }
 
-  await tm.createThread(thread as any);
+  await tm.createThread(thread);
 
   // Persist the user message ourselves so we can pass skipMessageInsert
   // to startAgent (matches the worktree-mode pattern above). Like project

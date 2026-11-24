@@ -160,6 +160,8 @@ async function forkThreadImpl(params: ForkThreadParams) {
           namespace: 'thread-fork',
           threadId: source.id,
           messageId: m.id,
+          // SAFETY: log-only read; `?.` keeps a non-Error rejection from throwing
+          // and logs `undefined` for one without `message`.
           error: (err as Error)?.message,
         });
         return false;

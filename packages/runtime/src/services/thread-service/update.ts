@@ -93,12 +93,17 @@ async function updateThreadImpl(params: UpdateThreadParams) {
     cwd: eventCwd,
   };
   if (params.archived) {
+    // SAFETY: the threads.stage column only holds ThreadStage values (written from
+    // ThreadStage literals at creation and from validated stages here), so the
+    // row's `string | null` stage is a ThreadStage or null.
     threadEventBus.emit('thread:stage-changed', {
       ...eventCtx,
       fromStage: fromStage as any,
       toStage: 'archived',
     });
   } else if (params.stage && params.stage !== fromStage) {
+    // SAFETY: fromStage as above; params.stage comes from the pipeline set_stage
+    // action, the only caller, which checks it with isThreadStage first.
     threadEventBus.emit('thread:stage-changed', {
       ...eventCtx,
       fromStage: fromStage as any,
@@ -190,6 +195,8 @@ async function autoStartIdleThread(
 
         // Update thread with worktree info
         await tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
+        // SAFETY: this branch only runs when needsWorktreeSetup, which requires a
+        // non-empty thread.branch, so `data.branch` is a string.
         wsBroker.emitToUser(thread.userId, {
           type: 'worktree:setup_complete',
           threadId,
@@ -204,7 +211,10 @@ async function autoStartIdleThread(
         // Start agent
         const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
         const draftMsg = draftMessages[0];
-        const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
+        const draftImages = draftMsg?.images ? JSON.parse(String(draftMsg.images)) : undefined;
+        // SAFETY: the thread row's and project's model / permissionMode / provider
+        // were written from inputs validated against the registry schemas
+        // (validation/schemas.ts); the fallbacks are registry defaults.
         const started = await startAgent(
           threadId,
           await startPromptForIdleThread(threadId, thread.initialPrompt!, projectPath, wtPath),
@@ -284,13 +294,15 @@ async function autoStartIdleThread(
 
     const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
     const draftMsg = draftMessages[0];
-    const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
+    const draftImages = draftMsg?.images ? JSON.parse(String(draftMsg.images)) : undefined;
     const startPrompt = await startPromptForIdleThread(
       threadId,
       thread.initialPrompt!,
       projectPath,
       cwd,
     );
+    // SAFETY: as above, stored model / permissionMode / provider values were
+    // validated against the registry schemas when written.
     void startAgent(
       threadId,
       startPrompt,
@@ -434,7 +446,7 @@ async function convertToWorktreeImpl(
         type: 'worktree:setup_complete',
         threadId,
         data: { branch: branchName, worktreePath: wtPath },
-      } as WSEvent);
+      });
       emitThreadUpdated(userId, threadId, {
         mode: 'worktree',
         branch: branchName,

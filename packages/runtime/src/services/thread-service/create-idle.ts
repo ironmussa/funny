@@ -145,9 +145,11 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     model: 'sonnet' as const,
     source: params.source || 'web',
     status: 'idle' as const,
-    stage: (params.stage || 'backlog') as 'backlog' | 'planning',
+    stage: params.stage || 'backlog',
     branch,
     baseBranch,
+    // SAFETY: an assertion on `undefined` itself; it only widens the empty
+    // placeholder to the row's `string | undefined` type for the returned thread.
     worktreePath: undefined as string | undefined,
     initialPrompt: prompt,
     designId: params.designId,
@@ -161,7 +163,7 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     updatedAt: new Date().toISOString(),
   };
 
-  await tm.createThread(thread as any);
+  await tm.createThread(thread);
 
   if (prompt) {
     await tm.insertMessage({

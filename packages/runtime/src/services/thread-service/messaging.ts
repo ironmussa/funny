@@ -180,9 +180,13 @@ async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessag
     return handleShellEscapeMessage(params, thread, cwd, shellCommand);
   }
 
+  // SAFETY: params.provider / model come from the validated send-message body
+  // (registry schemas in validation/schemas.ts), and the thread row's provider /
+  // model were written from the same validated inputs at creation or a change.
   const effectiveProvider = (params.provider ||
     thread.provider ||
     DEFAULT_PROVIDER) as AgentProvider;
+  // SAFETY: see above; a validated model id or the registry default.
   const effectiveModel = (params.model || thread.model || DEFAULT_MODEL) as AgentModel;
   const agentContent = await resolveSlashCommandContent(
     params,
@@ -192,6 +196,8 @@ async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessag
     effectiveModel,
   );
 
+  // SAFETY: params.permissionMode is checked by permissionModeSchema, and the
+  // thread row's permissionMode was written from validated inputs.
   let effectivePermission = (params.permissionMode ||
     thread.permissionMode ||
     'autoEdit') as PermissionMode;
@@ -460,10 +466,15 @@ async function startIdleThreadIfNeeded(
 }
 
 function parseDraftImages(raw: unknown): ImageAttachment[] | undefined {
-  if (Array.isArray(raw)) return raw as ImageAttachment[];
+  if (Array.isArray(raw)) {
+    // SAFETY: an array here is the `images` column the data channel already
+    // parsed; the runtime only stores ImageAttachment arrays there
+    // (JSON.stringify(params.images)).
+    return raw as ImageAttachment[];
+  }
   if (typeof raw !== 'string' || !raw) return undefined;
   const parsed = parseStoredJson(z.array(imageAttachmentSchema), raw, 'draft message images');
-  return parsed.ok ? (parsed.value as ImageAttachment[]) : undefined;
+  return parsed.ok ? parsed.value : undefined;
 }
 
 /** The images the agent sees: the earlier prompt's (sandbox retry), then the message's. */
@@ -576,11 +587,11 @@ function jsonOrUndefined(value: unknown): string | undefined {
 async function broadcastQueueUpdate(threadId: string, userId: string | undefined): Promise<number> {
   const qCount = await getServices().messageQueue.queueCount(threadId);
   const nextMsg = await getServices().messageQueue.peek(threadId);
-  const queueEvent = {
-    type: 'thread:queue_update' as const,
+  const queueEvent: WSEvent = {
+    type: 'thread:queue_update',
     threadId,
     data: { threadId, queuedCount: qCount, nextMessage: nextMsg?.content?.slice(0, 100) },
-  } as WSEvent;
+  };
   if (userId) {
     wsBroker.emitToUser(userId, queueEvent);
   } else {
@@ -751,9 +762,9 @@ async function handleShellEscapeMessage(
   await tm.updateToolCallOutput(toolCallId, output);
 
   const emitMessage = (data: { messageId: string; role: string; content: string }) => {
-    const event = { type: 'agent:message' as const, threadId: params.threadId, data };
-    if (thread.userId) wsBroker.emitToUser(thread.userId, event as WSEvent);
-    else wsBroker.emit(event as WSEvent);
+    const event: WSEvent = { type: 'agent:message', threadId: params.threadId, data };
+    if (thread.userId) wsBroker.emitToUser(thread.userId, event);
+    else wsBroker.emit(event);
   };
   const emitTool = (
     event:
@@ -769,7 +780,7 @@ async function handleShellEscapeMessage(
         }
       | { type: 'agent:tool_output'; data: { toolCallId: string; output: string } },
   ) => {
-    const wsEvent = { ...event, threadId: params.threadId } as WSEvent;
+    const wsEvent: WSEvent = { ...event, threadId: params.threadId };
     if (thread.userId) wsBroker.emitToUser(thread.userId, wsEvent);
     else wsBroker.emit(wsEvent);
   };
@@ -893,6 +904,9 @@ async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
   const run = params.approved
     ? await buildApprovedRun(params, thread, cwd)
     : buildDeniedRun(params);
+  // SAFETY: the thread row's model / permissionMode / provider were written from
+  // inputs validated against the registry schemas when the thread was created or
+  // its settings changed.
   const started = await startAgent(
     params.threadId,
     run.message,
@@ -965,6 +979,8 @@ async function persistApprovalRule(params: ApproveToolParams, projectPath: strin
     log.warn('approveToolCall: failed to persist always-allow rule', {
       namespace: 'thread-service',
       threadId: params.threadId,
+      // SAFETY: log-only read; `?.` keeps a non-Error rejection from throwing and
+      // logs `undefined` for one without `message`.
       error: (err as Error)?.message,
     });
   }

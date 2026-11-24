@@ -8,7 +8,7 @@
 /** `!cmd` initial prompts: run the command locally and store an already-completed thread. */
 
 import { getCurrentBranch } from '@funny/core/git';
-import type { WSEvent, AgentModel, PermissionMode, ImageAttachment } from '@funny/shared';
+import type { AgentModel, PermissionMode, ImageAttachment } from '@funny/shared';
 
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
@@ -40,6 +40,8 @@ export async function createShellEscapeProjectThread(
     status: 'completed' as const,
     branch: currentBranch,
     baseBranch: ctx.resolvedBaseBranch || currentBranch,
+    // SAFETY: an assertion on `undefined` itself; it only widens the empty
+    // placeholder to the row's `string | undefined` type for the returned thread.
     worktreePath: undefined as string | undefined,
     fileCheckpointingEnabled: 0,
   };
@@ -105,7 +107,7 @@ async function createCompletedShellEscapeThread(args: {
   permissionMode: PermissionMode;
   effort?: string;
 }) {
-  await tm.createThread(args.thread as any);
+  await tm.createThread(args.thread);
 
   const userMessageId = await tm.insertMessage({
     threadId: args.threadId,
@@ -147,7 +149,7 @@ async function createCompletedShellEscapeThread(args: {
     type: 'agent:message',
     threadId: args.threadId,
     data: { messageId: userMessageId, role: 'user', content: args.prompt },
-  } as WSEvent);
+  });
   wsBroker.emitToUser(args.userId, {
     type: 'agent:tool_call',
     threadId: args.threadId,
@@ -158,10 +160,10 @@ async function createCompletedShellEscapeThread(args: {
       input: toolInput,
       author: 'shell',
     },
-  } as WSEvent);
+  });
   wsBroker.emitToUser(args.userId, {
     type: 'agent:tool_output',
     threadId: args.threadId,
     data: { toolCallId, output },
-  } as WSEvent);
+  });
 }

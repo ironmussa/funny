@@ -69,7 +69,7 @@ export function emitThreadUpdated(
     type: 'thread:updated',
     threadId,
     data,
-  } as WSEvent);
+  });
 }
 
 export function emitAgentFailed(userId: string, threadId: string): void {

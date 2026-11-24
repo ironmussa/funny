@@ -212,17 +212,29 @@ function validateStageLimits(
 }
 
 /** A new factory starts manual: it admits only the issues sent to it. */
-const DEFAULTS = {
-  mode: 'manual' as FactoryMode,
+const DEFAULTS: Pick<
+  FactorySettingsView,
+  | 'mode'
+  | 'label'
+  | 'flowName'
+  | 'maxConcurrent'
+  | 'autoMerge'
+  | 'sensitivePaths'
+  | 'stageLimits'
+  | 'stepOverrides'
+  | 'batch'
+  | 'dependencies'
+> = {
+  mode: 'manual',
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
-  autoMerge: 'low_risk' as FactoryAutoMerge,
-  sensitivePaths: [] as string[],
-  stageLimits: {} as Record<string, number>,
-  stepOverrides: {} as FactoryStepOverrides,
+  autoMerge: 'low_risk',
+  sensitivePaths: [],
+  stageLimits: {},
+  stepOverrides: {},
   batch: DEFAULT_FACTORY_BATCH,
-  dependencies: 'wait' as FactoryDependencies,
+  dependencies: 'wait',
 };
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */

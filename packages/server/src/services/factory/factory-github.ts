@@ -209,6 +209,7 @@ function fetchIssues(
         githubError(`GitHub answered ${res.status} for ${repo}`),
       );
     }
+    // SAFETY: res.ok held; GitHub's list-issues endpoint answers a JSON array of issue objects.
     return ResultAsync.fromPromise(res.json() as Promise<RawIssue[]>, () =>
       githubError('unreadable issues response'),
     ).map((raw) =>

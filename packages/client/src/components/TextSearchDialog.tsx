@@ -1,66 +1,20 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
-import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { SearchBar } from '@/components/ui/search-bar';
-import { SearchEmptyRow as EmptyRow, SearchLoadingRow } from '@/components/ui/search-placeholder';
-import { useProjects } from '@/data/projects/hooks';
-import { api } from '@/lib/api';
-import { createClientLogger } from '@/lib/client-logger';
-import { FileExtensionIcon } from '@/lib/file-icons';
-import { metric } from '@/lib/telemetry';
-import { cn } from '@/lib/utils';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
-import { useProjectStore } from '@/stores/project-store';
-import { useThreadId } from '@/stores/thread-context';
-import { useUIStore } from '@/stores/ui-store';
 
-const log = createClientLogger('text-search-dialog');
+import type { FlatRow } from './text-search/flat-row';
+import { TextSearchResults } from './text-search/TextSearchResults';
+import { useTextSearch } from './text-search/use-text-search';
 
 interface TextSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const DEBOUNCE_MS = 250;
-const LIST_MAX_HEIGHT_PX = 480;
-const FILE_HEADER_ROW = 28;
-const MATCH_ROW = 22;
-
-interface FileResult {
-  path: string;
-  matches: Array<{ line: number; text: string; ranges: Array<{ start: number; end: number }> }>;
-}
-
-interface SearchResponse {
-  files: FileResult[];
-  totalMatches: number;
-  truncated: boolean;
-  durationMs: number;
-  basePath: string;
-}
-
-/**
- * Flattened item used by the virtualized list — one entry per visible row
- * (file header OR a single match line). Lets the list keep a constant row
- * height and supports keyboard navigation across files without nested loops.
- */
-type FlatRow =
-  | { kind: 'file'; fileIndex: number; path: string; matchCount: number; collapsed: boolean }
-  | {
-      kind: 'match';
-      fileIndex: number;
-      matchIndex: number;
-      path: string;
-      line: number;
-      text: string;
-      ranges: Array<{ start: number; end: number }>;
-    };
 
 export function TextSearchDialog({ open, onOpenChange }: TextSearchDialogProps) {
   if (!open) return null;
@@ -69,145 +23,32 @@ export function TextSearchDialog({ open, onOpenChange }: TextSearchDialogProps) 
 
 function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) {
   const { t } = useTranslation();
-  const threadId = useThreadId() ?? null;
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projects = useProjects();
-  const projectPath = projects.find((p) => p.id === selectedProjectId)?.path ?? null;
-  const searchTarget = useMemo(
-    () => (threadId ? { threadId } : projectPath ? { path: projectPath } : null),
-    [threadId, projectPath],
-  );
-  const searchScopeKey = threadId ? `thread:${threadId}` : projectPath ? `path:${projectPath}` : '';
-
-  const persisted = useUIStore((s) => s.textSearchState);
-  const setPersisted = useUIStore((s) => s.setTextSearchState);
-
-  // Local mirror of persisted state. We push back to the store on every
-  // change so reopening restores everything; we also restore the local copy
-  // on every mount from the latest persisted value.
-  const [query, setQuery] = useState(persisted.query);
-  const [caseSensitive, setCaseSensitive] = useState(persisted.caseSensitive);
-  const [wholeWord, setWholeWord] = useState(persisted.wholeWord);
-  const [regex, setRegex] = useState(persisted.regex);
-  const [include, setInclude] = useState(persisted.include);
-  const [exclude, setExclude] = useState(persisted.exclude);
-
-  const [response, setResponse] = useState<SearchResponse | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [activeRow, setActiveRow] = useState(0);
+  const {
+    query,
+    setQuery,
+    caseSensitive,
+    setCaseSensitive,
+    wholeWord,
+    setWholeWord,
+    regex,
+    setRegex,
+    include,
+    setInclude,
+    exclude,
+    setExclude,
+    response,
+    searching,
+    error,
+    setCollapsed,
+    activeRow,
+    setActiveRow,
+    flatRows,
+    scrollRef,
+    virtualizer,
+    hasSearchScope,
+  } = useTextSearch(open);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inflightSeq = useRef(0);
-
-  // Push every option change back into the store so a reopened dialog
-  // restores them. The text inputs (query/include/exclude) flush on each
-  // keystroke — cheap, debounce is for the network call only.
-  useEffect(() => {
-    setPersisted({ query, caseSensitive, wholeWord, regex, include, exclude });
-  }, [query, caseSensitive, wholeWord, regex, include, exclude, setPersisted]);
-
-  const runSearch = useCallback(async () => {
-    if (!searchTarget) {
-      setResponse(null);
-      setError(null);
-      setSearching(false);
-      return;
-    }
-    const q = query.trim();
-    if (!q) {
-      setResponse(null);
-      setError(null);
-      setSearching(false);
-      return;
-    }
-    const seq = ++inflightSeq.current;
-    setSearching(true);
-    setError(null);
-
-    const result = await api.searchText({
-      ...searchTarget,
-      query: q,
-      caseSensitive,
-      wholeWord,
-      regex,
-      include: include.trim() || undefined,
-      exclude: exclude.trim() || undefined,
-    });
-
-    if (seq !== inflightSeq.current) return; // stale
-    setSearching(false);
-    if (result.isErr()) {
-      setError(result.error.message);
-      setResponse(null);
-      log.warn('text search failed', { error: result.error.message });
-      return;
-    }
-    metric('text_search.matches', result.value.totalMatches, {
-      attributes: { truncated: String(result.value.truncated) },
-    });
-    setResponse(result.value);
-    setActiveRow(0);
-  }, [searchTarget, query, caseSensitive, wholeWord, regex, include, exclude]);
-
-  useEffect(() => {
-    setResponse(null);
-    setError(null);
-    setSearching(false);
-    setCollapsed({});
-    setActiveRow(0);
-    inflightSeq.current += 1;
-  }, [searchScopeKey]);
-
-  // Debounced search on any input change while open.
-  useEffect(() => {
-    if (!open) return;
-    const id = setTimeout(runSearch, DEBOUNCE_MS);
-    return () => clearTimeout(id);
-  }, [open, runSearch]);
-
-  const flatRows = useMemo<FlatRow[]>(() => {
-    if (!response) return [];
-    const rows: FlatRow[] = [];
-    response.files.forEach((file, fileIndex) => {
-      const isCollapsed = collapsed[file.path] === true;
-      rows.push({
-        kind: 'file',
-        fileIndex,
-        path: file.path,
-        matchCount: file.matches.length,
-        collapsed: isCollapsed,
-      });
-      if (!isCollapsed) {
-        file.matches.forEach((m, matchIndex) => {
-          rows.push({
-            kind: 'match',
-            fileIndex,
-            matchIndex,
-            path: file.path,
-            line: m.line,
-            text: m.text,
-            ranges: m.ranges,
-          });
-        });
-      }
-    });
-    return rows;
-  }, [response, collapsed]);
-
-  const virtualizer = useVirtualizer({
-    count: flatRows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => (flatRows[i]?.kind === 'file' ? FILE_HEADER_ROW : MATCH_ROW),
-    overscan: 12,
-  });
-
-  useEffect(() => {
-    if (flatRows.length === 0) return;
-    virtualizer.scrollToIndex(activeRow, { align: 'auto' });
-  }, [activeRow, flatRows.length, virtualizer]);
 
   const basePath = response?.basePath;
   const openMatch = useCallback(
@@ -229,7 +70,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
         openMatch(row.path);
       }
     },
-    [openMatch],
+    [openMatch, setCollapsed],
   );
 
   const handleKeyDown = useCallback(
@@ -247,10 +88,8 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
         if (row) activateRow(row);
       }
     },
-    [flatRows, activeRow, activateRow],
+    [flatRows, activeRow, activateRow, setActiveRow],
   );
-
-  const hasSearchScope = !!searchTarget;
   const totalMatches = response?.totalMatches ?? 0;
   const fileCount = response?.files.length ?? 0;
   const resultLabel = query.trim()
@@ -316,132 +155,21 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
             </div>
           </div>
 
-          <div
-            ref={scrollRef}
-            className="overflow-y-auto"
-            style={{ maxHeight: LIST_MAX_HEIGHT_PX }}
-            data-testid="text-search-results"
-          >
-            {!hasSearchScope ? (
-              <EmptyRow
-                text={t('textSearch.noScope', 'Open a thread or project to search its files')}
-              />
-            ) : error ? (
-              <EmptyRow text={error} />
-            ) : !query.trim() ? (
-              <EmptyRow text={t('textSearch.empty', 'Type to search')} />
-            ) : searching && flatRows.length === 0 ? (
-              <LoadingRow text={t('textSearch.searching', 'Searching...')} />
-            ) : flatRows.length === 0 ? (
-              <EmptyRow text={t('textSearch.noResults', 'No results')} />
-            ) : (
-              <div
-                style={{
-                  height: virtualizer.getTotalSize(),
-                  width: '100%',
-                  position: 'relative',
-                }}
-              >
-                {virtualizer.getVirtualItems().map((vRow) => {
-                  const row = flatRows[vRow.index];
-                  if (!row) return null;
-                  const isActive = vRow.index === activeRow;
-                  return (
-                    <div
-                      key={vRow.key}
-                      role="option"
-                      aria-selected={isActive}
-                      tabIndex={isActive ? 0 : -1}
-                      data-testid={
-                        row.kind === 'file'
-                          ? `text-search-file-${row.path}`
-                          : `text-search-match-${row.path}:${row.line}`
-                      }
-                      className={cn(
-                        'absolute left-0 top-0 flex w-full cursor-pointer items-center px-2',
-                        isActive && 'bg-accent text-accent-foreground',
-                      )}
-                      style={{ height: vRow.size, transform: `translateY(${vRow.start}px)` }}
-                      onMouseEnter={() => setActiveRow(vRow.index)}
-                      onClick={() => activateRow(row)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          activateRow(row);
-                        }
-                      }}
-                    >
-                      {row.kind === 'file' ? (
-                        <FileHeader
-                          path={row.path}
-                          matchCount={row.matchCount}
-                          collapsed={row.collapsed}
-                        />
-                      ) : (
-                        <MatchLine line={row.line} text={row.text} ranges={row.ranges} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {response?.truncated && (
-              <div className="text-muted-foreground border-t px-3 py-1.5 text-center text-xs">
-                {t('textSearch.truncated', 'Showing first {{count}} matches — refine your search', {
-                  count: response.totalMatches,
-                })}
-              </div>
-            )}
-          </div>
+          <TextSearchResults
+            hasSearchScope={hasSearchScope}
+            error={error}
+            query={query}
+            searching={searching}
+            flatRows={flatRows}
+            activeRow={activeRow}
+            onActiveRowChange={setActiveRow}
+            onActivateRow={activateRow}
+            scrollRef={scrollRef}
+            virtualizer={virtualizer}
+            truncatedCount={response?.truncated ? response.totalMatches : null}
+          />
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>
   );
-}
-
-function FileHeader({
-  path,
-  matchCount,
-  collapsed,
-}: {
-  path: string;
-  matchCount: number;
-  collapsed: boolean;
-}) {
-  const Chevron = collapsed ? ChevronRight : ChevronDown;
-  const slash = path.lastIndexOf('/');
-  const filename = slash === -1 ? path : path.slice(slash + 1);
-  const dir = slash === -1 ? '' : path.slice(0, slash);
-  return (
-    <>
-      <Chevron className="icon-xs mr-1 shrink-0 opacity-60" />
-      <FileExtensionIcon filePath={path} className="icon-base mr-1.5 shrink-0" />
-      <span className="truncate text-xs font-medium">{filename}</span>
-      {dir && <span className="text-muted-foreground ml-2 truncate text-xs">{dir}</span>}
-      <span className="text-muted-foreground text-2xs ml-auto pl-2 tabular-nums">{matchCount}</span>
-    </>
-  );
-}
-
-function MatchLine({
-  line,
-  text,
-  ranges,
-}: {
-  line: number;
-  text: string;
-  ranges: Array<{ start: number; end: number }>;
-}) {
-  return (
-    <div className="flex w-full min-w-0 items-baseline gap-2 pl-6">
-      <span className="text-muted-foreground text-2xs w-10 shrink-0 text-right tabular-nums">
-        {line}
-      </span>
-      <HighlightText text={text} ranges={ranges} className="truncate font-mono text-xs" />
-    </div>
-  );
-}
-
-function LoadingRow({ text }: { text: string }) {
-  return <SearchLoadingRow text={text} testId="text-search-loading" />;
 }

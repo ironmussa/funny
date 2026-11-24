@@ -1,31 +1,19 @@
 import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { GitBranch, Check, Copy, Plus, ChevronDown } from 'lucide-react';
+import { GitBranch, Check, Plus, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { EmptyState } from '@/components/ui/empty-state';
-import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
-import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
 import { PromptSelectionDrawer } from './PromptSelectionDrawer';
-
-export interface SearchablePickerItem {
-  key: string;
-  label: string;
-  isSelected: boolean;
-  detail?: string;
-  badge?: string;
-  icon?: React.ReactNode;
-  /** Keep actions such as branch creation available while searching on mobile. */
-  alwaysVisibleOnMobile?: boolean;
-}
+import type { SearchablePickerItem } from './searchable-picker/PickerItemRow';
+import { PickerList } from './searchable-picker/PickerList';
 
 const ITEM_HEIGHT = 32;
 
@@ -248,6 +236,12 @@ function SearchablePickerContent({
     }
   };
 
+  const selectItem = (key: string) => {
+    onSelect(key);
+    setOpen(false);
+    setSearch('');
+  };
+
   const trigger = customTrigger ?? (
     <DefaultPickerTrigger
       testId={testId}
@@ -277,113 +271,23 @@ function SearchablePickerContent({
           )}
         />
       </div>
-      <div
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
-        ref={listRef}
-        style={{ maxHeight: mobile ? '60dvh' : 'min(60vh, 440px)' }}
-      >
-        {loading && items.length === 0 && loadingText && (
-          <LoadingState padding="sm" fill={false} label={loadingText} />
-        )}
-        {!loading && items.length === 0 && emptyText && (
-          <EmptyState padding="sm" fill={false} title={emptyText} />
-        )}
-        {!loading &&
-          items.length > 0 &&
-          (filtered.length === 0 ||
-            (mobile && search && filtered.every((item) => item.alwaysVisibleOnMobile))) && (
-            <EmptyState padding="sm" fill={false} title={noMatchText} />
-          )}
-        {filtered.length > 0 && (
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const item = filtered[virtualRow.index];
-              const i = virtualRow.index;
-              return (
-                <div
-                  key={item.key}
-                  className="group/item absolute top-0 left-0 w-full"
-                  style={{
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    aria-pressed={mobile ? item.isSelected : undefined}
-                    onClick={() => {
-                      onSelect(item.key);
-                      setOpen(false);
-                      setSearch('');
-                    }}
-                    onKeyDown={(e) => handleItemKeyDown(e, i)}
-                    onFocus={() => setHighlightIndex(i)}
-                    onMouseEnter={() => {
-                      setHighlightIndex(i);
-                    }}
-                    className={cn(
-                      'w-full h-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-hidden',
-                      onCopy ? (mobile ? 'pr-14' : 'pr-7') : 'pr-2',
-                      mobile && 'text-base',
-                      i === highlightIndex
-                        ? 'bg-accent text-foreground'
-                        : item.isSelected
-                          ? 'bg-accent/50 text-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        {item.icon && <span className="shrink-0">{item.icon}</span>}
-                        <HighlightText
-                          text={item.label}
-                          query={search}
-                          className="truncate font-mono font-medium"
-                        />
-                        {item.badge && (
-                          <span className="bg-muted text-muted-foreground text-3xs rounded px-1 py-0.5 leading-none">
-                            {item.badge}
-                          </span>
-                        )}
-                      </div>
-                      {item.detail && (
-                        <span className="text-muted-foreground/70 block truncate font-mono text-xs">
-                          {item.detail}
-                        </span>
-                      )}
-                    </div>
-                    {item.isSelected && <Check className="icon-xs text-status-info shrink-0" />}
-                  </button>
-                  {onCopy && (
-                    <button
-                      type="button"
-                      aria-label={`Copy ${item.label}`}
-                      className={cn(
-                        'text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover/item:opacity-100',
-                        mobile &&
-                          'right-0 flex size-[48px] items-center justify-center opacity-100',
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCopy(item.label);
-                      }}
-                      tabIndex={mobile ? 0 : -1}
-                    >
-                      <Copy className="icon-xs" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <PickerList
+        listRef={listRef}
+        rowVirtualizer={rowVirtualizer}
+        items={items}
+        filtered={filtered}
+        search={search}
+        mobile={mobile}
+        loading={loading}
+        texts={{ loadingText, emptyText, noMatchText }}
+        highlightIndex={highlightIndex}
+        handlers={{
+          onSelect: selectItem,
+          onKeyDown: handleItemKeyDown,
+          onHighlight: setHighlightIndex,
+          onCopy,
+        }}
+      />
     </>
   );
   if (mobile) {

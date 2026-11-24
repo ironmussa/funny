@@ -16,7 +16,7 @@ import type { Context, Next } from 'hono';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import { normalizeUserRole } from '../lib/types.js';
+import { userRoleSchema } from '../lib/types.js';
 
 const PUBLIC_PATHS = new Set([
   '/api/health',
@@ -348,7 +348,7 @@ async function sessionStep(c: Context<ServerEnv>, path: string): Promise<AuthSte
 function resolveSessionRole(user: any) {
   const rawRole: unknown =
     user && typeof user === 'object' ? (user as Record<string, unknown>).role : undefined;
-  const role = normalizeUserRole(rawRole);
+  const role = userRoleSchema.parse(rawRole);
   if (rawRole !== undefined && typeof rawRole === 'string' && rawRole !== role) {
     log.warn('Unknown session role — coerced to user', {
       namespace: 'auth',

@@ -22,7 +22,7 @@ import { db } from '../db/index.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import { normalizeUserRole } from '../lib/types.js';
+import { userRoleSchema } from '../lib/types.js';
 import {
   saveGithubApp,
   type SettingsStore,
@@ -57,7 +57,7 @@ async function consumeState(
 /** Production: the user's current role, read from Better Auth's `user` table. */
 async function isAdminInDb(userId: string): Promise<boolean> {
   const [row] = await db.select({ role: user.role }).from(user).where(eq(user.id, userId));
-  return normalizeUserRole(row?.role) === 'admin';
+  return userRoleSchema.parse(row?.role) === 'admin';
 }
 
 /** Exchange GitHub's one-time manifest code for the new App, or null on any failure. */

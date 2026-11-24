@@ -22,6 +22,11 @@ interface ChatResponse {
 
 // ─── Main completion function ──────────────────────────
 
+/** HTTP request header name → value. */
+interface RequestHeaders {
+  [name: string]: string;
+}
+
 export async function llmComplete(
   config: LLMConfig,
   prompt: string,
@@ -37,7 +42,7 @@ export async function llmComplete(
   ];
   const body = { model, messages, stream: false };
 
-  const headers: Record<string, string> = {
+  const headers: RequestHeaders = {
     'Content-Type': 'application/json',
   };
   if (config.apiKey) {

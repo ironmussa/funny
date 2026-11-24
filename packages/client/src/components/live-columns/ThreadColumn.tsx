@@ -185,7 +185,8 @@ export const ThreadColumn = memo(function ThreadColumn({
                 <TooltipIconButton
                   tooltip={t('live.removeFromGrid', 'Remove from grid')}
                   onClick={removeThisColumn}
-                  className="size-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
+                  reveal="col-hover-fade"
+                  className="size-5 shrink-0"
                   data-testid={`grid-remove-${threadId}`}
                 >
                   <X className="icon-xs" />

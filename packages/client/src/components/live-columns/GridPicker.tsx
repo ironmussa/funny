@@ -29,7 +29,7 @@ export function GridPicker({ cols, rows, onChange }: Props) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" gap="snug" className="text-2xs h-6 min-w-0 px-2">
+        <Button variant="ghost" size="chip" gap="snug" className="min-w-0">
           <Grid2x2 className="icon-sm" />
           {cols}×{rows}
         </Button>

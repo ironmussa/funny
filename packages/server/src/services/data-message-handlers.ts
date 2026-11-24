@@ -111,6 +111,8 @@ function notifyTerminalStatusPersisted(
   threadId: unknown,
   updates: unknown,
 ): void {
+  // SAFETY: `?.status` is defined for any value (a primitive yields undefined) and status
+  // stays unknown until the typeof check below.
   const status = (updates as { status?: unknown } | null)?.status;
   if (!runnerUserId || typeof threadId !== 'string') return;
   if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
@@ -198,6 +200,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
 const asRecord = (v: unknown): Record<string, unknown> =>
+  // SAFETY: the typeof check proves v is a non-null object; its fields stay unknown.
   v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 
 /**
@@ -212,6 +215,8 @@ function pickWatcherPatch(raw: unknown): WatcherPatch {
   copyIf(out, patch, 'wakeCount', isNum);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: out holds only the WatcherPatch keys copied above, each type-checked; status is
+  // checked as a string only and kept as the runner sent it for its own watcher.
   return out as WatcherPatch;
 }
 
@@ -228,6 +233,8 @@ function pickJobPatch(raw: unknown): JobPatch {
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'exitCode', isNumOrNull);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: out holds only the JobPatch keys copied above, each type-checked; status is
+  // checked as a string only and kept as the runner sent it for its own job.
   return out as JobPatch;
 }
 
@@ -570,12 +577,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   'data:cancel_queued_message': async ({ data }) => {
     // The ownership guard already verified message → thread → runnerUserId.
     // Resolve threadId here so cancel can scope by (messageId, threadId).
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q)
       return {
         type: 'data:cancel_queued_message_response',
@@ -585,12 +592,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     return { type: 'data:cancel_queued_message_response', success };
   },
   'data:update_queued_message': async ({ data }) => {
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q) return { type: 'data:update_queued_message_response', updated: null };
     const updated = await messageQueueRepo.update(data.messageId, q.threadId, data.content);
     return { type: 'data:update_queued_message_response', updated };

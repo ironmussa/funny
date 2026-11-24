@@ -56,11 +56,7 @@ export async function revokeProjectThreadShares(
   projectId: string,
 ): Promise<string[]> {
   const shareRepo = repos.threadShares();
-  const shared = (await shareRepo.listThreadsSharedWithUser(userId)) as {
-    id: string;
-    projectId: string | null;
-    userId: string;
-  }[];
+  const shared = await shareRepo.listThreadsSharedWithUser(userId);
   const threadIds = shared
     .filter((t) => t.projectId === projectId && t.userId !== userId)
     .map((t) => t.id);

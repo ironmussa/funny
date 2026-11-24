@@ -123,10 +123,10 @@ export function revokePersonalAccessToken(
 
 type Rejection = 'malformed' | 'unknown' | 'revoked' | 'expired';
 
-function reject(reason: Rejection, meta: Record<string, unknown> = {}): null {
+function reject(reason: Rejection, meta: { tokenId?: string; userId?: string } = {}): null {
   audit({
     action: 'pat.rejected',
-    actorId: (meta.userId as string | undefined) ?? null,
+    actorId: meta.userId ?? null,
     detail: `Personal API token rejected: ${reason}`,
     meta: { reason, ...meta },
   });

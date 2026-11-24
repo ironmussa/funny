@@ -387,6 +387,33 @@ describe('factory over tRPC', () => {
     );
   });
 
+  test('the size limit and the globs left out of the size are saved and read back', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      maxLowRiskLines: 400,
+      sizeIgnoredPaths: [],
+    });
+    const saved = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      maxLowRiskLines: 800,
+      sizeIgnoredPaths: ['**/generated/**'],
+    });
+    expect(saved.body).toMatchObject({
+      maxLowRiskLines: 800,
+      sizeIgnoredPaths: ['**/generated/**'],
+    });
+    // Omitted fields keep their values.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      maxLowRiskLines: 800,
+      sizeIgnoredPaths: ['**/generated/**'],
+    });
+    for (const maxLowRiskLines of [0, 9, 100_001, 12.5]) {
+      expect(
+        (await save('alice', { projectId: 'p1', enabled: true, maxLowRiskLines })).status,
+      ).toBe(400);
+    }
+  });
+
   // openspec factory-flow-step-options, 4.1.
   test('step overrides are saved and read back; a permission mode or a bad pair is refused', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({

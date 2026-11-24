@@ -73,6 +73,8 @@ export const WithIncident: Story = {
       maxConcurrent: 4,
       autoMerge: 'low_risk',
       sensitivePaths: [],
+      maxLowRiskLines: 400,
+      sizeIgnoredPaths: [],
       stageLimits: {},
       stepOverrides: {},
       batch: { size: 5, waitSeconds: 60 },

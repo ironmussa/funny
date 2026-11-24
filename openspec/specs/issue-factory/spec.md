@@ -919,9 +919,18 @@ paths nor wait for them.
 
 For each head commit of a run's pull request, the system SHALL report, without an agent: removed test files or test cases, added skip or focus markers, lowered coverage
 thresholds, and edits to CI workflow files. The system SHALL classify the change `high` risk
-when it has any such finding, exceeds 400 changed lines, touches a default or
+when it has any such finding, exceeds the factory's line limit (400 unless the factory sets
+another) in changed lines (not counting tests, Markdown files, lockfiles, translation
+catalogs, stories, snapshots and the factory's own globs left out of size), touches a default or
 factory-configured sensitive path, or the contract lists a risk hint, and `low` otherwise. No
 agent result SHALL lower the risk class.
+
+#### Scenario: The factory's own size settings
+
+- **WHEN** a factory sets its line limit to 800 and leaves `**/generated/**` out of size, and a
+  change adds 3000 lines under `src/generated/` and 500 elsewhere
+- **THEN** the change is not high risk for its size, and a sensitive path under
+  `src/generated/` would still make it high risk
 
 #### Scenario: A skipped test
 

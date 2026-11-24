@@ -364,6 +364,8 @@ export function createTestDb() {
       mode TEXT NOT NULL DEFAULT 'manual',
       auto_merge TEXT NOT NULL DEFAULT 'low_risk',
       sensitive_paths TEXT,
+      max_low_risk_lines INTEGER,
+      size_ignored_paths TEXT,
       stage_limits TEXT,
       batch_size INTEGER,
       batch_wait_ms INTEGER,

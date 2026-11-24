@@ -213,6 +213,10 @@ export interface FactoryActionProviderDeps {
   issueLabels?: string[];
   /** The factory's own sensitive path globs (they make a change high risk). */
   sensitivePaths?: readonly string[];
+  /** The factory's size limit for a low-risk change. */
+  maxLowRiskLines?: number;
+  /** The factory's globs left out of a change's size. */
+  sizeIgnoredPaths?: readonly string[];
   /** Which reviewed changes the factory merges by itself (default: only low-risk ones). */
   autoMerge?: FactoryAutoMerge;
   /**
@@ -907,6 +911,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           change: files.value,
           findings,
           sensitivePaths: deps.sensitivePaths,
+          maxLowRiskLines: deps.maxLowRiskLines,
+          sizeIgnoredPaths: deps.sizeIgnoredPaths,
           riskHints: contractOf({ triage: triager.current() })?.riskHints,
         })
       : {

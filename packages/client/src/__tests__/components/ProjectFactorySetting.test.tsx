@@ -80,6 +80,8 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  maxLowRiskLines: 400,
+  sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
@@ -231,6 +233,33 @@ describe('review and merge settings', () => {
       projectId: 'p1',
       enabled: true,
       sensitivePaths: ['billing/**', 'infra/**'],
+    });
+  });
+
+  test('the size limit is saved when it is a whole number in range', () => {
+    mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-max-low-risk-lines')).toHaveValue(400);
+    blur('settings-factory-max-low-risk-lines', '400');
+    blur('settings-factory-max-low-risk-lines', '5');
+    blur('settings-factory-max-low-risk-lines', 'abc');
+    expect(mocks.save).not.toHaveBeenCalled();
+    blur('settings-factory-max-low-risk-lines', '800');
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      maxLowRiskLines: 800,
+    });
+  });
+
+  test('the globs left out of the size are saved as a list', () => {
+    mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    blur('settings-factory-size-ignored-paths', '**/generated/**, , **/generated/**');
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      sizeIgnoredPaths: ['**/generated/**'],
     });
   });
 

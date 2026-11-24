@@ -5,7 +5,7 @@
  * @domain layer: domain
  *
  * The risk class of a pull request's commit (change factory-agent-roles, D6):
- * `high` when the diff weakens a test, is large, touches a sensitive path, or
+ * `high` when the diff weakens a test, is large (tests and docs aside), touches a sensitive path, or
  * the run's contract named a risk; `low` otherwise. Decided here from the diff
  * and the factory's settings. No agent result is an input, so no agent result
  * can lower it; with `auto_merge: low_risk` a high-risk change waits for a
@@ -13,12 +13,15 @@
  */
 
 import type { PullRequestFiles } from '@funny/core/github-app';
-import type { FactoryRisk } from '@funny/shared/contracts/factory';
+import { DEFAULT_MAX_LOW_RISK_LINES, type FactoryRisk } from '@funny/shared/contracts/factory';
 
-import type { TestWeakeningFinding } from './factory-test-weakening.js';
+import { isTestFile, type TestWeakeningFinding } from './factory-test-weakening.js';
 
-/** A change with more changed lines than this (lockfiles aside) is high risk. */
-export const MAX_LOW_RISK_LINES = 400;
+/**
+ * A change with more counted lines than this is high risk (see
+ * `countsTowardSize`), unless the factory sets its own limit.
+ */
+export const MAX_LOW_RISK_LINES = DEFAULT_MAX_LOW_RISK_LINES;
 
 /**
  * Paths that make any change high risk, whatever the factory configures: CI
@@ -35,6 +38,30 @@ const DEFAULT_SENSITIVE_PATHS = [
 const LOCKFILE =
   /(^|\/)(bun\.lockb?|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|uv\.lock|Gemfile\.lock|go\.sum|composer\.lock)$/;
 
+/** Prose: any Markdown file, wherever it is. */
+const MARKDOWN = /\.md$/i;
+
+/** Translation catalogs, Storybook stories and test snapshots. */
+const NOT_CODE =
+  /(^|\/)(locales|i18n)\/.*\.json$|\.stories\.[cm]?[jt]sx?$|(^|\/)__snapshots__\/|\.snap$/;
+
+/**
+ * Whether a file's lines count toward the size of the change. Size stands for
+ * how much code a person would have to read, so tests (their weakening is its
+ * own reason), Markdown, lockfiles, translations, stories and snapshots do not
+ * count, nor what matches one of the factory's `ignoredPaths`. Sensitive paths
+ * are checked on every file, counted or not.
+ */
+export function countsTowardSize(path: string, ignoredPaths: readonly string[] = []): boolean {
+  return !(
+    LOCKFILE.test(path) ||
+    MARKDOWN.test(path) ||
+    NOT_CODE.test(path) ||
+    isTestFile(path) ||
+    ignoredPaths.some((glob) => matches(glob, path))
+  );
+}
+
 /** At most this many reasons are kept; the rest are counted in the last one. */
 const MAX_REASONS = 12;
 
@@ -44,6 +71,10 @@ export interface RiskInput {
   findings: readonly TestWeakeningFinding[];
   /** The factory's own sensitive globs, added to the default list. */
   sensitivePaths?: readonly string[];
+  /** The factory's size limit (default `MAX_LOW_RISK_LINES`). */
+  maxLowRiskLines?: number;
+  /** The factory's globs left out of the size, besides the default list. */
+  sizeIgnoredPaths?: readonly string[];
   /** Risks the run's contract named (triage); absent for a run without a contract. */
   riskHints?: readonly string[];
 }
@@ -69,11 +100,12 @@ function sensitiveReasons(input: RiskInput): string[] {
 }
 
 function sizeReasons(input: RiskInput): string[] {
+  const limit = input.maxLowRiskLines ?? MAX_LOW_RISK_LINES;
   const lines = input.change.files
-    .filter((file) => !LOCKFILE.test(file.path))
+    .filter((file) => countsTowardSize(file.path, input.sizeIgnoredPaths))
     .reduce((sum, file) => sum + file.additions + file.deletions, 0);
-  return lines > MAX_LOW_RISK_LINES
-    ? [`${lines} changed lines (more than ${MAX_LOW_RISK_LINES})`]
+  return lines > limit
+    ? [`${lines} changed lines outside tests and docs (more than ${limit})`]
     : [];
 }
 

@@ -854,6 +854,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         }),
       ...issueDepsOf(job, scope),
       sensitivePaths: job.factory.sensitivePaths,
+      maxLowRiskLines: job.factory.maxLowRiskLines,
+      sizeIgnoredPaths: job.factory.sizeIgnoredPaths,
       autoMerge: job.factory.autoMerge,
       // Read from the row: the member approves while the run waits.
       mergeApproved: async (sha) => {

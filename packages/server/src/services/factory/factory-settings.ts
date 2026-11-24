@@ -14,8 +14,11 @@
  */
 import {
   DEFAULT_FACTORY_BATCH,
+  DEFAULT_MAX_LOW_RISK_LINES,
   factoryStepOverridesSchema,
+  LOW_RISK_LINES_RANGE,
   MAX_SENSITIVE_PATHS,
+  MAX_SIZE_IGNORED_PATHS,
   MERGE_STAGE,
   type FactoryAutoMerge,
   type FactoryBatchSettings,
@@ -54,6 +57,8 @@ export interface SaveFactorySettingsInput {
   maxConcurrent?: number;
   autoMerge?: FactoryAutoMerge;
   sensitivePaths?: string[];
+  maxLowRiskLines?: number;
+  sizeIgnoredPaths?: string[];
   stageLimits?: Record<string, number>;
   stepOverrides?: FactoryStepOverrides;
   batch?: FactoryBatchSettings;
@@ -100,15 +105,21 @@ const autoMergeOf = (row: Row): FactoryAutoMerge => (row.autoMerge === 'all' ? '
 const SENSITIVE_PATHS_SCHEMA = z.array(z.string());
 const STAGE_LIMITS_SCHEMA = z.record(z.string(), z.number().int().positive());
 
-function sensitivePathsOf(row: Row): string[] {
-  if (!row.sensitivePaths) return [];
-  const parsed = parseStoredJson(
-    SENSITIVE_PATHS_SCHEMA,
-    row.sensitivePaths,
-    'factory_settings.sensitive_paths',
-  );
+/** A stored JSON list of globs; a value that no longer parses reads as none. */
+function globsOf(stored: string | null, column: string): string[] {
+  if (!stored) return [];
+  const parsed = parseStoredJson(SENSITIVE_PATHS_SCHEMA, stored, column);
   return parsed.ok ? parsed.value : [];
 }
+
+const sensitivePathsOf = (row: Row): string[] =>
+  globsOf(row.sensitivePaths, 'factory_settings.sensitive_paths');
+
+const sizeIgnoredPathsOf = (row: Row): string[] =>
+  globsOf(row.sizeIgnoredPaths, 'factory_settings.size_ignored_paths');
+
+/** The stored size limit, or the default where the column is null. */
+const maxLowRiskLinesOf = (row: Row): number => row.maxLowRiskLines ?? DEFAULT_MAX_LOW_RISK_LINES;
 
 /** The stored limits, never one for `merge` (it is not tunable). */
 function stageLimitsOf(row: Row): Record<string, number> {
@@ -143,6 +154,8 @@ const toView = (row: Row): FactorySettingsView => ({
   maxConcurrent: row.maxConcurrent,
   autoMerge: autoMergeOf(row),
   sensitivePaths: sensitivePathsOf(row),
+  maxLowRiskLines: maxLowRiskLinesOf(row),
+  sizeIgnoredPaths: sizeIgnoredPathsOf(row),
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
@@ -173,6 +186,24 @@ function validate(input: SaveFactorySettingsInput): FactorySettingsError | null 
   }
   if (input.sensitivePaths !== undefined && input.sensitivePaths.length > MAX_SENSITIVE_PATHS) {
     return { kind: 'invalid', message: `At most ${MAX_SENSITIVE_PATHS} sensitive paths` };
+  }
+  if (
+    input.sizeIgnoredPaths !== undefined &&
+    input.sizeIgnoredPaths.length > MAX_SIZE_IGNORED_PATHS
+  ) {
+    return { kind: 'invalid', message: `At most ${MAX_SIZE_IGNORED_PATHS} paths left out of size` };
+  }
+  const lines = input.maxLowRiskLines;
+  if (
+    lines !== undefined &&
+    (!Number.isInteger(lines) ||
+      lines < LOW_RISK_LINES_RANGE.min ||
+      lines > LOW_RISK_LINES_RANGE.max)
+  ) {
+    return {
+      kind: 'invalid',
+      message: `maxLowRiskLines must be between ${LOW_RISK_LINES_RANGE.min} and ${LOW_RISK_LINES_RANGE.max}`,
+    };
   }
   return validateStageLimits(input.stageLimits) ?? validateStepOverrides(input.stepOverrides);
 }
@@ -219,6 +250,8 @@ const DEFAULTS = {
   maxConcurrent: 2,
   autoMerge: 'low_risk' as FactoryAutoMerge,
   sensitivePaths: [] as string[],
+  maxLowRiskLines: DEFAULT_MAX_LOW_RISK_LINES,
+  sizeIgnoredPaths: [] as string[],
   stageLimits: {} as Record<string, number>,
   stepOverrides: {} as FactoryStepOverrides,
   batch: DEFAULT_FACTORY_BATCH,
@@ -246,6 +279,8 @@ function buildRow(
     maxConcurrent: input.maxConcurrent ?? base.maxConcurrent,
     autoMerge: input.autoMerge ?? base.autoMerge,
     sensitivePaths: JSON.stringify(input.sensitivePaths ?? base.sensitivePaths),
+    maxLowRiskLines: input.maxLowRiskLines ?? base.maxLowRiskLines,
+    sizeIgnoredPaths: JSON.stringify(input.sizeIgnoredPaths ?? base.sizeIgnoredPaths),
     stageLimits: JSON.stringify(input.stageLimits ?? base.stageLimits),
     stepOverrides: JSON.stringify(input.stepOverrides ?? base.stepOverrides),
     batchSize: (input.batch ?? base.batch).size,
@@ -275,6 +310,10 @@ export interface WatchedFactory {
   maxConcurrent: number;
   autoMerge: FactoryAutoMerge;
   sensitivePaths: string[];
+  /** More counted lines than this make a change high risk. */
+  maxLowRiskLines: number;
+  /** Globs left out of a change's size, besides the default list. */
+  sizeIgnoredPaths: string[];
   stageLimits: Record<string, number>;
   /** Provider / model / effort per agent step id (read again at every agent step). */
   stepOverrides: FactoryStepOverrides;
@@ -295,6 +334,8 @@ const toEnabled = (row: Row): WatchedFactory => ({
   maxConcurrent: row.maxConcurrent,
   autoMerge: autoMergeOf(row),
   sensitivePaths: sensitivePathsOf(row),
+  maxLowRiskLines: maxLowRiskLinesOf(row),
+  sizeIgnoredPaths: sizeIgnoredPathsOf(row),
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
@@ -395,6 +436,8 @@ export function createFactorySettingsService(
       ...(input.maxConcurrent !== undefined && { maxConcurrent: row.maxConcurrent }),
       ...(input.autoMerge !== undefined && { autoMerge: row.autoMerge }),
       ...(input.sensitivePaths !== undefined && { sensitivePaths: row.sensitivePaths }),
+      ...(input.maxLowRiskLines !== undefined && { maxLowRiskLines: row.maxLowRiskLines }),
+      ...(input.sizeIgnoredPaths !== undefined && { sizeIgnoredPaths: row.sizeIgnoredPaths }),
       ...(input.stageLimits !== undefined && { stageLimits: row.stageLimits }),
       ...(input.stepOverrides !== undefined && { stepOverrides: row.stepOverrides }),
       ...(input.batch !== undefined && { batchSize: row.batchSize, batchWaitMs: row.batchWaitMs }),

@@ -52,6 +52,16 @@ export type FactoryAutoMerge = 'low_risk' | 'all';
 /** At most this many sensitive path globs per factory. */
 export const MAX_SENSITIVE_PATHS = 50;
 
+/**
+ * A change with more counted lines than this is high risk, unless the factory
+ * sets its own limit (`maxLowRiskLines`, within `LOW_RISK_LINES_RANGE`).
+ */
+export const DEFAULT_MAX_LOW_RISK_LINES = 400;
+export const LOW_RISK_LINES_RANGE = { min: 10, max: 100_000 } as const;
+
+/** At most this many globs a factory leaves out of a change's size. */
+export const MAX_SIZE_IGNORED_PATHS = 50;
+
 /** The stage whose limit (one per repository and base branch) no setting changes. */
 export const MERGE_STAGE = 'merge';
 
@@ -104,6 +114,16 @@ export const saveFactorySettingsInput = z
     maxConcurrent: z.number().int().min(1).max(20).optional(),
     autoMerge: z.enum(['low_risk', 'all']).optional(),
     sensitivePaths: z.array(z.string().trim().min(1).max(200)).max(MAX_SENSITIVE_PATHS).optional(),
+    maxLowRiskLines: z
+      .number()
+      .int()
+      .min(LOW_RISK_LINES_RANGE.min)
+      .max(LOW_RISK_LINES_RANGE.max)
+      .optional(),
+    sizeIgnoredPaths: z
+      .array(z.string().trim().min(1).max(200))
+      .max(MAX_SIZE_IGNORED_PATHS)
+      .optional(),
     stageLimits: z
       .record(z.string().min(1).max(64), z.number().int().min(1).max(20))
       .refine(
@@ -134,6 +154,10 @@ export interface FactorySettings {
   autoMerge: FactoryAutoMerge;
   /** Globs that make a change high risk, besides the default list. */
   sensitivePaths: string[];
+  /** A change with more counted lines than this is high risk. */
+  maxLowRiskLines: number;
+  /** Globs whose lines do not count toward a change's size, besides tests, Markdown and the like. */
+  sizeIgnoredPaths: string[];
   /** Runs inside a flow node at once, per node id; replaces the flow's own limit. */
   stageLimits: Record<string, number>;
   /** Provider / model / effort per agent step id, over the flow's own (openspec factory-flow-step-options). */

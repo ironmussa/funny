@@ -291,6 +291,10 @@ export const factorySettings = sqliteTable(
     autoMerge: text('auto_merge').notNull().default('low_risk'),
     /** JSON array of globs that make a change high risk, besides the default list. */
     sensitivePaths: text('sensitive_paths'),
+    /** More counted lines than this make a change high risk (null: 400). */
+    maxLowRiskLines: integer('max_low_risk_lines'),
+    /** JSON array of globs whose lines do not count toward a change's size, besides the default list. */
+    sizeIgnoredPaths: text('size_ignored_paths'),
     /** JSON object: runs inside a flow node at once, per node id. */
     stageLimits: text('stage_limits'),
     /** The merge queue's batch size (null: 5) and wait in ms (null: 60 000). */

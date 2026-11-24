@@ -90,12 +90,7 @@ export {
 
 // The payload types live in `./thread-types.ts` (no edge back to this file);
 // re-exported here for existing call sites.
-export type {
-  AgentInitInfo,
-  AgentResultInfo,
-  CompactionEvent,
-  ThreadWithMessages,
-} from './thread-types';
+export type { AgentInitInfo, CompactionEvent, ThreadWithMessages } from './thread-types';
 
 // `ThreadState` lives in `./thread-state.ts` so peer modules can reference
 // the shape without importing this file (which imports them — would close a

@@ -100,24 +100,41 @@ interface TestState {
   reset: () => void;
 }
 
+/** Network-entry fields a later phase overwrites when it carries a non-null value. */
+const NETWORK_NON_NULL_FIELDS = ['status', 'size', 'responseBodyBase64'] as const;
+/** Network-entry fields a later phase overwrites when it carries a truthy value. */
+const NETWORK_TRUTHY_FIELDS = [
+  'statusText',
+  'mimeType',
+  'resourceType',
+  'method',
+  'url',
+  'failed',
+  'errorText',
+  'requestHeaders',
+  'responseHeaders',
+  'postData',
+  'responseBody',
+] as const;
+
+function copyNetworkField<K extends keyof TestNetworkEntry>(
+  target: TestNetworkEntry,
+  source: TestNetworkEntry,
+  key: K,
+): void {
+  target[key] = source[key];
+}
+
 /** Overwrite only the fields a network update actually carries, so a later
  *  phase (response / completed / failure) does not clobber earlier values. */
 function mergeNetworkEntry(e: TestNetworkEntry, update: TestNetworkEntry): TestNetworkEntry {
   const merged = { ...e };
-  if (update.status != null) merged.status = update.status;
-  if (update.statusText) merged.statusText = update.statusText;
-  if (update.mimeType) merged.mimeType = update.mimeType;
-  if (update.resourceType) merged.resourceType = update.resourceType;
-  if (update.method) merged.method = update.method;
-  if (update.url) merged.url = update.url;
-  if (update.size != null) merged.size = update.size;
-  if (update.failed) merged.failed = update.failed;
-  if (update.errorText) merged.errorText = update.errorText;
-  if (update.requestHeaders) merged.requestHeaders = update.requestHeaders;
-  if (update.responseHeaders) merged.responseHeaders = update.responseHeaders;
-  if (update.postData) merged.postData = update.postData;
-  if (update.responseBody) merged.responseBody = update.responseBody;
-  if (update.responseBodyBase64 != null) merged.responseBodyBase64 = update.responseBodyBase64;
+  for (const key of NETWORK_NON_NULL_FIELDS) {
+    if (update[key] != null) copyNetworkField(merged, update, key);
+  }
+  for (const key of NETWORK_TRUTHY_FIELDS) {
+    if (update[key]) copyNetworkField(merged, update, key);
+  }
   if (update.endTime) {
     merged.endTime = update.endTime;
     if (merged.startTime) merged.duration = update.endTime - merged.startTime;

@@ -150,11 +150,23 @@ async function loadSelectedThread(
   return snapshot;
 }
 
+type LoadedThread = Omit<ThreadSnapshot['thread'], 'queuedCount' | 'queuedNextMessage'>;
+
+/** Pagination metadata of the loaded message window, with its defaults. */
+function messageWindow(thread: LoadedThread) {
+  return {
+    hasMore: thread.hasMore ?? false,
+    hasMoreAfter: thread.hasMoreAfter ?? false,
+    totalMessages: thread.total ?? thread.messages?.length ?? 0,
+    windowStart: thread.windowStart ?? 0,
+  };
+}
+
 /** The loaded payload with the derived fields the view needs on first paint. */
 function hydrateThread(
   get: Get,
   threadId: string,
-  thread: Omit<ThreadSnapshot['thread'], 'queuedCount' | 'queuedNextMessage'>,
+  thread: LoadedThread,
   threadEvents: ThreadSnapshot['events'],
 ): ThreadWithMessages {
   const buffered = getBufferedInitInfo(threadId);
@@ -172,10 +184,7 @@ function hydrateThread(
 
   return {
     ...thread,
-    hasMore: thread.hasMore ?? false,
-    hasMoreAfter: thread.hasMoreAfter ?? false,
-    totalMessages: thread.total ?? thread.messages?.length ?? 0,
-    windowStart: thread.windowStart ?? 0,
+    ...messageWindow(thread),
     leadingUserMessage: thread.leadingUserMessage,
     threadEvents,
     initInfo: thread.initInfo || buffered || undefined,
@@ -185,6 +194,32 @@ function hydrateThread(
     setupProgress: storedSetupProgress,
     compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
   };
+}
+
+/** After the payload is published: drop the stale one, select the project, mark the thread read. */
+function settleOpenedThread(set: Set, get: Get, ctx: SwitchContext, thread: LoadedThread): void {
+  const { threadId, prevSelectedId, keepStale } = ctx;
+  // Deferred eviction for the `keepStale` path: we skipped it above so the
+  // back-fill subscriber wouldn't see `activeThread` pointing at an entry
+  // missing from `threadDataById`. Now that `setThreadData` has repointed
+  // `activeThread` at the new thread, it's safe to drop the old payload.
+  if (keepStale && prevSelectedId && prevSelectedId !== threadId) {
+    evictIfUnreferenced(get, set, prevSelectedId);
+  }
+
+  bridgeSelectProject(thread.projectId);
+
+  // Before the open marks it read: the recap card's `since` is the read
+  // marker as the owner left it (openspec thread-recap).
+  recordThreadOpened(threadId, {
+    createdAt: thread.createdAt,
+    ...newestActivity(thread.messages, thread.hasMoreAfter),
+  });
+
+  // Mark the thread as read so the unread blue dot in the sidebar clears.
+  if (thread.completedAt) {
+    useThreadReadStore.getState().markRead(threadId, thread.completedAt);
+  }
 }
 
 /**
@@ -197,7 +232,7 @@ function applyLoadedThread(
   ctx: SwitchContext,
   snapshot: ThreadSnapshot,
 ): boolean {
-  const { threadId, gen, prevSelectedId, prevActive, keepStale } = ctx;
+  const { threadId, gen, prevActive } = ctx;
   // The queue summary lives in the data layer (`data/queue`), not in the payload.
   const { queuedCount, queuedNextMessage, ...thread } = snapshot.thread;
 
@@ -243,27 +278,7 @@ function applyLoadedThread(
   if (prevActive) startTransition(publishHydratedThread);
   else publishHydratedThread();
 
-  // Deferred eviction for the `keepStale` path: we skipped it above so the
-  // back-fill subscriber wouldn't see `activeThread` pointing at an entry
-  // missing from `threadDataById`. Now that `setThreadData` has repointed
-  // `activeThread` at the new thread, it's safe to drop the old payload.
-  if (keepStale && prevSelectedId && prevSelectedId !== threadId) {
-    evictIfUnreferenced(get, set, prevSelectedId);
-  }
-
-  bridgeSelectProject(projectId);
-
-  // Before the open marks it read: the recap card's `since` is the read
-  // marker as the owner left it (openspec thread-recap).
-  recordThreadOpened(threadId, {
-    createdAt: thread.createdAt,
-    ...newestActivity(thread.messages, thread.hasMoreAfter),
-  });
-
-  // Mark the thread as read so the unread blue dot in the sidebar clears.
-  if (thread.completedAt) {
-    useThreadReadStore.getState().markRead(threadId, thread.completedAt);
-  }
+  settleOpenedThread(set, get, ctx, thread);
 
   // Replay any WS events that arrived while activeThread was loading
   flushWSBuffer(threadId, get());

@@ -20,9 +20,10 @@ import {
   type LocalMessage,
 } from './thread-message-merge';
 import * as mutations from './thread-mutations';
+import { reconstructCompactionEvents } from './thread-select-helpers';
 import type { ThreadState } from './thread-state';
 import { getUrlThreadId } from './thread-store-internals';
-import type { CompactionEvent, ThreadWithMessages } from './thread-types';
+import type { ThreadWithMessages } from './thread-types';
 import type { Get, Set } from './thread-ws-handlers/shared';
 
 const refreshLog = createClientLogger('thread-refresh');
@@ -39,6 +40,32 @@ function getActiveThread(state: ThreadState): ThreadWithMessages | null {
   return id ? (state.threadDataById[id] ?? null) : null;
 }
 
+function setLoadingMore(set: Set, threadId: string, loadingMore: boolean): void {
+  set((state) => mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore })));
+}
+
+/**
+ * Prepend an older page to the loaded window, deduplicated in case of
+ * overlapping timestamps. The leading user message is dropped once the page
+ * brings it into the window.
+ */
+function olderPagePatch<M extends { id: string }>(
+  t: { messages: M[] },
+  page: { messages: M[]; hasMore: boolean; leadingUserMessage?: M },
+) {
+  const existingIds = new Set(t.messages.map((m) => m.id));
+  const newMessages = page.messages.filter((m) => !existingIds.has(m.id));
+  const nextMessages = [...newMessages, ...t.messages];
+  const leading = page.leadingUserMessage;
+  const leadingUserAlreadyLoaded = leading != null && nextMessages.some((m) => m.id === leading.id);
+  return {
+    messages: nextMessages,
+    hasMore: page.hasMore,
+    leadingUserMessage: leadingUserAlreadyLoaded ? undefined : leading,
+    loadingMore: false,
+  };
+}
+
 type MessagePageKeys = 'loadOlderMessages' | 'loadNewerMessages' | 'loadMessagesUntil';
 
 /** Paging the loaded message window backwards and forwards. */
@@ -52,12 +79,7 @@ export function createMessagePageActions(set: Set, get: Get): Pick<ThreadState, 
       if (!oldestMessage) return;
       const threadId = active.id;
 
-      set((state) =>
-        mutations.applyThreadDataPatch(state, threadId, (t) => ({
-          ...t,
-          loadingMore: true,
-        })),
-      );
+      setLoadingMore(set, threadId, true);
 
       const result = await api.getThreadMessages(
         threadId,
@@ -70,34 +92,21 @@ export function createMessagePageActions(set: Set, get: Get): Pick<ThreadState, 
       if (!current) return;
 
       if (result.isErr()) {
-        set((state) =>
-          mutations.applyThreadDataPatch(state, threadId, (t) => ({
-            ...t,
-            loadingMore: false,
-          })),
-        );
+        setLoadingMore(set, threadId, false);
         return;
       }
 
-      const { messages: olderMessages, hasMore, total, leadingUserMessage } = result.value;
+      const { total } = result.value;
       set((state) =>
         mutations.applyThreadDataPatch(state, threadId, (t) => {
-          // Deduplicate in case of overlapping timestamps
-          const existingIds = new Set(t.messages.map((m) => m.id));
-          const newMessages = olderMessages.filter((m) => !existingIds.has(m.id));
-          const nextMessages = [...newMessages, ...t.messages];
-          const leadingUserAlreadyLoaded =
-            leadingUserMessage != null && nextMessages.some((m) => m.id === leadingUserMessage.id);
+          const patch = olderPagePatch(t, result.value);
+          const added = patch.messages.length - t.messages.length;
           return {
             ...t,
-            messages: nextMessages,
-            hasMore,
+            ...patch,
             hasMoreAfter: result.value.hasMoreAfter ?? t.hasMoreAfter,
             totalMessages: total ?? t.totalMessages,
-            windowStart:
-              result.value.windowStart ?? Math.max(0, (t.windowStart ?? 0) - newMessages.length),
-            leadingUserMessage: leadingUserAlreadyLoaded ? undefined : leadingUserMessage,
-            loadingMore: false,
+            windowStart: result.value.windowStart ?? Math.max(0, (t.windowStart ?? 0) - added),
           };
         }),
       );
@@ -111,12 +120,7 @@ export function createMessagePageActions(set: Set, get: Get): Pick<ThreadState, 
       if (!newestMessage) return;
       const threadId = active.id;
 
-      set((state) =>
-        mutations.applyThreadDataPatch(state, threadId, (t) => ({
-          ...t,
-          loadingMore: true,
-        })),
-      );
+      setLoadingMore(set, threadId, true);
 
       const result = await api.getThreadMessages(
         threadId,
@@ -129,12 +133,7 @@ export function createMessagePageActions(set: Set, get: Get): Pick<ThreadState, 
       if (!current) return;
 
       if (result.isErr()) {
-        set((state) =>
-          mutations.applyThreadDataPatch(state, threadId, (t) => ({
-            ...t,
-            loadingMore: false,
-          })),
-        );
+        setLoadingMore(set, threadId, false);
         return;
       }
 
@@ -208,12 +207,7 @@ export function createMessagePageActions(set: Set, get: Get): Pick<ThreadState, 
         }
 
         const oldestMessage = entry.messages[0];
-        set((state) =>
-          mutations.applyThreadDataPatch(state, threadId, (t) => ({
-            ...t,
-            loadingMore: true,
-          })),
-        );
+        setLoadingMore(set, threadId, true);
 
         const result = await api.getThreadMessages(threadId, oldestMessage.timestamp, PAGE_SIZE);
 
@@ -221,32 +215,15 @@ export function createMessagePageActions(set: Set, get: Get): Pick<ThreadState, 
         if (!get().threadDataById[threadId]) return false;
 
         if (result.isErr()) {
-          set((state) =>
-            mutations.applyThreadDataPatch(state, threadId, (t) => ({
-              ...t,
-              loadingMore: false,
-            })),
-          );
+          setLoadingMore(set, threadId, false);
           return false;
         }
 
-        const { messages: olderMessages, hasMore, leadingUserMessage } = result.value;
         set((state) =>
-          mutations.applyThreadDataPatch(state, threadId, (t) => {
-            const existingIds = new Set(t.messages.map((m) => m.id));
-            const newMessages = olderMessages.filter((m) => !existingIds.has(m.id));
-            const nextMessages = [...newMessages, ...t.messages];
-            const leadingUserAlreadyLoaded =
-              leadingUserMessage != null &&
-              nextMessages.some((m) => m.id === leadingUserMessage.id);
-            return {
-              ...t,
-              messages: nextMessages,
-              hasMore,
-              leadingUserMessage: leadingUserAlreadyLoaded ? undefined : leadingUserMessage,
-              loadingMore: false,
-            };
-          }),
+          mutations.applyThreadDataPatch(state, threadId, (t) => ({
+            ...t,
+            ...olderPagePatch(t, result.value),
+          })),
         );
       }
       return get().threadDataById[threadId]?.messages.some((m) => m.id === messageId) ?? false;
@@ -276,17 +253,7 @@ export async function refreshActiveThreadFlow(set: Set, get: Get): Promise<void>
   const threadEvents = eventsResult.isOk() ? eventsResult.value.events : eventsFallback;
 
   // Reconstruct compactionEvents from persisted thread events
-  const persistedCompaction: CompactionEvent[] = (threadEvents ?? []).flatMap((event) => {
-    if (event.type !== 'compact_boundary') return [];
-    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-    return [
-      {
-        trigger: data.trigger ?? 'auto',
-        preTokens: data.preTokens ?? 0,
-        timestamp: data.timestamp ?? event.createdAt,
-      },
-    ];
-  });
+  const persistedCompaction = reconstructCompactionEvents(threadEvents ?? []);
   // Clear waitingReason/pendingPermission if server status is no longer waiting
   // (handles case where agent:result WS event was lost during disconnect)
   const isServerWaiting = thread.status === 'waiting';

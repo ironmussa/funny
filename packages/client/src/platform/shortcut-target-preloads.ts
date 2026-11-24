@@ -21,7 +21,7 @@ const shortcutTargetPreloads: Array<() => LazyModule<unknown>> = [
 
 let scheduled = false;
 
-function isFunction(value: unknown): value is (...args: never[]) => unknown {
+function isFunction(value: unknown): value is (...args: never[]) => void {
   return typeof value === 'function';
 }
 

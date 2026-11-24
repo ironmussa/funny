@@ -20,7 +20,7 @@ const listeners = new Set<() => void>();
 const snapshots = new Map<string, ExternalClaudeSessionsSnapshot>();
 const inflightByKey = new Map<string, Promise<void>>();
 
-function isFunction(value: unknown): value is (...args: never[]) => unknown {
+function isFunction(value: unknown): value is (...args: never[]) => void {
   return typeof value === 'function';
 }
 

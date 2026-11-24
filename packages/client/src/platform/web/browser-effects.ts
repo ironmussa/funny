@@ -43,7 +43,7 @@ export function createBrowserEffectService(
   };
 }
 
-function isFunction(value: unknown): value is (...args: never[]) => unknown {
+function isFunction(value: unknown): value is (...args: never[]) => void {
   return typeof value === 'function';
 }
 

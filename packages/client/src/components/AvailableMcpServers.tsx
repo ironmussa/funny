@@ -43,7 +43,7 @@ function getMcpEndpoint(server: McpServer): string | null {
 }
 
 /** True when a browser API (e.g. `requestIdleCallback`) exists as a function in this engine. */
-function isCallable(value: unknown): value is (...args: never[]) => unknown {
+function isCallable(value: unknown): value is (...args: never[]) => void {
   return typeof value === 'function';
 }
 

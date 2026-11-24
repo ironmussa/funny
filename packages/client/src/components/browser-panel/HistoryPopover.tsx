@@ -57,7 +57,7 @@ export function HistoryPopover() {
         </TooltipTrigger>
         <TooltipContent side="bottom">Sent history</TooltipContent>
       </Tooltip>
-      <PopoverContent side="bottom" align="end" className="w-80 p-0">
+      <PopoverContent side="bottom" align="end" padding="none" className="w-80">
         <div className="border-border flex items-center justify-between border-b px-3 py-2">
           <span className="text-sm font-semibold">Sent history</span>
           {history.length > 0 && (

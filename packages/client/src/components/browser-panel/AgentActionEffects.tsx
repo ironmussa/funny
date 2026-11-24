@@ -37,10 +37,10 @@ function labelFor(action: AgentActionState): string {
 function ScrollArrow({ action }: { action: AgentActionState }) {
   const dx = action.deltaX ?? 0;
   const dy = action.deltaY ?? 0;
-  const Icon =
+  const CursorIcon =
     Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? ArrowRight : ArrowLeft) : dy < 0 ? ArrowUp : ArrowDown;
   return (
-    <Icon
+    <CursorIcon
       data-testid="browser-agent-action-scroll"
       strokeWidth={3}
       className="size-8 -translate-x-1/2 -translate-y-1/2 fill-black text-white drop-shadow-lg"

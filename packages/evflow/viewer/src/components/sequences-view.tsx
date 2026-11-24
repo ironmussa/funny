@@ -5,7 +5,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 import { EVFLOW_ICONS } from '../../../src/generators/react-flow';
-import type { ElementKind } from '../../../src/types';
 import { useViewerStore } from '../stores/viewer-store';
 
 export function SequencesView() {
@@ -70,7 +69,7 @@ export function SequencesView() {
               {seq.steps.map((step, i) => {
                 const el = model.elements.get(step);
                 const kind = el?.kind ?? 'command';
-                const icon = EVFLOW_ICONS[kind as ElementKind] ?? '';
+                const icon = EVFLOW_ICONS[kind] ?? '';
                 const inSlice = !sliceRefs || sliceRefs.has(step);
 
                 return (

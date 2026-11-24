@@ -63,9 +63,14 @@ function loadRunnerService(): grpc.ServiceDefinition {
     oneofs: true,
     includeDirs: [resolve(repositoryRoot, 'protocol')],
   });
-  const root = grpc.loadPackageDefinition(definition) as grpc.GrpcObject;
+  const root = grpc.loadPackageDefinition(definition);
+  // SAFETY: protocolPath's protos declare `package runner.v2` with `service
+  // RunnerTransportService`, so the loaded root nests namespaces runner → v2 and holds the
+  // service's client constructor there.
   const runner = root.runner as grpc.GrpcObject;
+  // SAFETY: as above, `v2` is the namespace object of package runner.v2.
   const v2 = runner.v2 as grpc.GrpcObject;
+  // SAFETY: RunnerTransportService is the service declared in package runner.v2.
   return (v2.RunnerTransportService as grpc.ServiceClientConstructor).service;
 }
 
@@ -149,8 +154,8 @@ function tunnel(call: Call): void {
   call.sendMetadata(new grpc.Metadata());
   call.on('data', (request: Message) => {
     observations.classMessages.add('tunnel');
-    const data = request.data?.data as Buffer | undefined;
-    if (data && data.byteLength > maxFrameBytes) {
+    const data: unknown = request.data?.data;
+    if (data instanceof Uint8Array && data.byteLength > maxFrameBytes) {
       call.emit(
         'error',
         Object.assign(new Error('frame exceeds negotiated limit'), {
@@ -294,6 +299,8 @@ try {
   if (!observations.explicitCancellation) throw new Error('explicit cancellation was not observed');
   if (!observations.slowReaderBackpressured)
     throw new Error('slow reader did not apply backpressure');
+  // SAFETY: stdout is the JSON object grpc-sustained-client prints when it exits 0 (checked
+  // above); only `iterations` is read, through Number() with a default.
   const result = JSON.parse(stdout) as Record<string, unknown>;
   const iterations = Number(result.iterations ?? 1);
   if (observations.forcedDisconnects !== iterations)

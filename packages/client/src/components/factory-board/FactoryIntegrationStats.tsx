@@ -2,33 +2,41 @@
  * How the factory's integration went over the runs the view shows (its
  * filters apply, so one project can be read on its own): outcomes, time in the
  * queue and to merge, and what integrating cost (CI rounds, red checks,
- * conflicts, agent fixes, merge queue batches). Folded by default under the
- * view's header; computed from the listed runs (`summarizeFactoryRuns`), so it
- * needs no request of its own.
+ * conflicts, agent fixes, merge queue batches). Shown in the view's analytics
+ * layout; computed from the listed runs (`summarizeFactoryRuns`), so it needs
+ * no request of its own.
  */
-import { ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import {
+  AlertTriangle,
+  GitMerge,
+  Hourglass,
+  Layers,
+  ListChecks,
+  RefreshCw,
+  Sparkles,
+  Timer,
+  Wrench,
+  XCircle,
+  Clock,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { FACTORY_METRICS_WINDOW_DAYS, summarizeFactoryRuns } from '@/data/factory/metrics';
+import { MetricCard } from '@/components/analytics/MetricCard';
+import { summarizeFactoryRuns } from '@/data/factory/metrics';
 import type { FactoryRun } from '@/lib/api/factory';
 import { formatActionDuration } from '@/lib/github-actions';
-import { cn } from '@/lib/utils';
 
 const percent = (value: number | null) => (value === null ? '—' : `${Math.round(value * 100)}%`);
 const decimal = (value: number | null) => (value === null ? '—' : value.toFixed(1));
 const duration = (ms: number | null) => (ms === null ? '—' : formatActionDuration(ms));
 
-function Stat({ id, label, value }: { id: string; label: string; value: string }) {
-  return (
-    <div className="bg-muted/40 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5">
-      <span className="text-muted-foreground truncate text-xs">{label}</span>
-      <span className="text-sm font-medium tabular-nums" data-testid={`factory-metric-${id}`}>
-        {value}
-      </span>
-    </div>
-  );
+interface Figure {
+  id: string;
+  title: string;
+  value: string;
+  icon: ReactNode;
+  color: 'blue' | 'green' | 'amber' | 'gray' | 'violet' | 'red';
 }
 
 export function FactoryIntegrationStats({
@@ -39,85 +47,101 @@ export function FactoryIntegrationStats({
   now: number;
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const summary = summarizeFactoryRuns(runs, { now });
   if (summary.runs === 0) return null;
 
+  const figures: Figure[] = [
+    {
+      id: 'runs',
+      title: t('factory.metrics.runs', 'Runs'),
+      value: String(summary.runs),
+      icon: <ListChecks className="icon-sm" />,
+      color: 'blue',
+    },
+    {
+      id: 'merge-rate',
+      title: t('factory.metrics.mergeRate', 'Merged'),
+      value: percent(summary.mergeRate),
+      icon: <GitMerge className="icon-sm" />,
+      color: 'green',
+    },
+    {
+      id: 'queue-time',
+      title: t('factory.metrics.medianQueue', 'Median time in queue'),
+      value: duration(summary.medianQueueMs),
+      icon: <Hourglass className="icon-sm" />,
+      color: 'gray',
+    },
+    {
+      id: 'time-to-merge',
+      title: t('factory.metrics.medianToMerge', 'Median time to merge'),
+      value: duration(summary.medianToMergeMs),
+      icon: <Timer className="icon-sm" />,
+      color: 'gray',
+    },
+    {
+      id: 'ci-rounds',
+      title: t('factory.metrics.ciRounds', 'CI rounds per run'),
+      value: decimal(summary.avgCiRounds),
+      icon: <RefreshCw className="icon-sm" />,
+      color: 'blue',
+    },
+    {
+      id: 'red-rate',
+      title: t('factory.metrics.redRate', 'Red CI rounds'),
+      value: percent(summary.redRate),
+      icon: <XCircle className="icon-sm" />,
+      color: 'red',
+    },
+    {
+      id: 'conflict-rate',
+      title: t('factory.metrics.conflictRate', 'Runs with a conflict'),
+      value: percent(summary.conflictRate),
+      icon: <AlertTriangle className="icon-sm" />,
+      color: 'amber',
+    },
+    {
+      id: 'agent-fixes',
+      title: t('factory.metrics.agentFixes', 'Agent fixes per run'),
+      value: decimal(summary.avgAgentFixes),
+      icon: <Wrench className="icon-sm" />,
+      color: 'violet',
+    },
+    {
+      id: 'settled-without-agent',
+      title: t('factory.metrics.settledWithoutAgent', 'Conflicts settled with no agent'),
+      value: percent(summary.settledWithoutAgentRate),
+      icon: <Sparkles className="icon-sm" />,
+      color: 'green',
+    },
+    {
+      id: 'batch-size',
+      title: t('factory.metrics.batchSize', 'Pull requests per batch'),
+      value: decimal(summary.avgBatchSize),
+      icon: <Layers className="icon-sm" />,
+      color: 'blue',
+    },
+    {
+      id: 'batch-wait',
+      title: t('factory.metrics.batchWait', 'Median time in the merge queue'),
+      value: duration(summary.medianBatchWaitMs),
+      icon: <Clock className="icon-sm" />,
+      color: 'gray',
+    },
+  ];
+
   return (
-    <div className="border-border/50 border-b px-4 py-2" data-testid="factory-metrics">
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs font-medium"
-            data-testid="factory-metrics-toggle"
-          >
-            <ChevronRight className={cn('icon-xs transition-transform', open && 'rotate-90')} />
-            {t('factory.metrics.title', 'Integration, last {{days}} days', {
-              days: FACTORY_METRICS_WINDOW_DAYS,
-            })}
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-4 xl:grid-cols-6">
-            <Stat
-              id="runs"
-              label={t('factory.metrics.runs', 'Runs')}
-              value={String(summary.runs)}
-            />
-            <Stat
-              id="merge-rate"
-              label={t('factory.metrics.mergeRate', 'Merged')}
-              value={percent(summary.mergeRate)}
-            />
-            <Stat
-              id="queue-time"
-              label={t('factory.metrics.medianQueue', 'Median time in queue')}
-              value={duration(summary.medianQueueMs)}
-            />
-            <Stat
-              id="time-to-merge"
-              label={t('factory.metrics.medianToMerge', 'Median time to merge')}
-              value={duration(summary.medianToMergeMs)}
-            />
-            <Stat
-              id="ci-rounds"
-              label={t('factory.metrics.ciRounds', 'CI rounds per run')}
-              value={decimal(summary.avgCiRounds)}
-            />
-            <Stat
-              id="red-rate"
-              label={t('factory.metrics.redRate', 'Red CI rounds')}
-              value={percent(summary.redRate)}
-            />
-            <Stat
-              id="conflict-rate"
-              label={t('factory.metrics.conflictRate', 'Runs with a conflict')}
-              value={percent(summary.conflictRate)}
-            />
-            <Stat
-              id="agent-fixes"
-              label={t('factory.metrics.agentFixes', 'Agent fixes per run')}
-              value={decimal(summary.avgAgentFixes)}
-            />
-            <Stat
-              id="settled-without-agent"
-              label={t('factory.metrics.settledWithoutAgent', 'Conflicts settled with no agent')}
-              value={percent(summary.settledWithoutAgentRate)}
-            />
-            <Stat
-              id="batch-size"
-              label={t('factory.metrics.batchSize', 'Pull requests per batch')}
-              value={decimal(summary.avgBatchSize)}
-            />
-            <Stat
-              id="batch-wait"
-              label={t('factory.metrics.batchWait', 'Median time in the merge queue')}
-              value={duration(summary.medianBatchWaitMs)}
-            />
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" data-testid="factory-metrics">
+      {figures.map((figure) => (
+        <MetricCard
+          key={figure.id}
+          title={figure.title}
+          value={figure.value}
+          icon={figure.icon}
+          color={figure.color}
+          valueTestId={`factory-metric-${figure.id}`}
+        />
+      ))}
     </div>
   );
 }

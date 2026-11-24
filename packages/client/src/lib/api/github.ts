@@ -197,6 +197,13 @@ export const githubApi = {
       body: JSON.stringify({ projectId, prNumber, method }),
     }),
 
+  /** Deletes the issues for good (GitHub allows it to repository admins only). */
+  githubDeleteIssues: (projectId: string, issueNumbers: number[]) =>
+    request<import('@funny/shared/contracts/github-issues').DeleteIssuesResult>(
+      `/github/issues-delete`,
+      { method: 'POST', body: JSON.stringify({ projectId, issueNumbers }) },
+    ),
+
   githubIssueComments: (projectId: string, issueNumber: number) =>
     request<{ comments: import('@funny/shared').PRIssueComment[] }>(
       `/github/issue-comments?projectId=${projectId}&issueNumber=${issueNumber}`,

@@ -1,13 +1,4 @@
-import type {
-  EventModelData,
-  ElementDef,
-  AggregateDef,
-  ScreenDef,
-  ExternalDef,
-  AutomationDef,
-  SagaDef,
-  ReadModelDef,
-} from '../types.js';
+import type { EventModelData, ElementDef } from '../types.js';
 
 // ── Options ──────────────────────────────────────────────────────
 
@@ -192,37 +183,37 @@ function buildEdges(
   for (const el of model.elements.values()) {
     switch (el.kind) {
       case 'aggregate': {
-        const agg = el as AggregateDef;
+        const agg = el;
         for (const cmd of agg.handles) add(cmd, agg.name, 'handles');
         for (const evt of agg.emits) add(agg.name, evt, 'emits');
         break;
       }
       case 'screen': {
-        const scr = el as ScreenDef;
+        const scr = el;
         for (const rm of scr.displays) add(rm, scr.name, 'displays');
         for (const cmd of scr.triggers) add(scr.name, cmd, 'triggers');
         break;
       }
       case 'external': {
-        const ext = el as ExternalDef;
+        const ext = el;
         for (const cmd of ext.receives) add(cmd, ext.name, 'receives');
         for (const evt of ext.emits) add(ext.name, evt, 'emits');
         break;
       }
       case 'readModel': {
-        const rm = el as ReadModelDef;
+        const rm = el;
         for (const evt of rm.from) add(evt, rm.name, 'projects');
         break;
       }
       case 'automation': {
-        const auto = el as AutomationDef;
+        const auto = el;
         add(auto.on, auto.name, 'on');
         const triggers = Array.isArray(auto.triggers) ? auto.triggers : [auto.triggers];
         for (const cmd of triggers) add(auto.name, cmd, 'triggers');
         break;
       }
       case 'saga': {
-        const saga = el as SagaDef;
+        const saga = el;
         for (const evt of saga.on) add(evt, saga.name, 'listens');
         const triggers = Array.isArray(saga.triggers) ? saga.triggers : [saga.triggers];
         for (const cmd of triggers) add(saga.name, cmd, 'triggers');

@@ -10,6 +10,13 @@ import { Sidebar } from './components/sidebar';
 import { SourcePanel } from './components/source-panel';
 import { useViewerStore } from './stores/viewer-store';
 
+const VIEWER_TABS = ['graph', 'elements', 'sequences'] as const;
+type ViewerTab = (typeof VIEWER_TABS)[number];
+
+function isViewerTab(value: string): value is ViewerTab {
+  return VIEWER_TABS.some((tab) => tab === value);
+}
+
 export function App() {
   const model = useViewerStore((s) => s.model);
   const activeTab = useViewerStore((s) => s.activeTab);
@@ -32,7 +39,10 @@ export function App() {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Tabs
             value={activeTab}
-            onValueChange={(v) => setActiveTab(v as 'graph' | 'elements' | 'sequences')}
+            onValueChange={(v) => {
+              // The only TabsTrigger values below are the three viewer tabs.
+              if (isViewerTab(v)) setActiveTab(v);
+            }}
             className="flex flex-1 flex-col overflow-hidden"
           >
             <div

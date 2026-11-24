@@ -294,6 +294,10 @@ function memoryGrowthSamples(samples: readonly ProcessTreeSample[]): MetricSampl
   ];
 }
 
+function isWorkloadName(name: string): name is WorkloadResult['name'] {
+  return BENCHMARK_WORKLOAD_NAMES.some((workload) => workload === name);
+}
+
 function sessionWorkloads(session: SessionResult): Map<string, WorkloadResult> {
   const results = new Map<string, WorkloadResult>();
   const completions = session.events.filter(
@@ -304,15 +308,19 @@ function sessionWorkloads(session: SessionResult): Map<string, WorkloadResult> {
     if (completed.event.type !== 'workload-completed') continue;
     const completedId = completed.event.id;
     const name = completedId.replace(/-\d+$/, '');
-    const previousBoundary =
-      completionIndex === 0
-        ? (ready?.receivedAtMs ?? session.startedAtMs)
-        : (completions[completionIndex - 1]?.receivedAtMs ?? session.startedAtMs);
-    const processSamples = samplesDuring(session, previousBoundary, completed.receivedAtMs);
+    // Priming runs (`repeated-navigation-prime-<n>`) are no workload of their own:
+    // only the workload names are ever read from this map.
+    if (!isWorkloadName(name)) continue;
+    const previousBoundary = (completions[completionIndex - 1] ?? ready)?.receivedAtMs;
+    const processSamples = samplesDuring(
+      session,
+      previousBoundary ?? session.startedAtMs,
+      completed.receivedAtMs,
+    );
     const samples = [...completed.event.samples, ...processMetricSamples(processSamples)];
     if (name === 'repeated-navigation') samples.push(...memoryGrowthSamples(processSamples));
     results.set(name, {
-      name: name as WorkloadResult['name'],
+      name,
       status: 'complete',
       samples,
       summaries: [],
@@ -405,9 +413,9 @@ async function gpuIdentity(): Promise<string | null> {
 
 async function rendererVersion(renderer: RendererKind): Promise<string> {
   if (renderer === 'gpuix') return 'react@19.2.4 + @gpuix/react@0.5.1 + @gpuix/native@0.5.1';
-  const playwright = JSON.parse(
+  const playwright: { version: string } = JSON.parse(
     await Bun.file(resolve(repositoryRoot, 'node_modules/playwright/package.json')).text(),
-  ) as { version: string };
+  );
   const { chromium } = await import('playwright');
   const chromiumVersion = await commandOutput([chromium.executablePath(), '--version']);
   return `react@19.2.4 + playwright@${playwright.version} + ${chromiumVersion ?? 'Chromium version unavailable'}`;
@@ -518,12 +526,12 @@ async function buildResult(
 function pairedOrder(measuredCount: number): RendererKind[] {
   const counts = { 'web-virtual': 0, gpuix: 0 };
   const order: RendererKind[] = [];
-  const pattern: RendererKind[] = ['web-virtual', 'gpuix', 'gpuix', 'web-virtual'];
+  const pattern: Array<'web-virtual' | 'gpuix'> = ['web-virtual', 'gpuix', 'gpuix', 'web-virtual'];
   while (counts['web-virtual'] < measuredCount || counts.gpuix < measuredCount) {
     for (const renderer of pattern) {
-      if (counts[renderer as 'web-virtual' | 'gpuix'] >= measuredCount) continue;
+      if (counts[renderer] >= measuredCount) continue;
       order.push(renderer);
-      counts[renderer as 'web-virtual' | 'gpuix'] += 1;
+      counts[renderer] += 1;
     }
   }
   return order;
@@ -589,11 +597,12 @@ async function main(): Promise<void> {
   const timestamp = new Date().toISOString().replaceAll(':', '-');
   const outputDirectory = resolve(resultsRoot, timestamp);
   await mkdir(outputDirectory, { recursive: true });
-  for (const renderer of [
+  const renderers: RendererKind[] = [
     'web-virtual',
     'gpuix',
-    ...(options.includeFrozen ? ['web-frozen'] : []),
-  ] as RendererKind[]) {
+    ...(options.includeFrozen ? ['web-frozen' as const] : []),
+  ];
+  for (const renderer of renderers) {
     const sessions = measured.get(renderer) ?? [];
     const result = await buildResult(renderer, sessions, options);
     await Bun.write(

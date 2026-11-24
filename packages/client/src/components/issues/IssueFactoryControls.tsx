@@ -1,8 +1,8 @@
 /**
  * The issue factory in the Issues tab (change factory-manual-queue): each
- * issue's factory state, the checkbox that selects it for a send, and the bar
- * that sends the selection with one flow. Only a caller who may start threads
- * on the project and has set up a factory sees any of it.
+ * issue's factory state, the checkbox that selects it, and the part of the
+ * selection bar that sends the selection with one flow. Only a caller who may
+ * start threads on the project selects issues; only one with a factory sends.
  */
 import { MAX_ISSUES_PER_SEND, implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
@@ -41,6 +41,8 @@ import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
 
 export interface IssueFactory {
+  /** The caller may steer the project: select issues, delete them. */
+  canSteer: boolean;
   /** The caller may send issues (steer + a configured factory). */
   active: boolean;
   settings: FactorySettings | null;
@@ -79,6 +81,7 @@ export function useIssueFactory(projectId: string): IssueFactory {
         ),
     );
     return {
+      canSteer,
       active: canSteer && settings !== null,
       settings,
       unavailable: canSteer && settingsFailed,
@@ -88,11 +91,23 @@ export function useIssueFactory(projectId: string): IssueFactory {
   }, [canSteer, settings, settingsFailed, runs]);
 }
 
-/** Whether an issue can be selected for a send: open, and not already in the factory. */
+/** Whether the issue has a run in the factory that has not ended. */
+function inFactory(factory: IssueFactory, issueNumber: number): boolean {
+  const run = factory.latestRun.get(issueNumber);
+  return run !== undefined && !ENDED_FACTORY_STATES.has(run.state);
+}
+
+/**
+ * Whether an issue can be selected (to send or delete it): the caller may
+ * steer the project, and the issue is not in the factory right now.
+ */
+export function canSelectIssue(factory: IssueFactory, issue: { number: number }) {
+  return factory.canSteer && !inFactory(factory, issue.number);
+}
+
+/** Whether a selected issue can go to the factory: open, and not already in it. */
 export function canSendIssue(factory: IssueFactory, issue: { number: number; state: string }) {
-  if (!factory.active || issue.state !== 'open') return false;
-  const run = factory.latestRun.get(issue.number);
-  return !run || ENDED_FACTORY_STATES.has(run.state);
+  return factory.active && issue.state === 'open' && !inFactory(factory, issue.number);
 }
 
 /**
@@ -139,7 +154,7 @@ export function IssueSelectToggle({
         <Checkbox
           checked={checked}
           onCheckedChange={() => onToggle(issueNumber)}
-          aria-label={t('factory.selectIssue', 'Select #{{number}} for the factory', {
+          aria-label={t('issues.selectIssue', 'Select #{{number}}', {
             number: issueNumber,
           })}
           data-testid={`issue-select-${issueNumber}`}
@@ -306,20 +321,23 @@ function reportSend(t: TFunction, result: FactorySubmitResult): void {
   }
 }
 
-/** The bar shown above the issues while some are selected: pick a flow and send them. */
+/**
+ * The factory part of the selection bar: pick a flow and send the selected
+ * issues that can go to the factory, with why the send is off and what the
+ * selection waits on.
+ */
 export function IssuesFactoryBar({
   projectId,
   settings,
   selected,
   onSent,
-  onClear,
 }: {
   projectId: string;
   settings: FactorySettings;
+  /** The selected issues that can be sent. */
   selected: number[];
   /** The issues the factory accepted (they leave the selection). */
   onSent: (accepted: number[]) => void;
-  onClear: () => void;
 }) {
   const { t } = useTranslation();
   const flows = useFactoryFlows(projectId);
@@ -355,23 +373,27 @@ export function IssuesFactoryBar({
   };
 
   return (
-    <div
-      className="border-sidebar-border bg-sidebar flex flex-col gap-1.5 border-b px-2 py-1 text-xs"
-      data-testid="issues-factory-bar"
-    >
-      <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground">
-          {t('factory.selectedCount', '{{count}} selected', { count: selected.length })}
-        </span>
-        <Button
-          variant="muted"
-          size="xs"
-          onClick={onClear}
-          data-testid="issues-factory-clear-selection"
-        >
-          {t('common.clear', 'Clear')}
-        </Button>
-        <div className="min-w-0 flex-1" />
+    <div className="flex flex-col gap-1.5" data-testid="issues-factory-bar">
+      {blocked && (
+        <p className="text-status-warning" data-testid="issues-factory-disabled-reason">
+          {blocked}
+        </p>
+      )}
+      {selected.length >= MAX_ISSUES_PER_SEND && (
+        <p className="text-muted-foreground" data-testid="issues-factory-limit">
+          {t('factory.sendLimit', 'Up to {{max}} issues per send', { max: MAX_ISSUES_PER_SEND })}
+        </p>
+      )}
+      {!blocked && outside.length > 0 && (
+        <p className="text-muted-foreground" data-testid="issues-factory-warning">
+          {t(
+            'factory.blockerWarning',
+            'Depends on {{blockers}}, which is not in the factory: those issues will wait for it.',
+            { blockers: outside.map((n) => `#${n}`).join(', ') },
+          )}
+        </p>
+      )}
+      <div className="flex items-center justify-end gap-1.5">
         <Select value={flow} onValueChange={setFlow}>
           <SelectTrigger size="xs" className="w-auto" data-testid="issues-factory-flow">
             <span className="truncate">{flow}</span>
@@ -399,25 +421,6 @@ export function IssuesFactoryBar({
           {t('factory.send', 'Send to factory')}
         </Button>
       </div>
-      {blocked && (
-        <p className="text-status-warning" data-testid="issues-factory-disabled-reason">
-          {blocked}
-        </p>
-      )}
-      {selected.length >= MAX_ISSUES_PER_SEND && (
-        <p className="text-muted-foreground" data-testid="issues-factory-limit">
-          {t('factory.sendLimit', 'Up to {{max}} issues per send', { max: MAX_ISSUES_PER_SEND })}
-        </p>
-      )}
-      {!blocked && outside.length > 0 && (
-        <p className="text-muted-foreground" data-testid="issues-factory-warning">
-          {t(
-            'factory.blockerWarning',
-            'Depends on {{blockers}}, which is not in the factory: those issues will wait for it.',
-            { blockers: outside.map((n) => `#${n}`).join(', ') },
-          )}
-        </p>
-      )}
     </div>
   );
 }

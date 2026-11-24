@@ -280,19 +280,19 @@ export function Sidebar() {
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Fields
                   </span>
-                  {Object.entries(selectedEl[1].fields as Record<string, string>).map(([k, v]) => (
+                  {Object.entries(selectedEl[1].fields).map(([k, v]) => (
                     <p key={k} className="text-muted-foreground text-xs">
                       <span className="text-foreground">{k}</span>: {v}
                     </p>
                   ))}
                 </div>
               )}
-              {'invariants' in selectedEl[1] && (selectedEl[1] as any).invariants?.length > 0 && (
+              {'invariants' in selectedEl[1] && selectedEl[1].invariants?.length > 0 && (
                 <div>
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Invariants
                   </span>
-                  {((selectedEl[1] as any).invariants as string[]).map((inv, i) => (
+                  {selectedEl[1].invariants.map((inv, i) => (
                     <p key={i} className="text-muted-foreground text-xs">
                       - {inv}
                     </p>
@@ -304,19 +304,19 @@ export function Sidebar() {
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Handles
                   </span>
-                  {((selectedEl[1] as any).handles as string[]).map((h, i) => (
+                  {selectedEl[1].handles.map((h, i) => (
                     <p key={i} className="text-muted-foreground text-xs">
                       {h}
                     </p>
                   ))}
                 </div>
               )}
-              {'emits' in selectedEl[1] && (selectedEl[1] as any).emits?.length > 0 && (
+              {'emits' in selectedEl[1] && selectedEl[1].emits?.length > 0 && (
                 <div>
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Emits
                   </span>
-                  {((selectedEl[1] as any).emits as string[]).map((e, i) => (
+                  {selectedEl[1].emits.map((e, i) => (
                     <p key={i} className="text-muted-foreground text-xs">
                       {e}
                     </p>
@@ -328,7 +328,7 @@ export function Sidebar() {
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Projects from
                   </span>
-                  {((selectedEl[1] as any).from as string[]).map((f, i) => (
+                  {selectedEl[1].from.map((f, i) => (
                     <p key={i} className="text-muted-foreground text-xs">
                       {f}
                     </p>
@@ -340,7 +340,7 @@ export function Sidebar() {
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Displays
                   </span>
-                  {((selectedEl[1] as any).displays as string[]).map((d, i) => (
+                  {selectedEl[1].displays.map((d, i) => (
                     <p key={i} className="text-muted-foreground text-xs">
                       {d}
                     </p>
@@ -352,9 +352,9 @@ export function Sidebar() {
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Triggers
                   </span>
-                  {(Array.isArray((selectedEl[1] as any).triggers)
-                    ? (selectedEl[1] as any).triggers
-                    : [(selectedEl[1] as any).triggers]
+                  {(Array.isArray(selectedEl[1].triggers)
+                    ? selectedEl[1].triggers
+                    : [selectedEl[1].triggers]
                   ).map((t: string, i: number) => (
                     <p key={i} className="text-muted-foreground text-xs">
                       {t}
@@ -367,14 +367,13 @@ export function Sidebar() {
                   <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
                     Listens to
                   </span>
-                  {(Array.isArray((selectedEl[1] as any).on)
-                    ? (selectedEl[1] as any).on
-                    : [(selectedEl[1] as any).on]
-                  ).map((o: string, i: number) => (
-                    <p key={i} className="text-muted-foreground text-xs">
-                      {o}
-                    </p>
-                  ))}
+                  {(Array.isArray(selectedEl[1].on) ? selectedEl[1].on : [selectedEl[1].on]).map(
+                    (o: string, i: number) => (
+                      <p key={i} className="text-muted-foreground text-xs">
+                        {o}
+                      </p>
+                    ),
+                  )}
                 </div>
               )}
               {selectedEl[1].source && (

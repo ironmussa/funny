@@ -11,6 +11,7 @@ const setUserControl = vi.fn(async () => {});
 const answerDialog = vi.fn(async () => {});
 const setAudioMuted = vi.fn(async () => {});
 const endBrowserSession = vi.fn(async () => {});
+const resizeViewport = vi.fn(async () => {});
 
 describe('BrowserControlBar', () => {
   beforeEach(() => {
@@ -19,11 +20,13 @@ describe('BrowserControlBar', () => {
     answerDialog.mockClear();
     setAudioMuted.mockClear();
     endBrowserSession.mockClear();
+    resizeViewport.mockClear();
     useBrowserPanelStore.setState({
       setUserControl,
       answerDialog,
       setAudioMuted,
       endBrowserSession,
+      resizeViewport,
     });
   });
 
@@ -104,5 +107,33 @@ describe('BrowserControlBar', () => {
     expect(screen.queryByTestId('browser-panel-dialog-dismiss')).toBeNull();
     fireEvent.click(screen.getByTestId('browser-panel-dialog-accept'));
     expect(answerDialog).toHaveBeenLastCalledWith(true, undefined);
+  });
+
+  test('the viewport menu offers DevTools device presets and marks the current size', () => {
+    useBrowserPanelStore.setState({ sessionId: 'thread:t1', sessionThreadId: 't1' });
+    const { rerender } = render(<BrowserControlBar />);
+    const openMenu = () =>
+      fireEvent.pointerDown(screen.getByTestId('browser-panel-viewport-menu'), {
+        button: 0,
+        ctrlKey: false,
+      });
+
+    openMenu();
+    expect(screen.getByTestId('browser-panel-viewport-desktop')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    fireEvent.click(screen.getByTestId('browser-panel-viewport-iphone-se'));
+    expect(resizeViewport).toHaveBeenCalledWith(375, 667);
+
+    act(() => useBrowserPanelStore.setState({ viewport: { width: 375, height: 667 } }));
+    rerender(<BrowserControlBar />);
+    openMenu();
+    expect(screen.getByTestId('browser-panel-viewport-iphone-se')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    fireEvent.click(screen.getByTestId('browser-panel-viewport-ipad-air'));
+    expect(resizeViewport).toHaveBeenLastCalledWith(820, 1180);
   });
 });

@@ -14,8 +14,9 @@ export interface PRBadgeProps {
   /** "sm" for large displays, "xs" for lists, "compact" for powerline rows, "xxs" for compact headers */
   size?: 'sm' | 'xs' | 'compact' | 'xxs';
   /**
-   * "plain" drops the border and fill and takes the git stat chip layout (size is
-   * ignored), so the PR lines up with the changes / commits chips in a row.
+   * "plain" drops the border and fill and takes the git stat chip layout, so the
+   * PR lines up with the changes / commits chips in a row. Only the "compact"
+   * size changes it: the text and icon of a small powerline, to sit beside one.
    */
   variant?: 'default' | 'inverse' | 'plain';
   showExternalIcon?: boolean;
@@ -41,6 +42,9 @@ const SIZE_CLASS = {
     icon: 'h-2.5 w-2.5',
   },
 } as const;
+
+/** The git stat chip at a small powerline's text size (`PowerlineBar` size "sm"). */
+const PLAIN_COMPACT_CLASS = 'flex shrink-0 items-center gap-0.5 text-2xs leading-[15px]';
 
 const STATE_CLASS = {
   OPEN: 'border-emerald-300/70 bg-emerald-50 text-emerald-700 hover:border-emerald-400 hover:text-emerald-800 dark:border-emerald-400/35 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:border-emerald-300/60 dark:hover:text-emerald-100',
@@ -75,7 +79,7 @@ function prBadgeClassName({
 }): string {
   if (variant === 'plain') {
     return cn(
-      GIT_STAT_CHIP_CLASS,
+      size === 'compact' ? PLAIN_COMPACT_CLASS : GIT_STAT_CHIP_CLASS,
       'rounded-sm hover:underline focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
       PR_STATE_TEXT_CLASS[prState],
       !linked && 'cursor-default',
@@ -113,7 +117,7 @@ export function PRBadge({
 
   const tooltipLabel = prTooltipLabel(t, prState, prNumber);
   const plain = variant === 'plain';
-  const iconClassName = plain ? GIT_STAT_ICON_CLASS : config.icon;
+  const iconClassName = plain && size !== 'compact' ? GIT_STAT_ICON_CLASS : config.icon;
   const badgeClassName = prBadgeClassName({ variant, prState, size, linked: !!prUrl, className });
   const StateIcon = PR_STATE_ICON[prState];
   const content = (

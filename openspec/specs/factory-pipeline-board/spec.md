@@ -8,7 +8,7 @@ Lets a member see the whole issue factory pipeline at a glance: where each run i
 
 ### Requirement: List and board layouts
 
-The factory view SHALL offer two layouts of the same runs, a list and a board, chosen with a toggle. The list SHALL be the default. The chosen layout SHALL be kept when the member leaves and comes back to the view. The search, project filter and state filter SHALL apply to both layouts.
+The factory view SHALL offer three layouts of the same runs, a list, a board and analytics, chosen with a toggle. The list SHALL be the default. The chosen layout SHALL be kept when the member leaves and comes back to the view. The search, project filter and state filter SHALL apply to the list and the board, and to the analytics layout's integration figures.
 
 #### Scenario: Switching to the board
 
@@ -35,12 +35,18 @@ The board SHALL show these columns, in this order, and place each run in exactly
 | Needs a person  | `needs_info`, `waiting_human`, `failed`, `no_change` |
 | Done            | `merged`, `stopped`                                  |
 
-A run state added later and not in the table SHALL be shown in Needs a person, never dropped. Each column header SHALL show the number of runs in it. Within a column, runs SHALL be ordered by queue position in Queue and by most recent activity (completed, admitted or sent time) elsewhere.
+A `stopped` run that carries a failure reason (it was stopped after failing, or its pull request was closed without a merge) SHALL be shown in Needs a person, not in Done: nothing has fixed it. A `failed`, `stopped` or `no_change` run whose issue has a newer run in the same factory SHALL be shown in Done: the newer run carries the issue. A run state added later and not in the table SHALL be shown in Needs a person, never dropped. Each column header SHALL show the number of runs in it. Within a column, runs SHALL be ordered by queue position in Queue and by most recent activity (completed, admitted or sent time) elsewhere.
 
 #### Scenario: A run in review
 
 - **WHEN** a run's state is `reviewing`
 - **THEN** its card is in the Review column and in no other column
+
+#### Scenario: A run stopped after a failure
+
+- **WHEN** a run's regression proof fails and a member stops the run
+- **THEN** its card is in the Needs a person column, not in Done
+- **AND** once the issue is sent again, the stopped run's card moves to Done
 
 #### Scenario: An unknown state
 
@@ -81,7 +87,7 @@ When the view is filtered to exactly one project, the Implementing and Review co
 
 ### Requirement: Run card
 
-Each board card SHALL show the issue number (linked to the issue when the run's pull request names its repository), the project name, the time since the run's most recent activity, and the pull request link when there is one. Activating a card SHALL open the run's detail panel. The panel SHALL link to the run's implementing thread, or its latest thread when it has no implementing thread.
+Each board card SHALL show the issue number (linked to the issue when the run's pull request names its repository), the project name, the time since the run's most recent activity, and the pull request link when there is one. The title SHALL span the card's width; the project and branches, the pull request, the diff size and the time SHALL share one line at the bottom of the card, under the gate chips. Activating a card SHALL open the run's detail panel. The panel SHALL link to the run's implementing thread, or its latest thread when it has no implementing thread.
 
 #### Scenario: Opening a run
 
@@ -181,14 +187,14 @@ Every agent step the run started (triage, implementer, each reviewer) SHALL link
 - **WHEN** a run is `needs_info` and triage asked two questions
 - **THEN** the panel's triage section lists the two questions and links to the triage thread
 
-### Requirement: Factory health header
+### Requirement: Factory analytics layout
 
-The factory view's header SHALL summarise the runs it lists, whatever the filters: the runs in flight, the runs needing a person (the board's Needs a person column), the runs merged in the last 24 hours, and over the runs that started in the last 7 days the share whose first review passed (among runs with at least one review), the number of merge holds, and the median time from admission to merge. A figure with nothing to measure SHALL show as a dash.
+The factory view's header SHALL show no figures; they SHALL live in its analytics layout. That layout SHALL first summarise the runs the view lists, whatever the filters: the runs in flight, the runs needing a person (the board's Needs a person column), the runs merged in the last 24 hours, and over the runs that started in the last 7 days the share whose first review passed (among runs with at least one review), the number of merge holds, and the median time from admission to merge. A figure with nothing to measure SHALL show as a dash. Below that, it SHALL show how integration went over the runs the filters keep that started in the last 14 days: runs, merge rate, median time in the queue and to merge, CI rounds, red rounds, conflicts, agent fixes and merge queue batches.
 
 #### Scenario: First-pass review rate
 
 - **WHEN** in the last 7 days three runs were reviewed and two of them passed their first review
-- **THEN** the header shows a first-pass review rate of 67%
+- **THEN** the analytics layout shows a first-pass review rate of 67%
 
 #### Scenario: Nothing reviewed
 

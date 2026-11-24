@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:tes
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 import { factoryRunSteps } from '@/lib/factory-run-labels';
@@ -27,8 +28,16 @@ mock.module('@/data/factory/actions', () => ({
 mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));
 mock.module('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_k: string, fallback?: string, vars?: Record<string, unknown>) =>
-      (fallback ?? _k).replace(/\{\{(\w+)\}\}/g, (_m, name) => String(vars?.[name] ?? '')),
+    // A fallback string with its values, or `{ defaultValue, ...values }` (PRBadge's form).
+    t: (
+      _k: string,
+      fallback?: string | Record<string, unknown>,
+      vars?: Record<string, unknown>,
+    ) => {
+      const values = typeof fallback === 'string' ? vars : fallback;
+      const text = typeof fallback === 'string' ? fallback : String(values?.defaultValue ?? _k);
+      return text.replace(/\{\{(\w+)\}\}/g, (_m, name) => String(values?.[name] ?? ''));
+    },
   }),
 }));
 
@@ -62,25 +71,29 @@ beforeEach(() => {
 
 /** Render the footer icon and open its popover. */
 function openIndicator() {
-  render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+  render(<FactoryRunIndicator projectId="p1" threadId="t1" />, { wrapper: TooltipProvider });
   fireEvent.click(screen.getByTestId('factory-run-indicator'));
 }
 
 describe('FactoryRunIndicator', () => {
   test('shows nothing for a thread with no factory run', () => {
-    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />, { wrapper: TooltipProvider });
     expect(screen.queryByTestId('factory-run-indicator')).toBeNull();
   });
 
   test('spins while the run works, also after its agent finished; not once it failed or parked', () => {
     mocks.run = runOf({ state: 'waiting_ci', currentStep: 'ci' });
-    const { unmount } = render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    const { unmount } = render(<FactoryRunIndicator projectId="p1" threadId="t1" />, {
+      wrapper: TooltipProvider,
+    });
     expect(screen.getByTestId('factory-run-indicator-spinner')).toBeInTheDocument();
     unmount();
 
     for (const state of ['failed', 'waiting_human', 'merged'] as const) {
       mocks.run = runOf({ state });
-      const view = render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+      const view = render(<FactoryRunIndicator projectId="p1" threadId="t1" />, {
+        wrapper: TooltipProvider,
+      });
       expect(screen.queryByTestId('factory-run-indicator-spinner')).toBeNull();
       view.unmount();
     }
@@ -88,7 +101,7 @@ describe('FactoryRunIndicator', () => {
 
   test('the icon names the step the run is on; its popover lists every step', () => {
     mocks.run = runOf();
-    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />, { wrapper: TooltipProvider });
     const icon = screen.getByTestId('factory-run-indicator');
     expect(icon).toHaveTextContent('implement');
     expect(screen.queryByTestId('factory-run-popover')).toBeNull();
@@ -110,7 +123,7 @@ describe('FactoryRunIndicator', () => {
       failureReason:
         'create_pr[pull-request] failed: No open pull request from the branch factory/issue-235-1cca3fa8: the agent did not open one.',
     });
-    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />, { wrapper: TooltipProvider });
     expect(screen.getByTestId('factory-run-indicator')).toHaveTextContent('pull-request');
 
     fireEvent.click(screen.getByTestId('factory-run-indicator'));
@@ -128,7 +141,7 @@ describe('FactoryRunIndicator', () => {
       currentStep: null,
       prUrl: 'https://github.com/o/r/pull/9',
     });
-    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />, { wrapper: TooltipProvider });
     expect(screen.getByTestId('factory-run-indicator')).toHaveTextContent('Merged');
 
     fireEvent.click(screen.getByTestId('factory-run-indicator'));

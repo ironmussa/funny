@@ -8,7 +8,7 @@ import type { FactoryRun } from '@funny/shared/contracts/factory';
 
 import { factoryReviewPassed } from '@/lib/factory-run-labels';
 
-import { factoryBoardColumn } from './board-columns';
+import { placeFactoryRuns } from './board-columns';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
@@ -37,7 +37,7 @@ function median(values: number[]): number | null {
 const at = (iso: string | null) => (iso ? Date.parse(iso) : Number.NaN);
 
 export function summarizeFactoryHealth(runs: readonly FactoryRun[], now: number): FactoryHealth {
-  const columns = runs.map((run) => factoryBoardColumn(run.state));
+  const columns = [...placeFactoryRuns(runs).values()];
   const lastWeek = runs.filter((run) => now - at(run.startedAt) <= WEEK_MS);
   const reviewed = lastWeek.filter((run) => run.reviews.length > 0);
   const mergeTimes = runs.flatMap((run) => {

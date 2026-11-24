@@ -60,6 +60,14 @@ function DialogContent({
     </DialogPortal>
   );
 }
+/** The displayName of a child element's component, or undefined for text and intrinsic tags. */
+function childDisplayName(child: React.ReactNode): string | undefined {
+  if (!React.isValidElement(child)) return undefined;
+  // SAFETY: an element's type is a tag string or a component; this view only reads the optional
+  // displayName, which components may set and strings never have, so a miss reads as undefined.
+  return (child.type as { displayName?: string }).displayName;
+}
+
 const DialogHeader = ({
   className,
   children,
@@ -72,18 +80,13 @@ const DialogHeader = ({
   const sectionClass = bordered && 'shrink-0 border-b border-border px-4 py-3';
   // Separate DialogTitle and DialogDescription from other children
   const childArray = React.Children.toArray(children);
-  const title = childArray.find(
-    (child) => React.isValidElement(child) && (child.type as any)?.displayName === 'DialogTitle',
-  );
-  const description = childArray.filter(
-    (child) =>
-      React.isValidElement(child) && (child.type as any)?.displayName === 'DialogDescription',
-  );
+  const title = childArray.find((child) => childDisplayName(child) === 'DialogTitle');
+  const description = childArray.filter((child) => childDisplayName(child) === 'DialogDescription');
   const actions = childArray.filter(
     (child) =>
       !React.isValidElement(child) ||
-      ((child.type as any)?.displayName !== 'DialogTitle' &&
-        (child.type as any)?.displayName !== 'DialogDescription'),
+      (childDisplayName(child) !== 'DialogTitle' &&
+        childDisplayName(child) !== 'DialogDescription'),
   );
 
   // If no direct DialogTitle found, fall back to simple layout (for custom headers)

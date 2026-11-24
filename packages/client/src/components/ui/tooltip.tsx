@@ -20,8 +20,8 @@ function TooltipTrigger({
       onFocusCapture={(event) => {
         onFocusCapture?.(event);
         if (event.defaultPrevented || event.isPropagationStopped()) return;
-        const target = event.target as HTMLElement | null;
-        if (target && typeof target.matches === 'function' && !target.matches(':focus-visible')) {
+        const target = event.target;
+        if (target instanceof Element && !target.matches(':focus-visible')) {
           event.stopPropagation();
         }
       }}

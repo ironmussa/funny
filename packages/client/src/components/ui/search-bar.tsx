@@ -90,6 +90,8 @@ export function SearchBar({
   inputRef: externalInputRef,
 }: SearchBarProps) {
   const internalInputRef = useRef<HTMLInputElement>(null);
+  // SAFETY: the <Input> holding internalInputRef is always rendered, and React attaches a child's
+  // ref before it runs this parent's imperative handle, so current is the input element here.
   useImperativeHandle(externalInputRef, () => internalInputRef.current as HTMLInputElement, []);
 
   useEffect(() => {

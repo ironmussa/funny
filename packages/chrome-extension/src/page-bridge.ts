@@ -123,6 +123,20 @@ if (!window.__funnyBridgeLoaded) {
   // -------------------------------------------------------------------------
   // Component info extraction (multi-framework)
   // -------------------------------------------------------------------------
+  /** The element keys under which React keeps an element's fiber. */
+  function isReactInstanceKey(
+    k: string,
+  ): k is `__reactFiber$${string}` | `__reactInternalInstance$${string}` {
+    return k.indexOf('__reactFiber$') === 0 || k.indexOf('__reactInternalInstance$') === 0;
+  }
+
+  /** A value whose constructor has a non-empty name (Angular component instances do). */
+  function hasNamedConstructor(v: unknown): v is { constructor: { name: string } } {
+    if (!v) return false;
+    const name: unknown = Object(v).constructor?.name;
+    return typeof name === 'string' && name !== '';
+  }
+
   document.addEventListener('__funny_get_component_info', () => {
     const uid = document.documentElement.getAttribute('data-funny-target');
     if (!uid) return;
@@ -134,23 +148,21 @@ if (!window.__funnyBridgeLoaded) {
     let componentTree = '';
 
     // --- React ---
-    const reactKey = Object.keys(el).find(
-      (k) => k.indexOf('__reactFiber$') === 0 || k.indexOf('__reactInternalInstance$') === 0,
-    );
+    const reactKey = Object.keys(el).find(isReactInstanceKey);
     if (reactKey) {
-      const fiber = (el as any)[reactKey] as ReactFiber;
+      const fiber = el[reactKey] ?? null;
       // Component name
       let f: ReactFiber | null = fiber;
       while (f) {
         if (f.type && isComponentFunction(f.type)) {
-          const n = (f.type as any).displayName || (f.type as any).name;
+          const n = f.type.displayName || f.type.name;
           if (n) {
             componentName = n;
             break;
           }
         }
-        if (f.type && isObjectType(f.type) && (f.type as any).displayName) {
-          componentName = (f.type as any).displayName;
+        if (f.type && isObjectType(f.type) && f.type.displayName) {
+          componentName = f.type.displayName;
           break;
         }
         f = f.return;
@@ -159,10 +171,9 @@ if (!window.__funnyBridgeLoaded) {
       const names: string[] = [];
       f = fiber;
       while (f) {
-        let name: string | null = null;
-        if (f.type && isComponentFunction(f.type))
-          name = (f.type as any).displayName || (f.type as any).name;
-        else if (f.type && isObjectType(f.type)) name = (f.type as any).displayName;
+        let name: string | null | undefined = null;
+        if (f.type && isComponentFunction(f.type)) name = f.type.displayName || f.type.name;
+        else if (f.type && isObjectType(f.type)) name = f.type.displayName;
         if (name) names.push(name);
         f = f.return;
       }
@@ -205,11 +216,9 @@ if (!window.__funnyBridgeLoaded) {
         const ctx = el.__ngContext__;
         if (Array.isArray(ctx)) {
           for (let i = 0; i < ctx.length; i++) {
-            const item = ctx[i] as any;
+            const item: unknown = ctx[i];
             if (
-              item &&
-              item.constructor &&
-              item.constructor.name &&
+              hasNamedConstructor(item) &&
               item.constructor.name !== 'Object' &&
               item.constructor.name !== 'Array'
             ) {

@@ -283,7 +283,7 @@ export function fakeSandboxProviderEntry(
   return {
     id: FAKE_PROVIDER_ID,
     displayName: 'Fake (tests)',
-    configSchema: z.object({}).strict() as z.ZodType<Record<string, never>>,
+    configSchema: z.object({}).strict(),
     capabilities: fakeCapabilities(opts),
     create: ({ credential }) => createFakeSandboxProvider(credential, opts),
   };

@@ -107,8 +107,8 @@ function isFunction(value: unknown): value is (...args: never[]) => void {
 
 export async function syncDb(db: Client): Promise<void> {
   try {
-    if ('sync' in db && isFunction((db as any).sync)) {
-      await (db as any).sync();
+    if ('sync' in db && isFunction(db.sync)) {
+      await db.sync();
     }
   } catch {
     // sync not available (non-replica client) — ignore
@@ -159,6 +159,7 @@ export async function getFact(db: Client, factId: string): Promise<Result<Memory
       args: [factId],
     });
     if (result.rows.length === 0) return err(`Fact not found: ${factId}`);
+    // SAFETY: `SELECT *` from facts yields the columns of SCHEMA_SQL's facts table, which FactRow mirrors.
     return ok(rowToFact(result.rows[0] as FactRow));
   } catch (e) {
     return err(`Failed to get fact ${factId}: ${e}`);
@@ -215,6 +216,7 @@ export async function listFacts(
     }
 
     const result = await db.execute({ sql, args });
+    // SAFETY: `SELECT *` from facts yields the columns of SCHEMA_SQL's facts table, which FactRow mirrors.
     return ok(result.rows.map((r) => rowToFact(r as FactRow)));
   } catch (e) {
     return err(`Failed to list facts: ${e}`);
@@ -262,6 +264,8 @@ export async function getAllEmbeddings(
 ): Promise<Result<Array<{ factId: string; embedding: Float32Array }>, string>> {
   try {
     const result = await db.execute('SELECT fact_id, embedding FROM fact_embeddings');
+    // SAFETY: fact_embeddings declares fact_id TEXT PRIMARY KEY and embedding BLOB NOT NULL, which
+    // libsql returns as a string and an ArrayBuffer.
     return ok(
       result.rows.map((r) => ({
         factId: r.fact_id as string,
@@ -278,6 +282,7 @@ export async function getAllEmbeddings(
 export async function getMeta(db: Client, key: string): Promise<string | null> {
   try {
     const result = await db.execute({ sql: 'SELECT value FROM meta WHERE key = ?', args: [key] });
+    // SAFETY: meta declares value TEXT NOT NULL, which libsql returns as a string.
     return result.rows.length > 0 ? (result.rows[0].value as string) : null;
   } catch {
     return null;

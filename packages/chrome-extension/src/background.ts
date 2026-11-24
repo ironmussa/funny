@@ -60,8 +60,11 @@ const DEFAULT_CONFIG: ExtensionConfig = {
 // ---------------------------------------------------------------------------
 
 async function getConfig(): Promise<ExtensionConfig> {
-  const result = await chrome.storage.local.get('funnyConfig');
-  return { ...DEFAULT_CONFIG, ...(result.funnyConfig as Partial<ExtensionConfig> | undefined) };
+  // `funnyConfig` is written only by saveConfig below.
+  const result = await chrome.storage.local.get<{ funnyConfig?: Partial<ExtensionConfig> }>(
+    'funnyConfig',
+  );
+  return { ...DEFAULT_CONFIG, ...result.funnyConfig };
 }
 
 /** Merges into the stored config, so a partial save keeps the other fields (the token among them). */
@@ -154,10 +157,13 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   return `data:${blob.type};base64,${btoa(binary)}`;
 }
 
-async function createThreadFromAnnotations(config: ExtensionConfig, data: AnnotationData) {
+async function createThreadFromAnnotations(
+  config: ExtensionConfig,
+  data: AnnotationData,
+): Promise<{ id: string; projectId: string }> {
   const body = buildCreateThreadBody(config, data, await fitScreenshot(data.screenshot));
   const result = await apiFetch('/threads', { method: 'POST', body });
-  return result.thread as { id: string; projectId: string };
+  return result.thread;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +188,7 @@ const handlers: Record<string, MessageHandler> = {
     }),
   CAPTURE_SCREENSHOT: () =>
     new Promise((resolve) => {
-      chrome.tabs.captureVisibleTab(null as any, { format: 'png' }, (dataUrl) => {
+      chrome.tabs.captureVisibleTab(undefined, { format: 'png' }, (dataUrl) => {
         resolve({ screenshot: dataUrl });
       });
     }),
@@ -237,7 +243,7 @@ function configFromSender(
 async function injectPageBridge(tabId: number | undefined) {
   if (!tabId) return { success: false };
   return chrome.scripting
-    .executeScript({ target: { tabId }, files: ['page-bridge.js'], world: 'MAIN' as any })
+    .executeScript({ target: { tabId }, files: ['page-bridge.js'], world: 'MAIN' })
     .then(
       () => ({ success: true }),
       () => ({ success: false }),
@@ -259,7 +265,8 @@ async function handleResolveProject(url: string): Promise<{ project: any; source
 }
 
 async function handleFetchModels() {
-  return toProviderMap((await apiFetch('/models')) as PublicModelList);
+  const list: PublicModelList = await apiFetch('/models');
+  return toProviderMap(list);
 }
 
 /**
@@ -280,7 +287,7 @@ async function handleGetFullConfig() {
     ([projectsData, modelsData]) => ({
       connected: true,
       projects: projectsData.projects ?? [],
-      providers: toProviderMap(modelsData as PublicModelList | null),
+      providers: toProviderMap(modelsData),
     }),
     (err: unknown) => {
       const failure = connectionFailure(err);

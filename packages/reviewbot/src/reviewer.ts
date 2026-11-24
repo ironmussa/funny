@@ -10,8 +10,6 @@ import {
   defaultProcessFactory,
   type IAgentProcess,
   type IAgentProcessFactory,
-  type CLIAssistantMessage,
-  type CLIResultMessage,
 } from '@funny/core/agents';
 import { getPRInfo, getPRDiff, postPRReview } from '@funny/core/git';
 import type { ReviewEvent } from '@funny/core/git';
@@ -57,7 +55,7 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number';
 }
 
-function parseReviewOutput(text: string): ParsedReviewOutput {
+function parseReviewOutput(text: string): ParsedReviewOutput & { findings: CodeReviewFinding[] } {
   // Extract JSON from markdown code blocks or raw JSON
   const jsonMatch =
     text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*"summary"[\s\S]*\})/);
@@ -111,7 +109,7 @@ function callAgent(
       prompt: fullPrompt,
       cwd,
       model,
-      provider: provider as any,
+      provider,
       maxTurns: 1,
       permissionMode: 'plan', // read-only, no tool execution needed
     });
@@ -122,16 +120,14 @@ function callAgent(
 
     agentProcess.on('message', (msg) => {
       if (msg.type === 'assistant') {
-        const assistantMsg = msg as CLIAssistantMessage;
-        for (const block of assistantMsg.message.content) {
+        for (const block of msg.message.content) {
           if (block.type === 'text') {
             lastAssistantText += block.text;
           }
         }
       }
       if (msg.type === 'result') {
-        const resultMsg = msg as CLIResultMessage;
-        resultText = resultMsg.result ?? lastAssistantText;
+        resultText = msg.result ?? lastAssistantText;
       }
     });
 
@@ -224,7 +220,7 @@ export class PRReviewer {
 
     // Step 3: Parse LLM output into structured findings
     const parsed = parseReviewOutput(llmOutput);
-    const findings: CodeReviewFinding[] = parsed.findings as CodeReviewFinding[];
+    const findings: CodeReviewFinding[] = parsed.findings;
 
     // Step 4: Post review to GitHub
     const reviewEvent: ReviewEvent = decideReviewEvent(findings);

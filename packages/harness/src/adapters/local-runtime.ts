@@ -147,7 +147,7 @@ async function runCoreAgent(
     permissionMode: request.agent.permissionMode,
     allowedTools: [...request.agent.allowedTools],
     disallowedTools: [...request.agent.disallowedTools],
-    mcpServers: request.agent.mcpServers as Record<string, unknown> | undefined,
+    mcpServers: request.agent.mcpServers,
     systemPrefix: request.agent.instructions,
     effort: request.agent.effort,
     images: request.images,
@@ -365,6 +365,8 @@ function makeId(prefix: string): string {
 
 async function loadDefaultProcessFactory(): Promise<CoreProcessFactoryLike> {
   const specifier = '@funny/core/agents';
+  // SAFETY: '@funny/core/agents' exports `defaultProcessFactory` (core/src/agents/index.ts);
+  // the specifier is a variable only so harness does not statically depend on core.
   const mod = (await import(specifier)) as { defaultProcessFactory: CoreProcessFactoryLike };
   return mod.defaultProcessFactory;
 }

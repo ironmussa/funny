@@ -234,9 +234,9 @@ export function IssueFactoryStatus({
       )}
       {run.state === 'requested' && (
         <Button
-          variant="outline"
+          variant="outline-muted"
           size="xs"
-          className="text-muted-foreground hover:text-foreground ml-1"
+          className="ml-1"
           onClick={cancel}
           data-testid={`issue-factory-cancel-${run.issueNumber}`}
         >

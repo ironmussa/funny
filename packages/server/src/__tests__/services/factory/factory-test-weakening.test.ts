@@ -248,7 +248,12 @@ describe('classifyRisk', () => {
 
   test('a small change in ordinary code is low risk', () => {
     const sixty = Array.from({ length: 60 }, (_, index) => `+const v${index} = ${index};`);
-    expect(risk([file('src/sum.ts', sixty)])).toEqual({ headSha: SHA, level: 'low', reasons: [] });
+    expect(risk([file('src/sum.ts', sixty)])).toEqual({
+      headSha: SHA,
+      level: 'low',
+      reasons: [],
+      keys: [],
+    });
   });
 
   test('a weakened test makes it high', () => {
@@ -286,7 +291,7 @@ describe('classifyRisk', () => {
       file('src/__snapshots__/a.snap', [], big),
       file('src/a.ts', [], { additions: MAX_LOW_RISK_LINES, deletions: 0 }),
     ]);
-    expect(result).toEqual({ headSha: SHA, level: 'low', reasons: [] });
+    expect(result).toEqual({ headSha: SHA, level: 'low', reasons: [], keys: [] });
   });
 
   test('only the counted files add up to the size', () => {
@@ -377,6 +382,48 @@ describe('classifyRisk', () => {
       review: { verdict: 'pass', risk: 'low' },
     };
     expect(classifyRisk(input).level).toBe('high');
+  });
+
+  // openspec factory-approval-survives-integration, D4: a merge approval
+  // follows a small adjustment only to a commit with no risk key the approved
+  // one lacked, so a key says what a reason is about and leaves its numbers out.
+  describe('the stable keys of the reasons', () => {
+    const lines = (count: number) =>
+      Array.from({ length: count }, (_, i) => `+const v${i} = ${i};`);
+
+    test('a change over the size limit that grows keeps the key `size`', () => {
+      const before = risk([file('src/sum.ts', lines(500))]);
+      const after = risk([file('src/sum.ts', lines(520))]);
+      expect(before.reasons).not.toEqual(after.reasons);
+      expect(before.keys).toEqual(['size']);
+      expect(after.keys).toEqual(['size']);
+    });
+
+    test('a sensitive path, a finding and a contract hint each add a key', () => {
+      const result = risk(
+        [
+          file('src/sum.ts', ['+x']),
+          file('packages/server/src/db/migrate.ts', ['+x']),
+          file('src/a.test.ts', ["+test.skip('adds', () => {});"]),
+        ],
+        { riskHints: ['touches billing'] },
+      );
+      expect(result.keys).toContain('sensitive:packages/server/src/db/migrate.ts');
+      expect(
+        result.keys?.some((key) => key.startsWith('finding:') && key.endsWith('src/a.test.ts')),
+      ).toBe(true);
+      expect(result.keys?.filter((key) => key.startsWith('contract:'))).toHaveLength(1);
+      // The same hint is the same key; another hint is another.
+      const same = risk([file('src/sum.ts', ['+x'])], { riskHints: ['touches billing'] });
+      const other = risk([file('src/sum.ts', ['+x'])], { riskHints: ['touches auth'] });
+      expect(result.keys).toContain(same.keys![0]!);
+      expect(other.keys).not.toEqual(same.keys);
+    });
+
+    test('every reason has its key, also the ones the capped list does not show', () => {
+      const many = Array.from({ length: 30 }, (_, index) => file(`src/auth/f${index}.ts`, ['+x']));
+      expect(risk(many).keys).toHaveLength(30);
+    });
   });
 
   test('many reasons are capped with a count', () => {

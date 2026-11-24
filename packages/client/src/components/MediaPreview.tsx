@@ -219,9 +219,9 @@ function useTextResource(src: string, inline?: string, onError?: (e: Error) => v
         setContent(body);
         setLoading(false);
       })
-      .catch((e: unknown) => {
+      .catch((cause: unknown) => {
         if (cancelled) return;
-        const err = e instanceof Error ? e : new Error(String(e));
+        const err = cause instanceof Error ? cause : new Error(String(cause));
         log.error('Failed to fetch text resource', { src, error: err.message });
         setLoading(false);
         onError?.(err);

@@ -182,9 +182,9 @@ export function AcceptInvitePage({ token }: Props) {
         }
         storeSignedInUser(outcome.user);
         // Now accept the invite
-        await acceptInvite().catch((err: unknown) => {
+        await acceptInvite().catch((cause: unknown) => {
           if (submissionIdRef.current === submissionId)
-            setFormError(loginFailure(caughtMessage(err)));
+            setFormError(loginFailure(caughtMessage(cause)));
         });
       },
       () => {

@@ -8,13 +8,13 @@ const REFRESH_MS = 2000;
 
 const log = createClientLogger('browser-session');
 
-interface TestIdLabel {
+type TestIdLabel = {
   testid: string;
   x: number;
   y: number;
   w: number;
   h: number;
-}
+};
 
 const COLLECT_TESTIDS_EXPR = `
 (() => {

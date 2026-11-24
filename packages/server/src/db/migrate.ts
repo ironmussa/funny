@@ -2465,6 +2465,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'too_big', 'TEXT');
     },
   },
+  {
+    // The largest adjustment a merge approval follows to a new commit, in
+    // lines (openspec factory-approval-survives-integration); null: 0, only
+    // the same change.
+    name: '126_factory_settings_approval_adjust',
+    async up() {
+      await ctx().addColumn('factory_settings', 'approval_adjust_max_lines', 'INTEGER');
+    },
+  },
 ];
 
 /**

@@ -578,6 +578,15 @@ const ENTRIES = [
     keywords: ['risk', 'size', 'lines', 'high risk', 'limit'],
   },
   {
+    id: 'factory.approvalAdjustMaxLines',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryApprovalAdjust',
+    description: 'settings.projectFactoryApprovalAdjustDesc',
+    keywords: ['approval', 'approve', 'high risk', 'merge', 'adjustment', 'carry'],
+  },
+  {
     id: 'factory.sizeIgnoredPaths',
     scope: 'project',
     page: 'factory',

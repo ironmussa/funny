@@ -559,7 +559,8 @@ function GraphRefChip({
         <PopoverContent
           side="bottom"
           align="start"
-          className="w-72 p-3"
+          padding="md"
+          className="w-72"
           onClick={(event) => event.stopPropagation()}
         >
           <BranchRefDetail

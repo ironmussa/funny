@@ -66,6 +66,8 @@ interface Props {
    * already owns the show-on-hover behavior.
    */
   triggerClassName?: string;
+  /** Trigger button variant: `muted-strong` for a trigger that hovers to the foreground color. */
+  triggerVariant?: 'muted' | 'muted-strong';
 }
 
 /** Stable empty default for {@link Props.localBranches} — a literal `[]` default
@@ -100,6 +102,7 @@ export function CommitActionsMenu({
   onAfterAction,
   onOpenChange,
   triggerClassName,
+  triggerVariant = 'muted',
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -132,7 +135,7 @@ export function CommitActionsMenu({
       <DropdownMenu open={open} onOpenChange={handleOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="muted"
+            variant={triggerVariant}
             size="icon-xs"
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}

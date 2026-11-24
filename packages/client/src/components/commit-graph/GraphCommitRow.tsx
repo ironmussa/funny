@@ -448,7 +448,8 @@ export function GraphCommitRow({
               onSelectRebaseEvent={onSelectRebaseEvent}
               onAfterAction={onAfterAction}
               onOpenChange={setMenuOpen}
-              triggerClassName="hover:text-foreground"
+              triggerClassName="shrink-0"
+              triggerVariant="muted-strong"
             />
           </HoverTimeMenu>
         </div>

@@ -65,7 +65,7 @@ export function HistoryFilters({
             <SelectItem
               key={scope}
               value={scope}
-              className="text-xs"
+              textSize="xs"
               data-testid={`graph-branch-scope-${scope}`}
             >
               {scopeLabels[scope]}
@@ -83,7 +83,7 @@ export function HistoryFilters({
             <SelectItem
               key={status}
               value={status}
-              className="text-xs"
+              textSize="xs"
               data-testid={`graph-filter-${status}`}
             >
               {statusLabels[status]}

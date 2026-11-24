@@ -25,10 +25,10 @@ export function RebaseEventDialog({
             return (
               <div className="flex max-h-[80vh] min-h-0 flex-col">
                 <div className="border-sidebar-border border-b px-4 py-3">
-                  <DialogTitle size="sm" className="leading-tight">
+                  <DialogTitle size="sm" leading="tight">
                     {t('graph.rebaseDetailsTitle', 'Rebase details')}
                   </DialogTitle>
-                  <DialogDescription className="mt-1 text-xs">
+                  <DialogDescription size="xs" className="mt-1">
                     {event.completed
                       ? t('graph.rebaseDetailsDescription', {
                           count: replayedCount,

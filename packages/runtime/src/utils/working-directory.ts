@@ -13,6 +13,8 @@ export function requireWorkingDirectory(path: string): Result<string, DomainErro
       ),
     );
   } catch (error) {
+    // SAFETY: statSync throws Node fs errors (ErrnoException); a non-fs error has no `code`
+    // and falls through to the generic branch.
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return err(

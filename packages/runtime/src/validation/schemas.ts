@@ -14,6 +14,8 @@ import { z } from 'zod';
 
 /** Build a zod enum from the keys of a MODEL_REGISTRY sub-map. */
 function registryEnum<P extends keyof typeof MODEL_REGISTRY>(provider: P) {
+  // SAFETY: every MODEL_REGISTRY provider map has at least one model, so the key list is
+  // non-empty as z.enum requires.
   const keys = Object.keys(MODEL_REGISTRY[provider]) as [string, ...string[]];
   return z.enum(keys);
 }

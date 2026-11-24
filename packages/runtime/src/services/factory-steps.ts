@@ -275,6 +275,9 @@ type MergeOutcome =
 /**
  * Merge `base` in (never a rebase: no force push, and the reviewed commit stays
  * in the history), regenerate the declared paths, and abort on what is left.
+ * Without the repository's hooks: `git merge` runs `pre-merge-commit` and
+ * `commit-msg`, and a hook that refuses "Merge … into …" (conventional commits)
+ * would stop the merge; an integration's checks are the ones `integrate` declares.
  */
 async function mergeBase(
   cwd: string,
@@ -284,7 +287,7 @@ async function mergeBase(
   env: Record<string, string>,
 ): Promise<MergeOutcome> {
   const message = `Merge ${base} into ${request.branch}`;
-  await gitWrite(['merge', '--no-ff', '--no-edit', '-m', message, base], {
+  await gitWrite(['merge', '--no-ff', '--no-edit', '--no-verify', '-m', message, base], {
     cwd,
     env,
     reject: false,
@@ -330,7 +333,10 @@ async function checkAndPush(
 ): Promise<string | null> {
   let failure = await runChecks(cwd, request.checks, signal, request.timeoutMs, env);
   if (!failure) {
-    const pushed = await gitNetwork(['push', 'origin', `HEAD:${request.branch}`], {
+    // --no-verify like the merge and commit above: the repository's pre-push
+    // hook repeats what implement's push, regression-proof and CI check, and on
+    // a merge that brings the base in it outlasts the push's timeout.
+    const pushed = await gitNetwork(['push', '--no-verify', 'origin', `HEAD:${request.branch}`], {
       cwd,
       env,
       reject: false,

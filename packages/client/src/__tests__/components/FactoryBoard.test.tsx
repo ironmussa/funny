@@ -5,25 +5,31 @@
  */
 import { beforeEach, describe, expect, mock, test, vi } from 'bun:test';
 
+import type { Thread } from '@funny/shared';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
+import { buildThread } from '@/data/threads/testing';
 import type { FactoryQueueRun, FactoryRun, FactorySettings } from '@/lib/api/factory';
 
 const mocks = ((): {
   queue: FactoryQueueRun[];
+  threads: Record<string, Thread>;
   settings: Partial<FactorySettings> | null;
   navigate: ReturnType<typeof vi.fn>;
-} => ({ queue: [], settings: null, navigate: vi.fn() }))();
+  control: ReturnType<typeof vi.fn>;
+} => ({ queue: [], threads: {}, settings: null, navigate: vi.fn(), control: vi.fn() }))();
 
 mock.module('@/data/factory/hooks', () => ({
   useFactoryQueueRuns: () => mocks.queue,
   useFactorySettings: () => mocks.settings,
 }));
-mock.module('@/lib/thread-selectors', () => ({ useThreadById: () => undefined }));
+mock.module('@/lib/thread-selectors', () => ({
+  useThreadById: (id: string | undefined) => (id ? mocks.threads[id] : undefined),
+}));
 mock.module('@/data/projects/hooks', () => ({
   useCanSteerProject: () => true,
   useProjects: () => [
@@ -32,7 +38,10 @@ mock.module('@/data/projects/hooks', () => ({
   ],
 }));
 mock.module('@/data/factory/actions', () => ({
-  controlFactoryRun: () => okAsync(null),
+  controlFactoryRun: (...args: unknown[]) => {
+    mocks.control(...args);
+    return okAsync(null);
+  },
   emptyFactory: () => okAsync({ cleared: 0, stopped: 0 }),
 }));
 mock.module('@/hooks/use-stable-navigate', () => ({ useStableNavigate: () => mocks.navigate }));
@@ -53,6 +62,7 @@ mock.module('react-i18next', () => ({
 }));
 
 import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
+import { factoryRunDependencies } from '@/components/factory-board/run-dependencies';
 import { FactoryQueueView } from '@/components/FactoryQueueView';
 import { useFactoryViewStore } from '@/stores/factory-view-store';
 
@@ -65,22 +75,26 @@ const queueRun = (id: string, state: FactoryRun['state'], over: Partial<FactoryQ
 
 const renderBoard = (runs: FactoryQueueRun[], singleProjectId: string | null = null) =>
   render(
-    <TooltipProvider>
-      <FactoryBoard
-        runs={runs}
-        projectNameById={new Map([['p1', 'funny']])}
-        now={Date.now()}
-        singleProjectId={singleProjectId}
-        onSelect={mocks.navigate}
-        onShowOlderDone={vi.fn()}
-      />
-    </TooltipProvider>,
+    <MemoryRouter>
+      <TooltipProvider>
+        <FactoryBoard
+          runs={runs}
+          projectNameById={new Map([['p1', 'funny']])}
+          now={Date.now()}
+          singleProjectId={singleProjectId}
+          onSelect={mocks.navigate}
+          onShowOlderDone={vi.fn()}
+        />
+      </TooltipProvider>
+    </MemoryRouter>,
   );
 
 beforeEach(() => {
   mocks.queue = [];
+  mocks.threads = {};
   mocks.settings = null;
   mocks.navigate = vi.fn();
+  mocks.control = vi.fn();
   useFactoryViewStore.setState({ layout: 'list' });
   localStorage.clear();
 });
@@ -114,12 +128,126 @@ describe('FactoryBoard', () => {
     expect(screen.queryByTestId('factory-board-limit-implementing')).toBeNull();
   });
 
+  test('a run stuck behind a blocker says which one and why, and the blocker lists what it holds', () => {
+    const blocker = queueRun('r434', 'waiting_human', {
+      issueNumber: 434,
+      failureReason: 'integrate[integrate] failed: Could not commit the merge: \u001b[38;2;5m╭─╮',
+    });
+    const runs = [
+      blocker,
+      queueRun('r435', 'requested', {
+        issueNumber: 435,
+        waitReason: { kind: 'blocker-waiting-merge', blockers: [434] },
+      }),
+      queueRun('r436', 'requested', {
+        issueNumber: 436,
+        waitReason: { kind: 'blocker-in-progress', blockers: [435] },
+      }),
+    ];
+    render(
+      <TooltipProvider>
+        <FactoryBoard
+          runs={runs}
+          projectNameById={new Map([['p1', 'funny']])}
+          now={Date.now()}
+          singleProjectId={null}
+          onSelect={mocks.navigate}
+          onShowOlderDone={vi.fn()}
+          dependencies={factoryRunDependencies(runs)}
+        />
+      </TooltipProvider>,
+    );
+    const behind = screen.getByTestId('factory-board-deps-r435-stuck-behind');
+    expect(behind.textContent).toBe(
+      'Stuck behind #434: integrate[integrate] failed: Could not commit the merge:',
+    );
+    expect(behind.className).toContain('text-status-warning');
+    expect(screen.getByTestId('factory-board-deps-r434-blocks').textContent).toBe(
+      'Blocks #435 · then #436',
+    );
+    expect(screen.getByTestId('factory-board-waiting-r434').className).toContain(
+      'text-status-warning',
+    );
+    // #436 waits on #435, which is only queued: no "stuck" line for it.
+    expect(screen.queryByTestId('factory-board-deps-r436-stuck-behind')).toBeNull();
+    fireEvent.click(screen.getByTestId('factory-board-deps-r435-issue-434'));
+    expect(mocks.navigate).toHaveBeenCalledWith(blocker);
+  });
+
+  test("a run's pull request shows as the sidebar's PR chip: state icon and number", () => {
+    renderBoard([
+      queueRun('r1', 'reviewing', { prUrl: 'https://github.com/o/r/pull/443' }),
+      queueRun('r2', 'merged', { prUrl: 'https://github.com/o/r/pull/440' }),
+    ]);
+    const open = screen.getByTestId('factory-board-pr-r1');
+    expect(open.textContent).toBe('#443');
+    expect(open.getAttribute('href')).toBe('https://github.com/o/r/pull/443');
+    expect(screen.getByTestId('factory-board-pr-r1-icon-OPEN')).toBeTruthy();
+    expect(screen.getByTestId('factory-board-pr-r2-icon-MERGED')).toBeTruthy();
+  });
+
+  test('a card shows no step strip: the column says the step', () => {
+    renderBoard([
+      queueRun('r1', 'working', {
+        flowSteps: ['triage', 'implement', 'review'],
+        currentStep: 'implement',
+      }),
+    ]);
+    expect(screen.getByTestId('factory-board-card-r1')).toBeTruthy();
+    expect(screen.queryByTestId('factory-board-progress-r1')).toBeNull();
+  });
+
+  test("a run with a thread is the thread's kanban card: its powerline with the PR, its menu, and the run's chips", async () => {
+    mocks.threads['t-impl'] = buildThread({ id: 't-impl', title: '[Factory] #434 Thread recap' });
+    const run = queueRun('r1', 'waiting_human', {
+      threadIds: ['t-impl'],
+      prUrl: 'https://github.com/o/r/pull/443',
+      failureReason: 'review failed',
+    });
+    renderBoard([run]);
+    const card = screen.getByTestId('factory-board-card-r1');
+    expect(card.textContent).toContain('[Factory] #434 Thread recap');
+    // The footer line holds the thread's powerline and the PR; the title keeps the card's full width.
+    const footer = within(card).getByTestId('factory-board-card-r1-footer');
+    expect(within(footer).getByTestId('kanban-card-powerline-t-impl')).toBeTruthy();
+    expect(within(footer).getByTestId('kanban-card-pr-t-impl').textContent).toBe('#443');
+    expect(within(card).queryByTestId('factory-board-issue-r1')).toBeNull();
+    expect(screen.queryByTestId('factory-board-pr-r1')).toBeNull();
+    expect(within(card).getByTestId('kanban-card-more-t-impl')).toBeTruthy();
+    expect(card.getAttribute('draggable')).toBe('false');
+    // The run's actions live in the card's own three-dot menu, not as buttons on the card.
+    expect(screen.queryByTestId('factory-board-retry-r1')).toBeNull();
+    fireEvent.click(card);
+    expect(mocks.navigate).toHaveBeenCalledWith(run);
+    fireEvent.pointerDown(within(card).getByTestId('kanban-card-more-t-impl'));
+    fireEvent.click(await screen.findByTestId('factory-board-retry-r1'));
+    expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+  });
+
   test('cards cannot be dragged, and opening one selects the run', () => {
     const run = queueRun('r1', 'working', { threadIds: ['t-impl'] });
     renderBoard([run]);
     expect(screen.getByTestId('factory-board-card-r1').getAttribute('draggable')).toBe('false');
     fireEvent.click(screen.getByTestId('factory-board-open-r1'));
     expect(mocks.navigate).toHaveBeenCalledWith(run);
+  });
+
+  test('like a kanban card, the whole card opens the run, but its menu and links do not', async () => {
+    const run = queueRun('r1', 'waiting_human', {
+      failureReason: 'review failed',
+      prUrl: 'https://github.com/o/r/pull/9',
+    });
+    renderBoard([run]);
+    fireEvent.click(screen.getByTestId('factory-board-card-r1'));
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByTestId('factory-board-card-r1'), { key: 'Enter' });
+    expect(mocks.navigate).toHaveBeenCalledTimes(2);
+    fireEvent.pointerDown(screen.getByTestId('factory-board-more-r1'));
+    fireEvent.click(await screen.findByTestId('factory-board-retry-r1'));
+    expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
+    fireEvent.click(screen.getByTestId('factory-board-pr-r1'));
+    expect(mocks.navigate).toHaveBeenCalledTimes(2);
   });
 
   test('a run without an issue shows its schedule in place of the issue number, and no issue link', () => {
@@ -133,12 +261,12 @@ describe('FactoryBoard', () => {
       }),
       queueRun('once', 'working', { issueNumber: null, source: 'run_now', flowName: 'audit' }),
     ]);
-    expect(screen.getByTestId('factory-board-ref-sched').textContent).toBe('Nightly audit');
     expect(screen.getByTestId('factory-board-open-sched').textContent).toBe(
       'Nightly audit · audit',
     );
+    // No separate issue or schedule line: the title names it.
     expect(screen.queryByTestId('factory-board-issue-sched')).toBeNull();
-    expect(screen.getByTestId('factory-board-ref-once').textContent).toBe('Run now');
+    expect(screen.queryByTestId('factory-board-ref-sched')).toBeNull();
   });
 
   test('a run that ended done is in the Done column', () => {
@@ -173,7 +301,7 @@ describe('time on the board', () => {
     finishedAt: end === null ? null : minAgo(end),
   });
 
-  test('a card says how long the run has been in its step, or waiting for it', () => {
+  test('a card says on its footer line how long the run has been in its step, or waiting for it', () => {
     renderBoard([
       queueRun('rev', 'reviewing', {
         currentStep: 'review',
@@ -184,6 +312,12 @@ describe('time on the board', () => {
     ]);
     expect(screen.getByTestId('factory-board-time-rev')).toHaveTextContent('In review 2h');
     expect(screen.getByTestId('factory-board-time-mrg')).toHaveTextContent('Waiting for merge 20m');
+    // It takes the footer's time slot, not a line of its own under the chips.
+    expect(
+      within(screen.getByTestId('factory-board-card-rev-footer')).getByTestId(
+        'factory-board-time-rev',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('factory-board-time-none')).toBeNull();
   });
 
@@ -230,6 +364,27 @@ describe('FactoryQueueView layouts', () => {
     expect(JSON.parse(localStorage.getItem('funny:factory-view-layout') ?? '{}').state.layout).toBe(
       'board',
     );
+  });
+
+  test('the analytics layout shows the figures, the filters only change the integration ones', () => {
+    mocks.queue = [
+      queueRun('busy', 'working', { startedAt: recent() }),
+      queueRun('other', 'merged', { projectId: 'p2', startedAt: recent(), completedAt: recent() }),
+    ];
+    render(
+      <MemoryRouter initialEntries={['/factory?project=p1']}>
+        <TooltipProvider>
+          <FactoryQueueView />
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('factory-view-health')).toBeNull();
+    fireEvent.click(screen.getByTestId('factory-view-layout-analytics'));
+    expect(screen.getByTestId('factory-analytics')).toBeTruthy();
+    expect(screen.queryByTestId('factory-view-list')).toBeNull();
+    expect(screen.getByTestId('factory-view-health-in-flight')).toHaveTextContent('1');
+    expect(screen.getByTestId('factory-view-health-merged-day')).toHaveTextContent('1');
+    expect(screen.getByTestId('factory-metric-runs')).toHaveTextContent('1');
   });
 
   test('a link names the filters and the layout, and changing them updates the link', () => {

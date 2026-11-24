@@ -16,6 +16,7 @@ import {
 } from '@/components/factory-board/board-columns';
 import { factoryRunGateChips } from '@/components/factory-board/run-gates';
 import { factoryRunStrip } from '@/components/factory-board/run-progress';
+import { factoryRunStateChip } from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
 import { buildFactoryRun } from '@/data/factory/testing';
 import { filterFactoryRuns } from '@/lib/factory-run-labels';
@@ -82,6 +83,66 @@ describe('layoutFactoryBoard', () => {
     );
     expect(columns.queue.map((r) => r.id)).toEqual(['admitted', 'first', 'second']);
     expect(columns.implementing.map((r) => r.id)).toEqual(['newer', 'older']);
+  });
+
+  // Issue #434: its run failed the regression proof, was stopped, and showed in
+  // Done although nothing had fixed it.
+  test('a run stopped after a failure waits for a person; a plain stop is done', () => {
+    const { columns } = layoutFactoryBoard(
+      [
+        buildFactoryRun({
+          id: 'failed-then-stopped',
+          issueNumber: 434,
+          state: 'stopped',
+          failureReason: 'regression_proof[regression-proof] failed',
+          completedAt: hoursAgo(1),
+        }),
+        buildFactoryRun({
+          id: 'stopped',
+          issueNumber: 435,
+          state: 'stopped',
+          failureReason: null,
+          completedAt: hoursAgo(1),
+        }),
+      ],
+      NOW,
+    );
+    expect(columns.needs_person.map((run) => run.id)).toEqual(['failed-then-stopped']);
+    expect(columns.done.map((run) => run.id)).toEqual(['stopped']);
+  });
+
+  test('an ended run a newer run of its issue replaced is done', () => {
+    const { columns } = layoutFactoryBoard(
+      [
+        buildFactoryRun({
+          id: 'first',
+          issueNumber: 434,
+          state: 'stopped',
+          failureReason: 'regression_proof[regression-proof] failed',
+          startedAt: hoursAgo(8),
+          completedAt: hoursAgo(7),
+        }),
+        buildFactoryRun({
+          id: 'earlier-failure',
+          issueNumber: 434,
+          state: 'failed',
+          failureReason: 'ci failed',
+          startedAt: hoursAgo(10),
+          completedAt: hoursAgo(9),
+        }),
+        buildFactoryRun({
+          id: 'resent',
+          issueNumber: 434,
+          state: 'working',
+          startedAt: hoursAgo(6),
+          completedAt: null,
+        }),
+      ],
+      NOW,
+    );
+    expect(columns.needs_person).toEqual([]);
+    expect(columns.done.map((run) => run.id)).toEqual(['first', 'earlier-failure']);
+    expect(columns.implementing.map((run) => run.id)).toEqual(['resent']);
   });
 });
 
@@ -207,6 +268,35 @@ describe('factoryRunGateChips', () => {
   });
 });
 
+describe('factoryRunStateChip', () => {
+  test('the states one column holds read apart', () => {
+    expect(factoryRunStateChip(t, buildFactoryRun({ state: 'failed' }))).toEqual({
+      label: 'Failed',
+      tone: 'danger',
+    });
+    expect(factoryRunStateChip(t, buildFactoryRun({ state: 'waiting_human' })).tone).toBe(
+      'warning',
+    );
+    expect(factoryRunStateChip(t, buildFactoryRun({ state: 'merged' }))).toEqual({
+      label: 'Merged',
+      tone: 'success',
+    });
+  });
+
+  test('a too-large issue, and one the factory split', () => {
+    const triage = { decision: 'too_big' as const, at: hoursAgo(1), items: ['a', 'b'] };
+    expect(factoryRunStateChip(t, buildFactoryRun({ state: 'needs_info', triage })).label).toBe(
+      'Too big',
+    );
+    expect(
+      factoryRunStateChip(
+        t,
+        buildFactoryRun({ state: 'done', triage: { ...triage, splitInto: [40, 41] } }),
+      ),
+    ).toEqual({ label: 'Split', tone: 'info' });
+  });
+});
+
 describe('factoryRunWaitingText', () => {
   test('a queued issue waits on shared paths', () => {
     expect(
@@ -230,6 +320,28 @@ describe('factoryRunWaitingText', () => {
         }),
       ),
     ).toBe('Triage asked 2 questions on the issue');
+  });
+
+  test('a proposed split, and an issue the factory split', () => {
+    expect(
+      factoryRunWaitingText(
+        t,
+        buildFactoryRun({
+          state: 'needs_info',
+          triage: { decision: 'too_big', at: hoursAgo(1), items: ['Schema', 'Screen', 'Docs'] },
+        }),
+      ),
+    ).toBe('Triage proposed a split into 3 parts');
+    expect(
+      factoryRunWaitingText(
+        t,
+        buildFactoryRun({
+          state: 'done',
+          triage: { decision: 'too_big', at: hoursAgo(1), items: ['a', 'b'], splitInto: [40, 41] },
+        }),
+      ),
+    ).toBe('Split into #40, #41');
+    expect(factoryRunWaitingText(t, buildFactoryRun({ state: 'done' }))).toBeNull();
   });
 
   test('failed and no-change runs', () => {

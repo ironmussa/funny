@@ -235,7 +235,12 @@ describe('checkTestWeakening', () => {
 describe('classifyRisk', () => {
   const risk = (
     files: PullRequestFile[],
-    over: { sensitivePaths?: string[]; riskHints?: string[] } = {},
+    over: {
+      sensitivePaths?: string[];
+      riskHints?: string[];
+      maxLowRiskLines?: number;
+      sizeIgnoredPaths?: string[];
+    } = {},
   ) => {
     const change = { files, truncated: false };
     return classifyRisk({ headSha: SHA, change, findings: checkTestWeakening(change), ...over });
@@ -258,7 +263,7 @@ describe('classifyRisk', () => {
     expect(sized(MAX_LOW_RISK_LINES).level).toBe('low');
     expect(sized(MAX_LOW_RISK_LINES + 1)).toMatchObject({
       level: 'high',
-      reasons: ['401 changed lines (more than 400)'],
+      reasons: ['401 changed lines outside tests and docs (more than 400)'],
     });
   });
 
@@ -268,6 +273,59 @@ describe('classifyRisk', () => {
       file('src/a.ts', ['+const a = 1;']),
     ]);
     expect(result.level).toBe('low');
+  });
+
+  test('tests, Markdown, translations, stories and snapshots do not count toward the size', () => {
+    const big = { additions: 5000, deletions: 0 };
+    const result = risk([
+      file('src/__tests__/a.test.ts', [], big),
+      file('docs/guide.md', [], big),
+      file('CLAUDE.md', [], big),
+      file('packages/client/src/locales/es/translation.json', [], big),
+      file('src/Button.stories.tsx', [], big),
+      file('src/__snapshots__/a.snap', [], big),
+      file('src/a.ts', [], { additions: MAX_LOW_RISK_LINES, deletions: 0 }),
+    ]);
+    expect(result).toEqual({ headSha: SHA, level: 'low', reasons: [] });
+  });
+
+  test('only the counted files add up to the size', () => {
+    const result = risk([
+      file('src/a.test.ts', [], { additions: 900, deletions: 0 }),
+      file('README.md', [], { additions: 900, deletions: 0 }),
+      file('src/a.ts', [], { additions: 300, deletions: 0 }),
+      file('package.json', [], { additions: 101, deletions: 0 }),
+    ]);
+    expect(result.reasons).toEqual(['401 changed lines outside tests and docs (more than 400)']);
+  });
+
+  test("the factory's own line limit replaces the default one", () => {
+    const change = [file('src/big.ts', [], { additions: 150, deletions: 0 })];
+    expect(risk(change).level).toBe('low');
+    expect(risk(change, { maxLowRiskLines: 100 })).toMatchObject({
+      level: 'high',
+      reasons: ['150 changed lines outside tests and docs (more than 100)'],
+    });
+    const huge = [file('src/big.ts', [], { additions: 900, deletions: 0 })];
+    expect(risk(huge, { maxLowRiskLines: 1000 }).level).toBe('low');
+  });
+
+  test("the factory's ignored globs leave their files out of the size, not out of sensitive paths", () => {
+    const change = [
+      file('src/generated/api.ts', [], { additions: 3000, deletions: 0 }),
+      file('src/a.ts', ['+const a = 1;']),
+    ];
+    expect(risk(change).level).toBe('high');
+    expect(risk(change, { sizeIgnoredPaths: ['**/generated/**'] }).level).toBe('low');
+    const sensitive = [file('src/auth/generated/keys.ts', [], { additions: 3000, deletions: 0 })];
+    expect(risk(sensitive, { sizeIgnoredPaths: ['**/generated/**'] })).toMatchObject({
+      level: 'high',
+      reasons: ['touches a sensitive path: src/auth/generated/keys.ts (**/auth/**)'],
+    });
+  });
+
+  test('a sensitive path still counts in a file left out of the size', () => {
+    expect(risk([file('.github/CONTRIBUTING.md', ['+hello'])]).level).toBe('high');
   });
 
   test('a default sensitive path makes it high', () => {

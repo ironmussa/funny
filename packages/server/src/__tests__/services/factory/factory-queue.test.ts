@@ -66,12 +66,15 @@ interface Script {
 type FakeGithub = FactoryGithubPort & {
   merges: number;
   opened: Array<{ ownerId: string; title: string; body: string }>;
+  /** Labels taken off issues. */
+  unlabelled: number[];
 };
 
 function fakeGithub(script: Script = {}): FakeGithub {
   const port: FakeGithub = {
     merges: 0,
     opened: [],
+    unlabelled: [],
     createIssue: (reader, issue) => {
       port.opened.push({ ownerId: reader.ownerId, ...issue });
       return okAsync({ number: 77, url: 'https://github.com/o/r/issues/77' });
@@ -119,7 +122,10 @@ function fakeGithub(script: Script = {}): FakeGithub {
     mergeCommitState: () => okAsync(null),
     issueText: () => okAsync({ title: 'Issue', body: '', comments: [] }),
     revertPullRequest: () => okAsync({ url: 'https://github.com/o/r/pull/99', number: 99 }),
-    relabelIssue: () => okAsync(undefined),
+    relabelIssue: (_reader, number, change) => {
+      if (change.remove) port.unlabelled.push(number);
+      return okAsync(undefined);
+    },
     commentOnIssue: () => okAsync(undefined),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
@@ -685,7 +691,69 @@ describe('the queue', () => {
     await tick();
 
     expect(launcher.issues()).toEqual([20]);
-    expect(await runFor(factoryId, 7)).toBeUndefined();
+    // The labelled issue waits behind it, in the queue.
+    const labelled = await runFor(factoryId, 7);
+    expect(labelled).toMatchObject({ state: 'requested', source: 'label' });
+  });
+
+  test('labelled issues beyond the free slots wait in the queue, oldest first', async () => {
+    const labelled = [7, 8, 9].map((number) => ({
+      number,
+      title: `L${number}`,
+      url: `u/${number}`,
+    }));
+    const { factoryId, launcher, tick } = await setUp({
+      mode: 'automatic',
+      maxConcurrent: 1,
+      script: { labelled },
+    });
+
+    await tick();
+
+    expect(launcher.issues()).toEqual([7]);
+    const queue = (await createFactoryRunsRepository().queue(factoryId))._unsafeUnwrap();
+    expect(queue.map((run) => [run.issueNumber, run.source])).toEqual([
+      [8, 'label'],
+      [9, 'label'],
+    ]);
+  });
+
+  test('a labelled issue leaves the queue when it loses its label, or the factory turns manual', async () => {
+    const script: Script = {
+      labelled: [7, 8, 9].map((number) => ({ number, title: `L${number}`, url: `u/${number}` })),
+    };
+    const { factoryId, tick } = await setUp({ mode: 'automatic', maxConcurrent: 1, script });
+    await tick();
+
+    script.labelled = script.labelled!.filter((issue) => issue.number !== 8);
+    await tick();
+    expect((await runFor(factoryId, 8)).state).toBe('stopped');
+    expect((await runFor(factoryId, 9)).state).toBe('requested');
+
+    (
+      await createFactorySettingsService().save('alice', 'p1', { enabled: true, mode: 'manual' })
+    )._unsafeUnwrap();
+    await tick();
+    expect((await runFor(factoryId, 9)).state).toBe('stopped');
+  });
+
+  test('clearing the queue takes the label off its labelled issues, so they do not come back', async () => {
+    const script: Script = {
+      labelled: [7, 8].map((number) => ({ number, title: `L${number}`, url: `u/${number}` })),
+    };
+    const { factoryId, queue, github, tick } = await setUp({
+      mode: 'automatic',
+      maxConcurrent: 1,
+      script,
+    });
+    await queue.submit(factoryId, { issueNumbers: [20], flowName: 'issue-to-merge' });
+    await tick();
+
+    const cleared = (await queue.clearQueue(factoryId))._unsafeUnwrap();
+
+    expect(cleared.cleared).toBe(2);
+    // Only the labelled ones lose a label; #20 was sent from funny.
+    expect(github.unlabelled.sort()).toEqual([7, 8]);
   });
 
   test('a sent issue runs the flow it was sent with, not the factory flow', async () => {
@@ -949,7 +1017,10 @@ describe('blocked issues', () => {
     await tick();
 
     expect(launcher.issues()).toEqual([3]);
-    expect(await runFor(factoryId, 2)).toBeUndefined();
+    // It waits in the queue, saying what blocks it.
+    const blocked = await runFor(factoryId, 2);
+    expect(blocked).toMatchObject({ state: 'requested', source: 'label' });
+    expect(blocked.waitReason?.kind).toStartWith('blocker-');
   });
 
   test('the send bar learns which open blockers are outside the factory', async () => {

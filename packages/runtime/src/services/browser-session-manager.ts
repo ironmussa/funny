@@ -270,8 +270,24 @@ function key(type: 'keyDown' | 'keyUp'): PanelInputHandler {
 /** Panel input event → CDP dispatch on the session's tab. */
 type PointerOrKeyKind = Exclude<
   WSBrowserSessionInputData['kind'],
-  'takeControl' | 'releaseControl' | 'dialog' | 'audio'
+  'takeControl' | 'releaseControl' | 'dialog' | 'audio' | 'viewport'
 >;
+
+/** Viewport bounds a panel resize may ask for (the same as `browser_resize`). */
+const PANEL_VIEWPORT_LIMITS = { minWidth: 200, maxWidth: 3840, minHeight: 200, maxHeight: 2160 };
+
+/** The size a panel `viewport` input asks for, or null when it is not a valid size. */
+export function panelViewportSize(
+  input: Pick<WSBrowserSessionInputData, 'width' | 'height'>,
+): { width: number; height: number } | null {
+  const { width, height } = input;
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return null;
+  const w = width as number;
+  const h = height as number;
+  const l = PANEL_VIEWPORT_LIMITS;
+  if (w < l.minWidth || w > l.maxWidth || h < l.minHeight || h > l.maxHeight) return null;
+  return { width: w, height: h };
+}
 
 const PANEL_INPUT: Record<PointerOrKeyKind, PanelInputHandler> = {
   mouseMove: mouse('mouseMoved'),
@@ -983,6 +999,15 @@ class BrowserSessionManager {
     }
     if (input.kind === 'audio') {
       await this.setAudioMuted(s, input.muted !== false);
+      return;
+    }
+    if (input.kind === 'viewport') {
+      const size = panelViewportSize(input);
+      if (!size) {
+        log.warn('dispatchInput: invalid viewport size', { namespace: NS, sessionId });
+        return;
+      }
+      await this.runExclusive(s, () => this.setViewport(s, size.width, size.height));
       return;
     }
     const cs = chromeOf(s);

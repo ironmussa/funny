@@ -3,7 +3,9 @@ import { join } from 'node:path';
 
 // Issue #482 (part 5/5 of #461): these scopes must stay free of
 // `anti-slop(no-known-value-widening)` warnings until the rule becomes an error.
-const ROOT = join(import.meta.dir, '..', '..');
+// This file lives in packages/workflows/src/__tests__; the regression proof runs
+// only tests under packages/.
+const ROOT = join(import.meta.dir, '..', '..', '..', '..');
 const SCOPES = [
   'scripts',
   'packages/memory',

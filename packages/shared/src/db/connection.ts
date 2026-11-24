@@ -96,22 +96,27 @@ export function createSqliteDatabase(options: CreateSqliteLegacyOptions): Databa
 
 // ── Compat helpers (work with both sync SQLite and async PG) ─────
 
+/** A query builder exposes `method` (a sync SQLite statement); a PG query is a thenable without it. */
+function hasMethod<K extends string>(query: any, method: K): query is Record<K, () => any> {
+  return typeof query[method] === 'function';
+}
+
 /** Execute a SELECT query and return all rows. */
 export async function dbAll<T = any>(query: any): Promise<T[]> {
-  if (typeof query.all === 'function') return query.all();
+  if (hasMethod(query, 'all')) return query.all();
   return query;
 }
 
 /** Execute a SELECT query and return the first row. */
 export async function dbGet<T = any>(query: any): Promise<T | undefined> {
-  if (typeof query.get === 'function') return query.get();
+  if (hasMethod(query, 'get')) return query.get();
   const rows = await query;
   return rows[0];
 }
 
 /** Execute a mutation query (INSERT/UPDATE/DELETE). */
 export async function dbRun(query: any): Promise<void> {
-  if (typeof query.run === 'function') {
+  if (hasMethod(query, 'run')) {
     query.run();
     return;
   }

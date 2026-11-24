@@ -61,7 +61,7 @@ function toError(error: unknown, signal: AbortSignal | undefined): CompleteOnceE
   if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
     return { kind: 'aborted', message: signal?.reason ? messageOf(signal.reason) : 'Aborted' };
   }
-  if (typeof error === 'object' && error !== null && 'kind' in error) {
+  if (isObject(error) && 'kind' in error) {
     // SAFETY: the only non-Error value thrown inside this module with a `kind`
     // is post()'s `{ kind: 'provider-error', ... }` object, a CompleteOnceError.
     return error as CompleteOnceError;
@@ -120,4 +120,9 @@ export function completeOnce(options: CompleteOnceOptions): ResultAsync<string, 
     return errAsync(toError(options.signal.reason, options.signal));
   }
   return ResultAsync.fromPromise(post(options, apiKey), (error) => toError(error, options.signal));
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

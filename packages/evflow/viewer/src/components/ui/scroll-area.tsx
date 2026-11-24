@@ -12,15 +12,19 @@ interface EdgeFadeState {
   bottom: boolean;
 }
 
+function isFunction(value: unknown): value is (...args: never[]) => void {
+  return typeof value === 'function';
+}
+
 function requestScrollFrame(callback: FrameRequestCallback): number {
-  if (typeof window.requestAnimationFrame === 'function') {
+  if (isFunction(window.requestAnimationFrame)) {
     return window.requestAnimationFrame(callback);
   }
   return window.setTimeout(() => callback(Date.now()), 16);
 }
 
 function cancelScrollFrame(id: number) {
-  if (typeof window.cancelAnimationFrame === 'function') {
+  if (isFunction(window.cancelAnimationFrame)) {
     window.cancelAnimationFrame(id);
     return;
   }

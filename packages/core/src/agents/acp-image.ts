@@ -27,9 +27,13 @@ export function toACPImageBlocks(images: unknown): ACPImageBlock[] {
     const data: string | undefined = src?.data ?? (img as any)?.data;
     // SAFETY: see above; a non-string `mimeType` is rejected by the `typeof` check below.
     const mimeType: string | undefined = src?.media_type ?? (img as any)?.mimeType;
-    if (typeof data === 'string' && typeof mimeType === 'string') {
+    if (isString(data) && isString(mimeType)) {
       blocks.push({ type: 'image', data, mimeType });
     }
   }
   return blocks;
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
 }

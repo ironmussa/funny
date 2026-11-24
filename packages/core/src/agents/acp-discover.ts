@@ -115,7 +115,7 @@ export async function discoverAcpModels(
 
       const discovered: DiscoveredAcpModel[] = [];
       for (const m of raw) {
-        if (!m || typeof m !== 'object') continue;
+        if (!m || !isObject(m)) continue;
         // SAFETY: `m` was checked to be a non-null object above; `modelId` is read
         // optionally and coerced with `String`, so a missing one is skipped.
         const modelId = String((m as { modelId?: unknown }).modelId ?? '').trim();
@@ -126,12 +126,10 @@ export async function discoverAcpModels(
         discovered.push({ modelId, name });
       }
 
-      // SAFETY: `models` is the optional object read above; the second assertion only
-      // runs after the `typeof === 'string'` check on the same field.
-      const currentModelId =
-        typeof (models as { currentModelId?: unknown } | undefined)?.currentModelId === 'string'
-          ? (models as { currentModelId: string }).currentModelId
-          : null;
+      // SAFETY: `models` is the optional object read above; `currentModelId` is used
+      // only after the `isString` check below.
+      const reportedModelId = (models as { currentModelId?: unknown } | undefined)?.currentModelId;
+      const currentModelId = isString(reportedModelId) ? reportedModelId : null;
 
       cleanup();
 
@@ -168,4 +166,13 @@ export async function discoverAcpModels(
   } finally {
     cleanup();
   }
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

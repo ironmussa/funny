@@ -30,7 +30,7 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
         )
         .map((e) => ({ name: String(e.name), value: String(e.value) }));
     }
-    if (typeof rec === 'object') {
+    if (isObject(rec)) {
       // SAFETY: `rec` is a non-null, non-array object (checked above); each value is
       // coerced with `String`.
       return Object.entries(rec as Record<string, unknown>).map(([name, value]) => ({
@@ -43,7 +43,7 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
 
   const out: ACPMcpServer[] = [];
   for (const [name, raw] of Object.entries(mcpServers)) {
-    if (!raw || typeof raw !== 'object') continue;
+    if (!raw || !isObject(raw)) continue;
     // SAFETY: `raw` is a non-null object (checked above); every field is read
     // optionally and coerced before use.
     const cfg = raw as Record<string, unknown>;
@@ -79,4 +79,9 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
     }
   }
   return out;
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

@@ -32,13 +32,29 @@ const dlog = createDebugLogger('sdk');
 const SENSITIVE_PATH_TOOLS = new Set(['Bash', 'Edit', 'Write', 'NotebookEdit', 'Read']);
 const SENSITIVE_PATH_PATTERNS = [/(?:^|[^A-Za-z0-9_])\.claude(?:[/\s'"`]|$)/, /\.config\/claude/];
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** A tool call's input: any non-null object, read only for the fields below. */
+function isToolInput(
+  value: unknown,
+): value is { command?: unknown; file_path?: unknown; notebook_path?: unknown } {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Any object, null included (`Object.assign` skips a null source). */
+function isObjectOrNull(value: unknown): value is object | null {
+  return typeof value === 'object';
+}
+
 /** The paths (or Bash command) a tool call touches. */
 function pathTargets(tool: string, ti: any): string[] {
-  if (!ti || typeof ti !== 'object') return [];
-  if (tool === 'Bash' && typeof ti.command === 'string') return [ti.command];
+  if (!isToolInput(ti)) return [];
+  if (tool === 'Bash' && isString(ti.command)) return [ti.command];
   const out: string[] = [];
-  if (typeof ti.file_path === 'string') out.push(ti.file_path);
-  if (typeof ti.notebook_path === 'string') out.push(ti.notebook_path);
+  if (isString(ti.file_path)) out.push(ti.file_path);
+  if (isString(ti.notebook_path)) out.push(ti.notebook_path);
   return out;
 }
 
@@ -493,7 +509,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     if (this.options.fastMode) {
       sdkOptions.settings = Object.assign(
         {},
-        typeof sdkOptions.settings === 'object' ? sdkOptions.settings : undefined,
+        isObjectOrNull(sdkOptions.settings) ? sdkOptions.settings : undefined,
         { fastMode: true, fastModePerSessionOptIn: true },
       );
     }
@@ -596,7 +612,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     const rawMsg = sdkMsg.message;
     if (rawMsg?.model !== '<synthetic>') return false;
     const errorText = (rawMsg.content ?? [])
-      .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+      .filter((b: any): b is { text: string } => b?.type === 'text' && typeof b.text === 'string')
       .map((b: any) => b.text)
       .join('\n')
       .trim();
@@ -846,7 +862,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // SAFETY: `toolInput` is the SDK's unvalidated Bash input; `command` is read optionally
     // (a missing or non-object input gives `undefined`) and used only once it is a string.
     const command = (toolInput as { command?: unknown } | undefined)?.command;
-    const reason = typeof command === 'string' ? checkRedirectReason(command) : null;
+    const reason = isString(command) ? checkRedirectReason(command) : null;
     if (!reason) return null;
     dlog.info('preToolUseHook REDIRECT check to funny_run_checks', {
       cwd: this.options.cwd,
@@ -912,8 +928,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // Serialize once for lookup + sensitive-path checks below
     const serializedToolInputForRule = ((): string | undefined => {
       const ti = input.tool_input;
-      if (!ti || typeof ti !== 'object') return undefined;
-      if (toolName === 'Bash' && 'command' in ti && typeof ti.command === 'string') {
+      if (!isToolInput(ti)) return undefined;
+      if (toolName === 'Bash' && isString(ti.command)) {
         return ti.command;
       }
       try {
@@ -1131,7 +1147,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         if (!raw.message?.content) return null;
         // Ensure tool_result content is always a string
         const content = raw.message.content.map((block: any) => {
-          if (block.type === 'tool_result' && typeof block.content !== 'string') {
+          if (block.type === 'tool_result' && !isString(block.content)) {
             // Content from Task/subagent tools comes as an array of content blocks
             if (Array.isArray(block.content)) {
               const text = block.content

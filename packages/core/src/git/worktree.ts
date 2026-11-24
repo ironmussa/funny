@@ -13,6 +13,11 @@ import { getNativeGit } from './native.js';
 import { validatePath } from './path-validation.js';
 import { gitRead, gitWrite, nativeGitWrite } from './process.js';
 
+/** Inputs typed as strings can still arrive as anything from an untyped caller. */
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
 /**
  * Security HI-4: pure predicate that decides whether a path is *safe* to
  * pass to `git config --global --add safe.directory ...`. Extracted from
@@ -30,7 +35,7 @@ import { gitRead, gitWrite, nativeGitWrite } from './process.js';
  * persistently widen what git trusts.
  */
 export function shouldRegisterSafeDirectory(dirPath: unknown): boolean {
-  if (typeof dirPath !== 'string' || dirPath.length === 0) return false;
+  if (!isString(dirPath) || dirPath.length === 0) return false;
   if (dirPath.startsWith('-')) return false;
   if (dirPath.includes('\0')) return false;
   if (!dirPath.startsWith('/') && !/^[a-zA-Z]:[\\/]/.test(dirPath)) return false;
@@ -544,11 +549,7 @@ export function isRegisteredWorktreePath(
   projectPath: string,
   worktreePath: string,
 ): ResultAsync<boolean, DomainError> {
-  if (
-    typeof worktreePath !== 'string' ||
-    worktreePath.length === 0 ||
-    worktreePath.startsWith('-')
-  ) {
+  if (!isString(worktreePath) || worktreePath.length === 0 || worktreePath.startsWith('-')) {
     return ResultAsync.fromSafePromise(Promise.resolve(false));
   }
 
@@ -577,7 +578,7 @@ function assertWorktreeInProjectBase(
   projectPath: string,
   worktreePath: string,
 ): DomainError | null {
-  if (typeof worktreePath !== 'string' || worktreePath.length === 0) {
+  if (!isString(worktreePath) || worktreePath.length === 0) {
     return badRequest('worktreePath is required');
   }
   if (worktreePath.startsWith('-')) {

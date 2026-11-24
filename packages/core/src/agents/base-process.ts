@@ -319,7 +319,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   /** Handle ACP `sessionUpdate: "usage_update"`. Returns true when handled. */
   protected handleAcpUsageUpdate(update: { sessionUpdate?: string; used?: number }): boolean {
     if (update.sessionUpdate !== 'usage_update') return false;
-    if (typeof update.used === 'number') {
+    if (isNumber(update.used)) {
       this.emitContextUsageMessage({ inputTokens: update.used });
     }
     return true;
@@ -327,7 +327,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
 
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
   protected emitAcpPromptResponseUsage(usage: unknown): void {
-    if (!usage || typeof usage !== 'object') return;
+    if (!usage || !isObject(usage)) return;
     // SAFETY: `usage` is an object (checked above) from the ACP PromptResponse,
     // whose token fields are numbers when present. They are not checked here:
     // a missing one becomes undefined and falls back to 0, and
@@ -458,15 +458,15 @@ export abstract class BaseAgentProcess extends EventEmitter {
    */
   protected extractErrorMessage(err: unknown): string {
     if (err == null) return 'Unknown error';
-    if (typeof err === 'string') return this.cleanErrorDetails(err);
-    if (typeof err !== 'object') return String(err);
+    if (isString(err)) return this.cleanErrorDetails(err);
+    if (!isObject(err)) return String(err);
 
-    const base = 'message' in err && typeof err.message === 'string' ? err.message : String(err);
+    const base = 'message' in err && isString(err.message) ? err.message : String(err);
 
     // ACP RequestError: { code, message, data: { details } }
-    if ('data' in err && err.data && typeof err.data === 'object' && 'details' in err.data) {
+    if ('data' in err && err.data && isObject(err.data) && 'details' in err.data) {
       const details = err.data.details;
-      if (typeof details === 'string') {
+      if (isString(details)) {
         return this.cleanErrorDetails(details);
       }
     }
@@ -546,4 +546,17 @@ export abstract class BaseAgentProcess extends EventEmitter {
     this.hasExited = true;
     this.emit('exit', exitCode);
   }
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+function isNumber<T>(value: T): value is T & number {
+  return typeof value === 'number';
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

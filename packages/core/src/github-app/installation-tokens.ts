@@ -99,6 +99,11 @@ export const githubAppError = (kind: GithubAppErrorKind, message: string): Githu
   message,
 });
 
+/** GitHub's installation response carries a numeric id; anything else is unusable. */
+function hasInstallationId(body: { id?: unknown }): body is { id: number } {
+  return typeof body.id === 'number';
+}
+
 const permissionsKey = (permissions: GithubPermissions) =>
   Object.keys(permissions)
     .sort()
@@ -142,7 +147,7 @@ export function createInstallationTokenIssuer(
         return ResultAsync.fromPromise(res.json() as Promise<{ id?: number }>, () =>
           githubAppError('github-error', 'unreadable installation response'),
         ).andThen((body) => {
-          if (typeof body.id !== 'number') {
+          if (!hasInstallationId(body)) {
             return errAsync(githubAppError('github-error', 'installation without id'));
           }
           installations.set(key, { id: body.id, until: now().getTime() + INSTALLATION_CACHE_MS });

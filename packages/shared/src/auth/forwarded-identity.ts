@@ -32,6 +32,10 @@
 
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
+function isString(value: string | number): value is string {
+  return typeof value === 'string';
+}
+
 /** Name of the signature header */
 export const SIGNATURE_HEADER = 'X-Forwarded-Signature';
 /** Name of the timestamp header (unix ms) */
@@ -153,7 +157,7 @@ export function verifyForwardedIdentity(
 ): boolean {
   if (!signature || !nonce || timestamp === undefined || timestamp === null) return false;
 
-  const ts = typeof timestamp === 'string' ? Number.parseInt(timestamp, 10) : timestamp;
+  const ts = isString(timestamp) ? Number.parseInt(timestamp, 10) : timestamp;
   if (!Number.isFinite(ts)) return false;
   if (Math.abs(now - ts) > maxSkewMs) return false;
 

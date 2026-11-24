@@ -544,7 +544,7 @@ export class GenericACPProcess extends BaseAgentProcess {
         // `value` / `options` are checked with `typeof` / `Array.isArray` before use.
         const entry = e as Record<string, unknown> | null;
         if (!entry) continue;
-        if (typeof entry.value === 'string') valueIds.add(entry.value);
+        if (isString(entry.value)) valueIds.add(entry.value);
         if (Array.isArray(entry.options)) collect(entry.options);
       }
     };
@@ -1201,7 +1201,7 @@ function formatPlanChecklist(items: Array<[unknown, unknown]>): string {
 function isRenderableToolInput(toolName: string, input: Record<string, unknown>): boolean {
   const has = (key: string) => {
     const value = input[key];
-    return typeof value === 'string' && value.length > 0;
+    return isString(value) && value.length > 0;
   };
   switch (toolName) {
     case 'Read':
@@ -1245,8 +1245,8 @@ function serializeToolInputForRule(
   toolName: string,
   toolInput: Record<string, unknown> | undefined,
 ): string | undefined {
-  if (!toolInput || typeof toolInput !== 'object') return undefined;
-  if (toolName === 'Bash' && typeof toolInput.command === 'string') {
+  if (!toolInput || !isObject(toolInput)) return undefined;
+  if (toolName === 'Bash' && isString(toolInput.command)) {
     return toolInput.command;
   }
   try {
@@ -1313,4 +1313,13 @@ function stopReasonToSubtype(stopReason: string | undefined): ResultSubtype {
   if (stopReason === 'cancelled') return 'error_during_execution';
   if (stopReason === 'max_tokens') return 'error_max_turns';
   return 'success';
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

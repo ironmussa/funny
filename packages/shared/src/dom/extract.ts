@@ -92,6 +92,15 @@ export function pickStyles(cs: CSSStyleDeclaration): Record<string, string> {
  * In an isolated world (Chrome extension content script) this won't see React
  * fibers — use a MAIN-world bridge there instead.
  */
+/** A React fiber's `type` for a function or class component. */
+function isComponentType(type: unknown): type is { displayName?: string; name: string } {
+  return typeof type === 'function';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function detectFrameworkComponent(el: Element): string | undefined {
   for (const k of Object.keys(el)) {
     if (k.startsWith('__reactFiber')) {
@@ -101,10 +110,10 @@ export function detectFrameworkComponent(el: Element): string | undefined {
       let node = (el as any)[k];
       while (node && !node.type) node = node.return;
       if (node && node.type) {
-        if (typeof node.type === 'function') {
+        if (isComponentType(node.type)) {
           return node.type.displayName || node.type.name || undefined;
         }
-        if (typeof node.type === 'string') return undefined;
+        if (isString(node.type)) return undefined;
       }
     }
   }
@@ -137,7 +146,7 @@ export function cssSelectorFull(el: Element, opts?: { excludeClassPrefix?: strin
       parts.unshift(selector);
       break;
     }
-    if (current.className && typeof current.className === 'string') {
+    if (current.className && isString(current.className)) {
       const classes = current.className
         .trim()
         .split(/\s+/)
@@ -244,7 +253,7 @@ export function getNearbyElements(el: Element): string {
   const items: string[] = [];
   const summarize = (n: Element) => {
     const tag = n.tagName.toLowerCase();
-    const cls = n.className && typeof n.className === 'string' ? n.className.split(/\s+/)[0] : '';
+    const cls = n.className && isString(n.className) ? n.className.split(/\s+/)[0] : '';
     return cls ? tag + '.' + cls : tag;
   };
   const prev = el.previousElementSibling;

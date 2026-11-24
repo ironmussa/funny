@@ -133,6 +133,10 @@ type DirParse =
   | { ok: true; manifest: ProviderManifest }
   | { ok: false; error: string };
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 /**
  * Parse one extension dir as a provider extension. Returns null when it is not
  * a provider extension at all (no `funny.provider`), a typed error when it is
@@ -148,7 +152,7 @@ function parseProviderExtensionDir(dir: string, dirName: string): DirParse {
     return null;
   }
   const providerRef: unknown = pkg?.funny?.provider;
-  if (typeof providerRef !== 'string' || !providerRef) return null; // not a provider ext
+  if (!isNonEmptyString(providerRef)) return null; // not a provider ext
 
   // Resolve the referenced manifest file, guarding against symlink/traversal escape.
   let manifestAbs: string;
@@ -268,7 +272,7 @@ export function loadProviderExtensions(dir: string): LoadProviderExtensionsResul
 const providerKindHandler: KindHandler<LoadedProviderExtension> = {
   validateSource(pkg, src) {
     const ref = pkg?.funny?.provider;
-    if (typeof ref !== 'string' || !ref) {
+    if (!isNonEmptyString(ref)) {
       return 'package.json is missing the funny.provider field';
     }
     try {

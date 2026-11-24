@@ -54,8 +54,8 @@ export async function unwrapResult<T>(result: ResultAsync<T, DomainError>): Prom
 }
 
 /** Map any rejection back to a `DomainError` for neverthrow callers. */
-export function toDomainError(error: unknown): DomainError {
-  if (error instanceof DataRequestError) return error.domainError;
-  const message = error instanceof Error ? error.message : String(error);
+export function toDomainError(cause: unknown): DomainError {
+  if (cause instanceof DataRequestError) return cause.domainError;
+  const message = cause instanceof Error ? cause.message : String(cause);
   return { type: 'INTERNAL', message };
 }

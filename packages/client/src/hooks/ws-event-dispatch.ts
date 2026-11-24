@@ -34,6 +34,7 @@ import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { notifyGitHistoryChanged } from '@/lib/git-history-invalidation';
+import type { BrowserSessionRealtimeEvent } from '@/lib/realtime/browser-session-v1-events';
 import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
@@ -173,6 +174,11 @@ function scheduleFlush() {
   }
 }
 
+/** Every realtime event carries its fields as an object; the dispatcher only types it `unknown`. */
+function hasEventFields(data: unknown): data is BrowserSessionRealtimeEvent['data'] {
+  return typeof data === 'object' && data !== null;
+}
+
 /**
  * Dispatch a received event (from Socket.IO or raw WS) to the appropriate
  * store. The event object has { type, threadId, data } shape.
@@ -194,7 +200,7 @@ const actionPorts: RealtimeActionPorts = {
   // Browser sessions arrive only as browser.v1 (decoded in use-ws.ts), never
   // as Socket.IO events, so they skip the web event table.
   browserSession: (event) => {
-    dispatchBrowserSessionEvent(event.type, event.data);
+    if (hasEventFields(event.data)) dispatchBrowserSessionEvent(event.type, event.data);
   },
   infrastructure: applyThroughWebStore,
 };
@@ -256,7 +262,11 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
 }
 
 /** Feed a transport-neutral event through the same state pipeline as legacy Socket.IO events. */
-export function dispatchRealtimeEvent(type: string, threadId: string, data: unknown): void {
+export function dispatchRealtimeEvent<EventData>(
+  type: string,
+  threadId: string,
+  data: EventData,
+): void {
   dispatchEvent(type, threadId, data);
 }
 

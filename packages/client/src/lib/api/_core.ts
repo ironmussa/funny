@@ -21,7 +21,7 @@ export type PullStrategy = 'ff-only' | 'merge' | 'rebase';
 const endpointPolicy = createEndpointPolicy(clientComposition.platform.transport.environment);
 const log = createClientLogger('api');
 
-export function validateContainerUrl(raw: unknown): string | null {
+export function validateContainerUrl(raw: string): string | null {
   return validateRemoteOrigin(raw, endpointPolicy.remoteOriginAllowlist);
 }
 

@@ -274,6 +274,7 @@ bun check -p packages/runtime/tsconfig.json
 - The agent runner spawns agent processes via `packages/core/src/agents/` and stores a session ID for resuming conversations
 - WebSocket events carry a `threadId` field so the client can associate updates with the correct thread
 - The model selector maps friendly names (sonnet/opus/haiku) to full model IDs in `agent-runner.ts`
+- Helper generations that are not a thread's agent (commit messages, thread recaps) go through `runUtilityGeneration` (`runtime/services/utility-model.ts`) on the requesting user's utility model: one turn, no tools, no fallback between providers. Do not call the Claude SDK `query()` or an LLM API directly for a new helper text. Thread recaps (`POST /api/threads/:id/recap`, owner only, never stored or sent to the agent) are described in [openwiki/architecture/agent-execution.md](openwiki/architecture/agent-execution.md).
 
 ### State machines
 

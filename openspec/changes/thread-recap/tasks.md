@@ -14,10 +14,10 @@
 
 ## 3. Recap generation (runtime + server proxy)
 
-- [ ] 3.1 Implement pure `recap-transcript.ts` (entries after `since`, tool name + input summary, 300-char output excerpts, pending approval/question, status, newest kept within ~12k chars); verify with fixtures from a Claude, a Codex and an LLM API thread plus a truncation case
-- [ ] 3.2 Add `recap-generator.ts` (system prompt: at most three sentences in the given language, what was done / state / waiting on user; 30 s timeout) and the runtime route `POST /api/threads/:id/recap` (`{ since, newestMessageId, language }`), rejecting sandbox threads with `400 recap-not-available-for-sandbox`; verify with a route test using a stubbed `runUtilityGeneration`
-- [ ] 3.3 Make the recap route owner-only in `middleware/proxy.ts` (not on the steer allow-list, runner certified for the owner); verify a server test that a sharee and a stranger get 404 and no runner request is sent, and that the owner's request reaches only the owner's runner
-- [ ] 3.4 Document the recap route and utility model in `openwiki/` (agent-execution page) and add a short CLAUDE.md note pointing to `runUtilityGeneration` as the single path for helper generations; verify `bun run lint` (docs fitness checks) passes
+- [x] 3.1 Implement pure `recap-transcript.ts` (entries after `since`, tool name + input summary, 300-char output excerpts, pending approval/question, status, newest kept within ~12k chars); verify with fixtures from a Claude, a Codex and an LLM API thread plus a truncation case
+- [x] 3.2 Add `recap-generator.ts` (system prompt: at most three sentences in the given language, what was done / state / waiting on user; 30 s timeout) and the runtime route `POST /api/threads/:id/recap` (`{ since, newestMessageId, language }`), rejecting sandbox threads with `400 recap-not-available-for-sandbox`; verify with a route test using a stubbed `runUtilityGeneration`
+- [x] 3.3 Make the recap route owner-only in `middleware/proxy.ts` (not on the steer allow-list, runner certified for the owner); verify a server test that a sharee and a stranger get 404 and no runner request is sent, and that the owner's request reaches only the owner's runner
+- [x] 3.4 Document the recap route and utility model in `openwiki/` (agent-execution page) and add a short CLAUDE.md note pointing to `runUtilityGeneration` as the single path for helper generations; verify `bun run lint` (docs fitness checks) passes
 
 ## 4. Client
 

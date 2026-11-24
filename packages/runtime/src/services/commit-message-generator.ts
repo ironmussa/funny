@@ -1,26 +1,12 @@
-import { UtilityModelSetting } from '@funny/shared/contracts/profile';
+import type { UtilityModelSetting } from '@funny/shared/contracts/profile';
 
 import { log } from '../lib/logger.js';
 import { COMMIT_MESSAGE_SYSTEM_PROMPT } from './pipeline-prompts.js';
-import { getServices } from './service-registry.js';
-import { runUtilityGeneration, type UtilityModelError } from './utility-model.js';
-
-/** The requesting user's saved utility model; `null` when they never set one. */
-async function loadUtilityModel(userId: string): Promise<UtilityModelSetting | null> {
-  const profile = await getServices().profile.getProfile(userId);
-  const saved = profile?.utilityModel ?? null;
-  if (saved === null) return null;
-  const parsed = UtilityModelSetting.safeParse(saved);
-  if (!parsed.success) throw new Error('The saved utility model setting is invalid');
-  return parsed.data;
-}
-
-function describe(error: UtilityModelError): string {
-  if (error.kind === 'utility-model-unavailable') {
-    return `The utility model is unavailable: no ${error.provider} API key is saved in Settings > Profile`;
-  }
-  return error.message;
-}
+import {
+  describeUtilityModelError,
+  loadUtilityModel,
+  runUtilityGeneration,
+} from './utility-model.js';
 
 /** A commit message for `prompt`, generated on the requesting user's utility model. */
 export async function generateCommitMessage(options: {
@@ -54,7 +40,7 @@ export async function generateCommitMessage(options: {
     const message =
       result.error.kind === 'timeout'
         ? 'Commit message generation timed out'
-        : describe(result.error);
+        : describeUtilityModelError(result.error);
     log.error('Utility model error generating commit message', {
       namespace: 'git',
       kind: result.error.kind,

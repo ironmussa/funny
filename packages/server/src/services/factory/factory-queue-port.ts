@@ -238,7 +238,12 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
     async deleteMergedBranch(member: QueueMember): Promise<void> {
       const run = await deps.run(member.runId);
       if (!run) return;
-      const deleted = await providerFor(member).deleteBranch(member.repo, factoryRunBranch(run));
+      // Pull requests stacked on it move to the base it landed on first (D10).
+      const deleted = await providerFor(member).deleteBranch(
+        member.repo,
+        factoryRunBranch(run),
+        member.baseBranch,
+      );
       if (deleted.isErr()) {
         log.warn('Issue factory batch: a merged branch could not be deleted', {
           namespace: 'factory',

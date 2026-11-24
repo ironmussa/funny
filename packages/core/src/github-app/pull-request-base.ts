@@ -109,3 +109,31 @@ export function baseChangesSince(
       files: (compare.files ?? []).map((file) => file.filename),
     }));
 }
+
+/**
+ * Point every open pull request whose base is `branch` at `to` instead, before
+ * `branch` is deleted: GitHub closes a pull request whose base branch is
+ * deleted through the API (it retargets only on its own merge-and-delete), so
+ * a pull request stacked on a merged one would be lost. The numbers moved.
+ */
+export function retargetPullRequestsOn(
+  github: RepoGithub,
+  repo: string,
+  branch: string,
+  to: string,
+): ResultAsync<number[], GithubCallError> {
+  const query = new URLSearchParams({ base: branch, state: 'open', per_page: '100' });
+  return github
+    .json<Array<{ number: number }>>(repo, 'GET', `/repos/${repo}/pulls?${query}`)
+    .andThen((pulls) =>
+      pulls.reduce<ResultAsync<number[], GithubCallError>>(
+        (moved, pull) =>
+          moved.andThen((done) =>
+            github
+              .json(repo, 'PATCH', `/repos/${repo}/pulls/${pull.number}`, { base: to })
+              .map(() => [...done, pull.number]),
+          ),
+        okAsync([]),
+      ),
+    );
+}

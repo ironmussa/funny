@@ -70,7 +70,7 @@ function NodeTooltipPerson({
     <span className="flex items-center gap-1.5" data-testid={testId}>
       <Avatar size="xs">
         {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-        <AvatarFallback name={name} className="text-[0.5rem] font-semibold">
+        <AvatarFallback name={name} textSize="micro">
           {initialsOf(name)}
         </AvatarFallback>
       </Avatar>

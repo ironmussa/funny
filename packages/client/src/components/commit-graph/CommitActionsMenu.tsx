@@ -143,7 +143,7 @@ export function CommitActionsMenu({
             className={cn(
               triggerClassName
                 ? cn('shrink-0', triggerClassName)
-                : cn(listRowActionClassName, 'ml-auto', open && 'opacity-100'),
+                : cn(listRowActionClassName, 'ml-auto'),
             )}
             // oxlint-enable shadcn/require-static-classes
             data-testid={`graph-commit-more-${shortHash}`}

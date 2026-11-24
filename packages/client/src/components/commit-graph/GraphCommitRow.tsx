@@ -428,12 +428,7 @@ export function GraphCommitRow({
             marginTop: titleYForRow(entry, rowHeight) - titleLineH / 2,
           }}
         >
-          <HoverTimeMenu
-            time={commitTime}
-            timeClassName="text-muted-foreground text-2xs"
-            open={menuOpen}
-            className="min-w-12"
-          >
+          <HoverTimeMenu time={commitTime} timeTone="subtle" open={menuOpen} className="min-w-12">
             <CommitActionsMenu
               hash={entry.hash}
               shortHash={entry.shortHash}

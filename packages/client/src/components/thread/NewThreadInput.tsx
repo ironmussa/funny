@@ -487,10 +487,10 @@ export function NewThreadInput({
   );
 }
 
-async function refreshCreatedProject(
+async function refreshCreatedProject<Loaded>(
   projectId: string | null | undefined,
   kind: 'idle' | 'normal',
-  load: (projectId: string) => Promise<unknown>,
+  load: (projectId: string) => Promise<Loaded>,
 ) {
   if (!projectId) return;
   const refresh = load(projectId);

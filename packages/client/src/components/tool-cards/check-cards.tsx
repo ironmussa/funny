@@ -57,9 +57,6 @@ function readCheckResult(text: string): CheckResult {
   };
 }
 
-const stringList = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-
 /**
  * What the run covers: the command it ran once the result names it (it already
  * includes the scope and filter), else what the call asked for (a custom
@@ -76,7 +73,9 @@ function CheckRunDetails({
 }) {
   const { t } = useTranslation();
   const requested = typeof parsed.command === 'string' ? parsed.command : null;
-  const scope = stringList(parsed.scope);
+  const scope = Array.isArray(parsed.scope)
+    ? parsed.scope.filter((item): item is string => typeof item === 'string')
+    : [];
   const filter = typeof parsed.filter === 'string' ? parsed.filter : null;
   const shown = command ?? requested;
 

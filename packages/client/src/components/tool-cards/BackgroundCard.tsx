@@ -10,8 +10,9 @@ import { ToolContentArea } from './MobileContentPreview';
 
 const JOB_STATUSES = new Set(['running', 'exited', 'failed', 'killed', 'cancelled']);
 
-function text(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null;
+/** A non-blank string. */
+function isText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
 }
 
 function JobStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
@@ -48,10 +49,10 @@ export function BackgroundCard({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const command = text(parsed.command);
-  const cwd = text(parsed.cwd);
-  const summary = text(parsed.label) ?? command;
-  const status = text(parsed.status);
+  const command = isText(parsed.command) ? parsed.command : null;
+  const cwd = isText(parsed.cwd) ? parsed.cwd : null;
+  const summary = (isText(parsed.label) ? parsed.label : null) ?? command;
+  const status = isText(parsed.status) ? parsed.status : null;
   const exitCode = typeof parsed.exitCode === 'number' ? parsed.exitCode : null;
 
   return (

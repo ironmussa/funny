@@ -70,6 +70,8 @@ type ToolOutcome = ResultAsync<BrowserToolContent[], BrowserToolError>;
 type CallToolResult = AgentToolResult;
 
 function signalOf(extra: unknown): AbortSignal | undefined {
+  // SAFETY: the MCP SDK passes its request-handler `extra` object (or nothing); only
+  // `signal` is read, and the instanceof check below rejects anything that is not an AbortSignal.
   const signal = (extra as { signal?: unknown } | undefined)?.signal;
   return signal instanceof AbortSignal ? signal : undefined;
 }

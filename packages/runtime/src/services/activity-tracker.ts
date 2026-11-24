@@ -85,18 +85,19 @@ export interface ActivityTrackerDeps {
 const PROGRESS_INTERVAL_MS = 500;
 
 /** A server answer that refuses the write (scope, ownership, unknown type). */
-function isRefusal(response: unknown): boolean {
+function isRefusal(response: unknown): response is { success: false; error?: unknown } {
   return (
     !!response &&
     typeof response === 'object' &&
-    (response as { success?: unknown }).success === false
+    'success' in response &&
+    response.success === false
   );
 }
 
 function messageOf(error: unknown): string {
   if (typeof error === 'string') return error;
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message: unknown }).message);
+    return String(error.message);
   }
   return String(error);
 }
@@ -108,6 +109,8 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
   const emitToUser =
     deps.emitToUser ??
     ((userId: string, event: Record<string, unknown>) =>
+      // SAFETY: the only event emitted here is `progress()`'s `activity:progress` envelope
+      // ({ type, threadId: '', data: { id, percent } }); the dependency takes a plain record so tests can record it.
       wsBroker.emitToUser(userId, event as never));
   const retryTimes = deps.retryTimes ?? 8;
   const retryBaseMs = deps.retryBaseMs ?? 1_000;
@@ -125,7 +128,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
         log.warn('Activity report refused by the server', {
           namespace: 'activities',
           eventType,
-          error: (response as { error?: unknown }).error,
+          error: response.error,
         });
       }
     } catch (error) {
@@ -156,7 +159,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
             log.warn('Activity outcome refused by the server', {
               namespace: 'activities',
               id: payload.id,
-              error: (response as { error?: unknown }).error,
+              error: response.error,
             });
           }
         }),

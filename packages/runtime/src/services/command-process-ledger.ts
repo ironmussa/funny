@@ -170,7 +170,7 @@ export function createCommandProcessLedger(deps: LedgerDeps): CommandProcessLedg
   }
 
   async function readEntries(): Promise<{ entries: LedgerEntry[]; unreadable: string[] }> {
-    const names = await readdir(dir).catch(() => [] as string[]);
+    const names = await readdir(dir).catch((): string[] => []);
     const entries: LedgerEntry[] = [];
     const unreadable: string[] = [];
     for (const name of names.filter((n) => n.endsWith('.json'))) {
@@ -233,6 +233,7 @@ export function createCommandProcessLedger(deps: LedgerDeps): CommandProcessLedg
     forget,
     sweepOrphans: () =>
       ResultAsync.fromPromise(sweep(), (error) =>
+        // SAFETY: optional chaining plus `?? error` covers a rejection that is not an Error (no `message`).
         internal(String((error as Error)?.message ?? error)),
       ),
   };

@@ -52,6 +52,8 @@ export async function augmentAllowedToolsWithRules(
       namespace: 'thread-service',
       userId,
       projectPath,
+      // SAFETY: log-only read; `?.` keeps a non-Error rejection from throwing and
+      // it just logs `undefined` for one without `message`.
       error: (err as Error)?.message,
     });
     return allowedTools;
@@ -183,10 +185,18 @@ function resolveRunDefaults(
   params: CreateAndStartThreadParams,
   project: StartProject,
 ): ResolvedRunDefaults {
+  // SAFETY: project defaults are checked against the model registry when the
+  // project is saved (projectSettings schema in validation/schemas.ts), and
+  // params.provider / params.model / params.permissionMode are checked by the
+  // create-thread schema there; internal callers (pipelines, automations) pass
+  // registry ids too.
   const projectProvider = (project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider;
+  // SAFETY: see above; params.provider comes from the validated create-thread body.
   const provider = (params.provider ||
     (params.model ? DEFAULT_PROVIDER : projectProvider)) as AgentProvider;
   const projectModel = provider === projectProvider ? project.defaultModel : undefined;
+  // SAFETY: model and permission mode come from the same validated inputs as the
+  // provider above, or from getDefaultModel(provider), a registry id.
   return {
     provider,
     model: (params.model || projectModel || getDefaultModel(provider)) as AgentModel,

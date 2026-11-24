@@ -13,6 +13,8 @@ import { metric } from '../../lib/telemetry.js';
 
 /** Records a Bash tool call that runs a check; ignores any other tool or command. */
 export function recordBashCheck(threadId: string, tool: string, input: unknown): void {
+  // SAFETY: a Bash tool call's input is the agent's `{ command, ... }` object; only `command`
+  // is read, and the typeof check below drops anything that is not a string.
   const command = tool === 'Bash' ? (input as { command?: unknown } | null)?.command : undefined;
   if (typeof command !== 'string') return;
   const check = classifyCheckCommand(command);

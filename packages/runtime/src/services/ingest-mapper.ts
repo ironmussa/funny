@@ -294,6 +294,8 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
         await tm.updateThread(existing.threadId, { provider: 'external' });
         threadStates.set(request_id, existing);
       }
+      // SAFETY: the ingest contract sends `prompt` as a string in data or metadata; it is
+      // only stored and echoed as message text, and a missing one skips the insert below.
       const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
       if (prompt) {
         await tm.insertMessage({ threadId: existing.threadId, role: 'user', content: prompt });
@@ -324,6 +326,8 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   }
 
   // Resolve project — prefer top-level data.projectId, then metadata, then auto-detect by path or repo
+  // SAFETY: the ingest contract sends projectId and worktree_path as strings; an unknown
+  // id or path resolves no project and the request fails with the error below.
   let projectId: string | null =
     (data.projectId as string) ??
     (metadata?.projectId as string) ??
@@ -331,6 +335,8 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
 
   // Fallback: resolve by GitHub owner/repo (e.g. from standalone reviewbot)
   if (!projectId && data.repo_full_name) {
+    // SAFETY: the ingest contract sends repo_full_name as an "owner/repo" string (truthy here);
+    // one that matches no project leaves projectId null and fails below.
     projectId = await resolveProjectByRepo(data.repo_full_name as string);
   }
 
@@ -342,21 +348,30 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   }
 
   const threadId = nanoid();
+  // SAFETY: the ingest route fills metadata.userId with the caller's user id string; a missing
+  // one becomes '' and emitWS drops events for it.
   const userId = (metadata?.userId as string) ?? '';
+  // SAFETY: the ingest contract sends title and branch as strings; they are only used as
+  // display text for the thread title.
   const title =
     (data.title as string) ??
     (data.branch ? `Pipeline: ${data.branch}` : `External: ${request_id.slice(0, 8)}`);
   // Resolve branch: prefer explicit value from event, fall back to current branch
   // so local-mode threads share branchKey with siblings on the same branch.
   const project = await getServices().projects.getProject(projectId);
+  // SAFETY: the ingest contract sends branch as a branch-name string; it is stored as-is on the thread.
   let branch = (data.branch as string) ?? null;
   if (!branch && project) {
     const branchResult = await getCurrentBranch(project.path);
     if (branchResult.isOk()) branch = branchResult.value;
   }
+  // SAFETY: the ingest contract sends base_branch as a branch-name string, stored as-is.
   const baseBranch = (data.base_branch as string) ?? branch;
+  // SAFETY: the ingest contract sends worktree_path as the path string of the pipeline's worktree, stored as-is.
   const worktreePath = (data.worktree_path as string) ?? null;
   // createdBy: allow external caller to specify agent/pipeline name, otherwise mark as "external"
+  // SAFETY: the ingest contract sends createdBy / created_by as an agent or pipeline name string,
+  // stored as display text only.
   const createdBy = (metadata?.createdBy as string) ?? (data.created_by as string) ?? 'external';
 
   await tm.createThread({
@@ -369,6 +384,8 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
     permissionMode: 'autoEdit',
     status: 'pending',
     stage: 'in_progress',
+    // SAFETY: the ingest contract sends model as a model id string; an external thread never
+    // starts an agent from it, it is only stored and shown.
     model: (data.model as string) ?? DEFAULT_MODEL,
     branch,
     baseBranch,
@@ -385,6 +402,8 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   threadStates.set(request_id, state);
 
   // Insert initial prompt as user message if provided
+  // SAFETY: the ingest contract sends `prompt` as a string in data or metadata; it is only
+  // stored as message text, and a missing one skips the insert below.
   const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
   if (prompt) {
     await tm.insertMessage({ threadId, role: 'user', content: prompt });
@@ -422,6 +441,8 @@ async function onCompleted(event: IngestEvent): Promise<void> {
 
   // If the event carries an error_message (e.g. non-fatal warning from agent),
   // insert it as a visible chat message before completing the thread.
+  // SAFETY: pipeline.completed sends error_message as an optional string; it is only stored
+  // and emitted as message text.
   const errorMessage = event.data.error_message as string | undefined;
   if (errorMessage) {
     const msgId = await tm.insertMessage({
@@ -437,7 +458,9 @@ async function onCompleted(event: IngestEvent): Promise<void> {
   }
 
   const now = new Date().toISOString();
+  // SAFETY: pipeline.completed sends cost_usd / cost as a number of US dollars.
   const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
+  // SAFETY: pipeline.completed sends duration_ms / duration as a number of milliseconds.
   const durationMs =
     (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
 
@@ -455,6 +478,7 @@ async function onCompleted(event: IngestEvent): Promise<void> {
       status: 'completed',
       cost: costUsd,
       duration: durationMs,
+      // SAFETY: pipeline.completed sends result as the run's summary string, shown as text.
       result: (event.data.result as string) ?? 'Completed',
       stage: 'review',
     },
@@ -479,6 +503,8 @@ async function onFailed(event: IngestEvent): Promise<void> {
   if (!state) return;
 
   // If the event carries an error_message, insert it as a visible chat message before failing.
+  // SAFETY: pipeline.failed sends error_message / error as strings; they are only stored and
+  // emitted as message text.
   const errorMessage =
     (event.data.error_message as string) ?? (event.data.error as string) ?? undefined;
   if (errorMessage) {
@@ -495,8 +521,11 @@ async function onFailed(event: IngestEvent): Promise<void> {
   }
 
   const now = new Date().toISOString();
+  // SAFETY: pipeline.failed sends error / message as strings, shown as the result text.
   const error = (event.data.error as string) ?? (event.data.message as string) ?? 'Failed';
+  // SAFETY: pipeline.failed sends cost_usd / cost as a number of US dollars.
   const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
+  // SAFETY: pipeline.failed sends duration_ms / duration as a number of milliseconds.
   const durationMs =
     (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
 
@@ -514,6 +543,7 @@ async function onFailed(event: IngestEvent): Promise<void> {
       cost: costUsd,
       duration: durationMs,
       result: error,
+      // SAFETY: pipeline.failed sends subtype as the CLI result subtype string (e.g. error_max_turns).
       errorReason: (event.data.subtype as string) ?? 'error',
     },
   });
@@ -542,12 +572,16 @@ async function onCLIMessage(event: IngestEvent): Promise<void> {
   const threadState = await resolveState(event);
   if (!threadState) return;
 
+  // SAFETY: cli_message is a Claude CLI stream-json message forwarded unchanged by the pipeline;
+  // the handlers below read it field by field with optional chaining, and one without a
+  // `type` is dropped on the next line.
   const msg = event.data.cli_message as any;
   if (!msg || !msg.type) return;
 
   const stateKey = resolveStateKey(event);
   const cliState = getCLIState(stateKey);
   // Extract author from CLI message (set by pipeline agents)
+  // SAFETY: pipeline agents set `author` as their agent name string; it is only display text.
   const author = (msg.author as string) ?? (event.data.author as string) ?? undefined;
 
   switch (msg.type) {
@@ -759,11 +793,14 @@ async function onMessage(event: IngestEvent): Promise<void> {
   const state = await resolveState(event);
   if (!state) return;
 
+  // SAFETY: legacy message events send text / content / message as strings; the content is
+  // only stored and emitted as message text, with the JSON of the payload as the fallback.
   const content =
     (event.data.text as string) ??
     (event.data.content as string) ??
     (event.data.message as string) ??
     JSON.stringify(event.data);
+  // SAFETY: legacy message events send role as a message role string; insertMessage takes any string.
   const role = (event.data.role as string) ?? 'assistant';
 
   const msgId = await tm.insertMessage({ threadId: state.threadId, role, content });
@@ -781,7 +818,9 @@ async function onWorkflowEvent(event: IngestEvent): Promise<void> {
   if (!state) return;
 
   const { event_type, data } = event;
+  // SAFETY: workflow events send run_id as the run's id string; it is only echoed to the client.
   const runId = (data.run_id as string) ?? event.request_id;
+  // SAFETY: workflow events send workflow_name as a string; it is only display text.
   const workflowName = (data.workflow_name as string) ?? 'unknown';
 
   if (event_type === 'workflow.started') {
@@ -802,8 +841,11 @@ async function onWorkflowEvent(event: IngestEvent): Promise<void> {
       data: {
         runId,
         workflowName,
+        // SAFETY: workflow.step.completed sends step_name as a string; it is only display text.
         stepName: (data.step_name as string) ?? 'unknown',
         status: 'completed',
+        // SAFETY: workflow.step.completed sends the step's output as a JSON object, forwarded
+        // unchanged to the client.
         output: (data.output as Record<string, unknown>) ?? undefined,
       } satisfies WSWorkflowStepData,
     };
@@ -816,6 +858,8 @@ async function onWorkflowEvent(event: IngestEvent): Promise<void> {
         runId,
         workflowName,
         status: 'completed',
+        // SAFETY: workflow.completed sends quality_scores as a map of check name to
+        // { status, details }, forwarded unchanged to the client.
         qualityScores:
           (data.quality_scores as Record<string, { status: string; details: string }>) ?? undefined,
       } satisfies WSWorkflowStatusData,
@@ -953,8 +997,11 @@ async function onSessionToolCall(event: IngestEvent): Promise<void> {
   const threadId = state.threadId;
   const data = event.data;
 
+  // SAFETY: session.tool_call sends tool_name as the tool's name string, stored as display text.
   const toolName = (data.tool_name as string) ?? 'unknown';
   const toolInput = data.tool_input ?? {};
+  // SAFETY: session.tool_call sends tool_call_id as the agent's id string; it is only a map key
+  // matched against the later session.tool_result.
   const toolCallId = (data.tool_call_id as string) ?? '';
 
   // Ensure a parent assistant message exists for the tool call
@@ -1005,7 +1052,10 @@ async function onSessionToolResult(event: IngestEvent): Promise<void> {
   if (!state) return;
 
   const data = event.data;
+  // SAFETY: session.tool_result sends tool_call_id as the agent's id string; an unknown one
+  // finds no tool call below and the event is ignored.
   const agentToolCallId = (data.tool_call_id as string) ?? '';
+  // SAFETY: session.tool_result sends the tool's output as a string, stored as text.
   const output = (data.output as string) ?? '';
 
   const cliState = resolveCliState(event.request_id);
@@ -1046,7 +1096,9 @@ async function onBranchSet(event: IngestEvent): Promise<void> {
   const state = await resolveState(event);
   if (!state) return;
 
+  // SAFETY: session.branch_set sends branch as an optional branch-name string, stored as-is.
   const branch = event.data.branch as string | undefined;
+  // SAFETY: session.branch_set sends worktreePath as an optional path string, stored as-is.
   const worktreePath = event.data.worktreePath as string | undefined;
 
   if (!branch && !worktreePath) return;
@@ -1055,7 +1107,7 @@ async function onBranchSet(event: IngestEvent): Promise<void> {
   if (branch) updates.branch = branch;
   if (worktreePath) updates.worktreePath = worktreePath;
 
-  await tm.updateThread(state.threadId, updates as any);
+  await tm.updateThread(state.threadId, updates);
 
   emitWS(state, {
     type: 'thread:updated',
@@ -1120,6 +1172,8 @@ export async function handleIngestEvent(event: IngestEvent): Promise<IngestResul
       // For truly unknown events from other sources, render as system message
       const state = await resolveState(event);
       if (!state) return {};
+      // SAFETY: unknown events may carry message / detail strings; they are only shown as
+      // system-message text, with the JSON of the payload as the fallback.
       const detail =
         (event.data.message as string) ??
         (event.data.detail as string) ??

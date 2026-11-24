@@ -24,14 +24,7 @@ import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { open, stat } from 'fs/promises';
 import { join } from 'path';
 
-import type {
-  AgentModel,
-  Job,
-  JobLogChunk,
-  JobStatus,
-  PermissionMode,
-  WSEvent,
-} from '@funny/shared';
+import type { AgentModel, Job, JobLogChunk, JobStatus, PermissionMode } from '@funny/shared';
 import { errorMessage } from '@funny/shared/errors';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE, DEFAULT_PROVIDER } from '@funny/shared/models';
@@ -65,7 +58,7 @@ function emit(
   type: 'job:created' | 'job:exited' | 'job:killed' | 'job:cancelled',
   job: Job,
 ): void {
-  wsBroker.emitToUser(userId, { type, threadId: job.threadId, data: { job } } as WSEvent);
+  wsBroker.emitToUser(userId, { type, threadId: job.threadId, data: { job } });
 }
 
 // ── Spawn ────────────────────────────────────────────────────────
@@ -146,6 +139,7 @@ function isAlive(pid: number): boolean {
     return true;
   } catch (err) {
     // ESRCH = no such process; EPERM = exists but not ours (still alive).
+    // SAFETY: process.kill throws a Node system error, which carries `code`.
     return (err as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
@@ -172,7 +166,7 @@ async function scanOnce(): Promise<void> {
   scanRequested = false;
   let hasRunningJobs = false;
   try {
-    const running = (await getServices().jobs.listRunningJobs()) as Job[];
+    const running = await getServices().jobs.listRunningJobs();
     for (const job of running) {
       const { status, exitCode } = deriveStatus(job);
       if (status === 'running') {
@@ -282,7 +276,7 @@ function emitTool(
       }
     | { type: 'agent:tool_output'; data: { toolCallId: string; output: string } },
 ): void {
-  wsBroker.emitToUser(userId, { ...event, threadId } as WSEvent);
+  wsBroker.emitToUser(userId, { ...event, threadId });
 }
 
 async function wakeAgentWithCompletion(job: Job, prompt: string): Promise<void> {
@@ -299,7 +293,10 @@ async function wakeAgentWithCompletion(job: Job, prompt: string): Promise<void> 
     job.threadId,
     prompt,
     cwdResult.value,
+    // SAFETY: thread.model / thread.permissionMode were validated as AgentModel / PermissionMode
+    // when the thread was created or updated; empty values fall back to the typed defaults.
     (thread.model || DEFAULT_MODEL) as AgentModel,
+    // SAFETY: see the model argument above; permissionMode is stored from a validated PermissionMode.
     (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,
     undefined,
     undefined,
@@ -352,7 +349,7 @@ function renderCompletionToolInput(job: Job): Record<string, unknown> {
  * null when the caller has no such job.
  */
 export async function cancelJob(jobId: string, userId: string): Promise<JobStatus | null> {
-  const job = (await getServices().jobs.getJob(jobId)) as Job | undefined;
+  const job = await getServices().jobs.getJob(jobId);
   if (!job || job.userId !== userId) return null;
   // A finished job keeps its outcome, and its pid may belong to another process by now.
   if (job.status !== 'running') return job.status;
@@ -367,7 +364,7 @@ export async function cancelJob(jobId: string, userId: string): Promise<JobStatu
   const applied = await getServices().jobs.updateJob(jobId, { status: 'cancelled' });
   if (!applied) {
     // It ended while being cancelled: report how.
-    const ended = (await getServices().jobs.getJob(jobId)) as Job | undefined;
+    const ended = await getServices().jobs.getJob(jobId);
     return ended?.status ?? null;
   }
   emit(userId, 'job:cancelled', { ...job, status: 'cancelled' });
@@ -380,7 +377,7 @@ export async function readJobLog(
   userId: string,
   offset = 0,
 ): Promise<JobLogChunk | null> {
-  const job = (await getServices().jobs.getJob(jobId)) as Job | undefined;
+  const job = await getServices().jobs.getJob(jobId);
   if (!job || job.userId !== userId) return null;
 
   const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
@@ -408,6 +405,7 @@ export async function readJobLog(
       nextOffset = readOffset;
     }
   } catch (err) {
+    // SAFETY: fs/promises open/read reject with Node system errors, which carry `code`.
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
 

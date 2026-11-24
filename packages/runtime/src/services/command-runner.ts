@@ -91,6 +91,8 @@ const activeCommands = new Map<string, RunningCommand>();
 let metricsSchedule: ReturnType<typeof scheduleRepeating> | null = null;
 
 async function emitWS(type: string, data: unknown, projectId?: string) {
+  // SAFETY: every caller passes a `command:*` type with the data shape the shared WSEvent
+  // union declares for it; `type` and `data` are untyped parameters, so TS cannot pair them.
   const event = { type, threadId: '', data } as any;
   // Look up project userId for per-user filtering
   if (projectId) {
@@ -116,6 +118,7 @@ export function startCommand(
 ): ResultAsync<void, DomainError> {
   return ResultAsync.fromPromise(
     startCommandImpl(commandId, command, cwd, projectId, label, options),
+    // SAFETY: optional chaining plus `?? err` covers a rejection that is not an Error (no `message`).
     (err) => internal(String((err as Error)?.message ?? err)),
   );
 }
@@ -183,9 +186,9 @@ async function startCommandImpl(
   );
 
   // Stream stdout
-  void readStream(proc.stdout as ReadableStream<Uint8Array>, commandId, 'stdout', projectId);
+  void readStream(proc.stdout, commandId, 'stdout', projectId);
   // Stream stderr
-  void readStream(proc.stderr as ReadableStream<Uint8Array>, commandId, 'stderr', projectId);
+  void readStream(proc.stderr, commandId, 'stderr', projectId);
 
   // Handle exit
   proc.exited

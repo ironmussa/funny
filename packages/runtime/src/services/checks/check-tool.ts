@@ -206,6 +206,7 @@ export function checkToolDefinition(threadId: string, userId: string): AgentTool
     description,
     schema,
     run: (args: Args, extra: unknown) =>
+      // SAFETY: the agent tool host passes the MCP request `extra`, whose `signal` is the call's AbortSignal (or absent).
       runChecks(threadId, userId, args, (extra as { signal?: AbortSignal } | undefined)?.signal),
   };
 }

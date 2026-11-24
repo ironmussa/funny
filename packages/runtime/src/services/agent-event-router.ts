@@ -58,22 +58,19 @@ export class AgentEventRouter {
    */
   private async persistTurnOutcome(event: AgentCompletedEvent): Promise<void> {
     const detail = await this.threadManager.getThreadWithMessages(event.threadId, 1);
+    // SAFETY: the server's getThreadWithMessages attaches `lastUserMessage` (a message row with an
+    // `id`) to the detail; it is absent on older servers, and a missing id returns below.
     const userMessageId = (detail as { lastUserMessage?: { id?: string } } | null)?.lastUserMessage
       ?.id;
     if (!userMessageId) return;
 
     const createdAt = new Date().toISOString();
-    const data: TurnOutcomeEventData = {
+    const data = {
       userMessageId,
       status: event.status,
       completedAt: createdAt,
-    };
-    await getServices().threadEvents.saveThreadEvent(
-      event.threadId,
-      'turn_outcome',
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      data as unknown as Record<string, unknown>,
-    );
+    } satisfies TurnOutcomeEventData;
+    await getServices().threadEvents.saveThreadEvent(event.threadId, 'turn_outcome', data);
     this.emitWSToUser(event.threadId, event.userId, 'thread:event', {
       event: {
         id: crypto.randomUUID(),
@@ -167,6 +164,8 @@ export class AgentEventRouter {
         const { status } = transitionStatus(
           threadId,
           { type: 'STOP' },
+          // SAFETY: threads.status is only written through the thread state machine, so the stored
+          // string is a ThreadStatus (or the 'running' default above).
           currentStatus as ThreadStatus,
         );
         await this.threadManager.updateThread(threadId, {
@@ -226,6 +225,8 @@ export class AgentEventRouter {
     type: WSEvent['type'],
     data: unknown,
   ): void {
+    // SAFETY: callers pair each `type` with the payload shape the client expects for it; WSEvent is a
+    // discriminated union that cannot be checked from a generic (type, data) pair.
     const event = { type, threadId, data } as WSEvent;
     if (userId) {
       this.wsBroker.emitToUser(userId, event);
@@ -280,6 +281,7 @@ export class AgentEventRouter {
       log.warn('Failed to persist changed-files summary', {
         namespace: 'agent',
         threadId,
+        // SAFETY: only `.message` is read, optional-chained; a reason without one falls back to String(err).
         error: (err as Error)?.message ?? String(err),
       });
     });
@@ -298,6 +300,8 @@ export class AgentEventRouter {
     const { status: failedStatus } = transitionStatus(
       threadId,
       { type: 'FAIL', error: errorMessage },
+      // SAFETY: threads.status is only written through the thread state machine, so the stored
+      // string is a ThreadStatus (or the 'running' default above).
       currentStatus as ThreadStatus,
     );
     // A process that exits while waiting for an ACP response has lost its
@@ -328,6 +332,9 @@ export class AgentEventRouter {
   ): Promise<void> {
     if (status !== 'waiting') await this.persistChangedFilesSummary(threadId);
     if (thread) {
+      // SAFETY: `status` is the FAIL transition's result ('failed' from running) or 'waiting' for a
+      // lost permission continuation; the narrow type is not checked at runtime and emitAgentCompleted
+      // forwards the value unchanged to the completion bus.
       await this.emitAgentCompleted(threadId, thread, status as 'completed' | 'failed' | 'stopped');
     }
   }

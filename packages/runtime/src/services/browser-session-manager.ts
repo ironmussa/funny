@@ -220,7 +220,7 @@ function mouse(type: 'mouseMoved' | 'mousePressed' | 'mouseReleased'): PanelInpu
     if (type === 'mouseMoved') {
       if (held) event.button = held;
     } else {
-      event.button = (input.button ?? 'left') as MouseButton;
+      event.button = input.button ?? 'left';
       event.clickCount = input.clickCount ?? 1;
     }
     return cs.dispatchMouseEvent(event);
@@ -290,6 +290,8 @@ class BrowserSessionManager {
   ): void {
     // The envelope keeps `threadId: ''` (browser-session events are user-scoped);
     // the thread binding travels inside `data` for the panel to route on.
+    // SAFETY: every caller passes a `browser-session:*` type with the data shape the
+    // shared WSEvent union declares for it; `type` is a plain string here, so TS cannot pair them.
     wsBroker.emitToUser(s.userId, {
       type,
       threadId: '',
@@ -506,9 +508,9 @@ class BrowserSessionManager {
 
   /** Threads currently holding a session (for the `too-many-sessions` message). */
   listThreadsWithSessions(userId: string): string[] {
-    return Array.from(this.sessions.values())
-      .filter((s) => s.userId === userId && s.threadId)
-      .map((s) => s.threadId as string);
+    return Array.from(this.sessions.values()).flatMap((s) =>
+      s.userId === userId && s.threadId ? [s.threadId] : [],
+    );
   }
 
   // ── Open ─────────────────────────────────────────────────────────────────
@@ -863,7 +865,7 @@ class BrowserSessionManager {
   /** Keep one active tab per session: switch the session (and panel) to a popup. */
   private async followPopup(s: BrowserSession, popup: Page): Promise<void> {
     const cdp = await popup.context().newCDPSession(popup);
-    const info = (await cdp.send('Target.getTargetInfo')) as { targetInfo: { targetId: string } };
+    const info = await cdp.send('Target.getTargetInfo');
     await cdp.detach().catch(() => {});
     s.backgroundTabs.push(s.tab);
     s.tab = { page: popup, targetId: info.targetInfo.targetId, ephemeralContext: null };
@@ -1243,7 +1245,7 @@ class BrowserSessionManager {
   /** Remove temp profiles left by the pre-host process-per-session model. */
   async cleanupLegacyTempProfiles(): Promise<void> {
     const root = tmpdir();
-    const entries = await readdir(root).catch(() => [] as string[]);
+    const entries = await readdir(root).catch((): string[] => []);
     await Promise.all(
       entries
         .filter((e) => e.startsWith('funny-browser-'))

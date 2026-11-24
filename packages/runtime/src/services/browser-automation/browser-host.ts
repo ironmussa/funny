@@ -93,7 +93,7 @@ async function closeLeftoverPages(browser: Browser): Promise<void> {
 async function targetIdOf(context: BrowserContext, page: Page): Promise<string> {
   const cdp = await context.newCDPSession(page);
   try {
-    const info = (await cdp.send('Target.getTargetInfo')) as { targetInfo: { targetId: string } };
+    const info = await cdp.send('Target.getTargetInfo');
     return info.targetInfo.targetId;
   } finally {
     await cdp.detach().catch(() => {});
@@ -353,10 +353,10 @@ export class BrowserHost {
         timeout: 10_000,
       });
       opened.catch(() => {});
-      const { targetId } = (await cdp.send('Target.createTarget', {
+      const { targetId } = await cdp.send('Target.createTarget', {
         url: 'about:blank',
         newWindow: true,
-      })) as { targetId: string };
+      });
       created(targetId);
       return await opened;
     } finally {

@@ -105,6 +105,9 @@ const activeRuns = new Map<string, AbortController>();
 // ── Pipeline Repository (delegates to service provider) ─────
 
 function toPipelineConfig(row: any): PipelineConfig {
+  // SAFETY: `row` is a `pipelines` table row from the server's data channel; the
+  // server only writes model ids chosen in the pipeline settings form (AgentModel
+  // values) to the *Model columns.
   return {
     id: row.id,
     projectId: row.projectId,
@@ -375,7 +378,7 @@ export async function startPipelineRun(opts: {
   // Helpers to project the YAML scope back onto the legacy DB column shape.
   const verdictOf = (ctx: YamlPipelineContext): PipelineVerdict | undefined => {
     const raw = ctx.outputs.review?.json?.verdict;
-    return raw === 'pass' || raw === 'fail' ? (raw as PipelineVerdict) : undefined;
+    return raw === 'pass' || raw === 'fail' ? raw : undefined;
   };
   const findingsOf = (ctx: YamlPipelineContext): string | undefined => {
     const raw = ctx.outputs.review?.json?.findings;

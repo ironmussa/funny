@@ -256,7 +256,7 @@ function FileListContent(props: FileListProps) {
               variant="outline"
               size="sm"
               onClick={props.refresh}
-              className="gap-1.5"
+              gap="snug"
               data-testid="review-retry"
             >
               <RotateCcw className="icon-xs" />

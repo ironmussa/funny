@@ -396,8 +396,8 @@ function useSyncCurrentBranchPR(threadId: string | null | undefined, pr: GitHubP
 }
 
 function splitByBranch(prs: GitHubPR[], branch: string | undefined) {
-  if (!branch) return { currentBranchPRs: [] as GitHubPR[], otherPRs: prs };
   const currentBranchPRs: GitHubPR[] = [];
+  if (!branch) return { currentBranchPRs, otherPRs: prs };
   const otherPRs: GitHubPR[] = [];
   for (const pr of prs) {
     if (pr.head.ref === branch) currentBranchPRs.push(pr);

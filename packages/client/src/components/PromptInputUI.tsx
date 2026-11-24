@@ -184,7 +184,8 @@ export interface PromptInputUIProps {
 // ── Component ────────────────────────────────────────────────────
 
 const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = [];
-const EMPTY_MESSAGE_HISTORY: string[] = [];
+const EMPTY_MESSAGE_HISTORY: readonly string[] = [];
+const EMPTY_RUNTIME_MODES: RuntimeMode[] = [];
 
 const PROP_DEFAULTS = {
   loading: false,
@@ -197,7 +198,7 @@ const PROP_DEFAULTS = {
   isScratch: false,
   createWorktree: false,
   runtime: 'local',
-  runtimeModes: [] as RuntimeMode[],
+  runtimeModes: EMPTY_RUNTIME_MODES,
   selectedBranch: '',
   followUpSelectedBranch: '',
   showBacklog: false,
@@ -205,7 +206,7 @@ const PROP_DEFAULTS = {
   hasDictation: false,
   isRecording: false,
   isTranscribing: false,
-  messageHistory: EMPTY_MESSAGE_HISTORY as readonly string[],
+  messageHistory: EMPTY_MESSAGE_HISTORY,
 };
 
 type ResolvedProps = Omit<PromptInputUIProps, keyof typeof PROP_DEFAULTS> & typeof PROP_DEFAULTS;
@@ -216,6 +217,7 @@ function withDefaults(props: PromptInputUIProps): ResolvedProps {
   for (const [key, value] of Object.entries(PROP_DEFAULTS)) {
     if (resolved[key] === undefined) resolved[key] = value;
   }
+  // SAFETY: resolved copies every prop and then fills each PROP_DEFAULTS key left undefined with its default, which is the ResolvedProps shape.
   return resolved as ResolvedProps;
 }
 

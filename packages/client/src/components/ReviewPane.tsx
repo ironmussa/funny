@@ -177,6 +177,7 @@ export function ReviewPane() {
       {/* Normal ReviewPane content */}
       <Tabs
         value={reviewSubTab}
+        // SAFETY: the triggers come from TABS in ReviewPaneTabs, whose values are typed ReviewSubTab.
         onValueChange={(v) => setReviewSubTab(v as ReviewSubTab)}
         className="flex h-full flex-col text-xs"
         style={{ contain: 'strict' }}

@@ -160,8 +160,10 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     }
     setDiagnostics(result.value.diagnostics);
     if (!result.value.ok || !result.value.parsed || !result.value.graph) return;
+    // SAFETY: with ok true, POST /workflows/validate sets parsed to the workflowSchema result (a ParsedWorkflow) of parseWorkflowYaml.
     const nextParsed = result.value.parsed as ParsedWorkflow;
     setParsed(nextParsed);
+    // SAFETY: the same response sets graph to workflowToGraph(parsed), a WorkflowGraph.
     applyGraph(result.value.graph as WorkflowGraph, setNodes, setEdges, runStates, filter);
   }, [filter, runStates, setEdges, setNodes, source]);
 
@@ -203,6 +205,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
     if (!selectedName || hasErrors || !selectedThreadId) return;
     let inputs: Record<string, unknown>;
     try {
+      // SAFETY: not checked here on purpose; POST /workflows/:name/run validates inputs with z.record and refuses any other JSON value.
       inputs = JSON.parse(inputsSource) as Record<string, unknown>;
     } catch {
       toast.error('Inputs must be valid JSON');
@@ -473,9 +476,7 @@ function Inspector({
   const updateNode = (patch: Partial<ParsedNode>) => {
     onUpdate((current) => ({
       ...current,
-      nodes: current.nodes.map((item) =>
-        item.id === node.id ? ({ ...item, ...patch } as ParsedNode) : item,
-      ),
+      nodes: current.nodes.map((item) => (item.id === node.id ? { ...item, ...patch } : item)),
     }));
   };
 
@@ -485,7 +486,7 @@ function Inspector({
       onUpdate((current) => ({
         ...current,
         nodes: current.nodes.map((item) =>
-          item.id === node.id ? ({ ...item, [action.type]: value } as ParsedNode) : item,
+          item.id === node.id ? { ...item, [action.type]: value } : item,
         ),
       }));
     } catch {
@@ -499,19 +500,19 @@ function Inspector({
       nodes: current.nodes.map((item) => {
         if (item.id !== node.id) return item;
         const cleared = { ...item };
-        for (const key of ACTION_KEYS) delete (cleared as Record<string, unknown>)[key];
-        return { ...cleared, [nextType]: defaultActionValue(nextType) } as ParsedNode;
+        for (const key of ACTION_KEYS) delete cleared[key];
+        return { ...cleared, [nextType]: defaultActionValue(nextType) };
       }),
     }));
   };
 
   const applyJsonField = (field: 'retry' | 'loop', value: string) => {
     if (!value.trim()) {
-      updateNode({ [field]: undefined } as Partial<ParsedNode>);
+      updateNode({ [field]: undefined });
       return;
     }
     try {
-      updateNode({ [field]: JSON.parse(value) } as Partial<ParsedNode>);
+      updateNode({ [field]: JSON.parse(value) });
     } catch {
       toast.error(`${field} JSON is invalid`);
     }
@@ -544,6 +545,7 @@ function Inspector({
         <select
           aria-label="Action type"
           value={action.type}
+          // SAFETY: the options of this select are the entries of ACTION_KEYS.
           onChange={(event) => changeActionType(event.target.value as (typeof ACTION_KEYS)[number])}
           className="border-input bg-background h-8 rounded-md border px-2 text-sm"
         >
@@ -562,6 +564,7 @@ function Inspector({
           aria-label="Error handling"
           value={node.on_error}
           onChange={(event) =>
+            // SAFETY: the options of this select are 'fail', 'continue' and 'retry', the on_error enum values.
             updateNode({ on_error: event.target.value as ParsedNode['on_error'] })
           }
           className="border-input bg-background h-8 rounded-md border px-2 text-sm"
@@ -660,6 +663,7 @@ function applyDefinition(
     filter: string;
   },
 ) {
+  // SAFETY: the runtime fills parsed with the catalog entry's workflow (definitionOf), already parsed with workflowSchema.
   const parsed = definition.parsed as ParsedWorkflow;
   setters.setDefinition(definition);
   setters.setParsed(parsed);

@@ -527,6 +527,7 @@ export function PRDetailDialog({
 
         <Tabs
           value={activeTab}
+          // SAFETY: the only TabsTrigger values below are 'info' and 'conversation'.
           onValueChange={(value) => setActiveTab(value as 'info' | 'conversation')}
           className="flex min-h-0 flex-1 flex-col"
         >

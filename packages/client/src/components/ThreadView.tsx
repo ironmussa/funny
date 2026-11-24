@@ -65,6 +65,7 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   // while the freshly created thread loads.
   const location = useLocation();
   const navigate = useNavigate();
+  // SAFETY: the only navigation that sets router state on a thread route is finishCreatedThread in NewThreadInput, which passes { pendingPrompt, pendingMetadata }; any other entry has null state.
   const { pendingPrompt, pendingMetadata } =
     (location.state as {
       pendingPrompt?: string;

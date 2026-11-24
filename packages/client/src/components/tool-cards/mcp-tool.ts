@@ -67,14 +67,26 @@ export function isBrowserTool(mcp: McpToolName): boolean {
   return mcp.server === 'funny_browser';
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
 function str(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+  return isString(value) && value.trim() ? value.trim() : null;
 }
 
 type Summarizer = (parsed: Record<string, unknown>) => string | null;
 
 function num(value: unknown): number | null {
-  return typeof value === 'number' ? value : null;
+  return isNumber(value) ? value : null;
 }
 
 function actTarget(parsed: Record<string, unknown>): string | null {
@@ -124,7 +136,7 @@ const BROWSER_SUMMARIES: Record<string, Summarizer> = {
   },
   browser_snapshot: (p) => (p.screenshot === true ? 'with screenshot' : null),
   browser_dialog: (p) => {
-    if (typeof p.accept !== 'boolean') return null;
+    if (!isBoolean(p.accept)) return null;
     const text = str(p.promptText);
     return p.accept ? (text ? `accept · "${firstLine(text, 60)}"` : 'accept') : 'dismiss';
   },
@@ -205,7 +217,7 @@ export function getMcpSummary(
   }
   for (const key of SUMMARY_KEYS) {
     const value = parsed[key];
-    const text = typeof value === 'string' ? firstLine(value, 120) : null;
+    const text = isString(value) ? firstLine(value, 120) : null;
     if (text) return { key, text };
   }
   return null;
@@ -233,41 +245,43 @@ function textPart(text: string): McpResultPart {
 
 type ContentBlock = Record<string, any>;
 
+/** Any non-null object (arrays included), read as a bag of fields. */
+function isContentBlock(value: unknown): value is ContentBlock {
+  return !!value && typeof value === 'object';
+}
+
 function imagePart(b: ContentBlock): McpResultPart | null {
-  const mimeType = typeof b.mimeType === 'string' ? b.mimeType : 'image/png';
+  const mimeType = isString(b.mimeType) ? b.mimeType : 'image/png';
   // Only inline raster/vector data the browser renders as an image.
-  if (typeof b.data !== 'string' || !/^image\/[a-z0-9.+-]+$/i.test(mimeType)) return null;
+  if (!isString(b.data) || !/^image\/[a-z0-9.+-]+$/i.test(mimeType)) return null;
   return { kind: 'image', src: `data:${mimeType};base64,${b.data}`, mimeType };
 }
 
 function resourcePart(b: ContentBlock): McpResultPart | null {
   const r = b.resource ?? {};
-  if (typeof r.uri !== 'string') return null;
-  return { kind: 'resource', uri: r.uri, text: typeof r.text === 'string' ? r.text : null };
+  if (!isString(r.uri)) return null;
+  return { kind: 'resource', uri: r.uri, text: isString(r.text) ? r.text : null };
 }
 
 const CONTENT_PARSERS: Record<string, (b: ContentBlock) => McpResultPart | null> = {
-  text: (b) => (typeof b.text === 'string' ? textPart(b.text) : null),
+  text: (b) => (isString(b.text) ? textPart(b.text) : null),
   image: imagePart,
   resource: resourcePart,
-  resource_link: (b) =>
-    typeof b.uri === 'string' ? { kind: 'resource', uri: b.uri, text: null } : null,
+  resource_link: (b) => (isString(b.uri) ? { kind: 'resource', uri: b.uri, text: null } : null),
 };
 
 function contentPart(block: unknown): McpResultPart | null {
-  if (!block || typeof block !== 'object') return null;
-  const b = block as ContentBlock;
+  if (!isContentBlock(block)) return null;
+  const b = block;
   const parse =
-    typeof b.type === 'string' && Object.hasOwn(CONTENT_PARSERS, b.type)
-      ? CONTENT_PARSERS[b.type]
-      : null;
+    isString(b.type) && Object.hasOwn(CONTENT_PARSERS, b.type) ? CONTENT_PARSERS[b.type] : null;
   return parse ? parse(b) : null;
 }
 
 function durationFromMeta(meta: unknown): number | null {
-  if (!meta || typeof meta !== 'object') return null;
+  if (!isContentBlock(meta)) return null;
   for (const [key, value] of Object.entries(meta)) {
-    if (/durationms$/i.test(key) && typeof value === 'number' && Number.isFinite(value)) {
+    if (/durationms$/i.test(key) && isNumber(value) && Number.isFinite(value)) {
       return value;
     }
   }
@@ -288,8 +302,8 @@ export function parseMcpResult(output: string | undefined): McpResult | null {
   } catch {
     return null;
   }
-  const envelope = Array.isArray(value) ? { content: value } : (value as Record<string, any>);
-  if (!envelope || typeof envelope !== 'object' || !Array.isArray(envelope.content)) return null;
+  const envelope = Array.isArray(value) ? { content: value } : value;
+  if (!isContentBlock(envelope) || !Array.isArray(envelope.content)) return null;
   const parts = envelope.content.map(contentPart);
   // Not an MCP envelope if any block is unrecognized: show the raw output instead.
   if (parts.some((p: McpResultPart | null) => p === null)) return null;

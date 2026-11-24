@@ -4,6 +4,10 @@
  * the generic card (every field of a built-in tool).
  */
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** Input keys holding source code, with the language they imply (if any). */
 const CODE_KEYS: Record<string, string | null> = {
   code: null,
@@ -44,7 +48,7 @@ export interface CodeInput {
 export function getCodeInput(parsed: Record<string, unknown>, tool: string): CodeInput | null {
   for (const [key, keyLanguage] of Object.entries(CODE_KEYS)) {
     const value = parsed[key];
-    if (typeof value !== 'string' || !value.trim()) continue;
+    if (!isString(value) || !value.trim()) continue;
     return { key, code: value, language: keyLanguage ?? toolLanguage(tool) };
   }
   return null;

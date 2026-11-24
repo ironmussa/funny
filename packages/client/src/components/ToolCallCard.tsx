@@ -37,12 +37,16 @@ function normalizeProviderErrorText(text: string): string {
   return stripAnsi(text).replace(/\r\n/g, '\n').trim();
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function shouldSuppressDuplicateProviderErrorOutput(
   name: string,
   parsed: Record<string, unknown>,
   output: string | undefined,
 ): boolean {
-  if (name !== 'ProviderError' || !output || typeof parsed.error !== 'string') return false;
+  if (name !== 'ProviderError' || !output || !isString(parsed.error)) return false;
   return normalizeProviderErrorText(parsed.error) === normalizeProviderErrorText(output);
 }
 
@@ -69,7 +73,7 @@ export const ToolCallCard = memo(
     // that value flows through untouched. Only run ANSI stripping on real strings —
     // calling `.replace` on a non-string throws and crashes the whole thread view.
     const summary = useMemo(
-      () => (typeof rawSummary === 'string' ? stripAnsi(rawSummary) : rawSummary),
+      () => (isString(rawSummary) ? stripAnsi(rawSummary) : rawSummary),
       [rawSummary],
     );
 

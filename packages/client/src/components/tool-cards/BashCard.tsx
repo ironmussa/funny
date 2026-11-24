@@ -8,10 +8,19 @@ import { CommandOutput } from './CommandOutput';
 import { unwrapShellCommand } from './format-utils';
 import { ToolContentArea } from './MobileContentPreview';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** A primitive that `String()` prints as itself. */
+function isPrintablePrimitive(value: unknown): value is number | boolean | bigint {
+  return typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint';
+}
+
 function commandToText(command: unknown): string | null {
-  if (typeof command === 'string') return unwrapShellCommand(command);
+  if (isString(command)) return unwrapShellCommand(command);
   if (command == null) return null;
-  if (typeof command === 'number' || typeof command === 'boolean' || typeof command === 'bigint') {
+  if (isPrintablePrimitive(command)) {
     return String(command);
   }
 

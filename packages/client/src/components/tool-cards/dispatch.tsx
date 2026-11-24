@@ -16,6 +16,10 @@ import { TaskCard } from './TaskCard';
 import { ThinkCard } from './ThinkCard';
 import { WriteFileCard } from './WriteFileCard';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 interface Args {
   name: string;
   parsed: Record<string, any>;
@@ -132,13 +136,13 @@ export function dispatchToolCard(args: Args): ReactNode | null {
   if (name === 'ExitPlanMode')
     return (
       <ExitPlanModeCard
-        plan={planText || (typeof parsed.plan === 'string' ? parsed.plan : undefined)}
+        plan={planText || (isString(parsed.plan) ? parsed.plan : undefined)}
         onRespond={output ? undefined : onRespond}
         output={output}
         displayTime={displayTime}
       />
     );
-  if (typeof parsed.plan === 'string' && parsed.plan.length > 0)
+  if (isString(parsed.plan) && parsed.plan.length > 0)
     return (
       <PlanCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
     );

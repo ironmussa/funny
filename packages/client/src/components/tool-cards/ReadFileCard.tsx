@@ -25,6 +25,10 @@ import {
   makeRelativePath,
 } from './utils';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 const LINE_PREFIX_RE = /^(\s*)(\d+)([→\t])(.*)$/;
 
 interface ParsedLine {
@@ -139,7 +143,7 @@ export function ReadFileCard({
   const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
   const isMarkdown = filePath ? isMarkdownFile(filePath) : false;
-  const hasOutput = typeof output === 'string' && output.length > 0;
+  const hasOutput = isString(output) && output.length > 0;
 
   const [expanded, setExpanded] = useState(false);
   const [renderMarkdown, setRenderMarkdown] = useResettableState(isMarkdown, [

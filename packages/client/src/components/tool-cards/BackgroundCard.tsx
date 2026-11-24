@@ -10,8 +10,16 @@ import { ToolContentArea } from './MobileContentPreview';
 
 const JOB_STATUSES = new Set(['running', 'exited', 'failed', 'killed', 'cancelled']);
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function text(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null;
+  return isString(value) && value.trim() ? value : null;
 }
 
 function JobStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
@@ -52,7 +60,7 @@ export function BackgroundCard({
   const cwd = text(parsed.cwd);
   const summary = text(parsed.label) ?? command;
   const status = text(parsed.status);
-  const exitCode = typeof parsed.exitCode === 'number' ? parsed.exitCode : null;
+  const exitCode = isNumber(parsed.exitCode) ? parsed.exitCode : null;
 
   return (
     <div

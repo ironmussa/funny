@@ -33,8 +33,12 @@ export function createEndpointPolicy(environment: TransportEnvironment): Endpoin
   };
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function validateRemoteOrigin(raw: unknown, allowlist: readonly string[]): string | null {
-  if (typeof raw !== 'string' || raw.length === 0) return null;
+  if (!isString(raw) || raw.length === 0) return null;
   let parsed: ParsedUrl;
   try {
     parsed = new URL(raw);

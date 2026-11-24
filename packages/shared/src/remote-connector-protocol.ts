@@ -630,9 +630,25 @@ export type ConnectorErrorResult = z.infer<typeof connectorErrorResultSchema>;
 export type ConnectorIpcRequest = z.infer<typeof connectorIpcRequestSchema>;
 export type ConnectorIpcResponse = z.infer<typeof connectorIpcResponseSchema>;
 
+function isNonNullObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === 'object') {
+  if (isNonNullObject(value)) {
     return Object.fromEntries(
       Object.entries(value)
         .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
@@ -763,7 +779,7 @@ export function validateRemoteOperationArguments(
       continue;
     }
     if (definition.type === 'string') {
-      if (typeof value !== 'string') throw new Error(`Argument ${name} must be a string`);
+      if (!isString(value)) throw new Error(`Argument ${name} must be a string`);
       if (value.length > definition.maxLength)
         throw new Error(`Argument ${name} exceeds its maximum length`);
       if (definition.enum && !definition.enum.includes(value))
@@ -771,13 +787,13 @@ export function validateRemoteOperationArguments(
       if (definition.pattern && !new RegExp(definition.pattern, 'u').test(value))
         throw new Error(`Argument ${name} does not match its pattern`);
     } else if (definition.type === 'integer') {
-      if (typeof value !== 'number' || !Number.isSafeInteger(value))
+      if (!isNumber(value) || !Number.isSafeInteger(value))
         throw new Error(`Argument ${name} must be an integer`);
       if (definition.minimum !== undefined && value < definition.minimum)
         throw new Error(`Argument ${name} is below its minimum`);
       if (definition.maximum !== undefined && value > definition.maximum)
         throw new Error(`Argument ${name} is above its maximum`);
-    } else if (typeof value !== 'boolean') {
+    } else if (!isBoolean(value)) {
       throw new Error(`Argument ${name} must be a boolean`);
     }
     validated[name] = value;

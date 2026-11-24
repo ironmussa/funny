@@ -44,6 +44,10 @@ export function normalizeServerUrl(serverUrl: string): string {
 }
 
 /** The origin of a server URL, or null when it is not an http(s) URL. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function serverOrigin(serverUrl: string): string | null {
   try {
     const url = new URL(normalizeServerUrl(serverUrl));
@@ -103,9 +107,9 @@ export function apiErrorFromResponse(status: number, bodyText: string): ApiError
       message?: unknown;
       issues?: Array<{ message?: unknown; path?: unknown }>;
     };
-    if (typeof body?.message === 'string') message = body.message;
+    if (isString(body?.message)) message = body.message;
     const issue = Array.isArray(body?.issues) ? body.issues[0] : undefined;
-    if (issue && typeof issue.message === 'string' && !message.includes(issue.message)) {
+    if (issue && isString(issue.message) && !message.includes(issue.message)) {
       const where =
         Array.isArray(issue.path) && issue.path.length ? `${issue.path.join('.')}: ` : '';
       message = message ? `${message} (${where}${issue.message})` : `${where}${issue.message}`;

@@ -43,6 +43,10 @@ export function isInside(parent: string, child: string): boolean {
   return c === p || c.startsWith(p + sep);
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 /** Turn an npm package name into a filesystem-safe directory name. */
 export function safeDirName(raw: string): string {
   return raw
@@ -189,7 +193,7 @@ export function installPackageFromPath<T>(
   const sourceError = handler.validateSource(pkg, src);
   if (sourceError) return { ok: false, error: sourceError };
 
-  const dirName = safeDirName(typeof pkg.name === 'string' && pkg.name ? pkg.name : basename(src));
+  const dirName = safeDirName(isNonEmptyString(pkg.name) ? pkg.name : basename(src));
   if (!dirName) return { ok: false, error: 'could not derive a safe extension name' };
   const dest = resolve(dir, dirName);
   if (!isInside(dir, dest) || dest === resolve(dir)) {

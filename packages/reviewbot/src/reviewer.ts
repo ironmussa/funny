@@ -49,6 +49,14 @@ const VALID_CATEGORIES = new Set<ReviewFindingCategory>([
   'maintainability',
 ]);
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function parseReviewOutput(text: string): ParsedReviewOutput {
   // Extract JSON from markdown code blocks or raw JSON
   const jsonMatch =
@@ -61,18 +69,18 @@ function parseReviewOutput(text: string): ParsedReviewOutput {
   try {
     const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0]);
 
-    const summary = typeof parsed.summary === 'string' ? parsed.summary : 'Review completed.';
+    const summary = isString(parsed.summary) ? parsed.summary : 'Review completed.';
 
     const findings = Array.isArray(parsed.findings)
       ? parsed.findings
-          .filter((f: any) => f && typeof f.description === 'string' && typeof f.file === 'string')
+          .filter((f: any) => f && isString(f.description) && isString(f.file))
           .map((f: any) => ({
             severity: VALID_SEVERITIES.has(f.severity) ? f.severity : 'low',
             category: VALID_CATEGORIES.has(f.category) ? f.category : 'logic',
             file: f.file,
-            line: typeof f.line === 'number' ? f.line : undefined,
+            line: isNumber(f.line) ? f.line : undefined,
             description: f.description,
-            suggestion: typeof f.suggestion === 'string' ? f.suggestion : undefined,
+            suggestion: isString(f.suggestion) ? f.suggestion : undefined,
           }))
       : [];
 

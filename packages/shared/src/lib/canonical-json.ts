@@ -1,6 +1,10 @@
+function isNonNullObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === 'object') {
+  if (isNonNullObject(value)) {
     return Object.fromEntries(
       Object.entries(value)
         .sort(([left], [right]) => left.localeCompare(right))

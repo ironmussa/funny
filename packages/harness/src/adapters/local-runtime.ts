@@ -258,15 +258,15 @@ function normalizeCoreMessage(msg: unknown): HarnessEvent[] {
           type: 'session.message',
           timestamp: nowIso(),
           role: 'assistant',
-          text: typeof part.text === 'string' ? part.text : '',
+          text: isString(part.text) ? part.text : '',
           raw: msg,
         });
       } else if (part.type === 'tool_use') {
         events.push({
           type: 'session.tool_call',
           timestamp: nowIso(),
-          id: typeof part.id === 'string' ? part.id : undefined,
-          name: typeof part.name === 'string' ? part.name : 'unknown',
+          id: isString(part.id) ? part.id : undefined,
+          name: isString(part.name) ? part.name : 'unknown',
           input: part.input,
           raw: msg,
         });
@@ -301,6 +301,10 @@ function isResultMessage(msg: unknown): msg is {
   errors?: string[];
 } {
   return isRecord(msg) && msg.type === 'result' && typeof msg.session_id === 'string';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

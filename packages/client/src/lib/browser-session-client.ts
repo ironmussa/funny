@@ -10,6 +10,7 @@ import type { BrowserSessionCloseRequestReason } from '@funny/shared';
  * Frame events are routed elsewhere — see `dispatch-browser-session-events.ts`.
  */
 import { waitFor } from '@funny/shared/async';
+import type { JsonValue } from '@funny/shared/json';
 
 import { createClientLogger } from '@/lib/client-logger';
 import { sendBrowserSessionRealtime } from '@/lib/realtime/browser-session-realtime';
@@ -24,6 +25,9 @@ interface PendingRequest {
 }
 
 const pending = new Map<string, PendingRequest>();
+
+/** A message's own fields: JSON values, with unset optional ones left undefined. */
+type MessageFields = { [field: string]: JsonValue | undefined };
 
 const REQUEST_TIMEOUT_MS = 5000;
 
@@ -50,11 +54,7 @@ export function resolveBrowserSessionRequest(
   else entry.reject(new Error(error ?? 'unknown error'));
 }
 
-function sendRequest(
-  type: string,
-  sessionId: string,
-  extra: Record<string, unknown>,
-): Promise<unknown> {
+function sendRequest(type: string, sessionId: string, extra: MessageFields): Promise<unknown> {
   const requestId = newRequestId();
   return waitFor(
     (resolve, reject) => {
@@ -100,7 +100,7 @@ function sendRequest(
 
 type RealtimeFrame = Parameters<typeof sendBrowserSessionRealtime>[1];
 
-const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) => RealtimeFrame> = {
+const FIRE_AND_FORGET_FRAMES: Record<string, (extra: MessageFields) => RealtimeFrame> = {
   'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
   'browser-session:navigate': (extra) => ({
     case: 'navigate',
@@ -115,11 +115,7 @@ const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) =>
   }),
 };
 
-function sendFireAndForget(
-  type: string,
-  sessionId: string,
-  extra: Record<string, unknown> = {},
-): void {
+function sendFireAndForget(type: string, sessionId: string, extra: MessageFields = {}): void {
   const frame = Object.hasOwn(FIRE_AND_FORGET_FRAMES, type)
     ? FIRE_AND_FORGET_FRAMES[type](extra)
     : null;
@@ -144,7 +140,7 @@ export const browserSessionClient = {
   },
 
   /** Mouse / wheel / keyboard input — fire-and-forget. */
-  input(sessionId: string, input: Record<string, unknown>): void {
+  input(sessionId: string, input: MessageFields): void {
     sendFireAndForget('browser-session:input', sessionId, input);
   },
 

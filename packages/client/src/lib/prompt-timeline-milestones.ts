@@ -61,7 +61,13 @@ const TOOL_CALL_TYPES: Record<string, MilestoneType> = {
   ExitPlanMode: 'plan',
 };
 
-function parseToolInput(input: string): Record<string, unknown> | null {
+/** The fields of a TodoWrite / AskUserQuestion input the timeline reads; each is checked before use. */
+interface MilestoneToolInput {
+  todos?: unknown;
+  questions?: unknown;
+}
+
+function parseToolInput(input: string): MilestoneToolInput | null {
   try {
     return typeof input === 'string' ? JSON.parse(input) : input;
   } catch {
@@ -70,7 +76,7 @@ function parseToolInput(input: string): Record<string, unknown> | null {
 }
 
 /** Extract a short summary for non-todo tool call milestones */
-function getToolCallSummary(name: string, parsed: Record<string, unknown>): string | null {
+function getToolCallSummary(name: string, parsed: MilestoneToolInput): string | null {
   if (name === 'AskUserQuestion') {
     const questions = parsed.questions;
     if (!Array.isArray(questions) || questions.length === 0) return null;

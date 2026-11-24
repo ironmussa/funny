@@ -5,6 +5,7 @@ import type { CompactionEvent } from '@/stores/thread-store';
 
 import { isTrailingFactoryCard, type FactoryTimelineCard } from './factory-timeline';
 import { isGitTimelineEventType } from './git-timeline-events';
+import { parseThreadEventData } from './thread-event-data';
 
 export type ToolItem =
   | { type: 'toolcall'; tc: any }
@@ -466,7 +467,7 @@ function buildThreadEventItems(threadEvents: ThreadEvent[]): RenderItem[] {
 
   // First pass: collect all events that carry a workflowId and group them
   for (const e of filteredEvents) {
-    const wfId = parseEventDataCompat(e.data).workflowId;
+    const wfId = parseThreadEventData(e.data).workflowId;
     if (!wfId) continue;
     if (!workflowGroups.has(wfId)) workflowGroups.set(wfId, []);
     workflowGroups.get(wfId)!.push(e);
@@ -534,16 +535,4 @@ export function buildGroupedRenderItems(
   const merged = [...final, ...eventItems, ...compactionItems, ...factoryItems];
   merged.sort(compareByTimestamp);
   return merged;
-}
-
-/** Parse event data string or object */
-function parseEventDataCompat(data: string | Record<string, unknown>): Record<string, any> {
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return {};
-    }
-  }
-  return data as Record<string, any>;
 }

@@ -12,6 +12,7 @@
 import {
   threadIdFromBrowserSessionId,
   type WSBrowserSessionAudioData,
+  type WSBrowserSessionConsoleData,
   type WSBrowserSessionNavigatedData,
   type WSBrowserSessionAgentActionData,
   type WSBrowserSessionPointerData,
@@ -147,7 +148,7 @@ const BROWSER_SESSION_HANDLERS: Record<string, (data: any) => void> = {
   }) => resolveBrowserSessionRequest(d.requestId, d.ok, d.value, d.error),
 
   // Visible only at debug log level — runner already emits the original.
-  'browser-session:console': (d: Record<string, unknown>) => log.debug('console', d),
+  'browser-session:console': (d: WSBrowserSessionConsoleData) => log.debug('console', { ...d }),
 
   'browser-session:error': (d: { sessionId: string; message: string }) => log.warn('page error', d),
 

@@ -10,7 +10,7 @@
  * then the resident project search provider does the heavy lifting.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
@@ -25,6 +25,42 @@ import { parseJsonBody, parseQuery, queryBoolean } from '../validation/request.j
 const NS = 'text-search-route';
 
 const app = new Hono<HonoEnv>();
+
+/**
+ * The directory a search runs in: the thread's working directory when `threadId` is
+ * given (owner only), otherwise the project `path` the user may access. Answers the
+ * error response when neither is usable.
+ */
+async function resolveSearchCwd(
+  c: Context<HonoEnv>,
+  userId: string,
+  rawThreadId: string | undefined,
+  rawPath: string | undefined,
+): Promise<string | Response> {
+  const threadId = rawThreadId?.trim();
+  const path = rawPath?.trim();
+  if (!threadId && !path) {
+    return c.json({ error: 'threadId or path is required' }, 400);
+  }
+
+  if (threadId) {
+    const thread = await tm.getThread(threadId);
+    if (!thread || thread.userId !== userId) {
+      return c.json({ error: 'Thread not found' }, 404);
+    }
+
+    const cwdResult = await ensureThreadCwd(thread, userId);
+    if (cwdResult.isErr()) {
+      // SAFETY: errorStatus maps every DomainError type to a 4xx/5xx code from STATUS_MAP;
+      // `400` is only the literal Hono's c.json overload needs, the real code is sent unchanged.
+      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
+    }
+    return cwdResult.value;
+  }
+  const denied = await requireProjectPath(path!, userId);
+  if (denied) return denied;
+  return path!;
+}
 
 const textSearchQuerySchema = z.object({
   threadId: z.string().min(1).optional(),
@@ -74,31 +110,9 @@ app.get('/files', async (c) => {
   if (parsedQuery.isErr()) return resultToResponse(c, parsedQuery);
   const { threadId: rawThreadId, path: rawPath, q: query, limit } = parsedQuery.value;
 
-  const threadId = rawThreadId?.trim();
-  const path = rawPath?.trim();
-  if (!threadId && !path) {
-    return c.json({ error: 'threadId or path is required' }, 400);
-  }
-
-  let cwd: string;
-  if (threadId) {
-    const thread = await tm.getThread(threadId);
-    if (!thread || thread.userId !== userId) {
-      return c.json({ error: 'Thread not found' }, 404);
-    }
-
-    const cwdResult = await ensureThreadCwd(thread, userId);
-    if (cwdResult.isErr()) {
-      // SAFETY: errorStatus maps every DomainError type to a 4xx/5xx code from STATUS_MAP;
-      // `400` is only the literal Hono's c.json overload needs, the real code is sent unchanged.
-      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
-    }
-    cwd = cwdResult.value;
-  } else {
-    const denied = await requireProjectPath(path!, userId);
-    if (denied) return denied;
-    cwd = path!;
-  }
+  const resolved = await resolveSearchCwd(c, userId, rawThreadId, rawPath);
+  if (resolved instanceof Response) return resolved;
+  const cwd = resolved;
 
   const leaseResult = await projectSearchRegistry.acquire(cwd);
   if (leaseResult.isErr()) return resultToResponse(c, leaseResult);
@@ -122,31 +136,9 @@ app.post('/files/selection', async (c) => {
   if (parsedBody.isErr()) return resultToResponse(c, parsedBody);
   const { threadId: rawThreadId, path: rawPath, query, relativePath } = parsedBody.value;
 
-  const threadId = rawThreadId?.trim();
-  const path = rawPath?.trim();
-  if (!threadId && !path) {
-    return c.json({ error: 'threadId or path is required' }, 400);
-  }
-
-  let cwd: string;
-  if (threadId) {
-    const thread = await tm.getThread(threadId);
-    if (!thread || thread.userId !== userId) {
-      return c.json({ error: 'Thread not found' }, 404);
-    }
-
-    const cwdResult = await ensureThreadCwd(thread, userId);
-    if (cwdResult.isErr()) {
-      // SAFETY: errorStatus maps every DomainError type to a 4xx/5xx code from STATUS_MAP;
-      // `400` is only the literal Hono's c.json overload needs, the real code is sent unchanged.
-      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
-    }
-    cwd = cwdResult.value;
-  } else {
-    const denied = await requireProjectPath(path!, userId);
-    if (denied) return denied;
-    cwd = path!;
-  }
+  const resolved = await resolveSearchCwd(c, userId, rawThreadId, rawPath);
+  if (resolved instanceof Response) return resolved;
+  const cwd = resolved;
 
   const leaseResult = await projectSearchRegistry.acquire(cwd);
   if (leaseResult.isErr()) return resultToResponse(c, leaseResult);
@@ -191,32 +183,9 @@ app.get('/text', async (c) => {
 
   if (!query.trim()) return c.json({ error: 'q is required' }, 400);
 
-  const threadId = rawThreadId?.trim();
-  const path = rawPath?.trim();
-  if (!threadId && !path) {
-    return c.json({ error: 'threadId or path is required' }, 400);
-  }
-
-  let cwd: string;
-
-  if (threadId) {
-    const thread = await tm.getThread(threadId);
-    if (!thread || thread.userId !== userId) {
-      return c.json({ error: 'Thread not found' }, 404);
-    }
-
-    const cwdResult = await ensureThreadCwd(thread, userId);
-    if (cwdResult.isErr()) {
-      // SAFETY: errorStatus maps every DomainError type to a 4xx/5xx code from STATUS_MAP;
-      // `400` is only the literal Hono's c.json overload needs, the real code is sent unchanged.
-      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
-    }
-    cwd = cwdResult.value;
-  } else {
-    const denied = await requireProjectPath(path!, userId);
-    if (denied) return denied;
-    cwd = path!;
-  }
+  const resolved = await resolveSearchCwd(c, userId, rawThreadId, rawPath);
+  if (resolved instanceof Response) return resolved;
+  const cwd = resolved;
 
   const leaseResult = await projectSearchRegistry.acquire(cwd);
   if (leaseResult.isErr()) return resultToResponse(c, leaseResult);
@@ -240,7 +209,7 @@ app.get('/text', async (c) => {
   if (result.isErr()) {
     log.warn('text-search failed', {
       namespace: NS,
-      threadId,
+      threadId: rawThreadId?.trim(),
       userId,
       error: result.error.message,
     });

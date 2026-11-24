@@ -168,11 +168,7 @@ prFileRoutes.get('/pr-file-content', async (c) => {
     if (!prRes.ok) {
       return c.json({ error: `Failed to fetch PR: ${prRes.status}` }, 502);
     }
-    // SAFETY: GitHub REST GET /pulls/{n} response (prRes.ok above); only `base.ref` and
-    // `head.ref` are read, with optional chaining.
-    const prData = (await prRes.json()) as any;
-    const baseRef = prData.base?.ref;
-    const headRef = prData.head?.ref;
+    const { baseRef, headRef } = await readPullRequestRefs(prRes);
 
     // Fetch both base and head versions in parallel
     const encodedPath = encodeURIComponent(filePath);
@@ -228,6 +224,16 @@ prFileRoutes.post('/pr-revert-file', async (c) => {
   );
 });
 
+/** The base and head branch names of a successful GitHub GET /pulls/{n} response. */
+async function readPullRequestRefs(
+  prRes: Response,
+): Promise<{ baseRef: string | undefined; headRef: string | undefined }> {
+  // SAFETY: GitHub REST GET /pulls/{n} response (callers checked `prRes.ok`); only
+  // `base.ref` and `head.ref` are read, with optional chaining.
+  const prData = (await prRes.json()) as any;
+  return { baseRef: prData.base?.ref, headRef: prData.head?.ref };
+}
+
 async function revertPullRequestFile(
   c: Context<HonoEnv>,
   args: { owner: string; repo: string; token: string; prNumber: number | string; filePath: string },
@@ -239,11 +245,7 @@ async function revertPullRequestFile(
     if (!prRes.ok) {
       return c.json({ error: `Failed to fetch PR: ${prRes.status}` }, 502);
     }
-    // SAFETY: GitHub REST GET /pulls/{n} response (prRes.ok above); only `base.ref` and
-    // `head.ref` are read, with optional chaining.
-    const prData = (await prRes.json()) as any;
-    const baseRef = prData.base?.ref;
-    const headRef = prData.head?.ref;
+    const { baseRef, headRef } = await readPullRequestRefs(prRes);
     if (!baseRef || !headRef) {
       return c.json({ error: 'Could not determine PR branches' }, 400);
     }

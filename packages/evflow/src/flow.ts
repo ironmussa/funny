@@ -1,5 +1,9 @@
 import type { ElementRef, SequenceStep } from './types.js';
 
+function isElementRef(val: ElementRef | null | undefined): val is ElementRef {
+  return !!val && typeof val.name === 'string' && typeof val.kind === 'string';
+}
+
 /**
  * Tagged template literal for defining sequences.
  *
@@ -42,7 +46,7 @@ export function parseFlow(strings: TemplateStringsArray, values: ElementRef[]): 
   }
 
   for (const val of values) {
-    if (!val || typeof val.name !== 'string' || typeof val.kind !== 'string') {
+    if (!isElementRef(val)) {
       throw new Error(
         `flow: interpolated value must be an ElementRef ` +
           `(returned by system.command(), system.event(), etc.), got: ${String(val)}`,

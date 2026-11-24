@@ -19,11 +19,15 @@ export interface ApiContext {
   ports: ApiPorts;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** Validation causes (zod, Standard Schema) expose their issues. */
 function firstIssueMessage(cause: unknown): string | undefined {
   const issues = (cause as { issues?: { message?: unknown }[] } | undefined)?.issues;
   const message = Array.isArray(issues) ? issues[0]?.message : undefined;
-  return typeof message === 'string' ? message : undefined;
+  return isString(message) ? message : undefined;
 }
 
 const t = initTRPC.context<ApiContext>().create({

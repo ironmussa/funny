@@ -97,11 +97,11 @@ export function interpolate(
  */
 export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: InterpolateOptions): T {
   if (value === null || value === undefined) return value;
-  if (typeof value === 'string') return interpolate(value, scope, opts) as T & string;
+  if (isString(value)) return interpolate(value, scope, opts) as T & string;
   if (Array.isArray(value)) {
     return value.map((v) => interpolateObject(v, scope, opts)) as T & unknown[];
   }
-  if (typeof value === 'object') {
+  if (isObject(value)) {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       out[k] = interpolateObject(v, scope, opts);
@@ -114,6 +114,14 @@ export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: Inte
 // ── Internal helpers ────────────────────────────────────────
 
 type MustacheToken = [type: string, key: string, ...rest: unknown[]];
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
+}
 
 function assertScopeCoversTokens(tokens: unknown[], scope: TemplateScope, template: string): void {
   for (const tok of tokens as MustacheToken[]) {
@@ -137,7 +145,7 @@ function resolvePath(scope: TemplateScope, path: string): unknown {
   let current: unknown = scope;
   for (const seg of segments) {
     if (current === null || current === undefined) return undefined;
-    if (typeof current !== 'object') return undefined;
+    if (!isObject(current)) return undefined;
     current = (current as Record<string, unknown>)[seg];
   }
   return current;

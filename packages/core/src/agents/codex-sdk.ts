@@ -881,7 +881,7 @@ async function imagesToLocalFiles(
     const src = (image as any)?.source;
     const data = src?.data ?? (image as any)?.data;
     const mediaType = src?.media_type ?? (image as any)?.mimeType ?? (image as any)?.media_type;
-    if (typeof data !== 'string' || typeof mediaType !== 'string') continue;
+    if (!isString(data) || !isString(mediaType)) continue;
     dir ??= await mkdtemp(join(tmpdir(), 'funny-codex-images-'));
     const ext = extensionForMime(mediaType);
     const file = join(dir, `${randomUUID()}${ext}`);
@@ -900,10 +900,14 @@ function extensionForMime(mime: string): string {
 }
 
 function stringifyToolOutput(value: unknown): string {
-  if (typeof value === 'string') return value;
+  if (isString(value)) return value;
   try {
     return JSON.stringify(value, null, 2);
   } catch {
     return String(value);
   }
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
 }

@@ -211,9 +211,13 @@ app.get('/v1/facts', async (c) => {
 
 // ─── PATCH /v1/facts/:id/invalidate ────────────────────
 
+interface InvalidateBody {
+  reason?: string;
+}
+
 app.patch('/v1/facts/:id/invalidate', async (c) => {
   const factId = c.req.param('id');
-  const body = await c.req.json<{ reason?: string }>().catch((): { reason?: string } => ({}));
+  const body = await c.req.json<InvalidateBody>().catch((): InvalidateBody => ({}));
 
   try {
     const pp = getMemory();

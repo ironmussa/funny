@@ -174,6 +174,45 @@ describe('the panel content', () => {
     expect(screen.getByTestId('factory-run-detail-ref').textContent).toBe('#1');
   });
 
+  // openspec factory-approval-survives-integration, 5.2.
+  test('a merge approval shows the commit a member approved and where it moved', () => {
+    renderBody(
+      queueRun({
+        state: 'merging',
+        mergeApproval: {
+          sha: 'c'.repeat(40),
+          userId: 'u1',
+          at: '2026-11-24T10:00:00.000Z',
+          carriedFrom: 'a'.repeat(40),
+          moves: [
+            {
+              to: 'b'.repeat(40),
+              at: '2026-11-24T11:00:00.000Z',
+              kind: 'same',
+              lines: 0,
+              files: [],
+            },
+            {
+              to: 'c'.repeat(40),
+              at: '2026-11-24T12:00:00.000Z',
+              kind: 'adjustment',
+              lines: 7,
+              files: ['src/a.ts', 'src/b.ts'],
+            },
+          ],
+        },
+      }),
+    );
+    const approval = screen.getByTestId('factory-run-detail-approval');
+    expect(approval.textContent).toContain('Merge approved at aaaaaaa');
+    expect(screen.getByTestId('factory-run-detail-approval-move-0').textContent).toBe(
+      'moved to bbbbbbb · same change',
+    );
+    expect(screen.getByTestId('factory-run-detail-approval-move-1').textContent).toBe(
+      'moved to ccccccc · 7 lines differ in 2 files',
+    );
+  });
+
   test('a run that reached nothing yet shows only its header', () => {
     renderBody(queueRun({ state: 'requested' }));
     expect(screen.getByTestId('factory-run-detail-title')).toBeTruthy();

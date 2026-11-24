@@ -199,7 +199,7 @@ async function probeNestedUserNamespace(): Promise<boolean> {
 }
 
 /** Any non-null object (arrays included). */
-function isObject(value: unknown): value is object {
+function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
@@ -210,18 +210,25 @@ function isObject(value: unknown): value is object {
  * into a command that prints nothing in the sandbox. funny's own pre-tool hook
  * is an SDK callback, not a settings hook, and keeps running.
  */
-export function withSettingsHooksOff(settings: unknown): Record<string, unknown> {
+export function withSettingsHooksOff(settings: Options['settings']): Record<string, unknown> {
   const current = isObject(settings) ? settings : {};
   return { ...current, disableAllHooks: true };
 }
 
 const ALLOWED = new Set(READ_ONLY_AGENT_TOOLS);
 
+/** A tool call's input, as the SDK's pre-tool hook hands it over; every field is checked. */
+type ToolInput = Readonly<Record<string, unknown>>;
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-const text = (value: unknown) => (isNonEmptyString(value) ? value : null);
+/** A tool input's field when it is a non-empty string, else null. */
+function text(input: ToolInput, field: string): string | null {
+  const value = input[field];
+  return isNonEmptyString(value) ? value : null;
+}
 
 /** The folder an absolute glob pattern starts in (its part before the first wildcard). */
 function patternRoot(pattern: string | null): string[] {
@@ -234,11 +241,11 @@ function patternRoot(pattern: string | null): string[] {
 const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
 
 /** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
-function targetsOf(toolName: string, input: Record<string, unknown>, cwd: string): string[] {
-  if (toolName === 'Read') return [text(input.file_path) ?? ''];
+function targetsOf(toolName: string, input: ToolInput, cwd: string): string[] {
+  if (toolName === 'Read') return [text(input, 'file_path') ?? ''];
   const field = PATTERN_FIELD[toolName];
   if (!field) return [];
-  return [text(input.path) ?? cwd, ...patternRoot(text(input[field]))];
+  return [text(input, 'path') ?? cwd, ...patternRoot(text(input, field))];
 }
 
 /** A path with its symlinks resolved, as far as it exists (a link inside the checkout can point out). */
@@ -265,14 +272,14 @@ const inside = (path: string, root: string) => {
 /** Why a read-only agent may not make this call, or null when it may. */ /** Why a read-only agent may not make this call, or null when it may. */
 export function readOnlyDenial(
   toolName: string,
-  toolInput: unknown,
+  toolInput: ToolInput | null | undefined,
   /** The checkout first, then any other folder its reading tools may read (role inputs). */
   roots: readonly string[],
 ): string | null {
   if (!ALLOWED.has(toolName)) {
     return `This thread may only read: ${toolName} is not available. Use ${READ_ONLY_AGENT_TOOLS.join(', ')}.`;
   }
-  const input = (isObject(toolInput) ? toolInput : {}) as Record<string, unknown>;
+  const input: ToolInput = isObject(toolInput) ? toolInput : {};
   if (toolName === 'Bash' && input.dangerouslyDisableSandbox) {
     return 'This thread may only read: commands run in the sandbox, without network or writes.';
   }

@@ -103,14 +103,10 @@ echo "funny runner $FUNNY_COMMIT installed"
  * Environment the install script needs for `build`. `buildNative` compiles
  * native-git too: worth it once per template, too slow for an on-the-fly install.
  */
-export function runnerInstallEnv(
-  build: RunnerBuild,
-  options: { buildNative?: boolean } = {},
-): Record<string, string> {
-  const env: Record<string, string> = {
-    FUNNY_REPO_URL: build.repoUrl,
-    FUNNY_COMMIT: build.commit,
-  };
+export function runnerInstallEnv(build: RunnerBuild, options: { buildNative?: boolean } = {}) {
+  const env: Record<string, string> = {};
+  env.FUNNY_REPO_URL = build.repoUrl;
+  env.FUNNY_COMMIT = build.commit;
   if (options.buildNative) env.FUNNY_BUILD_NATIVE = '1';
   return env;
 }

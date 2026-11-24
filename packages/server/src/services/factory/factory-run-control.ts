@@ -247,7 +247,13 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
           });
         }
         return runs
-          .approveMerge(run.id, { sha, userId, at: new Date().toISOString() })
+          .approveMerge(run.id, {
+            sha,
+            userId,
+            at: new Date().toISOString(),
+            // What the member accepted: an adjustment may add no risk key to these.
+            riskKeys: run.risk?.keys,
+          })
           .mapErr(storage)
           .andThen((written) =>
             written

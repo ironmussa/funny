@@ -81,6 +81,7 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   autoMerge: 'low_risk',
   sensitivePaths: [],
   maxLowRiskLines: 400,
+  approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
@@ -250,6 +251,24 @@ describe('review and merge settings', () => {
       projectId: 'p1',
       enabled: true,
       maxLowRiskLines: 800,
+    });
+  });
+
+  // openspec factory-approval-survives-integration, 4.4.
+  test('the adjustment an approval follows is off by default and saved within its range', () => {
+    mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-approval-adjust-max-lines')).toHaveValue(0);
+    blur('settings-factory-approval-adjust-max-lines', '0');
+    blur('settings-factory-approval-adjust-max-lines', '201');
+    blur('settings-factory-approval-adjust-max-lines', '');
+    blur('settings-factory-approval-adjust-max-lines', 'abc');
+    expect(mocks.save).not.toHaveBeenCalled();
+    blur('settings-factory-approval-adjust-max-lines', '50');
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      approvalAdjustMaxLines: 50,
     });
   });
 

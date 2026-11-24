@@ -117,7 +117,12 @@ function httpErrorMessage(body: Record<string, unknown>, status: number): string
   return rawError ? JSON.stringify(rawError) : `HTTP ${status}`;
 }
 
-const HTTP_STATUS_TYPES: Record<number, ApiErrorType> = {
+/** HTTP status → the error type it reports (others fall back on the status class). */
+interface HttpStatusTypes {
+  readonly [status: number]: ApiErrorType;
+}
+
+const HTTP_STATUS_TYPES: HttpStatusTypes = {
   404: 'NOT_FOUND',
   403: 'FORBIDDEN',
   409: 'CONFLICT',

@@ -38,6 +38,14 @@ function isAstNode(value: unknown): value is AstNode {
   return typeof value === 'object' && value !== null && 'type' in value && 'start' in value;
 }
 
+/** The AST nodes directly under `node` (its parent link excluded). */
+function childNodes(node: AstNode): AstNode[] {
+  return Object.entries(node)
+    .filter(([key]) => key !== 'parent')
+    .flatMap(([, value]) => (Array.isArray(value) ? value : [value]))
+    .filter(isAstNode);
+}
+
 /** Offsets of the `typeof` expressions the rule reports in `source`. */
 function findRuntimeTypeof(fileName: string, source: string): number[] {
   const { program, errors } = parseSync(fileName, source);
@@ -60,11 +68,7 @@ function findRuntimeTypeof(fileName: string, source: string): number[] {
       // set `parent` on this node and every ancestor, which is all the rule reads.
       onUnary(node as never);
     }
-    for (const [key, child] of Object.entries(node)) {
-      if (key === 'parent') continue;
-      const children = Array.isArray(child) ? child : [child];
-      for (const item of children) if (isAstNode(item)) walk(item, node);
-    }
+    for (const child of childNodes(node)) walk(child, node);
   };
   walk(program, null);
   return reported;

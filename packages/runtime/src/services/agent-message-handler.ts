@@ -17,7 +17,14 @@ import {
   getIgnoredFileStats,
   getExternalRepoFileStats,
 } from '@funny/core/git';
-import type { FileDiffSummary, ThreadStatus, WaitingReason, WSEvent } from '@funny/shared';
+import type {
+  ChangedFilesSummaryEventData,
+  FileDiffSummary,
+  Project,
+  ThreadStatus,
+  WaitingReason,
+  WSEvent,
+} from '@funny/shared';
 import { latestSessionChanges } from '@funny/shared';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
@@ -28,7 +35,7 @@ import { redactDeep } from './agent-startup/project-secrets.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { recordBashCheck } from './checks/bash-check-metric.js';
 import { flushPendingMessageUpdates } from './remote-thread-data-client.js';
-import type { IThreadManager, IWSBroker } from './server-interfaces.js';
+import type { IThreadManager, IWSBroker, ThreadEventData } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { canDoGitOps } from './thread-context.js';
 import { threadEventBus } from './thread-event-bus.js';
@@ -118,11 +125,41 @@ function backfillStats(
   });
 }
 
+/** Token usage on an assistant message, under the field names each provider reports. */
+interface AssistantMessageUsage {
+  input_tokens?: number;
+  inputTokens?: number;
+  used?: number;
+  cache_read_input_tokens?: number;
+  cachedReadTokens?: number;
+  cacheReadTokens?: number;
+  cache_creation_input_tokens?: number;
+  cachedWriteTokens?: number;
+  cacheWriteTokens?: number;
+  output_tokens?: number;
+  outputTokens?: number;
+}
+
+/** `summary` as a thread event payload: the same fields, as plain JSON objects. */
+function changedFilesSummaryEventData(summary: ChangedFilesSummaryEventData): ThreadEventData {
+  return {
+    userMessageId: summary.userMessageId,
+    files: summary.files.map(({ nestedDirty, ...file }) =>
+      nestedDirty ? { ...file, nestedDirty: { ...nestedDirty } } : { ...file },
+    ),
+  };
+}
+
 /**
  * Handles all CLI messages from Claude processes — system init,
  * assistant text/tool_use, user tool_result, and result.
  */
-export type ProjectLookup = (id: string) => { path: string; [key: string]: any } | undefined;
+export type ProjectLookup = (
+  id: string,
+) => ProjectLocation | undefined | Promise<ProjectLocation | undefined>;
+
+/** What the handler reads of a project: where it lives on disk. */
+type ProjectLocation = Pick<Project, 'path'>;
 
 export class AgentMessageHandler {
   private projectLookup: ProjectLookup | undefined;
@@ -137,7 +174,7 @@ export class AgentMessageHandler {
   }
 
   /** Lazy-load project lookup to avoid importing the singleton DB in tests */
-  private async getProject(id: string): Promise<{ path: string; [key: string]: any } | undefined> {
+  private async getProject(id: string): Promise<ProjectLocation | undefined> {
     if (!this.projectLookup) {
       const { getServices } = require('./service-registry.js');
       this.projectLookup = getServices().projects.getProject;
@@ -583,26 +620,16 @@ export class AgentMessageHandler {
     const isCompactionSummary = msg.message.content.some(
       (b: any) => b && typeof b === 'object' && 'type' in b && b.type === 'compaction',
     );
-    const usage = isCompactionSummary
+    const usage: AssistantMessageUsage | undefined = isCompactionSummary
       ? undefined
-      : (msg.message.usage as Record<string, unknown> | undefined);
+      : msg.message.usage;
     if (usage) {
-      const inputTokens =
-        (usage.input_tokens as number) ??
-        (usage.inputTokens as number) ??
-        (usage.used as number) ??
-        0;
+      const inputTokens = usage.input_tokens ?? usage.inputTokens ?? usage.used ?? 0;
       const cacheRead =
-        (usage.cache_read_input_tokens as number) ??
-        (usage.cachedReadTokens as number) ??
-        (usage.cacheReadTokens as number) ??
-        0;
+        usage.cache_read_input_tokens ?? usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0;
       const cacheCreation =
-        (usage.cache_creation_input_tokens as number) ??
-        (usage.cachedWriteTokens as number) ??
-        (usage.cacheWriteTokens as number) ??
-        0;
-      const outputTokens = (usage.output_tokens as number) ?? (usage.outputTokens as number) ?? 0;
+        usage.cache_creation_input_tokens ?? usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0;
+      const outputTokens = usage.output_tokens ?? usage.outputTokens ?? 0;
       const totalInputTokens = inputTokens + cacheRead + cacheCreation;
 
       log.info('Assistant message usage (DEBUG)', {
@@ -1315,8 +1342,7 @@ export class AgentMessageHandler {
     await getServices().threadEvents.saveThreadEvent(
       threadId,
       'changed_files_summary',
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      summary as unknown as Record<string, unknown>,
+      changedFilesSummaryEventData(summary),
     );
 
     await this.emitWS(threadId, 'thread:event', {

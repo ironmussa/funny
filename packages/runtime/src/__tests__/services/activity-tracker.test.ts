@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { err, ok } from 'neverthrow';
 
-import { createActivityTracker } from '../../services/activity-tracker.js';
+import { createActivityTracker, type ActivitySpec } from '../../services/activity-tracker.js';
 
 type Report = { eventType: string; payload: any };
 
@@ -182,13 +182,13 @@ describe('reconcile', () => {
 });
 
 describe('origin, effects and recordActivity (track-funny-actions)', () => {
-  const CLEANUP = {
-    kind: 'workspace.cleanup' as const,
+  const CLEANUP: ActivitySpec = {
+    kind: 'workspace.cleanup',
     userId: 'u1',
     projectId: 'p1',
     title: 'Clean up worktree',
     input: { reason: 'manual', deleteBranch: true },
-    origin: 'implicit' as const,
+    origin: 'implicit',
   };
 
   test('origin rides on the start; effects on the next report and the terminal one', async () => {

@@ -8,6 +8,7 @@
  * Translates external webhook events into thread/message operations and WebSocket emissions.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import { getCurrentBranch, getRemoteUrl, getWorktreeBasePaths } from '@funny/core/git';
 import type { WSEvent, WSWorkflowStepData, WSWorkflowStatusData } from '@funny/shared';
 import { scheduleRepeating } from '@funny/shared/async';
@@ -16,6 +17,7 @@ import { nanoid } from 'nanoid';
 
 import { parseGithubOwnerRepo } from '../lib/github-remote.js';
 import { log } from '../lib/logger.js';
+import type { RuntimeThreadUpdate } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import * as tm from './thread-manager.js';
@@ -23,13 +25,14 @@ import { wsBroker } from './ws-broker.js';
 
 // ── Types ────────────────────────────────────────────────────
 
+/** An event posted to `/api/ingest`: a JSON body whose `data` fields depend on `event_type`. */
 export interface IngestEvent {
   event_type: string;
   request_id: string;
   thread_id?: string;
   timestamp: string;
-  data: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
+  data: JsonObject;
+  metadata?: JsonObject;
 }
 
 interface ExternalThreadState {
@@ -804,7 +807,7 @@ async function onWorkflowEvent(event: IngestEvent): Promise<void> {
         workflowName,
         stepName: (data.step_name as string) ?? 'unknown',
         status: 'completed',
-        output: (data.output as Record<string, unknown>) ?? undefined,
+        output: (data.output as JsonObject) ?? undefined,
       } satisfies WSWorkflowStepData,
     };
     emitWS(state, wsEvent);
@@ -1051,11 +1054,11 @@ async function onBranchSet(event: IngestEvent): Promise<void> {
 
   if (!branch && !worktreePath) return;
 
-  const updates: Record<string, unknown> = {};
+  const updates: Pick<RuntimeThreadUpdate, 'branch' | 'worktreePath'> = {};
   if (branch) updates.branch = branch;
   if (worktreePath) updates.worktreePath = worktreePath;
 
-  await tm.updateThread(state.threadId, updates as any);
+  await tm.updateThread(state.threadId, updates);
 
   emitWS(state, {
     type: 'thread:updated',

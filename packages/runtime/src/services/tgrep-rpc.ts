@@ -11,11 +11,29 @@ const envelopeSchema = z.object({
   error: z.unknown().optional(),
 });
 
+/** Params of tgrep's `search` method. */
+export interface TgrepSearchParams {
+  pattern: string;
+  fixed_string: boolean;
+  case_insensitive: boolean;
+  word_boundary: boolean;
+  glob: string[];
+  max_count: number;
+  detail: boolean;
+  positions: boolean;
+}
+
+/** tgrep's JSON-RPC methods and their params (`status` takes none). */
+export interface TgrepRpcParams {
+  search: TgrepSearchParams;
+  status: Record<string, never>;
+}
+
 /** One bounded, cancellable request to an owned local tgrep process. */
-export function tgrepRpc(
+export function tgrepRpc<M extends keyof TgrepRpcParams>(
   port: number,
-  method: string,
-  params: Record<string, unknown>,
+  method: M,
+  params: TgrepRpcParams[M],
   signal: AbortSignal,
   limits = { timeoutMs: 10_000, maxBytes: 8 * 1_048_576 },
 ): Promise<unknown> {

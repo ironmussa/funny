@@ -3,6 +3,7 @@ import type { AgentProvider } from '@funny/shared';
 import { claudeProfileEnv } from '../../utils/claude-profile-paths.js';
 import type { RuntimeThreadRecord } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
+import type { AgentMcpServers } from './load-mcp-servers.js';
 
 export interface ActiveAgentProfile {
   profile: { id: string; name: string; provider: string } | null;
@@ -47,9 +48,9 @@ export async function resolveActiveAgentProfile(
 export async function withWatchMcpServer(
   threadId: string,
   userId: string | undefined,
-  mcpServers: Record<string, any> | undefined,
+  mcpServers: AgentMcpServers | undefined,
   provider?: AgentProvider,
-): Promise<Record<string, any> | undefined> {
+): Promise<AgentMcpServers | undefined> {
   if (!userId) return mcpServers;
   const { FUNNY_MCP_SERVER } = await import('../agent-watch-tool.js');
   const { grantAgentMcpHttp } = await import('../agent-mcp-http.js');
@@ -73,9 +74,9 @@ export async function withWatchMcpServer(
 export async function withBrowserMcpServer(
   threadId: string,
   userId: string | undefined,
-  mcpServers: Record<string, any> | undefined,
+  mcpServers: AgentMcpServers | undefined,
   cwd?: string,
-): Promise<Record<string, any> | undefined> {
+): Promise<AgentMcpServers | undefined> {
   if (!userId || process.env.FUNNY_BROWSER_TOOLS === '0') return mcpServers;
   const { BROWSER_MCP_SERVER } = await import('../browser-automation/browser-mcp-server.js');
   const { grantAgentMcpHttp } = await import('../agent-mcp-http.js');

@@ -1,3 +1,4 @@
+import type { JsonObject, JsonValue } from '@bufbuild/protobuf';
 import { waitFor } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { nanoid } from 'nanoid';
@@ -81,10 +82,28 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
 
+/** proto3 JSON of `runner.v2.OperationSuccess` (int64 fields are decimal strings). */
+export interface OperationSuccessJson {
+  acknowledgement?: JsonObject;
+  thread?: { value?: JsonObject };
+  threadMessages?: {
+    messages?: JsonObject[];
+    hasMore?: boolean;
+    hasMoreAfter?: boolean;
+    total?: string;
+    windowStart?: string;
+    leadingUserMessage?: JsonObject;
+  };
+  toolCall?: { id?: string; name?: string; input?: string; output?: string };
+  insertedRecord?: { id?: string };
+  deletedRecords?: { count?: string };
+  operationResponse?: JsonObject;
+}
+
 type PendingOperation = {
   eventType: RunnerOperationEventType;
   kind: string;
-  value: Record<string, any>;
+  value: JsonObject;
   resolve(value: unknown): void;
   reject(error: Error): void;
   timer: ReturnType<typeof setTimeout>;
@@ -120,7 +139,12 @@ function normalizeProtobufString(value: string): string {
   return changed ? normalized + value.slice(unchangedStart) : value;
 }
 
-function normalizeProtobufJson(value: any): any {
+/**
+ * Parses a JS value into protobuf JSON: dates become ISO strings, bigints
+ * decimal strings, non-finite numbers `null`, lone surrogates U+FFFD, and
+ * `undefined` (or any other non-JSON value) is dropped.
+ */
+function normalizeProtobufJson(value: unknown): JsonValue | undefined {
   if (value === undefined) return undefined;
   if (value === null || typeof value === 'boolean') return value;
   if (typeof value === 'string') return normalizeProtobufString(value);
@@ -128,25 +152,32 @@ function normalizeProtobufJson(value: any): any {
   if (typeof value === 'bigint') return String(value);
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map((item) => normalizeProtobufJson(item) ?? null);
-  if (typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value)
-        .map(([key, item]) => [key, normalizeProtobufJson(item)] as const)
-        .filter((entry) => entry[1] !== undefined),
-    );
-  }
+  if (typeof value === 'object') return normalizeProtobufObject(value);
   return undefined;
 }
 
-export function normalizeRunnerOperationValue(
+function normalizeProtobufObject<Value extends object>(value: Value): JsonObject {
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, item]) => {
+      const json = normalizeProtobufJson(item);
+      return json === undefined ? [] : [[key, json] as const];
+    }),
+  );
+}
+
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function normalizeRunnerOperationValue<Value extends object>(
   kind: string,
-  value: Record<string, any>,
-): Record<string, any> {
-  const normalized = normalizeProtobufJson(value) as Record<string, any>;
+  value: Value,
+): JsonObject {
+  const normalized = normalizeProtobufObject(value);
   switch (kind) {
     case 'insertMessage': {
       const imagesJson = normalized.imagesJson ?? normalized.images;
-      return normalizeProtobufJson({
+      return normalizeProtobufObject({
         threadId: normalized.threadId,
         role: normalized.role,
         content: normalized.content,
@@ -159,20 +190,20 @@ export function normalizeRunnerOperationValue(
       });
     }
     case 'createPermissionRule':
-      return normalizeProtobufJson({
+      return normalizeProtobufObject({
         projectPath: normalized.projectPath,
         toolName: normalized.toolName,
         pattern: normalized.pattern ?? undefined,
         decision: normalized.decision,
       });
     case 'findPermissionRule':
-      return normalizeProtobufJson({
+      return normalizeProtobufObject({
         projectPath: normalized.projectPath,
         toolName: normalized.toolName,
         toolInput: normalized.toolInput ?? undefined,
       });
     case 'listPermissionRules':
-      return normalizeProtobufJson({
+      return normalizeProtobufObject({
         projectPath: normalized.projectPath ?? undefined,
       });
     default:
@@ -213,8 +244,7 @@ const persistentMutations = new Set([
   'activityReconcile',
 ]);
 
-type OperationValue = Record<string, any>;
-type OperationValueMapper = (input: OperationValue, payload: OperationValue) => OperationValue;
+type OperationValueMapper = (input: JsonObject, payload: JsonObject) => JsonObject;
 type OperationMapping = readonly [kind: string, toValue: OperationValueMapper];
 
 const asInput: OperationValueMapper = (input) => input;
@@ -327,12 +357,13 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:watcher_list_by_user': ['watcherListByUser', noValue],
   'data:watcher_update': [
     'watcherUpdate',
-    (_input, payload) => ({
-      watcherId: payload.id,
-      patch: payload.patch,
-      expectedNextWakeAtMs:
-        payload.expectedNextWakeAt !== undefined ? String(payload.expectedNextWakeAt) : undefined,
-    }),
+    (_input, payload) => {
+      const value: JsonObject = { watcherId: payload.id, patch: payload.patch };
+      if (payload.expectedNextWakeAt !== undefined) {
+        value.expectedNextWakeAtMs = String(payload.expectedNextWakeAt);
+      }
+      return value;
+    },
   ],
   'data:watcher_delete_by_thread': ['watcherDeleteByThread', payloadThreadId],
   'data:job_insert': [
@@ -361,15 +392,29 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   ],
 };
 
-export function mapRunnerOperation(
-  eventType: RunnerOperationEventType,
-  input: Record<string, any>,
-): { kind: string; value: Record<string, any> } {
-  const [kind, toValue] = OPERATION_MAPPINGS[eventType];
-  return { kind, value: toValue(input, input.payload ?? input) };
+/** A runner.v2 operation: the `OperationsRequest` field name and its value. */
+export interface RunnerOperation {
+  kind: string;
+  value: JsonObject;
 }
 
-export function mapRunnerOperationOutcome(kind: string, success: Record<string, any>): unknown {
+export function mapRunnerOperation<Body extends object>(
+  eventType: RunnerOperationEventType,
+  body: Body,
+): RunnerOperation {
+  const [kind, toValue] = OPERATION_MAPPINGS[eventType];
+  const input = normalizeProtobufObject(body);
+  return { kind, value: toValue(input, operationPayload(input)) };
+}
+
+/** Most `data:*` bodies carry their fields under `payload`; the rest carry them inline. */
+function operationPayload(input: JsonObject): JsonObject {
+  const payload = input.payload;
+  if (payload === undefined || payload === null) return input;
+  return isJsonObject(payload) ? payload : {};
+}
+
+export function mapRunnerOperationOutcome(kind: string, success: OperationSuccessJson): unknown {
   if (success.operationResponse !== undefined) return success.operationResponse;
   if (success.threadMessages)
     return { type: 'data:get_thread_messages_response', ...success.threadMessages };
@@ -414,7 +459,7 @@ export class GrpcOperationsAdapter {
     private readonly outbox: GrpcOperationOutbox = new GrpcOperationOutbox(),
   ) {}
 
-  request(eventType: string, input: Record<string, any>): Promise<any> {
+  request<Body extends object>(eventType: string, input: Body): Promise<any> {
     if (!isRunnerOperationEventType(eventType)) {
       throw new Error(`Unsupported gRPC runner operation: ${eventType}`);
     }
@@ -494,7 +539,10 @@ export class GrpcOperationsAdapter {
     for (const item of this.outbox.replayable({ onDropped: reportDropped })) {
       if (liveKeys.has(item.idempotencyKey)) continue;
       try {
-        this.send(nanoid(), item.operationKind, item.payload, item.idempotencyKey);
+        // SAFETY: the outbox holds only the operation values `request` enqueued,
+        // which `normalizeRunnerOperationValue` returned as JSON objects.
+        const payload = item.payload as JsonObject;
+        this.send(nanoid(), item.operationKind, payload, item.idempotencyKey);
       } catch (error) {
         // A row that cannot be encoded never will be: drop it and keep replaying.
         this.outbox.discard(item.idempotencyKey);
@@ -537,14 +585,19 @@ export class GrpcOperationsAdapter {
     this.outbox.close();
   }
 
-  private send(correlationId: string, kind: string, value: unknown, idempotencyKey?: string): void {
+  private send(
+    correlationId: string,
+    kind: string,
+    value: JsonObject,
+    idempotencyKey?: string,
+  ): void {
     const sent = this.sender.send('operations', {
       metadata: {
         correlationId,
         deadline: new Date(Date.now() + OPERATION_TIMEOUT_MS).toISOString(),
         ...(idempotencyKey ? { idempotencyKey } : undefined),
       },
-      [kind]: normalizeRunnerOperationValue(kind, value as Record<string, any>),
+      [kind]: normalizeRunnerOperationValue(kind, value),
     });
     if (sent) {
       const pending = this.pending.get(correlationId);

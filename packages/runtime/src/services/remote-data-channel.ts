@@ -1,6 +1,7 @@
 import { createPermitPool } from '@funny/shared/async';
+
 export interface RemoteDataTransport {
-  request(eventType: string, payload: Record<string, any>): Promise<any>;
+  request<Body extends object>(eventType: string, payload: Body): Promise<any>;
 }
 
 const MAX_CONCURRENT_REQUESTS = 20;
@@ -12,9 +13,9 @@ export function configureRemoteDataTransport(next: RemoteDataTransport | null): 
   transport = next;
 }
 
-export async function sendRemoteData(
+export async function sendRemoteData<Body extends object>(
   eventType: string,
-  payload: Record<string, any>,
+  payload: Body,
 ): Promise<any> {
   const release = await slots.acquire({
     timeoutMs: ACQUIRE_TIMEOUT_MS,

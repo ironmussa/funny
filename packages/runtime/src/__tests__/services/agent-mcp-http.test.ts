@@ -24,7 +24,7 @@ import {
   withBrowserMcpServer,
   withWatchMcpServer,
 } from '../../services/agent-startup/agent-profile.js';
-import { expectDefined } from '../helpers/builders-agents.js';
+import { expectDefined, expectHttpMcpEntry } from '../helpers/builders-agents.js';
 
 afterAll(() => stopAgentMcpHttp());
 
@@ -46,7 +46,7 @@ describe('funny MCP servers over HTTP', () => {
   test('Claude uses native jobs while retaining scheduled wakes and other tools', async () => {
     const watch = expectDefined(await withWatchMcpServer('native-jobs', 'u1', undefined, 'claude'));
     const all = expectDefined(await withBrowserMcpServer('native-jobs', 'u1', watch));
-    expect((await listTools(all.funny)).sort()).toEqual([
+    expect((await listTools(expectHttpMcpEntry(all.funny))).sort()).toEqual([
       'funny_run_checks',
       'funny_search_threads',
       'funny_spawn_thread',
@@ -54,8 +54,8 @@ describe('funny MCP servers over HTTP', () => {
     ]);
     const client = new Client({ name: 'test', version: '1.0.0' });
     await client.connect(
-      new StreamableHTTPClientTransport(new URL(all.funny.url), {
-        requestInit: { headers: all.funny.headers },
+      new StreamableHTTPClientTransport(new URL(expectHttpMcpEntry(all.funny).url), {
+        requestInit: { headers: expectHttpMcpEntry(all.funny).headers },
       }),
     );
     try {
@@ -74,7 +74,7 @@ describe('funny MCP servers over HTTP', () => {
       const servers = expectDefined(
         await withWatchMcpServer('provider-switch', 'u1', undefined, provider),
       );
-      const names = await listTools(servers.funny);
+      const names = await listTools(expectHttpMcpEntry(servers.funny));
       expect(names.includes('funny_spawn')).toBe(provider !== 'claude');
       expect(names).toContain('funny_watch');
     }
@@ -89,7 +89,7 @@ describe('funny MCP servers over HTTP', () => {
       url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/mcp\/funny$/),
       alwaysLoad: true,
     });
-    expect((await listTools(servers.funny)).sort()).toEqual([
+    expect((await listTools(expectHttpMcpEntry(servers.funny))).sort()).toEqual([
       'funny_run_checks',
       'funny_search_threads',
       'funny_spawn',
@@ -101,12 +101,14 @@ describe('funny MCP servers over HTTP', () => {
   test('one thread token opens both servers; unknown servers are not found', async () => {
     const watch = expectDefined(await withWatchMcpServer('t2', 'u1', undefined));
     const all = expectDefined(await withBrowserMcpServer('t2', 'u1', watch));
-    expect(all.funny_browser.headers).toEqual(all.funny.headers);
-    expect(await listTools(all.funny_browser)).toContain('browser_open');
+    expect(expectHttpMcpEntry(all.funny_browser).headers).toEqual(
+      expectHttpMcpEntry(all.funny).headers,
+    );
+    expect(await listTools(expectHttpMcpEntry(all.funny_browser))).toContain('browser_open');
 
-    const unknown = await fetch(all.funny.url.replace(/\/funny$/, '/nope'), {
+    const unknown = await fetch(expectHttpMcpEntry(all.funny).url.replace(/\/funny$/, '/nope'), {
       method: 'POST',
-      headers: all.funny.headers,
+      headers: expectHttpMcpEntry(all.funny).headers,
     });
     expect(unknown.status).toBe(404);
   });
@@ -114,6 +116,8 @@ describe('funny MCP servers over HTTP', () => {
   test("another thread's token is a different one", async () => {
     const a = expectDefined(await withWatchMcpServer('t3', 'u1', undefined));
     const b = expectDefined(await withWatchMcpServer('t4', 'u1', undefined));
-    expect(a.funny.headers.Authorization).not.toBe(b.funny.headers.Authorization);
+    expect(expectHttpMcpEntry(a.funny).headers.Authorization).not.toBe(
+      expectHttpMcpEntry(b.funny).headers.Authorization,
+    );
   });
 });

@@ -63,17 +63,12 @@ export class AgentEventRouter {
     if (!userMessageId) return;
 
     const createdAt = new Date().toISOString();
-    const data: TurnOutcomeEventData = {
+    const data = {
       userMessageId,
       status: event.status,
       completedAt: createdAt,
-    };
-    await getServices().threadEvents.saveThreadEvent(
-      event.threadId,
-      'turn_outcome',
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      data as unknown as Record<string, unknown>,
-    );
+    } satisfies TurnOutcomeEventData;
+    await getServices().threadEvents.saveThreadEvent(event.threadId, 'turn_outcome', data);
     this.emitWSToUser(event.threadId, event.userId, 'thread:event', {
       event: {
         id: crypto.randomUUID(),

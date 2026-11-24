@@ -18,6 +18,7 @@ import { z } from 'zod';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { readFileLines } from './file-lines.js';
+import type { RuntimeThreadInsert, RuntimeThreadRecord } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 
 const CLAUDE_PROJECTS_DIR = '.claude/projects';
@@ -183,8 +184,12 @@ export function dismissExternalClaudeSession(sessionId: string): boolean {
   return true;
 }
 
+/** The thread a session is imported into: a `threads` row, found or created here. */
+type ExternalSessionThread = Pick<RuntimeThreadRecord, 'id' | 'userId'> &
+  Partial<RuntimeThreadInsert>;
+
 export type ImportExternalClaudeSessionResult =
-  | { ok: true; imported: boolean; thread: Record<string, any> }
+  | { ok: true; imported: boolean; thread: ExternalSessionThread }
   | { ok: false; status: number; error: string };
 
 export async function importExternalClaudeSession(
@@ -293,7 +298,7 @@ async function ensureExternalClaudeThreadShell(params: {
   projects: ClaudeProject[];
   userId: string;
   projectId?: string | null;
-}): Promise<Record<string, any> | null> {
+}): Promise<ExternalSessionThread | null> {
   const { session, projects, userId } = params;
   if (!session.sessionId) return null;
 
@@ -352,7 +357,7 @@ async function ensureExternalClaudeThreadShell(params: {
 }
 
 async function hydrateExternalClaudeThread(params: {
-  thread: Record<string, any>;
+  thread: ExternalSessionThread;
   sessionId: string;
   userId: string;
   homeDir?: string;
@@ -1069,6 +1074,20 @@ function withoutEmptyLists<T extends Record<string, unknown>>(parts: T): Partial
   ) as Partial<T>;
 }
 
+/**
+ * A content block of a transcript line, as parsed from the JSONL file: the
+ * fields read here, each checked before use.
+ */
+interface TranscriptContentBlock {
+  type?: unknown;
+  id?: unknown;
+  name?: unknown;
+  input?: unknown;
+  content?: unknown;
+  tool_use_id?: unknown;
+  text?: unknown;
+}
+
 function extractToolCalls(
   content: unknown,
   entry: z.infer<typeof claudeJsonlEntrySchema>,
@@ -1080,7 +1099,8 @@ function extractToolCalls(
   const toolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
     if (!block || typeof block !== 'object') return;
-    const record = block as Record<string, unknown>;
+    // SAFETY: `block` is a non-null object; every field is read as unknown and checked.
+    const record = block as TranscriptContentBlock;
     if (record.type !== 'tool_use') return;
 
     const claudeToolId = typeof record.id === 'string' ? record.id : null;
@@ -1109,7 +1129,8 @@ function applyToolResults(
   const orphanToolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
     if (!block || typeof block !== 'object') return;
-    const record = block as Record<string, unknown>;
+    // SAFETY: `block` is a non-null object; every field is read as unknown and checked.
+    const record = block as TranscriptContentBlock;
     if (record.type !== 'tool_result') return;
 
     const output = contentToText(record.content);
@@ -1159,7 +1180,8 @@ function blockToText(block: unknown): string {
   if (typeof block === 'string') return block;
   if (!block || typeof block !== 'object') return stringifyUnknown(block);
 
-  const record = block as Record<string, unknown>;
+  // SAFETY: `block` is a non-null object; every field is read as unknown and checked.
+  const record = block as TranscriptContentBlock;
   const type = typeof record.type === 'string' ? record.type : null;
 
   if (type === 'text' && typeof record.text === 'string') return record.text;
@@ -1181,7 +1203,8 @@ function contentLooksLikeToolResult(content: unknown): boolean {
       (block) =>
         !!block &&
         typeof block === 'object' &&
-        (block as Record<string, unknown>).type === 'tool_result',
+        // SAFETY: `block` is a non-null object; `type` is compared, not trusted.
+        (block as TranscriptContentBlock).type === 'tool_result',
     )
   );
 }

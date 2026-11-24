@@ -8,7 +8,7 @@ export type RunnerConnectionOptions = ConstructorParameters<typeof GrpcTeamTrans
 export interface SupervisedRunnerTransport {
   start(): void;
   shutdown(reason?: string): void;
-  request(eventType: string, input: Record<string, any>): Promise<any>;
+  request<Body extends object>(eventType: string, input: Body): Promise<any>;
   publish(event: WSEvent): void;
 }
 
@@ -58,7 +58,7 @@ export class RunnerConnectionSupervisor {
     this.transport.start();
   }
 
-  request(eventType: string, input: Record<string, any>): Promise<any> {
+  request<Body extends object>(eventType: string, input: Body): Promise<any> {
     if (!this.transport) throw new Error('gRPC runner transport not initialized');
     return this.transport.request(eventType, input);
   }

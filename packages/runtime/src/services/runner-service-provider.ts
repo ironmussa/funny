@@ -15,6 +15,7 @@
 import { internal } from '@funny/shared/errors';
 import { ok, err, errAsync } from 'neverthrow';
 
+import type { ThreadEventData } from './server-interfaces.js';
 import type { RuntimeServiceProvider } from './service-provider.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -304,7 +305,7 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
 
     threadEvents: {
       async createThreadEvent() {},
-      async saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>) {
+      async saveThreadEvent(threadId: string, type: string, data: ThreadEventData) {
         const { remoteSaveThreadEvent } = await import('./remote-thread-data-client.js');
         await remoteSaveThreadEvent(threadId, type, data);
       },

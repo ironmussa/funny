@@ -6,11 +6,12 @@
  */
 
 import type { SetupProgressFn } from '@funny/core/ports';
-import type { WSEvent } from '@funny/shared';
+import type { WSEvent, WSThreadUpdatedData } from '@funny/shared';
 import { parseReferencedFiles } from '@funny/shared/attachments';
 
 import { log } from '../../lib/logger.js';
 import type { FileRef } from '../../utils/file-mentions.js';
+import type { RuntimeThreadUpdate } from '../server-interfaces.js';
 import { wsBroker } from '../ws-broker.js';
 import { adoptStagedUploads, releaseStagedUploads } from './staged-uploads.js';
 
@@ -60,16 +61,18 @@ export function createSetupProgressEmitter(userId: string, threadId: string): Se
   };
 }
 
+/**
+ * A `thread:updated` payload: the thread columns that changed, and why
+ * (`reason`) when a pipeline set the status.
+ */
+export type ThreadUpdatedPayload = WSThreadUpdatedData & RuntimeThreadUpdate & { reason?: string };
+
 export function emitThreadUpdated(
   userId: string,
   threadId: string,
-  data: Record<string, any>,
+  data: ThreadUpdatedPayload,
 ): void {
-  wsBroker.emitToUser(userId, {
-    type: 'thread:updated',
-    threadId,
-    data,
-  } as WSEvent);
+  wsBroker.emitToUser(userId, { type: 'thread:updated', threadId, data });
 }
 
 export function emitAgentFailed(userId: string, threadId: string): void {

@@ -22,6 +22,7 @@ import { randomBytes } from 'crypto';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import type { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
@@ -39,7 +40,6 @@ export interface AgentToolContext {
 }
 
 export interface AgentToolResult {
-  [key: string]: unknown;
   content: Array<
     { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
   >;
@@ -50,8 +50,8 @@ export interface AgentToolResult {
 export interface AgentToolDefinition {
   name: string;
   description: string;
-  /** Zod raw shape of the tool's arguments (`{}` for none). */
-  schema: Record<string, any>;
+  /** A zod schema per argument of the tool (`{}` for none). */
+  schema: Record<string, z.ZodType>;
   run: (args: any, extra: unknown) => Promise<AgentToolResult>;
 }
 

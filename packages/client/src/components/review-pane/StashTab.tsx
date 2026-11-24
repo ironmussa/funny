@@ -142,7 +142,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
         >
           <div className="border-border shrink-0 border-b px-4 py-3">
             <div className="flex items-start justify-between gap-2">
-              <DialogTitle size="sm" className="leading-tight">
+              <DialogTitle size="sm" leading="tight">
                 {selectedStashEntry?.message ?? t('review.stashDetails', 'Stash details')}
               </DialogTitle>
               <Button

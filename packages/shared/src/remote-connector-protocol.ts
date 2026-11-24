@@ -1,7 +1,7 @@
 import { lt, valid } from 'semver';
 import { z } from 'zod';
 
-import { asCanonicalLeaf, type CanonicalValue } from './lib/canonical-json.js';
+import { canonicalJsonWithKeyOrder } from './lib/canonical-json.js';
 
 export const REMOTE_CONNECTOR_PROTOCOL_VERSION = 1 as const;
 export const REMOTE_CONNECTOR_PROTOCOL_VERSIONS = [REMOTE_CONNECTOR_PROTOCOL_VERSION] as const;
@@ -632,10 +632,6 @@ export type ConnectorErrorResult = z.infer<typeof connectorErrorResultSchema>;
 export type ConnectorIpcRequest = z.infer<typeof connectorIpcRequestSchema>;
 export type ConnectorIpcResponse = z.infer<typeof connectorIpcResponseSchema>;
 
-function isNonNullObject<T>(value: T): value is T & object {
-  return typeof value === 'object' && value !== null;
-}
-
 function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
@@ -648,20 +644,13 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
 }
 
-function canonicalize<T>(value: T): CanonicalValue {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (isNonNullObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([key, entry]) => [key, canonicalize(entry)]),
-    );
-  }
-  return asCanonicalLeaf(value);
+/** Code-unit key order: the connector's signed digests must not depend on locale. */
+function codeUnitOrder(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 export function canonicalJson<T>(value: T): string {
-  return JSON.stringify(canonicalize(value));
+  return canonicalJsonWithKeyOrder(value, codeUnitOrder);
 }
 
 function toBase64Url(bytes: Uint8Array): string {

@@ -92,6 +92,8 @@ function mulberry32(seed: number): () => number {
 }
 
 function pick<T>(rand: () => number, items: readonly T[]): T {
+  // SAFETY: rand() is in [0, 1), so the index is in range, and every caller passes a
+  // non-empty literal list.
   return items[Math.floor(rand() * items.length)] as T;
 }
 

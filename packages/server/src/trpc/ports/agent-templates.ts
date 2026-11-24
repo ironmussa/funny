@@ -86,16 +86,21 @@ const JSON_FIELDS = [
   'variables',
 ] as const;
 
+/** Column name → the value a PATCH writes to it. */
+interface TemplateColumnUpdates {
+  [column: string]: unknown;
+}
+
 /** Column writes for a PATCH body: scalars as given, list fields as JSON. */
-function templateUpdates(body: UpdateAgentTemplateBody): Record<string, unknown> {
-  const updates: Record<string, unknown> = {};
+function templateUpdates(body: UpdateAgentTemplateBody): TemplateColumnUpdates {
+  const updates: TemplateColumnUpdates = {};
   for (const key of SCALAR_FIELDS) if (body[key] !== undefined) updates[key] = body[key];
   for (const key of JSON_FIELDS) if (body[key] !== undefined) updates[key] = toJson(body[key]);
   return updates;
 }
 
 /** The columns a duplicate copies from a built-in template. */
-function builtinColumns(builtin: AgentTemplate): Record<string, unknown> {
+function builtinColumns(builtin: AgentTemplate) {
   return {
     name: builtin.name,
     description: builtin.description ?? null,

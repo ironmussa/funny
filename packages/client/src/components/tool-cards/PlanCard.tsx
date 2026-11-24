@@ -28,6 +28,7 @@ export function PlanCard({
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  // SAFETY: ExitPlanMode declares plan as a string in its input schema.
   const plan = parsed.plan as string | undefined;
 
   const handleCopy = async () => {

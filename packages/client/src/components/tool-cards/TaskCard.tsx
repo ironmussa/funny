@@ -124,6 +124,7 @@ export const TaskCard = memo(function TaskCard({
   const { t } = useTranslation();
   const isRunning = !rawOutput;
   const [expanded, setExpanded] = useState(isRunning);
+  // SAFETY: Task and Agent declare description as a string in their input schema.
   const description = (parsed.description as string) ?? '';
   const hasChildren = childToolCalls && childToolCalls.length > 0;
 

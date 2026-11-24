@@ -28,6 +28,8 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
   const todos: TodoItem[] = [];
   for (const raw of arr) {
     if (!raw || typeof raw !== 'object') continue;
+    // SAFETY: raw is a non-null object (checked above), and each field read from
+    // it stays unknown until a typeof / equality check below.
     const e = raw as Record<string, unknown>;
     const content =
       (typeof e.content === 'string' && e.content) ||
@@ -79,6 +81,8 @@ export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
   }
   const outcome = parsed.outcome;
   if (outcome && typeof outcome === 'object') {
+    // SAFETY: outcome is a non-null object (checked above); o.todos is only used
+    // after Array.isArray.
     const o = outcome as Record<string, unknown>;
     if (Array.isArray(o.todos)) {
       const normalized = normalizeTodoItems(o.todos);
@@ -90,6 +94,7 @@ export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
 
 export function getFilePath(name: string, parsed: Record<string, unknown>): string | null {
   if (name === 'Read' || name === 'Write' || name === 'Edit') {
+    // SAFETY: Read, Write and Edit declare file_path as a string in their input schema.
     return (parsed.file_path as string) ?? null;
   }
   return null;
@@ -98,12 +103,16 @@ export function getFilePath(name: string, parsed: Record<string, unknown>): stri
 export function getQuestions(parsed: Record<string, unknown>): Question[] | null {
   const questions = parsed.questions;
   if (!Array.isArray(questions)) return null;
+  // SAFETY: AskUserQuestion's input schema declares questions as an array of
+  // { question, header, options, multiSelect }, the Question shape.
   return questions as Question[];
 }
 
 type SummaryFn = (parsed: Record<string, unknown>, t: (key: string) => string) => string | null;
 
 /** Summary that is just one input field (or null). */
+// SAFETY: every key passed to field() below is declared as a string in that
+// tool's input schema; a missing key is undefined, which `??` turns into null.
 const field =
   (key: string): SummaryFn =>
   (parsed) =>
@@ -126,6 +135,7 @@ function questionSummary(
 }
 
 function thinkSummary(parsed: Record<string, unknown>): string | null {
+  // SAFETY: Think inputs carry their text in content or description, both strings.
   const thought = (parsed.content as string) ?? (parsed.description as string) ?? '';
   const firstLine = thought
     .split('\n')
@@ -142,6 +152,7 @@ function taskUpdateSummary(parsed: Record<string, unknown>): string | null {
 }
 
 function backgroundSummary(parsed: Record<string, unknown>): string | null {
+  // SAFETY: Background tool inputs declare label and command as strings.
   return (
     (parsed.label as string) ??
     (parsed.command as string) ??
@@ -155,6 +166,8 @@ const SUMMARIES: Record<string, SummaryFn> = {
   Read: filePathSummary,
   Write: filePathSummary,
   Edit: filePathSummary,
+  // SAFETY: Bash declares command as a string, so the second branch only sees it
+  // missing (undefined), which `??` turns into null.
   Bash: (parsed) =>
     typeof parsed.command === 'string'
       ? unwrapShellCommand(parsed.command)
@@ -182,7 +195,11 @@ const SUMMARIES: Record<string, SummaryFn> = {
   TaskOutput: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
   TaskStop: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
   ScheduleWakeup: field('reason'),
+  // SAFETY: Monitor declares description and command as strings in its input schema.
+  // SAFETY: Monitor declares description and command as strings in its input schema.
   Monitor: (parsed) => (parsed.description as string) ?? (parsed.command as string) ?? null,
+  // SAFETY: SendMessage declares summary and to as strings in its input schema.
+  // SAFETY: SendMessage declares summary and to as strings in its input schema.
   SendMessage: (parsed) => (parsed.summary as string) ?? (parsed.to as string) ?? null,
   apply_patch: (parsed) => patchSummary(parsed),
   ApplyPatch: (parsed) => patchSummary(parsed),
@@ -190,6 +207,8 @@ const SUMMARIES: Record<string, SummaryFn> = {
     typeof parsed.explanation === 'string'
       ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
       : null,
+  // SAFETY: a generic Tool input gets description from the ACP tool title, a
+  // string (core/agents/acp-tool-input.ts).
   Tool: (parsed) =>
     parsed.server && parsed.tool
       ? `${String(parsed.server)} · ${String(parsed.tool)}`

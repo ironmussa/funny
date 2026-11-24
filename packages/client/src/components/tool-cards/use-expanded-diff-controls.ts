@@ -190,6 +190,8 @@ export function useExpandedDiffControls({
 
   const handleViewModeChange = useCallback((value: string) => {
     if (!value) return;
+    // SAFETY: the view-mode ToggleGroup only has items from VIEW_MODE_OPTIONS,
+    // whose values are DiffViewMode; the empty deselect value returned above.
     startTransition(() => setUserViewMode(value as DiffViewMode));
   }, []);
 

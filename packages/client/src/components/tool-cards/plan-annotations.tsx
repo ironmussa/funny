@@ -148,7 +148,10 @@ function collectTextNodes(root: HTMLElement): Text[] {
   const nodes: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n: Node | null;
-  while ((n = walker.nextNode())) nodes.push(n as Text);
+  while ((n = walker.nextNode())) {
+    // SAFETY: the walker was created with NodeFilter.SHOW_TEXT, so it only yields Text nodes.
+    nodes.push(n as Text);
+  }
   return nodes;
 }
 

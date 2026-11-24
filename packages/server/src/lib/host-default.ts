@@ -1,3 +1,4 @@
+import { isString } from './value-guards.js';
 /**
  * Security CR-7 — server HOST default.
  *
@@ -7,6 +8,6 @@
  * address) explicitly.
  */
 export function resolveHost(envValue: string | undefined): string {
-  if (typeof envValue !== 'string' || envValue.length === 0) return '127.0.0.1';
+  if (!isString(envValue) || envValue.length === 0) return '127.0.0.1';
   return envValue;
 }

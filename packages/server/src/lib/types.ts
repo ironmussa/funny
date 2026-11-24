@@ -1,3 +1,4 @@
+import { isString } from './value-guards.js';
 /**
  * Known user roles. Any role not in this set is coerced to `'user'` by the
  * auth middleware so that a value leaking in from an untrusted source cannot
@@ -8,7 +9,7 @@ export type UserRole = (typeof USER_ROLES)[number];
 
 /** Narrow an untrusted value to a known UserRole, defaulting to 'user'. */
 export function normalizeUserRole(raw: unknown): UserRole {
-  return typeof raw === 'string' && (USER_ROLES as readonly string[]).includes(raw)
+  return isString(raw) && (USER_ROLES as readonly string[]).includes(raw)
     ? (raw as UserRole)
     : 'user';
 }

@@ -17,6 +17,7 @@ import {
   recordLoginSuccess,
 } from '../lib/login-throttle.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isString } from '../lib/value-guards.js';
 
 /** Best-effort JSON body read; returns {} on any failure. */
 async function readBody(c: Context<ServerEnv>): Promise<Record<string, unknown>> {
@@ -36,7 +37,7 @@ function pickIdentifier(body: Record<string, unknown>): string | null {
   const fields = ['username', 'email', 'identifier'] as const;
   for (const f of fields) {
     const v = body[f];
-    if (typeof v === 'string' && v.trim().length > 0) return v;
+    if (isString(v) && v.trim().length > 0) return v;
   }
   return null;
 }

@@ -12,6 +12,7 @@
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
+import { isString } from '../../../lib/value-guards.js';
 import {
   authorizedRunnerRequests,
   runnerActor,
@@ -181,11 +182,7 @@ export function createRemoteCreationAdapter(deps: RunnerAdapterDeps): RemoteThre
   return {
     create(runnerId, actor, intent, payload) {
       const projectId =
-        payload.isScratch === true
-          ? null
-          : typeof payload.projectId === 'string'
-            ? payload.projectId
-            : null;
+        payload.isScratch === true ? null : isString(payload.projectId) ? payload.projectId : null;
       return sendCertified(
         deps,
         actor,

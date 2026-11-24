@@ -1,3 +1,4 @@
+import { isString, isObject } from './value-guards.js';
 /**
  * Shared password strength policy.
  *
@@ -25,7 +26,7 @@ export interface PasswordPolicyResult {
  * accepts and the other rejects.
  */
 export function validatePasswordStrength(password: unknown): PasswordPolicyResult {
-  if (typeof password !== 'string' || password.length === 0) {
+  if (!isString(password) || password.length === 0) {
     return { ok: false, reason: 'Password is required' };
   }
   if (password.length < 10) {
@@ -64,8 +65,7 @@ const PASSWORD_FIELD_BY_AUTH_PATH: Record<string, string> = {
 export function validateAuthRequestPassword(path: string, body: unknown): PasswordPolicyResult {
   const field = PASSWORD_FIELD_BY_AUTH_PATH[path];
   if (!field) return { ok: true };
-  const value =
-    body && typeof body === 'object' ? (body as Record<string, unknown>)[field] : undefined;
+  const value = isObject(body) ? (body as Record<string, unknown>)[field] : undefined;
   if (path === '/admin/create-user' && value === undefined) return { ok: true };
   return validatePasswordStrength(value);
 }

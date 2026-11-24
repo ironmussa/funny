@@ -28,6 +28,7 @@ import {
 } from '@funny/core/extensions';
 
 import { DATA_DIR } from './data-dir.js';
+import { isString } from './value-guards.js';
 
 export { parseGitSpec } from '@funny/core/extensions';
 
@@ -64,7 +65,7 @@ function readExtension(dir: string, dirName: string): InstalledExtension | null 
     const pkg = readPackageJson(pkgDir);
     if (!pkg) return null;
     const clientEntry: unknown = pkg?.funny?.client;
-    if (typeof clientEntry !== 'string' || clientEntry.length === 0) return null;
+    if (!isString(clientEntry) || clientEntry.length === 0) return null;
     const pkgDirReal = realpathSync(pkgDir);
     const entryAbs = realpathSync(resolve(pkgDirReal, clientEntry));
     if (!isInside(pkgDirReal, entryAbs) || entryAbs === pkgDirReal) return null;
@@ -72,9 +73,9 @@ function readExtension(dir: string, dirName: string): InstalledExtension | null 
     const relEntry = clientEntry.replace(/^\.?[\\/]+/, '').replace(/\\/g, '/');
     return {
       name: dirName,
-      id: typeof pkg.name === 'string' && pkg.name ? pkg.name : dirName,
-      version: typeof pkg.version === 'string' && pkg.version ? pkg.version : '0.0.0',
-      description: typeof pkg.description === 'string' ? pkg.description : undefined,
+      id: isString(pkg.name) && pkg.name ? pkg.name : dirName,
+      version: isString(pkg.version) && pkg.version ? pkg.version : '0.0.0',
+      description: isString(pkg.description) ? pkg.description : undefined,
       entryUrl: `/extensions/${encodeURIComponent(dirName)}/${relEntry
         .split('/')
         .map(encodeURIComponent)
@@ -88,7 +89,7 @@ function readExtension(dir: string, dirName: string): InstalledExtension | null 
 /** Validate a SOURCE package is a `client` extension before install. */
 function validateClientSource(pkg: Record<string, any>, src: string): string | null {
   const clientEntry = pkg?.funny?.client;
-  if (typeof clientEntry !== 'string' || !clientEntry) {
+  if (!isString(clientEntry) || !clientEntry) {
     return 'package.json is missing the funny.client field';
   }
   const entryAbs = resolve(src, clientEntry);

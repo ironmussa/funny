@@ -1013,13 +1013,71 @@ describe('merge brings the branch up to date with its base first', () => {
       deps: {
         mergeApproved: async (sha) => sha === approved,
         carryMergeApproval: async (from, to) => {
-          if (approved === from) approved = to;
+          if (approved !== from) return false;
+          approved = to;
+          return true;
         },
       },
     });
     expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
     expect(merges).toMatchObject([{ sha: SHA_M }]);
     expect(approved).toBe(SHA_M);
+  });
+
+  // #485: the base merge carried the approval of A to M, the run merged M, and
+  // neither the pull request nor the approver was told the approval had moved.
+  test('an approval carried by a base merge is commented on the pull request and recorded', async () => {
+    let approval: FactoryMergeApproval = { sha: SHA_A, userId: 'alice', at };
+    const announced: unknown[] = [];
+    posted.length = 0;
+    commentError = null;
+    const { merge } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+      deps: {
+        mergeApproved: async (sha) => sha === approval.sha,
+        mergeApproval: async () => approval,
+        onApprovalMoved: async (move) => {
+          announced.push(move);
+        },
+        carryMergeApproval: async (from, to) => {
+          if (approval.sha !== from) return false;
+          approval = { ...approval, sha: to, carriedFrom: approval.carriedFrom ?? from };
+          return true;
+        },
+      },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(announced).toEqual([
+      { userId: 'alice', from: SHA_A, to: SHA_M, kind: 'same', lines: 0, files: [] },
+    ]);
+    expect(posted).toHaveLength(1);
+    expect(posted[0]!.body).toContain(SHA_A.slice(0, 7));
+    expect(posted[0]!.body).toContain(SHA_M.slice(0, 7));
+    expect(posted[0]!.body).toContain('no person approved the new commit');
+  });
+
+  test('a base merge of an unapproved commit announces no approval move', async () => {
+    const announced: unknown[] = [];
+    posted.length = 0;
+    const { merge } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      deps: {
+        mergeApproved: async () => false,
+        mergeApproval: async () => null,
+        onApprovalMoved: async (move) => {
+          announced.push(move);
+        },
+        carryMergeApproval: async () => false,
+      },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(announced).toEqual([]);
+    expect(posted).toEqual([]);
   });
 
   test('without an approval of A, the merge commit of a high-risk change still waits for a person', async () => {
@@ -1030,7 +1088,7 @@ describe('merge brings the branch up to date with its base first', () => {
       files: [changed('.github/workflows/ci.yml', ['+x'])],
       deps: {
         mergeApproved: async () => false,
-        carryMergeApproval: async () => {},
+        carryMergeApproval: async () => false,
       },
     });
     expect(await merge()).toMatchObject({
@@ -1045,7 +1103,7 @@ describe('merge brings the branch up to date with its base first', () => {
   // run waited for a person again. The base comes in before the hold.
   describe('a high-risk change is held on a head that includes its base', () => {
     const highRisk = [changed('.github/workflows/ci.yml', ['+x'])];
-    const unapproved = { mergeApproved: async () => false, carryMergeApproval: async () => {} };
+    const unapproved = { mergeApproved: async () => false, carryMergeApproval: async () => false };
 
     test('a head behind its base is updated first, and held without waiting for its checks', async () => {
       const { merge, merges, updates, reviews } = lane({
@@ -1140,9 +1198,10 @@ describe('merge brings the branch up to date with its base first', () => {
           },
           approvalAdjustMaxLines: over.maxLines,
           carryMergeApproval: async (from, to, move) => {
-            if (approval.sha !== from) return;
+            if (approval.sha !== from) return false;
             approval = { ...approval, sha: to, carriedFrom: approval.carriedFrom ?? from };
             moves.push(move);
+            return true;
           },
           steps: {
             startStep: async (_threadId, body) => {

@@ -975,7 +975,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
             to,
             error: carried.error.message,
           });
+          return false;
         }
+        return carried.value;
       },
       storedProof: job.run.regressionProof,
       triage: job.run.triage,

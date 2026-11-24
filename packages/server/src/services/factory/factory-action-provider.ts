@@ -243,12 +243,13 @@ export interface FactoryActionProviderDeps {
    * Move a member's merge approval of `from` to `to`: a merge of `from` with
    * the base branch that settled nothing (as the review and the proof move),
    * or, with `move`, a commit whose change `approvalCovers` found covered.
+   * True when the approval moved.
    */
   carryMergeApproval?: (
     from: string,
     to: string,
     move?: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'>,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   /** The largest adjustment an approval follows, in lines (default 0: only the same change). */
   approvalAdjustMaxLines?: number;
   /** An approval moved to another commit: record it for the member who approved. */
@@ -1286,7 +1287,26 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   async function carryChecks(from: string, to: string): Promise<void> {
     await reviewer.carry(from, to);
     await carryProof(from, to);
-    await deps.carryMergeApproval?.(from, to);
+    await carryApprovalAcrossBaseMerge(from, to);
+  }
+
+  /**
+   * Carry a member's approval of `from` to the base merge `to`, and say so like
+   * any other move (D6): the change is the same, but no person approved `to`.
+   */
+  async function carryApprovalAcrossBaseMerge(from: string, to: string): Promise<void> {
+    if (!(await deps.carryMergeApproval?.(from, to))) return;
+    await count(metrics, { event: 'merge_approval_moved_same' });
+    const approval = (await deps.mergeApproval?.()) ?? null;
+    if (approval?.sha !== to) return;
+    await announceApprovalMove({
+      userId: approval.userId,
+      from: approval.carriedFrom ?? from,
+      to,
+      kind: 'same',
+      lines: 0,
+      files: [],
+    });
   }
 
   /** Whether the proof's check is on GitHub, publishing it now when an earlier try failed. */

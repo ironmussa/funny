@@ -44,6 +44,8 @@ type HistoryRefreshEvent =
   /** The git context changed; the component reloads from scratch itself. */
   | { type: 'RESET' };
 
+// SAFETY: the `{} as T` values in `types` are xstate's type-only slots: setup() reads
+// their types and never their runtime value, so the empty objects are never used as data.
 export const historyRefreshMachine = setup({
   types: {
     context: {} as HistoryRefreshContext,

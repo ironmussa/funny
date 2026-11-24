@@ -54,6 +54,8 @@ type TerminalSpawnEvent =
   | { type: 'SESSION_LOST' }
   | { type: 'RESTART' };
 
+// SAFETY: the `{} as T` values in `types` are xstate's type-only slots: setup() reads
+// their types and never their runtime value, so the empty objects are never used as data.
 export const terminalSpawnMachine = setup({
   types: {
     context: {} as TerminalSpawnContext,

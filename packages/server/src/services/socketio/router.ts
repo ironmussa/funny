@@ -72,14 +72,17 @@ export function registerSocketRpc<
   },
 ): void {
   socket.on(eventName, async (data: unknown, ack?: (response: TResponse) => void) => {
+    // SAFETY: payloadSchema is omitted only by callers on the default TSchema
+    // (typeof socketObjectPayloadSchema); every explicit TSchema caller passes its schema.
     const schema = (spec.payloadSchema ?? socketObjectPayloadSchema) as TSchema;
     const payload = parseSocketPayload(schema, data);
     const requestId =
       data != null &&
       typeof data === 'object' &&
       !Array.isArray(data) &&
-      typeof (data as { _requestId?: unknown })._requestId === 'string'
-        ? (data as { _requestId: string })._requestId
+      '_requestId' in data &&
+      typeof data._requestId === 'string'
+        ? data._requestId
         : null;
     const respond =
       typeof ack === 'function'

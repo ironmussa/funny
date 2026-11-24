@@ -51,6 +51,7 @@ const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string |
 function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object') return null;
+  // SAFETY: the check above made value a non-null object; its fields are only read as unknown.
   const raw = value as Record<string, unknown>;
   const ref: ActivityResultRef = {};
   for (const [field, check] of RESULT_REF_FIELDS) {
@@ -122,6 +123,7 @@ export async function startActivityFromRunner(args: {
 }
 
 function reportedStatus(value: unknown): ActivityStatus | undefined {
+  // SAFETY: has() only compares the string; it is returned as ActivityStatus only when the set holds it.
   return typeof value === 'string' && REPORTED_STATUSES.has(value as ActivityStatus)
     ? (value as ActivityStatus)
     : undefined;
@@ -130,6 +132,7 @@ function reportedStatus(value: unknown): ActivityStatus | undefined {
 /** The fields a runner may change on its own activity; never `origin`. */
 function pickActivityPatch(raw: unknown): ActivityPatch {
   if (!raw || typeof raw !== 'object') return {};
+  // SAFETY: the check above made raw a non-null object; its fields are only read as unknown.
   const value = raw as Record<string, unknown>;
   const patch: ActivityPatch = {};
   const status = reportedStatus(value.status);

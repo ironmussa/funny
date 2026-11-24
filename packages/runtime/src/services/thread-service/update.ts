@@ -211,7 +211,9 @@ async function autoStartIdleThread(
         // Start agent
         const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
         const draftMsg = draftMessages[0];
-        const draftImages = draftMsg?.images ? JSON.parse(String(draftMsg.images)) : undefined;
+        // SAFETY: JSON.parse converts its argument to a string, so this cast only satisfies its
+        // parameter type; the value is passed through unchanged, exactly as before.
+        const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
         // SAFETY: the thread row's and project's model / permissionMode / provider
         // were written from inputs validated against the registry schemas
         // (validation/schemas.ts); the fallbacks are registry defaults.
@@ -294,7 +296,9 @@ async function autoStartIdleThread(
 
     const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
     const draftMsg = draftMessages[0];
-    const draftImages = draftMsg?.images ? JSON.parse(String(draftMsg.images)) : undefined;
+    // SAFETY: JSON.parse converts its argument to a string, so this cast only satisfies its
+    // parameter type; the value is passed through unchanged, exactly as before.
+    const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
     const startPrompt = await startPromptForIdleThread(
       threadId,
       thread.initialPrompt!,

@@ -157,6 +157,8 @@ export function approvalNode<T extends PipelineContext>(
         ctx.progress.onStepProgress(name, { status: 'completed' });
 
         if (opts.captureResponse) {
+          // SAFETY: approval gates are the only writers of ctx.approvalOutputs, and they always
+          // write a Record<string, string> of gate name → comment (or leave it absent).
           const augmented = ctx as T & ApprovalCapturedOutputs;
           augmented.approvalOutputs = {
             ...(augmented.approvalOutputs ?? {}),

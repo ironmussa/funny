@@ -257,7 +257,7 @@ function compileConcurrency(
 /** The output a batch leader settled for a member, as this node's output. */
 function asNodeOutput(output: unknown): NodeOutput {
   if (output !== null && typeof output === 'object' && 'output' in output) {
-    return output as NodeOutput;
+    return output;
   }
   return { output };
 }
@@ -613,7 +613,7 @@ function compileRetry(
             depends_on: [],
             on_error: 'fail' as const,
             spawn_agent: cfg.before_retry,
-          } satisfies Partial<ParsedNode> as ParsedNode;
+          } satisfies ParsedNode;
 
           const augmentedScope: YamlPipelineContext = {
             ...ctx,

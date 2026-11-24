@@ -1,53 +1,27 @@
-import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
-import { SiGithub } from '@icons-pack/react-simple-icons';
-import {
-  Copy,
-  ExternalLink,
-  Lock,
-  Globe,
-  ArrowLeft,
-  FolderOpen,
-  Check,
-  LogOut,
-  Settings,
-} from 'lucide-react';
+import type { GitHubRepo } from '@funny/shared';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import { EmptyState } from '@/components/ui/empty-state';
-import { HighlightText } from '@/components/ui/highlight-text';
-import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { SearchBar } from '@/components/ui/search-bar';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { useResettableState } from '@/hooks/use-resettable-state';
-import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
-import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
-import { cn } from '@/lib/utils';
-import { withCleanup } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
-import { FolderPicker } from './FolderPicker';
-
-const log = createClientLogger('clone-repo-view');
-
-type ViewState =
-  | 'checking'
-  | 'connect'
-  | 'error'
-  | 'device-flow'
-  | 'repos'
-  | 'clone-config'
-  | 'cloning';
+import type { ViewState } from './clone-repo/clone-view-state';
+import { CloneConfigForm } from './clone-repo/CloneConfigForm';
+import { CloneProgressView } from './clone-repo/CloneProgressView';
+import { ConnectGithubView } from './clone-repo/ConnectGithubView';
+import { ConnectionErrorView } from './clone-repo/ConnectionErrorView';
+import { DeviceFlowView } from './clone-repo/DeviceFlowView';
+import { RepoBrowser } from './clone-repo/RepoBrowser';
+import { useCloneProgress } from './clone-repo/use-clone-progress';
+import { useRepoFeed, useRepoListState } from './clone-repo/use-repo-feed';
 
 interface CloneRepoViewProps {
   onCloningChange?: (cloning: boolean) => void;
@@ -108,19 +82,19 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Repos state
-  const [repos, setRepos] = useState<GitHubRepo[]>([]);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingRepos, setLoadingRepos] = useState(false);
-  // Highlight resets when the debounced query changes (new result set).
-  const [highlightedIndex, setHighlightedIndex] = useResettableState(-1, [debouncedSearch]);
-  const listRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const loadingRef = useRef(false);
-  const fetchIdRef = useRef(0);
-  const pageRef = useRef(1);
+  const repoList = useRepoListState();
+  const {
+    repos,
+    setRepos,
+    search,
+    setSearch,
+    debouncedSearch,
+    loadingRepos,
+    highlightedIndex,
+    setHighlightedIndex,
+    listRef,
+    sentinelRef,
+  } = repoList;
 
   // Clone config state
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(() =>
@@ -136,54 +110,14 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   const [_isCloning, setIsCloning] = useState(false);
 
   // Clone progress from WebSocket
-  const [clonePhase, setClonePhase] = useState('');
-  const [clonePercent, setClonePercent] = useState<number | undefined>(undefined);
-  const [phaseChanged, setPhaseChanged] = useState(false);
-  const prevPhaseRef = useRef('');
-  /** The clone this view started; events of any other clone are ignored. */
-  const activeCloneIdRef = useRef<string | null>(null);
-
-  // The runner answers as soon as the clone starts; its last `clone:progress`
-  // event says whether the project was created.
-  const finishClone = useStableCallback(async (data: WSCloneProgressData) => {
-    activeCloneIdRef.current = null;
-    setIsCloning(false);
-    if (data.status === 'failed') {
-      log.warn('clone failed', { cloneId: data.cloneId, error: data.error });
-      toast.error(t('github.clone.failed', { error: data.error ?? '' }));
-      setView('clone-config');
-      return;
-    }
-    toast.success(t('github.clone.success'));
-    await loadProjects();
-    setAddProjectOpen(false);
-    if (data.projectId) navigate(buildPath(`/projects/${data.projectId}`));
-  });
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const data = (e as CustomEvent<WSCloneProgressData>).detail;
-      if (!activeCloneIdRef.current || data.cloneId !== activeCloneIdRef.current) return;
-      if (data.status === 'done' || data.status === 'failed') {
-        void finishClone(data);
-        return;
-      }
-      if (data.phase) {
-        const newPhase = data.phase.replace(/:.*$/, '').trim();
-        const oldPhase = prevPhaseRef.current;
-        if (newPhase !== oldPhase) {
-          setPhaseChanged(true);
-          prevPhaseRef.current = newPhase;
-          // Re-enable transition on next frame so only the reset is instant
-          requestAnimationFrame(() => setPhaseChanged(false));
-        }
-        setClonePhase(data.phase);
-      }
-      if (data.percent !== undefined) setClonePercent(data.percent);
-    };
-    window.addEventListener('clone:progress', handler);
-    return () => window.removeEventListener('clone:progress', handler);
-  }, [finishClone]);
+  const {
+    clonePhase,
+    setClonePhase,
+    clonePercent,
+    setClonePercent,
+    phaseChanged,
+    activeCloneIdRef,
+  } = useCloneProgress({ t, navigate, loadProjects, setAddProjectOpen, setIsCloning, setView });
 
   const loadGhUser = useCallback(async () => {
     const result = await api.githubUser();
@@ -223,100 +157,12 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     }
   }, [generalSettingsOpen, view, checkConnection]);
 
-  // Load repos with optional server-side search. `append` keeps existing
-  // results when paginating; stale responses are dropped via fetchIdRef.
-  const fetchRepos = useCallback(async (pageNum: number, searchQuery: string, append: boolean) => {
-    const fetchId = ++fetchIdRef.current;
-    loadingRef.current = true;
-    setLoadingRepos(true);
-    log.debug('github repo search', { page: pageNum, query: searchQuery, append });
-    return withCleanup(
-      async () => {
-        const result = await api.githubRepos({
-          page: pageNum,
-          per_page: 30,
-          sort: 'updated',
-          search: searchQuery || undefined,
-        });
-        if (fetchId !== fetchIdRef.current) return;
-        if (result.isOk()) {
-          setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
-          setHasMore(result.value.hasMore);
-        }
-      },
-      () => {
-        if (fetchId === fetchIdRef.current) {
-          loadingRef.current = false;
-          setLoadingRepos(false);
-        }
-      },
-    );
-  }, []);
-
-  // Debounce the search input to avoid firing a GitHub search on every keystroke.
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 200);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [search]);
-
-  // Keyboard navigation for repo list
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightedIndex((prev) => Math.min(prev + 1, repos.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightedIndex((prev) => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter' && highlightedIndex >= 0 && highlightedIndex < repos.length) {
-      e.preventDefault();
-      const repo = repos[highlightedIndex];
-      setSelectedRepo(repo);
-      setProjectName(repo.name);
-      setView('clone-config');
-    }
+  const selectRepo = (repo: GitHubRepo) => {
+    setSelectedRepo(repo);
+    setProjectName(repo.name);
+    setView('clone-config');
   };
-
-  // Scroll highlighted item into view
-  useEffect(() => {
-    if (highlightedIndex < 0 || !listRef.current) return;
-    const items = listRef.current.querySelectorAll('[data-repo-item]');
-    items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [highlightedIndex]);
-
-  // Load repos when entering repo view or the debounced search changes.
-  // Always reset pagination to page 1 for a fresh result set.
-  useEffect(() => {
-    if (view !== 'repos') return;
-    pageRef.current = 1;
-    fetchRepos(1, debouncedSearch, false);
-  }, [view, debouncedSearch, fetchRepos]);
-
-  // Infinite scroll: when the sentinel enters the viewport, fetch the next page.
-  useEffect(() => {
-    if (view !== 'repos') return;
-    const root = listRef.current;
-    const sentinel = sentinelRef.current;
-    if (!root || !sentinel) return;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry?.isIntersecting) return;
-        if (loadingRef.current || !hasMore) return;
-        const next = pageRef.current + 1;
-        pageRef.current = next;
-        fetchRepos(next, debouncedSearch, true);
-      },
-      { root, rootMargin: '0px 0px 200px 0px', threshold: 0 },
-    );
-    io.observe(sentinel);
-    return () => io.disconnect();
-  }, [view, hasMore, debouncedSearch, fetchRepos]);
+  const { handleSearchKeyDown } = useRepoFeed(view, repoList, selectRepo);
 
   // Cleanup poll timer on unmount
   useEffect(() => {
@@ -377,16 +223,6 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     );
   };
 
-  // ── Copy user code ─────────────────────────────
-
-  // ── Select repo for cloning ────────────────────
-
-  const selectRepo = (repo: GitHubRepo) => {
-    setSelectedRepo(repo);
-    setProjectName(repo.name);
-    setView('clone-config');
-  };
-
   // ── Clone repo ─────────────────────────────────
 
   const handleClone = async () => {
@@ -424,19 +260,6 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     toast.success(t('github.disconnected'));
   };
 
-  // ── Format relative time ───────────────────────
-
-  const relativeTime = (dateStr: string) => {
-    const diff = now - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return t('time.minutes', { count: mins });
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return t('time.hours', { count: hours });
-    const days = Math.floor(hours / 24);
-    if (days < 30) return t('time.days', { count: days });
-    return t('time.months', { count: Math.floor(days / 30) });
-  };
-
   // ── Render ─────────────────────────────────────
 
   // Loading / Checking state
@@ -447,365 +270,90 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   // Error state — API call failed (network error, server down, etc.)
   if (view === 'error') {
     return (
-      <div className="flex flex-col items-center gap-4 py-8">
-        <div className="bg-destructive/10 flex size-12 items-center justify-center rounded-full">
-          <SiGithub className="icon-xl text-destructive" />
-        </div>
-        <div className="space-y-1 text-center">
-          <h3 className="font-medium">
-            {t('github.connectionError', { defaultValue: 'Connection Error' })}
-          </h3>
-          <p className="text-muted-foreground max-w-xs text-sm">
-            {t('github.connectionErrorDesc', {
-              defaultValue:
-                'Could not check GitHub connection status. The server may be unavailable.',
-            })}
-          </p>
-        </div>
-        <Button
-          onClick={() => {
-            setView('checking');
-            checkConnection();
-          }}
-          data-testid="clone-repo-retry"
-        >
-          {t('common.retry', { defaultValue: 'Retry' })}
-        </Button>
-      </div>
+      <ConnectionErrorView
+        onRetry={() => {
+          setView('checking');
+          checkConnection();
+        }}
+      />
     );
   }
 
   // Connect state
   if (view === 'connect') {
     return (
-      <div className="flex flex-col items-center gap-4 py-8">
-        <div className="bg-muted flex size-12 items-center justify-center rounded-full">
-          <SiGithub className="icon-xl" />
-        </div>
-        <div className="space-y-1 text-center">
-          <h3 className="font-medium">{t('github.connectGithub')}</h3>
-          <p className="text-muted-foreground max-w-xs text-sm">{t('github.connectDesc')}</p>
-        </div>
-        <div className="flex w-full max-w-xs flex-col gap-2">
-          <Button className="w-full" onClick={startDeviceFlow}>
-            <SiGithub className="icon-base mr-2" />
-            {t('github.connectGithub')}
-          </Button>
-          <div className="flex items-center gap-3">
-            <div className="bg-border h-px flex-1" />
-            <span className="text-muted-foreground text-xs">{t('common.or')}</span>
-            <div className="bg-border h-px flex-1" />
-          </div>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => navigate(buildPath('/preferences/github'))}
-          >
-            <Settings className="icon-base mr-2" />
-            {t('github.useToken')}
-          </Button>
-          <p className="text-muted-foreground text-center text-xs">
-            <Trans
-              i18nKey="github.useTokenHint"
-              components={{
-                link: (
-                  <a
-                    href="https://github.com/settings/tokens/new"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-foreground underline"
-                  />
-                ),
-              }}
-            />
-          </p>
-        </div>
-      </div>
+      <ConnectGithubView
+        onConnect={startDeviceFlow}
+        onUseToken={() => navigate(buildPath('/preferences/github'))}
+      />
     );
   }
 
   // Device Flow state
   if (view === 'device-flow') {
     return (
-      <div className="flex flex-col items-center gap-5 py-8">
-        <div className="space-y-1 text-center">
-          <h3 className="font-medium">{t('github.deviceFlow.title')}</h3>
-          <p className="text-muted-foreground text-sm">{t('github.deviceFlow.desc')}</p>
-        </div>
-
-        {/* User code display */}
-        <div className="flex items-center gap-2">
-          <code className="bg-muted rounded-md px-4 py-2 font-mono text-2xl font-bold tracking-widest">
-            {userCode}
-          </code>
-          <Button variant="outline" size="sm" onClick={() => copyCode(userCode)}>
-            {codeCopied ? (
-              <Check className="icon-base copy-feedback-icon text-status-success" />
-            ) : (
-              <Copy className="icon-base copy-feedback-icon" />
-            )}
-          </Button>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => window.open(verificationUri, '_blank', 'noopener,noreferrer')}
-          >
-            <ExternalLink className="icon-base mr-2" />
-            {t('github.deviceFlow.openGithub')}
-          </Button>
-        </div>
-
-        <LoadingState
-          fill={false}
-          layout="inline"
-          className="text-sm"
-          testId="clone-repo-waiting-auth"
-          label={t('github.deviceFlow.waitingAuth')}
-        />
-
-        <Button
-          variant="muted"
-          size="sm"
-          onClick={() => {
-            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-            setView('connect');
-          }}
-        >
-          {t('common.cancel')}
-        </Button>
-      </div>
+      <DeviceFlowView
+        userCode={userCode}
+        verificationUri={verificationUri}
+        codeCopied={codeCopied}
+        onCopyCode={() => copyCode(userCode)}
+        onCancel={() => {
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          setView('connect');
+        }}
+      />
     );
   }
 
   // Repo browser state
   if (view === 'repos') {
     return (
-      <div className="flex h-full flex-col">
-        {/* Header with user info */}
-        {ghUser && (
-          <div className="mb-3 flex items-center gap-2">
-            <img src={ghUser.avatar_url} alt={ghUser.login} className="size-6 rounded-full" />
-            <span className="text-sm font-medium">{ghUser.login}</span>
-            {tokenSource === 'cli' ? (
-              <span className="text-muted-foreground ml-auto text-xs">
-                {t('github.viaGhCli', { defaultValue: 'via gh CLI' })}
-              </span>
-            ) : (
-              <Button
-                variant="muted"
-                size="xs"
-                className="ml-auto"
-                onClick={disconnect}
-                data-testid="clone-repo-disconnect"
-              >
-                <LogOut className="icon-xs mr-1" />
-                {t('github.disconnect')}
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* Search */}
-        <div className="mb-3">
-          <SearchBar
-            query={search}
-            onQueryChange={setSearch}
-            placeholder={t('github.repos.searchPlaceholder')}
-            totalMatches={repos.length}
-            resultLabel={search ? `${repos.length}` : ''}
-            onClose={search ? () => setSearch('') : undefined}
-            onInputKeyDown={handleSearchKeyDown}
-            autoFocus={false}
-            testIdPrefix="clone-repo-search"
-            className="border-input bg-background h-8 rounded-md border px-3 [&_input]:h-full [&_input]:px-0 [&_input]:text-sm"
-          />
-        </div>
-
-        {/* Repo list */}
-        <ScrollArea viewportRef={listRef} className="-mx-1 max-h-[40vh] min-h-0 flex-1">
-          {repos.map((repo, index) => (
-            <button
-              key={repo.id}
-              data-repo-item
-              data-testid={`clone-repo-item-${repo.id}`}
-              onClick={() => selectRepo(repo)}
-              onMouseEnter={() => setHighlightedIndex(index)}
-              className={cn(
-                'flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
-                highlightedIndex === index && 'bg-accent',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <HighlightText
-                  text={repo.full_name}
-                  query={debouncedSearch}
-                  className="truncate text-sm font-medium"
-                />
-                {repo.private ? (
-                  <Lock className="icon-xs text-status-pending shrink-0" />
-                ) : (
-                  <Globe className="icon-xs text-muted-foreground shrink-0" />
-                )}
-              </div>
-              {repo.description && (
-                <HighlightText
-                  text={repo.description}
-                  query={debouncedSearch}
-                  className="text-muted-foreground truncate text-xs"
-                />
-              )}
-              <div className="text-muted-foreground flex items-center gap-3 text-xs">
-                {repo.language && <HighlightText text={repo.language} query={debouncedSearch} />}
-                <span>{relativeTime(repo.updated_at)}</span>
-              </div>
-            </button>
-          ))}
-
-          {loadingRepos && (
-            <LoadingState fill={false} className="py-4" testId="clone-repo-loading-repos" />
-          )}
-
-          {!loadingRepos && repos.length === 0 && (
-            <EmptyState padding="md" fill={false} title={t('github.repos.noRepos')} />
-          )}
-
-          <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
-        </ScrollArea>
-      </div>
+      <RepoBrowser
+        ghUser={ghUser}
+        tokenSource={tokenSource}
+        onDisconnect={disconnect}
+        search={search}
+        onSearchChange={setSearch}
+        debouncedSearch={debouncedSearch}
+        onSearchKeyDown={handleSearchKeyDown}
+        repos={repos}
+        loadingRepos={loadingRepos}
+        highlightedIndex={highlightedIndex}
+        onHighlight={setHighlightedIndex}
+        onSelect={selectRepo}
+        listRef={listRef}
+        sentinelRef={sentinelRef}
+        now={now}
+      />
     );
   }
 
   // Clone config state
   if (view === 'clone-config' && selectedRepo) {
     return (
-      <div className="space-y-4">
-        <Button variant="muted" size="sm" className="-ml-2" onClick={() => setView('repos')}>
-          <ArrowLeft className="icon-sm mr-1" />
-          {t('github.repos.title')}
-        </Button>
-
-        {/* Selected repo */}
-        <div className="border-border space-y-1 rounded-md border p-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">{selectedRepo.full_name}</span>
-            {selectedRepo.private && <Lock className="icon-xs text-status-pending" />}
-          </div>
-          {selectedRepo.description && (
-            <p className="text-muted-foreground text-xs">{selectedRepo.description}</p>
-          )}
-        </div>
-
-        {/* Project name */}
-        <div>
-          <label htmlFor="clone-project-name" className="mb-1.5 block text-sm font-medium">
-            {t('github.clone.projectName')}
-          </label>
-          <Input
-            id="clone-project-name"
-            data-testid="clone-config-project-name"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-          />
-        </div>
-
-        {/* Destination path */}
-        <div>
-          <label htmlFor="clone-destination-path" className="mb-1.5 block text-sm font-medium">
-            {t('github.clone.destination')}
-          </label>
-          <div className="flex gap-2">
-            <Input
-              id="clone-destination-path"
-              data-testid="clone-config-destination"
-              className="flex-1"
-              placeholder={t('github.clone.destinationDesc')}
-              value={destinationPath}
-              onChange={(e) => setDestinationPath(e.target.value)}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="clone-config-browse"
-              onClick={() => setFolderPickerOpen(true)}
-            >
-              <FolderOpen className="icon-base" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            data-testid="clone-config-cancel"
-            onClick={() => setView('repos')}
-          >
-            {t('common.cancel')}
-          </Button>
-          <Button
-            className="flex-1"
-            data-testid="clone-config-submit"
-            onClick={handleClone}
-            disabled={!destinationPath || !projectName}
-          >
-            {t('github.clone.cloneAndCreate')}
-          </Button>
-        </div>
-
-        {folderPickerOpen && (
-          <FolderPicker
-            onSelect={(path) => {
-              setDestinationPath(path);
-              setFolderPickerOpen(false);
-            }}
-            onClose={() => setFolderPickerOpen(false)}
-          />
-        )}
-      </div>
+      <CloneConfigForm
+        selectedRepo={selectedRepo}
+        projectName={projectName}
+        onProjectNameChange={setProjectName}
+        destinationPath={destinationPath}
+        onDestinationPathChange={setDestinationPath}
+        folderPickerOpen={folderPickerOpen}
+        onFolderPickerOpenChange={setFolderPickerOpen}
+        onBack={() => setView('repos')}
+        onClone={handleClone}
+      />
     );
   }
 
   // Cloning state
   if (view === 'cloning') {
-    // Extract phase name and title-case it: "receiving objects" → "Receiving Objects"
-    const phaseName = clonePhase
-      ? clonePhase
-          .replace(/:.*$/, '')
-          .trim()
-          .replace(/\b\w/g, (c) => c.toUpperCase())
-      : '';
-
     return (
-      <div className="flex flex-col items-center gap-4 py-12">
-        <LoadingState
-          fill={false}
-          label={t('github.clone.cloning', { repo: selectedRepo?.full_name })}
-        />
-
-        {/* Progress bar with phase label */}
-        <div className="w-full max-w-xs">
-          {phaseName && (
-            <p className="text-muted-foreground mb-1 text-xs font-medium">{phaseName}</p>
-          )}
-          {clonePercent !== undefined && (
-            <>
-              <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
-                <div
-                  className={cn(
-                    'h-full rounded-full bg-primary',
-                    phaseChanged ? '' : 'transition-all duration-300',
-                  )}
-                  style={{ width: `${clonePercent}%` }}
-                />
-              </div>
-              <p className="text-muted-foreground mt-1 text-right text-xs">{clonePercent}%</p>
-            </>
-          )}
-        </div>
-      </div>
+      <CloneProgressView
+        repoFullName={selectedRepo?.full_name}
+        clonePhase={clonePhase}
+        clonePercent={clonePercent}
+        phaseChanged={phaseChanged}
+      />
     );
   }
 

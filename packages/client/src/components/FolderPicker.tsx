@@ -1,15 +1,5 @@
 import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
-import {
-  Folder,
-  ChevronRight,
-  HardDrive,
-  ArrowLeft,
-  ArrowRight,
-  Search,
-  FolderPlus,
-  Check,
-  X,
-} from 'lucide-react';
+import { HardDrive, ArrowLeft, ArrowRight, Search, FolderPlus } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -22,14 +12,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import { LoadingState } from '@/components/ui/loading-state';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import { whilePending } from '@/lib/while-pending';
+
+import { DirectoryListing } from './folder-picker/DirectoryListing';
+import { FolderBreadcrumbs } from './folder-picker/FolderBreadcrumbs';
+import { NewFolderRow } from './folder-picker/NewFolderRow';
 
 interface FolderPickerProps {
   onSelect: (path: string) => void;
@@ -293,32 +284,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             <ArrowRight className="icon-sm" />
           </TooltipIconButton>
 
-          {/* Breadcrumb path */}
-          <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-            {breadcrumbs.length === 0 && (
-              <span className="text-muted-foreground text-xs">{t('folderPicker.loading')}</span>
-            )}
-            {breadcrumbs.map((crumb, i) => (
-              <div key={crumb.path} className="flex shrink-0 items-center gap-0.5">
-                {i > 0 && <ChevronRight className="icon-xs text-muted-foreground/50 shrink-0" />}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => loadDir(crumb.path)}
-                      className={`hover:bg-accent hover:text-foreground max-w-[120px] truncate rounded px-1 py-0.5 text-xs transition-colors ${
-                        i === breadcrumbs.length - 1
-                          ? 'text-foreground font-medium'
-                          : 'text-muted-foreground'
-                      }`}
-                    >
-                      {crumb.label}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent variant="mono">{crumb.path}</TooltipContent>
-                </Tooltip>
-              </div>
-            ))}
-          </div>
+          <FolderBreadcrumbs breadcrumbs={breadcrumbs} onNavigate={loadDir} />
 
           <Button
             variant="muted"
@@ -376,83 +342,28 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         <div className="flex min-h-0 flex-1 flex-col p-2">
           {/* Inline new folder creation */}
           {creatingFolder && (
-            <div className="bg-accent/50 mb-1 flex items-center gap-2 rounded-md px-2 py-1.5">
-              <FolderPlus className="icon-sm text-status-info shrink-0" />
-              <Input
-                ref={newFolderInputRef}
-                type="text"
-                value={newFolderName}
-                onChange={(e) => {
-                  setNewFolderName(e.target.value);
-                  setNewFolderError('');
-                }}
-                onKeyDown={(e) => {
-                  if (e.nativeEvent.isComposing) return;
-                  if (e.key === 'Enter') handleCreateFolder();
-                  if (e.key === 'Escape') cancelCreateFolder();
-                }}
-                placeholder={t('folderPicker.newFolderPlaceholder')}
-                className="font-mono-explorer h-6 flex-1 text-xs"
-                data-testid="folder-picker-new-folder-input"
-              />
-              <TooltipIconButton
-                size="icon"
-                onClick={handleCreateFolder}
-                disabled={!newFolderName.trim()}
-                className="size-6 shrink-0"
-                tooltip={t('folderPicker.create')}
-                data-testid="folder-picker-new-folder-confirm"
-              >
-                <Check className="icon-xs" />
-              </TooltipIconButton>
-              <TooltipIconButton
-                size="icon"
-                onClick={cancelCreateFolder}
-                className="size-6 shrink-0"
-                tooltip={t('folderPicker.cancel')}
-                data-testid="folder-picker-new-folder-cancel"
-              >
-                <X className="icon-xs" />
-              </TooltipIconButton>
-            </div>
+            <NewFolderRow
+              inputRef={newFolderInputRef}
+              name={newFolderName}
+              onNameChange={(name) => {
+                setNewFolderName(name);
+                setNewFolderError('');
+              }}
+              onCreate={handleCreateFolder}
+              onCancel={cancelCreateFolder}
+            />
           )}
           {newFolderError && (
             <p className="text-status-error mb-1 px-2 text-xs">{newFolderError}</p>
           )}
 
-          {/* Status messages center in the listing area; the list only renders
-              when there's something to show. */}
-          {error ? (
-            <div className="flex flex-1 items-center justify-center">
-              <p className="text-status-error px-2 text-center text-xs">{error}</p>
-            </div>
-          ) : loading ? (
-            <div className="flex flex-1 items-center justify-center">
-              <LoadingState fill={false} className="px-2" label={t('folderPicker.loading')} />
-            </div>
-          ) : dirs.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center">
-              <EmptyState fill={false} className="px-2" title={t('folderPicker.noSubdirs')} />
-            </div>
-          ) : filteredDirs.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center">
-              <EmptyState fill={false} className="px-2" title={t('folderPicker.noResults')} />
-            </div>
-          ) : (
-            <ScrollArea className="-mx-2 min-h-0 flex-1 px-2">
-              {filteredDirs.map((dir) => (
-                <button
-                  key={dir.path}
-                  onClick={() => loadDir(dir.path)}
-                  className="text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
-                >
-                  <Folder className="icon-sm text-status-info shrink-0" />
-                  <span className="font-mono-explorer truncate">{dir.name}</span>
-                  <ChevronRight className="icon-xs ml-auto shrink-0 opacity-40" />
-                </button>
-              ))}
-            </ScrollArea>
-          )}
+          <DirectoryListing
+            error={error}
+            loading={loading}
+            dirs={dirs}
+            filteredDirs={filteredDirs}
+            onOpen={loadDir}
+          />
         </div>
 
         {/* Actions */}

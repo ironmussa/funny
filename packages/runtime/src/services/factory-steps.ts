@@ -275,6 +275,9 @@ type MergeOutcome =
 /**
  * Merge `base` in (never a rebase: no force push, and the reviewed commit stays
  * in the history), regenerate the declared paths, and abort on what is left.
+ * Without the repository's hooks: `git merge` runs `pre-merge-commit` and
+ * `commit-msg`, and a hook that refuses "Merge … into …" (conventional commits)
+ * would stop the merge; an integration's checks are the ones `integrate` declares.
  */
 async function mergeBase(
   cwd: string,
@@ -284,7 +287,7 @@ async function mergeBase(
   env: Record<string, string>,
 ): Promise<MergeOutcome> {
   const message = `Merge ${base} into ${request.branch}`;
-  await gitWrite(['merge', '--no-ff', '--no-edit', '-m', message, base], {
+  await gitWrite(['merge', '--no-ff', '--no-edit', '--no-verify', '-m', message, base], {
     cwd,
     env,
     reject: false,

@@ -195,6 +195,253 @@ function stoppedCount(
   return ok(results.filter((r) => r.isOk()).length);
 }
 
+/** The resolved dependencies the queue's reads share. */
+interface QueueContext {
+  runs: ReturnType<typeof createFactoryRunsRepository>;
+  batches: Pick<FactoryBatchesRepository, 'ciDurations'>;
+  github: () => FactoryGithubPort | null;
+  target: (factory: WatchedFactory) => Promise<FactoryTarget | null>;
+  loadFactory: (factoryId: string) => Promise<WatchedFactory | null>;
+}
+
+/** The factory's repository reader when it resolves now, else null (paused does not matter here). */
+async function readerOf(
+  ctx: QueueContext,
+  factoryId: string,
+): Promise<{ port: FactoryGithubPort; reader: FactoryRepoReader } | null> {
+  const factory = await ctx.loadFactory(factoryId);
+  const port = ctx.github();
+  if (!factory || !port) return null;
+  const where = await ctx.target(factory);
+  if (!where || 'reason' in where) return null;
+  return {
+    port,
+    reader: { repo: where.repo, ownerId: factory.userId, projectId: factory.projectId },
+  };
+}
+
+async function flows(ctx: QueueContext, factoryId: string): Promise<FactoryFlowOption[]> {
+  const builtIns = BUILT_IN_FACTORY_FLOWS.map((name): FactoryFlowOption => ({
+    name,
+    source: 'built-in',
+  }));
+  const where = await readerOf(ctx, factoryId);
+  if (!where) return builtIns;
+  const listed = await listFactoryFlows({
+    listDefaultBranchDir: (path) => where.port.listDefaultBranchDir(where.reader, path),
+  });
+  return listed.isOk() ? listed.value : builtIns;
+}
+
+/**
+ * One flow's YAML. Without a factory, or when its repository cannot be read
+ * now, only the built-ins are found, as in `flows` (which lists the
+ * built-ins in that case).
+ */
+async function flowDefinition(
+  ctx: QueueContext,
+  factoryId: string | null,
+  flowName: string,
+): Promise<Result<FactoryFlowDefinition, FactoryQueueError>> {
+  const builtInOnly = {
+    readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null),
+  };
+  const where = factoryId ? await readerOf(ctx, factoryId) : null;
+  if (!where) return (await readFactoryFlowDefinition(flowName, builtInOnly)).mapErr(flowRefusal);
+  const read = await readFactoryFlowDefinition(flowName, {
+    readDefaultBranchFile: (path) => where.port.readDefaultBranchFile(where.reader, path),
+  });
+  if (read.isErr() && read.error.kind === 'unavailable') {
+    return (await readFactoryFlowDefinition(flowName, builtInOnly)).mapErr(flowRefusal);
+  }
+  return read.mapErr(flowRefusal);
+}
+
+/** How the factory's repository merges through the merge queue, and why (D12). */
+async function readiness(ctx: QueueContext, factoryId: string | null): Promise<FactoryReadiness> {
+  const factory = factoryId ? await ctx.loadFactory(factoryId) : null;
+  const where = factoryId ? await readerOf(ctx, factoryId) : null;
+  if (!factory || !where) {
+    return {
+      mode: 'serial',
+      queueCi: null,
+      mergeQueueRequired: null,
+      upToDateRequired: null,
+      mergeDriver: null,
+      medianCiMs: null,
+      batchWaitMs: (factory?.batch.waitSeconds ?? 0) * 1000,
+      reasons: [NOT_RUNNING_HERE],
+      advice: [],
+    };
+  }
+  const base = await where.port.defaultBranch(where.reader);
+  const host = where.port.pullRequests.integrationFor?.({
+    userId: factory.userId,
+    projectId: factory.projectId,
+  });
+  const rules = base.isOk() && host ? await host.branchRules(where.reader.repo, base.value) : null;
+  const ran = await ctx.runs.list(factory.id);
+  const durations = await ctx.batches.ciDurations(where.reader.repo);
+  return readinessOf({
+    batchSize: factory.batch.size,
+    batchWaitMs: factory.batch.waitSeconds * 1000,
+    mergeDriver: ran.isOk() ? lastMergeDriver(ran.value) : null,
+    medianCiMs: durations.isOk() ? medianOf(durations.value) : null,
+    rules: rules?.isOk() ? rules.value : null,
+    workflows: await readWorkflowFiles(where.port, where.reader),
+  });
+}
+
+/**
+ * Validate flow (openspec factory-flow-step-options, D8): the flow loaded
+ * exactly as an admitted run of this factory would load it now (default
+ * branch at its head, prompt files, the factory checks, its step overrides
+ * and the project's defaults), and its summary or every problem. Reads only:
+ * no run, no thread. Without a factory, the built-ins only.
+ */
+async function validateFlow(
+  ctx: QueueContext,
+  factoryId: string | null,
+  projectId: string,
+  flowName: string,
+): Promise<Result<FactoryFlowValidation, FactoryQueueError>> {
+  const factory = factoryId ? await ctx.loadFactory(factoryId) : null;
+  const context = {
+    overrides: factory?.stepOverrides ?? {},
+    project: await projectAgentDefaults(projectId),
+    dependencies: factory?.dependencies,
+  };
+  const where = factoryId ? await readerOf(ctx, factoryId) : null;
+  const reads = where
+    ? flowReadsOf(where.port, where.reader)
+    : { readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null) };
+  const flow = await loadFactoryFlow(flowName, reads, context);
+  if (flow.isErr()) {
+    if (flow.error.kind === 'unavailable') return err(flowRefusal(flow.error));
+    const problems = flow.error.problems ?? [
+      { step: 'flow', field: 'flow', message: flow.error.message },
+    ];
+    return ok({ ok: false, message: flow.error.message, problems });
+  }
+  const summary = summarizeFactoryFlow(flow.value.workflow, context);
+  return ok({
+    ok: true,
+    name: flow.value.name,
+    source: flow.value.source,
+    commit: flow.value.commit,
+    ...summary,
+    // What loading the flow found too (stale wording of a repository copy).
+    warnings: [...summary.warnings, ...flow.value.warnings.map((warning) => warning.message)],
+  });
+}
+
+async function blockers(
+  ctx: QueueContext,
+  factoryId: string,
+  issueNumbers: number[],
+): Promise<Result<FactoryIssueBlockers[], FactoryQueueError>> {
+  const where = await readerOf(ctx, factoryId);
+  if (!where) return ok([]);
+  const all = await ctx.runs.list(factoryId);
+  if (all.isErr()) return err({ kind: 'storage', message: all.error.message });
+  // A blocker is in the factory while it has a run that has not failed or been stopped.
+  const inFactory = new Set(
+    all.value
+      .filter(
+        (run) => run.state !== 'failed' && run.state !== 'stopped' && run.state !== 'no_change',
+      )
+      .map((run) => run.issueNumber),
+  );
+  const answers: FactoryIssueBlockers[] = [];
+  for (const issue of [...new Set(issueNumbers)]) {
+    const read = await where.port.issueBlockers(where.reader, issue);
+    const open = read.isOk()
+      ? read.value.filter((b) => b.open && b.repo === where.reader.repo)
+      : [];
+    answers.push({
+      issue,
+      blockers: open.map((b) => ({ issue: b.number, inFactory: inFactory.has(b.number) })),
+    });
+  }
+  return ok(answers);
+}
+
+const builtInReads = {
+  readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null),
+};
+
+/** The flow as a run of this factory would load it now; the built-ins when its repository cannot be read. */
+async function loadForFactory(ctx: QueueContext, factoryId: string | null, flowName: string) {
+  const where = factoryId ? await readerOf(ctx, factoryId) : null;
+  return loadFactoryFlow(flowName, where ? flowReadsOf(where.port, where.reader) : builtInReads);
+}
+
+/**
+ * Whether a flow can run without an issue, and the inputs a member types to
+ * start it (change flow-triggers). Reads only.
+ */
+async function issuelessFlow(
+  ctx: QueueContext,
+  factoryId: string | null,
+  flowName: string,
+): Promise<Result<FactoryIssuelessFlow, FactoryQueueError>> {
+  const flow = await loadForFactory(ctx, factoryId, flowName);
+  if (flow.isErr()) {
+    if (flow.error.kind === 'unavailable') return err(flowRefusal(flow.error));
+    return ok({
+      inputs: [],
+      problems: flow.error.problems ?? [
+        { step: 'flow', field: 'flow', message: flow.error.message },
+      ],
+    });
+  }
+  const declared = Object.entries(flow.value.workflow.inputs ?? {}).filter(
+    ([name]) => !FACTORY_FLOW_INPUTS.has(name),
+  );
+  return ok({
+    inputs: declared.map(([name, def]) => ({
+      name,
+      required: def.required === true && def.default === undefined,
+      description: def.description ?? null,
+    })),
+    // Every declared input counts as typed here: only the steps are judged.
+    problems: validateFlowForIssuelessRun(
+      flow.value.workflow,
+      declared.map(([name]) => name),
+    ),
+  });
+}
+
+/** Why these input values cannot start `flowName` without an issue, or null. */
+async function issuelessRefusal(
+  ctx: QueueContext,
+  factoryId: string,
+  flowName: string,
+  inputs: Record<string, string>,
+): Promise<FactoryQueueError | null> {
+  const reserved = Object.keys(inputs).find(
+    (name) =>
+      FACTORY_FLOW_INPUTS.has(name) || validateSecretName(name.toUpperCase()) === 'reserved',
+  );
+  if (reserved) {
+    return {
+      kind: 'invalid',
+      message: `The input "${reserved}" cannot be set: the factory supplies it, or its name is reserved for a credential.`,
+    };
+  }
+  const flow = await loadForFactory(ctx, factoryId, flowName);
+  if (flow.isErr()) return flowRefusal(flow.error);
+  const supplied = Object.entries(inputs).flatMap(([name, value]) =>
+    value.trim() === '' ? [] : [name],
+  );
+  const problems = validateFlowForIssuelessRun(flow.value.workflow, supplied);
+  if (problems.length === 0) return null;
+  return {
+    kind: 'invalid-flow',
+    message: formatFactoryFlowProblems(`The flow "${flowName}"`, problems),
+  };
+}
+
 export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const runs = deps.runs ?? createFactoryRunsRepository();
   const batches = deps.batches ?? createFactoryBatchesRepository();
@@ -205,6 +452,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const wake = deps.wake ?? pokeFactory;
   const triggers = deps.triggers ?? createFactoryTriggersRepository();
   const release = deps.releaseIssue ?? releaseStoppedIssue;
+  const ctx: QueueContext = { runs, batches, github, target, loadFactory };
 
   /** The factory and where it runs now, or why a send cannot go in. */
   async function workingFactory(
@@ -296,100 +544,6 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     );
   }
 
-  /** The factory's repository reader when it resolves now, else null (paused does not matter here). */
-  async function readerOf(
-    factoryId: string,
-  ): Promise<{ port: FactoryGithubPort; reader: FactoryRepoReader } | null> {
-    const factory = await loadFactory(factoryId);
-    const port = github();
-    if (!factory || !port) return null;
-    const where = await target(factory);
-    if (!where || 'reason' in where) return null;
-    return {
-      port,
-      reader: { repo: where.repo, ownerId: factory.userId, projectId: factory.projectId },
-    };
-  }
-
-  async function flows(factoryId: string): Promise<FactoryFlowOption[]> {
-    const builtIns = BUILT_IN_FACTORY_FLOWS.map((name): FactoryFlowOption => ({
-      name,
-      source: 'built-in',
-    }));
-    const where = await readerOf(factoryId);
-    if (!where) return builtIns;
-    const listed = await listFactoryFlows({
-      listDefaultBranchDir: (path) => where.port.listDefaultBranchDir(where.reader, path),
-    });
-    return listed.isOk() ? listed.value : builtIns;
-  }
-
-  /**
-   * One flow's YAML. Without a factory, or when its repository cannot be read
-   * now, only the built-ins are found, as in `flows` (which lists the
-   * built-ins in that case).
-   */
-  async function flowDefinition(
-    factoryId: string | null,
-    flowName: string,
-  ): Promise<Result<FactoryFlowDefinition, FactoryQueueError>> {
-    const builtInOnly = {
-      readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null),
-    };
-    const where = factoryId ? await readerOf(factoryId) : null;
-    if (!where) return (await readFactoryFlowDefinition(flowName, builtInOnly)).mapErr(flowRefusal);
-    const read = await readFactoryFlowDefinition(flowName, {
-      readDefaultBranchFile: (path) => where.port.readDefaultBranchFile(where.reader, path),
-    });
-    if (read.isErr() && read.error.kind === 'unavailable') {
-      return (await readFactoryFlowDefinition(flowName, builtInOnly)).mapErr(flowRefusal);
-    }
-    return read.mapErr(flowRefusal);
-  }
-
-  /**
-   * Validate flow (openspec factory-flow-step-options, D8): the flow loaded
-   * exactly as an admitted run of this factory would load it now (default
-   * branch at its head, prompt files, the factory checks, its step overrides
-   * and the project's defaults), and its summary or every problem. Reads only:
-   * no run, no thread. Without a factory, the built-ins only.
-   */
-  /** How the factory's repository merges through the merge queue, and why (D12). */
-  async function readiness(factoryId: string | null): Promise<FactoryReadiness> {
-    const factory = factoryId ? await loadFactory(factoryId) : null;
-    const where = factoryId ? await readerOf(factoryId) : null;
-    if (!factory || !where) {
-      return {
-        mode: 'serial',
-        queueCi: null,
-        mergeQueueRequired: null,
-        upToDateRequired: null,
-        mergeDriver: null,
-        medianCiMs: null,
-        batchWaitMs: (factory?.batch.waitSeconds ?? 0) * 1000,
-        reasons: [NOT_RUNNING_HERE],
-        advice: [],
-      };
-    }
-    const base = await where.port.defaultBranch(where.reader);
-    const host = where.port.pullRequests.integrationFor?.({
-      userId: factory.userId,
-      projectId: factory.projectId,
-    });
-    const rules =
-      base.isOk() && host ? await host.branchRules(where.reader.repo, base.value) : null;
-    const ran = await runs.list(factory.id);
-    const durations = await batches.ciDurations(where.reader.repo);
-    return readinessOf({
-      batchSize: factory.batch.size,
-      batchWaitMs: factory.batch.waitSeconds * 1000,
-      mergeDriver: ran.isOk() ? lastMergeDriver(ran.value) : null,
-      medianCiMs: durations.isOk() ? medianOf(durations.value) : null,
-      rules: rules?.isOk() ? rules.value : null,
-      workflows: await readWorkflowFiles(where.port, where.reader),
-    });
-  }
-
   /**
    * Open the issue that asks for CI on the queue's branches, with the App
    * token capped by `userId`'s own access, and send it to the factory as a
@@ -433,145 +587,6 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     );
   }
 
-  async function validateFlow(
-    factoryId: string | null,
-    projectId: string,
-    flowName: string,
-  ): Promise<Result<FactoryFlowValidation, FactoryQueueError>> {
-    const factory = factoryId ? await loadFactory(factoryId) : null;
-    const context = {
-      overrides: factory?.stepOverrides ?? {},
-      project: await projectAgentDefaults(projectId),
-      dependencies: factory?.dependencies,
-    };
-    const where = factoryId ? await readerOf(factoryId) : null;
-    const reads = where
-      ? flowReadsOf(where.port, where.reader)
-      : { readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null) };
-    const flow = await loadFactoryFlow(flowName, reads, context);
-    if (flow.isErr()) {
-      if (flow.error.kind === 'unavailable') return err(flowRefusal(flow.error));
-      const problems = flow.error.problems ?? [
-        { step: 'flow', field: 'flow', message: flow.error.message },
-      ];
-      return ok({ ok: false, message: flow.error.message, problems });
-    }
-    const summary = summarizeFactoryFlow(flow.value.workflow, context);
-    return ok({
-      ok: true,
-      name: flow.value.name,
-      source: flow.value.source,
-      commit: flow.value.commit,
-      ...summary,
-      // What loading the flow found too (stale wording of a repository copy).
-      warnings: [...summary.warnings, ...flow.value.warnings.map((warning) => warning.message)],
-    });
-  }
-
-  async function blockers(
-    factoryId: string,
-    issueNumbers: number[],
-  ): Promise<Result<FactoryIssueBlockers[], FactoryQueueError>> {
-    const where = await readerOf(factoryId);
-    if (!where) return ok([]);
-    const all = await runs.list(factoryId);
-    if (all.isErr()) return err({ kind: 'storage', message: all.error.message });
-    // A blocker is in the factory while it has a run that has not failed or been stopped.
-    const inFactory = new Set(
-      all.value
-        .filter(
-          (run) => run.state !== 'failed' && run.state !== 'stopped' && run.state !== 'no_change',
-        )
-        .map((run) => run.issueNumber),
-    );
-    const answers: FactoryIssueBlockers[] = [];
-    for (const issue of [...new Set(issueNumbers)]) {
-      const read = await where.port.issueBlockers(where.reader, issue);
-      const open = read.isOk()
-        ? read.value.filter((b) => b.open && b.repo === where.reader.repo)
-        : [];
-      answers.push({
-        issue,
-        blockers: open.map((b) => ({ issue: b.number, inFactory: inFactory.has(b.number) })),
-      });
-    }
-    return ok(answers);
-  }
-
-  const builtInReads = {
-    readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null),
-  };
-
-  /** The flow as a run of this factory would load it now; the built-ins when its repository cannot be read. */
-  async function loadForFactory(factoryId: string | null, flowName: string) {
-    const where = factoryId ? await readerOf(factoryId) : null;
-    return loadFactoryFlow(flowName, where ? flowReadsOf(where.port, where.reader) : builtInReads);
-  }
-
-  /**
-   * Whether a flow can run without an issue, and the inputs a member types to
-   * start it (change flow-triggers). Reads only.
-   */
-  async function issuelessFlow(
-    factoryId: string | null,
-    flowName: string,
-  ): Promise<Result<FactoryIssuelessFlow, FactoryQueueError>> {
-    const flow = await loadForFactory(factoryId, flowName);
-    if (flow.isErr()) {
-      if (flow.error.kind === 'unavailable') return err(flowRefusal(flow.error));
-      return ok({
-        inputs: [],
-        problems: flow.error.problems ?? [
-          { step: 'flow', field: 'flow', message: flow.error.message },
-        ],
-      });
-    }
-    const declared = Object.entries(flow.value.workflow.inputs ?? {}).filter(
-      ([name]) => !FACTORY_FLOW_INPUTS.has(name),
-    );
-    return ok({
-      inputs: declared.map(([name, def]) => ({
-        name,
-        required: def.required === true && def.default === undefined,
-        description: def.description ?? null,
-      })),
-      // Every declared input counts as typed here: only the steps are judged.
-      problems: validateFlowForIssuelessRun(
-        flow.value.workflow,
-        declared.map(([name]) => name),
-      ),
-    });
-  }
-
-  /** Why these input values cannot start `flowName` without an issue, or null. */
-  async function issuelessRefusal(
-    factoryId: string,
-    flowName: string,
-    inputs: Record<string, string>,
-  ): Promise<FactoryQueueError | null> {
-    const reserved = Object.keys(inputs).find(
-      (name) =>
-        FACTORY_FLOW_INPUTS.has(name) || validateSecretName(name.toUpperCase()) === 'reserved',
-    );
-    if (reserved) {
-      return {
-        kind: 'invalid',
-        message: `The input "${reserved}" cannot be set: the factory supplies it, or its name is reserved for a credential.`,
-      };
-    }
-    const flow = await loadForFactory(factoryId, flowName);
-    if (flow.isErr()) return flowRefusal(flow.error);
-    const supplied = Object.entries(inputs).flatMap(([name, value]) =>
-      value.trim() === '' ? [] : [name],
-    );
-    const problems = validateFlowForIssuelessRun(flow.value.workflow, supplied);
-    if (problems.length === 0) return null;
-    return {
-      kind: 'invalid-flow',
-      message: formatFactoryFlowProblems(`The flow "${flowName}"`, problems),
-    };
-  }
-
   /** Start one run of a flow now, without an issue (change flow-triggers). */
   async function runFlow(
     factoryId: string,
@@ -579,7 +594,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   ): Promise<Result<FactoryRunView, FactoryQueueError>> {
     const ready = await workingFactory(factoryId);
     if (ready.isErr()) return err(ready.error);
-    const refusal = await issuelessRefusal(factoryId, input.flowName, input.inputs);
+    const refusal = await issuelessRefusal(ctx, factoryId, input.flowName, input.inputs);
     if (refusal) return err(refusal);
     const queued = await runs.enqueueIssueless({
       factoryId,
@@ -601,7 +616,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   ): Promise<Result<FactoryTrigger, FactoryQueueError>> {
     const problem = scheduleProblem(input.schedule);
     if (problem) return err({ kind: 'invalid', message: `Invalid schedule: ${problem}` });
-    const refusal = await issuelessRefusal(factoryId, input.flowName, input.inputs);
+    const refusal = await issuelessRefusal(ctx, factoryId, input.flowName, input.inputs);
     if (refusal) return err(refusal);
     if (!input.id) {
       const existing = await triggers.list(factoryId);
@@ -629,7 +644,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
       new ResultAsync(submit(factoryId, input)),
 
     issuelessFlow: (factoryId: string | null, flowName: string) =>
-      new ResultAsync(issuelessFlow(factoryId, flowName)),
+      new ResultAsync(issuelessFlow(ctx, factoryId, flowName)),
 
     runFlow: (factoryId: string, input: { flowName: string; inputs: Record<string, string> }) =>
       new ResultAsync(runFlow(factoryId, input)),
@@ -652,22 +667,22 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
               }),
         ),
 
-    flows: (factoryId: string) => ResultAsync.fromSafePromise(flows(factoryId)),
+    flows: (factoryId: string) => ResultAsync.fromSafePromise(flows(ctx, factoryId)),
 
     flowDefinition: (factoryId: string | null, flowName: string) =>
-      new ResultAsync(flowDefinition(factoryId, flowName)),
+      new ResultAsync(flowDefinition(ctx, factoryId, flowName)),
 
     blockers: (factoryId: string, issueNumbers: number[]) =>
-      new ResultAsync(blockers(factoryId, issueNumbers)),
+      new ResultAsync(blockers(ctx, factoryId, issueNumbers)),
 
     readiness: (factoryId: string | null): ResultAsync<FactoryReadiness, FactoryQueueError> =>
-      ResultAsync.fromSafePromise(readiness(factoryId)),
+      ResultAsync.fromSafePromise(readiness(ctx, factoryId)),
 
     proposeQueueCi: (userId: string, factoryId: string) =>
       new ResultAsync(proposeQueueCi(userId, factoryId)),
 
     validateFlow: (factoryId: string | null, projectId: string, flowName: string) =>
-      new ResultAsync(validateFlow(factoryId, projectId, flowName)),
+      new ResultAsync(validateFlow(ctx, factoryId, projectId, flowName)),
 
     /** Remove every waiting issue from the queue; runs in progress go on. */
     clearQueue(factoryId: string): ResultAsync<FactoryQueueClearResult, FactoryQueueError> {

@@ -61,10 +61,13 @@ mock.module('../../services/thread-service/create.js', () => ({
 mock.module('../../services/thread-service/messaging.js', () => ({
   sendMessage: mocks.sendMessage,
   stopThread: mocks.stopThread,
-  approveToolCall: mocks.approveToolCall,
-  respondPermissionRequest: mocks.respondPermissionRequest,
   cancelQueuedMessage: mocks.cancelQueuedMessage,
   updateQueuedMessage: mocks.updateQueuedMessage,
+}));
+
+mock.module('../../services/thread-service/approvals.js', () => ({
+  approveToolCall: mocks.approveToolCall,
+  respondPermissionRequest: mocks.respondPermissionRequest,
 }));
 
 mock.module('../../services/thread-service/fork.js', () => ({

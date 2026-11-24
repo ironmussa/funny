@@ -116,10 +116,12 @@ import {
   listPermissionRules,
 } from '../../services/permission-rules-client.js';
 import {
-  sendMessage,
-  stopThread,
   approveToolCall,
   respondPermissionRequest,
+} from '../../services/thread-service/approvals.js';
+import {
+  sendMessage,
+  stopThread,
   cancelQueuedMessage,
   updateQueuedMessage,
   deleteComment,

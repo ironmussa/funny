@@ -22,6 +22,7 @@ import { requestSpan } from '../middleware/tracing.js';
 import { adoptRoleInputs } from '../services/agent-startup/role-inputs.js';
 import { getServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
+import { approveToolCall, respondPermissionRequest } from '../services/thread-service/approvals.js';
 import { createIdleThread, createAndStartThread } from '../services/thread-service/create.js';
 import { checkExpectedBranch } from '../services/thread-service/expected-branch.js';
 import { forkThread } from '../services/thread-service/fork.js';
@@ -29,8 +30,6 @@ import { ThreadServiceError } from '../services/thread-service/helpers.js';
 import {
   sendMessage,
   stopThread,
-  approveToolCall,
-  respondPermissionRequest,
   cancelQueuedMessage,
   updateQueuedMessage as updateQueuedMessageService,
 } from '../services/thread-service/messaging.js';

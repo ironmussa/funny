@@ -171,8 +171,8 @@ export function DraggableTerminalTab({
                 e.stopPropagation();
               }}
               onClick={(e) => e.stopPropagation()}
-              size="xs"
-              className="h-5 w-32 px-1 py-0"
+              size="inline"
+              className="w-32"
               data-testid={`terminal-tab-rename-${tab.id}`}
             />
           ) : (

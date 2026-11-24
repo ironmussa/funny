@@ -123,6 +123,18 @@ export function isFactoryRunFailed(run: Pick<FactoryRun, 'state' | 'failureReaso
 }
 
 /**
+ * Held at the merge because its change is high risk and the factory merges
+ * only low-risk changes by itself: the member may approve merging it.
+ */
+export function isFactoryRunAwaitingMergeApproval(
+  run: Pick<FactoryRun, 'state' | 'failureReason' | 'risk'>,
+): boolean {
+  return (
+    run.state === 'waiting_human' && run.failureReason === 'high risk' && run.risk?.level === 'high'
+  );
+}
+
+/**
  * Stopped by the member (or its pull request closed) while it was failed or
  * parked after a failure: the run ended, but on an error nobody fixed.
  */

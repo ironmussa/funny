@@ -1853,7 +1853,11 @@
       "reviewFailed": "The review of the commit it would merge did not pass. Read its findings on the pull request, then follow up on this thread to fix them or merge it yourself.",
       "rewritten": "The branch no longer contains the commit that was reviewed (a rebase or a force push), so what would be merged was not checked. Look at the new head on the pull request before merging it yourself.",
       "mergeRounds": "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself."
-    }
+    },
+    "viewPullRequest": "View PR",
+    "approveMerge": "Approve and merge",
+    "approveMergeTitle": "Merge this high-risk change?",
+    "approveMergeBody": "The factory will merge commit {{sha}} of issue #{{issue}} once its checks, review and regression proof still pass. A new commit on the branch needs a new approval."
   },
   "projectSecrets": {
     "title": "Secrets",

@@ -1846,7 +1846,11 @@
       "reviewFailed": "La review del commit que se fusionaría no pasó. Lee sus hallazgos en el pull request y luego pide en este hilo que los arregle, o haz el merge tú.",
       "rewritten": "La rama ya no contiene el commit que se revisó (un rebase o un force push), así que lo que se fusionaría no se revisó. Mira el nuevo head en el pull request antes de hacer el merge tú.",
       "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú."
-    }
+    },
+    "viewPullRequest": "Ver PR",
+    "approveMerge": "Aprobar y hacer merge",
+    "approveMergeTitle": "¿Hacer merge de este cambio de riesgo alto?",
+    "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación."
   },
   "projectSecrets": {
     "title": "Secretos",

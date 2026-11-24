@@ -2365,6 +2365,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'stacked_on', 'TEXT');
     },
   },
+  {
+    // A member's approval to merge a high-risk change the factory held (JSON:
+    // the approved head commit, who, when). Numbered after master's 119-121
+    // and #443's 122, so the two sides keep distinct names when merged.
+    name: '123_factory_runs_merge_approval',
+    async up() {
+      await ctx().addColumn('factory_runs', 'merge_approval', 'TEXT');
+    },
+  },
 ];
 
 /**

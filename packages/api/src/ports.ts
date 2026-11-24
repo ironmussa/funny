@@ -451,6 +451,8 @@ export interface FactoryPort {
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */
   retryRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /** Approve merging a run's held high-risk commit, then retry the run. */
+  approveMerge(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /**
    * Queue chosen issues of the project's repository in the caller's own factory
    * with one flow (change factory-manual-queue). Refused as a whole (409) when

@@ -423,7 +423,8 @@ export function createTestDb() {
       step_options TEXT,
       regenerate_node TEXT,
       integration_pending_at TEXT,
-      stacked_on TEXT
+      stacked_on TEXT,
+      merge_approval TEXT
     )
   `);
   testDb.run(sql`

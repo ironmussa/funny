@@ -31,6 +31,7 @@ type AuditAction =
   | 'factory.disabled_access_lost'
   | 'factory.run_stopped'
   | 'factory.run_retried'
+  | 'factory.merge_approved'
   | 'factory.issues_sent'
   | 'factory.queue_cleared'
   | 'factory.stopped_all'

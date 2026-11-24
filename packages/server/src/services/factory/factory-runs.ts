@@ -18,12 +18,14 @@ import {
   EMPTY_FACTORY_RUN_METRICS,
   factoryRegressionProofSchema,
   factoryReviewVerdictSchema,
+  factoryMergeApprovalSchema,
   factoryRiskSchema,
   factoryStackedOnSchema,
   factoryStepOptionsRecordSchema,
   factoryTriageSchema,
   MAX_STORED_REVIEWS,
   type FactoryFlowSource,
+  type FactoryMergeApproval,
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
   type FactoryRisk,
@@ -209,6 +211,13 @@ const RETRYABLE_STATES = [...REOPENABLE_STATES, 'no_change'] as const satisfies 
  */
 const FAILED_RUN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
+/**
+ * The reason a run waits for a person because its change is high risk and the
+ * factory merges only low-risk changes by itself: the one hold a member's
+ * merge approval answers.
+ */
+export const HIGH_RISK_HOLD = 'high risk';
+
 /** The branch a run's agent pushes and opens its pull request from. */
 export const factoryRunBranch = (run: Pick<FactoryRunView, 'id' | 'issueNumber'>): string =>
   `factory/issue-${run.issueNumber}-${run.id.slice(0, 8)}`;
@@ -276,6 +285,8 @@ export interface FactoryRunView {
   regenerateNode: string | null;
   /** The run this one is stacked on (D10), or null. */
   stackedOn: FactoryStackedOn | null;
+  /** A member's approval to merge its high-risk head commit, or null. */
+  mergeApproval: FactoryMergeApproval | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
   /** Each flow node execution, in start order; only the run lists read it (openspec factory-step-timings). */
@@ -330,7 +341,15 @@ const queueAndFlowOf = (row: Row) => ({
   flowCommit: row.flowCommit ?? null,
   regenerateNode: row.regenerateNode ?? null,
   stackedOn: parseStackedOn(row.stackedOn ?? null),
+  mergeApproval: parseMergeApproval(row.mergeApproval ?? null),
 });
+
+/** The stored merge approval, or null (none, or no longer readable: nothing is approved). */
+function parseMergeApproval(raw: string | null): FactoryMergeApproval | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryMergeApprovalSchema, raw, 'factory_runs.merge_approval');
+  return parsed.ok ? parsed.value : null;
+}
 
 /** The stored blocker of a stacked run, or null (none, or no longer readable). */
 function parseStackedOn(raw: string | null): FactoryStackedOn | null {
@@ -670,6 +689,7 @@ function queueOperations(newId: () => string) {
             regenerateNode: null,
             integrationPendingAt: null,
             stackedOn: null,
+            mergeApproval: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -868,6 +888,7 @@ export function createFactoryRunsRepository(
       regenerateNode: null,
       integrationPendingAt: null,
       stackedOn: null,
+      mergeApproval: null,
     };
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
       toView(row),
@@ -1218,6 +1239,32 @@ export function createFactoryRunsRepository(
         db.select().from(factoryRuns).where(eq(factoryRuns.id, runId)),
         storage,
       ).map((rows) => (rows[0] ? toView(rows[0]) : null));
+    },
+
+    /**
+     * Record a member's approval to merge the run's held high-risk commit:
+     * only while the run waits for a person because of that risk (a
+     * compare-and-set on the stored state and reason). Resolves whether it
+     * was written.
+     */
+    approveMerge(
+      runId: string,
+      approval: FactoryMergeApproval,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set({ mergeApproval: JSON.stringify(approval) })
+          .where(
+            and(
+              eq(factoryRuns.id, runId),
+              eq(factoryRuns.state, 'waiting_human'),
+              eq(factoryRuns.failureReason, HIGH_RISK_HOLD),
+            ),
+          )
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
     },
 
     /** The parked or failed runs a thread belongs to (a member following up on it). */

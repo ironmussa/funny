@@ -746,6 +746,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       issueLabels: job.issue.labels ?? [],
       sensitivePaths: job.factory.sensitivePaths,
       autoMerge: job.factory.autoMerge,
+      // Read from the row: the member approves while the run waits.
+      mergeApproved: async (sha) => {
+        const run = await deps.runs.get(job.run.id);
+        return run.isOk() && run.value?.mergeApproval?.sha === sha;
+      },
       triage: job.run.triage,
       findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
       busyPaths: async () => {

@@ -145,6 +145,36 @@ describe('factory over tRPC', () => {
     expect(retried).toMatchObject({ status: 200, body: { state: 'queued' } });
   });
 
+  test('approving a held high-risk merge retries the run', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const held = await seededRun('waiting_human');
+    await createFactoryRunsRepository().update(held.id, {
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c51b2e',
+        level: 'high',
+        reasons: ['touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)'],
+        changedLines: 10,
+        paths: ['packages/server/src/db/migrate.ts'],
+      },
+    });
+
+    // A viewer may not approve; the owner does, once.
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'approveMerge', { projectId: 'p1', runId: held.id })).status).toBe(
+      403,
+    );
+    const approved = await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id });
+    expect(approved).toMatchObject({
+      status: 200,
+      body: { state: 'queued', mergeApproval: { sha: 'c2b585c51b2e', userId: 'alice' } },
+    });
+    // The run moved on: approving again is refused.
+    expect(
+      (await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id })).status,
+    ).toBe(409);
+  });
+
   test("another user's run is not found, and a viewer cannot control runs", async () => {
     const run = await seededRun('working');
     expect((await mutate('bob', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(404);

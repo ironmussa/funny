@@ -96,6 +96,37 @@ describe('FactoryRunFailureCard', () => {
     expect(screen.getByTestId('factory-run-failure-detail')).toHaveTextContent('merge it yourself');
   });
 
+  test('a high-risk hold offers "Approve and merge" instead of Retry, after a confirmation', async () => {
+    mocks.run = runOf({
+      currentStep: 'merge',
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c51b2e',
+        level: 'high',
+        reasons: ['touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)'],
+        changedLines: 345,
+        paths: ['packages/server/src/db/migrate.ts'],
+      },
+    });
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    // Retry would hold the same commit again: it is not offered.
+    expect(screen.queryByTestId('factory-run-failure-retry')).not.toBeInTheDocument();
+    expect(screen.getByTestId('factory-run-failure-pr')).toHaveTextContent('View PR');
+
+    fireEvent.click(screen.getByTestId('factory-run-failure-approve-merge'));
+    expect(mocks.control).not.toHaveBeenCalled();
+    expect(await screen.findByText('Merge this high-risk change?')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
+    expect(mocks.control).toHaveBeenCalledWith('approve-merge', 'p1', 'r1');
+  });
+
+  test('a run held for another reason keeps Retry and offers no approval', () => {
+    mocks.run = runOf({ currentStep: 'merge', failureReason: 'review failed' });
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    expect(screen.getByTestId('factory-run-failure-retry')).toBeInTheDocument();
+    expect(screen.queryByTestId('factory-run-failure-approve-merge')).not.toBeInTheDocument();
+  });
+
   test('a failed run without a known step still shows its error', () => {
     mocks.run = runOf({ state: 'failed', currentStep: null, failureReason: 'merge conflict' });
     render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);

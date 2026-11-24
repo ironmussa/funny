@@ -69,7 +69,7 @@ export type FactoryQueueError =
 
 export interface FactoryQueueDeps {
   runs?: ReturnType<typeof createFactoryRunsRepository>;
-  control?: ReturnType<typeof createFactoryRunControl>;
+  control?: Pick<ReturnType<typeof createFactoryRunControl>, 'stop' | 'retry'>;
   /** The watcher's GitHub side; null when the watcher is not running here. */
   github?: () => FactoryGithubPort | null;
   /** The live target check; null when the watcher is not running here. */

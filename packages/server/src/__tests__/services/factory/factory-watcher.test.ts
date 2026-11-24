@@ -2385,6 +2385,51 @@ describe('factory operator controls', () => {
     expect(launcher.calls).toHaveLength(1);
   });
 
+  test('approving a held high-risk merge records the approved commit and retries the run', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-ok', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const run = await seedRun(factoryId, 'waiting_human', ['t-ok']);
+    await createFactoryRunsRepository().update(run.id, {
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c51b2e',
+        level: 'high',
+        reasons: ['touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)'],
+        changedLines: 10,
+        paths: ['packages/server/src/db/migrate.ts'],
+      },
+    });
+
+    const approved = await createFactoryRunControl().approveMerge('alice', factoryId, run.id);
+
+    const { run: after, sha } = approved._unsafeUnwrap();
+    expect(sha).toBe('c2b585c51b2e');
+    expect(after).toMatchObject({ state: 'queued', failureReason: null, threadIds: ['t-ok'] });
+    expect(after.mergeApproval).toMatchObject({ sha: 'c2b585c51b2e', userId: 'alice' });
+  });
+
+  test('only a run held for its high risk can be approved', async () => {
+    const factoryId = await enableFactory();
+    const failed = await seedRun(factoryId, 'failed', []);
+    const parked = (
+      await createFactoryRunsRepository().start({
+        factoryId,
+        issueNumber: 8,
+        threadIds: [],
+        state: 'waiting_human',
+      })
+    )._unsafeUnwrap();
+    await createFactoryRunsRepository().update(parked.id, { failureReason: 'review failed' });
+    const control = createFactoryRunControl();
+
+    for (const run of [failed, parked]) {
+      const approved = await control.approveMerge('alice', factoryId, run.id);
+      expect(approved.isErr() && approved.error.kind).toBe('conflict');
+    }
+    const rows = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(rows.map((row) => row.mergeApproval)).toEqual([null, null]);
+  });
+
   test('retrying keeps a completed implement step and runs the later steps again', async () => {
     const factoryId = await enableFactory();
     seedThread(testDb.db, { id: 't-ok', projectId: 'p1', userId: 'alice', status: 'completed' });

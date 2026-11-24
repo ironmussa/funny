@@ -762,6 +762,29 @@ describe('what merge checks on entry', () => {
     expect(merges).toHaveLength(1);
   });
 
+  test("a member's approval of the held commit lets the high-risk change merge", async () => {
+    const { merge, merges } = merging({
+      reviews: [pass(SHA_A)],
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+      mergeApproved: async (sha) => sha === SHA_A,
+    });
+    expect(await merge()).toMatchObject({ ok: true });
+    expect(merges).toHaveLength(1);
+  });
+
+  test('an approval of another commit does not let a new head through', async () => {
+    const { merge, merges } = merging({
+      reviews: [pass(SHA_A)],
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+      mergeApproved: async (sha) => sha === 'an-older-commit',
+    });
+    expect(await merge()).toMatchObject({
+      ok: false,
+      metadata: { reason: MERGE_HOLD_REASONS.highRisk },
+    });
+    expect(merges).toEqual([]);
+  });
+
   test('a high-risk change is held even with the review gate off', async () => {
     const { merge, merges } = merging({ files: [changed('src/auth/session.ts', ['+x'])] });
     expect(await merge({ requireReview: false })).toMatchObject({

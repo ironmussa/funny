@@ -390,6 +390,7 @@ export const factoryRuns = pgTable('factory_runs', {
   integrationPendingAt: text('integration_pending_at'),
   /** JSON: the run this one is stacked on (D10: run id, issue, branch, retargeted), or null. */
   stackedOn: text('stacked_on'),
+  mergeApproval: text('merge_approval'),
 });
 
 /**

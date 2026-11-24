@@ -1812,7 +1812,11 @@
       "reviewFailed": "O review do commit que seria mesclado não passou. Leia os achados no pull request e depois peça neste thread para corrigi-los, ou faça o merge você.",
       "rewritten": "A branch não contém mais o commit que foi revisado (um rebase ou um force push), então o que seria mesclado não foi verificado. Veja o novo head no pull request antes de fazer o merge você.",
       "mergeRounds": "As rodadas de correções do agente não conseguiram mesclar a mudança com a branch base. Veja o pull request e resolva você."
-    }
+    },
+    "viewPullRequest": "Ver PR",
+    "approveMerge": "Aprovar e fazer merge",
+    "approveMergeTitle": "Fazer merge desta mudança de risco alto?",
+    "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação."
   },
   "projectSecrets": {
     "title": "Segredos",

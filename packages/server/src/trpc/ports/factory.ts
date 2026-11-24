@@ -84,6 +84,33 @@ async function reschedule(factoryId: string, projectId: string): Promise<void> {
   );
 }
 
+type RunControlAction = 'stop' | 'retry' | 'approve-merge';
+
+const withoutSha = (run: FactoryRunView) => ({ run, sha: null as string | null });
+
+/** How each run control is audited. */
+const RUN_CONTROL: Record<
+  RunControlAction,
+  {
+    audit: 'factory.run_stopped' | 'factory.run_retried' | 'factory.merge_approved';
+    auditDetail: (issue: number, sha: string | null) => string;
+  }
+> = {
+  stop: {
+    audit: 'factory.run_stopped',
+    auditDetail: (issue) => `Factory run for issue #${issue} stopped`,
+  },
+  retry: {
+    audit: 'factory.run_retried',
+    auditDetail: (issue) => `Factory run for issue #${issue} retried`,
+  },
+  'approve-merge': {
+    audit: 'factory.merge_approved',
+    auditDetail: (issue, sha) =>
+      `Merge of the high-risk change for issue #${issue} approved at ${sha ?? 'unknown commit'}`,
+  },
+};
+
 function createFactoryPort(
   settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
@@ -135,23 +162,34 @@ function createFactoryPort(
       return result;
     };
 
-  const controlled = (action: 'stop' | 'retry', userId: string, projectId: string, runId: string) =>
+  /**
+   * A member's control over one run (stop, retry, approve a held merge): run
+   * and audited.
+   */
+  const controlled = (
+    action: RunControlAction,
+    userId: string,
+    projectId: string,
+    runId: string,
+  ): ResultAsync<FactoryRunView, ApiFailure> =>
     ownFactory(userId, projectId)
-      .andThen((factoryId) =>
-        (action === 'stop'
-          ? control.stop(userId, factoryId, runId)
-          : control.retry(factoryId, runId)
-        ).mapErr(controlFailure),
-      )
-      .map((run) => {
+      .andThen((factoryId) => {
+        const run = {
+          stop: () => control.stop(userId, factoryId, runId).map(withoutSha),
+          retry: () => control.retry(factoryId, runId).map(withoutSha),
+          'approve-merge': () => control.approveMerge(userId, factoryId, runId),
+        }[action];
+        return run().mapErr(controlFailure);
+      })
+      .andTee(({ run, sha }) => {
         audit({
-          action: action === 'stop' ? 'factory.run_stopped' : 'factory.run_retried',
+          action: RUN_CONTROL[action].audit,
           actorId: userId,
-          detail: `Factory run for issue #${run.issueNumber} ${action === 'stop' ? 'stopped' : 'retried'}`,
-          meta: { projectId, runId, issueNumber: run.issueNumber },
+          detail: RUN_CONTROL[action].auditDetail(run.issueNumber, sha),
+          meta: { projectId, runId, issueNumber: run.issueNumber, ...(sha && { sha }) },
         });
-        return run;
-      });
+      })
+      .map(({ run }) => run);
 
   return {
     async settings(userId, projectId) {
@@ -229,6 +267,10 @@ function createFactoryPort(
 
     async retryRun(userId, projectId, runId) {
       return controlled('retry', userId, projectId, runId);
+    },
+
+    async approveMerge(userId, projectId, runId) {
+      return controlled('approve-merge', userId, projectId, runId);
     },
 
     async submitIssues(userId, projectId, input) {

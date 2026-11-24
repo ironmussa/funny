@@ -122,9 +122,10 @@ describe('EditFileCard', () => {
 
     const placeholder = screen.getByTestId('edit-file-inline-diff-placeholder');
     const slot = expectInstance(placeholder.parentElement, HTMLElement);
-    const reservedHeight = slot.style.height;
+    const reservedHeight = slot.style.getPropertyValue('--edit-file-diff-slot-height');
 
     expect(reservedHeight).toMatch(/^\d+px$/);
+    expect(slot).toHaveClass('h-[var(--edit-file-diff-slot-height)]');
 
     await act(async () => {
       intersectionObserverState.callback?.(
@@ -135,7 +136,7 @@ describe('EditFileCard', () => {
 
     const diff = await screen.findByTestId('edit-file-inline-diff');
     expect(diff.parentElement).toBe(slot);
-    expect(slot.style.height).toBe(reservedHeight);
+    expect(slot.style.getPropertyValue('--edit-file-diff-slot-height')).toBe(reservedHeight);
     expect(screen.queryByTestId('edit-file-inline-diff-placeholder')).not.toBeInTheDocument();
   });
 
@@ -166,10 +167,13 @@ describe('EditFileCard', () => {
       </TooltipProvider>,
     );
 
-    const slot = screen.getByTestId('edit-file-inline-diff-placeholder').parentElement;
+    const slot = expectInstance(
+      screen.getByTestId('edit-file-inline-diff-placeholder').parentElement,
+      HTMLElement,
+    );
 
     // 1 hunk + (3 context + 1 fold + 3 context) on each side + 1 changed row.
-    expect(slot).toHaveStyle({ height: '320px' });
+    expect(slot.style.getPropertyValue('--edit-file-diff-slot-height')).toBe('320px');
   });
 
   test('mounts a visible diff when IntersectionObserver does not notify', async () => {

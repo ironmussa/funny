@@ -424,10 +424,7 @@ export function ExpandedDiffDialog(props: ExpandedDiffDialogProps) {
             className="flex min-w-0 items-center gap-2 overflow-hidden font-mono"
           >
             <Icon className="icon-base shrink-0" />
-            <span
-              className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-              style={{ direction: 'rtl', textAlign: 'left' }}
-            >
+            <span className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap [direction:rtl]">
               {filePath}
             </span>
           </DialogTitle>
@@ -569,10 +566,7 @@ export function ExpandedDiffView(props: ExpandedDiffViewProps) {
       {/* Header toolbar */}
       <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4 select-none">
         <Icon className="icon-base text-muted-foreground shrink-0" />
-        <span
-          className="text-foreground min-w-0 flex-1 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap"
-          style={{ direction: 'rtl', textAlign: 'left' }}
-        >
+        <span className="text-foreground min-w-0 flex-1 overflow-hidden text-left font-mono text-xs text-ellipsis whitespace-nowrap [direction:rtl]">
           {filePath}
         </span>
         <DiffHeaderControls testIdPrefix="diff-view" controls={controls} display={display} />

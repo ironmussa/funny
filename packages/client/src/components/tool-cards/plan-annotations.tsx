@@ -68,11 +68,10 @@ export function SelectionPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute z-100"
+      className="absolute top-[var(--plan-popover-top)] left-[var(--plan-popover-left)] z-100 [transform:translate(-50%,-100%)_translateY(-8px)]"
       style={{
-        left: position.x,
-        top: position.y,
-        transform: 'translate(-50%, -100%) translateY(-8px)',
+        '--plan-popover-left': `${position.x}px`,
+        '--plan-popover-top': `${position.y}px`,
       }}
       onMouseDown={(e) => e.stopPropagation()}
       data-testid="plan-selection-popover"
@@ -295,8 +294,8 @@ export function MarginAnnotations({
       {groups.map((group) => (
         <div
           key={group.top}
-          className="border-border/60 bg-card absolute right-0 flex items-center gap-px rounded-full border px-px py-px"
-          style={{ top: group.top }}
+          className="border-border/60 bg-card absolute top-[var(--plan-annotation-group-top)] right-0 flex items-center gap-px rounded-full border px-px py-px"
+          style={{ '--plan-annotation-group-top': `${group.top}px` }}
         >
           {group.items.map((a) => (
             <Tooltip key={a.index}>

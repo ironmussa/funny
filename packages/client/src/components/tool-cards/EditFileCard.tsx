@@ -507,8 +507,14 @@ export function EditFileCard({
         >
           <div
             ref={diffSlotRef}
-            className="border-border/40 max-h-[50vh] overflow-hidden border-t"
-            style={{ height: inlineDiffSlotHeight }}
+            className={cn(
+              'border-border/40 max-h-[50vh] overflow-hidden border-t',
+              inlineDiffSlotHeight !== undefined && 'h-[var(--edit-file-diff-slot-height)]',
+            )}
+            style={{
+              '--edit-file-diff-slot-height':
+                inlineDiffSlotHeight === undefined ? undefined : `${inlineDiffSlotHeight}px`,
+            }}
           >
             {diffMounted ? (
               <VirtualDiff

@@ -137,10 +137,7 @@ export class CodexAppServer {
   }
 
   /** Register before sending: completion can arrive before the RPC response. */
-  async runTurn(
-    method: string,
-    params: { threadId: string; [key: string]: unknown },
-  ): Promise<string> {
+  async runTurn<P extends { threadId: string }>(method: string, params: P): Promise<string> {
     let output = '';
     let listener: (event: CodexNotification) => void = () => {};
     const controller = new AbortController();

@@ -2,11 +2,13 @@ import { randomUUID } from 'crypto';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { isAbsolute, join, resolve } from 'path';
 
+import type { JsonObject } from '@funny/shared/json';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 import { toACPImageBlocks } from './acp-image.js';
 import { BaseAgentProcess } from './base-process.js';
+import { isJsonPayloadObject } from './json-payload.js';
 import { connectMcpTools, type McpToolBridge } from './mcp-tool-bridge.js';
 import { createPiSessionManager } from './pi-sdk-session.js';
 import type { CLIMessage } from './types.js';
@@ -199,8 +201,8 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private handleSessionEvent(event: unknown): void {
-    if (!isObject(event)) return;
-    const e = event as Record<string, any>;
+    if (!isPiSessionEvent(event)) return;
+    const e = event;
     switch (e.type) {
       case 'message_update':
         this.handleMessageUpdate(e.assistantMessageEvent);
@@ -226,11 +228,12 @@ export class PiSDKProcess extends BaseAgentProcess {
         break;
       case 'compaction_end':
         if (e.result) {
+          const tokens: PiCompactionResult = isPiCompactionResult(e.result) ? e.result : {};
           this.emit('message', {
             type: 'compact_boundary',
             trigger: e.reason === 'manual' ? 'manual' : 'auto',
-            preTokens: e.result.tokensBefore ?? 0,
-            postTokens: e.result.tokensAfter ?? 0,
+            preTokens: tokens.tokensBefore ?? 0,
+            postTokens: tokens.tokensAfter ?? 0,
             sessionId: this.session?.sessionId ?? '',
           } as CLIMessage);
         }
@@ -241,8 +244,8 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private handleMessageUpdate(event: unknown): void {
-    if (!isObject(event)) return;
-    const e = event as Record<string, any>;
+    if (!isPiAssistantMessageEvent(event)) return;
+    const e = event;
     if (e.type === 'text_delta' && isNonEmptyString(e.delta)) {
       this.flushPendingThought();
       this.accumulatedText += e.delta;
@@ -346,8 +349,8 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private captureUsage(message: unknown): void {
-    if (!isObject(message)) return;
-    const usage = (message as Record<string, any>).usage;
+    if (!isPiMessage(message)) return;
+    const usage = message.usage;
     if (!isPiUsage(usage)) return;
     const input = Number(usage.input ?? 0);
     const output = Number(usage.output ?? 0);
@@ -398,8 +401,53 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-/** Any non-null object (arrays included). */
-function isObject(value: unknown): value is object {
+/** The fields of a pi session event this adapter reads; which ones are set depends on `type`. */
+interface PiSessionEvent {
+  type?: unknown;
+  assistantMessageEvent?: unknown;
+  toolCallId?: unknown;
+  toolName?: unknown;
+  args?: unknown;
+  /** A tool's result (`tool_execution_end`) or the compaction result (`compaction_end`). */
+  result?: unknown;
+  isError?: unknown;
+  message?: unknown;
+  messages?: unknown;
+  reason?: unknown;
+}
+
+/** A pi session event: any non-null object, its fields checked where they are read. */
+function isPiSessionEvent(value: unknown): value is PiSessionEvent {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A `message_update`'s assistant message event: any non-null object. */
+function isPiAssistantMessageEvent(value: unknown): value is {
+  type?: unknown;
+  delta?: unknown;
+  toolCall?: { id?: unknown; name?: unknown; arguments?: unknown };
+} {
+  return typeof value === 'object' && value !== null;
+}
+
+/** The token counts of a `compaction_end` result. */
+interface PiCompactionResult {
+  tokensBefore?: number;
+  tokensAfter?: number;
+}
+
+/** A `compaction_end` result: any non-null object. */
+function isPiCompactionResult(value: unknown): value is PiCompactionResult {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A pi message (`turn_end`, `agent_end`): any non-null object. */
+function isPiMessage(value: unknown): value is { usage?: unknown } {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A tool result: any non-null object, its `content` read when it is an array. */
+function isPiToolResult(value: unknown): value is { content?: unknown } {
   return typeof value === 'object' && value !== null;
 }
 
@@ -473,9 +521,9 @@ function normalizeSearchInput(input: unknown): unknown {
   return record;
 }
 
-function cloneRecord(input: unknown): Record<string, unknown> | null {
-  if (!isObject(input) || Array.isArray(input)) return null;
-  return { ...(input as Record<string, unknown>) };
+function cloneRecord(input: unknown): JsonObject | null {
+  if (!isJsonPayloadObject(input) || Array.isArray(input)) return null;
+  return { ...input };
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -652,7 +700,8 @@ export function piToolsFromMcp(bridge: McpToolBridge) {
     description: tool.description,
     parameters: tool.inputSchema as any,
     execute: async (_toolCallId: string, params: unknown, signal: AbortSignal | undefined) => {
-      const result = await tool.call((params ?? {}) as Record<string, unknown>, signal);
+      // SAFETY: pi validated the model's JSON arguments against the tool's object schema.
+      const result = await tool.call((params ?? {}) as JsonObject, signal);
       if (result.isError) throw new Error(result.text || 'tool failed');
       return { content: [{ type: 'text' as const, text: result.text }], details: undefined };
     },
@@ -791,8 +840,8 @@ function toPiImages(images: unknown): any[] {
 function stringifyToolResult(result: unknown): string {
   if (result == null) return '';
   if (isString(result)) return result;
-  if (!isObject(result)) return String(result);
-  const content = (result as Record<string, any>).content;
+  if (!isPiToolResult(result)) return String(result);
+  const content = result.content;
   if (Array.isArray(content)) {
     const text = content
       .map((block) => {

@@ -17,6 +17,8 @@
  * synchronous `funny_run_checks` ≤ 30 min), so they get `FUNNY_TOOL_TIMEOUT_SEC`.
  */
 
+import type { McpServerEntry, McpServerMap, McpStringPairs } from './mcp-server-map.js';
+
 export interface CodexMcpConfig {
   /** Value for Codex `mcp_servers`. */
   mcpServers: Record<
@@ -45,8 +47,8 @@ function tokenEnvVar(name: string): string {
 type CodexEntry = CodexMcpConfig['mcpServers'][string];
 
 /** The bearer token in an entry's `Authorization` header, if any. */
-function bearerToken(headers: unknown): string | undefined {
-  const authorization = Object.entries((headers ?? {}) as Record<string, unknown>).find(
+function bearerToken(headers: McpStringPairs | undefined): string | undefined {
+  const authorization = Object.entries(headers ?? {}).find(
     ([key]) => key.toLowerCase() === 'authorization',
   )?.[1];
   return /^Bearer\s+(\S+)$/i.exec(String(authorization ?? ''))?.[1];
@@ -55,12 +57,12 @@ function bearerToken(headers: unknown): string | undefined {
 /** One streamable-HTTP server as a Codex entry, its token moved to `env`; null for others. */
 function codexEntry(
   name: string,
-  raw: unknown,
+  raw: McpServerEntry,
   extra: Partial<CodexEntry>,
   env: Record<string, string>,
 ): CodexEntry | null {
   if (!raw || !isObject(raw)) return null;
-  const { type, url, headers } = raw as { type?: unknown; url?: unknown; headers?: unknown };
+  const { type, url, headers } = raw;
   if (String(type ?? '').toLowerCase() !== 'http' || !isString(url)) return null;
   const timeout = isFunnyServer(url) ? { tool_timeout_sec: FUNNY_TOOL_TIMEOUT_SEC } : {};
   const token = bearerToken(headers);
@@ -71,7 +73,7 @@ function codexEntry(
 }
 
 export function toCodexMcpConfig(
-  mcpServers: Record<string, any> | undefined,
+  mcpServers: McpServerMap | undefined,
   options: { approveTools?: boolean } = {},
 ): CodexMcpConfig {
   const config: CodexMcpConfig = { mcpServers: {}, env: {} };
@@ -89,7 +91,7 @@ export function toCodexMcpConfig(
  * except in read-only plan mode.
  */
 export function codexMcpSettings(
-  mcpServers: Record<string, any> | undefined,
+  mcpServers: McpServerMap | undefined,
   permissionMode: string | undefined,
 ): { config: { mcp_servers?: CodexMcpConfig['mcpServers'] }; env: Record<string, string> } {
   const mcp = toCodexMcpConfig(mcpServers, { approveTools: permissionMode !== 'plan' });

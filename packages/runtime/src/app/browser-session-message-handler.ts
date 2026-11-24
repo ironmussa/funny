@@ -25,6 +25,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
   log.info('WS message received', { namespace: NS, type, userId });
   switch (type) {
     case 'browser-session:open': {
+      // SAFETY: `type === 'browser-session:open'` here, and the client sends WSBrowserSessionOpenData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionOpenData;
       log.info('handling open', { namespace: NS, sessionId: d.sessionId, url: d.url });
       browserSessionManager.open(userId, d.sessionId, d.url, { origin: 'panel' }).catch((err) => {
@@ -34,6 +35,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:navigate': {
+      // SAFETY: `type === 'browser-session:navigate'` here, and the client sends WSBrowserSessionNavigateData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionNavigateData;
       browserSessionManager.navigate(userId, d.sessionId, d.url).catch((err) => {
         log.warn('navigate failed', {
@@ -46,6 +48,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:nav': {
+      // SAFETY: `type === 'browser-session:nav'` here, and the client sends WSBrowserSessionNavData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionNavData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
@@ -63,6 +66,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:input': {
+      // SAFETY: `type === 'browser-session:input'` here, and the client sends WSBrowserSessionInputData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionInputData;
       browserSessionManager.dispatchInput(userId, d.sessionId, d).catch(() => {
         /* swallow — input is best-effort, frame stream provides visual feedback */
@@ -71,6 +75,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:inspect-at': {
+      // SAFETY: `type === 'browser-session:inspect-at'` here, and the client sends WSBrowserSessionInspectAtData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionInspectAtData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
@@ -87,6 +92,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:inspect-rect': {
+      // SAFETY: `type === 'browser-session:inspect-rect'` here, and the client sends WSBrowserSessionInspectRectData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionInspectRectData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
@@ -97,6 +103,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:screenshot': {
+      // SAFETY: `type === 'browser-session:screenshot'` here, and the client sends WSBrowserSessionScreenshotData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionScreenshotData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
@@ -107,6 +114,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:execute': {
+      // SAFETY: `type === 'browser-session:execute'` here, and the client sends WSBrowserSessionExecuteData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionExecuteData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
@@ -117,12 +125,14 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     }
 
     case 'browser-session:heartbeat': {
+      // SAFETY: `type === 'browser-session:heartbeat'` here, and the client sends WSBrowserSessionHeartbeatData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionHeartbeatData;
       browserSessionManager.heartbeat(userId, d.sessionId);
       return true;
     }
 
     case 'browser-session:close': {
+      // SAFETY: `type === 'browser-session:close'` here, and the client sends WSBrowserSessionCloseData for that message type (shared WS protocol).
       const d = data as WSBrowserSessionCloseData;
       browserSessionManager
         .closeFromClient(userId, d.sessionId, d.reason, d.closeId)

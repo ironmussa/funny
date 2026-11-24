@@ -79,6 +79,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.get('/api/system/shells', (c) => {
+    // SAFETY: a CommonJS require of this exact module path, so it returns that module's exports.
     const { detectShells } =
       require('../services/shell-detector.js') as typeof import('../services/shell-detector.js');
     return c.json({ shells: detectShells() });
@@ -110,6 +111,8 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   app.post('/api/system/claude-code/external-sessions/:sessionId/import', (c) =>
     withExternalSession(c, async ({ sessionId, userId }) => {
+      // SAFETY: client JSON body (or `{}` on a parse error); only `projectId` is read and its
+      // type is checked on the next line.
       const body = (await c.req.json().catch(() => ({}))) as {
         projectId?: unknown;
       };
@@ -121,7 +124,10 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
         userId,
         projectId,
       });
-      if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404);
+      if (!result.ok) {
+        // SAFETY: importExternalClaudeSession's failures only use status 400 or 404.
+        return c.json({ error: result.error }, result.status as 400 | 404);
+      }
       return c.json({
         imported: result.imported,
         thread: result.thread,
@@ -360,9 +366,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
         cliVersion: info.cliVersion ?? null,
         error: info.error ?? null,
         label: PROVIDER_LABELS[name] ?? name,
-        defaultModel: info.available ? getDefaultModel(name as any) : null,
-        models: info.available ? getProviderModels(name as any) : [],
-        modelsWithLabels: info.available ? getProviderModelsWithLabels(name as any) : [],
+        defaultModel: info.available ? getDefaultModel(name) : null,
+        models: info.available ? getProviderModels(name) : [],
+        modelsWithLabels: info.available ? getProviderModelsWithLabels(name) : [],
       };
     }
 
@@ -423,6 +429,8 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     }
 
     const emitBuild = (type: string, data: unknown) => {
+      // SAFETY: the native-git build events are not in the shared WSEvent union; the client
+      // listens for these `native-git:*` types with this `{ type, threadId, data }` shape.
       wsBroker.emitToUser(userId, { type, threadId: '', data } as any);
     };
 
@@ -452,8 +460,8 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       }
     };
 
-    void streamReader(proc.stdout as ReadableStream<Uint8Array>, 'stdout');
-    void streamReader(proc.stderr as ReadableStream<Uint8Array>, 'stderr');
+    void streamReader(proc.stdout, 'stdout');
+    void streamReader(proc.stderr, 'stderr');
 
     void proc.exited.then((exitCode) => {
       nativeGitBuildInProgress = false;

@@ -62,7 +62,12 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
         threadId,
         prompt,
         cwd,
+        // SAFETY: the handlers pass a queued message's or thread's stored model (or
+        // DEFAULT_MODEL); it is only persisted from AgentModel values, HandlerServiceContext
+        // just types it as string.
         model as AgentModel | undefined,
+        // SAFETY: same for the permission mode: stored PermissionMode values or
+        // DEFAULT_PERMISSION_MODE, typed as string by HandlerServiceContext.
         permissionMode as PermissionMode | undefined,
         images,
         disallowedTools,
@@ -126,6 +131,8 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
     await import('../services/team-client.js');
   setLocalApp(app);
   setBrowserWSHandler((userId, data, respond) => {
+    // SAFETY: the server forwards browser WS frames as `{ type, data }`; a frame without a
+    // `type` (or a nullish one) is dropped by the `parsed?.type` check below.
     const parsed = data as { type: string; data: any };
     if (!parsed?.type) return;
     if (parsed.type.startsWith('browser-session:')) {

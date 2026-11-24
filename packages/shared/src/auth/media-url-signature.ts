@@ -22,6 +22,10 @@
 
 import { createHmac, timingSafeEqual } from 'crypto';
 
+function isString(value: string | number): value is string {
+  return typeof value === 'string';
+}
+
 /** Default lifetime of a signed media URL. Short, to bound URL-leak exposure. */
 export const MEDIA_URL_DEFAULT_TTL_MS = 5 * 60 * 1000;
 
@@ -95,7 +99,7 @@ export function verifyMediaUrl(
     return { ok: false, reason: 'missing' };
   }
 
-  const exp = typeof expires === 'string' ? Number.parseInt(expires, 10) : expires;
+  const exp = isString(expires) ? Number.parseInt(expires, 10) : expires;
   if (!Number.isFinite(exp)) return { ok: false, reason: 'missing' };
   if (now >= exp) return { ok: false, reason: 'expired' };
 

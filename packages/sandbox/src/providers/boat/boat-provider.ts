@@ -84,6 +84,10 @@ export function boatTemplateName(serverVersion: string): string {
   return `${TEMPLATE_PREFIX}${serverVersion.replace(/[^A-Za-z0-9.-]/g, '-')}`;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function retryAfterMs(body: any, res: Response): number | undefined {
   const seconds =
     body?.error?.details?.retryAfterSeconds ??
@@ -234,7 +238,7 @@ export function createBoatProvider(
         },
       }).andThen((body) => {
         const sandboxId = body?.sandbox?.id;
-        return typeof sandboxId === 'string'
+        return isString(sandboxId)
           ? okAsync<SandboxHandle, SandboxError>({ providerId: BOAT_PROVIDER_ID, sandboxId })
           : errAsync<SandboxHandle, SandboxError>({
               kind: 'provider',
@@ -294,7 +298,7 @@ export function createBoatProvider(
       call('POST', `/sandboxes/${handle.sandboxId}/host`, {
         body: { port, public: false, title: 'funny runner link' },
       }).andThen((body) =>
-        typeof body?.url === 'string' && body.url
+        isString(body?.url) && body.url
           ? okAsync<SandboxIngress, SandboxError>({ url: body.url, headers: {} })
           : errAsync<SandboxIngress, SandboxError>({
               kind: 'provider',
@@ -326,7 +330,7 @@ export function createBoatProvider(
         headers: { 'Idempotency-Key': `funny-template:${name}:${Date.now()}` },
         body: { type: 'small', ttlSeconds: 3600, name: `funny-template-${req.serverVersion}` },
       }).andThen((body) =>
-        typeof body?.sandbox?.id === 'string'
+        isString(body?.sandbox?.id)
           ? okAsync<SandboxHandle, SandboxError>({
               providerId: BOAT_PROVIDER_ID,
               sandboxId: body.sandbox.id,

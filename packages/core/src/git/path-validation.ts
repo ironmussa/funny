@@ -94,6 +94,11 @@ export function isContainedPath(
   return isPathUnder(realTarget, realBase);
 }
 
+/** Inputs typed as strings can still arrive as anything from an untyped caller. */
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
 /**
  * Sanitizes a path to prevent directory traversal attacks.
  * Rejects paths that escape `basePath` lexically (including sibling
@@ -107,7 +112,7 @@ export function sanitizePath(
   userPath: string,
   options: ContainmentOptions = { followFinalSymlink: false },
 ): Result<string, DomainError> {
-  if (typeof userPath !== 'string' || userPath.includes('\0')) {
+  if (!isString(userPath) || userPath.includes('\0')) {
     return err(forbidden('Path traversal detected'));
   }
   const resolvedBase = resolve(basePath);
@@ -136,7 +141,7 @@ export function resolveRepoRelativePath(
   cwd: string,
   userPath: string,
 ): Result<string, DomainError> {
-  if (typeof userPath !== 'string' || userPath.length === 0) {
+  if (!isString(userPath) || userPath.length === 0) {
     return err(badRequest('File path must be a non-empty string'));
   }
   if (userPath.includes('\0')) {
@@ -262,7 +267,7 @@ function isUnderPathCaseInsensitive(target: string, scope: string): boolean {
  * a host that does not hold the files). Returns the lexically-resolved path.
  */
 export function validateProjectPathLexical(rawPath: string): Result<string, DomainError> {
-  if (typeof rawPath !== 'string' || rawPath.length === 0) {
+  if (!isString(rawPath) || rawPath.length === 0) {
     return err(badRequest('Project path must be a non-empty string'));
   }
   if (rawPath.startsWith('-')) {

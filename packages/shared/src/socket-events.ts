@@ -107,9 +107,13 @@ export const browserPtyForwardPayloadSchema = z.preprocess(
 
 export type BrowserPtyForwardPayload = z.infer<typeof browserPtyForwardPayloadSchema>;
 
+function isObject(value: unknown): value is object | null {
+  return typeof value === 'object';
+}
+
 /** Normalize browser fire-and-forget payloads. Returns null when invalid. */
 export function parseObjectPayload(data: unknown): Record<string, unknown> | null {
-  if (data != null && (typeof data !== 'object' || Array.isArray(data))) {
+  if (data != null && (!isObject(data) || Array.isArray(data))) {
     return null;
   }
   const parsed = objectPayloadSchema.safeParse(data);

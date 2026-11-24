@@ -7,8 +7,12 @@ import { useGpuixUiTheme } from './theme';
 type NativeInputProps = JSX.IntrinsicElements['input'];
 type NativeTextareaProps = JSX.IntrinsicElements['textarea'];
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function eventValue(event: EventPayload): string {
-  return typeof event.value === 'string' ? event.value : '';
+  return isString(event.value) ? event.value : '';
 }
 
 export interface InputProps extends Omit<NativeInputProps, 'onChange' | 'style'> {

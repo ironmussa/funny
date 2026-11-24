@@ -119,6 +119,11 @@ let multiSelectContainer: HTMLDivElement;
 
 // Cache for component name lookups (WeakMap so GC can collect removed elements)
 const componentNameCache = new WeakMap<Element, string>();
+
+/** An SVG element's `className` is an SVGAnimatedString, not a string. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
 const componentTreeCache = new WeakMap<Element, string>();
 
 // DOM refs (created once, reused)
@@ -228,7 +233,7 @@ function getElementName(el: Element): string {
   // Fallback: tag + class or id
   const tag = el.tagName.toLowerCase();
   if (el.id) return `${tag}#${el.id}`;
-  if (el.className && typeof el.className === 'string') {
+  if (el.className && isString(el.className)) {
     const cls = el.className
       .split(/\s+/)
       .filter((c) => c && !c.startsWith('funny-'))
@@ -627,7 +632,7 @@ let editingAnnotationIndex = -1;
 
 function populateElementDetails(el: Element) {
   const tag = el.tagName.toLowerCase();
-  const classes = (typeof el.className === 'string' ? el.className : '').trim();
+  const classes = (isString(el.className) ? el.className : '').trim();
   const component = getComponentTree(el);
   const a11y = formatAccessibility(el);
 
@@ -908,7 +913,7 @@ function buildElementData(el: Element): ElementData {
       height: Math.round(rect.height),
     },
     componentTree: getComponentTree(el),
-    cssClasses: (typeof el.className === 'string' ? el.className : '').trim(),
+    cssClasses: (isString(el.className) ? el.className : '').trim(),
     computedStyles: formatStyles(el),
     accessibility: formatAccessibility(el),
     nearbyText: getNearbyText(el),

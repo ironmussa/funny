@@ -307,11 +307,12 @@ function sessionWorkloads(session: SessionResult): Map<string, WorkloadResult> {
     // Priming runs (`repeated-navigation-prime-<n>`) are no workload of their own:
     // only the workload names are ever read from this map.
     if (!isWorkloadName(name)) continue;
-    const previousBoundary =
-      completionIndex === 0
-        ? (ready?.receivedAtMs ?? session.startedAtMs)
-        : (completions[completionIndex - 1]?.receivedAtMs ?? session.startedAtMs);
-    const processSamples = samplesDuring(session, previousBoundary, completed.receivedAtMs);
+    const previousBoundary = (completions[completionIndex - 1] ?? ready)?.receivedAtMs;
+    const processSamples = samplesDuring(
+      session,
+      previousBoundary ?? session.startedAtMs,
+      completed.receivedAtMs,
+    );
     const samples = [...completed.event.samples, ...processMetricSamples(processSamples)];
     if (name === 'repeated-navigation') samples.push(...memoryGrowthSamples(processSamples));
     results.set(name, {

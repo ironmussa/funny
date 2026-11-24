@@ -734,6 +734,10 @@
     "projectFactoryAutoMergeAllDesc": "Every change that passed its review, also high-risk ones",
     "projectFactorySensitivePaths": "Sensitive paths",
     "projectFactorySensitivePathsDesc": "Globs, separated by commas. A change that touches one is high risk, besides .github/, migrations and auth/",
+    "projectFactoryMaxLowRiskLines": "Size of a low-risk change",
+    "projectFactoryMaxLowRiskLinesDesc": "A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count",
+    "projectFactorySizeIgnoredPaths": "Not counted in size",
+    "projectFactorySizeIgnoredPathsDesc": "Globs, separated by commas. Their lines do not count toward the size of a change. Sensitive paths still apply to them",
     "projectFactoryStageLimits": "Runs per step",
     "projectFactoryStageLimitsDesc": "How many runs may be implementing or in review at once. Merges are always one batch at a time per repository",
     "projectFactoryTriggers": "Schedules",
@@ -750,6 +754,11 @@
     "projectFactoryDependenciesStackDesc": "An issue whose blocker has a pull request open starts on the blocker's branch, and merges after it",
     "projectFactoryDependenciesWait": "Wait",
     "projectFactoryDependenciesStack": "Stack",
+    "projectFactoryTooBig": "Issues too large for one change",
+    "projectFactoryTooBigAsk": "Ask",
+    "projectFactoryTooBigSplit": "Split",
+    "projectFactoryTooBigAskDesc": "The factory comments the split triage proposes on the issue, and waits until a person changes the issue",
+    "projectFactoryTooBigSplitDesc": "The factory opens each part triage proposes as its own issue and works on them; the original issue leaves the factory. A part is never split again by itself",
     "projectFactoryLimitImplement": "Implementing",
     "projectFactoryLimitReview": "Reviewing",
     "projectFactoryLimitNone": "No limit",
@@ -1552,6 +1561,17 @@
     "closed": "Closed",
     "noIssues": "No issues found",
     "viewOnGithub": "View on GitHub",
+    "selectIssue": "Select #{{number}}",
+    "selectedCount": "{{count}} selected",
+    "clearSelection": "Clear",
+    "delete": "Delete",
+    "deleteTitle_one": "Delete {{count}} issue?",
+    "deleteTitle_other": "Delete {{count}} issues?",
+    "deleteDesc": "This deletes {{issues}} on GitHub for good, with their comments. It cannot be undone.",
+    "deleteWarning": "Only repository admins can delete issues. To keep the history, close them on GitHub instead.",
+    "deleted_one": "Deleted {{count}} issue",
+    "deleted_other": "Deleted {{count}} issues",
+    "deleteFailed": "Couldn't delete #{{number}}: {{message}}",
     "notGithub": "This project is not hosted on GitHub",
     "error": "Failed to load issues",
     "createThread": "Create thread",
@@ -1774,7 +1794,6 @@
     }
   },
   "factory": {
-    "pullRequest": "PR",
     "thread": "Thread",
     "retry": "Retry",
     "stop": "Stop",
@@ -1798,7 +1817,9 @@
       "merged": "Merged",
       "noChange": "No change needed",
       "failed": "Failed",
-      "stopped": "Stopped"
+      "stopped": "Stopped",
+      "split": "Split",
+      "tooBig": "Too big"
     },
     "wait": {
       "notSent": "Blocked by {{blockers}}, which is not in the factory",
@@ -1808,9 +1829,9 @@
       "otherRepo": "Blocked by {{blockers}} in another repository",
       "circular": "Circular dependency with {{blockers}}",
       "unreadable": "Its blockers could not be read from GitHub",
-      "proofNotConfigured": "Regression proof not configured: its flow has no proof rules, so it would never merge"
+      "proofNotConfigured": "Regression proof not configured: its flow has no proof rules, so it would never merge",
+      "noFreeSlot": "Waiting for a free slot: the factory is running as many runs as it may"
     },
-    "selectIssue": "Select #{{number}} for the factory",
     "queuePosition": "{{label}} · #{{position}}",
     "issueInFactory": "In your issue factory",
     "sendBlockers": "Send {{blockers}}",
@@ -1890,7 +1911,6 @@
       "rewritten": "The branch no longer contains the commit that was reviewed (a rebase or a force push), so what would be merged was not checked. Look at the new head on the pull request before merging it yourself.",
       "mergeRounds": "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself."
     },
-    "viewPullRequest": "View PR",
     "approveMerge": "Approve and merge",
     "approveMergeTitle": "Merge this high-risk change?",
     "approveMergeBody": "The factory will merge commit {{sha}} of issue #{{issue}} once its checks, review and regression proof still pass. A new commit on the branch needs a new approval."
@@ -1971,6 +1991,7 @@
       "agent-stopped": "Agent stopped",
       "factory-disabled": "Factory turned off",
       "repo-published": "Repository published",
+      "issue-deleted": "Issue deleted",
       "file-reverted": "File reverted",
       "changes-discarded": "Changes discarded",
       "commits-reset": "Reset",
@@ -1997,6 +2018,7 @@
     "showActive": "Active",
     "layoutList": "List",
     "layoutBoard": "Board",
+    "layoutAnalytics": "Analytics",
     "details": "Run details",
     "health": {
       "inFlight": "In flight",
@@ -2005,6 +2027,11 @@
       "firstPass": "First review passed, 7 d",
       "mergeHolds": "Merge holds, 7 d",
       "toMerge": "Median to merge, 7 d"
+    },
+    "analytics": {
+      "health": "Right now",
+      "noIntegration": "No run the filters keep started in this period",
+      "empty": "No factory runs to measure"
     }
   },
   "factoryBoard": {
@@ -2049,6 +2076,8 @@
     "waiting": {
       "questions": "Triage asked {{count}} questions on the issue",
       "needsInfo": "Triage asked on the issue",
+      "split": "Triage proposed a split into {{count}} parts",
+      "splitInto": "Split into {{issues}}",
       "noChange": "Nothing to change: the issue needs a person",
       "failed": "Failed",
       "unsaved": "No commit, but unsaved work in its checkout",
@@ -2058,6 +2087,12 @@
       "inStep": "In {{step}} {{duration}}",
       "waiting": "Waiting for {{step}} {{duration}}",
       "medianTitle": "Median time in this stage, last 7 days"
+    },
+    "deps": {
+      "stuckBehind": "Stuck behind",
+      "needsPerson": "it needs a person",
+      "blocks": "Blocks",
+      "then": "then"
     }
   },
   "factoryRunDetail": {

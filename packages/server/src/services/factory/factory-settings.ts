@@ -14,8 +14,11 @@
  */
 import {
   DEFAULT_FACTORY_BATCH,
+  DEFAULT_MAX_LOW_RISK_LINES,
   factoryStepOverridesSchema,
+  LOW_RISK_LINES_RANGE,
   MAX_SENSITIVE_PATHS,
+  MAX_SIZE_IGNORED_PATHS,
   MERGE_STAGE,
   type FactoryAutoMerge,
   type FactoryBatchSettings,
@@ -23,6 +26,7 @@ import {
   type FactoryMode,
   type FactorySettings,
   type FactoryStepOverrides,
+  type FactoryTooBig,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { KNOWN_PROVIDER_IDS, providerModelProblem } from '@funny/shared/models';
@@ -46,25 +50,23 @@ export type FactorySettingsError =
   | { kind: 'invalid'; message: string }
   | { kind: 'storage'; message: string };
 
-export interface SaveFactorySettingsInput {
-  enabled: boolean;
-  mode?: FactoryMode;
-  label?: string;
-  flowName?: string;
-  maxConcurrent?: number;
-  autoMerge?: FactoryAutoMerge;
-  sensitivePaths?: string[];
-  stageLimits?: Record<string, number>;
-  stepOverrides?: FactoryStepOverrides;
-  batch?: FactoryBatchSettings;
-  dependencies?: FactoryDependencies;
-}
+/** The settings a member configures (the contract's), without the toggle and the bookkeeping. */
+type FactoryConfig = Omit<
+  FactorySettings,
+  'projectId' | 'enabled' | 'blockedReason' | 'incident' | 'updatedAt'
+>;
+
+/** A save: the toggle, and any configured field it changes (an omitted one keeps its value). */
+export type SaveFactorySettingsInput = { enabled: boolean } & Partial<FactoryConfig>;
 
 type Row = typeof factorySettings.$inferSelect;
 
 /** How the factory treats an in-flight blocker: `wait` unless it stacks. */
 const dependenciesOf = (row: Row): FactoryDependencies =>
   row.dependencies === 'stack' ? 'stack' : 'wait';
+
+/** What the factory does with a too-large issue: `ask` unless it splits. */
+const tooBigOf = (row: Row): FactoryTooBig => (row.tooBig === 'split' ? 'split' : 'ask');
 
 /** The stored batch settings, or the defaults where a column is null. */
 function batchOf(row: Row): FactoryBatchSettings {
@@ -100,15 +102,21 @@ const autoMergeOf = (row: Row): FactoryAutoMerge => (row.autoMerge === 'all' ? '
 const SENSITIVE_PATHS_SCHEMA = z.array(z.string());
 const STAGE_LIMITS_SCHEMA = z.record(z.string(), z.number().int().positive());
 
-function sensitivePathsOf(row: Row): string[] {
-  if (!row.sensitivePaths) return [];
-  const parsed = parseStoredJson(
-    SENSITIVE_PATHS_SCHEMA,
-    row.sensitivePaths,
-    'factory_settings.sensitive_paths',
-  );
+/** A stored JSON list of globs; a value that no longer parses reads as none. */
+function globsOf(stored: string | null, column: string): string[] {
+  if (!stored) return [];
+  const parsed = parseStoredJson(SENSITIVE_PATHS_SCHEMA, stored, column);
   return parsed.ok ? parsed.value : [];
 }
+
+const sensitivePathsOf = (row: Row): string[] =>
+  globsOf(row.sensitivePaths, 'factory_settings.sensitive_paths');
+
+const sizeIgnoredPathsOf = (row: Row): string[] =>
+  globsOf(row.sizeIgnoredPaths, 'factory_settings.size_ignored_paths');
+
+/** The stored size limit, or the default where the column is null. */
+const maxLowRiskLinesOf = (row: Row): number => row.maxLowRiskLines ?? DEFAULT_MAX_LOW_RISK_LINES;
 
 /** The stored limits, never one for `merge` (it is not tunable). */
 function stageLimitsOf(row: Row): Record<string, number> {
@@ -134,19 +142,27 @@ function stepOverridesOf(row: Row): FactoryStepOverrides {
   return parsed.ok ? parsed.value : {};
 }
 
-const toView = (row: Row): FactorySettingsView => ({
-  projectId: row.projectId,
-  enabled: row.enabled === 1,
+/** The configured fields of a stored row, read with their fallbacks. */
+const configOf = (row: Row): FactoryConfig => ({
   mode: modeOf(row),
   label: row.label,
   flowName: row.flowName,
   maxConcurrent: row.maxConcurrent,
   autoMerge: autoMergeOf(row),
   sensitivePaths: sensitivePathsOf(row),
+  maxLowRiskLines: maxLowRiskLinesOf(row),
+  sizeIgnoredPaths: sizeIgnoredPathsOf(row),
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
   dependencies: dependenciesOf(row),
+  tooBig: tooBigOf(row),
+});
+
+const toView = (row: Row): FactorySettingsView => ({
+  projectId: row.projectId,
+  enabled: row.enabled === 1,
+  ...configOf(row),
   blockedReason: row.blockedReason ?? null,
   updatedAt: row.updatedAt,
 });
@@ -154,25 +170,44 @@ const toView = (row: Row): FactorySettingsView => ({
 const byOwner = (userId: string, projectId: string) =>
   and(eq(factorySettings.projectId, projectId), eq(factorySettings.userId, userId));
 
+const outside = (value: number, min: number, max: number): boolean => value < min || value > max;
+
+/** One check of a save: the problem's message, or null when the field is fine (or omitted). */
+type SaveRule = (input: SaveFactorySettingsInput) => string | null;
+
+const SAVE_RULES: readonly SaveRule[] = [
+  ({ label }) => (label !== undefined && label.trim() === '' ? 'Label must not be empty' : null),
+  ({ mode }) =>
+    mode !== undefined && mode !== 'manual' && mode !== 'automatic'
+      ? 'mode must be manual or automatic'
+      : null,
+  ({ maxConcurrent }) =>
+    maxConcurrent !== undefined && outside(maxConcurrent, 1, 20)
+      ? 'maxConcurrent must be between 1 and 20'
+      : null,
+  ({ autoMerge }) =>
+    autoMerge !== undefined && autoMerge !== 'low_risk' && autoMerge !== 'all'
+      ? 'autoMerge must be low_risk or all'
+      : null,
+  ({ sensitivePaths }) =>
+    (sensitivePaths?.length ?? 0) > MAX_SENSITIVE_PATHS
+      ? `At most ${MAX_SENSITIVE_PATHS} sensitive paths`
+      : null,
+  ({ sizeIgnoredPaths }) =>
+    (sizeIgnoredPaths?.length ?? 0) > MAX_SIZE_IGNORED_PATHS
+      ? `At most ${MAX_SIZE_IGNORED_PATHS} paths left out of size`
+      : null,
+  ({ maxLowRiskLines: lines }) =>
+    lines !== undefined &&
+    (!Number.isInteger(lines) || outside(lines, LOW_RISK_LINES_RANGE.min, LOW_RISK_LINES_RANGE.max))
+      ? `maxLowRiskLines must be between ${LOW_RISK_LINES_RANGE.min} and ${LOW_RISK_LINES_RANGE.max}`
+      : null,
+];
+
 function validate(input: SaveFactorySettingsInput): FactorySettingsError | null {
-  if (input.label !== undefined && input.label.trim() === '') {
-    return { kind: 'invalid', message: 'Label must not be empty' };
-  }
-  if (input.mode !== undefined && input.mode !== 'manual' && input.mode !== 'automatic') {
-    return { kind: 'invalid', message: 'mode must be manual or automatic' };
-  }
-  if (input.maxConcurrent !== undefined && (input.maxConcurrent < 1 || input.maxConcurrent > 20)) {
-    return { kind: 'invalid', message: 'maxConcurrent must be between 1 and 20' };
-  }
-  if (
-    input.autoMerge !== undefined &&
-    input.autoMerge !== 'low_risk' &&
-    input.autoMerge !== 'all'
-  ) {
-    return { kind: 'invalid', message: 'autoMerge must be low_risk or all' };
-  }
-  if (input.sensitivePaths !== undefined && input.sensitivePaths.length > MAX_SENSITIVE_PATHS) {
-    return { kind: 'invalid', message: `At most ${MAX_SENSITIVE_PATHS} sensitive paths` };
+  for (const rule of SAVE_RULES) {
+    const message = rule(input);
+    if (message) return { kind: 'invalid', message };
   }
   return validateStageLimits(input.stageLimits) ?? validateStepOverrides(input.stepOverrides);
 }
@@ -212,30 +247,42 @@ function validateStageLimits(
 }
 
 /** A new factory starts manual: it admits only the issues sent to it. */
-const DEFAULTS: Pick<
-  FactorySettingsView,
-  | 'mode'
-  | 'label'
-  | 'flowName'
-  | 'maxConcurrent'
-  | 'autoMerge'
-  | 'sensitivePaths'
-  | 'stageLimits'
-  | 'stepOverrides'
-  | 'batch'
-  | 'dependencies'
-> = {
+const DEFAULTS: FactoryConfig = {
   mode: 'manual',
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  maxLowRiskLines: DEFAULT_MAX_LOW_RISK_LINES,
+  sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
   batch: DEFAULT_FACTORY_BATCH,
   dependencies: 'wait',
+  tooBig: 'ask',
 };
+
+/** The configured fields a save stores: the ones it carries, else `base`'s. */
+function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): FactoryConfig {
+  const given: Partial<FactoryConfig> = input;
+  const pick = <K extends keyof FactoryConfig>(key: K): FactoryConfig[K] => given[key] ?? base[key];
+  return {
+    mode: pick('mode'),
+    label: pick('label'),
+    flowName: pick('flowName'),
+    maxConcurrent: pick('maxConcurrent'),
+    autoMerge: pick('autoMerge'),
+    sensitivePaths: pick('sensitivePaths'),
+    maxLowRiskLines: pick('maxLowRiskLines'),
+    sizeIgnoredPaths: pick('sizeIgnoredPaths'),
+    stageLimits: pick('stageLimits'),
+    stepOverrides: pick('stepOverrides'),
+    batch: pick('batch'),
+    dependencies: pick('dependencies'),
+    tooBig: pick('tooBig'),
+  };
+}
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */
 function buildRow(
@@ -246,23 +293,26 @@ function buildRow(
   existing: FactorySettingsView | null,
 ): Row {
   const now = new Date().toISOString();
-  const base = existing ?? DEFAULTS;
+  const config = mergeConfig(input, existing ?? DEFAULTS);
   return {
     id,
     projectId,
     userId,
     enabled: input.enabled ? 1 : 0,
-    mode: input.mode ?? base.mode,
-    label: input.label ?? base.label,
-    flowName: input.flowName ?? base.flowName,
-    maxConcurrent: input.maxConcurrent ?? base.maxConcurrent,
-    autoMerge: input.autoMerge ?? base.autoMerge,
-    sensitivePaths: JSON.stringify(input.sensitivePaths ?? base.sensitivePaths),
-    stageLimits: JSON.stringify(input.stageLimits ?? base.stageLimits),
-    stepOverrides: JSON.stringify(input.stepOverrides ?? base.stepOverrides),
-    batchSize: (input.batch ?? base.batch).size,
-    batchWaitMs: (input.batch ?? base.batch).waitSeconds * 1000,
-    dependencies: input.dependencies ?? base.dependencies,
+    mode: config.mode,
+    label: config.label,
+    flowName: config.flowName,
+    maxConcurrent: config.maxConcurrent,
+    autoMerge: config.autoMerge,
+    sensitivePaths: JSON.stringify(config.sensitivePaths),
+    maxLowRiskLines: config.maxLowRiskLines,
+    sizeIgnoredPaths: JSON.stringify(config.sizeIgnoredPaths),
+    stageLimits: JSON.stringify(config.stageLimits),
+    stepOverrides: JSON.stringify(config.stepOverrides),
+    batchSize: config.batch.size,
+    batchWaitMs: config.batch.waitSeconds * 1000,
+    dependencies: config.dependencies,
+    tooBig: config.tooBig,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -275,42 +325,19 @@ function buildRow(
  * `listAutomations`). A paused (disabled) factory is still polled while it has
  * runs in flight, so they run to completion; it admits nothing new.
  */
-export interface WatchedFactory {
+export interface WatchedFactory extends FactoryConfig {
   id: string;
   enabled: boolean;
-  /** `automatic` also admits labelled issues; `manual` only the queue. */
-  mode: FactoryMode;
   projectId: string;
   userId: string;
-  label: string;
-  flowName: string;
-  maxConcurrent: number;
-  autoMerge: FactoryAutoMerge;
-  sensitivePaths: string[];
-  stageLimits: Record<string, number>;
-  /** Provider / model / effort per agent step id (read again at every agent step). */
-  stepOverrides: FactoryStepOverrides;
-  /** The merge queue's batch size and wait. */
-  batch: FactoryBatchSettings;
-  /** Wait for an in-flight blocker, or stack on its branch (D10). */
-  dependencies: FactoryDependencies;
 }
 
 const toEnabled = (row: Row): WatchedFactory => ({
   id: row.id,
   enabled: row.enabled === 1,
-  mode: modeOf(row),
   projectId: row.projectId,
   userId: row.userId,
-  label: row.label,
-  flowName: row.flowName,
-  maxConcurrent: row.maxConcurrent,
-  autoMerge: autoMergeOf(row),
-  sensitivePaths: sensitivePathsOf(row),
-  stageLimits: stageLimitsOf(row),
-  stepOverrides: stepOverridesOf(row),
-  batch: batchOf(row),
-  dependencies: dependenciesOf(row),
+  ...configOf(row),
 });
 
 /**
@@ -378,6 +405,43 @@ export async function disableFactory(id: string): Promise<void> {
     .where(eq(factorySettings.id, id));
 }
 
+/** The columns each configured field is stored in. */
+const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
+  mode: ['mode'],
+  label: ['label'],
+  flowName: ['flowName'],
+  maxConcurrent: ['maxConcurrent'],
+  autoMerge: ['autoMerge'],
+  sensitivePaths: ['sensitivePaths'],
+  maxLowRiskLines: ['maxLowRiskLines'],
+  sizeIgnoredPaths: ['sizeIgnoredPaths'],
+  stageLimits: ['stageLimits'],
+  stepOverrides: ['stepOverrides'],
+  batch: ['batchSize', 'batchWaitMs'],
+  dependencies: ['dependencies'],
+  tooBig: ['tooBig'],
+};
+
+/** What a save writes over a stored row: the toggle, the bookkeeping and the fields it carries. */
+function changedColumns(row: Row, input: SaveFactorySettingsInput): Partial<Row> {
+  // SAFETY: COLUMNS_OF is typed Record<keyof FactoryConfig, …>, so its own keys are exactly
+  // the FactoryConfig fields; Object.keys only widens them to string.
+  const fields = (Object.keys(COLUMNS_OF) as (keyof FactoryConfig)[]).filter(
+    (field) => input[field] !== undefined,
+  );
+  const carried = fields.flatMap((field) =>
+    COLUMNS_OF[field].map((column) => [column, row[column]]),
+  );
+  return {
+    enabled: row.enabled,
+    blockedReason: row.blockedReason,
+    updatedAt: row.updatedAt,
+    // SAFETY: every entry of `carried` pairs a column (keyof Row) with row[column], the value
+    // the same row holds under that key.
+    ...(Object.fromEntries(carried) as Partial<Row>),
+  };
+}
+
 export function createFactorySettingsService(
   deps: { newId: () => string } = { newId: () => crypto.randomUUID() },
 ) {
@@ -397,21 +461,7 @@ export function createFactorySettingsService(
     row: Row,
     input: SaveFactorySettingsInput,
   ): ResultAsync<FactorySettingsView, FactorySettingsError> => {
-    const changes: Partial<Row> = {
-      enabled: row.enabled,
-      blockedReason: row.blockedReason,
-      updatedAt: row.updatedAt,
-      ...(input.mode !== undefined && { mode: row.mode }),
-      ...(input.label !== undefined && { label: row.label }),
-      ...(input.flowName !== undefined && { flowName: row.flowName }),
-      ...(input.maxConcurrent !== undefined && { maxConcurrent: row.maxConcurrent }),
-      ...(input.autoMerge !== undefined && { autoMerge: row.autoMerge }),
-      ...(input.sensitivePaths !== undefined && { sensitivePaths: row.sensitivePaths }),
-      ...(input.stageLimits !== undefined && { stageLimits: row.stageLimits }),
-      ...(input.stepOverrides !== undefined && { stepOverrides: row.stepOverrides }),
-      ...(input.batch !== undefined && { batchSize: row.batchSize, batchWaitMs: row.batchWaitMs }),
-      ...(input.dependencies !== undefined && { dependencies: row.dependencies }),
-    };
+    const changes = changedColumns(row, input);
     return ResultAsync.fromPromise(
       db
         .insert(factorySettings)

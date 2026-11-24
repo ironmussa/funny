@@ -25,10 +25,13 @@ const settings: FactorySettings = {
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  maxLowRiskLines: 400,
+  sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
+  tooBig: 'ask',
   blockedReason: null,
   updatedAt: '2026-11-21T00:00:00.000Z',
 };

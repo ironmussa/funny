@@ -39,7 +39,7 @@ import {
 } from '@funny/pipelines';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
-import { err, type Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { messages, threads } from '../../db/schema.js';
@@ -108,7 +108,7 @@ import {
   type ThreadOutcome,
   type WaitAfter,
 } from './factory-thread-waits.js';
-import { busyPathsOf } from './factory-triage.js';
+import { busyPathsOf, type FactorySplitDeps } from './factory-triage.js';
 
 export interface FactoryRunJob {
   factory: WatchedFactory;
@@ -374,6 +374,26 @@ export function admissionPriority(run: Pick<FactoryRunView, 'admittedAt' | 'star
 
 /** A blocker that ended in one of these will not merge: the runs stacked on it park (D10). */
 const GONE_STATES: ReadonlySet<string> = new Set(['failed', 'stopped', 'no_change']);
+
+/**
+ * Per factory, one triage contract-and-paths check at a time (in this process,
+ * like the watcher), as slot writes are serialized in `factory-runs.ts`: two
+ * runs triaged together would otherwise each miss the other's paths.
+ */
+const pathChecks = (() => {
+  const tails = new Map<string, Promise<unknown>>();
+  return {
+    run<T>(factoryId: string, work: () => Promise<T>): Promise<T> {
+      const result = (tails.get(factoryId) ?? Promise.resolve()).then(work);
+      const tail = result.catch(() => undefined);
+      tails.set(factoryId, tail);
+      void tail.then(() => {
+        if (tails.get(factoryId) === tail) tails.delete(factoryId);
+      });
+      return result;
+    },
+  };
+})();
 
 /** A bucket's weight in a merge priority: above any admission order (seconds since 2026). */
 const MERGE_BUCKET = 10_000_000_000;
@@ -744,6 +764,54 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   }
 
   /**
+   * What the factory's `split` setting needs, or nothing (comment the split):
+   * part issues are opened as the App with the token capped by the enabler,
+   * like every other write of the run, and queued with the run's own flow.
+   */
+  function splitDepsOf(job: FactoryRunJob, scope: FactoryRunScope): FactorySplitDeps | undefined {
+    const open = deps.github.createIssue;
+    const parent = scope.issueNumber;
+    if (job.factory.tooBig !== 'split' || !open || parent === null) return undefined;
+    const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
+    return {
+      openIssue: async (issue) => {
+        const created = await open(reader, issue);
+        return created.isOk() ? ok(created.value.number) : err(created.error.message);
+      },
+      queue: async (issueNumbers) => {
+        if (issueNumbers.length === 0) return;
+        const queued = await deps.runs.enqueue({
+          factoryId: job.factory.id,
+          issueNumbers,
+          flowName: flowOf(job),
+        });
+        if (queued.isErr()) {
+          log.warn('Issue factory could not queue the parts of a split issue', {
+            namespace: 'factory',
+            runId: job.run.id,
+            issues: issueNumbers,
+            error: queued.error.message,
+          });
+        }
+      },
+      release: async (complete) => {
+        const relabelled = await deps.github.relabelIssue(reader, parent, {
+          remove: job.factory.label || undefined,
+          add: complete ? undefined : NO_CHANGE_TRIAGE_LABEL,
+        });
+        if (relabelled.isErr()) {
+          log.warn('Issue factory could not take its label off a split issue', {
+            namespace: 'factory',
+            runId: job.run.id,
+            issue: parent,
+            error: relabelled.error.message,
+          });
+        }
+      },
+    };
+  }
+
+  /**
    * Fail a run without an issue whose flow cannot run that way, before any
    * thread. The flow is read again for every run: it may have gained an
    * issue-only step or a required input since its trigger was saved.
@@ -854,13 +922,29 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
           projectId: scope.projectId,
         }),
       ...issueDepsOf(job, scope),
+      split: splitDepsOf(job, scope),
       sensitivePaths: job.factory.sensitivePaths,
+      maxLowRiskLines: job.factory.maxLowRiskLines,
+      sizeIgnoredPaths: job.factory.sizeIgnoredPaths,
       autoMerge: job.factory.autoMerge,
       // Read from the row: the member approves while the run waits.
       mergeApproved: async (sha) => {
         const run = await deps.runs.get(job.run.id);
         return run.isOk() && run.value?.mergeApproval?.sha === sha;
       },
+      carryMergeApproval: async (from, to) => {
+        const carried = await deps.runs.carryMergeApproval(job.run.id, from, to);
+        if (carried.isErr()) {
+          log.warn('Issue factory could not carry the merge approval to the merged base', {
+            namespace: 'factory',
+            runId: job.run.id,
+            from,
+            to,
+            error: carried.error.message,
+          });
+        }
+      },
+      storedProof: job.run.regressionProof,
       triage: job.run.triage,
       findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
       busyPaths: async () => {
@@ -875,6 +959,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         trace.held = true;
         return true;
       },
+      exclusive: (work) => pathChecks.run(job.factory.id, work),
       reviews: job.run.reviews,
       admittedAt: job.run.admittedAt ?? job.run.startedAt,
       findReviewThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),

@@ -60,4 +60,16 @@ describe('PRBadge', () => {
       expect(screen.getByTestId(`pr-icon-${state}`)).toHaveClass('icon-sm');
     },
   );
+
+  test("a compact plain badge takes a small powerline's text and icon size", () => {
+    renderWithProviders(
+      <PRBadge prNumber={9} prState="MERGED" variant="plain" size="compact" data-testid="pr" />,
+    );
+
+    const badge = screen.getByTestId('pr');
+    expect(badge).toHaveClass('text-2xs');
+    expect(badge).not.toHaveClass('text-xs');
+    expect(badge).not.toHaveClass('border');
+    expect(screen.getByTestId('pr-icon-MERGED')).not.toHaveClass('icon-sm');
+  });
 });

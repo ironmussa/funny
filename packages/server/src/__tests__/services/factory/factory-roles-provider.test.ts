@@ -840,6 +840,10 @@ describe('merge brings the branch up to date with its base first', () => {
     /** The checks of each head (default green). */
     checks?: Record<string, CiState>;
     reviews?: ProviderDeps['reviews'];
+    /** The pull request's changed files (default: a low-risk change). */
+    files?: PullRequestFile[];
+    /** Extra provider deps (a member's merge approval, a stored proof). */
+    deps?: Partial<ProviderDeps>;
     /** Commits of the first that the second lacks (a rewritten history), by `first...second`. */
     lacks?: Record<string, number>;
     /** The base branch requires GitHub's merge queue: how adding to it and following it go. */
@@ -907,7 +911,7 @@ describe('merge brings the branch up to date with its base first', () => {
           }),
         changedFiles: () =>
           okAsync({
-            files: [changed('src/sum.ts', ['+x']), changed('bun.lock', ['+y'])],
+            files: script.files ?? [changed('src/sum.ts', ['+x']), changed('bun.lock', ['+y'])],
             truncated: false,
           }),
         ciState: () => okAsync(script.checks?.[head] ?? { kind: 'green' as const }),
@@ -923,6 +927,7 @@ describe('merge brings the branch up to date with its base first', () => {
       {
         reviews: script.reviews ?? [reviewedA],
         proof: script.proof ? workTreeProof : undefined,
+        ...script.deps,
         record: async (input) => {
           recorded.push(input);
         },
@@ -973,6 +978,93 @@ describe('merge brings the branch up to date with its base first', () => {
       { sha: SHA_A, verdict: 'pass' },
       { sha: SHA_M, verdict: 'pass', carriedFrom: SHA_A },
     ]);
+  });
+
+  // A member approved the high-risk commit A; bringing the base in made the
+  // merge commit M. Its change is still the approved one: without carrying the
+  // approval, every base merge sent the run back to wait for a person.
+  test('an approval of A holds for the merge commit that only brought the base in', async () => {
+    let approved = SHA_A;
+    const { merge, merges } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+      deps: {
+        mergeApproved: async (sha) => sha === approved,
+        carryMergeApproval: async (from, to) => {
+          if (approved === from) approved = to;
+        },
+      },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(merges).toMatchObject([{ sha: SHA_M }]);
+    expect(approved).toBe(SHA_M);
+  });
+
+  test('without an approval of A, the merge commit of a high-risk change still waits for a person', async () => {
+    const { merge, merges } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+      deps: {
+        mergeApproved: async () => false,
+        carryMergeApproval: async () => {},
+      },
+    });
+    expect(await merge()).toMatchObject({
+      ok: false,
+      metadata: { reason: MERGE_HOLD_REASONS.highRisk },
+    });
+    expect(merges).toEqual([]);
+  });
+
+  // A retry or a merge approval reruns the proof step on a head that did not
+  // change: the run's stored passing proof of that commit holds, and the
+  // proof (temporary checkouts, installs, the tests twice) does not run again.
+  test('with a regression proof: a stored passing proof of the head is held, not run again', async () => {
+    let started = 0;
+    const { merge, merges } = lane({
+      deps: {
+        proof: {
+          ...workTreeProof,
+          startProof: async (...args) => {
+            started += 1;
+            return workTreeProof.startProof(...args);
+          },
+        },
+        storedProof: {
+          headSha: SHA_A,
+          verdict: 'pass',
+          ranAt: '2026-11-24T00:00:00.000Z',
+          checkPublished: true,
+        },
+      },
+      proof: true,
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(merges).toMatchObject([{ sha: SHA_A }]);
+    expect(started).toBe(0);
+  });
+
+  test('with a regression proof: a stored proof of an older commit does not hold, the proof runs', async () => {
+    let started = 0;
+    const { merge } = lane({
+      deps: {
+        proof: {
+          ...workTreeProof,
+          startProof: async (...args) => {
+            started += 1;
+            return workTreeProof.startProof(...args);
+          },
+        },
+        storedProof: { headSha: SHA_B, verdict: 'pass', ranAt: '2026-11-24T00:00:00.000Z' },
+      },
+      proof: true,
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(started).toBe(1);
   });
 
   // The PR's final head is the merge commit: without its own `funny/review`

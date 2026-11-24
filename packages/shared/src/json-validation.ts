@@ -1,5 +1,14 @@
 import { z, type ZodTypeAny } from 'zod';
 
+/** A value as JSON.parse (or `Response.json()`) decodes it. */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 export interface JsonValidationIssue {
   path: string;
   message: string;
@@ -18,7 +27,7 @@ function formatIssues(error: z.ZodError): JsonValidationIssue[] {
 
 function validatePayload<TSchema extends ZodTypeAny>(
   schema: TSchema,
-  value: unknown,
+  value: JsonValue,
   label: string,
 ): JsonValidationResult<z.infer<TSchema>> {
   const parsed = schema.safeParse(value);
@@ -37,7 +46,7 @@ export function parseStoredJson<TSchema extends ZodTypeAny>(
   raw: string,
   label = 'stored JSON',
 ): JsonValidationResult<z.infer<TSchema>> {
-  let value: unknown;
+  let value: JsonValue;
   try {
     value = JSON.parse(raw);
   } catch (err) {
@@ -52,7 +61,7 @@ export function parseStoredJson<TSchema extends ZodTypeAny>(
 
 export function parseExternalPayload<TSchema extends ZodTypeAny>(
   schema: TSchema,
-  value: unknown,
+  value: JsonValue,
   source = 'external payload',
 ): JsonValidationResult<z.infer<TSchema>> {
   return validatePayload(schema, value, source);

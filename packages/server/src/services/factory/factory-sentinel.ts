@@ -37,11 +37,13 @@ import {
   type FactoryIncidentCandidate,
   type FactoryIncidentResult,
 } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import type { Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
+import type { NotifyOutcome } from './factory-flow-runs.js';
 import type { FactoryIncidentRecord, FactoryIncidentsRepository } from './factory-incidents.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import { REVIEWER_DISALLOWED_TOOLS } from './factory-review.js';
@@ -102,7 +104,7 @@ export interface SentinelDeps {
     prNumber: number,
     text: { title: string; body: string },
   ): Promise<Result<{ url: string }, { message: string }>>;
-  notify(userId: string, notice: SentinelNotice): Promise<unknown>;
+  notify(userId: string, notice: SentinelNotice): Promise<NotifyOutcome>;
   /**
    * The sentinel's thread ended and its answer was read: out of the board's
    * Review column, and its worktree removed when nothing in it would be lost.
@@ -204,11 +206,11 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
         url: `/projects/${factory.projectId}`,
         tag: `factory-incident-${incident.id}`,
       }),
-    ).catch((error: unknown) =>
+    ).catch((cause: unknown) =>
       log.warn('Issue factory incident notification failed', {
         namespace: 'factory',
         incidentId: incident.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       }),
     );
 
@@ -315,11 +317,11 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
   }
 
   const retireQuietly = (threadId: string) =>
-    deps.retire(threadId).catch((error: unknown) =>
+    deps.retire(threadId).catch((cause: unknown) =>
       log.warn('Issue factory could not retire the sentinel thread', {
         namespace: 'factory',
         threadId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       }),
     );
 

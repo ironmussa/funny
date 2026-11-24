@@ -1,19 +1,3 @@
-/**
- * @domain subdomain: Issue Factory
- * @domain subdomain-type: core
- * @domain type: repository
- * @domain layer: application
- *
- * Factory runs (change issue-factory): one row per admitted issue, holding the
- * run's state, its PR and the thread ids of its thread steps. The watcher reads
- * `activeByIssue` for admission (one run per issue) and the Factory tab lists
- * them per factory.
- *
- * Issues sent from funny (change factory-manual-queue) wait in `requested`: a
- * non-terminal state, so the one-run-per-issue index already holds the issue,
- * but neither in flight (nothing drives it) nor holding a concurrency slot.
- * Leaving the queue is a compare-and-set (`QUEUE_TRANSITIONS`).
- */
 import {
   EMPTY_FACTORY_RUN_METRICS,
   factoryRegressionProofSchema,
@@ -36,6 +20,23 @@ import {
   type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
+/**
+ * @domain subdomain: Issue Factory
+ * @domain subdomain-type: core
+ * @domain type: repository
+ * @domain layer: application
+ *
+ * Factory runs (change issue-factory): one row per admitted issue, holding the
+ * run's state, its PR and the thread ids of its thread steps. The watcher reads
+ * `activeByIssue` for admission (one run per issue) and the Factory tab lists
+ * them per factory.
+ *
+ * Issues sent from funny (change factory-manual-queue) wait in `requested`: a
+ * non-terminal state, so the one-run-per-issue index already holds the issue,
+ * but neither in flight (nothing drives it) nor holding a concurrency slot.
+ * Leaving the queue is a compare-and-set (`QUEUE_TRANSITIONS`).
+ */
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import {
   and,
@@ -342,9 +343,9 @@ export type FactoryRunsError = { kind: 'storage'; message: string };
 
 type Row = typeof factoryRuns.$inferSelect;
 
-const storage = (error: unknown): FactoryRunsError => ({
+const storage = (cause: unknown): FactoryRunsError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 /** The run's own columns, stored as they are. */
@@ -630,13 +631,18 @@ const holdsSlot = (factoryId: string): SQL =>
 /** Per factory: the tail of the in-process chain that serializes slot-taking writes. */
 const slotLocks = new Map<string, Promise<unknown>>();
 
+/** What node-postgres answers a raw query with; the lock's rows are not read. */
+interface RawQueryResult {
+  rows: object[];
+}
+
 /**
  * Hold a Postgres advisory lock on the factory's slots until the transaction
  * ends, so slot-taking writes of every server instance run one at a time.
  */
 async function lockSlotsAcrossServers(factoryId: string): Promise<void> {
   // SAFETY: only called on the Postgres dialect, whose Drizzle database has `execute`.
-  const pg = db as { execute?: (query: SQL) => Promise<unknown> };
+  const pg = db as { execute?: (query: SQL) => Promise<RawQueryResult> };
   await pg.execute?.(sql`SELECT pg_advisory_xact_lock(hashtext(${`factory-slots:${factoryId}`}))`);
 }
 

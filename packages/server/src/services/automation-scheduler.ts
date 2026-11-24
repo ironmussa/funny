@@ -206,11 +206,11 @@ function logFailure(
   message: string,
   fields: Record<string, unknown> = {},
 ): Promise<void> {
-  return work.catch((error: unknown) => {
+  return work.catch((cause: unknown) => {
     log.error(message, {
       namespace: 'automation',
       ...fields,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(cause),
     });
   });
 }

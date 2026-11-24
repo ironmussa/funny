@@ -40,12 +40,18 @@ export interface BrowserEventsPort {
   toUser(userId: string, event: Record<string, unknown>): void;
 }
 
+/** A follow-up's JSON body: its content, the branch it expects, and the step's agent options. */
+interface FollowUpBody {
+  content: string;
+  expectedBranch?: string;
+}
+
 /** POST `path` (a thread route) to the thread's runner, as `userId`. */
 async function postToThread(
   ports: RunnerPorts,
   userId: string,
   path: string,
-  body: unknown,
+  body: FollowUpBody | null,
 ): Promise<Result<void, ThreadRunnerError>> {
   return (await sendToThreadRunner(ports, userId, { method: 'POST', path, body })).map(
     () => undefined,
@@ -187,7 +193,7 @@ export async function sendFactoryFollowUp(
     .where(and(eq(threads.id, threadId), eq(threads.userId, userId)));
   if (!thread) return err('the thread no longer exists');
   const path = `/api/threads/${threadId}/message`;
-  const message: Record<string, unknown> = { ...options, content };
+  const message: FollowUpBody = { ...options, content };
   if (expectedBranch) message.expectedBranch = expectedBranch;
   const sent = await postToThread(ports, userId, path, message);
   if (sent.isOk() || !sent.error.sandboxAsleep) return sent.mapErr((e) => e.message);

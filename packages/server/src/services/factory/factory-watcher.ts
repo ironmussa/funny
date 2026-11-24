@@ -31,6 +31,7 @@ import type {
   FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
 import { contractOf } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import type { RegressionProofOpts } from '@funny/workflows/compiler';
 import { and, eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
@@ -63,6 +64,7 @@ import {
   createFactoryFlowRuns,
   type FactoryFlowRunsDeps,
   type FactoryRunJob,
+  type NotifyOutcome,
   type WaitingNotice,
 } from './factory-flow-runs.js';
 import {
@@ -189,7 +191,7 @@ export interface FactoryWatcherDeps {
   /** "No change" cleanup override for tests; defaults to `cleanupFactoryWorktrees` keeping unsaved work. */
   cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
   /** Notification override for tests; defaults to Web Push. */
-  notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
+  notify?: (userId: string, message: WaitingNotice) => Promise<NotifyOutcome>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Proof service override for tests; defaults to runner thread requests. */
@@ -379,11 +381,11 @@ function tick(id: string): Promise<void> {
   }
   busy.add(id);
   return fire(id)
-    .catch((error: unknown) => {
+    .catch((cause: unknown) => {
       log.error('Issue factory tick failed', {
         namespace: 'factory',
         factoryId: id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       });
     })
     .finally(() => busy.delete(id));
@@ -696,11 +698,11 @@ const blockedReasons = new Map<string, string | null>();
 async function reportBlocked(factoryId: string, reason: string | null): Promise<void> {
   if (blockedReasons.has(factoryId) && blockedReasons.get(factoryId) === reason) return;
   blockedReasons.set(factoryId, reason);
-  await setFactoryBlocked(factoryId, reason).catch((error: unknown) =>
+  await setFactoryBlocked(factoryId, reason).catch((cause: unknown) =>
     log.warn('Failed to record why an issue factory is blocked', {
       namespace: 'factory',
       factoryId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(cause),
     }),
   );
 }
@@ -1474,12 +1476,12 @@ async function reproveMovedHead(
   reproving.set(run.id, controller);
   const proofDeps = proofsFor(factory.userId, target.threadId);
   void settleParkedProof(target, proofDeps, repository, controller.signal)
-    .catch((error: unknown) => {
+    .catch((cause: unknown) => {
       log.error("Issue factory failed while proving a parked run's new head", {
         namespace: 'factory',
         runId: run.id,
         headSha: target.sha,
-        error: String(error),
+        error: String(cause),
       });
     })
     .finally(() => reproving.delete(run.id));

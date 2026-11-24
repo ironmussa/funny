@@ -6,6 +6,7 @@
  */
 
 import { failure, type ApiFailure, type FactoryPort } from '@funny/api';
+import { errorMessage } from '@funny/shared/errors';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { audit } from '../../lib/audit.js';
@@ -81,11 +82,11 @@ const storageFailure = (error: { message: string }) => {
 
 /** Pick up a saved change in the running watcher; best-effort (it may not be running). */
 async function reschedule(factoryId: string, projectId: string): Promise<void> {
-  await rescheduleFactory(factoryId).catch((error: unknown) =>
+  await rescheduleFactory(factoryId).catch((cause: unknown) =>
     log.error('Failed to reschedule factory', {
       namespace: 'factory',
       projectId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(cause),
     }),
   );
 }

@@ -125,9 +125,8 @@ describe('factory batches', () => {
     expect((await batches.attemptSha(left.id, 'S1'))._unsafeUnwrap()).toBe(true);
     expect((await batches.endAttempt(left.id, 'green'))._unsafeUnwrap()).toBe(true);
     expect((await batches.endAttempt(left.id, 'red'))._unsafeUnwrap()).toBe(false);
-    expect((await batches.endAttempt(right.id, 'red', { checks: ['test'] }))._unsafeUnwrap()).toBe(
-      true,
-    );
+    const failing = [{ name: 'test', conclusion: 'failure', excerpt: '' }];
+    expect((await batches.endAttempt(right.id, 'red', failing))._unsafeUnwrap()).toBe(true);
     const attempts = (await batches.attemptsOf(id))._unsafeUnwrap();
     expect(attempts.map((a) => [a.members, a.state, a.sha])).toEqual([
       [['r1'], 'green', 'S1'],

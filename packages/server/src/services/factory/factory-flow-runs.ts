@@ -37,9 +37,11 @@ import {
   type ConcurrencyGate,
   type MemoryGateOptions,
 } from '@funny/pipelines';
+import { errorMessage } from '@funny/shared/errors';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { messages, threads } from '../../db/schema.js';
@@ -160,7 +162,7 @@ export interface FactoryFlowRunsDeps {
   /** Factory steps (a flow's command, integrate) through the enabler's runner. */
   steps?: (userId: string) => FactoryStepDeps;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
-  notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
+  notify?: (userId: string, message: WaitingNotice) => Promise<NotifyOutcome>;
   /**
    * Grants the flows' concurrency-group slots. Default: database leases shared
    * by every server instance (`createLeaseGate`), stopped by `stopAll`, so
@@ -169,6 +171,9 @@ export interface FactoryFlowRunsDeps {
    */
   gate?: ConcurrencyGate;
 }
+
+/** What a notifier answers: how many devices Web Push reached, or nothing. Never read. */
+export type NotifyOutcome = number | void;
 
 export interface WaitingNotice {
   title: string;
@@ -332,13 +337,26 @@ const failureReason = (error: string | undefined): string => error?.trim() || 'T
 const flowOf = (job: FactoryRunJob): string => job.run.flowName ?? job.factory.flowName;
 
 /**
+ * The step outputs a journal stored: an object per step. JSON drops an
+ * undefined `output`, so a missing one reads back as undefined.
+ */
+const STORED_OUTPUTS = z.record(
+  z.string(),
+  z
+    .looseObject({ output: z.unknown().optional() })
+    .transform((stored): NodeOutput => ({ ...stored, output: stored.output })),
+);
+
+/**
  * The journal keeps the flow's step outputs; the rest of the context (the
  * provider, the progress reporter, the inputs) is this attempt's, rebuilt by
  * the server that resumes the run.
  */
-const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineContext> => ({
+const journalCodec = (
+  live: YamlPipelineContext,
+): JournalCodec<YamlPipelineContext, Record<string, NodeOutput>> => ({
   encode: (ctx) => ctx.outputs,
-  decode: (stored) => ({ ...live, outputs: stored as Record<string, NodeOutput> }),
+  decode: (stored) => ({ ...live, outputs: STORED_OUTPUTS.parse(stored) }),
 });
 
 /** The given gate, or this server's lease gate with how to stop renewing its leases. */
@@ -499,11 +517,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       body: why.length > 200 ? `${why.slice(0, 199)}…` : why,
       url: `/projects/${job.factory.projectId}`,
       tag: `factory-run-${job.run.id}`,
-    }).catch((error: unknown) =>
+    }).catch((cause: unknown) =>
       log.warn('Issue factory notification failed', {
         namespace: 'factory',
         runId: job.run.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       }),
     );
   }
@@ -1056,11 +1074,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       let ready!: (start: FactoryRunStart) => void;
       const started = new Promise<FactoryRunStart>((resolve) => (ready = resolve));
       execute(job, controller, () => ready('started'))
-        .then(ready, (error: unknown) => {
+        .then(ready, (cause: unknown) => {
           log.error('Issue factory flow crashed', {
             namespace: 'factory',
             runId: job.run.id,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(cause),
           });
           ready('not-started');
         })

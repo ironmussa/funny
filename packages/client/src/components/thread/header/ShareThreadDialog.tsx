@@ -112,7 +112,7 @@ function useThreadShares({
   }, [open, projectId, selfId, refreshShares]);
 
   /** Run `action`, then re-read the shares, with the buttons disabled meanwhile. */
-  const busyWhile = async <Done,>(action: () => Promise<Done>) => {
+  const busyWhile = async (action: () => Promise<void>) => {
     await whilePending(setBusy, async () => {
       await action();
       await refreshShares();

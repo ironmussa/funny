@@ -34,7 +34,7 @@ function isString<T>(value: T): value is T & string {
  * upstream would otherwise let an attacker-influenced project path
  * persistently widen what git trusts.
  */
-export function shouldRegisterSafeDirectory(dirPath: unknown): boolean {
+export function shouldRegisterSafeDirectory(dirPath: string | null | undefined): boolean {
   if (!isString(dirPath) || dirPath.length === 0) return false;
   if (dirPath.startsWith('-')) return false;
   if (dirPath.includes('\0')) return false;

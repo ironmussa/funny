@@ -132,14 +132,18 @@ export function createActionProviderRuntime(options: ActionProviderRuntimeOption
   };
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function mapActionResult(result: ActionResultLike): HarnessAgentResult {
+  const sessionId = result.metadata?.sessionId;
   return {
     ok: result.ok,
     output: result.output,
     error: result.error,
     metadata: result.metadata,
-    sessionId:
-      typeof result.metadata?.sessionId === 'string' ? result.metadata.sessionId : undefined,
+    sessionId: isString(sessionId) ? sessionId : undefined,
   };
 }
 

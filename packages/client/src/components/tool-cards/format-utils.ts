@@ -196,9 +196,7 @@ const SUMMARIES: Record<string, SummaryFn> = {
   TaskStop: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
   ScheduleWakeup: field('reason'),
   // SAFETY: Monitor declares description and command as strings in its input schema.
-  // SAFETY: Monitor declares description and command as strings in its input schema.
   Monitor: (parsed) => (parsed.description as string) ?? (parsed.command as string) ?? null,
-  // SAFETY: SendMessage declares summary and to as strings in its input schema.
   // SAFETY: SendMessage declares summary and to as strings in its input schema.
   SendMessage: (parsed) => (parsed.summary as string) ?? (parsed.to as string) ?? null,
   apply_patch: (parsed) => patchSummary(parsed),

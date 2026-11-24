@@ -35,10 +35,13 @@ type FactoryForm = Pick<
   | 'maxConcurrent'
   | 'autoMerge'
   | 'sensitivePaths'
+  | 'maxLowRiskLines'
+  | 'sizeIgnoredPaths'
   | 'stageLimits'
   | 'stepOverrides'
   | 'batch'
   | 'dependencies'
+  | 'tooBig'
 >;
 
 /** The server's defaults: what the form shows before the first save. */
@@ -51,12 +54,12 @@ const DEFAULT_FORM: FactoryForm = {
   autoMerge: 'low_risk',
   sensitivePaths: [],
   maxLowRiskLines: 400,
-  sizeIgnoredPaths: [] as string[],
+  sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
-  tooBig: 'ask' as FactorySettings['tooBig'],
+  tooBig: 'ask',
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */

@@ -24,7 +24,7 @@ describe('VirtualDiff', () => {
       'scroll-fade-none',
       'scrollbar-visible',
     );
-    expect(screen.getByTestId('diff-scroll-area')).toHaveStyle({ scrollbarGutter: 'stable' });
+    expect(screen.getByTestId('diff-scroll-area')).toHaveClass('[scrollbar-gutter:stable]');
     expect(screen.getByTestId('diff-h-scrollbar')).toHaveClass(
       'scroll-fade-none',
       'scrollbar-visible',

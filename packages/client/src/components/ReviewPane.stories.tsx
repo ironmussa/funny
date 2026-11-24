@@ -490,10 +490,7 @@ function ReviewPaneWrapper({
        * and `right: panelWidthPx`. Anchoring the panel to the right edge
        * ensures the portal fills the left portion of the screen correctly.
        */}
-      <div
-        className="bg-sidebar fixed top-0 right-0 flex flex-col"
-        style={{ width: 400, height: '100vh', overflow: 'hidden' }}
-      >
+      <div className="bg-sidebar fixed top-0 right-0 flex h-screen w-[400px] flex-col overflow-hidden">
         <div className="flex h-full min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-hidden">
             <ReviewPane />

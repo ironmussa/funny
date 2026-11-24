@@ -282,6 +282,13 @@ const anyFailed = (runs: RestCheckRun[], status: RestCombinedStatus) =>
   runs.some((run) => run.conclusion && FAILED_CONCLUSIONS.has(run.conclusion)) ||
   status.statuses.some((s) => s.state === 'failure' || s.state === 'error');
 
+/** The check runs and statuses that count, and whether a required one is missing. */
+interface CountedChecks {
+  runs: RestCheckRun[];
+  status: RestCombinedStatus;
+  missing: boolean;
+}
+
 /**
  * The check runs and statuses that count: all of them, or only the `required`
  * names — then `missing` says whether one of those has not reported yet.
@@ -290,7 +297,7 @@ function onlyRequired(
   runs: RestCheckRun[],
   status: RestCombinedStatus,
   required?: readonly string[],
-): { runs: RestCheckRun[]; status: RestCombinedStatus; missing: boolean } {
+): CountedChecks {
   if (!required?.length) return { runs, status, missing: false };
   const wanted = new Set(required);
   const keptRuns = runs.filter((run) => wanted.has(run.name));

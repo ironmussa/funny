@@ -13,6 +13,7 @@ import type {
   ThreadStatus,
   ToolCall,
 } from '@funny/shared';
+import type { JsonObject } from '@funny/shared/json';
 
 import type { NativeGitStatusState } from '../git-status-state';
 
@@ -43,8 +44,8 @@ function isGitState(state: string): state is GitStatusInfo['state'] {
   return GIT_STATES.has(state);
 }
 
-/** A realtime event's payload fields, read before they are checked. */
-type EventFields = Record<string, unknown>;
+/** A realtime event's payload fields (it arrived as JSON), read before they are checked. */
+type EventFields = JsonObject;
 
 function isEventFields(value: unknown): value is EventFields {
   return typeof value === 'object' && value !== null;

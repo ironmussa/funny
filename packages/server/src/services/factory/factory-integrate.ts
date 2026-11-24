@@ -101,6 +101,7 @@ export function createFactoryIntegrate(deps: FactoryIntegrateDeps) {
         conflictsResolvedWithoutLlm: metrics.conflictsResolvedWithoutLlm + (settled ? 1 : 0),
         conflictsSentToAgent:
           metrics.conflictsSentToAgent + (result.outcome === 'conflict' && !parked ? 1 : 0),
+        weaveIntegrations: metrics.weaveIntegrations + (result.weave ? 1 : 0),
       },
       { event: `integrate_${result.outcome}` },
     );

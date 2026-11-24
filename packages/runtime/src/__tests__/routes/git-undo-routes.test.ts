@@ -18,21 +18,34 @@ const mocks = (() => ({
   recorded: [] as Array<{ spec: any; outcome: any }>,
 }))();
 
+// Each mock keeps the rest of its module real: the routes load modules that
+// import other names from these, and a mock without them fails at link time.
+const actualGitHelpers = await import('../../routes/git/helpers.js');
+const actualRouteHelpers = await import('../../utils/route-helpers.js');
+const actualRunnerControl = await import('../../services/agent-runner-control.js');
+const actualThreadManager = await import('../../services/thread-manager.js');
+
 mock.module('../../routes/git/helpers.js', () => ({
+  ...actualGitHelpers,
   requireProjectCwd: async () => ok(mocks.cwd),
-  _gitStatusCache: new Map(),
+  gitStatusCache: new Map(),
   invalidateGitStatusCache: async () => undefined,
 }));
 mock.module('../../utils/route-helpers.js', () => ({
+  ...actualRouteHelpers,
   requireThreadCwd: async () => ok(mocks.cwd),
 }));
 mock.module('../../services/agent-runner-control.js', () => ({
+  ...actualRunnerControl,
   isAgentRunning: () => mocks.agentRunning,
 }));
 mock.module('../../services/thread-manager.js', () => ({
+  ...actualThreadManager,
   getThread: async (id: string) => ({ id, projectId: 'p1' }),
 }));
+const actualActivityTracker = await import('../../services/activity-tracker.js');
 mock.module('../../services/activity-tracker.js', () => ({
+  ...actualActivityTracker,
   recordActivity: vi.fn(async (spec: any, outcome: any) => {
     mocks.recorded.push({ spec, outcome });
   }),

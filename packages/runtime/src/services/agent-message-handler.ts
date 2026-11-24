@@ -125,7 +125,7 @@ function backfillStats(
 export type ProjectLookup = (id: string) => { path: string; [key: string]: any } | undefined;
 
 export class AgentMessageHandler {
-  private _getProject: ProjectLookup | undefined;
+  private projectLookup: ProjectLookup | undefined;
 
   constructor(
     private state: AgentStateTracker,
@@ -133,16 +133,16 @@ export class AgentMessageHandler {
     private wsBroker: IWSBroker,
     getProject?: ProjectLookup,
   ) {
-    this._getProject = getProject;
+    this.projectLookup = getProject;
   }
 
   /** Lazy-load project lookup to avoid importing the singleton DB in tests */
   private async getProject(id: string): Promise<{ path: string; [key: string]: any } | undefined> {
-    if (!this._getProject) {
+    if (!this.projectLookup) {
       const { getServices } = require('./service-registry.js');
-      this._getProject = getServices().projects.getProject;
+      this.projectLookup = getServices().projects.getProject;
     }
-    return this._getProject!(id);
+    return this.projectLookup!(id);
   }
 
   /** Build common log attributes with thread context for observability.

@@ -5,15 +5,15 @@ import {
   MoreVertical,
   FolderOpenDot,
   Terminal,
-  Square,
   Pencil,
   GitFork,
   GitBranch,
   Factory,
 } from 'lucide-react';
-import { useState, memo, useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useState, memo, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { StopThreadMenuItem } from '@/components/thread/StopThreadMenuItem';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Button } from '@/components/ui/button';
 import {
@@ -125,6 +125,7 @@ function StopFactoryRunItem({
     <>
       <DropdownMenuSeparator />
       <DropdownMenuItem
+        variant="destructive"
         data-testid={`thread-stop-factory-run-${thread.id}`}
         onClick={(e) => {
           e.stopPropagation();
@@ -132,7 +133,6 @@ function StopFactoryRunItem({
             toastError(error, 'factory'),
           );
         }}
-        className="text-status-error focus:text-status-error"
       >
         <Factory className="icon-sm" />
         {t('factory.activity.stopRun', 'Stop factory run')}
@@ -179,12 +179,11 @@ function ThreadItemActions({
       <DropdownMenu onOpenChange={handleDropdownChange}>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="ghost"
+            variant="muted"
             size="icon-xs"
             aria-label={t('sidebar.threadActions', 'Thread actions')}
             data-testid={`thread-item-more-${thread.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground hover:text-foreground"
           >
             <MoreVertical className="icon-sm" />
           </Button>
@@ -257,19 +256,7 @@ function ThreadItemActions({
           {isRunning && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const result = await api.stopThread(thread.id);
-                  if (result.isErr()) {
-                    console.error('Failed to stop thread:', result.error);
-                  }
-                }}
-                className="text-status-error focus:text-status-error"
-              >
-                <Square className="icon-sm" />
-                {t('common.stop')}
-              </DropdownMenuItem>
+              <StopThreadMenuItem threadId={thread.id} />
             </>
           )}
           <StopFactoryRunItem thread={thread} activity={activity} />
@@ -288,12 +275,12 @@ function ThreadItemActions({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                variant="destructive"
                 data-testid={`thread-delete-${thread.id}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="text-status-error focus:text-status-error"
               >
                 <Trash2 className="icon-sm" />
                 {t('common.delete')}
@@ -352,12 +339,9 @@ function useThreadRowHandlers(
  * transient undefined gaps (e.g. thread selection race conditions).
  */
 function useStickyGitStatus(gitStatus?: GitStatusInfo) {
-  const lastGitStatusRef = useRef(gitStatus);
-  const effectiveGitStatus = gitStatus ?? lastGitStatusRef.current;
-  useLayoutEffect(() => {
-    if (gitStatus) lastGitStatusRef.current = gitStatus;
-  }, [gitStatus]);
-  return effectiveGitStatus;
+  const [lastGitStatus, setLastGitStatus] = useState(gitStatus);
+  if (gitStatus && gitStatus !== lastGitStatus) setLastGitStatus(gitStatus);
+  return gitStatus ?? lastGitStatus;
 }
 
 interface ThreadItemTrailingProps {

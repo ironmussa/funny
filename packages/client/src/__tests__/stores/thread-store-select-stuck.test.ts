@@ -131,7 +131,7 @@ describe('selectThread — stuck selectingThreadId (reproduces "invariant re-sel
     // Simular el estado "post-throw" descrito en thread-store.ts:481-528:
     // `setSelectingThreadId` fue llamado pero el try/finally que lo limpia
     // nunca corrió porque algo posterior throweó (set listener, telemetría,
-    // _evictIfUnreferenced, etc.).
+    // evictIfUnreferenced, etc.).
     setSelectingThreadId(threadB.id);
     expect(getSelectingThreadId()).toBe(threadB.id);
 
@@ -214,7 +214,7 @@ describe('selectThread — stuck selectingThreadId (reproduces "invariant re-sel
     // deliberadamente deja `activeThread=A` mientras `selectedThreadId=B`,
     // para que el panel derecho no parpadee mientras carga B.
     //
-    // El bug: justo después del set() de selectThread, `_evictIfUnreferenced(A)`
+    // El bug: justo después del set() de selectThread, `evictIfUnreferenced(A)`
     // sacaba A de `threadDataById`. El subscriber de back-fill veía
     // "activeThread=A pero threadDataById[A]=undefined", reinjectaba A en el
     // mapa Y forzaba `selectedThreadId=A`. El usuario terminaba con URL=/B y

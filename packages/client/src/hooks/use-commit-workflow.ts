@@ -10,12 +10,104 @@ import {
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';
 import { projectsApi } from '@/lib/api/projects';
 import { toastError } from '@/lib/toast-error';
 import { useCommitProgressStore, type CommitProgressEntry } from '@/stores/commit-progress-store';
 import { useDraftStore } from '@/stores/draft-store';
 import { useThreadStore } from '@/stores/thread-store';
+
+type Translate = ReturnType<typeof useTranslation>['t'];
+type EntrySnapshot = { id: string; entry: CommitProgressEntry | undefined };
+
+/** Git output that means a rebase or merge stopped on a conflict. */
+const CONFLICT_MARKERS = [
+  'conflict',
+  'rebase failed',
+  'merge failed',
+  'automatic merge failed',
+  'fix conflicts',
+  'could not apply',
+];
+
+/**
+ * Records the current entry and answers the previous one, or undefined when
+ * the previous entry belongs to another thread (the thread just switched).
+ */
+function takePreviousEntry(
+  ref: { current: EntrySnapshot },
+  id: string,
+  entry: CommitProgressEntry | undefined,
+): CommitProgressEntry | undefined {
+  const previous = ref.current;
+  ref.current = { id, entry };
+  return previous.id === id ? previous.entry : undefined;
+}
+
+function allStepsCompleted(entry: CommitProgressEntry): boolean {
+  return entry.steps.every((s) => s.status === 'completed');
+}
+
+function hasFailedStep(entry: CommitProgressEntry): boolean {
+  return entry.steps.some((s) => s.status === 'failed');
+}
+
+/** The entry has just become all-completed (it was not on the previous update). */
+function justCompleted(entry: CommitProgressEntry, prev: CommitProgressEntry | undefined): boolean {
+  return allStepsCompleted(entry) && !!prev && !allStepsCompleted(prev);
+}
+
+function failedStep(entry: CommitProgressEntry, id: string) {
+  return entry.steps.find((s) => s.id === id && s.status === 'failed');
+}
+
+function isRebaseConflict(entry: CommitProgressEntry): boolean {
+  const error = failedStep(entry, 'merge')?.error?.toLowerCase();
+  return !!error && CONFLICT_MARKERS.some((marker) => error.includes(marker));
+}
+
+/** The label of the pre-commit hook that failed, or null when the hooks step did not fail. */
+function failedHookLabel(entry: CommitProgressEntry): string | null {
+  const hooks = failedStep(entry, 'hooks');
+  if (!hooks?.error) return null;
+  return failedSubItemLabel(hooks);
+}
+
+function failedSubItemLabel(step: NonNullable<ReturnType<typeof failedStep>>): string {
+  return step.subItems?.find((si) => si.status === 'failed')?.label || 'unknown';
+}
+
+function isMergeAction(action: string): boolean {
+  return action === 'merge' || action === 'commit-merge';
+}
+
+/** The success toast for a finished workflow; null for push, which use-ws.ts announces. */
+function successMessage(
+  action: string,
+  t: Translate,
+  threadBranch: string | undefined,
+  baseBranch: string | undefined,
+): string | null {
+  if (action === 'push') return null;
+  if (isMergeAction(action)) return mergeSuccessMessage(t, threadBranch, baseBranch);
+  if (action === 'create-pr') return t('review.prSuccess', 'Pull request created');
+  return t('review.commitSuccess', 'Changes committed successfully');
+}
+
+function mergeSuccessMessage(
+  t: Translate,
+  threadBranch: string | undefined,
+  baseBranch: string | undefined,
+): string {
+  const branch = threadBranch || 'branch';
+  const target = baseBranch || 'base';
+  return t('review.mergeSuccess', {
+    branch,
+    target,
+    defaultValue: `Merged "${branch}" into "${target}" successfully`,
+  });
+}
 
 export type CommitAction = 'commit' | 'commit-push' | 'commit-pr' | 'commit-merge' | 'amend';
 
@@ -161,75 +253,34 @@ export function useCommitWorkflow({
 
   // React to server-driven progress of the running workflow (failure, success).
   const prevCommitEntryRef = useRef({ id: commitProgressId, entry: commitEntry });
-  useEffect(() => {
-    const previous = prevCommitEntryRef.current;
-    prevCommitEntryRef.current = { id: commitProgressId, entry: commitEntry };
-    // Just switched threads: the previous entry is another thread's.
-    const prev = previous.id === commitProgressId ? previous.entry : undefined;
+  /** The running workflow failed: release the actions, flag a conflict, name a failed hook. */
+  const handleWorkflowFailure = (entry: CommitProgressEntry) => {
+    setActionInProgress(null);
+    commitLockRef.current = false;
+    setPushInProgress(false);
+    setMergeInProgress(false);
+    setPrInProgress(false);
+    if (isRebaseConflict(entry)) setHasRebaseConflict(true);
+    const hook = failedHookLabel(entry);
+    if (hook) toast.error(t('review.hookFailed', 'Pre-commit hook failed: {{hook}}', { hook }));
+    refresh();
+  };
 
+  /** The workflow just finished: say so (push has its own toast in use-ws.ts). */
+  const announceSuccess = (action: string) => {
+    const message = successMessage(action, t, threadBranch, baseBranch);
+    if (message) toast.success(message);
+  };
+
+  const onCommitEntryChange = useStableCallback(() => {
+    const prev = takePreviousEntry(prevCommitEntryRef, commitProgressId, commitEntry);
     if (!commitEntry) return;
-
-    const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
-    const allCompleted = commitEntry.steps.every((s) => s.status === 'completed');
-
-    if (hasFailed) {
-      setActionInProgress(null);
-      commitLockRef.current = false;
-      setPushInProgress(false);
-      setMergeInProgress(false);
-      setPrInProgress(false);
-
-      // Detect rebase/merge conflicts
-      const mergeStep = commitEntry.steps.find((s) => s.id === 'merge' && s.status === 'failed');
-      if (mergeStep?.error) {
-        const lower = mergeStep.error.toLowerCase();
-        if (
-          lower.includes('conflict') ||
-          lower.includes('rebase failed') ||
-          lower.includes('merge failed') ||
-          lower.includes('automatic merge failed') ||
-          lower.includes('fix conflicts') ||
-          lower.includes('could not apply')
-        ) {
-          setHasRebaseConflict(true);
-        }
-      }
-
-      // Detect hook failures for toast
-      const hookStep = commitEntry.steps.find((s) => s.id === 'hooks' && s.status === 'failed');
-      if (hookStep?.error) {
-        const failedHook = hookStep.subItems?.find((si) => si.status === 'failed');
-        toast.error(
-          t('review.hookFailed', 'Pre-commit hook failed: {{hook}}', {
-            hook: failedHook?.label || 'unknown',
-          }),
-        );
-      }
-
-      refresh();
-    }
-
-    if (allCompleted && prev && !prev.steps.every((s) => s.status === 'completed')) {
-      // Just transitioned to all-completed — show success toast.
-      // Note: push toast is handled in use-ws.ts to avoid duplication.
-      const action = commitEntry.action;
-      if (action === 'push') {
-        // handled in use-ws.ts
-      } else if (action === 'merge' || action === 'commit-merge') {
-        toast.success(
-          t('review.mergeSuccess', {
-            branch: threadBranch || 'branch',
-            target: baseBranch || 'base',
-            defaultValue: `Merged "${threadBranch || 'branch'}" into "${baseBranch || 'base'}" successfully`,
-          }),
-        );
-      } else if (action === 'create-pr') {
-        toast.success(t('review.prSuccess', 'Pull request created'));
-      } else {
-        toast.success(t('review.commitSuccess', 'Changes committed successfully'));
-      }
-    }
-  }, [commitProgressId, commitEntry]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (hasFailedStep(commitEntry)) handleWorkflowFailure(commitEntry);
+    if (justCompleted(commitEntry, prev)) announceSuccess(commitEntry.action);
+  });
+  useEffect(() => {
+    onCommitEntryChange();
+  }, [commitProgressId, commitEntry, onCommitEntryChange]);
 
   const handleCommitAction = useCallback(async () => {
     if (!hasGitContext || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
@@ -420,7 +471,7 @@ function useClearOnWorkflowEnd(
 ): void {
   const settled = useCommitProgressStore((s) => s.settled[commitProgressId]);
   const lastSettledRef = useRef({ id: commitProgressId, count: settled?.count ?? 0 });
-  useEffect(() => {
+  const onSettledChange = useStableCallback(() => {
     const last = lastSettledRef.current;
     const count = settled?.count ?? 0;
     lastSettledRef.current = { id: commitProgressId, count };
@@ -431,5 +482,8 @@ function useClearOnWorkflowEnd(
     if (count === last.count) return;
     clearInProgress();
     onEnded(settled?.action);
-  }, [commitProgressId, settled]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    onSettledChange();
+  }, [commitProgressId, settled, onSettledChange]);
 }

@@ -32,6 +32,7 @@ import type {
   PermissionMode,
   WSEvent,
 } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE, DEFAULT_PROVIDER } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
@@ -182,14 +183,17 @@ async function scanOnce(): Promise<void> {
         log.error('Job completion handling failed', {
           namespace: NS,
           jobId: job.id,
-          error: (err as Error).message,
+          error: errorMessage(err),
         }),
       );
     }
   } catch (err) {
     // A transient repository error must not permanently disable monitoring.
     hasRunningJobs = true;
-    log.error('Job scan failed', { namespace: NS, error: (err as Error).message });
+    log.error('Job scan failed', {
+      namespace: NS,
+      error: errorMessage(err),
+    });
   } finally {
     scanning = false;
     if (hasRunningJobs || scanRequested) armScanner();
@@ -231,7 +235,7 @@ async function onTerminal(job: Job, status: JobStatus, exitCode: number | null):
     log.error('Job wake failed to start agent', {
       namespace: NS,
       jobId: job.id,
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
   });
 }

@@ -175,9 +175,7 @@ export function AutomationSettings() {
   };
 
   if (!selectedProjectId) {
-    return (
-      <EmptyState fill={false} className="py-6" title="Select a project to manage automations." />
-    );
+    return <EmptyState padding="md" fill={false} title="Select a project to manage automations." />;
   }
 
   return (
@@ -195,8 +193,8 @@ export function AutomationSettings() {
       {/* Automation list */}
       {automations.length === 0 ? (
         <EmptyState
+          padding="md"
           fill={false}
-          className="py-8"
           title="No automations yet."
           action={
             <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
@@ -257,12 +255,7 @@ export function AutomationSettings() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleToggleEnabled(a)}
-                      className="text-muted-foreground"
-                    >
+                    <Button variant="muted" size="icon-sm" onClick={() => handleToggleEnabled(a)}>
                       {a.enabled ? <Pause className="icon-sm" /> : <Play className="icon-sm" />}
                     </Button>
                   </TooltipTrigger>
@@ -270,12 +263,7 @@ export function AutomationSettings() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleViewRuns(a.id)}
-                      className="text-muted-foreground"
-                    >
+                    <Button variant="muted" size="icon-sm" onClick={() => handleViewRuns(a.id)}>
                       <History className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
@@ -284,12 +272,7 @@ export function AutomationSettings() {
                 {a.source !== 'config' && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => openEditDialog(a)}
-                        className="text-muted-foreground"
-                      >
+                      <Button variant="muted" size="icon-sm" onClick={() => openEditDialog(a)}>
                         <Pencil className="icon-sm" />
                       </Button>
                     </TooltipTrigger>
@@ -300,10 +283,9 @@ export function AutomationSettings() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="ghost"
+                        variant="muted-destructive"
                         size="icon-sm"
                         onClick={() => handleDelete(a)}
-                        className="text-muted-foreground hover:text-status-error"
                       >
                         <Trash2 className="icon-sm" />
                       </Button>
@@ -346,8 +328,8 @@ export function AutomationSettings() {
                       </div>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-5 px-1.5 text-xs"
+                        size="xs"
+                        className="h-5 px-1.5"
                         onClick={() => {
                           navigate(
                             buildPath(`/projects/${selectedProjectId}/threads/${run.threadId}`),
@@ -361,8 +343,8 @@ export function AutomationSettings() {
                 )}
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="h-5 w-full text-xs"
+                  size="xs"
+                  className="h-5 w-full"
                   onClick={() => setRunsAutomationId(null)}
                 >
                   Close
@@ -432,7 +414,9 @@ export function AutomationSettings() {
                 </Select>
                 {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (
                   <Input
-                    className="settings-form-input mt-1.5 font-mono text-xs"
+                    mono
+                    size="xs"
+                    className="settings-form-input mt-1.5"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}

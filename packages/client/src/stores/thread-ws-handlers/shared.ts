@@ -95,19 +95,19 @@ export function maybeBuffer(
 // When a WS event arrives for a thread not in any loaded project, we need to
 // refresh projects so it appears. But doing this on every event causes an
 // O(projects) API storm. Debounce to at most once per 2 seconds.
-let _refreshAllTimer: ReturnType<typeof setTimeout> | null = null;
-const _pendingRefreshPids = new Set<string>();
+let refreshAllTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingRefreshPids = new Set<string>();
 
 export function scheduleProjectRefresh(get: Get, specificPid?: string): void {
   if (specificPid) {
-    _pendingRefreshPids.add(specificPid);
+    pendingRefreshPids.add(specificPid);
   }
-  if (_refreshAllTimer) return; // already scheduled
-  _refreshAllTimer = setTimeout(() => {
-    _refreshAllTimer = null;
+  if (refreshAllTimer) return; // already scheduled
+  refreshAllTimer = setTimeout(() => {
+    refreshAllTimer = null;
     const { loadThreadsForProject } = get();
-    if (_pendingRefreshPids.size > 0) {
-      for (const pid of _pendingRefreshPids) {
+    if (pendingRefreshPids.size > 0) {
+      for (const pid of pendingRefreshPids) {
         loadThreadsForProject(pid);
       }
     } else {
@@ -116,6 +116,6 @@ export function scheduleProjectRefresh(get: Get, specificPid?: string): void {
         loadThreadsForProject(pid);
       }
     }
-    _pendingRefreshPids.clear();
+    pendingRefreshPids.clear();
   }, 2000);
 }

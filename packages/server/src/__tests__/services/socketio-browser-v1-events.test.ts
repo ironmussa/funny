@@ -38,7 +38,7 @@ import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 
 import { BrowserV1EventRetention } from '../../services/socketio/browser-v1-event-retention.js';
 import { setupBrowserV1Events } from '../../services/socketio/browser-v1-events.js';
-import { __resetPresenceForTests } from '../../services/socketio/thread-presence.js';
+import { resetPresenceForTests } from '../../services/socketio/thread-presence.js';
 import { expectInstance } from '../helpers/builders-services.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
@@ -114,7 +114,7 @@ function durableEvent() {
 describe('browser.v1 event subscriptions', () => {
   beforeEach(() => {
     canView = true;
-    __resetPresenceForTests();
+    resetPresenceForTests();
   });
 
   test('authorizes user scope and replays retained events after its cursor', async () => {

@@ -60,7 +60,6 @@ describe('useUIStore', () => {
       addProjectOpen: false,
       analyticsOpen: false,
       liveColumnsOpen: false,
-      schedulerOpen: false,
       testRunnerOpen: false,
       generalSettingsOpen: false,
       commandPaletteOpen: false,
@@ -586,17 +585,6 @@ describe('useUIStore', () => {
   });
 
   describe('secondary panels', () => {
-    test('setSchedulerOpen clears competing panels when opening', () => {
-      useUIStore.setState({ analyticsOpen: true, reviewPaneOpen: true });
-      useUIStore.getState().setSchedulerOpen(true);
-
-      const state = useUIStore.getState();
-      expect(state.schedulerOpen).toBe(true);
-      expect(state.analyticsOpen).toBe(false);
-      expect(state.reviewPaneOpen).toBe(false);
-      expect(mockClearThreadSelection).toHaveBeenCalled();
-    });
-
     test('setLiveColumnsOpen clears analytics when opening', () => {
       useUIStore.setState({ analyticsOpen: true });
       useUIStore.getState().setLiveColumnsOpen(true);
@@ -623,7 +611,7 @@ describe('useUIStore', () => {
 
   describe('design + kanban flows', () => {
     test('setDesignView stores design context and closes overlays', () => {
-      useUIStore.setState({ settingsOpen: true, schedulerOpen: true });
+      useUIStore.setState({ settingsOpen: true });
       useUIStore.getState().setDesignView('p1', 'd1');
 
       const state = useUIStore.getState();
@@ -631,7 +619,6 @@ describe('useUIStore', () => {
       expect(state.designViewDesignId).toBe('d1');
       expect(state.activeDesignId).toBe('d1');
       expect(state.settingsOpen).toBe(false);
-      expect(state.schedulerOpen).toBe(false);
     });
 
     test('closeDesignView clears design context', () => {

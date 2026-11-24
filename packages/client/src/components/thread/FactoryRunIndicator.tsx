@@ -20,6 +20,7 @@ import {
   factoryRunStateVariant,
   factoryRunSteps,
   type FactoryStepStatus,
+  factoryRunBanner,
 } from '@/lib/factory-run-labels';
 import { isFactoryRunInFlight } from '@/lib/thread-activity';
 import { cn } from '@/lib/utils';
@@ -130,9 +131,7 @@ export function FactoryRunIndicator({
       >
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-medium">
-              {t('factory.banner.title', 'Factory · #{{issue}}', { issue: run.issueNumber })}
-            </span>
+            <span className="font-medium">{factoryRunBanner(t, run)}</span>
             <Badge size="xs" variant={factoryRunStateVariant(run.state)} className="ml-auto">
               {stateLabel}
             </Badge>

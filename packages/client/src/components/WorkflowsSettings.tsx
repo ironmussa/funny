@@ -44,8 +44,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Textarea } from '@/components/ui/textarea';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 import { useActiveThreadView } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -102,23 +104,19 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
 
   const loadList = useCallback(async () => {
     if (!selectedProjectId) return;
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await api.listWorkflows(selectedProjectId);
       if (result.isOk()) {
         setSummaries(result.value.workflows);
         setSelectedName((current) => current ?? result.value.workflows[0]?.name ?? null);
       } else toast.error(result.error.message);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [selectedProjectId]);
 
   const loadWorkflow = useCallback(
     async (name: string) => {
       if (!selectedProjectId) return;
-      setLoading(true);
-      try {
+      await whilePending(setLoading, async () => {
         const result = await api.getWorkflow(selectedProjectId, name);
         if (result.isOk()) {
           applyDefinition(result.value, {
@@ -133,9 +131,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
           });
           setSelectedNodeId(null);
         } else toast.error(result.error.message);
-      } finally {
-        setLoading(false);
-      }
+      });
     },
     [filter, runStates, selectedProjectId, setEdges, setNodes],
   );
@@ -460,15 +456,11 @@ function Inspector({
   onUpdate: (updater: (workflow: ParsedWorkflow) => ParsedWorkflow) => void;
 }) {
   const action = useMemo(() => (node ? actionOf(node) : null), [node]);
-  const [actionSource, setActionSource] = useState('{}');
-  const [retrySource, setRetrySource] = useState('');
-  const [loopSource, setLoopSource] = useState('');
-
-  useEffect(() => {
-    setActionSource(JSON.stringify(action?.value ?? {}, null, 2));
-    setRetrySource(node?.retry ? JSON.stringify(node.retry, null, 2) : '');
-    setLoopSource(node?.loop ? JSON.stringify(node.loop, null, 2) : '');
-  }, [action, node?.loop, node?.retry]);
+  const sourceKeys = [action, node?.loop, node?.retry];
+  const initial = inspectorSources(node, action);
+  const [actionSource, setActionSource] = useResettableState(initial.action, sourceKeys);
+  const [retrySource, setRetrySource] = useResettableState(initial.retry, sourceKeys);
+  const [loopSource, setLoopSource] = useResettableState(initial.loop, sourceKeys);
 
   if (!node || !workflow || !action) {
     return (
@@ -692,6 +684,19 @@ function applyGraph(
   const { nodes, edges } = decorateGraph(graph, runStates, filter);
   setNodes(nodes);
   setEdges(edges);
+}
+
+/** The JSON text the inspector's editors start from for a node. */
+function inspectorSources(
+  node: ParsedNode | null,
+  action: { value: unknown } | null,
+): { action: string; retry: string; loop: string } {
+  const pretty = (value: unknown) => JSON.stringify(value, null, 2);
+  return {
+    action: pretty(action?.value ?? {}),
+    retry: node?.retry ? pretty(node.retry) : '',
+    loop: node?.loop ? pretty(node.loop) : '',
+  };
 }
 
 function actionOf(node: ParsedNode): { type: keyof ParsedNode; value: unknown } {

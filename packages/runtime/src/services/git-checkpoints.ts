@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { gitWrite } from '@funny/core/git';
+import { errorMessage } from '@funny/shared/errors';
 
 // Kept under the original Codex-only name so checkpoints captured before
 // rewind became provider-agnostic stay restorable.
@@ -256,7 +257,7 @@ export async function restoreGitCheckpoint(params: {
     return {
       canRewind: false,
       filesChanged: [],
-      error: `Failed to restore Git checkpoint: ${(err as Error).message}`,
+      error: `Failed to restore Git checkpoint: ${errorMessage(err)}`,
     };
   }
 }

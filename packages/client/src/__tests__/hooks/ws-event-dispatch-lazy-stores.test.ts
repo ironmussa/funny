@@ -7,7 +7,6 @@ import { getRunsData } from '@/data/automations/store';
 import { seedAutomations } from '@/data/automations/testing';
 import { getJobsData, getWatchersData } from '@/data/background/store';
 import { getCommentsData } from '@/data/comments/store';
-import { getSchedulerData } from '@/data/scheduler/store';
 import { readThreadIndex } from '@/data/threads/read';
 import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { clearWSDispatchState, dispatchRealtimeEvent } from '@/hooks/ws-event-dispatch';
@@ -94,22 +93,6 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
       expect(p.handlePipelineCompleted).toHaveBeenCalledWith({ a: 3 });
       expect(wf.handleNodeState).toHaveBeenCalledWith({ c: 1 });
     });
-  });
-
-  test('scheduler events patch the run row and release removes it', () => {
-    const runs = getSchedulerData();
-    dispatchRealtimeEvent('thread:claimed', 't1', { userId: 'u1', attempt: 1 });
-    expect(runs.getSynced('t1')).toMatchObject({ userId: 'u1', attempt: 1 });
-    dispatchRealtimeEvent('thread:dispatched', 't1', { pipelineRunId: 'pr1' });
-    dispatchRealtimeEvent('thread:retry-queued', 't1', { attempt: 2, dueAtMs: 5, error: 'x' });
-    expect(runs.getSynced('t1')).toMatchObject({
-      pipelineRunId: 'pr1',
-      attempt: 2,
-      nextRetryAtMs: 5,
-      lastError: 'x',
-    });
-    dispatchRealtimeEvent('thread:released', 't1', {});
-    expect(runs.getSynced('t1')).toBeUndefined();
   });
 
   test('presence events route to the presence store', async () => {

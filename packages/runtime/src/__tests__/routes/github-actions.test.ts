@@ -31,7 +31,7 @@ mock.module('@funny/core/git', () => ({
 }));
 
 import { actionRoutes, extractFailureTail } from '../../routes/github/actions.js';
-import { _resetGithubCache } from '../../routes/github/github-cache.js';
+import { resetGithubCache } from '../../routes/github/github-cache.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 
 function app() {
@@ -74,7 +74,7 @@ const RAW_RUN = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  _resetGithubCache();
+  resetGithubCache();
   stubGlobal('fetch', fetchMock);
   mocks.getProject.mockResolvedValue({ id: 'p-1', userId: 'u-1', path: '/repo' });
   mocks.getRemoteUrl.mockResolvedValue(ok('https://github.com/acme/repo.git'));

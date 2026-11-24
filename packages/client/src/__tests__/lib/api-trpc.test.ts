@@ -45,7 +45,7 @@ function lastCall(): [string, RequestInit] {
 describe('tRPC procedure calls (automations)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, cooldownTimer: null });
   });
 
   test('a query is a GET with the input in ?input= and unwraps result.data', async () => {
@@ -153,7 +153,7 @@ describe('tRPC procedure calls (automations)', () => {
 describe('tRPC procedure calls (pipelines)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, cooldownTimer: null });
   });
 
   test('listPipelines is a tRPC query', async () => {
@@ -181,7 +181,7 @@ describe('tRPC procedure calls (pipelines)', () => {
 describe('tRPC procedure calls (threads)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, cooldownTimer: null });
   });
 
   test('getThread is a tRPC query carrying the id and the message window', async () => {
@@ -223,7 +223,7 @@ describe('tRPC procedure calls (threads)', () => {
 describe('tRPC procedure calls (profile and settings)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, cooldownTimer: null });
   });
 
   test('getProfile is the profile.get query; completeSetup is an update mutation', async () => {
@@ -253,7 +253,7 @@ describe('tRPC procedure calls (profile and settings)', () => {
 describe('tRPC procedure calls (runners)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, cooldownTimer: null });
   });
 
   test('deleteRunner is the runners.remove mutation', async () => {
@@ -279,7 +279,7 @@ describe('tRPC procedure calls (runners)', () => {
 describe('tRPC procedure calls (personal tokens)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, cooldownTimer: null });
   });
 
   test('list is the personalTokens.list query', async () => {

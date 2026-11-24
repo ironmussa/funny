@@ -4,9 +4,9 @@ import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { renderHook, waitFor, cleanup, act } from '@testing-library/react';
 
 import {
-  __cacheSignedMediaForTests,
-  __hasSignedMediaForTests,
-  __resetDirectMediaForTests,
+  cacheSignedMediaForTests,
+  hasSignedMediaForTests,
+  resetDirectMediaForTests,
   useResolvedMediaSrc,
 } from '@/lib/use-direct-media';
 
@@ -29,7 +29,7 @@ function mockSign(...urls: string[]) {
 afterEach(() => {
   cleanup();
   unstubAllGlobals();
-  __resetDirectMediaForTests();
+  resetDirectMediaForTests();
 });
 
 describe('useResolvedMediaSrc signed-URL cache', () => {
@@ -87,11 +87,11 @@ describe('useResolvedMediaSrc signed-URL cache', () => {
   test('evicts the oldest signed URLs when the session cache reaches its cap', async () => {
     const now = Date.now();
     for (let index = 0; index < 201; index++) {
-      __cacheSignedMediaForTests(`/img-${index}.png`, signedUrl(now + TTL, `cached-${index}`));
+      cacheSignedMediaForTests(`/img-${index}.png`, signedUrl(now + TTL, `cached-${index}`));
     }
 
-    expect(__hasSignedMediaForTests('/img-0.png')).toBe(false);
-    expect(__hasSignedMediaForTests('/img-1.png')).toBe(true);
+    expect(hasSignedMediaForTests('/img-0.png')).toBe(false);
+    expect(hasSignedMediaForTests('/img-1.png')).toBe(true);
 
     const fetchMock = mockSign(signedUrl(now + TTL, 'refetched'));
     const firstAgain = renderHook(() => useResolvedMediaSrc('/img-0.png'));

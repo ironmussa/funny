@@ -33,7 +33,7 @@ export const projectCreateRoutes = new Hono<HonoEnv>();
 // POST /api/projects — validate the path on the runner's filesystem, then
 // persist the project record on the server.
 projectCreateRoutes.post('/', async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const orgId = c.get('organizationId');
 
   const body = await c.req.json().catch(() => null);

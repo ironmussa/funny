@@ -1,6 +1,6 @@
 /**
  * The server factory's flows: `issue-to-merge` (the default) and
- * `issue-to-pr`, built-ins that compile beside `factory-issue`, and the CI fix
+ * `issue-to-pr`, built-ins that compile, and the CI fix
  * loop of `issue-to-merge` — red runs a fix agent with the failing log, green
  * merges, a red that outlasts the fixes or a timeout fails without
  * merging (a timeout gets no fix agent).
@@ -194,13 +194,13 @@ describe('a missing pull request', () => {
 });
 
 describe('issue-to-merge workflow', () => {
-  test('is a built-in beside factory-issue, and both compile', async () => {
+  test('is a built-in beside issue-to-pr, and both compile', async () => {
     const { workflows, warnings } = await loadWorkflowCatalog();
     // The only catalog warnings are the proof-not-configured ones from built-in flows
     // (they ship without rules as templates).
     const unexpected = warnings.filter((w) => !w.includes('no rules'));
     expect(unexpected).toEqual([]);
-    for (const name of ['issue-to-merge', 'issue-to-pr', 'factory-issue']) {
+    for (const name of ['issue-to-merge', 'issue-to-pr']) {
       expect(workflows.get(name)?.source).toBe('built-in');
       expect(() => compileYamlPipeline(workflows.get(name)!.workflow)).not.toThrow();
     }
@@ -463,7 +463,7 @@ describe('issue-to-merge workflow', () => {
     });
 
     test('a run without a contract gets no contract section', async () => {
-      const { workflows } = await loadWorkflowCatalog();
+      await loadWorkflowCatalog();
       const fake = provider([green]);
       fake.p.triage = async () => ({
         ok: true,
@@ -489,7 +489,7 @@ describe('issue-to-merge workflow', () => {
     });
 
     test('triage that stops the run starts no implementing agent', async () => {
-      const { workflows } = await loadWorkflowCatalog();
+      await loadWorkflowCatalog();
       const fake = provider([green]);
       fake.p.triage = async () => ({ ok: false, error: 'The issue needs more information: ?' });
       const result = await runPipeline(

@@ -41,8 +41,6 @@ export interface Thread {
   cost: number;
   archived?: boolean;
   pinned?: boolean;
-  /** When true, the scheduler may auto-claim and dispatch this thread. */
-  schedulerManaged?: boolean;
   automationId?: string;
   source: ThreadSource;
   externalRequestId?: string;

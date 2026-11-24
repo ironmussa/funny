@@ -92,12 +92,12 @@ const HooksEventCard = memo(function HooksEventCard({
   // Collect error output from failed hooks
   const errorOutput = useMemo(() => {
     const errors: string[] = [];
-    for (const hook of hooks) {
+    const memoHooks: typeof hooks = metadata.hooks ?? [];
+    for (const hook of memoHooks) {
       if (hook.status === 'failed' && hook.error) errors.push(hook.error);
     }
     if (errors.length === 0) return null;
     return ansiConverter.toHtml(errors.join('\n'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metadata.hooks]);
 
   const hasError = hasFailed && errorOutput;
@@ -123,9 +123,9 @@ const HooksEventCard = memo(function HooksEventCard({
           Pre-commit hooks
         </span>
         <Badge
+          size="xxs"
           data-testid={`workflow-hooks-verdict-${hasFailed ? 'fail' : 'pass'}`}
           variant={hasFailed ? 'destructive' : 'default'}
-          className="text-2xs h-4 px-1.5 py-0 leading-none"
         >
           {hasFailed ? 'FAILED' : 'PASSED'}
         </Badge>
@@ -222,9 +222,9 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       detail = (
         <>
           <Badge
+            size="xxs"
             data-testid={`workflow-review-verdict-${isPassing ? 'pass' : 'fail'}`}
             variant={isPassing ? 'default' : 'destructive'}
-            className="text-2xs h-4 px-1.5 py-0 leading-none"
           >
             {isPassing ? 'PASS' : 'FAIL'}
           </Badge>

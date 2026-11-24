@@ -49,6 +49,7 @@ const RUN_STAGE = {
   failed: 'review',
   no_change: 'review',
   merged: 'done',
+  done: 'done',
   // Stopped by a person: they decide where its threads go.
   stopped: null,
 } as const satisfies Record<FactoryRunState, RunThreadStage | null>;

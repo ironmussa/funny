@@ -61,10 +61,10 @@ export type ContextBuilder = Pick<
 
 export class EventModel {
   readonly name: string;
-  private _elements = new Map<string, ElementDef>();
-  private _sequences: SequenceDef[] = [];
-  private _slices: SliceDef[] = [];
-  private _contexts: ContextDef[] = [];
+  #elements = new Map<string, ElementDef>();
+  #sequences: SequenceDef[] = [];
+  #slices: SliceDef[] = [];
+  #contexts: ContextDef[] = [];
 
   constructor(name: string) {
     this.name = name;
@@ -73,21 +73,21 @@ export class EventModel {
   // ── Element Registration ─────────────────────────────────
 
   command(name: string, opts: CommandOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const def: CommandDef = { kind: 'command', name, ...opts };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'command');
   }
 
   event(name: string, opts: EventOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const def: EventDef = { kind: 'event', name, ...opts };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'event');
   }
 
   readModel(name: string, opts: ReadModelOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const def: ReadModelDef = {
       kind: 'readModel',
       name,
@@ -96,19 +96,19 @@ export class EventModel {
       description: opts.description,
       source: opts.source,
     };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'readModel');
   }
 
   automation(name: string, opts: AutomationOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const def: AutomationDef = { kind: 'automation', name, ...opts };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'automation');
   }
 
   aggregate(name: string, opts: AggregateOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const def: AggregateDef = {
       kind: 'aggregate',
       name,
@@ -118,12 +118,12 @@ export class EventModel {
       description: opts.description,
       source: opts.source,
     };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'aggregate');
   }
 
   screen(name: string, opts: ScreenOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const def: ScreenDef = {
       kind: 'screen',
       name,
@@ -132,12 +132,12 @@ export class EventModel {
       description: opts.description,
       source: opts.source,
     };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'screen');
   }
 
   external(name: string, opts: ExternalOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const def: ExternalDef = {
       kind: 'external',
       name,
@@ -146,12 +146,12 @@ export class EventModel {
       description: opts.description,
       source: opts.source,
     };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'external');
   }
 
   saga(name: string, opts: SagaOptions): ElementRef {
-    this._assertUnique(name);
+    this.#assertUnique(name);
     const triggers = Array.isArray(opts.triggers) ? resolveRefs(opts.triggers) : opts.triggers;
     const def: SagaDef = {
       kind: 'saga',
@@ -163,7 +163,7 @@ export class EventModel {
       description: opts.description,
       source: opts.source,
     };
-    this._elements.set(name, def);
+    this.#elements.set(name, def);
     return createRef(name, 'saga');
   }
 
@@ -174,11 +174,11 @@ export class EventModel {
    * Elements defined inside the callback are tracked as belonging to this context.
    */
   context(name: string, fn: (ctx: ContextBuilder) => void): void {
-    const elementsBefore = new Set(this._elements.keys());
+    const elementsBefore = new Set(this.#elements.keys());
     fn(this as ContextBuilder);
-    const elementsAfter = new Set(this._elements.keys());
+    const elementsAfter = new Set(this.#elements.keys());
     const newElements = [...elementsAfter].filter((e) => !elementsBefore.has(e));
-    this._contexts.push({ name, elements: newElements });
+    this.#contexts.push({ name, elements: newElements });
   }
 
   // ── Tagged Template Literal ──────────────────────────────
@@ -206,13 +206,13 @@ export class EventModel {
   sequence(name: string, steps: SequenceStep[] | string): void {
     const parsed: string[] =
       typeof steps === 'string' ? parseStringSequence(steps) : steps.map((s) => s.name);
-    this._sequences.push({ name, steps: parsed });
+    this.#sequences.push({ name, steps: parsed });
   }
 
   // ── Slices ───────────────────────────────────────────────
 
   slice(name: string, opts: SliceOptions): void {
-    this._slices.push({
+    this.#slices.push({
       name,
       ui: opts.ui,
       commands: resolveRefs(opts.commands ?? []),
@@ -259,22 +259,22 @@ export class EventModel {
   getData(): EventModelData {
     return {
       name: this.name,
-      elements: new Map(this._elements),
-      sequences: [...this._sequences],
-      slices: [...this._slices],
-      contexts: [...this._contexts],
+      elements: new Map(this.#elements),
+      sequences: [...this.#sequences],
+      slices: [...this.#slices],
+      contexts: [...this.#contexts],
     };
   }
 
   /** Get a specific element by name */
   getElement(name: string): ElementDef | undefined {
-    return this._elements.get(name);
+    return this.#elements.get(name);
   }
 
   // ── Internals ────────────────────────────────────────────
 
-  private _assertUnique(name: string): void {
-    if (this._elements.has(name)) {
+  #assertUnique(name: string): void {
+    if (this.#elements.has(name)) {
       throw new Error(`Element "${name}" is already defined in system "${this.name}"`);
     }
   }

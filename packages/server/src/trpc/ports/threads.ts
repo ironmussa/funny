@@ -94,12 +94,12 @@ function permissionFields(
  * the contract's body schema (see `threadPatchBody`), so it never gets here.
  */
 function threadPatchUpdates(body: ThreadPatchRequest): Record<string, unknown> {
-  const { archived, pinned, schedulerManaged, ...fields } = body;
+  const { archived, pinned, ...fields } = body;
   const updates: Record<string, unknown> = Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
   );
   // The flag columns are integers.
-  const flags = { archived, pinned, schedulerManaged };
+  const flags = { archived, pinned };
   for (const [column, value] of Object.entries(flags)) {
     if (value !== undefined) updates[column] = value ? 1 : 0;
   }

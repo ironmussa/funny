@@ -298,9 +298,10 @@ function PinDeleteSection({ menu }: { menu: Menu }) {
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem
+        variant="destructive"
         data-testid="header-menu-delete"
         onClick={() => setDeleteOpen(true)}
-        className="text-status-error focus:text-status-error cursor-pointer"
+        className="cursor-pointer"
       >
         <Trash2 className="icon-base mr-2" />
         {t('common.delete', 'Delete')}
@@ -371,12 +372,7 @@ export const MoreActionsMenu = memo(function MoreActionsMenu({
         <Tooltip {...tooltipMenu.tooltipProps}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button
-                data-testid="header-more-actions"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-              >
+              <Button data-testid="header-more-actions" variant="muted" size="icon-sm">
                 <EllipsisVertical className="icon-base" />
               </Button>
             </DropdownMenuTrigger>

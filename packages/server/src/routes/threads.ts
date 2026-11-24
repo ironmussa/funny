@@ -1,7 +1,7 @@
 /**
  * Thread routes for the central server.
  *
- * Comments, deletion and the scheduler's workflow events are handled natively
+ * Comments, deletion and workflow events are handled natively
  * using the server's DB; lists, detail, messages and field updates are tRPC
  * procedures (their REST paths answer 404).
  * Agent operations (create+start, stop, send message) are proxied to the runner.
@@ -74,13 +74,6 @@ const threadWorkflowEventBodySchema = z
   .passthrough();
 
 const threadCreateBodySchema = z.record(z.string(), z.unknown());
-
-const schedulerWorkflowEventBodySchema = z
-  .object({
-    event: z.unknown().optional(),
-    data: z.unknown().optional(),
-  })
-  .passthrough();
 
 // ── Shared repository instances ──────────────────────────────────
 
@@ -187,7 +180,7 @@ threadRoutes.get('/:id/comments', requireThreadView, async (c) => {
 // POST /api/threads/:id/comments
 threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   // Posting a comment needs the `comment` capability (commenter+): a plain
   // viewer can read the thread and its comments but not post. They already see
@@ -236,16 +229,16 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
 // Thread sharing routes (`/:id/shares`, `/shared-with-me`) live in
 // routes/thread-shares.ts and are mounted alongside this router in index.ts.
 
-// ── Workflow event fan-out (scheduler-bound) ─────────────
+// ── Workflow event fan-out ───────────────────────────────
 //
-// The (co-located) scheduler binary posts here when a pipeline step
-// emits a generic message — `notify` actions, log lines, etc. The server
+// A thread owner's process posts here when a pipeline step emits a
+// generic message — `notify` actions, log lines, etc. The server
 // persists the event as a thread:event in the DB and broadcasts the same
 // envelope shape used by emitWorkflowEvent in the runtime, so existing
 // client listeners work unchanged.
 threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const parsed = await parseJsonBody(c, threadWorkflowEventBodySchema);
   if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
@@ -324,7 +317,7 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
   const createThread = composeCreateThread(c.env);
   const result = await createThread({
     actor: {
-      userId: authenticatedUserId(c.get('userId') as string),
+      userId: authenticatedUserId(c.get('userId')),
       organizationId: c.get('organizationId') as string | undefined,
       role: c.get('userRole') as string | undefined,
       organizationName: c.get('organizationName') as string | undefined,
@@ -369,7 +362,7 @@ function creationFailureResponse(
 
 /** `runtime: 'sandbox'`: the server creates the thread and starts it in its own sandbox. */
 async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<string, unknown>) {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
   return sandboxLaunchResponse(c, result, 201);
 }
@@ -397,33 +390,9 @@ threadRoutes.post('/idle', (c) => handleCreateThread(c, 'idle'));
 
 // ── Agent operations (proxied to runner) ─────────────────────────
 
-// POST /api/threads/:id/scheduler/workflow-event — scheduler-bound
-// Generic event fan-out for the standalone scheduler. Mirrors the
-// in-process pipeline-adapter's `notify()` path: the scheduler pushes
-// a workflow event here and the server relays it to the user's browser
-// clients via Socket.IO.
-threadRoutes.post('/:id/scheduler/workflow-event', async (c) => {
-  const threadId = c.req.param('id');
-  const userId = c.get('userId');
-  if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
-
-  const parsed = await parseJsonBody(c, schedulerWorkflowEventBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-
-  const event = body.event;
-  if (typeof event !== 'string' || !event.startsWith('workflow:')) {
-    return c.json({ error: 'event must be a string starting with "workflow:"' }, 400);
-  }
-
-  c.env?.browserEvents?.toUser(userId, {
-    type: event,
-    threadId,
-    data: { ...((body.data ?? {}) as Record<string, unknown>) },
-  });
-
-  return c.json({ ok: true });
-});
+// Removed with the standalone thread scheduler; answer 404 here instead of
+// letting the path fall through to the runner proxy.
+threadRoutes.all('/:id/scheduler/*', refuseRetiredRoute);
 
 /**
  * A follow-up the OWNER sent to an issue-factory thread may take its parked
@@ -448,7 +417,7 @@ threadRoutes.post('/:id/message', requireThreadSteer, noteFactoryOwnerFollowUp, 
 // A follow-up on a sandbox thread whose setup failed: provision a new sandbox
 // for it and start the agent there (thread-sandboxes). Owner only.
 threadRoutes.post('/:id/sandbox-retry', requireThreadOwner, async (c) => {
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const parsed = await parseJsonBody(c, retrySandboxThreadSchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const result = await sandboxThreadLauncherFor(c.env ?? {}).retry(
@@ -523,7 +492,7 @@ async function handleForkThread(c: Context<ServerEnv>, variant: ForkVariant) {
   const forkThread = composeForkThread(c.env);
   return withForkInputs(
     {
-      userId: authenticatedUserId(c.get('userId') as string),
+      userId: authenticatedUserId(c.get('userId')),
       organizationId: c.get('organizationId') as string | undefined,
       role: c.get('userRole') as string | undefined,
       organizationName: c.get('organizationName') as string | undefined,
@@ -567,7 +536,7 @@ threadRoutes.patch('/:id/tool-calls/:toolCallId', requireThreadOwner, proxyToRun
 // GET /api/threads/:id/events — served from server DB
 threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
 
   const span = startSpan('GET /api/threads/:id/events', {
     attributes: { 'thread.id': id },

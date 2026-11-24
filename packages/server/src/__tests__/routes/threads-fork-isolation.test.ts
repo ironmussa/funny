@@ -12,7 +12,7 @@ import { describe, test, expect, beforeAll, beforeEach, mock, spyOn, afterEach }
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 import type { RunnerRequest } from '../../services/runner-ports.js';
-import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
@@ -56,7 +56,7 @@ describe('Thread fork — authorization and runner isolation', () => {
 
   beforeEach(() => {
     t.cleanup();
-    __resetRunnerScopeCache();
+    resetRunnerScopeCache();
     online.clear();
     tunnelFetch.mockClear();
     spyOn(threadRegistry, 'registerThread').mockResolvedValue(undefined);

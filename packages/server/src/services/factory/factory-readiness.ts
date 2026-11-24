@@ -14,7 +14,7 @@
  */
 
 import type { BranchRules } from '@funny/core/github-app';
-import type { FactoryReadiness } from '@funny/shared/contracts/factory';
+import type { FactoryReadiness, FactoryRunMetrics } from '@funny/shared/contracts/factory';
 import { parse as parseYaml } from 'yaml';
 
 import type { FactoryGithubPort, FactoryRepoReader } from './factory-github.js';
@@ -101,24 +101,67 @@ export async function readWorkflowFiles(
   return files;
 }
 
+/** The median of `values`; null when there are none. */
+export function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : Math.round((sorted[mid - 1]! + sorted[mid]!) / 2);
+}
+
+/** The merge driver of the newest run that integrated (`runs` newest first); null before one. */
+export function lastMergeDriver(
+  runs: Array<{ metrics: Pick<FactoryRunMetrics, 'integrateRounds' | 'weaveIntegrations'> }>,
+): 'weave' | 'git' | null {
+  const last = runs.find((run) => run.metrics.integrateRounds > 0);
+  if (!last) return null;
+  return last.metrics.weaveIntegrations > 0 ? 'weave' : 'git';
+}
+
 /** What readiness is read from. */
 export interface ReadinessInputs {
   batchSize: number;
+  batchWaitMs: number;
+  /** The merge driver of the factory's last integration; null before one. */
+  mergeDriver: 'weave' | 'git' | null;
+  /** The median CI time of the queue's last batches; null before one. */
+  medianCiMs: number | null;
   /** The base branch's rules; null when they cannot be read. */
   rules: BranchRules | null;
   /** The workflow files; null when they cannot be read. */
   workflows: string[] | null;
 }
 
+/** What would make the factory merge faster or need the agent less (D12); it never blocks. */
+function adviceOf({ mergeDriver, medianCiMs, batchWaitMs, batchSize }: ReadinessInputs): string[] {
+  const advice: string[] = [];
+  if (mergeDriver === 'git') {
+    advice.push(
+      "The runner merged the base with git's own driver: install weave (weave-driver on the runner's PATH) so conflicts between separate edits of one file are settled without the agent.",
+    );
+  }
+  if (batchSize > 1 && medianCiMs !== null && batchWaitMs > medianCiMs) {
+    advice.push(
+      'The queue waits longer for a batch to fill than CI takes to test one: a shorter batch wait merges sooner.',
+    );
+  }
+  return advice;
+}
+
 /** How a repository merges through the merge queue, and what to change for batches (D12). */
-export function readinessOf({ batchSize, rules, workflows }: ReadinessInputs): FactoryReadiness {
+export function readinessOf(inputs: ReadinessInputs): FactoryReadiness {
+  const { batchSize, rules, workflows } = inputs;
   const queueCi = workflows === null ? null : ciRunsOnQueueBranches(workflows);
   const readiness: FactoryReadiness = {
     mode: 'batches',
     queueCi,
     mergeQueueRequired: rules?.mergeQueue ?? null,
     upToDateRequired: rules?.upToDate ?? null,
+    mergeDriver: inputs.mergeDriver,
+    medianCiMs: inputs.medianCiMs,
+    batchWaitMs: inputs.batchWaitMs,
     reasons: [],
+    advice: adviceOf(inputs),
   };
   if (rules?.mergeQueue) {
     readiness.mode = 'host-queue';

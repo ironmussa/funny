@@ -266,11 +266,11 @@ function annotateToolCall(
   // Attach plan text for ExitPlanMode: prefer the content written to plan.md,
   // then fall back to the parent assistant message content
   if (tc.name === 'ExitPlanMode') {
-    tc._planText = lastWrittenPlanContent || msg.content?.trim() || undefined;
+    tc.planText = lastWrittenPlanContent || msg.content?.trim() || undefined;
   }
   // Attach child tool calls to Task tools for nested rendering
   if (isAgentToolName(tc.name) && relations.childrenByParent.has(tc.id)) {
-    tc._childToolCalls = relations.childrenByParent.get(tc.id);
+    tc.childToolCalls = relations.childrenByParent.get(tc.id);
   }
   return lastWrittenPlanContent;
 }

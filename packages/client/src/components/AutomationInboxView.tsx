@@ -110,9 +110,9 @@ export function AutomationInboxView() {
           )}
         </div>
         <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground h-7 gap-1.5 text-xs"
+          variant="muted"
+          size="xs"
+          className="gap-1.5"
           data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >
@@ -180,12 +180,13 @@ export function AutomationInboxView() {
           <Popover open={filterOpen} onOpenChange={setFilterOpen}>
             <PopoverTrigger asChild>
               <Button
+                size="xs"
                 variant="outline"
                 role="combobox"
                 aria-expanded={filterOpen}
                 aria-controls={filterListId}
                 data-testid="inbox-project-filter"
-                className="h-7 w-[200px] justify-between text-xs font-normal"
+                className="w-[200px] justify-between font-normal"
               >
                 {filterProjectId
                   ? projectsWithItems.find((p) => p.id === filterProjectId)?.name
@@ -312,8 +313,7 @@ export function AutomationInboxView() {
                     <div className="flex items-center justify-end gap-2">
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
+                        size="xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           setAutomationInboxOpen(false);
@@ -326,8 +326,7 @@ export function AutomationInboxView() {
                         <>
                           <Button
                             variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs"
+                            size="xs"
                             onClick={(e) => {
                               e.stopPropagation();
                               void triageRun(run.id, 'dismissed');
@@ -337,8 +336,7 @@ export function AutomationInboxView() {
                           </Button>
                           <Button
                             variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
+                            size="xs"
                             onClick={(e) => {
                               e.stopPropagation();
                               void triageRun(run.id, 'reviewed');

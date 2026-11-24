@@ -76,16 +76,17 @@ export function GeneralSettings() {
   // Branch selector state for project default branch
   const [settingsBranches, setSettingsBranches] = useState<string[]>([]);
 
+  // Keyed on the id: the project object is a new one on every render.
+  const branchProjectId = selectedProject?.id;
   useEffect(() => {
-    if (selectedProject) {
-      projectsApi.listBranches(selectedProject.id).then((result) => {
+    if (branchProjectId !== undefined) {
+      projectsApi.listBranches(branchProjectId).then((result) => {
         if (result.isOk()) {
           setSettingsBranches(result.value.branches);
         }
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on id only; using selectedProject object would loop
-  }, [selectedProject?.id]);
+  }, [branchProjectId]);
 
   // Dynamic catalogs (pi / cursor / opencode) are discovered at runtime so
   // the Settings combobox lists what each agent actually advertises (e.g.

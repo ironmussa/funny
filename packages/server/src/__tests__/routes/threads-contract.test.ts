@@ -40,7 +40,6 @@ describe('Thread routes follow the contract', () => {
         projectId: 'p1',
         userId: 'user-1',
         pinned: 1,
-        schedulerManaged: 0,
         mergedAt: '2026-11-01T00:00:00.000Z',
       });
 
@@ -54,7 +53,6 @@ describe('Thread routes follow the contract', () => {
         isScratch: false,
         archived: false,
         pinned: true,
-        schedulerManaged: false,
         fileCheckpointingEnabled: false,
         commentCount: 0,
       });

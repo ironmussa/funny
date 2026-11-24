@@ -1,16 +1,7 @@
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element';
-import { draggable, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStage, GitStatusInfo } from '@funny/shared';
-import {
-  Trash2,
-  Terminal,
-  FolderOpenDot,
-  MoreVertical,
-  Square,
-  Archive,
-  Workflow,
-} from 'lucide-react';
-import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -18,36 +9,19 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { KanbanColumn } from '@/components/kanban/KanbanColumn';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
-import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
-import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
-import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
-import { ThreadPowerline } from '@/components/ThreadPowerline';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
-import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { useGitStatusMaps } from '@/data/git-status/hooks';
 import { branchKey as computeBranchKey } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
 import { useProjectThreadMode } from '@/data/runner/hooks';
 import { groupThreadsByStage } from '@/data/threads/views';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
-import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
-import { api } from '@/lib/api';
-import { openThreadTerminal } from '@/lib/open-terminal-tab';
-import { stageConfig, timeAgo } from '@/lib/thread-utils';
-import { toastError } from '@/lib/toast-error';
+import { stageConfig } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
-import { cn, resolveThreadBranch } from '@/lib/utils';
+import { resolveThreadBranch } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
 
 interface KanbanViewProps {
   threads: Thread[];
@@ -59,259 +33,6 @@ interface KanbanViewProps {
 }
 
 const STAGES: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done', 'archived'];
-
-export const KanbanCard = memo(function KanbanCard({
-  thread,
-  projectInfo,
-  onDelete,
-  onArchive,
-  search,
-  caseSensitive,
-  ghost,
-  contentSnippet,
-  projectId,
-  highlighted,
-  stage: _stage,
-  gitStatus: gitStatusProp,
-}: {
-  thread: Thread;
-  projectInfo?: { name: string; color?: string; path?: string };
-  onDelete: (thread: Thread) => void;
-  onArchive?: (thread: Thread) => void;
-  search?: string;
-  caseSensitive?: boolean;
-  ghost?: boolean;
-  contentSnippet?: string;
-  projectId?: string;
-  highlighted?: boolean;
-  stage: ThreadStage;
-  gitStatus?: GitStatusInfo;
-}) {
-  const { t } = useTranslation();
-  const now = useMinuteTick();
-  const navigate = useNavigate();
-  const setKanbanContext = useUIStore((s) => s.setKanbanContext);
-  const pinThread = useThreadStore((s) => s.pinThread);
-  const ref = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // Scroll the highlighted card into view when returning from thread view
-  useEffect(() => {
-    if (highlighted && ref.current) {
-      ref.current.scrollIntoView({ block: 'center', behavior: 'instant' });
-    }
-  }, [highlighted]);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    return draggable({
-      element: el,
-      getInitialData: () => ({
-        type: 'kanban-card',
-        threadId: thread.id,
-        sourceStage: thread.archived ? 'archived' : thread.stage || 'backlog',
-        projectId: thread.projectId,
-      }),
-      onDragStart: () => setIsDragging(true),
-      onDrop: () => setIsDragging(false),
-    });
-  }, [thread.id, thread.stage, thread.archived, thread.projectId]);
-
-  const isRunning = thread.status === 'running';
-  const isBusy = isRunning || thread.status === 'setting_up';
-
-  const [openDropdown, setOpenDropdown] = useState(false);
-  const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
-
-  return (
-    <div
-      ref={ref}
-      data-testid={`kanban-card-${thread.id}`}
-      role="link"
-      tabIndex={0}
-      className={cn(
-        'group/card flex items-stretch rounded-md border bg-card cursor-pointer transition-[opacity,box-shadow] duration-300',
-        isDragging && 'opacity-40',
-        ghost && !isDragging && 'opacity-50 hover:opacity-80',
-        highlighted && 'ring-2 ring-ring shadow-md',
-      )}
-      onClick={() => {
-        if (!isDragging) {
-          startTransition(() => {
-            setKanbanContext({ projectId, search, caseSensitive, threadId: thread.id });
-            navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-          });
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.target === event.currentTarget && event.key === 'Enter' && !isDragging) {
-          startTransition(() => {
-            setKanbanContext({ projectId, search, caseSensitive, threadId: thread.id });
-            navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-          });
-        }
-      }}
-    >
-      {/* Left: main content */}
-      <div className="min-w-0 flex-1 px-3.5 py-3">
-        <div className="mb-2 flex min-w-0 items-start gap-2">
-          <ThreadStatusPin
-            thread={thread}
-            onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
-            hoverGroup="card"
-            className="mt-0.5"
-          />
-
-          <ThreadTitle
-            title={thread.title}
-            search={search || ''}
-            multiline
-            containerClassName="flex-1"
-            className="text-muted-foreground group-hover/card:text-foreground line-clamp-3 text-sm leading-relaxed font-medium transition-colors"
-            stopBadgePropagation
-            badgeTestId={`kanban-view-card-attachments-${thread.id}`}
-          />
-          <ThreadWatcherIndicator threadId={thread.id} className="mt-1" />
-        </div>
-
-        <ThreadPowerline
-          thread={thread}
-          projectName={projectInfo?.name}
-          projectColor={projectInfo?.color}
-          gitStatus={gitStatusProp}
-          diffStatsSize="xxs"
-          className="mb-2"
-          data-testid={`kanban-card-powerline-${thread.id}`}
-        />
-
-        {contentSnippet && search && !normalize(thread.title).includes(normalize(search)) && (
-          <HighlightText
-            text={contentSnippet}
-            query={search}
-            className="text-muted-foreground text-compact mb-1 line-clamp-2 block italic"
-          />
-        )}
-      </div>
-
-      {/* Right: time / more menu overlay */}
-      <div className="flex shrink-0 items-center px-1.5">
-        <div className="grid min-w-10 place-items-center justify-items-center">
-          <span
-            className={cn(
-              'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/card:opacity-0 group-hover/card:pointer-events-none',
-              openDropdown && 'opacity-0 pointer-events-none',
-            )}
-          >
-            {timeAgo(thread.completedAt || thread.createdAt, t, now)}
-          </span>
-          <div
-            className={cn(
-              'col-start-1 row-start-1 flex items-center opacity-0 group-hover/card:opacity-100',
-              openDropdown && 'opacity-100!',
-            )}
-          >
-            <DropdownMenu onOpenChange={handleDropdownChange}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  tabIndex={-1}
-                  data-testid={`kanban-card-more-${thread.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <MoreVertical className="icon-sm" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="bottom">
-                <DropdownMenuItem
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const result = await api.openDirectory({ threadId: thread.id });
-                    if (result.isErr()) {
-                      toastError(result.error);
-                    }
-                  }}
-                >
-                  <FolderOpenDot className="icon-sm" />
-                  {t('sidebar.openDirectory')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openThreadTerminal({ thread });
-                  }}
-                >
-                  <Terminal className="icon-sm" />
-                  {t('sidebar.openTerminal')}
-                </DropdownMenuItem>
-                {isRunning && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const result = await api.stopThread(thread.id);
-                        if (result.isErr()) {
-                          console.error('Failed to stop thread:', result.error);
-                        }
-                      }}
-                      className="text-status-error focus:text-status-error"
-                    >
-                      <Square className="icon-sm" />
-                      {t('common.stop')}
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {onArchive && !isBusy && (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onArchive(thread);
-                    }}
-                  >
-                    <Archive className="icon-sm" />
-                    {t('sidebar.archive')}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  data-testid={`kanban-card-toggle-scheduler-${thread.id}`}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const next = !thread.schedulerManaged;
-                    const result = await api.setSchedulerManaged(thread.id, next);
-                    if (result.isErr()) {
-                      toastError(result.error);
-                    }
-                  }}
-                >
-                  <Workflow className="icon-sm" />
-                  {thread.schedulerManaged
-                    ? t('sidebar.disableScheduler', 'Disable scheduler')
-                    : t('sidebar.enableScheduler', 'Enable scheduler')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  data-testid={`kanban-card-delete-${thread.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(thread);
-                  }}
-                  className="text-status-error focus:text-status-error"
-                >
-                  <Trash2 className="icon-sm" />
-                  {t('common.delete')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
 
 export function KanbanView({
   threads,
@@ -397,19 +118,16 @@ export function KanbanView({
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
-    setDeleteLoading(true);
-    const { threadId, projectId: threadProjectId, title } = deleteConfirm;
-    const wasSelected = selectedThreadId === threadId;
-    try {
+    return whilePending(setDeleteLoading, async () => {
+      const { threadId, projectId: threadProjectId, title } = deleteConfirm;
+      const wasSelected = selectedThreadId === threadId;
       const deleted = await deleteThread(threadId, threadProjectId);
       setDeleteConfirm(null);
       // A refused delete already brought the card back with an error toast.
       if (!deleted) return;
       toast.success(t('toast.threadDeleted', { title }));
       if (wasSelected) navigate(buildPath(`/projects/${threadProjectId}`));
-    } finally {
-      setDeleteLoading(false);
-    }
+    });
   }, [deleteConfirm, selectedThreadId, deleteThread, navigate, t]);
 
   const handleMergeWarningConfirm = useCallback(() => {
@@ -519,7 +237,6 @@ export function KanbanView({
       <div ref={boardRef} className="flex h-full gap-3 overflow-x-auto px-4 py-2">
         {STAGES.map((stage) => (
           <KanbanColumn
-            cardComponent={KanbanCard}
             key={stage}
             stage={stage}
             threads={threadsByStage[stage]}

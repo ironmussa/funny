@@ -130,12 +130,24 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
   const providerFor = (member: Pick<QueueMember, 'userId' | 'projectId'>) =>
     deps.integrationFor({ userId: member.userId, projectId: member.projectId });
 
+  /**
+   * A commit bisection already isolated as the cause of a red batch, back
+   * unchanged (its agent made no fix): batching it again would only turn the
+   * next batch red, at the cost of its other members.
+   */
+  async function culpritHold(member: QueueMember): Promise<string | null> {
+    const culprit = await deps.batches.culpritAt(member.repo, member.runId, member.headSha);
+    if (culprit.isErr() || !culprit.value) return null;
+    return `commit ${member.headSha} made a merge queue batch fail before and has not changed since: a person decides`;
+  }
+
   /** Why `member` may not merge its recorded head, or null (the run's own records for that commit). */
   async function holdOf(member: QueueMember, gates: QueueGates): Promise<string | null> {
     const run = await deps.run(member.runId);
     if (!run) return 'the run is gone';
     const factory = await deps.factory(run.factoryId);
     return (
+      (await culpritHold(member)) ??
       (gates.requireReview ? reviewHold(run, member.headSha) : null) ??
       riskHold(run, member.headSha, factory?.autoMerge === 'all') ??
       (gates.requireRegressionProof ? proofHold(run, member.headSha) : null)
@@ -143,6 +155,8 @@ export function createFactoryQueuePort(deps: FactoryQueuePortDeps) {
   }
 
   return {
+    culpritHold,
+
     /**
      * A member of the leader's batch, by run id, at its pull request's head
      * now (the commit the batch tests); null when it cannot be one.

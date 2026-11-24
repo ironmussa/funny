@@ -120,9 +120,9 @@ function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
           </div>
           {isActive ? (
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
-              className="text-muted-foreground size-6 shrink-0"
+              className="size-6 shrink-0"
               data-testid={`watcher-cancel-${watcher.id}`}
               onClick={() => void cancelWatcher(watcher.id)}
               aria-label="Stop watcher"
@@ -222,9 +222,9 @@ function JobRow({
             </button>
             {isRunning ? (
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-xs"
-                className="text-muted-foreground size-6 shrink-0"
+                className="size-6 shrink-0"
                 data-testid={`job-cancel-${job.id}`}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -366,7 +366,8 @@ function WatchersDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex h-[85dvh] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+        flush
+        className="flex h-[85dvh] max-w-4xl flex-col overflow-hidden"
         data-testid="watchers-view"
       >
         <DialogHeader className="border-border border-b px-5 py-4">
@@ -403,7 +404,7 @@ function WatchersDialog({
         </div>
         <ScrollArea className="min-h-0 flex-1 px-3 py-2">
           {filtered.length === 0 ? (
-            <EmptyState fill={false} className="py-12" title="No matching background activity." />
+            <EmptyState padding="lg" fill={false} title="No matching background activity." />
           ) : (
             <ActivityEntryList
               items={filtered.slice(0, visibleCount)}
@@ -448,7 +449,7 @@ function BackgroundEntriesTab({
         {activeCount} active · {items.length - activeCount} in history
       </p>
       {items.length === 0 ? (
-        <EmptyState fill={false} className="px-2 py-4" title="No background activity yet." />
+        <EmptyState fill={false} className="px-2" title="No background activity yet." />
       ) : (
         <>
           <ScrollArea className={cn('max-h-96', items.length > 6 && 'h-96')}>

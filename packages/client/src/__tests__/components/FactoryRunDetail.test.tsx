@@ -143,6 +143,37 @@ describe('the panel content', () => {
     );
   });
 
+  test('a run without an issue: its schedule, its inputs, and no triage, proof or reviews', () => {
+    renderBody(
+      queueRun({
+        state: 'working',
+        issueNumber: null,
+        source: 'schedule',
+        triggerName: 'Nightly audit',
+        flowName: 'audit',
+        inputs: { scope: 'auth', depth: 'deep' },
+        // Stale fields an issue run would show: they are not rendered here.
+        reviews: [verdict('aaa1111ff', true, 't-rev-1')],
+        triage: { decision: 'ready', at: new Date().toISOString() },
+      }),
+    );
+    expect(screen.getByTestId('factory-run-detail-ref').textContent).toBe('Nightly audit');
+    expect(screen.getByTestId('factory-run-detail-title').textContent).toBe(
+      'Nightly audit · audit',
+    );
+    expect(screen.getByTestId('factory-run-detail-input-scope')).toHaveTextContent('auth');
+    expect(screen.getByTestId('factory-run-detail-input-depth')).toHaveTextContent('deep');
+    for (const section of ['triage', 'reviews']) {
+      expect(screen.queryByTestId(`factory-run-detail-${section}`)).toBeNull();
+    }
+  });
+
+  test('an issue run lists no inputs', () => {
+    renderBody(queueRun({ state: 'working' }));
+    expect(screen.queryByTestId('factory-run-detail-inputs')).toBeNull();
+    expect(screen.getByTestId('factory-run-detail-ref').textContent).toBe('#1');
+  });
+
   test('a run that reached nothing yet shows only its header', () => {
     renderBody(queueRun({ state: 'requested' }));
     expect(screen.getByTestId('factory-run-detail-title')).toBeTruthy();

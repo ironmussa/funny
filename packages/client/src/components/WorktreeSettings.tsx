@@ -37,6 +37,7 @@ import {
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { useProjectStore } from '@/stores/project-store';
@@ -358,12 +359,14 @@ function WorktreeCreateForm({
           {t('worktreeSettings.branchName')}
         </label>
         <Input
+          mono
+          size="xs"
           id="worktree-branch-name"
           type="text"
           value={branchName}
           onChange={(e) => onBranchNameChange(e.target.value)}
           placeholder="feature/my-new-branch"
-          className="h-8 px-2 font-mono text-xs"
+          className="h-8"
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter') onCreate();
@@ -504,23 +507,21 @@ export function WorktreeSettings({
     [worktrees, threadsByWorktree],
   );
 
+  // The project object is derived on every render; its id is what the loaders follow.
+  const activeProjectId = project?.id;
   const loadWorktrees = useCallback(async () => {
-    if (!project) return;
-    setLoading(true);
+    if (activeProjectId === undefined) return;
     setLoadError(null);
-    try {
-      const result = await api.listWorktrees(project.id);
+    await whilePending(setLoading, async () => {
+      const result = await api.listWorktrees(activeProjectId);
       if (result.isOk()) setWorktrees(result.value);
       else setLoadError(result.error.message);
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
-  }, [project?.id]);
+    });
+  }, [activeProjectId]);
 
   const loadBranches = useCallback(async () => {
-    if (!project) return;
-    const result = await api.listBranches(project.id);
+    if (activeProjectId === undefined) return;
+    const result = await api.listBranches(activeProjectId);
     if (result.isOk()) {
       const data = result.value;
       setBranches(data.branches);
@@ -532,8 +533,7 @@ export function WorktreeSettings({
       // already says when the runner cannot be reached.
       console.error('Failed to load branches:', result.error);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
-  }, [project?.id]);
+  }, [activeProjectId]);
 
   useEffect(() => {
     loadWorktrees();
@@ -601,12 +601,12 @@ export function WorktreeSettings({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 onClick={handleRefresh}
                 disabled={loading}
                 aria-label={t('worktreeSettings.refresh')}
-                className="text-muted-foreground shrink-0"
+                className="shrink-0"
                 data-testid="worktree-settings-refresh"
               >
                 <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
@@ -618,12 +618,12 @@ export function WorktreeSettings({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={() => setShowCreate(!showCreate)}
                   aria-label={createLabel}
                   aria-expanded={showCreate}
-                  className="text-muted-foreground shrink-0"
+                  className="shrink-0"
                   data-testid="worktree-settings-create"
                 >
                   {showCreate ? (

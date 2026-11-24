@@ -111,7 +111,6 @@ All cleanup is centralized in `packages/runtime/src/services/shutdown-manager.ts
      server.stop(true)  [parallel]:           closeDatabase()        taskkill /F /T
                         - agents                                     process.exit
                         - PTY
-                        - scheduler
                         - commands
                         - timers
                         - telemetry

@@ -1,3 +1,4 @@
+import { errorMessage } from '@funny/shared/errors';
 import {
   BROWSER_PTY_FORWARD_EVENTS,
   browserPtyForwardPayloadSchema,
@@ -163,7 +164,7 @@ export function setupBrowserPtyHandlers(
           event: eventName,
           userId,
           projectId,
-          error: (e as Error).message,
+          error: errorMessage(e),
         });
         noRunner();
       }

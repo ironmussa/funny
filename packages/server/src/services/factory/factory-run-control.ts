@@ -7,7 +7,9 @@
  * A member's controls over their factory's runs (issue-factory phase 4):
  *
  * - **Stop** a run: it becomes `stopped`, its flow stops in this process and
- *   its running agent threads are stopped on the enabler's runner.
+ *   its running agent threads are stopped on the enabler's runner. A run the
+ *   factory took by its label has the label taken off its issue, so automatic
+ *   mode does not take it again.
  * - **Retry** a failed or parked run: it goes back in flight on the same
  *   branch and pull request, when the factory has a free slot (`maxConcurrent`,
  *   checked in the same step as the write; refused otherwise). A completed implement step is kept (its thread
@@ -44,10 +46,13 @@ import {
   threadsOf,
   type FactoryRunView,
 } from './factory-runs.js';
+import { getWatchedFactory } from './factory-settings.js';
 import { archiveReplacedFactoryThreads, stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
 import {
+  checkFactoryTarget,
   factoryBrowserEvents,
+  factoryGithubPort,
   factoryRunnerPorts,
   pokeFactory,
   stopFactoryFlow,
@@ -73,6 +78,31 @@ function wake(factoryId: string): void {
       error: error instanceof Error ? error.message : String(error),
     }),
   );
+}
+
+/**
+ * A stopped run that the factory took by its label: take the label off the
+ * issue, so automatic mode does not admit it again at the next poll. A person
+ * who wants it run again puts the label back (or retries the run). Best
+ * effort: the stop has happened either way, and a failure is logged.
+ */
+async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
+  if (run.source !== 'label' || run.issueNumber === null) return;
+  const factory = await getWatchedFactory(run.factoryId);
+  const port = factoryGithubPort();
+  if (!factory?.label || !port) return;
+  const target = await checkFactoryTarget(factory);
+  if (!target || 'reason' in target) return;
+  const reader = { repo: target.repo, ownerId: factory.userId, projectId: factory.projectId };
+  const removed = await port.relabelIssue(reader, run.issueNumber, { remove: factory.label });
+  if (removed.isErr()) {
+    log.warn("Issue factory could not take the label off a stopped run's issue", {
+      namespace: 'factory',
+      runId: run.id,
+      issue: run.issueNumber,
+      error: removed.error.message,
+    });
+  }
 }
 
 /** A reopen the unique index refused: another run of the issue is in flight. */
@@ -178,7 +208,9 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             const threadsStopped = ports
               ? stopFactoryThreads(ports, userId, threadsOf(run))
               : Promise.resolve();
-            return ResultAsync.fromSafePromise(threadsStopped).andThen(() => reread(run.id));
+            return ResultAsync.fromSafePromise(
+              Promise.all([threadsStopped, releaseStoppedIssue(run)]),
+            ).andThen(() => reread(run.id));
           }),
       );
     },

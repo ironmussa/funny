@@ -394,16 +394,6 @@ export const VirtualDiff = memo(function VirtualDiff({
     onMatchCount?.(searchMatchData?.total ?? 0);
   }, [searchMatchData?.total, onMatchCount]);
 
-  // Scroll to the row containing the current match
-  useEffect(() => {
-    if (!searchMatchData || currentMatchIndex < 0 || currentMatchIndex >= searchMatchData.total)
-      return;
-    const rowIdx = searchMatchData.matchToRow[currentMatchIndex];
-    if (rowIdx !== undefined) {
-      virtualizer.scrollToIndex(rowIdx, { align: 'center' });
-    }
-  }, [currentMatchIndex, searchMatchData]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Per-row height map for word-wrap mode ──
   const rowHeightMap = useMemo(() => {
     if (!wordWrap || !pretextReady || diffContainerWidth <= 0 || !isPretextReady()) return null;
@@ -483,7 +473,17 @@ export const VirtualDiff = memo(function VirtualDiff({
   // Re-measure all rows when word-wrap is toggled off or font size changes
   useLayoutEffect(() => {
     virtualizer.measure();
-  }, [wordWrap, viewMode, rowHeight]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [wordWrap, viewMode, rowHeight, virtualizer]);
+
+  // Scroll to the row containing the current match
+  useEffect(() => {
+    if (!searchMatchData || currentMatchIndex < 0 || currentMatchIndex >= searchMatchData.total)
+      return;
+    const rowIdx = searchMatchData.matchToRow[currentMatchIndex];
+    if (rowIdx !== undefined) {
+      virtualizer.scrollToIndex(rowIdx, { align: 'center' });
+    }
+  }, [currentMatchIndex, searchMatchData, virtualizer]);
 
   // Measure actual max content width using a canvas for accurate monospace measurement.
   // Used by split/three-pane for the custom horizontal scrollbar AND by unified mode

@@ -191,6 +191,17 @@ export const ACTIVITY_KINDS = {
       sha: z.string().max(64).optional(),
     }),
   },
+  // flow-triggers: a schedule occurrence that started no run.
+  'factory.trigger_skipped': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      triggerId: z.string().max(128),
+      flowName: z.string().max(64),
+      due: z.string().max(64),
+    }),
+  },
   'agents.stopped': {
     scope: 'project',
     destructive: true,

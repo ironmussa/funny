@@ -8,6 +8,7 @@ import {
   refitAndRepaintVisibleTerminal,
   useThemeSync,
 } from '@/components/terminal/xterm-utils';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { getActiveWS, sendTerminalRealtime, subscribeActiveWS } from '@/hooks/use-ws';
 import { watchSocketConnection } from '@/lib/realtime/watch-socket-connection';
 import { cn } from '@/lib/utils';
@@ -187,7 +188,9 @@ export function WebTerminalTabContent({
 
   // mountWebXterm's teardown clears the focus timeout, cancels both RAFs, and disposes the terminal.
   // react-doctor-disable-next-line effect-needs-cleanup
-  useEffect(() => {
+  // label / initialCommand / font size are one-shot reads at mount: re-running
+  // on their change would reset the live xterm.
+  const mountTerminal = useStableCallback(() => {
     if (!containerRef.current) return;
     return mountWebXterm({
       id,
@@ -201,8 +204,11 @@ export function WebTerminalTabContent({
       registerPtyCallback,
       unregisterPtyCallback,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- label/initialCommand/codeFontSizePx are intentional one-shot reads at mount; rerunning on change would reset the live xterm
-  }, [id, cwd, registerPtyCallback, unregisterPtyCallback]);
+  });
+  useEffect(
+    () => mountTerminal(),
+    [id, cwd, registerPtyCallback, unregisterPtyCallback, mountTerminal],
+  );
 
   // Sync font size when the setting changes
   useEffect(() => {

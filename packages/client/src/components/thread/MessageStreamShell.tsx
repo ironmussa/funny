@@ -198,9 +198,9 @@ function PaginationLoading({ pagination, t }: Pick<MessageStreamShellProps, 'pag
   if (!pagination?.loadingMore) return null;
   return (
     <LoadingState
+      padding="sm"
       fill={false}
       layout="inline"
-      className="py-3"
       testId="message-stream-loading-more"
       label={t('thread.loadingOlder', 'Loading older messages…')}
     />

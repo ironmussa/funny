@@ -284,7 +284,6 @@ function emitWS(state: ExternalThreadState, event: WSEvent): void {
 
 async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   const { request_id, data, metadata, timestamp } = event;
-  const _stateKey = resolveStateKey(event);
 
   // If thread_id is provided, link to an existing thread instead of creating one
   if (event.thread_id) {

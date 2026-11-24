@@ -2,7 +2,6 @@ import type { ThreadEvent } from '@funny/shared';
 import {
   useCallback,
   useEffect,
-  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useReducer,
@@ -19,6 +18,7 @@ import {
   makeProseFont,
   prepareBatch,
 } from '@/hooks/use-pretext';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { analyzeMarkdown } from '@/lib/markdown-to-plaintext';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import { buildGroupedRenderItems, type RenderItem } from '@/lib/render-items';
@@ -87,7 +87,7 @@ export function useListScrollMargin(
     const next = measureListScrollMargin();
     setListScrollMargin((prev) => (Math.abs(prev - next) > 1 ? next : prev));
   }, [measureListScrollMargin]);
-  const updateListScrollMarginEvent = useEffectEvent(updateListScrollMargin);
+  const updateListScrollMarginEvent = useStableCallback(updateListScrollMargin);
 
   useLayoutEffect(() => {
     updateListScrollMargin();
@@ -132,7 +132,7 @@ export function useListScrollMargin(
       mo.disconnect();
       viewport.removeEventListener('scroll', scheduleUpdate);
     };
-  }, [itemContainerRef, scrollRef]);
+  }, [itemContainerRef, scrollRef, updateListScrollMarginEvent]);
 
   return listScrollMargin;
 }
@@ -166,7 +166,7 @@ export function usePretextWarmup(
   fontConfig: FontConfig,
   onPrepared?: () => void,
 ) {
-  const notifyPrepared = useEffectEvent(() => onPrepared?.());
+  const notifyPrepared = useStableCallback(() => onPrepared?.());
 
   // The effect cleanup cancels the idle callback or fallback timeout and gates the pending promise.
   // react-doctor-disable-next-line effect-needs-cleanup
@@ -220,7 +220,7 @@ export function usePretextWarmup(
         clearTimeout(idleId);
       }
     };
-  }, [groupedItems, fontConfig]);
+  }, [groupedItems, fontConfig, notifyPrepared]);
 }
 
 /** Sync renders allowed per frame before falling back to React's own schedule. */

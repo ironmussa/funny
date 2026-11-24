@@ -177,12 +177,12 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
 
     /**
      * Take `remove` off the issue (when given; an issue that does not carry it
-     * is fine) and put `add` on it, as the App. GitHub creates `add` when the
-     * repository has no such label.
+     * is fine) and put `add` on it (when given), as the App. GitHub creates
+     * `add` when the repository has no such label.
      */
     relabelIssue(
       issueNumber: number,
-      labels: { remove?: string; add: string },
+      labels: { remove?: string; add?: string },
     ): ResultAsync<void, GithubCallError> {
       const issuePath = `/repos/${repo}/issues/${issueNumber}/labels`;
       const removed: ResultAsync<void, GithubCallError> = labels.remove
@@ -191,8 +191,11 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
             .map(() => undefined)
             .orElse((error) => (error.status === 404 ? okAsync(undefined) : errAsync(error)))
         : okAsync(undefined);
+      const add = labels.add;
       return removed.andThen(() =>
-        github.json(repo, 'POST', issuePath, { labels: [labels.add] }).map(() => undefined),
+        add
+          ? github.json(repo, 'POST', issuePath, { labels: [add] }).map(() => undefined)
+          : okAsync(undefined),
       );
     },
 
@@ -201,6 +204,16 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
       return github
         .json(repo, 'POST', `/repos/${repo}/issues/${issueNumber}/comments`, { body })
         .map(() => undefined);
+    },
+
+    /** Open an issue, as the App. */
+    createIssue(issue: {
+      title: string;
+      body: string;
+    }): ResultAsync<{ number: number; url: string }, GithubCallError> {
+      return github
+        .json<{ number: number; html_url: string }>(repo, 'POST', `/repos/${repo}/issues`, issue)
+        .map((created) => ({ number: created.number, url: created.html_url }));
     },
 
     /** The issue's blockers (GitHub's "blocked by" relation), open or closed. */

@@ -23,7 +23,6 @@ function isAnyRouteActive(parsed: ParsedRoute): boolean {
     parsed.analytics ||
     parsed.workflowsProjectId ||
     parsed.liveColumns ||
-    parsed.scheduler ||
     parsed.factory ||
     parsed.addProject ||
     parsed.externalClaudeSessionId,

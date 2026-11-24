@@ -6,12 +6,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { errAsync, okAsync } from 'neverthrow';
 
-import {
-  createRepoGithub,
-  issueBlockers,
-  openBlockers,
-  type RepoGithub,
-} from '../github-app/index.js';
+import { createRepoGithub, issueBlockers, type RepoGithub } from '../github-app/index.js';
 import { fakeFetch } from './helpers/test-helpers.js';
 
 /** A RepoGithub over a fake GitHub that answers each page from `pages`. */
@@ -55,7 +50,8 @@ describe('issueBlockers', () => {
 
   test('a blocker without a state counts as open', async () => {
     const github = stubGithub([[{ number: 3 }, { number: 4, state: 'closed' }]]);
-    expect((await openBlockers(github, 'acme/app', 9))._unsafeUnwrap()).toEqual([3]);
+    const blockers = (await issueBlockers(github, 'acme/app', 9))._unsafeUnwrap();
+    expect(blockers.filter((b) => b.open).map((b) => b.number)).toEqual([3]);
   });
 
   test('a GitHub failure is an error, not an empty list', async () => {

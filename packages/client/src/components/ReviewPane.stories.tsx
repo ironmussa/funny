@@ -129,7 +129,7 @@ function makeGitStatus(overrides: Partial<GitStatusInfo> = {}): GitStatusInfo {
 // ── Fetch mock ──────────────────────────────────────────────
 
 /** Capture real fetch once at module load — before any story can overwrite it. */
-const _realFetch = window.fetch.bind(window);
+const realFetch = window.fetch.bind(window);
 
 // ── Mock data for History tab ──
 
@@ -333,7 +333,7 @@ function installMockFetch(opts: MockFetchOptions = {}) {
 }
 
 function restoreFetch() {
-  window.fetch = _realFetch;
+  window.fetch = realFetch;
 }
 
 // ── Store seeders ───────────────────────────────────────────

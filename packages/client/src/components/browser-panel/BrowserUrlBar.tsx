@@ -112,13 +112,12 @@ export function BrowserUrlBar() {
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="browser-panel-back"
               disabled={!canNavigate}
               onClick={goBack}
-              className="text-muted-foreground"
             >
               <ArrowLeft className="icon-base" />
             </Button>
@@ -129,13 +128,12 @@ export function BrowserUrlBar() {
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="browser-panel-forward"
               disabled={!canNavigate}
               onClick={goForward}
-              className="text-muted-foreground"
             >
               <ArrowRight className="icon-base" />
             </Button>
@@ -146,13 +144,12 @@ export function BrowserUrlBar() {
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost"
+              variant="muted"
               size="icon-sm"
               tabIndex={-1}
               data-testid="browser-panel-reload"
               disabled={!canNavigate}
               onClick={reload}
-              className="text-muted-foreground"
             >
               <RotateCw className="icon-base" />
             </Button>
@@ -178,12 +175,11 @@ export function BrowserUrlBar() {
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 tabIndex={-1}
                 data-testid="browser-panel-open-annotator"
                 onClick={handleOpenAnnotator}
-                className="text-muted-foreground"
               >
                 <ExternalLink className="icon-base" />
               </Button>

@@ -44,9 +44,6 @@ test.describe('4. New Thread Dialog', () => {
     await page.waitForTimeout(300);
 
     // Should show filtered results (at least "main" or "master")
-    const _branchItems = page.locator(
-      '[data-testid="new-thread-branch-search"] ~ * button, [role="option"]',
-    );
     // Just verify the search input works without error
     await expect(page.getByTestId('new-thread-branch-search')).toHaveValue('main');
   });

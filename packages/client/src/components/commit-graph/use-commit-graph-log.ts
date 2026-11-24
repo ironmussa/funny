@@ -16,11 +16,13 @@ import { FILTER_MAX_SCAN, type GraphEntry, PAGE_SIZE } from '@/components/commit
 import { DEFAULT_GRAPH_BRANCH_SCOPE } from '@/components/commit-graph/HistoryFilters';
 import type { GraphFilters } from '@/components/commit-graph/use-graph-filters';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import type { GraphBranchScope } from '@/lib/api/git';
 import { createClientLogger } from '@/lib/client-logger';
 import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
 import { metric } from '@/lib/telemetry';
+import { withCleanup } from '@/lib/while-pending';
 
 const log = createClientLogger('commit-graph');
 
@@ -241,36 +243,50 @@ export function useCommitGraphLog({
       if (!append) setLogErrorMessage(null);
       const started = performance.now();
       const signal = abortRef.current?.signal;
-      try {
-        const result = await fetchGraphLogPage(
-          effectiveThreadId,
-          projectModeId,
-          branchScope,
-          skip,
-          signal,
-        );
-        if (signal?.aborted) return null;
-        if (result.isErr()) {
-          reportGraphLogFailure(result.error.message, t, setLogErrorMessage);
-          return null;
-        }
-        const out = applyGraphLogPage(pageSink, result.value, skip, append);
-        metric('git.graph_log.loaded', performance.now() - started, {
-          attributes: { count: String(result.value.entries.length), append: String(append) },
-        });
-        return out;
-      } finally {
-        setLogLoading(false);
-        loadingRef.current = false;
-      }
+      return withCleanup(
+        async () => {
+          const result = await fetchGraphLogPage(
+            effectiveThreadId,
+            projectModeId,
+            branchScope,
+            skip,
+            signal,
+          );
+          if (signal?.aborted) return null;
+          if (result.isErr()) {
+            reportGraphLogFailure(result.error.message, t, setLogErrorMessage);
+            return null;
+          }
+          const out = applyGraphLogPage(pageSink, result.value, skip, append);
+          metric('git.graph_log.loaded', performance.now() - started, {
+            attributes: { count: String(result.value.entries.length), append: String(append) },
+          });
+          return out;
+        },
+        () => {
+          setLogLoading(false);
+          loadingRef.current = false;
+        },
+      );
     },
-    [hasGitContext, effectiveThreadId, projectModeId, branchScope, t, pageSink],
+    [
+      hasGitContext,
+      effectiveThreadId,
+      projectModeId,
+      branchScope,
+      t,
+      pageSink,
+      loadingRef,
+      abortRef,
+      setLogLoading,
+      setLogErrorMessage,
+    ],
   );
 
   const loadMore = useCallback(() => {
     if (!hasMore || loadingRef.current) return;
     loadLog(loadedLogSkipRef.current, true);
-  }, [hasMore, loadLog]);
+  }, [hasMore, loadLog, loadingRef, loadedLogSkipRef]);
 
   // Keep the graph in sync with new commits / refs.
   const invalidateHistory = useGitHistoryAutoRefresh({
@@ -287,7 +303,7 @@ export function useCommitGraphLog({
   const loadFilteredHistory = useCallback(async () => {
     if (!hasMoreRef.current || loadingRef.current) return;
     await pageWhileFiltering(loadLog, wantsFilteredHistory, hasMoreRef, loadedLogSkipRef);
-  }, [loadLog, wantsFilteredHistory]);
+  }, [loadLog, wantsFilteredHistory, loadingRef, hasMoreRef, loadedLogSkipRef]);
 
   const updateSearchQuery = useCallback(
     (nextQuery: string) => {
@@ -316,10 +332,10 @@ export function useCommitGraphLog({
   const refreshLog = useCallback(() => {
     loadedRef.current = true;
     loadLog(0, false);
-  }, [loadLog]);
+  }, [loadLog, loadedRef]);
 
   // (Re)load whenever the context (thread/project or all-branches toggle) changes.
-  useEffect(() => {
+  const resetOnContextChange = useStableCallback(() => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     loadingRef.current = false;
@@ -339,8 +355,10 @@ export function useCommitGraphLog({
       loadedRef.current = true;
       loadLog(0, false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps -- intentionally only on context change
-  }, [gitContextKey]);
+  });
+  useEffect(() => {
+    resetOnContextChange();
+  }, [gitContextKey, resetOnContextChange]);
 
   // Load on first reveal if the tab mounted while hidden.
   useEffect(() => {
@@ -349,7 +367,7 @@ export function useCommitGraphLog({
       // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- first reveal intentionally triggers the initial graph fetch once.
       loadLog(0, false);
     }
-  }, [visible, hasGitContext, loadLog]);
+  }, [visible, hasGitContext, loadLog, loadedRef]);
 
   return {
     entries,

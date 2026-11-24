@@ -28,11 +28,11 @@ export function PushButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-sm"
           onClick={onPush}
           disabled={disabled ?? (pushInProgress || unpushedCommitCount === 0)}
-          className="text-muted-foreground relative"
+          className="relative"
           data-testid={`${testIdPrefix}-push`}
         >
           <Upload className={cn('icon-base', pushInProgress && 'animate-pulse')} />

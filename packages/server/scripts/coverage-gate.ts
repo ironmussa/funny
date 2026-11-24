@@ -4,7 +4,7 @@
  * scripts/coverage-gate.ts; `SERVER_COVERAGE_MIN_LINES` overrides the minimum).
  *
  * Files excluded from coverage (see bunfig.toml):
- *   - src/routes/pipelines.ts (scheduler approval/progress pending)
+ *   - src/routes/pipelines.ts (approval gates proxied to the runner)
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

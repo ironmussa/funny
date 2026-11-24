@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
 import {
-  __resetThreadScrollPositionForTests,
+  resetThreadScrollPositionForTests,
   loadThreadScrollFetchOptions,
   saveThreadScrollPosition,
 } from '@/lib/thread-scroll-position';
@@ -9,7 +9,7 @@ import {
 describe('thread scroll position', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    __resetThreadScrollPositionForTests();
+    resetThreadScrollPositionForTests();
   });
 
   test('omits stale anchors when the saved position is at the thread bottom', () => {

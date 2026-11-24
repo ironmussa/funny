@@ -34,21 +34,21 @@ const isRunner = !!process.env.TEAM_SERVER_URL;
 /** The active database dialect (or 'runner' when stateless). */
 export const dbDialect: DbDialect | 'runner' = isRunner ? 'runner' : 'sqlite';
 
-let _provider: DatabaseProvider | null = null;
-let _legacyConnection: DatabaseConnection | null = null;
+let providerInstance: DatabaseProvider | null = null;
+let legacyConnection: DatabaseConnection | null = null;
 
 // Only create a DB connection when NOT in runner mode
 if (!isRunner) {
   const dbPath = resolve(DATA_DIR, 'data.db');
-  _legacyConnection = createSqliteDatabase({ mode: 'sqlite', path: dbPath, log });
-  _provider = {
-    db: _legacyConnection.db,
-    schema: _legacyConnection.schema,
+  legacyConnection = createSqliteDatabase({ mode: 'sqlite', path: dbPath, log });
+  providerInstance = {
+    db: legacyConnection.db,
+    schema: legacyConnection.schema,
     dialect: 'sqlite',
-    rawDriver: _legacyConnection.sqlite,
-    close: () => _legacyConnection!.close(),
+    rawDriver: legacyConnection.sqlite,
+    close: () => legacyConnection!.close(),
   };
-  shutdownManager.register('database', () => _provider!.close(), ShutdownPhase.DATABASE);
+  shutdownManager.register('database', () => providerInstance!.close(), ShutdownPhase.DATABASE);
 }
 
 // ── Exports ─────────────────────────────────────────────────────
@@ -61,16 +61,16 @@ export const db: AppDatabase = new Proxy({} as AppDatabase, {
         'Database not available in runner mode (stateless). Data is proxied to the server.',
       );
     }
-    if (!_provider) {
+    if (!providerInstance) {
       throw new Error('Database not initialized.');
     }
-    return (_provider.db as any)[prop];
+    return (providerInstance.db as any)[prop];
   },
 });
 
 /** Get the underlying DatabaseConnection. Null in runner mode. */
 export function getConnection(): DatabaseConnection | null {
-  return _legacyConnection;
+  return legacyConnection;
 }
 
 // ── Compat helpers ──────────────────────────────────────────────

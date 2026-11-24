@@ -20,12 +20,7 @@ import { join, relative, sep } from 'node:path';
 import { walkSources } from './walk-sources';
 
 const ROOT = join(import.meta.dir, '..', '..');
-const SCANNED = [
-  'packages/server/src',
-  'packages/runtime/src',
-  'packages/shared/src',
-  'packages/scheduler/src',
-];
+const SCANNED = ['packages/server/src', 'packages/runtime/src', 'packages/shared/src'];
 
 /** Table identifier (as the Drizzle schema exports it) → files allowed to update it, and why. */
 const OWNERS: Record<string, { files: string[]; why: string }> = {
@@ -58,10 +53,6 @@ const OWNERS: Record<string, { files: string[]; why: string }> = {
       'packages/server/src/trpc/ports/automations.ts',
     ],
     why: 'finishRunningRun and the stale sweep compare-and-set on running',
-  },
-  schedulerRuns: {
-    files: ['packages/shared/src/repositories/scheduler-run-repository.ts'],
-    why: 'scheduler run repository',
   },
   pendingPermissionRequests: {
     files: ['packages/shared/src/repositories/pending-permission-repository.ts'],

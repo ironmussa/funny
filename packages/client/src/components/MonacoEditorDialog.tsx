@@ -34,6 +34,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import type { BlameHunk, BlameResponse, FileHistoryEntry } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
@@ -97,13 +98,13 @@ export function MonacoEditorDialog({
   // code/preview toggle (which would show an empty Monaco) is hidden.
   const lockPreview = !!fileVisualizer?.contributes.binary;
 
-  const [showPreview, setShowPreview] = useState(canPreview);
-  const [copied, copy] = useCopyToClipboard();
-
   // When the dialog opens or the file changes, default previewable files to preview mode.
-  useEffect(() => {
-    if (open) setShowPreview(canPreview);
-  }, [open, filePath, canPreview]);
+  const [showPreview, setShowPreview] = useResettableState(canPreview, [
+    open,
+    filePath,
+    canPreview,
+  ]);
+  const [copied, copy] = useCopyToClipboard();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -259,7 +260,7 @@ export function MonacoEditorDialog({
         editor?.focus();
       });
     },
-    [canPreview, lockPreview, showPreview],
+    [canPreview, lockPreview, setShowPreview, showPreview],
   );
 
   const closeSearch = useCallback(() => {
@@ -461,7 +462,6 @@ export function MonacoEditorDialog({
       monacoMatchesRef.current = [];
     }
     // Intentionally only react to view changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
   }, [inCodeView]);
 
   const goToNextMatch = useCallback(() => {
@@ -507,8 +507,11 @@ export function MonacoEditorDialog({
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3">
-          <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
+        <DialogHeader bordered className="overflow-hidden">
+          <DialogTitle
+            size="sm"
+            className="flex min-w-0 items-center gap-2 overflow-hidden font-mono"
+          >
             <FileCode className="icon-base shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
@@ -520,11 +523,11 @@ export function MonacoEditorDialog({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 onClick={() => copy(content)}
                 disabled={!content}
-                className="text-muted-foreground shrink-0"
+                className="shrink-0"
                 data-testid="editor-copy-content"
                 aria-label={t('editor.copy', 'Copy')}
               >
@@ -597,10 +600,10 @@ export function MonacoEditorDialog({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-sm"
                   onClick={() => setShowMinimap((prev) => !prev)}
-                  className="text-muted-foreground shrink-0"
+                  className="shrink-0"
                   data-testid="editor-toggle-minimap"
                 >
                   {showMinimap ? <EyeOff className="icon-base" /> : <Eye className="icon-base" />}
@@ -614,10 +617,10 @@ export function MonacoEditorDialog({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="muted"
                 size="icon-sm"
                 onClick={() => setIsFullscreen((prev) => !prev)}
-                className="text-muted-foreground shrink-0"
+                className="shrink-0"
                 data-testid="editor-toggle-fullscreen"
               >
                 {isFullscreen ? (

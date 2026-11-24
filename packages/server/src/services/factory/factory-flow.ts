@@ -22,7 +22,11 @@ import { dirname, join } from 'node:path';
 
 import type { GithubCallError } from '@funny/core/github-app';
 import type { PipelineDefinition } from '@funny/pipelines';
-import type { FactoryBatchSettings, FactoryFlowDefinition } from '@funny/shared/contracts/factory';
+import type {
+  FactoryBatchSettings,
+  FactoryDependencies,
+  FactoryFlowDefinition,
+} from '@funny/shared/contracts/factory';
 import {
   EMPTY_INTEGRATE_CONFIG,
   formatParseError,
@@ -93,12 +97,11 @@ export function flowReadsOf(
 export interface FactoryFlowContext {
   /** The factory's merge queue batches: the `merge` group batches when its size is over 1. */
   batch?: FactoryBatchSettings;
+  /** The factory stacks dependent issues (D10): a flow whose prompts ignore it is warned about. */
+  dependencies?: FactoryDependencies;
   overrides?: StepOverrides;
   project?: ProjectAgentDefaults;
 }
-
-/** Built-ins written for the orchestrator's workspace, not for a server-run factory. */
-const WORKSPACE_ONLY_FLOWS = new Set(['factory-issue']);
 
 export interface FactoryFlow {
   name: string;
@@ -201,6 +204,29 @@ function staleBranchWordingIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
 }
 
 /**
+ * A factory that stacks dependent issues (D10) passes the blocker's branch as
+ * `{{stack_branch}}`; a repository copy of the prompts made before stacking
+ * never uses it, so a stacked run starts from the default branch and its pull
+ * request carries the blocker's change too. Warn so the copy gets the
+ * built-in's stacking sections.
+ */
+function staleStackingIssues(
+  workflow: ParsedWorkflow,
+  dependencies: FactoryDependencies | undefined,
+): WorkflowIssue[] {
+  if (dependencies !== 'stack') return [];
+  const prompts = workflow.nodes.flatMap((node, index) => agentPrompts(node, index));
+  if (prompts.some(({ prompt }) => prompt.includes('stack_branch'))) return [];
+  return [
+    {
+      path: 'nodes',
+      message:
+        "The factory stacks dependent issues, but no agent prompt of this flow uses {{stack_branch}}: a stacked run starts from the default branch and its pull request also carries its blocker's change. Copy the stacking sections of the built-in implement prompt.",
+    },
+  ];
+}
+
+/**
  * The merge lane (change factory-agent-roles, D8): the concurrency group every
  * `merge` node of a factory flow runs in, one per repository and base branch,
  * shared by every factory on that repository.
@@ -271,7 +297,11 @@ async function compile(
       pipeline: compileYamlPipeline(withMergeLane(workflow, context.batch)),
       warnings:
         source === 'repository'
-          ? [...parsed.warnings, ...staleBranchWordingIssues(workflow)]
+          ? [
+              ...parsed.warnings,
+              ...staleBranchWordingIssues(workflow),
+              ...staleStackingIssues(workflow, context.dependencies),
+            ]
           : parsed.warnings,
       proofReady: isProofReady(workflow),
       regressionProof: proofConfigOf(workflow),
@@ -389,12 +419,6 @@ async function findFactoryFlow(
     });
   }
 
-  if (WORKSPACE_ONLY_FLOWS.has(flowName)) {
-    return err({
-      kind: 'invalid',
-      message: `"${flowName}" runs inside a workspace and never pushes, so it cannot run as a server factory flow. Use "issue-to-pr" (stops at the pull request) or "issue-to-merge".`,
-    });
-  }
   const { workflows } = await loadWorkflowCatalog({ defaultsDir: deps.defaultsDir });
   const builtIn = workflows.get(flowName);
   if (!builtIn) {
@@ -484,8 +508,8 @@ export interface FactoryFlowChoice {
  * The flows a send may pick (change factory-manual-queue): the built-in
  * factory flows, plus every `.funny/workflows/*.y{a,}ml` of the default branch
  * (a repository copy replaces the built-in of its name, as `loadFactoryFlow`
- * does), minus the workspace-only ones. A listed repository flow may still fail
- * to compile; the send loads it and says so.
+ * does). A listed repository flow may still fail to compile; the send loads
+ * it and says so.
  */
 export async function listFactoryFlows(deps: {
   listDefaultBranchDir(path: string): PromiseLike<Result<string[], GithubCallError>>;
@@ -495,8 +519,7 @@ export async function listFactoryFlows(deps: {
   const fromRepo = new Set(
     files.value
       .map((file) => file.match(/^(.+)\.ya?ml$/)?.[1])
-      .filter((name): name is string => !!name && FLOW_NAME.test(name))
-      .filter((name) => !WORKSPACE_ONLY_FLOWS.has(name)),
+      .filter((name): name is string => !!name && FLOW_NAME.test(name)),
   );
   const builtIns = BUILT_IN_FACTORY_FLOWS.flatMap((name): FactoryFlowChoice[] =>
     fromRepo.has(name) ? [] : [{ name, source: 'built-in' }],

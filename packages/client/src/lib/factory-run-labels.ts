@@ -11,9 +11,42 @@ import type { FactoryRun, FactoryWaitReason } from '@/lib/api/factory';
 export const ENDED_FACTORY_STATES: ReadonlySet<FactoryRun['state']> = new Set([
   'merged',
   'no_change',
+  'done',
   'failed',
   'stopped',
 ]);
+
+/**
+ * How a run is named where an issue run shows `#<n>` (change flow-triggers):
+ * its issue, else the name of the schedule that started it, else "Run now".
+ */
+export function factoryRunRef(
+  t: TFunction,
+  run: Pick<FactoryRun, 'issueNumber' | 'triggerName'>,
+): string {
+  if (run.issueNumber !== null) return `#${run.issueNumber}`;
+  return run.triggerName ?? t('factory.runNow', 'Run now');
+}
+
+/** A run's title while it has no thread to take one from. */
+export function factoryRunFallbackTitle(
+  t: TFunction,
+  run: Pick<FactoryRun, 'issueNumber' | 'triggerName' | 'flowName'>,
+): string {
+  if (run.issueNumber !== null) {
+    return t('factoryView.issueTitle', 'Issue #{{number}}', { number: run.issueNumber });
+  }
+  const ref = factoryRunRef(t, run);
+  return run.flowName ? `${ref} · ${run.flowName}` : ref;
+}
+
+/** "Factory · #225", or "Factory · Nightly audit" for a run without an issue. */
+export function factoryRunBanner(
+  t: TFunction,
+  run: Pick<FactoryRun, 'issueNumber' | 'triggerName'>,
+): string {
+  return t('factory.banner.subject', 'Factory · {{subject}}', { subject: factoryRunRef(t, run) });
+}
 
 export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): string {
   const labels: Record<FactoryRun['state'], string> = {
@@ -30,6 +63,7 @@ export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): 
     waiting_human: t('factory.state.waitingHuman', 'Waiting for you'),
     merged: t('factory.state.merged', 'Merged'),
     no_change: t('factory.state.noChange', 'No change needed'),
+    done: t('factory.state.done', 'Done'),
     failed: t('factory.state.failed', 'Failed'),
     stopped: t('factory.state.stopped', 'Stopped'),
   };
@@ -193,6 +227,7 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   failed: 'failed',
   merged: 'ended',
   no_change: 'ended',
+  done: 'ended',
   stopped: 'ended',
 };
 
@@ -246,7 +281,8 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
   const needle = fold(search.trim().replace(/^#/, ''));
   const matchesSearch = (run: R) =>
     !needle ||
-    String(run.issueNumber).includes(needle) ||
+    String(run.issueNumber ?? '').includes(needle) ||
+    fold(run.triggerName ?? '').includes(needle) ||
     fold(projectNameById.get(run.projectId) ?? '').includes(needle) ||
     fold(run.currentStep ?? '').includes(needle);
   const kept = runs.filter(

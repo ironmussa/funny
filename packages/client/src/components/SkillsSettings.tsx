@@ -25,6 +25,7 @@ import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
+import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 
 interface RecommendedSkill {
@@ -80,9 +81,10 @@ function InstalledSkillCard({
       </div>
       {skill.scope !== 'project' && (
         <TooltipIconButton
+          variant="muted-destructive"
           onClick={onRemove}
           disabled={removing}
-          className="text-muted-foreground hover:text-destructive shrink-0"
+          className="shrink-0"
           tooltip={t('common.remove')}
         >
           {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
@@ -242,25 +244,19 @@ export function SkillsSettings() {
     : (projects[0]?.path ?? null);
 
   const loadSkills = useCallback(async () => {
-    setLoading(true);
-    try {
+    await whilePending(setLoading, async () => {
       const result = await api.listSkills(projectPath || undefined);
       if (result.isOk()) setSkills(result.value.skills);
       else toastError(result.error);
-    } finally {
-      setLoading(false);
-    }
+    });
   }, [projectPath]);
 
   const loadPlugins = useCallback(async () => {
-    setLoadingPlugins(true);
-    try {
+    await whilePending(setLoadingPlugins, async () => {
       const result = await api.listPlugins();
       if (result.isOk()) setPlugins(result.value.plugins);
       // Silently fail — plugins are optional
-    } finally {
-      setLoadingPlugins(false);
-    }
+    });
   }, []);
 
   const loadRecommended = useCallback(async () => {
@@ -379,19 +375,21 @@ export function SkillsSettings() {
             </label>
             <div className="flex gap-2">
               <Input
+                mono
+                size="xs"
                 id="custom-skill-id"
                 type="text"
                 value={customId}
                 onChange={(e) => setCustomId(e.target.value)}
                 placeholder="vercel-labs/agent-skills@nextjs-best-practices"
-                className="h-8 flex-1 px-2 font-mono text-xs"
+                className="h-8 flex-1"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
               />
               <Button
-                size="sm"
+                size="xs"
                 onClick={handleAddCustom}
                 disabled={!customId.trim() || addingCustom}
-                className="h-8 text-xs"
+                className="h-8"
               >
                 {addingCustom ? (
                   <Loader2 className="icon-xs mr-1 animate-spin" />
@@ -406,14 +404,14 @@ export function SkillsSettings() {
 
         {loading ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-6"
             testId="skills-loading"
             label={t('skills.loadingSkills')}
           />
         ) : globalSkills.length === 0 ? (
-          <EmptyState fill={false} className="py-6" title={t('skills.noGlobalSkills')} />
+          <EmptyState padding="md" fill={false} title={t('skills.noGlobalSkills')} />
         ) : (
           <div className="space-y-1.5">
             {globalSkills.map((skill) => (
@@ -441,14 +439,14 @@ export function SkillsSettings() {
 
         {loadingPlugins ? (
           <LoadingState
+            padding="md"
             fill={false}
             layout="inline"
-            className="py-6"
             testId="skills-loading-plugins"
             label={t('plugins.loadingPlugins')}
           />
         ) : plugins.length === 0 ? (
-          <EmptyState fill={false} className="py-4" title={t('plugins.noPlugins')} />
+          <EmptyState fill={false} title={t('plugins.noPlugins')} />
         ) : (
           <div className="space-y-1.5">
             {plugins.map((plugin) => (

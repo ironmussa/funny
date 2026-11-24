@@ -177,13 +177,23 @@ export type FactoryRunState =
    * back to a person to close or reword. Retry starts a new agent.
    */
   | 'no_change'
+  /**
+   * A run without an issue whose flow finished without a pull request to
+   * follow (change flow-triggers): a scheduled audit that ran and reported.
+   */
+  | 'done'
   | 'failed'
   | 'stopped';
 
 export interface FactoryRun {
   id: string;
   factoryId: string;
-  issueNumber: number;
+  /** The run's issue; null for a run a schedule or a member started without one. */
+  issueNumber: number | null;
+  /** The name of the schedule trigger that started it, as it was then; null otherwise. */
+  triggerName: string | null;
+  /** The input values its trigger supplied; empty for an issue run. */
+  inputs: Record<string, string>;
   prUrl: string | null;
   state: FactoryRunState;
   currentStep: string | null;
@@ -193,7 +203,7 @@ export interface FactoryRun {
   /** When the run left the queue and its flow could start; null while `requested`. */
   admittedAt: string | null;
   completedAt: string | null;
-  /** How the issue came in: sent from funny, or found by the label (automatic mode). */
+  /** What started the run: a sent issue, a labelled issue, a schedule, or a member without an issue. */
   source: FactoryRunSource;
   /** The flow the run executes; null on runs from before runs recorded their own. */
   flowName: string | null;
@@ -381,6 +391,8 @@ export interface FactoryRunMetrics {
   conflictsResolvedWithoutLlm: number;
   /** Integrations whose conflicts went to the implementing agent. */
   conflictsSentToAgent: number;
+  /** Integrations where weave was the merge driver on the runner (the rest used git's own). */
+  weaveIntegrations: number;
   /**
    * Merge rounds that reached the implementing agent (an integration conflict,
    * or checks failing on the current base); the run waits for a person after two.
@@ -410,6 +422,7 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
   integrateRounds: 0,
   conflictsResolvedWithoutLlm: 0,
   conflictsSentToAgent: 0,
+  weaveIntegrations: 0,
   mergeRoundsToAgent: 0,
   queueWaitMs: 0,
   batchSize: 0,
@@ -417,7 +430,7 @@ export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
   ciFlakes: 0,
 };
 
-export type FactoryRunSource = 'manual' | 'label';
+export type FactoryRunSource = 'manual' | 'label' | 'schedule' | 'run_now';
 
 /**
  * Why a queued issue is not admitted yet: it waits on another one (GitHub's
@@ -540,8 +553,28 @@ export interface FactoryReadiness {
   mergeQueueRequired: boolean | null;
   /** Whether pull requests must be up to date with the base; null when it cannot be read. */
   upToDateRequired: boolean | null;
+  /**
+   * The merge driver the enabler's runner used at the factory's last
+   * integration: `weave` (structural) or `git` (git's own); null before one.
+   */
+  mergeDriver: 'weave' | 'git' | null;
+  /** The median time CI took on the queue's branches (its last batches), in ms; null before one. */
+  medianCiMs: number | null;
+  /** How long the queue waits for a batch to fill, in ms. */
+  batchWaitMs: number;
   /** Why it is not batching, each with what to change. */
   reasons: string[];
+  /** What would make it merge faster or with fewer agent rounds; never blocks a batch. */
+  advice: string[];
+}
+
+/** The issue opened to add the merge queue's CI trigger, and whether the factory queued it (D12). */
+export interface FactoryQueueCiProposal {
+  issueNumber: number;
+  url: string;
+  /** False when the issue was opened but the factory did not take it (the reason says why). */
+  queued: boolean;
+  reason?: string;
 }
 
 export type FactoryFlowValidation =
@@ -561,6 +594,84 @@ export type FactoryFlowValidation =
       /** Things that run but cost: a model change on a continuing thread replays its context. */
       warnings: string[];
     };
+
+/**
+ * Triggers (change flow-triggers): what starts a flow of the caller's factory
+ * besides an issue. A schedule trigger starts its flow at each occurrence of a
+ * cron pattern; its runs have no issue and get the trigger's input values.
+ */
+
+/** At most this many schedule triggers per factory. */
+export const MAX_FACTORY_TRIGGERS = 20;
+
+/** At most this many input values on a trigger or a "run a flow" start. */
+export const MAX_TRIGGER_INPUTS = 20;
+
+const triggerInputs = z
+  .record(
+    z.string().regex(/^[a-z][a-z0-9_]{0,63}$/, {
+      message: 'An input name is lowercase letters, digits and underscores, starting with a letter',
+    }),
+    z.string().max(4000),
+  )
+  .refine((inputs) => Object.keys(inputs).length <= MAX_TRIGGER_INPUTS, {
+    message: `At most ${MAX_TRIGGER_INPUTS} inputs`,
+  });
+
+export interface FactoryTrigger {
+  id: string;
+  name: string;
+  /** A cron pattern, in the server's time zone. */
+  schedule: string;
+  flowName: string;
+  /** The input values each run gets. Shown to every member who sees the factory: no secrets. */
+  inputs: Record<string, string>;
+  enabled: boolean;
+  /** The next occurrence; null while disabled. */
+  nextRunAt: string | null;
+}
+
+/** Create a schedule trigger, or change the one with `id`. */
+export const saveFactoryTriggerInput = z
+  .object({
+    projectId,
+    id: z.string().min(1).optional(),
+    name: z.string().trim().min(1).max(80),
+    schedule: z.string().trim().min(1).max(120),
+    flowName,
+    inputs: triggerInputs.default({}),
+    enabled: z.boolean().default(true),
+  })
+  .strict();
+
+export type SaveFactoryTriggerInput = z.input<typeof saveFactoryTriggerInput>;
+
+export const factoryTriggerInput = z.object({ projectId, triggerId: z.string().min(1) }).strict();
+
+/** Start one run of a flow now, without an issue, with typed input values. */
+export const runFactoryFlowInput = z
+  .object({ projectId, flowName, inputs: triggerInputs.default({}) })
+  .strict();
+
+export type RunFactoryFlowInput = z.input<typeof runFactoryFlowInput>;
+
+/** One input a flow declares and the factory does not supply itself. */
+export interface FactoryFlowInput {
+  name: string;
+  required: boolean;
+  description: string | null;
+}
+
+/**
+ * Whether a flow can run without an issue, and what a member has to type to
+ * start it: the "Run a flow" dialog and the trigger form read this.
+ */
+export interface FactoryIssuelessFlow {
+  /** The inputs the flow declares and the factory does not supply itself. */
+  inputs: FactoryFlowInput[];
+  /** Why it cannot run without an issue (a step that needs one); empty when it can. */
+  problems: FactoryFlowProblem[];
+}
 
 /** The open blockers of some issues (the send bar's warning). */
 export const factoryBlockersInput = z

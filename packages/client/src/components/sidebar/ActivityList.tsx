@@ -124,9 +124,9 @@ function RowAction({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-xs"
-          className="text-muted-foreground size-6"
+          className="size-6"
           aria-label={label}
           data-testid={testId}
           onClick={onClick}
@@ -243,8 +243,9 @@ function ActivityRow({
           <span className="truncate text-sm font-medium">{activity.title}</span>
           {activity.origin !== 'user' ? (
             <Badge
+              size="xs"
               variant="outline"
-              className="shrink-0 px-1 py-0 text-xs font-normal"
+              className="shrink-0 font-normal"
               data-testid={`activity-item-automatic-${activity.id}`}
             >
               {t('activity.automatic')}
@@ -279,6 +280,9 @@ function ActivityRow({
   );
 }
 
+const cannotRestore = () => false;
+const ignoreRestore = () => {};
+
 export function ActivityList({
   activities,
   progress,
@@ -286,8 +290,8 @@ export function ActivityList({
   now,
   canRetry,
   onRetry,
-  canRestore = () => false,
-  onRestore = () => {},
+  canRestore = cannotRestore,
+  onRestore = ignoreRestore,
   onDismiss,
   onClearFinished,
 }: ActivityListProps) {
@@ -298,7 +302,7 @@ export function ActivityList({
     return (
       <EmptyState
         fill={false}
-        className="px-2 py-4"
+        className="px-2"
         title={t('activity.empty')}
         testId="activity-panel-empty"
       />

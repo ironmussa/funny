@@ -112,7 +112,6 @@ export const threads = sqliteTable('threads', {
   cost: real('cost').notNull().default(0),
   archived: integer('archived').notNull().default(0),
   pinned: integer('pinned').notNull().default(0),
-  schedulerManaged: integer('scheduler_managed').notNull().default(0),
   stage: text('stage').notNull().default('backlog'),
   model: text('model').notNull().default(DEFAULT_MODEL),
   initialPrompt: text('initial_prompt'),
@@ -319,6 +318,7 @@ export const factoryRuns = sqliteTable('factory_runs', {
   factoryId: text('factory_id')
     .notNull()
     .references(() => factorySettings.id, { onDelete: 'cascade' }),
+  /** The run's issue; `0` for a run without one (mapped to null in `factory-runs.ts`). */
   issueNumber: integer('issue_number').notNull(),
   prUrl: text('pr_url'),
   state: text('state').notNull().default('queued'),
@@ -332,7 +332,7 @@ export const factoryRuns = sqliteTable('factory_runs', {
   launchStartedAt: text('launch_started_at'),
   startedAt: text('started_at').notNull(),
   completedAt: text('completed_at'),
-  /** How the issue came in (change factory-manual-queue): `manual` (sent) or `label`. */
+  /** What started the run: `manual` (a sent issue), `label`, `schedule` or `run_now`. */
   source: text('source').notNull().default('label'),
   /** The flow the run executes; null on rows from before runs recorded their own. */
   flowName: text('flow_name'),
@@ -369,6 +369,36 @@ export const factoryRuns = sqliteTable('factory_runs', {
   /** JSON: the run this one is stacked on (D10: run id, issue, branch, retargeted), or null. */
   stackedOn: text('stacked_on'),
   mergeApproval: text('merge_approval'),
+  /** The schedule trigger that started the run (change flow-triggers); null otherwise. */
+  triggerId: text('trigger_id'),
+  /** The trigger's name when the run started, kept for display after an edit or a delete. */
+  triggerName: text('trigger_name'),
+  /** JSON object of the input values the trigger supplied; null for an issue run. */
+  inputs: text('inputs'),
+});
+
+/**
+ * What starts a factory flow besides an issue (change flow-triggers): a cron
+ * schedule with a flow and input values. `next_run_at` is taken with a
+ * compare-and-set, so one server instance starts each occurrence.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryTriggers = sqliteTable('factory_triggers', {
+  id: text('id').primaryKey(),
+  factoryId: text('factory_id')
+    .notNull()
+    .references(() => factorySettings.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  kind: text('kind').notNull().default('schedule'),
+  schedule: text('schedule').notNull(),
+  flowName: text('flow_name').notNull(),
+  /** JSON object of the input values each run gets. */
+  inputs: text('inputs'),
+  enabled: integer('enabled').notNull().default(1),
+  nextRunAt: text('next_run_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 /**
@@ -762,47 +792,6 @@ export const pipelineRuns = sqliteTable('pipeline_runs', {
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 });
-
-/**
- * Scheduler-managed run state.
- *
- * One row per actively claimed thread. Removed (released) when the
- * underlying pipeline reaches a terminal outcome (completed, failed,
- * cancelled). `pipeline_run_id` ties back to `pipelineRuns.id` once
- * the dispatcher hands the thread to `@funny/pipelines`.
- */
-export const schedulerRuns = sqliteTable('scheduler_runs', {
-  threadId: text('thread_id')
-    .primaryKey()
-    .references(() => threads.id, { onDelete: 'cascade' }),
-  pipelineRunId: text('pipeline_run_id'),
-  attempt: integer('attempt').notNull().default(0),
-  nextRetryAtMs: integer('next_retry_at_ms'),
-  lastEventAtMs: integer('last_event_at_ms').notNull(),
-  lastError: text('last_error'),
-  claimedAtMs: integer('claimed_at_ms').notNull(),
-  userId: text('user_id').notNull(),
-  tokensTotal: integer('tokens_total').notNull().default(0),
-  updatedAtMs: integer('updated_at_ms').notNull(),
-});
-
-/**
- * Directed dependency edges between threads. A thread is eligible to
- * be dispatched only once every `blocked_by` thread has reached a
- * terminal stage. Composite primary key prevents duplicate edges.
- */
-export const threadDependencies = sqliteTable(
-  'thread_dependencies',
-  {
-    threadId: text('thread_id')
-      .notNull()
-      .references(() => threads.id, { onDelete: 'cascade' }),
-    blockedBy: text('blocked_by')
-      .notNull()
-      .references(() => threads.id, { onDelete: 'cascade' }),
-  },
-  (table) => [primaryKey({ columns: [table.threadId, table.blockedBy] })],
-);
 
 export const teamProjects = sqliteTable(
   'team_projects',

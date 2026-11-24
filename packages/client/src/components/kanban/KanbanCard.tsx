@@ -1,10 +1,11 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { GitStatusInfo, Thread, ThreadStage } from '@funny/shared';
-import { Archive, FolderOpenDot, MoreVertical, Square, Terminal, Trash2 } from 'lucide-react';
+import { Archive, FolderOpenDot, MoreVertical, Terminal, Trash2 } from 'lucide-react';
 import { memo, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { StopThreadMenuItem } from '@/components/thread/StopThreadMenuItem';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
@@ -35,6 +36,7 @@ interface Props {
   onDelete: (thread: Thread) => void;
   onArchive?: (thread: Thread) => void;
   search?: string;
+  caseSensitive?: boolean;
   ghost?: boolean;
   contentSnippet?: string;
   projectId?: string;
@@ -49,6 +51,7 @@ export const KanbanCard = memo(function KanbanCard({
   onDelete,
   onArchive,
   search,
+  caseSensitive,
   ghost,
   contentSnippet,
   projectId,
@@ -109,7 +112,13 @@ export const KanbanCard = memo(function KanbanCard({
       onClick={() => {
         if (!isDragging) {
           startTransition(() => {
-            setKanbanContext({ projectId, search, threadId: thread.id, viewMode: 'board' });
+            setKanbanContext({
+              projectId,
+              search,
+              caseSensitive,
+              threadId: thread.id,
+              viewMode: 'board',
+            });
             navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
           });
         }
@@ -117,7 +126,13 @@ export const KanbanCard = memo(function KanbanCard({
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && event.key === 'Enter' && !isDragging) {
           startTransition(() => {
-            setKanbanContext({ projectId, search, threadId: thread.id, viewMode: 'board' });
+            setKanbanContext({
+              projectId,
+              search,
+              caseSensitive,
+              threadId: thread.id,
+              viewMode: 'board',
+            });
             navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
           });
         }
@@ -181,12 +196,11 @@ export const KanbanCard = memo(function KanbanCard({
             <DropdownMenu onOpenChange={handleDropdownChange}>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="icon-xs"
                   tabIndex={-1}
                   data-testid={`kanban-card-more-${thread.id}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground"
                 >
                   <MoreVertical className="icon-sm" />
                 </Button>
@@ -214,17 +228,7 @@ export const KanbanCard = memo(function KanbanCard({
                 {isRunning && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const result = await api.stopThread(thread.id);
-                        if (result.isErr()) console.error('Failed to stop thread:', result.error);
-                      }}
-                      className="text-status-error focus:text-status-error"
-                    >
-                      <Square className="icon-sm" />
-                      {t('common.stop')}
-                    </DropdownMenuItem>
+                    <StopThreadMenuItem threadId={thread.id} />
                   </>
                 )}
                 {onArchive && !isBusy && (
@@ -240,12 +244,12 @@ export const KanbanCard = memo(function KanbanCard({
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  variant="destructive"
                   data-testid={`kanban-card-delete-${thread.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onDelete(thread);
                   }}
-                  className="text-status-error focus:text-status-error"
                 >
                   <Trash2 className="icon-sm" />
                   {t('common.delete')}

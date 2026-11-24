@@ -110,18 +110,10 @@ describe('AvailableMcpServers', () => {
     renderMcpList(<AvailableMcpServers projectPath="/repo" />);
 
     const healthyBadge = await screen.findByTestId('available-mcp-healthy-http');
-    expect(healthyBadge).not.toHaveClass(
-      'border-status-warning/50',
-      'bg-status-warning/10',
-      'text-status-warning',
-    );
+    expect(healthyBadge).not.toHaveClass('bg-status-warning/15', 'text-status-warning');
 
     const badge = await screen.findByTestId('available-mcp-linear-server');
-    expect(badge).toHaveClass(
-      'border-status-warning/50',
-      'bg-status-warning/10',
-      'text-status-warning',
-    );
+    expect(badge).toHaveClass('bg-status-warning/15', 'text-status-warning');
 
     fireEvent.pointerMove(badge);
     fireEvent.focus(badge);

@@ -239,7 +239,12 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
           </CommandGroup>
         )}
         {!loading && !error && !searchLower && displayProjects.length === 0 && (
-          <EmptyState fill={false} className="px-2 py-6" title={t('commandPalette.noProjects')} />
+          <EmptyState
+            padding="md"
+            fill={false}
+            className="px-2"
+            title={t('commandPalette.noProjects')}
+          />
         )}
         {displayProjects.length > 0 && displaySettings.length > 0 && <CommandSeparator />}
         {displaySettings.length > 0 && (
@@ -283,6 +288,6 @@ function PaletteSearchStatus({
   if (loading) return <EmptyState fill={false} className="py-6" title={t('common.loading')} />;
   if (error) return <EmptyState fill={false} className="py-6" title={error} />;
   if (hasNoResults)
-    return <EmptyState fill={false} className="py-6" title={t('commandPalette.noResults')} />;
+    return <EmptyState padding="md" fill={false} title={t('commandPalette.noResults')} />;
   return null;
 }

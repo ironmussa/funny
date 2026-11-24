@@ -20,10 +20,6 @@ configuration only; data in `data/factory/`) and the factory view (`/factory`,
 integration figures), served over the `factory` tRPC group. See
 [The factory view](#the-factory-view).
 
-> Not to be confused with `packages/orchestrator`, the standalone issue factory that runs flows
-> in its own workspaces with local git. It shares the GitHub logic (`@funny/core/github-app`)
-> and the `factory-issue` flow; the server factory does not run that flow.
-
 ## Pieces
 
 | File                                                        | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -32,7 +28,7 @@ integration figures), served over the `factory` tRPC group. See
 | `factory-watcher.ts`                                        | One poll per factory (60 s; also paused factories with runs in flight). Per tick: re-check the enabler's `steer`, resolve runtime and repo, resume runs not driven in this process, then fill free slots: the queue in order, then (automatic) labelled issues; blocked issues are skipped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `factory-queue.ts`                                          | Sending issues (checked live: running, target resolves, flow loads, each issue open and not a PR), the flows a send may pick, the send bar's blockers, Clear queue and Stop all.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `factory-dependencies.ts`                                   | Pure: whether an issue waits for its blockers (GitHub's "blocked by", read with `issueBlockers` from `@funny/core/github-app`) and why.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `factory-flow.ts`                                           | Loads `.funny/workflows/<flowName>.yaml` from the repo's **default branch** at its head commit (contents API, App token), with its prompt files from the same commit, else the built-in; then refuses what the factory cannot apply (`factory-flow-validation.ts`, see Agent step options). `factory-issue` is refused (workspace-only).                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `factory-flow.ts`                                           | Loads `.funny/workflows/<flowName>.yaml` from the repo's **default branch** at its head commit (contents API, App token), with its prompt files from the same commit, else the built-in; then refuses what the factory cannot apply (`factory-flow-validation.ts`, see Agent step options).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `factory-flow-runs.ts`                                      | Runs the compiled flow with `@funny/pipelines` and writes progress to `factory_runs`; decides how a run ends.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `factory-action-provider.ts`                                | The server `ActionProvider`: agent steps are threads; `create_pr` finds the agent's PR by branch; `wait_ci` / `merge` via `factory-ci-actions.ts`; `run_command` and `integrate` run on the runner (`factory-step-runner.ts`, `factory-integrate.ts`); approvals refused.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `factory-thread-waits.ts`                                   | An agent step waits on the thread's persisted status, woken by `notifyTerminalStatusPersisted` and a 30 s DB poll; missing or > 24 h thread fails the step.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -145,7 +141,9 @@ integration figures), served over the `factory` tRPC group. See
    the batch; a refusal after a landing is a partial landing (the rest wait again, and a branch
    whose up-to-date rule could not be read gets batches of one from then on). Red: the same tree
    once more (a flake), then halves from B in parallel, every red half split again; culprits go
-   back to their loop with the failing checks, the rest are requeued; no red half: one at a time,
+   back to their loop with the failing checks (a culprit back at the same commit, its agent having
+   changed nothing, waits for a person instead of entering another batch: `culpritAt` in
+   `factory-batches.ts`), the rest are requeued; no red half: one at a time,
    in order. A member is settled with the output its own `merge` would have had
    (`merge.json.outcome`), and a landed one is recorded `merged` on its own run. Every write about
    a member uses its enabler's capped token (`integrationFor`, `@funny/core/github-app`
@@ -156,7 +154,13 @@ integration figures), served over the `factory` tRPC group. See
    D9: a conflict re-runs that node, `regenerate_node` on the run). The merge group grants a
    blocker first, then a much smaller change (powers of four of its changed lines, recorded with
    the risk), then admission order. **Settings > Factory** shows the merge queue's batch setting
-   and how the repository merges now, with what to change (`factory.readiness`).
+   and how the repository merges now, with what to change (`factory.readiness`): the merge
+   driver the enabler's runner used at the last integration (`weaveIntegrations` on the run's
+   metrics), the median CI time of the queue's last batch attempts against the batch wait
+   (`ciDurations` in `factory-batches.ts`), and advice that never blocks a batch. Where CI does not
+   run on the queue's branches it offers `factory.proposeQueueCi`: an issue, opened with the App
+   token capped by the person who asked, sent to the factory as a normal run, so the trigger is a
+   pull request the factory opens; nothing edits a workflow or a branch rule.
    4d. **Early integration and stacking** (change `factory-integration`, D8, D10): each tick
    that finds the base moved asks, for every run whose changed paths (its risk record's, or its
    contract's likely paths) overlap what merged, whether its pull request still merges, and runs
@@ -167,7 +171,8 @@ integration figures), served over the `factory` tRPC group. See
    the queue; a conflict goes to the implementer at once. With `dependencies: stack` (factory
    setting, default `wait`), an issue whose one blocker is in flight with a pull request starts on
    the blocker's branch and opens its pull request against it (`stacked_on`, the prompts'
-   `{{stack_branch}}`; its merge group stays the base's). It waits for the blocker at the end of
+   `{{stack_branch}}`; its merge group stays the base's; a repository flow whose prompts never use
+   it gets a warning in Validate flow, `staleStackingIssues` in `factory-flow.ts`). It waits for the blocker at the end of
    `ci` (never inside `merge`, whose slot is the blocker's way in), parks when the blocker ends
    without merging, and at `merge` is retargeted to the default branch and sent round to
    `integrate` first (`factory-stacking.ts`). Each push to the blocker's branch integrates the runs
@@ -232,6 +237,44 @@ queue fall back to the factory's flow.
 
 Built-in flows (`packages/workflows/defaults/`): `issue-to-merge` (default) and `issue-to-pr` (stops
 at the PR for teams that merge by hand).
+
+## Triggers and runs without an issue
+
+A run records the **trigger** that started it in `factory_runs.source`: `manual` (an issue
+sent to the queue), `label` (a labelled issue, automatic mode), `schedule` or `run_now`. The
+last two have no issue (openspec `flow-triggers`): `issue_number` is `0` in the database and
+`issueNumber: null` everywhere else (`factory-runs.ts` is the only reader of the column), the
+branch is `factory/run-<id>`, and the flow's inputs are the values the trigger recorded in
+`factory_runs.inputs` instead of the issue's.
+
+- **Which flows may run without an issue.** `validateFlowForIssuelessRun`
+  (`factory-flow-validation.ts`) refuses a flow that has a `triage`, `review`,
+  `regression_proof` or `merge` step, or that requires an input nobody supplies (the
+  factory supplies `repo`, `branch`, `base_branch` and `factory_id`, and they always win
+  over a recorded input of the same name). It runs when a schedule is saved, on "Run a
+  flow", and again at the start of every run (`factory-flow-runs.ts`), since the flow is
+  read from the default branch each time. The action provider refuses those four steps
+  again for a run without an issue. So such a run can open a pull request and never merges
+  one by itself.
+- **Schedule triggers** (`factory-triggers.ts`, table `factory_triggers`): a name, a cron
+  pattern, a flow, input values and an enabled flag, saved with `steer` through
+  `factory.saveTrigger`. On each tick of an enabled factory, `queueDueTriggers`
+  (`factory-watcher.ts`) takes every due occurrence with a compare-and-set on `next_run_at`
+  (one server instance wins), then queues a run in `requested`; `admitWork` admits it under
+  the factory's cap like a sent issue. An occurrence more than five minutes late (the
+  server was down, the factory paused) is dropped, not run late.
+- **One working run per trigger.** The partial unique index
+  `factory_runs_one_active_per_trigger` refuses a second run while one is queued or in
+  flight; the watcher then records a `factory.trigger_skipped` activity. A run parked for a
+  person (its pull request is open) does not hold its trigger.
+- **How it ends.** With a pull request it parks in `waiting_human` like an `issue-to-pr`
+  run and closes when a person merges or closes the pull request. Without one it ends in
+  the terminal state `done` (an issue run still ends `no_change`).
+- **Run a flow** (`factory.runFlow`) queues one such run now; it is refused, like a sent
+  issue, while the factory is paused or cannot work.
+- Input values are written by a member with `steer`, are shown to every member who sees
+  the factory, and are interpolated into prompts: they must not hold secrets. A name the
+  factory supplies, or one `validateSecretName` reserves, is refused.
 
 ## Agent step options
 
@@ -318,6 +361,9 @@ reads the role's prose as a decision:
   flight.
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
+  A run the factory took by its label has that label taken off its issue (`releaseStoppedIssue`
+  in `factory-run-control.ts`), so automatic mode does not admit it again; putting the label back
+  admits it.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
   branch and PR; a completed implement step is kept, later steps run again. Refused (409) while
   the factory already runs `maxConcurrent` runs. A `no_change` run (or one parked with reason `no change`)

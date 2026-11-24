@@ -1,7 +1,12 @@
 import { type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { STATE_ICON_CLASS, STATE_TEXT_CLASS } from '@/components/ui/state-styles';
+import {
+  STATE_ICON_CLASS,
+  STATE_PADDING,
+  STATE_TEXT_CLASS,
+  type StatePadding,
+} from '@/components/ui/state-styles';
 import { cn } from '@/lib/utils';
 
 interface EmptyStateProps {
@@ -19,6 +24,8 @@ interface EmptyStateProps {
   testId?: string;
   /** Fill a panel, or size to content inside lists and settings. */
   fill?: boolean;
+  /** Vertical padding: sm (12px), md (24px), lg (48px). Defaults to 16px. */
+  padding?: StatePadding;
 }
 
 /**
@@ -34,6 +41,7 @@ export function EmptyState({
   className,
   testId,
   fill = true,
+  padding,
 }: EmptyStateProps) {
   return (
     <div
@@ -41,6 +49,7 @@ export function EmptyState({
       className={cn(
         'flex w-full flex-col items-center justify-center gap-2 p-4 text-center text-muted-foreground',
         fill && 'h-full min-h-0 flex-1',
+        padding && STATE_PADDING[padding],
         className,
       )}
     >

@@ -105,7 +105,7 @@ export function DockLayoutRoot({
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
-  const panelRefs = useRef(new Map<string, DockPublicInstance>()).current;
+  const [panelRefs] = useState(() => new Map<string, DockPublicInstance>());
   const definitionMap = useMemo(
     () => new Map(definitions.map((definition) => [definition.id, definition])),
     [definitions],

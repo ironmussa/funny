@@ -108,7 +108,6 @@ export function createTestDb() {
       agent_profile_name TEXT,
       agent_profile_provider TEXT,
       file_checkpointing_enabled INTEGER NOT NULL DEFAULT 0,
-      scheduler_managed INTEGER NOT NULL DEFAULT 0,
       is_scratch INTEGER NOT NULL DEFAULT 0,
       read_only INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -424,7 +423,25 @@ export function createTestDb() {
       regenerate_node TEXT,
       integration_pending_at TEXT,
       stacked_on TEXT,
-      merge_approval TEXT
+      merge_approval TEXT,
+      trigger_id TEXT,
+      trigger_name TEXT,
+      inputs TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_triggers (
+      id TEXT PRIMARY KEY,
+      factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'schedule',
+      schedule TEXT NOT NULL,
+      flow_name TEXT NOT NULL,
+      inputs TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      next_run_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )
   `);
   testDb.run(sql`
@@ -489,7 +506,13 @@ export function createTestDb() {
   testDb.run(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
     ON factory_runs (factory_id, issue_number)
-    WHERE state NOT IN ('merged', 'no_change', 'failed', 'stopped')
+    WHERE issue_number > 0 AND state NOT IN ('merged', 'no_change', 'failed', 'stopped')
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_trigger
+    ON factory_runs (factory_id, trigger_id)
+    WHERE trigger_id IS NOT NULL
+      AND state IN ('requested', 'queued', 'triaging', 'working', 'pr_open', 'waiting_ci', 'fixing', 'reviewing', 'merging')
   `);
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS workflow_node_executions (
@@ -618,29 +641,6 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
-    CREATE TABLE IF NOT EXISTS scheduler_runs (
-      thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
-      pipeline_run_id TEXT,
-      attempt INTEGER NOT NULL DEFAULT 0,
-      next_retry_at_ms INTEGER,
-      last_event_at_ms INTEGER NOT NULL,
-      last_error TEXT,
-      claimed_at_ms INTEGER NOT NULL,
-      user_id TEXT NOT NULL,
-      tokens_total INTEGER NOT NULL DEFAULT 0,
-      updated_at_ms INTEGER NOT NULL
-    )
-  `);
-
-  testDb.run(sql`
-    CREATE TABLE IF NOT EXISTS thread_dependencies (
-      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-      blocked_by TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-      PRIMARY KEY (thread_id, blocked_by)
-    )
-  `);
-
-  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS message_queue (
       id TEXT PRIMARY KEY,
       thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
@@ -749,7 +749,6 @@ export function seedThread(
     title: overrides.title ?? 'Test Thread',
     mode: overrides.mode ?? 'local',
     status: overrides.status ?? 'pending',
-    schedulerManaged: overrides.schedulerManaged ?? 1,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     updatedAt: overrides.updatedAt ?? new Date().toISOString(),
     ...overrides,
@@ -1007,33 +1006,6 @@ export function seedInviteLink(
   return link;
 }
 
-export function seedSchedulerRun(
-  db: SeedDb,
-  overrides: {
-    threadId?: string;
-    userId?: string;
-    pipelineRunId?: string | null;
-    attempt?: number;
-  } = {},
-) {
-  const now = Date.now();
-  const row = {
-    threadId: overrides.threadId ?? 'test-thread-1',
-    pipelineRunId: overrides.pipelineRunId ?? null,
-    attempt: overrides.attempt ?? 0,
-    nextRetryAtMs: null,
-    lastEventAtMs: now,
-    lastError: null,
-    claimedAtMs: now,
-    userId: overrides.userId ?? 'user-1',
-    tokensTotal: 0,
-    updatedAtMs: now,
-    ...overrides,
-  };
-  db.insert(schema.schedulerRuns).values(row).run();
-  return row;
-}
-
 export function seedAutomation(
   db: SeedDb,
   overrides: Partial<typeof schema.automations.$inferInsert> = {},
@@ -1089,18 +1061,6 @@ export function seedPipelineRun(
   };
   db.insert(schema.pipelineRuns).values(run).run();
   return run;
-}
-
-export function seedThreadDependency(
-  db: SeedDb,
-  overrides: { threadId?: string; blockedBy?: string } = {},
-) {
-  const row = {
-    threadId: overrides.threadId ?? 'test-thread-1',
-    blockedBy: overrides.blockedBy ?? 'blocker-thread-1',
-  };
-  db.insert(schema.threadDependencies).values(row).run();
-  return row;
 }
 
 export function seedToolCall(

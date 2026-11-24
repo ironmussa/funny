@@ -7,6 +7,7 @@ import {
   factoryRunFailedStep,
   factoryRunStateLabel,
   isFactoryRunStoppedAfterFailure,
+  factoryRunBanner,
 } from '@/lib/factory-run-labels';
 import { threadActivity, type ThreadActivity } from '@/lib/thread-activity';
 
@@ -40,7 +41,7 @@ export function threadActivityShortLabel(t: TFunction, view: ThreadActivityView)
   return view.run.currentStep ?? factoryRunStateLabel(t, view.run.state);
 }
 
-/** The tooltip of a row's activity: "Factory · #225 · Waiting for CI". */
+/** The tooltip of a row's activity (a run without an issue shows its schedule's name): "Factory · #225 · Waiting for CI". */
 export function threadActivityTooltip(t: TFunction, view: ThreadActivityView): string | null {
   if (!view.run) return null;
   const label = activityTooltipText(t, view.run, view.activity);
@@ -49,32 +50,24 @@ export function threadActivityTooltip(t: TFunction, view: ThreadActivityView): s
 }
 
 function activityTooltipText(t: TFunction, run: FactoryRun, activity: ThreadActivity): string {
-  const issue = run.issueNumber;
+  const subject = factoryRunBanner(t, run);
   if (isFactoryRunStoppedAfterFailure(run)) {
     return run.currentStep
-      ? t(
-          'factory.activity.stoppedAfterFailureTooltip',
-          'Factory · #{{issue}} · Stopped after failing at {{step}}',
-          { issue, step: run.currentStep },
-        )
-      : t(
-          'factory.activity.stoppedWithReasonTooltip',
-          'Factory · #{{issue}} · Stopped: {{reason}}',
-          {
-            issue,
-            reason: run.failureReason,
-          },
-        );
+      ? t('factory.activity.stoppedAfterFailure', '{{run}} · Stopped after failing at {{step}}', {
+          run: subject,
+          step: run.currentStep,
+        })
+      : t('factory.activity.stoppedWithReason', '{{run}} · Stopped: {{reason}}', {
+          run: subject,
+          reason: run.failureReason,
+        });
   }
   const failedStep = activity === 'factory-failed' ? factoryRunFailedStep(run) : null;
   if (failedStep) {
-    return t('factory.activity.failedTooltip', 'Factory · #{{issue}} · Failed at {{step}}', {
-      issue,
+    return t('factory.activity.failedAt', '{{run}} · Failed at {{step}}', {
+      run: subject,
       step: failedStep,
     });
   }
-  return t('factory.activity.tooltip', 'Factory · #{{issue}} · {{state}}', {
-    issue,
-    state: factoryRunStateLabel(t, run.state),
-  });
+  return `${subject} · ${factoryRunStateLabel(t, run.state)}`;
 }

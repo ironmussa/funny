@@ -20,6 +20,7 @@ import { toastError } from '@/lib/toast-error';
 import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
 import { ProjectFactoryStepOptions } from './ProjectFactoryStepOptions';
+import { ProjectFactoryTriggers } from './ProjectFactoryTriggers';
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
 type OnOff = 'on' | 'off';
@@ -264,6 +265,9 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
           />
         </>
       )}
+
+      {/* Listed while paused too: a paused factory keeps its schedules and starts none. */}
+      {settings && <ProjectFactoryTriggers projectId={projectId} />}
 
       {settings?.incident && (
         <ProjectFactoryIncident projectId={projectId} incident={settings.incident} />

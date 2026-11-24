@@ -35,7 +35,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
-import type { FactoryRunScope } from './factory-action-provider.js';
+import type { IssueRunScope } from './factory-action-provider.js';
 import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
 import { readRoleResult } from './factory-role-results.js';
@@ -179,7 +179,7 @@ function triagePrompt(input: {
 }
 
 export interface FactoryTriageDeps {
-  scope: FactoryRunScope;
+  scope: IssueRunScope;
   issueUrl: string | null;
   /** What the run already stores of its triage (a resumed run, or one back from a hold). */
   stored: FactoryTriage | null;
@@ -418,20 +418,28 @@ const WORKING_ON_PATHS: ReadonlySet<string> = new Set([
 export function busyPathsOf(
   runs: ReadonlyArray<{
     id: string;
-    issueNumber: number;
+    issueNumber: number | null;
     state: string;
     triage: FactoryTriage | null;
     stackedOn?: { runId: string } | null;
   }>,
   exceptRunId: string,
-  /** The run `exceptRunId` is stacked on (D10): its paths do not count either. */
+  /**
+   * The run `exceptRunId` is stacked on (D10): it builds on that run's branch
+   * on purpose, so sharing its files is the point and its paths do not count.
+   */
   stackedOnRunId: string | null = null,
 ): Array<{ issue: number; paths: string[] }> {
   return runs.flatMap((run) => {
-    // Neither way round: a stacked run and its blocker do not hold each other.
+    // Neither way round: a blocker is not held by the runs stacked on it
+    // either, since they wait for it to merge (holding it would deadlock).
     if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
     const paths = run.triage?.decision === 'ready' ? (run.triage.contract?.likelyPaths ?? []) : [];
-    return run.id !== exceptRunId && paths.length > 0 && WORKING_ON_PATHS.has(run.state)
+    // A run without an issue has no triage contract, so no likely paths.
+    return run.issueNumber !== null &&
+      run.id !== exceptRunId &&
+      paths.length > 0 &&
+      WORKING_ON_PATHS.has(run.state)
       ? [{ issue: run.issueNumber, paths }]
       : [];
   });

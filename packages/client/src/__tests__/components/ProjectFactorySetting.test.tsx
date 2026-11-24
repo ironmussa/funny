@@ -9,6 +9,7 @@ interface FactoryMocks {
   settings: FactorySettings | null;
   save: Mock<(...args: any[]) => any>;
   closeIncident: Mock<(...args: any[]) => any>;
+  proposeQueueCi: Mock<(...args: any[]) => any>;
   toastError: Mock<(...args: any[]) => any>;
   canSteer: boolean;
   /** Whether the flow's review step resolves to the implementer's provider and model. */
@@ -23,6 +24,7 @@ const mocks = ((): FactoryMocks => ({
   settings: null,
   save: vi.fn(),
   closeIncident: vi.fn(),
+  proposeQueueCi: vi.fn(),
   toastError: vi.fn(),
   canSteer: true,
   sameReviewer: undefined,
@@ -55,6 +57,7 @@ mock.module('@/data/factory/hooks', () => ({
 mock.module('@/data/factory/actions', () => ({
   saveFactorySettings: (input: unknown) => mocks.save(input),
   closeFactoryIncident: (...args: unknown[]) => mocks.closeIncident(...args),
+  proposeQueueCi: (...args: unknown[]) => mocks.proposeQueueCi(...args),
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
 mock.module('react-i18next', () => ({
@@ -275,8 +278,15 @@ describe('review and merge settings', () => {
       queueCi: false,
       mergeQueueRequired: false,
       upToDateRequired: null,
+      mergeDriver: null,
+      medianCiMs: null,
+      batchWaitMs: 60_000,
       reasons: ["CI does not run on the merge queue's branches"],
+      advice: [],
     };
+    mocks.proposeQueueCi.mockReturnValue(
+      okAsync({ issueNumber: 77, url: 'https://github.com/o/r/issues/77', queued: true }),
+    );
     render(<ProjectFactorySetting projectId="p1" />);
     expect(screen.getByTestId('settings-factory-readiness-mode')).toHaveTextContent(
       'Pull requests merge one at a time:',
@@ -284,6 +294,38 @@ describe('review and merge settings', () => {
     expect(screen.getByTestId('settings-factory-readiness')).toHaveTextContent(
       "CI does not run on the merge queue's branches",
     );
+    expect(screen.getByTestId('settings-factory-readiness-driver')).toHaveTextContent(
+      'known after the first integration',
+    );
+    expect(screen.queryByTestId('settings-factory-readiness-ci-time')).toBeNull();
+    // The CI trigger is offered as a factory run, never as an edit made here.
+    fireEvent.click(screen.getByTestId('settings-factory-propose-queue-ci'));
+    expect(mocks.proposeQueueCi).toHaveBeenCalledWith('p1');
+    mocks.readiness = undefined;
+  });
+
+  test('a batching repository shows its merge driver, CI time against the wait, and advice', () => {
+    mocks.settings = configured();
+    mocks.readiness = {
+      mode: 'batches',
+      queueCi: true,
+      mergeQueueRequired: false,
+      upToDateRequired: false,
+      mergeDriver: 'git',
+      medianCiMs: 240_000,
+      batchWaitMs: 600_000,
+      reasons: [],
+      advice: ['install weave'],
+    };
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-readiness-driver')).toHaveTextContent("git's own");
+    expect(screen.getByTestId('settings-factory-readiness-ci-time')).toHaveTextContent(
+      'CI on a batch takes 4m 0s (median); the batch wait is 10m 0s',
+    );
+    expect(screen.getByTestId('settings-factory-readiness-advice')).toHaveTextContent(
+      'install weave',
+    );
+    expect(screen.queryByTestId('settings-factory-propose-queue-ci')).toBeNull();
     mocks.readiness = undefined;
   });
 

@@ -1,3 +1,4 @@
+import { errorMessage } from '@funny/shared/errors';
 import { BROWSER_PTY_LIST_EVENT, type PtyListResponse } from '@funny/shared/socket-events';
 import type { Socket } from 'socket.io';
 
@@ -60,7 +61,11 @@ export function setupBrowserPtyListRpc(
         });
         ack({ status: 'ok', sessions: sessions as any });
       } catch (err) {
-        ack({ status: 'error', sessions: [], error: (err as Error).message });
+        ack({
+          status: 'error',
+          sessions: [],
+          error: errorMessage(err),
+        });
       }
     },
   });

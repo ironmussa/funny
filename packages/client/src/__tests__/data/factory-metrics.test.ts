@@ -15,6 +15,8 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     id: `r${seq}`,
     factoryId: 'f1',
     issueNumber: seq,
+    triggerName: null,
+    inputs: {},
     prUrl: null,
     state: 'merged',
     currentStep: null,

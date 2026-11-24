@@ -53,8 +53,8 @@ function ToolItemRenderer({
           output={tc.output}
           author={tc.author}
           timestamp={tc.timestamp}
-          planText={tc['_planText']}
-          childToolCalls={tc['_childToolCalls']}
+          planText={tc['planText']}
+          childToolCalls={tc['childToolCalls']}
           onRespond={
             (tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') &&
             isWaiting &&
@@ -92,7 +92,7 @@ function ToolItemRenderer({
               output={call.output}
               author={call.author}
               timestamp={call.timestamp}
-              childToolCalls={call['_childToolCalls']}
+              childToolCalls={call['childToolCalls']}
               hideLabel
               onRespond={
                 (item.name === 'AskUserQuestion' || item.name === 'ExitPlanMode') &&

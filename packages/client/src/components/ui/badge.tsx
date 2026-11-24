@@ -16,6 +16,12 @@ const badgeVariants = cva(
           'border-transparent bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/80',
         outline:
           'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
+        // Tinted status pills: the status color on a 15% wash of itself.
+        success: 'border-transparent bg-status-success/15 text-status-success',
+        warning: 'border-transparent bg-status-warning/15 text-status-warning',
+        error: 'border-transparent bg-status-error/15 text-status-error',
+        info: 'border-transparent bg-status-info/15 text-status-info',
+        violet: 'border-transparent bg-status-violet/15 text-status-violet',
       },
       size: {
         default: 'px-2.5 py-0.5 text-base',

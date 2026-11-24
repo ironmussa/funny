@@ -14,239 +14,134 @@ import {
   stashShow,
   stashFileDiff,
 } from '@funny/core/git';
-import { badRequest } from '@funny/shared/errors';
+import { badRequest, type DomainError } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
-import { err } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
-import { requestSpan } from '../../middleware/tracing.js';
 import { stashDropTracked, threadTarget } from '../../services/git-destructive.js';
 import {
   stashChanges as gitServiceStash,
   stashSelectedFiles as gitServiceStashFiles,
   popStash as gitServicePopStash,
   dropStash as gitServiceDropStash,
-  validateFilePaths,
 } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThreadCwd } from '../../utils/route-helpers.js';
-import { stashSchema, validate } from '../../validation/schemas.js';
-import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { stashSchema } from '../../validation/schemas.js';
+import {
+  answerPathDiff,
+  onBothCheckouts,
+  projectGitMutation,
+  threadGitMutation,
+  traced,
+} from './checkout-route.js';
 
 export const stashRoutes = new Hono<HonoEnv>();
 
-/**
- * The files to stash (empty = everything). Each path must stay inside `cwd`,
- * as for staging (`validateFilePaths`).
- */
-async function readStashFiles(c: Context<HonoEnv>, cwd: string) {
-  const raw = await c.req.json().catch(() => ({}));
-  const parsed = validate(stashSchema, raw);
-  if (parsed.isErr()) return err(parsed.error);
-  const files = parsed.value.files ?? [];
-  return validateFilePaths(cwd, files).map(() => files);
+/** The files to stash (empty = everything); each must stay inside the checkout. */
+const stashedFiles = (body: { files?: string[] }) => body.files ?? [];
+
+/** The route's `:stashIndex`, a non-negative integer. */
+function stashIndexOf(c: Context<HonoEnv>): Result<number, DomainError> {
+  const stashIndex = parseInt(c.req.param('stashIndex') ?? '', 10);
+  return Number.isNaN(stashIndex) || stashIndex < 0
+    ? err(badRequest('Invalid stash index'))
+    : ok(stashIndex);
 }
 
-// GET /api/git/project/:projectId/stash/list
-stashRoutes.get('/project/:projectId/stash/list', async (c) => {
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const span = requestSpan(c, 'git.stash_list', { projectId: c.req.param('projectId') });
-  const result = await stashList(cwdResult.value);
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+const stashRefOf = (c: Context<HonoEnv>) => `stash@{${c.req.param('stashIndex')}}`;
+
+// ── Reads, the same on a project and on a thread checkout ──────────────────
+
+// GET /api/git/(project/:projectId | :threadId)/stash/list
+onBothCheckouts(stashRoutes, 'GET', '/stash/list', async (c, { cwd, ids }) => {
+  const result = await traced(c, 'git.stash_list', ids, () => stashList(cwd));
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ entries: result.value });
 });
 
-// GET /api/git/project/:projectId/stash/show/:stashIndex
-stashRoutes.get('/project/:projectId/stash/show/:stashIndex', async (c) => {
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const stashRef = `stash@{${c.req.param('stashIndex')}}`;
-  const span = requestSpan(c, 'git.stash_show', {
-    projectId: c.req.param('projectId'),
-    stashIndex: c.req.param('stashIndex'),
-  });
-  const result = await stashShow(cwdResult.value, stashRef);
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+// GET /api/git/(project/:projectId | :threadId)/stash/show/:stashIndex
+onBothCheckouts(stashRoutes, 'GET', '/stash/show/:stashIndex', async (c, { cwd, ids }) => {
+  const attributes = { ...ids, stashIndex: c.req.param('stashIndex') ?? '' };
+  const result = await traced(c, 'git.stash_show', attributes, () => stashShow(cwd, stashRefOf(c)));
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ files: result.value });
 });
 
-// GET /api/git/project/:projectId/stash/:stashIndex/diff?path=...
-stashRoutes.get('/project/:projectId/stash/:stashIndex/diff', async (c) => {
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
-  }
-  const stashRef = `stash@{${c.req.param('stashIndex')}}`;
-  const span = requestSpan(c, 'git.stash_diff', {
-    projectId: c.req.param('projectId'),
-    stashIndex: c.req.param('stashIndex'),
-    path: filePath,
-  });
-  const result = await stashFileDiff(cwdResult.value, stashRef, filePath);
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ diff: result.value });
-});
+// GET /api/git/(project/:projectId | :threadId)/stash/:stashIndex/diff?path=...
+onBothCheckouts(stashRoutes, 'GET', '/stash/:stashIndex/diff', (c, { cwd, ids }) =>
+  answerPathDiff(
+    c,
+    'git.stash_diff',
+    { ...ids, stashIndex: c.req.param('stashIndex') ?? '' },
+    (filePath) => stashFileDiff(cwd, stashRefOf(c), filePath),
+  ),
+);
+
+// ── Project checkout (/project/:projectId) ──────────────────────────────────
 
 // POST /api/git/project/:projectId/stash
-stashRoutes.post('/project/:projectId/stash', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const files = await readStashFiles(c, cwdResult.value);
-  if (files.isErr()) return resultToResponse(c, files);
-  const result =
-    files.value.length > 0
-      ? await stashFiles(cwdResult.value, files.value)
-      : await stash(cwdResult.value);
-  if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
-  return c.json({ ok: true, output: result.value });
-});
+stashRoutes.post('/project/:projectId/stash', (c) =>
+  projectGitMutation(c, {
+    body: stashSchema,
+    paths: stashedFiles,
+    run: ({ cwd }, body) => {
+      const files = stashedFiles(body);
+      return files.length > 0 ? stashFiles(cwd, files) : stash(cwd);
+    },
+  }),
+);
 
 // POST /api/git/project/:projectId/stash/pop
-stashRoutes.post('/project/:projectId/stash/pop', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await stashPop(cwdResult.value);
-  if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
-  return c.json({ ok: true, output: result.value });
-});
+stashRoutes.post('/project/:projectId/stash/pop', (c) =>
+  projectGitMutation(c, { run: ({ cwd }) => stashPop(cwd) }),
+);
 
 // POST /api/git/project/:projectId/stash/drop/:stashIndex
-stashRoutes.post('/project/:projectId/stash/drop/:stashIndex', async (c) => {
-  const projectId = c.req.param('projectId');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const stashIndex = parseInt(c.req.param('stashIndex'), 10);
-  if (Number.isNaN(stashIndex) || stashIndex < 0) {
-    return resultToResponse(c, err(badRequest('Invalid stash index')));
-  }
-  const cwd = cwdResult.value;
-  const result = await stashDropTracked({ userId, cwd, projectId }, stashIndex, () =>
-    stashDrop(cwd, `stash@{${stashIndex}}`),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  _gitStatusCache.delete(projectId);
-  return c.json({ ok: true, output: result.value });
-});
+stashRoutes.post('/project/:projectId/stash/drop/:stashIndex', (c) =>
+  projectGitMutation(c, {
+    run: async (target) => {
+      const index = stashIndexOf(c);
+      if (index.isErr()) return err(index.error);
+      return stashDropTracked(target, index.value, () =>
+        stashDrop(target.cwd, `stash@{${index.value}}`),
+      );
+    },
+  }),
+);
+
+// ── Thread checkout (/:threadId) ────────────────────────────────────────────
 
 // POST /api/git/:threadId/stash
-stashRoutes.post('/:threadId/stash', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-
-  const files = await readStashFiles(c, cwdResult.value);
-  if (files.isErr()) return resultToResponse(c, files);
-  const result =
-    files.value.length > 0
-      ? await gitServiceStashFiles(threadId, userId, cwdResult.value, files.value)
-      : await gitServiceStash(threadId, userId, cwdResult.value);
-  if (result.isErr()) return resultToResponse(c, result);
-  await invalidateGitStatusCache(threadId);
-  return c.json({ ok: true, output: result.value });
-});
+stashRoutes.post('/:threadId/stash', (c) =>
+  threadGitMutation(c, {
+    body: stashSchema,
+    paths: stashedFiles,
+    run: ({ threadId, userId, cwd }, body) => {
+      const files = stashedFiles(body);
+      return files.length > 0
+        ? gitServiceStashFiles(threadId, userId, cwd, files)
+        : gitServiceStash(threadId, userId, cwd);
+    },
+  }),
+);
 
 // POST /api/git/:threadId/stash/pop
-stashRoutes.post('/:threadId/stash/pop', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-
-  const result = await gitServicePopStash(threadId, userId, cwdResult.value);
-  if (result.isErr()) return resultToResponse(c, result);
-  await invalidateGitStatusCache(threadId);
-  return c.json({ ok: true, output: result.value });
-});
+stashRoutes.post('/:threadId/stash/pop', (c) =>
+  threadGitMutation(c, {
+    run: ({ threadId, userId, cwd }) => gitServicePopStash(threadId, userId, cwd),
+  }),
+);
 
 // POST /api/git/:threadId/stash/drop/:stashIndex
-stashRoutes.post('/:threadId/stash/drop/:stashIndex', async (c) => {
-  const threadId = c.req.param('threadId');
-  const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-
-  const stashIndex = parseInt(c.req.param('stashIndex'), 10);
-  if (Number.isNaN(stashIndex) || stashIndex < 0) {
-    return resultToResponse(c, err(badRequest('Invalid stash index')));
-  }
-  const cwd = cwdResult.value;
-  const result = await stashDropTracked(await threadTarget(userId, threadId, cwd), stashIndex, () =>
-    gitServiceDropStash(threadId, userId, cwd, stashIndex),
-  );
-  if (result.isErr()) return resultToResponse(c, result);
-  await invalidateGitStatusCache(threadId);
-  return c.json({ ok: true, output: result.value });
-});
-
-// GET /api/git/:threadId/stash/list
-stashRoutes.get('/:threadId/stash/list', async (c) => {
-  const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-
-  const span = requestSpan(c, 'git.stash_list', { threadId: c.req.param('threadId') });
-  const result = await stashList(cwdResult.value);
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ entries: result.value });
-});
-
-// GET /api/git/:threadId/stash/show/:stashIndex
-stashRoutes.get('/:threadId/stash/show/:stashIndex', async (c) => {
-  const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const stashRef = `stash@{${c.req.param('stashIndex')}}`;
-  const span = requestSpan(c, 'git.stash_show', {
-    threadId: c.req.param('threadId'),
-    stashIndex: c.req.param('stashIndex'),
-  });
-  const result = await stashShow(cwdResult.value, stashRef);
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ files: result.value });
-});
-
-// GET /api/git/:threadId/stash/:stashIndex/diff?path=...
-stashRoutes.get('/:threadId/stash/:stashIndex/diff', async (c) => {
-  const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
-  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
-  }
-  const stashRef = `stash@{${c.req.param('stashIndex')}}`;
-  const span = requestSpan(c, 'git.stash_diff', {
-    threadId: c.req.param('threadId'),
-    stashIndex: c.req.param('stashIndex'),
-    path: filePath,
-  });
-  const result = await stashFileDiff(cwdResult.value, stashRef, filePath);
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ diff: result.value });
-});
+stashRoutes.post('/:threadId/stash/drop/:stashIndex', (c) =>
+  threadGitMutation(c, {
+    run: async ({ threadId, userId, cwd }) => {
+      const index = stashIndexOf(c);
+      if (index.isErr()) return err(index.error);
+      return stashDropTracked(await threadTarget(userId, threadId, cwd), index.value, () =>
+        gitServiceDropStash(threadId, userId, cwd, index.value),
+      );
+    },
+  }),
+);

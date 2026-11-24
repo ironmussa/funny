@@ -73,11 +73,12 @@ function QueueItemEditor({ message, index, queue }: QueueItemProps) {
     <div className="flex items-center gap-2">
       <QueueIndex index={index} />
       <Input
+        size="xs"
         data-testid={`queue-edit-textarea-${message.id}`}
         value={queue.editingContent}
         onChange={(event) => queue.setEditingContent(event.target.value)}
         disabled={isBusy}
-        className="bg-background h-7 flex-1 text-xs"
+        className="bg-background flex-1"
       />
       <div className="flex shrink-0 items-center gap-0.5">
         <QueueIconButton

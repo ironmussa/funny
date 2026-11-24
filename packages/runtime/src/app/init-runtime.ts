@@ -5,6 +5,7 @@ import {
   pruneStaleWorktreeSafeDirectories,
 } from '@funny/core/git';
 import { AUTO_RESUME_MESSAGE_AUTHOR, type AgentModel, type PermissionMode } from '@funny/shared';
+import { errorMessage } from '@funny/shared/errors';
 import type { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
@@ -138,7 +139,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   rehydrateWatchers().catch((err) => {
     log.error('Failed to rehydrate git watchers', {
       namespace: 'server',
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
   });
 
@@ -155,7 +156,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   autoResumeStaleThreads().catch((err) => {
     log.error('Failed to auto-resume stale threads', {
       namespace: 'server',
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
   });
 }
@@ -234,7 +235,7 @@ async function autoResumeStaleThreads(): Promise<void> {
       log.error('Failed to auto-resume thread', {
         namespace: 'server',
         threadId: thread.id,
-        error: (err as Error).message,
+        error: errorMessage(err),
       });
     }
   }

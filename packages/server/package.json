@@ -34,7 +34,6 @@
     "@funny/pipelines": "workspace:*",
     "@funny/sandbox": "workspace:*",
     "@funny/shared": "workspace:*",
-    "@funny/thread-scheduler": "workspace:*",
     "@funny/workflows": "workspace:*",
     "@gdp-ts/core": "0.1.0",
     "@grpc/grpc-js": "1.14.7",

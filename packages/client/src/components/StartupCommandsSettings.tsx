@@ -143,7 +143,7 @@ export function StartupCommandsSettings() {
   };
 
   if (!selectedProjectId) {
-    return <EmptyState fill={false} className="py-6" title={t('startup.noCommands')} />;
+    return <EmptyState padding="md" fill={false} title={t('startup.noCommands')} />;
   }
 
   return (
@@ -169,8 +169,8 @@ export function StartupCommandsSettings() {
       {/* Command list */}
       {commands.length === 0 && !adding && (
         <EmptyState
+          padding="md"
           fill={false}
-          className="py-8"
           title={t('startup.noCommands')}
           action={
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
@@ -206,8 +206,9 @@ export function StartupCommandsSettings() {
                     {t('startup.command')}
                   </label>
                   <Input
+                    mono
                     id={`startup-command-${cmd.id}`}
-                    className="settings-form-input font-mono"
+                    className="settings-form-input"
                     placeholder={t('startup.command')}
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
@@ -281,12 +282,7 @@ export function StartupCommandsSettings() {
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => startEditing(cmd)}
-                    className="text-muted-foreground"
-                  >
+                  <Button variant="muted" size="icon-sm" onClick={() => startEditing(cmd)}>
                     <Pencil className="icon-sm" />
                   </Button>
                 </TooltipTrigger>
@@ -295,10 +291,9 @@ export function StartupCommandsSettings() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="muted-destructive"
                     size="icon-sm"
                     onClick={() => handleDelete(cmd.id)}
-                    className="text-muted-foreground hover:text-status-error"
                   >
                     <Trash2 className="icon-sm" />
                   </Button>
@@ -332,8 +327,9 @@ export function StartupCommandsSettings() {
                 {t('startup.command')}
               </label>
               <Input
+                mono
                 id="startup-new-command"
-                className="h-auto py-1.5 font-mono"
+                className="h-auto py-1.5"
                 placeholder={t('startup.commandPlaceholder')}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}

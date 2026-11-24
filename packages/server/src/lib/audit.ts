@@ -33,8 +33,13 @@ type AuditAction =
   | 'factory.run_retried'
   | 'factory.merge_approved'
   | 'factory.issues_sent'
+  | 'factory.queue_ci_proposed'
   | 'factory.queue_cleared'
   | 'factory.stopped_all'
+  /** A schedule trigger of a factory was saved or removed, or a flow started without an issue. */
+  | 'factory.trigger_saved'
+  | 'factory.trigger_removed'
+  | 'factory.flow_started'
   | 'factory.incident_closed'
   | 'infra.project_sandbox_cleared'
   | 'runner.remove'
@@ -54,8 +59,6 @@ type AuditAction =
   | 'auth.role_coerced'
   /** Request carrying an unauthorized runner secret or token was rejected. */
   | 'auth.runner_rejected'
-  /** Request carrying a scheduler secret without X-Forwarded-User was rejected. */
-  | 'auth.scheduler_rejected'
   /** Runner-scoped resource access refused because runner.userId ≠ requester/owner. */
   | 'authz.cross_tenant_refused'
   /** A runner asked for data of a project outside its scope (project-runner-binding). */

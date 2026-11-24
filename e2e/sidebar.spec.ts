@@ -21,7 +21,6 @@ test.describe('2. Sidebar', () => {
     await expect(page.getByTestId('sidebar-search')).not.toBeVisible();
 
     // Click the expand button (PanelLeft icon in collapsed strip)
-    const _expandBtn = page.locator('[data-testid="sidebar-collapse"]');
     // In collapsed state, there should be an expand trigger
     await page.locator('aside').first().click();
     // Wait a bit for animation

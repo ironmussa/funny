@@ -42,12 +42,10 @@ describe('loadPipelines', () => {
       'code-quality',
       'code-review',
       'commit',
-      'factory-issue',
       'fusion',
       'issue-to-merge',
       'issue-to-pr',
       'pre-push',
-      'scheduler-thread',
     ]);
 
     for (const p of result.pipelines.values()) {

@@ -13,7 +13,7 @@ import {
   NONCE_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
-  __resetForwardedIdentityNonceCacheForTests,
+  resetForwardedIdentityNonceCacheForTests,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
@@ -72,7 +72,7 @@ function signedFor(userId: string, headers: Record<string, string>): boolean {
 
 let audit: ReturnType<typeof spyOn>;
 beforeEach(() => {
-  __resetForwardedIdentityNonceCacheForTests();
+  resetForwardedIdentityNonceCacheForTests();
   audit = spyOn(auditModule, 'audit').mockImplementation(() => {});
 });
 afterEach(() => mock.restore());

@@ -9,6 +9,7 @@ import { MediaLoadError } from '@/components/MediaLoadError';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useImageZoomPan } from '@/hooks/use-image-zoom-pan';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { createClientLogger } from '@/lib/client-logger';
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { detectMediaKind, type MediaKind } from '@/lib/media-preview';
@@ -104,8 +105,7 @@ function ImagePreview({
   onError?: (error: Error) => void;
 }) {
   const zoom = useImageZoomPan();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
+  const [failed, setFailed] = useResettableState(false, [src]);
   if (failed) return <MediaLoadError probeUrl={src} path={name} fill />;
   return (
     <div
@@ -166,8 +166,7 @@ function VideoPreview({
   name?: string;
   onError?: (error: Error) => void;
 }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
+  const [failed, setFailed] = useResettableState(false, [src]);
   if (failed) return <MediaLoadError probeUrl={src} path={name} fill />;
   return (
     <video

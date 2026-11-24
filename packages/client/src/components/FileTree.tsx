@@ -591,11 +591,11 @@ export function FileTree({
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  variant="destructive"
                   onClick={(e) => {
                     e.stopPropagation();
                     onRevertFile(f.path);
                   }}
-                  className="text-destructive focus:text-destructive"
                 >
                   <Undo2 />
                   {revertLabel ?? t('review.discardChanges')}

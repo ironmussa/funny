@@ -177,27 +177,14 @@ const BINARY_EXTENSIONS = [
 ];
 
 /**
- * Read file contents
- * GET /api/files/read?path=/absolute/path/to/file.ts
+ * `filePath` resolved once through realpath, when it is still inside `scope`
+ * (a symlink cannot escape it); otherwise the response refusing it.
  */
-app.get('/read', async (c) => {
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return c.json({ error: 'path is required' }, 400);
-  }
-
-  const userId = c.get('userId') as string;
-  const scope = await resolveProjectScope(filePath, userId);
-  if (!scope) return deny();
-
-  // Check if file is binary
-  const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
-  if (BINARY_EXTENSIONS.includes(ext)) {
-    return resultToResponse(c, err(badRequest('Cannot edit binary files in internal editor')));
-  }
-
-  // Resolve once via realpath; perform all subsequent I/O on the canonical
-  // path so a symlink swap between check and read cannot escape scope.
+async function canonicalInScope(
+  c: Context<HonoEnv>,
+  filePath: string,
+  scope: ProjectScope,
+): Promise<string | Response> {
   const canon = await canonicalize(filePath, false);
   if (!canon.ok) {
     return resultToResponse(
@@ -205,24 +192,67 @@ app.get('/read', async (c) => {
       err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
     );
   }
-  if (!isInScope(canon.canonical, scope)) return deny();
+  return isInScope(canon.canonical, scope) ? canon.canonical : deny();
+}
 
-  // Check file size (max 10MB)
-  const statsResult = await ResultAsync.fromPromise(stat(canon.canonical), (e: any) =>
-    e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
-  );
-  if (statsResult.isErr()) return resultToResponse(c, statsResult);
-  if (statsResult.value.size > 10 * 1024 * 1024) {
-    return resultToResponse(c, err(badRequest('File too large for internal editor (max 10MB)')));
+/** Runs `handler` with the `?path=` file and its project scope, or refuses the request. */
+async function withScopedFile(
+  c: Context<HonoEnv>,
+  handler: (filePath: string, scope: ProjectScope) => Response | Promise<Response>,
+): Promise<Response> {
+  const filePath = c.req.query('path');
+  if (!filePath) {
+    return c.json({ error: 'path is required' }, 400);
   }
+  const scope = await resolveProjectScope(filePath, c.get('userId'));
+  if (!scope) return deny();
+  return handler(filePath, scope);
+}
 
-  const contentResult = await ResultAsync.fromPromise(
-    readFile(canon.canonical, 'utf-8'),
-    (e: any) => (e.code === 'ENOENT' ? notFound('File not found') : internal('File read error')),
-  );
-  if (contentResult.isErr()) return resultToResponse(c, contentResult);
-  return c.json({ content: contentResult.value });
-});
+/**
+ * Like withScopedFile, with the file resolved once through realpath and still
+ * inside the scope: the handler does all its I/O on the canonical path, so a
+ * symlink swap between the check and the read cannot escape the scope.
+ */
+function withCanonicalFile(
+  c: Context<HonoEnv>,
+  handler: (canonical: string, filePath: string) => Response | Promise<Response>,
+): Promise<Response> {
+  return withScopedFile(c, async (filePath, scope) => {
+    const canonical = await canonicalInScope(c, filePath, scope);
+    if (canonical instanceof Response) return canonical;
+    return handler(canonical, filePath);
+  });
+}
+
+/**
+ * Read file contents
+ * GET /api/files/read?path=/absolute/path/to/file.ts
+ */
+app.get('/read', (c) =>
+  withCanonicalFile(c, async (canonical, filePath) => {
+    // Check if file is binary
+    const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+    if (BINARY_EXTENSIONS.includes(ext)) {
+      return resultToResponse(c, err(badRequest('Cannot edit binary files in internal editor')));
+    }
+
+    // Check file size (max 10MB)
+    const statsResult = await ResultAsync.fromPromise(stat(canonical), (e: any) =>
+      e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
+    );
+    if (statsResult.isErr()) return resultToResponse(c, statsResult);
+    if (statsResult.value.size > 10 * 1024 * 1024) {
+      return resultToResponse(c, err(badRequest('File too large for internal editor (max 10MB)')));
+    }
+
+    const contentResult = await ResultAsync.fromPromise(readFile(canonical, 'utf-8'), (e: any) =>
+      e.code === 'ENOENT' ? notFound('File not found') : internal('File read error'),
+    );
+    if (contentResult.isErr()) return resultToResponse(c, contentResult);
+    return c.json({ content: contentResult.value });
+  }),
+);
 
 /**
  * Git blame for a file (per-line commit attribution against HEAD).
@@ -233,27 +263,9 @@ app.get('/read', async (c) => {
  * be discovered, or the native module is unavailable — the client treats any
  * failure as "no blame to show".
  */
-app.get('/blame', async (c) => {
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return c.json({ error: 'path is required' }, 400);
-  }
-
-  const userId = c.get('userId') as string;
-  const scope = await resolveProjectScope(filePath, userId);
-  if (!scope) return deny();
-
-  const canon = await canonicalize(filePath, false);
-  if (!canon.ok) {
-    return resultToResponse(
-      c,
-      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
-    );
-  }
-  if (!isInScope(canon.canonical, scope)) return deny();
-
-  return resultToResponse(c, await getBlame(canon.canonical));
-});
+app.get('/blame', (c) =>
+  withCanonicalFile(c, async (canonical) => resultToResponse(c, await getBlame(canonical))),
+);
 
 /**
  * Git history for a file, following renames/moves.
@@ -261,27 +273,9 @@ app.get('/blame', async (c) => {
  *
  * Same project-scope/symlink-escape protections as /read and /blame.
  */
-app.get('/history', async (c) => {
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return c.json({ error: 'path is required' }, 400);
-  }
-
-  const userId = c.get('userId') as string;
-  const scope = await resolveProjectScope(filePath, userId);
-  if (!scope) return deny();
-
-  const canon = await canonicalize(filePath, false);
-  if (!canon.ok) {
-    return resultToResponse(
-      c,
-      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
-    );
-  }
-  if (!isInScope(canon.canonical, scope)) return deny();
-
-  return resultToResponse(c, await getFileHistory(canon.canonical));
-});
+app.get('/history', (c) =>
+  withCanonicalFile(c, async (canonical) => resultToResponse(c, await getFileHistory(canonical))),
+);
 
 /**
  * Write file contents
@@ -299,7 +293,7 @@ app.post('/write', async (c) => {
     return c.json({ error: 'content is required' }, 400);
   }
 
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 
@@ -446,14 +440,9 @@ async function streamRawFile(
   filePath: string,
   scope: ProjectScope,
 ): Promise<Response> {
-  const canon = await canonicalize(filePath, false);
-  if (!canon.ok) {
-    return resultToResponse(
-      c,
-      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
-    );
-  }
-  if (!isInScope(canon.canonical, scope)) return deny();
+  const canonicalPath = await canonicalInScope(c, filePath, scope);
+  if (canonicalPath instanceof Response) return canonicalPath;
+  const canon = { canonical: canonicalPath };
 
   const statsResult = await ResultAsync.fromPromise(stat(canon.canonical), (e: any) =>
     e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
@@ -510,18 +499,7 @@ async function streamRawFile(
  * file as a stream with an inferred Content-Type so the browser can render
  * images, audio, video, PDFs, etc.
  */
-app.get('/raw', async (c) => {
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return c.json({ error: 'path is required' }, 400);
-  }
-
-  const userId = c.get('userId') as string;
-  const scope = await resolveProjectScope(filePath, userId);
-  if (!scope) return deny();
-
-  return streamRawFile(c, filePath, scope);
-});
+app.get('/raw', (c) => withScopedFile(c, (filePath, scope) => streamRawFile(c, filePath, scope)));
 
 /**
  * Stream raw file contents authenticated by an HMAC-signed URL (transport C).

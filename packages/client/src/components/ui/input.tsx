@@ -16,9 +16,15 @@ const inputVariants = cva(
         md: FIELD_SIZE.md,
         lg: FIELD_SIZE.lg,
       },
+      // Paths, commands, branch names and other values read character by character.
+      mono: {
+        true: 'font-mono',
+        false: '',
+      },
     },
     defaultVariants: {
       size: 'sm',
+      mono: false,
     },
   },
 );
@@ -27,12 +33,18 @@ function Input({
   className,
   type,
   size,
+  mono,
   ref,
   ...props
 }: Omit<React.ComponentProps<'input'>, 'size'> &
   VariantProps<typeof inputVariants> & { ref?: React.Ref<HTMLInputElement> }) {
   return (
-    <input type={type} className={cn(inputVariants({ size }), className)} ref={ref} {...props} />
+    <input
+      type={type}
+      className={cn(inputVariants({ size, mono }), className)}
+      ref={ref}
+      {...props}
+    />
   );
 }
 export { Input, inputVariants };

@@ -12,13 +12,13 @@ import * as schema from '../../db/schema.js';
  * general runner (serves `py` and projectless work, but not the pinned `px`).
  * Entities suffixed `x` live in `px`, entities suffixed `y` live in `py`.
  */
-import { __resetDataOwnershipCache } from '../../services/data-ownership.js';
+import { resetDataOwnershipCache } from '../../services/data-ownership.js';
 import {
-  __resetDataScopeCache,
+  resetDataScopeCache,
   assertRunnerDataScope,
   type DataScopeDecision,
 } from '../../services/data-scope.js';
-import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
+import { resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
 import {
   seedMessage,
   seedMessageQueue,
@@ -234,9 +234,9 @@ describe('assertRunnerDataScope characterization', () => {
     ]) {
       db.run(`DELETE FROM ${table}`);
     }
-    __resetRunnerScopeCache();
-    __resetDataScopeCache();
-    __resetDataOwnershipCache();
+    resetRunnerScopeCache();
+    resetDataScopeCache();
+    resetDataOwnershipCache();
     const now = new Date().toISOString();
     for (const s of ['x', 'y'] as const) {
       seedProject(db, { id: `p${s}`, userId: 'alice', path: `/${s}` });

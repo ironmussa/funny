@@ -718,6 +718,8 @@
     "projectFactorySensitivePathsDesc": "Globs separados por vírgulas. Uma mudança que toca um deles é de risco alto, além de .github/, migrações e auth/",
     "projectFactoryStageLimits": "Execuções por etapa",
     "projectFactoryStageLimitsDesc": "Quantas execuções podem estar implementando ou em revisão ao mesmo tempo. Os merges são sempre um lote de cada vez por repositório",
+    "projectFactoryTriggers": "Agendamentos",
+    "projectFactoryTriggersDesc": "Inicia um fluxo em um agendamento, ou uma vez, sem uma issue. Essa execução pode abrir um pull request e nunca o mescla sozinha",
     "projectFactoryBatch": "Fila de merge",
     "projectFactoryBatchDesc": "Os pull requests prontos são testados juntos sobre a base atual e mesclados como foram testados, em mais ou menos uma execução de CI. Quantos por lote (1: um de cada vez) e quanto esperar para reuni-los",
     "projectFactoryBatchSize": "Pull requests",
@@ -743,7 +745,15 @@
       "inPreferences_other": "{{count}} resultados em Preferências",
       "inProject_one": "{{count}} resultado em Configurações do projeto",
       "inProject_other": "{{count}} resultados em Configurações do projeto"
-    }
+    },
+    "projectFactoryQueueCiQueued": "Issue #{{number}} aberto e enviado ao factory",
+    "projectFactoryQueueCiNotQueued": "Issue #{{number}} aberto, mas não enviado ao factory: {{reason}}",
+    "projectFactoryQueueCiPropose": "Abrir uma run do factory que adiciona o gatilho de CI",
+    "projectFactoryMergeDriverWeave": "weave",
+    "projectFactoryMergeDriverGit": "o do git",
+    "projectFactoryMergeDriverUnknown": "conhecido após a primeira integração",
+    "projectFactoryMergeDriver": "Merge driver no runner: {{driver}}",
+    "projectFactoryQueueCiTime": "O CI de um lote leva {{ci}} (mediana); a espera do lote é {{wait}}"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1757,10 +1767,9 @@
       "title": "O pipeline do factory parou por um erro"
     },
     "activity": {
-      "tooltip": "Factory · #{{issue}} · {{state}}",
-      "failedTooltip": "Factory · #{{issue}} · Falhou em {{step}}",
-      "stoppedAfterFailureTooltip": "Factory · #{{issue}} · Parado após falhar em {{step}}",
-      "stoppedWithReasonTooltip": "Factory · #{{issue}} · Parado: {{reason}}",
+      "failedAt": "{{run}} · Falhou em {{step}}",
+      "stoppedAfterFailure": "{{run}} · Parado após falhar em {{step}}",
+      "stoppedWithReason": "{{run}} · Parado: {{reason}}",
       "resentTooltip": "{{label}} · Enviado de novo como outro run",
       "stopRun": "Parar o factory run"
     },

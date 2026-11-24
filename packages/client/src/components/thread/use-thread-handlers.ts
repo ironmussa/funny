@@ -17,7 +17,9 @@ import { applyQueueCount, readQueuedCount } from '@/data/queue/store';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildSendMessagePayload, type SendMessageOpts } from '@/lib/send-message-payload';
-import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
+import { startWorkflowInvocation } from '@/lib/start-workflow-invocation';
+import { whilePending } from '@/lib/while-pending';
+import { parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -68,25 +70,11 @@ export function useThreadHandlers(refs: Refs) {
         toast.error(workflowParse.error);
         return false;
       }
-      if (workflowParse.invocation) {
-        setSendingSafely(true);
-        try {
-          const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
-            threadId: thread.id,
-            ...buildWorkflowRunBody(workflowParse.invocation, {
-              fileReferences: opts.fileReferences,
-              symbolReferences: opts.symbolReferences,
-            }),
-          });
-          if (result.isErr()) {
-            toast.error(result.error.message);
-            return false;
-          }
-          toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
-          return true;
-        } finally {
-          setSendingSafely(false);
-        }
+      const invocation = workflowParse.invocation;
+      if (invocation) {
+        return whilePending(setSendingSafely, () =>
+          startWorkflowInvocation(thread.id, invocation, opts, t),
+        );
       }
       const queuedCount = readQueuedCount(thread.id);
       const threadIsRunning = thread.status === 'running' || queuedCount > 0;
@@ -95,34 +83,31 @@ export function useThreadHandlers(refs: Refs) {
 
       const toolPermissions = useSettingsStore.getState().toolPermissions;
 
-      setSendingSafely(true);
-      if (threadIsRunning && followUpMode === 'interrupt') {
-        toast.info(t('thread.interruptingAgent'));
-      }
-      if (threadIsRunning && followUpMode === 'steer') {
-        toast.info(t('thread.steeringAgent'));
-      }
-      if (!threadIsRunning) {
-        useThreadStore
-          .getState()
-          .appendOptimisticMessage(
-            thread.id,
-            prompt,
-            images,
-            opts.model as any,
-            opts.mode as any,
-            opts.fileReferences,
-            opts.effort as any,
-          );
-      }
-      try {
+      return whilePending(setSendingSafely, async () => {
+        if (threadIsRunning && followUpMode === 'interrupt') {
+          toast.info(t('thread.interruptingAgent'));
+        }
+        if (threadIsRunning && followUpMode === 'steer') {
+          toast.info(t('thread.steeringAgent'));
+        }
+        if (!threadIsRunning) {
+          useThreadStore
+            .getState()
+            .appendOptimisticMessage(
+              thread.id,
+              prompt,
+              images,
+              opts.model as any,
+              opts.mode as any,
+              opts.fileReferences,
+              opts.effort as any,
+            );
+        }
         requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
         const payload = buildSendMessagePayload(opts, toolPermissions);
         const result = await api.sendMessage(thread.id, prompt, payload, images);
         handleSendResult(result, thread.id, { rollbackOnQueue: !threadIsRunning }, t);
-      } finally {
-        setSendingSafely(false);
-      }
+      });
     },
     [refs, setSendingSafely, t],
   );

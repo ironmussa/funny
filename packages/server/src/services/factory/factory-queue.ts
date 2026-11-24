@@ -26,14 +26,29 @@ import type {
   FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
+  FactoryIssuelessFlow,
+  FactoryQueueCiProposal,
   FactoryQueueClearResult,
   FactoryReadiness,
   FactorySubmitResult,
+  FactoryTrigger,
 } from '@funny/shared/contracts/factory';
-import { err, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
+import { MAX_FACTORY_TRIGGERS } from '@funny/shared/contracts/factory';
+import { validateSecretName } from '@funny/shared/project-secrets';
+import { err, errAsync, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
-import { summarizeFactoryFlow } from './factory-flow-validation.js';
+import { scheduleProblem } from '../schedules.js';
+import {
+  createFactoryBatchesRepository,
+  type FactoryBatchesRepository,
+} from './factory-batches.js';
+import {
+  FACTORY_FLOW_INPUTS,
+  formatFactoryFlowProblems,
+  summarizeFactoryFlow,
+  validateFlowForIssuelessRun,
+} from './factory-flow-validation.js';
 import {
   BUILT_IN_FACTORY_FLOWS,
   listFactoryFlows,
@@ -42,14 +57,25 @@ import {
   readFactoryFlowDefinition,
 } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssueDetail, FactoryRepoReader } from './factory-github.js';
-import { readinessOf, readWorkflowFiles } from './factory-readiness.js';
+import {
+  ciRunsOnQueueBranches,
+  lastMergeDriver,
+  medianOf,
+  readinessOf,
+  readWorkflowFiles,
+} from './factory-readiness.js';
 import { createFactoryRunControl } from './factory-run-control.js';
-import { createFactoryRunsRepository } from './factory-runs.js';
+import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
 import {
   getWatchedFactory,
   projectAgentDefaults,
   type WatchedFactory,
 } from './factory-settings.js';
+import {
+  createFactoryTriggersRepository,
+  type FactoryTriggersRepository,
+  type SaveTriggerInput,
+} from './factory-triggers.js';
 import {
   checkFactoryTarget,
   factoryGithubPort,
@@ -63,12 +89,15 @@ export type FactoryQueueError =
   | { kind: 'paused'; message: string }
   /** The factory cannot work now (runner, sandbox, GitHub App…): the message says why. */
   | { kind: 'cannot-work'; message: string }
-  /** The chosen flow is unknown, workspace-only or does not compile. */
+  /** The chosen flow is unknown or does not compile. */
   | { kind: 'invalid-flow'; message: string }
+  /** A trigger or a start that cannot be accepted as written (schedule, input, limit). */
+  | { kind: 'invalid'; message: string }
   | { kind: 'storage'; message: string };
 
 export interface FactoryQueueDeps {
   runs?: ReturnType<typeof createFactoryRunsRepository>;
+  batches?: Pick<FactoryBatchesRepository, 'ciDurations'>;
   control?: Pick<ReturnType<typeof createFactoryRunControl>, 'stop' | 'retry'>;
   /** The watcher's GitHub side; null when the watcher is not running here. */
   github?: () => FactoryGithubPort | null;
@@ -77,9 +106,28 @@ export interface FactoryQueueDeps {
   factory?: (factoryId: string) => Promise<WatchedFactory | null>;
   /** Look at the factory now instead of at its next poll. */
   wake?: (factoryId: string) => Promise<void>;
+  triggers?: FactoryTriggersRepository;
 }
 
 const NOT_RUNNING_HERE = 'The issue factory is not running on this server.';
+
+/** The issue that asks for CI on the merge queue's branches (D12), as the implementer reads it. */
+const QUEUE_CI_ISSUE = {
+  title: "Run CI on the factory merge queue's branches",
+  body: [
+    "funny's issue factory merges pull requests in batches: it merges several of them onto a `factory/queue/<id>` branch and lets CI test that branch once. CI does not run on pushes to those branches in this repository yet, so the factory merges one pull request at a time.",
+    '',
+    'Change the GitHub Actions workflow(s) that run the checks pull requests need so they also run on pushes to `factory/queue/**`:',
+    '',
+    '```yaml',
+    'on:',
+    '  push:',
+    "    branches: ['factory/queue/**']",
+    '```',
+    '',
+    'Keep every trigger the workflows have now (pull requests, the default branch). Do not add deploys or other side effects to those pushes: a queue branch is a test, never a release. Do not change branch protection or rulesets.',
+  ].join('\n'),
+};
 
 /** A token refusal (App missing, not installed, no access): the whole send fails, not one issue. */
 const isTokenRefusal = (error: GithubCallError) => error.status === undefined && !!error.kind;
@@ -147,11 +195,13 @@ function stoppedCount(
 
 export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const runs = deps.runs ?? createFactoryRunsRepository();
+  const batches = deps.batches ?? createFactoryBatchesRepository();
   const control = deps.control ?? createFactoryRunControl(runs);
   const github = deps.github ?? factoryGithubPort;
   const target = deps.target ?? checkFactoryTarget;
   const loadFactory = deps.factory ?? getWatchedFactory;
   const wake = deps.wake ?? pokeFactory;
+  const triggers = deps.triggers ?? createFactoryTriggersRepository();
 
   /** The factory and where it runs now, or why a send cannot go in. */
   async function workingFactory(
@@ -210,7 +260,9 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
       flowName: input.flowName,
     });
     if (queued.isErr()) return err({ kind: 'storage', message: queued.error.message });
-    const accepted = queued.value.queued.map((run) => run.issueNumber);
+    const accepted = queued.value.queued.flatMap((run) =>
+      run.issueNumber === null ? [] : [run.issueNumber],
+    );
     if (accepted.length > 0) wakeFactory(factoryId);
     return ok({ accepted, refused: [...refused, ...queued.value.duplicates.map(alreadyIn)] });
   }
@@ -294,7 +346,11 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
         queueCi: null,
         mergeQueueRequired: null,
         upToDateRequired: null,
+        mergeDriver: null,
+        medianCiMs: null,
+        batchWaitMs: (factory?.batch.waitSeconds ?? 0) * 1000,
         reasons: [NOT_RUNNING_HERE],
+        advice: [],
       };
     }
     const base = await where.port.defaultBranch(where.reader);
@@ -304,11 +360,59 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     });
     const rules =
       base.isOk() && host ? await host.branchRules(where.reader.repo, base.value) : null;
+    const ran = await runs.list(factory.id);
+    const durations = await batches.ciDurations(where.reader.repo);
     return readinessOf({
       batchSize: factory.batch.size,
+      batchWaitMs: factory.batch.waitSeconds * 1000,
+      mergeDriver: ran.isOk() ? lastMergeDriver(ran.value) : null,
+      medianCiMs: durations.isOk() ? medianOf(durations.value) : null,
       rules: rules?.isOk() ? rules.value : null,
       workflows: await readWorkflowFiles(where.port, where.reader),
     });
+  }
+
+  /**
+   * Open the issue that asks for CI on the queue's branches, with the App
+   * token capped by `userId`'s own access, and send it to the factory as a
+   * normal run (D12). The factory opens the pull request; nothing edits a
+   * workflow or a branch rule here.
+   */
+  async function proposeQueueCi(
+    userId: string,
+    factoryId: string,
+  ): Promise<Result<FactoryQueueCiProposal, FactoryQueueError>> {
+    const ready = await workingFactory(factoryId);
+    if (ready.isErr()) return err(ready.error);
+    const { factory, port, reader } = ready.value;
+    const workflows = await readWorkflowFiles(port, reader);
+    if (workflows === null) {
+      return err({ kind: 'cannot-work', message: "The repository's workflows could not be read." });
+    }
+    if (ciRunsOnQueueBranches(workflows)) {
+      return err({
+        kind: 'cannot-work',
+        message: "CI already runs on the merge queue's branches.",
+      });
+    }
+    if (!port.createIssue) return err({ kind: 'cannot-work', message: NOT_RUNNING_HERE });
+    const opened = await port.createIssue({ ...reader, ownerId: userId }, QUEUE_CI_ISSUE);
+    if (opened.isErr()) {
+      return err({
+        kind: 'cannot-work',
+        message: `The issue could not be opened: ${opened.error.message}`,
+      });
+    }
+    const { number, url } = opened.value;
+    const sent = await submit(factoryId, { issueNumbers: [number], flowName: factory.flowName });
+    if (sent.isErr())
+      return ok({ issueNumber: number, url, queued: false, reason: sent.error.message });
+    const refused = sent.value.refused[0];
+    return ok(
+      sent.value.accepted.includes(number)
+        ? { issueNumber: number, url, queued: true }
+        : { issueNumber: number, url, queued: false, reason: refused?.message ?? 'Not queued.' },
+    );
   }
 
   async function validateFlow(
@@ -320,6 +424,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     const context = {
       overrides: factory?.stepOverrides ?? {},
       project: await projectAgentDefaults(projectId),
+      dependencies: factory?.dependencies,
     };
     const where = factoryId ? await readerOf(factoryId) : null;
     const reads = where
@@ -340,6 +445,8 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
       source: flow.value.source,
       commit: flow.value.commit,
       ...summary,
+      // What loading the flow found too (stale wording of a repository copy).
+      warnings: [...summary.warnings, ...flow.value.warnings.map((warning) => warning.message)],
     });
   }
 
@@ -373,9 +480,159 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     return ok(answers);
   }
 
+  const builtInReads = {
+    readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null),
+  };
+
+  /** The flow as a run of this factory would load it now; the built-ins when its repository cannot be read. */
+  async function loadForFactory(factoryId: string | null, flowName: string) {
+    const where = factoryId ? await readerOf(factoryId) : null;
+    return loadFactoryFlow(flowName, where ? flowReadsOf(where.port, where.reader) : builtInReads);
+  }
+
+  /**
+   * Whether a flow can run without an issue, and the inputs a member types to
+   * start it (change flow-triggers). Reads only.
+   */
+  async function issuelessFlow(
+    factoryId: string | null,
+    flowName: string,
+  ): Promise<Result<FactoryIssuelessFlow, FactoryQueueError>> {
+    const flow = await loadForFactory(factoryId, flowName);
+    if (flow.isErr()) {
+      if (flow.error.kind === 'unavailable') return err(flowRefusal(flow.error));
+      return ok({
+        inputs: [],
+        problems: flow.error.problems ?? [
+          { step: 'flow', field: 'flow', message: flow.error.message },
+        ],
+      });
+    }
+    const declared = Object.entries(flow.value.workflow.inputs ?? {}).filter(
+      ([name]) => !FACTORY_FLOW_INPUTS.has(name),
+    );
+    return ok({
+      inputs: declared.map(([name, def]) => ({
+        name,
+        required: def.required === true && def.default === undefined,
+        description: def.description ?? null,
+      })),
+      // Every declared input counts as typed here: only the steps are judged.
+      problems: validateFlowForIssuelessRun(
+        flow.value.workflow,
+        declared.map(([name]) => name),
+      ),
+    });
+  }
+
+  /** Why these input values cannot start `flowName` without an issue, or null. */
+  async function issuelessRefusal(
+    factoryId: string,
+    flowName: string,
+    inputs: Record<string, string>,
+  ): Promise<FactoryQueueError | null> {
+    const reserved = Object.keys(inputs).find(
+      (name) =>
+        FACTORY_FLOW_INPUTS.has(name) || validateSecretName(name.toUpperCase()) === 'reserved',
+    );
+    if (reserved) {
+      return {
+        kind: 'invalid',
+        message: `The input "${reserved}" cannot be set: the factory supplies it, or its name is reserved for a credential.`,
+      };
+    }
+    const flow = await loadForFactory(factoryId, flowName);
+    if (flow.isErr()) return flowRefusal(flow.error);
+    const supplied = Object.entries(inputs).flatMap(([name, value]) =>
+      value.trim() === '' ? [] : [name],
+    );
+    const problems = validateFlowForIssuelessRun(flow.value.workflow, supplied);
+    if (problems.length === 0) return null;
+    return {
+      kind: 'invalid-flow',
+      message: formatFactoryFlowProblems(`The flow "${flowName}"`, problems),
+    };
+  }
+
+  /** Start one run of a flow now, without an issue (change flow-triggers). */
+  async function runFlow(
+    factoryId: string,
+    input: { flowName: string; inputs: Record<string, string> },
+  ): Promise<Result<FactoryRunView, FactoryQueueError>> {
+    const ready = await workingFactory(factoryId);
+    if (ready.isErr()) return err(ready.error);
+    const refusal = await issuelessRefusal(factoryId, input.flowName, input.inputs);
+    if (refusal) return err(refusal);
+    const queued = await runs.enqueueIssueless({
+      factoryId,
+      flowName: input.flowName,
+      source: 'run_now',
+      inputs: input.inputs,
+    });
+    if (queued.isErr()) return err({ kind: 'storage', message: queued.error.message });
+    // No trigger id: the one-run-per-trigger index never refuses a run a member starts.
+    if (!queued.value) return err({ kind: 'storage', message: 'The run could not be queued.' });
+    wakeFactory(factoryId);
+    return ok(queued.value);
+  }
+
+  /** Create or change a schedule trigger of the factory (change flow-triggers). */
+  async function saveTrigger(
+    factoryId: string,
+    input: Omit<SaveTriggerInput, 'factoryId'>,
+  ): Promise<Result<FactoryTrigger, FactoryQueueError>> {
+    const problem = scheduleProblem(input.schedule);
+    if (problem) return err({ kind: 'invalid', message: `Invalid schedule: ${problem}` });
+    const refusal = await issuelessRefusal(factoryId, input.flowName, input.inputs);
+    if (refusal) return err(refusal);
+    if (!input.id) {
+      const existing = await triggers.list(factoryId);
+      if (existing.isErr()) return err({ kind: 'storage', message: existing.error.message });
+      if (existing.value.length >= MAX_FACTORY_TRIGGERS) {
+        return err({
+          kind: 'invalid',
+          message: `A factory has at most ${MAX_FACTORY_TRIGGERS} schedule triggers.`,
+        });
+      }
+    }
+    const saved = await triggers.save({ ...input, factoryId });
+    if (saved.isErr()) return err({ kind: 'storage', message: saved.error.message });
+    if (!saved.value) return err({ kind: 'not-found', message: 'Trigger not found' });
+    return ok(saved.value);
+  }
+
+  const triggerStorage = (e: { message: string }): FactoryQueueError => ({
+    kind: 'storage',
+    message: e.message,
+  });
+
   return {
     submit: (factoryId: string, input: { issueNumbers: number[]; flowName: string }) =>
       new ResultAsync(submit(factoryId, input)),
+
+    issuelessFlow: (factoryId: string | null, flowName: string) =>
+      new ResultAsync(issuelessFlow(factoryId, flowName)),
+
+    runFlow: (factoryId: string, input: { flowName: string; inputs: Record<string, string> }) =>
+      new ResultAsync(runFlow(factoryId, input)),
+
+    triggers: (factoryId: string) => triggers.list(factoryId).mapErr(triggerStorage),
+
+    saveTrigger: (factoryId: string, input: Omit<SaveTriggerInput, 'factoryId'>) =>
+      new ResultAsync(saveTrigger(factoryId, input)),
+
+    removeTrigger: (factoryId: string, triggerId: string) =>
+      triggers
+        .remove(factoryId, triggerId)
+        .mapErr(triggerStorage)
+        .andThen((removed) =>
+          removed
+            ? okAsync(undefined)
+            : errAsync<undefined, FactoryQueueError>({
+                kind: 'not-found',
+                message: 'Trigger not found',
+              }),
+        ),
 
     flows: (factoryId: string) => ResultAsync.fromSafePromise(flows(factoryId)),
 
@@ -387,6 +644,9 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
 
     readiness: (factoryId: string | null): ResultAsync<FactoryReadiness, FactoryQueueError> =>
       ResultAsync.fromSafePromise(readiness(factoryId)),
+
+    proposeQueueCi: (userId: string, factoryId: string) =>
+      new ResultAsync(proposeQueueCi(userId, factoryId)),
 
     validateFlow: (factoryId: string | null, projectId: string, flowName: string) =>
       new ResultAsync(validateFlow(factoryId, projectId, flowName)),

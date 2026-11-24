@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 /**
  * FUNNY_WORKTREE_ROOT: worktrees under a configured root instead of next to
  * the project. Unit tests for the base resolution, then integration tests

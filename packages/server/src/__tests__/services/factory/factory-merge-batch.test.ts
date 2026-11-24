@@ -50,9 +50,14 @@ function gateBatch(n: number) {
 }
 
 /** A queue whose batch ends with `verdicts`, recording what it wrote on the runs. */
-function fakeQueue(verdicts: Record<string, MemberVerdict>, batchable = true) {
+function fakeQueue(
+  verdicts: Record<string, MemberVerdict>,
+  batchable = true,
+  culprit: string | null = null,
+) {
   const written: string[] = [];
   const queue: FactoryQueuePort = {
+    culpritHold: async () => culprit,
     memberOf: async (runId, holder) => member(Number(runId.slice(1)), holder),
     batchable: async () => batchable,
     lead: async () => ({
@@ -127,6 +132,19 @@ describe('mergeAsBatch', () => {
     const { queue } = fakeQueue({ r1: { kind: 'merged', sha: 'L1' } }, false);
     expect(await mergeAsBatch({ queue, batch, self: member(1, null), gates })).toBeNull();
     expect([...settled.values()]).toEqual([{ status: 'requeued' }, { status: 'requeued' }]);
+  });
+
+  // Found in the E2E: alone, the culprit would take the serial path and merge on its own green checks.
+  test('a leader back unchanged after it was a culprit waits for a person, alone or not', async () => {
+    for (const batchable of [true, false]) {
+      const { batch, settled } = gateBatch(2);
+      const { queue } = fakeQueue({}, batchable, 'commit h1 made a merge queue batch fail before');
+      expect(await mergeAsBatch({ queue, batch, self: member(1, null), gates })).toEqual({
+        kind: 'held',
+        reason: 'commit h1 made a merge queue batch fail before',
+      });
+      expect([...settled.values()]).toEqual([{ status: 'requeued' }, { status: 'requeued' }]);
+    }
   });
 });
 
@@ -217,5 +235,72 @@ describe('which base branches batch', () => {
     );
     expect(outcome.result.partialLanding).toBe(true);
     expect(await queue.batchable(members[0]!)).toBe(false);
+  });
+
+  // Found in the E2E: the agent left the culprit as it was, and it was batched again.
+  test('a commit isolated as the cause of a red batch, back unchanged, waits for a person', async () => {
+    const testDb = createTestDb();
+    const { setConnection } = await import('../../../db/index.js');
+    setConnection({
+      db: testDb.db,
+      schema: testDb.schema,
+      sqlite: testDb.sqlite,
+      mode: 'sqlite',
+      close: async () => testDb.sqlite.close(),
+    });
+    const batches = createFactoryBatchesRepository();
+    const repo = 'o/culprit';
+    const culprit = { ...member(1, null), repo };
+    const other = { ...member(2, 'r2/merge/1'), repo };
+    // An earlier batch named r1 at h1 the culprit.
+    const earlier = (
+      await batches.start({
+        repo,
+        baseBranch: 'main',
+        leaderRunId: 'r1',
+        members: [culprit, other],
+      })
+    )._unsafeUnwrap()!;
+    await batches.move(earlier.id, 'test');
+    await batches.move(earlier.id, 'retest');
+    await batches.move(earlier.id, 'bisect');
+    await batches.move(earlier.id, 'split', {
+      result: {
+        summary: 'Red batch of 2: bisected.',
+        landed: [],
+        culprits: ['r1'],
+        requeued: ['r2'],
+        flake: false,
+        partialLanding: false,
+      },
+    });
+    expect((await batches.culpritAt(repo, 'r1', 'h1'))._unsafeUnwrap()).toBe(true);
+    // A new commit is a new change: it may be batched again.
+    expect((await batches.culpritAt(repo, 'r1', 'h1-fixed'))._unsafeUnwrap()).toBe(false);
+    expect((await batches.culpritAt(repo, 'r2', 'h2'))._unsafeUnwrap()).toBe(false);
+
+    const host = createFakeHost();
+    host.heads.set(1, 'h1');
+    host.heads.set(2, 'h2');
+    const queue = createFactoryQueuePort({
+      batches,
+      run: async () =>
+        ({ factoryId: 'f1', reviews: [], risk: null, regressionProof: null }) as never,
+      factory: async () => null,
+      record: async () => undefined,
+      integrationFor: (owner) => host.as(owner.userId),
+      signal: new AbortController().signal,
+      pollMs: 1,
+    });
+    const outcome = await queue.lead(
+      [culprit, other],
+      { requireReview: false, requireRegressionProof: false },
+      () => false,
+    );
+    expect(outcome.verdicts.get('r1')).toEqual({
+      kind: 'held',
+      reason: expect.stringContaining('made a merge queue batch fail before'),
+    });
+    expect(outcome.verdicts.get('r2')?.kind).toBe('merged');
   });
 });

@@ -50,13 +50,12 @@ export function LiveColumnsView() {
   // WS events keep the store in sync after the initial load).
   const projectIdsKey = useMemo(() => projects.map((p) => p.id).join(','), [projects]);
   useEffect(() => {
-    for (const project of projects) {
-      if (!isProjectListed(project.id)) {
-        loadThreadsForProject(project.id);
+    for (const projectId of projectIdsKey.split(',')) {
+      if (projectId && !isProjectListed(projectId)) {
+        loadThreadsForProject(projectId);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectIdsKey]);
+  }, [projectIdsKey, loadThreadsForProject]);
 
   // --- Image lightbox (shared across all columns) ---
   const [lightboxImages, setLightboxImages] = useState<{ src: string; alt: string }[]>([]);
@@ -102,7 +101,7 @@ export function LiveColumnsView() {
   // data to show.
   useEffect(() => {
     if (gridSelectedThreadId) fetchForThread(gridSelectedThreadId);
-  }, [gridSelectedThreadId, fetchForThread]);
+  }, [gridSelectedThreadId]);
   // Tracks cells where the user has pre-selected a project (via the header
   // "+") but hasn't typed a prompt yet. The EmptyGridCell uses this to skip
   // the project picker and jump straight to the prompt input — same flow as

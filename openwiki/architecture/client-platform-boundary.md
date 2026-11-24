@@ -38,7 +38,7 @@ file of each entity folder imports React, and the folder never imports `@/stores
   collection, a shared query-core `QueryClient` and an abort signal, and is replaced when the
   user or active organization changes. Entity modules attach their resources lazily.
 - **Collections** (TanStack DB) for rows with per-row writes: threads, projects, agent
-  templates, git status, automations and runs, comments, jobs, watchers, scheduler runs,
+  templates, git status, automations and runs, comments, jobs, watchers,
   pipeline approvals.
 - **Queries** for request-shaped data: runner providers, sandbox connections, ACP models,
   template usage stats, project branch listings (`data/projects/branches.ts`), PR detail and

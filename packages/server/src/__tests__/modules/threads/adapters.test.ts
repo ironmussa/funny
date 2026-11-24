@@ -38,7 +38,7 @@ import { RunnerGrpcSessionRegistry } from '../../../services/grpc/session-regist
 import { runnerAccess } from '../../../services/runner-access/index.js';
 import type { RunnerRequest, RunnerRequestPort } from '../../../services/runner-ports.js';
 import * as runnerResolver from '../../../services/runner-resolver.js';
-import { __resetRunnerScopeCache } from '../../../services/runner-scope.js';
+import { resetRunnerScopeCache } from '../../../services/runner-scope.js';
 import {
   createTestDb,
   seedProject,
@@ -73,7 +73,7 @@ function runner(id: string, userId: string, online = true) {
 
 beforeEach(async () => {
   presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
-  __resetRunnerScopeCache();
+  resetRunnerScopeCache();
   testDb = createTestDb();
   const { setConnection } = await import('../../../db/index.js');
   setConnection({

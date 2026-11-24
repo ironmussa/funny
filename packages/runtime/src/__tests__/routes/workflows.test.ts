@@ -32,8 +32,8 @@ mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
 }));
 
-mock.module('../../services/scheduler-pipeline-bootstrap.js', () => ({
-  getSchedulerPipelineDispatcher: () => ({
+mock.module('../../services/pipeline-dispatcher-bootstrap.js', () => ({
+  getPipelineDispatcher: () => ({
     dispatch: mocks.dispatch,
     getActive: mocks.getActive,
   }),
@@ -212,7 +212,7 @@ nodes:
     expect(mocks.dispatch).not.toHaveBeenCalled();
   });
 
-  test('run delegates to scheduler dispatcher with workflow name', async () => {
+  test('run delegates to the pipeline dispatcher with the workflow name', async () => {
     mocks.getThread.mockResolvedValue({
       id: 'thread-1',
       userId: 'user-1',

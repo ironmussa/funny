@@ -84,6 +84,7 @@ const METRICS_SCHEMA = z.object({
   batchSize: z.number().int().nonnegative().default(0),
   bisectionRounds: z.number().int().nonnegative().default(0),
   ciFlakes: z.number().int().nonnegative().default(0),
+  weaveIntegrations: z.number().int().nonnegative().default(0),
 });
 
 const WAIT_REASON_SCHEMA = z.object({
@@ -116,12 +117,15 @@ export type FactoryRunState =
   | 'waiting_human'
   | 'merged'
   | 'no_change'
+  | 'done'
   | 'failed'
   | 'stopped';
 
 const TERMINAL_STATES = [
   'merged',
   'no_change',
+  // A run without an issue whose flow finished without a pull request (change flow-triggers).
+  'done',
   'failed',
   'stopped',
 ] as const satisfies FactoryRunState[];
@@ -220,7 +224,16 @@ export const HIGH_RISK_HOLD = 'high risk';
 
 /** The branch a run's agent pushes and opens its pull request from. */
 export const factoryRunBranch = (run: Pick<FactoryRunView, 'id' | 'issueNumber'>): string =>
-  `factory/issue-${run.issueNumber}-${run.id.slice(0, 8)}`;
+  run.issueNumber === null
+    ? `factory/run-${run.id.slice(0, 8)}`
+    : `factory/issue-${run.issueNumber}-${run.id.slice(0, 8)}`;
+
+/** How a run is named where an issue run shows `#<n>`: its issue, or its short id. */
+export const factoryRunLabel = (run: Pick<FactoryRunView, 'id' | 'issueNumber'>): string =>
+  run.issueNumber === null ? `run-${run.id.slice(0, 8)}` : `#${run.issueNumber}`;
+
+/** `issue_number` of a run without an issue: the column is NOT NULL, issues start at 1. */
+const NO_ISSUE = 0;
 
 /**
  * How long after parking a run without a recorded pull request the watcher
@@ -247,7 +260,14 @@ export function awaitsPullRequest(now: number = Date.now()): SQL {
 export interface FactoryRunView {
   id: string;
   factoryId: string;
-  issueNumber: number;
+  /** The run's issue; null for a run a schedule or a member started without one. */
+  issueNumber: number | null;
+  /** The schedule trigger that started it, or null. */
+  triggerId: string | null;
+  /** That trigger's name when the run started, or null. */
+  triggerName: string | null;
+  /** The input values its trigger supplied; empty for an issue run. */
+  inputs: Record<string, string>;
   prUrl: string | null;
   state: FactoryRunState;
   currentStep: string | null;
@@ -293,7 +313,12 @@ export interface FactoryRunView {
   stepTimings?: FactoryStepTiming[];
 }
 
-export type FactoryRunSource = 'manual' | 'label';
+export type FactoryRunSource = 'manual' | 'label' | 'schedule' | 'run_now';
+
+const RUN_SOURCES: readonly FactoryRunSource[] = ['manual', 'label', 'schedule', 'run_now'];
+
+const sourceOf = (stored: string): FactoryRunSource =>
+  RUN_SOURCES.find((source) => source === stored) ?? 'label';
 
 /**
  * Every thread a run started: its implementing agent's (`threadIds`, the
@@ -320,7 +345,10 @@ const storage = (error: unknown): FactoryRunsError => ({
 const plainFieldsOf = (row: Row) => ({
   id: row.id,
   factoryId: row.factoryId,
-  issueNumber: row.issueNumber,
+  issueNumber: row.issueNumber === NO_ISSUE ? null : row.issueNumber,
+  triggerId: row.triggerId ?? null,
+  triggerName: row.triggerName ?? null,
+  inputs: parseStoredInputs(row.inputs ?? null, 'factory_runs.inputs'),
   prUrl: row.prUrl,
   state: row.state as FactoryRunState,
   currentStep: row.currentStep,
@@ -328,7 +356,7 @@ const plainFieldsOf = (row: Row) => ({
   startedAt: row.startedAt,
   admittedAt: row.admittedAt ?? null,
   completedAt: row.completedAt,
-  source: row.source === 'manual' ? ('manual' as const) : ('label' as const),
+  source: sourceOf(row.source),
   failureReason: row.failureReason ?? null,
 });
 
@@ -385,6 +413,15 @@ function parseStepOptions(raw: string | null): FactoryStepOptionsRecord[] {
   if (!raw) return [];
   const parsed = parseStoredJson(STEP_OPTIONS_SCHEMA, raw, 'factory_runs.step_options');
   return parsed.ok ? parsed.value : [];
+}
+
+const INPUTS_SCHEMA = z.record(z.string(), z.string());
+
+/** Stored input values (a run's, a trigger's); a value that no longer parses reads as none. */
+export function parseStoredInputs(raw: string | null, column: string): Record<string, string> {
+  if (!raw) return {};
+  const parsed = parseStoredJson(INPUTS_SCHEMA, raw, column);
+  return parsed.ok ? parsed.value : {};
 }
 
 function parseTriage(raw: string | null): FactoryTriage | null {
@@ -455,7 +492,12 @@ function parseStepNames(raw: string | null): string[] {
 
 export interface StartRunInput {
   factoryId: string;
-  issueNumber: number;
+  /** The run's issue, or null for a run without one. */
+  issueNumber: number | null;
+  /** The schedule trigger that starts it, with its name as of now. */
+  trigger?: { id: string; name: string };
+  /** The input values the trigger supplies. */
+  inputs?: Record<string, string>;
   state?: FactoryRunState;
   threadIds?: string[];
   currentStep?: string;
@@ -630,6 +672,63 @@ function withFreeSlot<T>(
   return ResultAsync.fromPromise(run, storage);
 }
 
+/** A new run's row: every column empty, with `given` on top. */
+function newRunRow(
+  given: Pick<Row, 'id' | 'factoryId' | 'issueNumber' | 'state' | 'source'> & Partial<Row>,
+): Row {
+  return {
+    prUrl: null,
+    currentStep: null,
+    threadIds: JSON.stringify([]),
+    launchStartedAt: null,
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    flowName: null,
+    queueOrder: null,
+    waitReason: null,
+    admittedAt: null,
+    flowSteps: null,
+    failureReason: null,
+    metrics: null,
+    regressionProof: null,
+    reviews: null,
+    risk: null,
+    triage: null,
+    flowSource: null,
+    flowCommit: null,
+    stepOptions: null,
+    regenerateNode: null,
+    integrationPendingAt: null,
+    stackedOn: null,
+    mergeApproval: null,
+    triggerId: null,
+    triggerName: null,
+    inputs: null,
+    ...given,
+  };
+}
+
+/** The trigger columns of a run started by a trigger (change flow-triggers). */
+const triggerFieldsOf = (input: {
+  trigger?: { id: string; name: string };
+  inputs?: Record<string, string>;
+}) => ({
+  triggerId: input.trigger?.id ?? null,
+  triggerName: input.trigger?.name ?? null,
+  inputs: input.inputs ? JSON.stringify(input.inputs) : null,
+});
+
+/** The position behind the factory's queue. */
+async function nextQueueOrder(factoryId: string): Promise<number> {
+  const [last] = await db
+    .select({ order: factoryRuns.queueOrder })
+    .from(factoryRuns)
+    .where(eq(factoryRuns.factoryId, factoryId))
+    .orderBy(desc(factoryRuns.queueOrder))
+    .limit(1);
+  return (last?.order ?? 0) + 1;
+}
+
 /**
  * The queue's reads and writes (change factory-manual-queue): sent issues wait
  * in `requested` until the watcher admits them; each move out of the queue is
@@ -652,45 +751,20 @@ function queueOperations(newId: () => string) {
     }): ResultAsync<{ queued: FactoryRunView[]; duplicates: number[] }, FactoryRunsError> {
       return ResultAsync.fromPromise(
         (async () => {
-          const [last] = await db
-            .select({ order: factoryRuns.queueOrder })
-            .from(factoryRuns)
-            .where(eq(factoryRuns.factoryId, input.factoryId))
-            .orderBy(desc(factoryRuns.queueOrder))
-            .limit(1);
-          const first = (last?.order ?? 0) + 1;
+          const first = await nextQueueOrder(input.factoryId);
           const now = new Date().toISOString();
-          const rows: Row[] = input.issueNumbers.map((issueNumber, index) => ({
-            id: newId(),
-            factoryId: input.factoryId,
-            issueNumber,
-            prUrl: null,
-            state: 'requested',
-            currentStep: null,
-            threadIds: JSON.stringify([]),
-            launchStartedAt: null,
-            startedAt: now,
-            completedAt: null,
-            source: 'manual',
-            flowName: input.flowName,
-            queueOrder: first + index,
-            waitReason: null,
-            admittedAt: null,
-            flowSteps: null,
-            failureReason: null,
-            metrics: null,
-            regressionProof: null,
-            reviews: null,
-            risk: null,
-            triage: null,
-            flowSource: null,
-            flowCommit: null,
-            stepOptions: null,
-            regenerateNode: null,
-            integrationPendingAt: null,
-            stackedOn: null,
-            mergeApproval: null,
-          }));
+          const rows: Row[] = input.issueNumbers.map((issueNumber, index) =>
+            newRunRow({
+              id: newId(),
+              factoryId: input.factoryId,
+              issueNumber,
+              state: 'requested',
+              startedAt: now,
+              source: 'manual',
+              flowName: input.flowName,
+              queueOrder: first + index,
+            }),
+          );
           const written = await db
             .insert(factoryRuns)
             .values(rows)
@@ -701,6 +775,41 @@ function queueOperations(newId: () => string) {
             queued: rows.flatMap((row) => (ids.has(row.id) ? [toView(row)] : [])),
             duplicates: rows.flatMap((row) => (ids.has(row.id) ? [] : [row.issueNumber])),
           };
+        })(),
+        storage,
+      );
+    },
+
+    /**
+     * Queue one run without an issue (change flow-triggers), behind the
+     * factory's queue. Null when its schedule trigger still has a run working:
+     * the one-run-per-trigger index refuses the row.
+     */
+    enqueueIssueless(input: {
+      factoryId: string;
+      flowName: string;
+      source: 'schedule' | 'run_now';
+      trigger?: { id: string; name: string };
+      inputs: Record<string, string>;
+    }): ResultAsync<FactoryRunView | null, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        (async () => {
+          const row = newRunRow({
+            id: newId(),
+            factoryId: input.factoryId,
+            issueNumber: NO_ISSUE,
+            state: 'requested',
+            source: input.source,
+            flowName: input.flowName,
+            queueOrder: await nextQueueOrder(input.factoryId),
+            ...triggerFieldsOf(input),
+          });
+          const written = await db
+            .insert(factoryRuns)
+            .values(row)
+            .onConflictDoNothing()
+            .returning({ id: factoryRuns.id });
+          return written.length > 0 ? toView(row) : null;
         })(),
         storage,
       );
@@ -859,37 +968,19 @@ export function createFactoryRunsRepository(
 
   /** Insert a run row as given. */
   const insertRun = (input: StartRunInput): ResultAsync<FactoryRunView, FactoryRunsError> => {
-    const row: Row = {
+    const state = input.state ?? 'queued';
+    const row = newRunRow({
       id: deps.newId(),
       factoryId: input.factoryId,
-      issueNumber: input.issueNumber,
-      prUrl: null,
-      state: input.state ?? 'queued',
+      issueNumber: input.issueNumber ?? NO_ISSUE,
+      state,
       currentStep: input.currentStep ?? null,
       threadIds: JSON.stringify(input.threadIds ?? []),
-      launchStartedAt: null,
-      startedAt: new Date().toISOString(),
-      completedAt: null,
       source: input.source ?? 'label',
       flowName: input.flowName ?? null,
-      queueOrder: null,
-      waitReason: null,
-      admittedAt: input.state === 'requested' ? null : new Date().toISOString(),
-      flowSteps: null,
-      failureReason: null,
-      metrics: null,
-      regressionProof: null,
-      reviews: null,
-      risk: null,
-      triage: null,
-      flowSource: null,
-      flowCommit: null,
-      stepOptions: null,
-      regenerateNode: null,
-      integrationPendingAt: null,
-      stackedOn: null,
-      mergeApproval: null,
-    };
+      admittedAt: state === 'requested' ? null : new Date().toISOString(),
+      ...triggerFieldsOf(input),
+    });
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
       toView(row),
     );

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'bu
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
-import { FRESH_TTL_MS, _resetGithubCache } from '../../routes/github/github-cache.js';
+import { FRESH_TTL_MS, resetGithubCache } from '../../routes/github/github-cache.js';
 import { githubApiFetch } from '../../routes/github/helpers.js';
 
 const TOKEN = 'gho_test_token';
@@ -32,7 +32,7 @@ describe('githubApiFetch caching', () => {
     fetchMock.mock.calls.filter((c) => String(c[0]).includes('api.github.com'));
 
   beforeEach(() => {
-    _resetGithubCache();
+    resetGithubCache();
     vi.useFakeTimers();
     ghQueue = [];
     fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {

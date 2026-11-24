@@ -1,0 +1,166 @@
+/**
+ * Smoke test for pipeline-driven dispatch.
+ *
+ * Proves the three behaviors the pipeline dispatcher relies on:
+ *   1. A YAML pipeline compiles and runs end-to-end against a fake
+ *      ActionProvider — the API is usable outside `pipeline-manager`.
+ *   2. AbortSignal cancels an in-flight `spawn_agent` action — needed so
+ *      a run can be cancelled.
+ *   3. ProgressReporter callbacks fire on every step transition — the
+ *      dispatcher will wire these to `touchLastEvent` for stall detection.
+ */
+
+import { describe, expect, test, vi } from 'bun:test';
+
+import { runPipeline, type ProgressReporter, type StepProgressData } from '@funny/pipelines';
+import { parseWorkflowYaml } from '@funny/workflows';
+import type { ActionProvider } from '@funny/workflows/compiler';
+import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
+
+const AGENT_RUN_YAML = `
+name: agent-run-smoke
+inputs:
+  prompt:
+    type: string
+    required: true
+nodes:
+  - id: dispatch
+    spawn_agent:
+      prompt: "{{prompt}}"
+`;
+
+function fakeProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
+  return {
+    spawnAgent: vi.fn().mockResolvedValue({ ok: true, output: 'agent-done' }),
+    runCommand: vi.fn().mockResolvedValue({ ok: true, output: '' }),
+    gitCommit: vi.fn().mockResolvedValue({ ok: true, output: '' }),
+    gitPush: vi.fn().mockResolvedValue({ ok: true, output: '' }),
+    createPr: vi.fn().mockResolvedValue({ ok: true, output: '' }),
+    notify: vi.fn().mockResolvedValue({ ok: true }),
+    setStatus: vi.fn().mockResolvedValue({ ok: true }),
+    setStage: vi.fn().mockResolvedValue({ ok: true }),
+    waitCi: vi.fn().mockResolvedValue({ ok: true, output: 'green' }),
+    merge: vi.fn().mockResolvedValue({ ok: true, output: 'merged' }),
+    requestApproval: vi.fn().mockResolvedValue({ decision: 'approve' }),
+    ...overrides,
+  };
+}
+
+function recordingReporter(): {
+  reporter: ProgressReporter;
+  steps: Array<{ id: string; status: StepProgressData['status'] }>;
+} {
+  const steps: Array<{ id: string; status: StepProgressData['status'] }> = [];
+  return {
+    steps,
+    reporter: {
+      onStepProgress: (id, data) => steps.push({ id, status: data.status }),
+      onPipelineEvent: () => {},
+    },
+  };
+}
+
+function compile(yaml: string) {
+  const parsed = parseWorkflowYaml(yaml);
+  if (!parsed.ok) throw new Error(parsed.error.message);
+  return compileYamlPipeline(parsed.workflow);
+}
+
+describe('pipeline smoke — runPipeline + YAML standalone', () => {
+  test('compiles an agent-run YAML and runs the spawn_agent dispatch', async () => {
+    const provider = fakeProvider();
+    const pipeline = compile(AGENT_RUN_YAML);
+
+    const result = await runPipeline<YamlPipelineContext>(pipeline, {
+      provider,
+      progress: recordingReporter().reporter,
+      cwd: '/repo',
+      inputs: { prompt: 'pick up the thread' },
+      outputs: {},
+    });
+
+    expect(result.outcome).toBe('completed');
+    expect(provider.spawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'pick up the thread', cwd: '/repo' }),
+    );
+    expect(result.ctx.outputs.dispatch?.output).toBe('agent-done');
+  });
+
+  test('AbortSignal cancels mid-flight spawn_agent', async () => {
+    let aborted = false;
+    const ctrl = new AbortController();
+
+    const provider = fakeProvider({
+      spawnAgent: vi.fn().mockImplementation(async () => {
+        ctrl.abort();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return { ok: true, output: 'should-not-be-used' };
+      }),
+    });
+
+    const pipeline = compile(`
+name: cancel-smoke
+nodes:
+  - id: first
+    spawn_agent:
+      prompt: "step one"
+  - id: second
+    depends_on: [first]
+    spawn_agent:
+      prompt: "step two"
+`);
+
+    const result = await runPipeline<YamlPipelineContext>(
+      pipeline,
+      {
+        provider,
+        progress: { onStepProgress: () => {}, onPipelineEvent: () => {} },
+        cwd: '/repo',
+        inputs: {},
+        outputs: {},
+      },
+      {
+        signal: ctrl.signal,
+        onStateChange: (change) => {
+          if (change.kind === 'terminal') aborted = change.outcome === 'cancelled';
+        },
+      },
+    );
+
+    expect(result.outcome).toBe('cancelled');
+    expect(aborted).toBe(true);
+    expect(provider.spawnAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test('ProgressReporter fires running→completed for each step (stall-detection hook)', async () => {
+    const { reporter, steps } = recordingReporter();
+
+    const pipeline = compile(`
+name: progress-smoke
+nodes:
+  - id: review
+    spawn_agent:
+      prompt: "review the change"
+  - id: tests
+    depends_on: [review]
+    run_command:
+      command: "bun test"
+`);
+
+    const result = await runPipeline<YamlPipelineContext>(pipeline, {
+      provider: fakeProvider(),
+      progress: reporter,
+      cwd: '/repo',
+      inputs: {},
+      outputs: {},
+    });
+
+    expect(result.outcome).toBe('completed');
+    expect(steps).toEqual([
+      { id: 'review', status: 'running' },
+      { id: 'review', status: 'completed' },
+      { id: 'tests', status: 'running' },
+      { id: 'tests', status: 'completed' },
+    ]);
+  });
+});

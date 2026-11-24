@@ -1,4 +1,4 @@
-import { expect, test, vi } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

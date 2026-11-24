@@ -158,11 +158,12 @@ export function ExtensionsSettings() {
       {/* Installed list */}
       {extensions.length === 0 ? (
         loading ? (
-          <LoadingState fill={false} className="settings-card py-8" label="Loading…" />
+          <LoadingState padding="md" fill={false} className="settings-card" label="Loading…" />
         ) : (
           <EmptyState
+            padding="md"
             fill={false}
-            className="settings-card py-8"
+            className="settings-card"
             icon={Puzzle}
             title="No extensions installed."
           />

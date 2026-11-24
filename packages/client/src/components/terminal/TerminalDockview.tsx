@@ -162,9 +162,9 @@ function NewTerminalButton() {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               data-testid="terminal-new"
-              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-full rounded-none px-2.5"
+              className="h-full rounded-none px-2.5"
             >
               <Plus className="icon-sm" />
             </Button>
@@ -209,10 +209,10 @@ function DetachTerminalButton({ activeTabId }: { activeTabId: string | undefined
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           onClick={onClick}
           data-testid="terminal-detach"
-          className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-full rounded-none px-2.5"
+          className="h-full rounded-none px-2.5"
         >
           <PictureInPicture2 className="icon-sm" />
         </Button>
@@ -235,10 +235,10 @@ function HideTerminalPanelButton() {
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           onClick={() => togglePanel(selectedProjectId)}
           data-testid="terminal-hide-panel"
-          className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-full rounded-none px-2.5"
+          className="h-full rounded-none px-2.5"
         >
           <PanelBottomClose className="icon-sm" />
         </Button>

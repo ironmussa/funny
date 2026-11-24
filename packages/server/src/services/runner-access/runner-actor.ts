@@ -60,8 +60,7 @@ export function runnerActor(input: RunnerActorInput): RunnerActor {
  *    (terminals and browser sessions need the files on disk).
  *  - `projectless`: one of the actor's general runners (browser sessions,
  *    terminals without a project, run cancellation fallback).
- *  - `request`: the resolver's route-based selection (proxied HTTP requests,
- *    scheduler dispatch by thread).
+ *  - `request`: the resolver's route-based selection (proxied HTTP requests).
  *  - `runner`: a runner chosen elsewhere; certified for the given project
  *    (null = projectless) before it is used.
  *  - `owned-runner`: a runner chosen elsewhere; certified for ownership only.

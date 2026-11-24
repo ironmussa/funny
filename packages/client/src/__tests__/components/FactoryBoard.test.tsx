@@ -122,6 +122,36 @@ describe('FactoryBoard', () => {
     expect(mocks.navigate).toHaveBeenCalledWith(run);
   });
 
+  test('a run without an issue shows its schedule in place of the issue number, and no issue link', () => {
+    renderBoard([
+      queueRun('sched', 'working', {
+        issueNumber: null,
+        source: 'schedule',
+        triggerName: 'Nightly audit',
+        flowName: 'audit',
+        prUrl: 'https://github.com/o/r/pull/9',
+      }),
+      queueRun('once', 'working', { issueNumber: null, source: 'run_now', flowName: 'audit' }),
+    ]);
+    expect(screen.getByTestId('factory-board-ref-sched').textContent).toBe('Nightly audit');
+    expect(screen.getByTestId('factory-board-open-sched').textContent).toBe(
+      'Nightly audit · audit',
+    );
+    expect(screen.queryByTestId('factory-board-issue-sched')).toBeNull();
+    expect(screen.getByTestId('factory-board-ref-once').textContent).toBe('Run now');
+  });
+
+  test('a run that ended done is in the Done column', () => {
+    renderBoard([
+      queueRun('fin', 'done', { issueNumber: null, triggerName: 'Nightly', completedAt: recent() }),
+    ]);
+    expect(
+      within(screen.getByTestId('factory-board-column-done')).queryByTestId(
+        'factory-board-card-fin',
+      ),
+    ).not.toBeNull();
+  });
+
   test('old finished runs are left to the list and counted', () => {
     renderBoard([
       queueRun('new', 'merged', { completedAt: recent() }),
@@ -208,11 +238,10 @@ describe('FactoryQueueView layouts', () => {
       queueRun('broken', 'failed'),
       queueRun('other', 'failed', { projectId: 'p2' }),
     ];
-    const location = { search: '' };
     function LocationProbe() {
-      location.search = useLocation().search;
-      return null;
+      return <output data-testid="location">{useLocation().search}</output>;
     }
+    const search = () => new URLSearchParams(screen.getByTestId('location').textContent ?? '');
     render(
       <MemoryRouter initialEntries={['/factory?project=p1&status=failed&view=board']}>
         <TooltipProvider>
@@ -227,9 +256,9 @@ describe('FactoryQueueView layouts', () => {
     expect(screen.queryByTestId('factory-board-card-other')).toBeNull();
 
     fireEvent.click(screen.getByTestId('factory-view-show-active'));
-    expect(new URLSearchParams(location.search).get('active')).toBe('1');
+    expect(search().get('active')).toBe('1');
     fireEvent.click(screen.getByTestId('factory-view-clear-filters'));
-    const params = new URLSearchParams(location.search);
+    const params = search();
     expect(params.get('project')).toBeNull();
     expect(params.get('status')).toBeNull();
     expect(params.get('view')).toBe('board');

@@ -53,12 +53,12 @@ export function TabToolbarRefresh({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon-sm"
           onClick={onRefresh}
           disabled={loading}
           aria-label={t('common.refresh', 'Refresh')}
-          className="text-muted-foreground shrink-0"
+          className="shrink-0"
           data-testid={testId}
         >
           <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
@@ -81,13 +81,7 @@ export function TabToolbarExternalLink({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          asChild
-          className="text-muted-foreground shrink-0"
-          data-testid={testId}
-        >
+        <Button variant="muted" size="icon-sm" asChild className="shrink-0" data-testid={testId}>
           <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
             <ExternalLink className="icon-base" />
           </a>

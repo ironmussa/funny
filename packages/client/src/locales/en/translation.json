@@ -730,6 +730,8 @@
     "projectFactorySensitivePathsDesc": "Globs, separated by commas. A change that touches one is high risk, besides .github/, migrations and auth/",
     "projectFactoryStageLimits": "Runs per step",
     "projectFactoryStageLimitsDesc": "How many runs may be implementing or in review at once. Merges are always one batch at a time per repository",
+    "projectFactoryTriggers": "Schedules",
+    "projectFactoryTriggersDesc": "Start a flow on a schedule, or once, without an issue. Such a run can open a pull request and never merges one by itself",
     "projectFactoryBatch": "Merge queue",
     "projectFactoryBatchDesc": "Ready pull requests are tested together on the current base and merged as tested, in about one CI run. How many in one batch (1: one at a time), and how long to wait to gather them",
     "projectFactoryBatchSize": "Pull requests",
@@ -755,7 +757,15 @@
       "inPreferences_other": "{{count}} results in Preferences",
       "inProject_one": "{{count}} result in Project Settings",
       "inProject_other": "{{count}} results in Project Settings"
-    }
+    },
+    "projectFactoryQueueCiQueued": "Issue #{{number}} opened and sent to the factory",
+    "projectFactoryQueueCiNotQueued": "Issue #{{number}} opened, but not sent to the factory: {{reason}}",
+    "projectFactoryQueueCiPropose": "Open a factory run that adds the CI trigger",
+    "projectFactoryMergeDriverWeave": "weave",
+    "projectFactoryMergeDriverGit": "git's own",
+    "projectFactoryMergeDriverUnknown": "known after the first integration",
+    "projectFactoryMergeDriver": "Merge driver on the runner: {{driver}}",
+    "projectFactoryQueueCiTime": "CI on a batch takes {{ci}} (median); the batch wait is {{wait}}"
   },
   "skills": {
     "showingFor": "Showing skills for:",
@@ -1798,10 +1808,9 @@
       "title": "The factory pipeline stopped on an error"
     },
     "activity": {
-      "tooltip": "Factory · #{{issue}} · {{state}}",
-      "failedTooltip": "Factory · #{{issue}} · Failed at {{step}}",
-      "stoppedAfterFailureTooltip": "Factory · #{{issue}} · Stopped after failing at {{step}}",
-      "stoppedWithReasonTooltip": "Factory · #{{issue}} · Stopped: {{reason}}",
+      "failedAt": "{{run}} · Failed at {{step}}",
+      "stoppedAfterFailure": "{{run}} · Stopped after failing at {{step}}",
+      "stoppedWithReason": "{{run}} · Stopped: {{reason}}",
       "resentTooltip": "{{label}} · Sent again as a new run",
       "stopRun": "Stop factory run"
     },

@@ -10,6 +10,7 @@
 
 import { timingSafeEqual } from 'crypto';
 
+import { errorMessage } from '@funny/shared/errors';
 import type { Context, Next } from 'hono';
 
 import { audit } from '../lib/audit.js';
@@ -32,16 +33,16 @@ const PUBLIC_PATHS = new Set([
 const PUBLIC_PREFIXES = ['/api/invite-links/verify/', '/api/invite-links/register'];
 
 // Auth instance — set at startup via setAuthInstance()
-let _auth: any = null;
+let authSingleton: any = null;
 
 /** Set the Better Auth instance used by middleware. Called once at startup. */
 export function setAuthInstance(auth: any): void {
-  _auth = auth;
+  authSingleton = auth;
 }
 
 /** Test-only: reset cached auth so mocked lib/auth.js is picked up again. */
 export function resetAuthInstanceForTests(): void {
-  _auth = null;
+  authSingleton = null;
 }
 
 /** Sentinel returned by an auth step that authenticated the request (or let it through). */
@@ -153,38 +154,6 @@ async function runnerBearerStep(c: Context<ServerEnv>, path: string): Promise<Au
 
   c.set('runnerId', runnerId);
   c.set('isRunner', true);
-  return PROCEED;
-}
-
-// ── Scheduler auth via shared secret + impersonated user ────
-// Co-located scheduler binary calling server-native pipeline endpoints.
-// Trust boundary: same-host process. The secret + X-Forwarded-User pair
-// grants the scheduler the ability to act as `userId` for the duration
-// of the request — per-tenant guards downstream still apply.
-//
-// System mode: when the path is under `/api/scheduler/system/*`, the
-// X-Forwarded-User header is OPTIONAL — those endpoints are explicitly
-// cross-tenant (the brain reads/writes runs and dependencies for ALL users).
-function schedulerStep(c: Context<ServerEnv>, path: string): AuthStepResult {
-  const ORCH_AUTH_SECRET = process.env.SCHEDULER_AUTH_SECRET;
-  if (!ORCH_AUTH_SECRET) return null;
-  if (!secretMatches(c.req.header('X-Scheduler-Auth'), ORCH_AUTH_SECRET)) return null;
-
-  const isSystemPath = path.startsWith('/api/scheduler/system/');
-  const forwardedUser = c.req.header('X-Forwarded-User');
-  if (!forwardedUser && !isSystemPath) {
-    audit({
-      action: 'auth.scheduler_rejected',
-      actorId: null,
-      detail: 'X-Scheduler-Auth without X-Forwarded-User',
-      meta: { path, method: c.req.method },
-    });
-    return c.json({ error: 'X-Forwarded-User required with scheduler auth' }, 401);
-  }
-  if (forwardedUser) c.set('userId', forwardedUser);
-  c.set('isScheduler', true);
-  c.set('isSchedulerSystem', isSystemPath && !forwardedUser);
-  c.set('isRunner', false);
   return PROCEED;
 }
 
@@ -323,19 +292,19 @@ async function bindLoopbackRunnerUser(
   } catch (err) {
     log.error('Failed to resolve loopback runner userId', {
       namespace: 'auth',
-      error: (err as Error).message,
+      error: errorMessage(err),
     });
     return c.json({ error: 'Failed to resolve userId for runner' }, 500);
   }
 }
 
 async function getAuth(): Promise<any> {
-  if (!_auth) {
+  if (!authSingleton) {
     // Fallback: import from server's auth module (team mode)
     const { auth } = await import('../lib/auth.js');
-    _auth = auth;
+    authSingleton = auth;
   }
-  return _auth;
+  return authSingleton;
 }
 
 // ── Better Auth session ────────────────────────────────────────
@@ -485,7 +454,6 @@ const AUTH_STEPS: readonly AuthStep[] = [
   provisionTokenStep,
   inviteTokenStep,
   runnerBearerStep,
-  schedulerStep,
   runnerSecretStep,
   sessionStep,
 ];
@@ -523,13 +491,13 @@ export function requirePermission(resource: string, action: string) {
     const orgId = c.get('organizationId');
     if (!orgId) return next();
 
-    if (!_auth) {
+    if (!authSingleton) {
       const { auth } = await import('../lib/auth.js');
-      _auth = auth;
+      authSingleton = auth;
     }
 
     try {
-      const hasPermission = await _auth.api.hasPermission({
+      const hasPermission = await authSingleton.api.hasPermission({
         headers: c.req.raw.headers,
         body: {
           permissions: {

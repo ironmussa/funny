@@ -174,7 +174,7 @@ function AuthGate() {
           if (cancelled) return;
           if (retries < maxRetries) {
             // Server might still be starting — retry with backoff
-            retries++;
+            retries += 1;
             retryTimeout = setTimeout(fetchProfile, retries * 1000);
             return;
           }
@@ -199,7 +199,6 @@ function AuthGate() {
       cancelled = true;
       if (retryTimeout !== undefined) clearTimeout(retryTimeout);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCheckSetup, initializeFromProfile, setTheme]);
 
   if (isLoading) {

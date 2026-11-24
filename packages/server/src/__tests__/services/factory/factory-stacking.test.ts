@@ -12,6 +12,7 @@ import { ok, okAsync } from 'neverthrow';
 import { integrateStacked } from '../../../services/factory/factory-early-watch.js';
 import type { FactoryRunView } from '../../../services/factory/factory-runs.js';
 import { createStacking, type BlockerState } from '../../../services/factory/factory-stacking.js';
+import { busyPathsOf } from '../../../services/factory/factory-triage.js';
 import { pathsHeld, stackTarget } from '../../../services/factory/factory-watcher.js';
 
 const on: FactoryStackedOn = {
@@ -159,6 +160,30 @@ describe('path reservation of a stacked run', () => {
       kind: 'paths-overlap',
       blockers: [90],
     });
+  });
+
+  // Found in the E2E: triage itself held #87, stacked on #86, for #86's paths.
+  test('the paths triage holds a stacked run for leave out the run it stacks on', () => {
+    expect(busyPathsOf([blocker, other], stacked.id, 'blocker-run-id')).toEqual([
+      { issue: 90, paths: ['src/pad.js', 'src/index.json'] },
+    ]);
+    expect(busyPathsOf([blocker], stacked.id)).toEqual([
+      { issue: 80, paths: ['src/pad.js', 'src/index.json'] },
+    ]);
+  });
+
+  // Found in the E2E: #86, retried while #87 waited on it at the end of ci, was held for #87's paths.
+  test('a blocker is not held by the paths of a run stacked on it (they would wait for each other)', () => {
+    const stackedRun = {
+      ...blocker,
+      id: 'stacked-run-id',
+      issueNumber: 81,
+      triage: stacked.triage,
+      stackedOn: { runId: 'blocker-run-id' },
+    };
+    expect(busyPathsOf([stackedRun, other], 'blocker-run-id')).toEqual([
+      { issue: 90, paths: ['src/pad.js', 'src/index.json'] },
+    ]);
   });
 });
 

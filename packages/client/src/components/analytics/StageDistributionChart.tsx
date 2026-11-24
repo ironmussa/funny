@@ -44,7 +44,7 @@ export function StageDistributionChart({ data }: Props) {
   );
 
   if (chartData.length === 0) {
-    return <EmptyState fill={false} className="py-8" title={t('analytics.noData')} />;
+    return <EmptyState padding="md" fill={false} title={t('analytics.noData')} />;
   }
 
   const total = chartData.reduce((sum, d) => sum + d.value, 0);

@@ -19,7 +19,7 @@ import {
 export const providerRoutes = new Hono<ServerEnv>();
 
 providerRoutes.get('/', async (c) => {
-  const userId = c.get('userId') as string | undefined;
+  const userId = c.get('userId');
   c.header('Cache-Control', 'no-store');
   if (!userId)
     return c.json({

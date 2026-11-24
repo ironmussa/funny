@@ -9,11 +9,6 @@ const emailUrlCache = new Map<string, string>();
 
 type Size = 'xs' | 'sm';
 
-const SIZE_CLASSES: Record<Size, { avatar: string; text: string }> = {
-  xs: { avatar: 'h-3.5 w-3.5', text: 'text-4xs' },
-  sm: { avatar: 'h-4 w-4', text: 'text-3xs' },
-};
-
 export interface AuthorBadgeProps {
   name: string;
   avatarUrl?: string | null;

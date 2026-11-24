@@ -89,9 +89,10 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
           <Breadcrumb className="min-w-0 flex-1">
             <BreadcrumbList className="flex-nowrap">
               <BreadcrumbItem>
-                <BreadcrumbLink asChild className="cursor-pointer truncate">
+                <BreadcrumbLink asChild className="cursor-pointer">
                   <button
                     type="button"
+                    className="truncate"
                     onClick={() => setPage(null)}
                     data-testid="mobile-project-settings-crumb-root"
                   >
@@ -146,7 +147,7 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col p-2">
           {items.map((item) => {
-            const Icon = item.icon;
+            const ItemIcon = item.icon;
             return (
               <button
                 key={item.id}
@@ -154,7 +155,7 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
                 data-testid={`mobile-settings-nav-${item.id}`}
                 className="hover:bg-accent active:bg-accent flex items-center gap-3 rounded-md px-3 py-3 text-left"
               >
-                <Icon className="icon-base text-muted-foreground shrink-0" />
+                <ItemIcon className="icon-base text-muted-foreground shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {t(settingsLabelKeys[item.id] ?? item.label)}
                 </span>

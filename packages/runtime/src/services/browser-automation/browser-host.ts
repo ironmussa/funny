@@ -232,7 +232,11 @@ export class BrowserHost {
       '--remote-debugging-address=127.0.0.1',
       '--headless=new',
       '--no-sandbox',
-      '--disable-gpu',
+      // Software WebGL through SwiftShader. Without a GPU, recent Chromium
+      // only falls back to SwiftShader when explicitly allowed, so with
+      // `--disable-gpu` alone pages that need WebGL (games, maps, 3D) fail.
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
       '--disable-dev-shm-usage',
       '--hide-scrollbars',
       '--no-first-run',

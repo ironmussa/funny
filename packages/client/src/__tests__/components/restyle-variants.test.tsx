@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button';
+import { Command, CommandEmpty, CommandList } from '@/components/ui/command';
 import { Textarea } from '@/components/ui/textarea';
 
 // #454: call sites stopped restyling shadcn primitives with classes and use
@@ -85,5 +86,26 @@ describe('ui variants added for restyled call sites', () => {
     expect(cls).not.toContain('text-base');
     // The default size's padding and height stay.
     expect(cls).toContain('px-3 py-2');
+  });
+});
+
+describe('CommandEmpty', () => {
+  // It used to set its classes before `{...props}`, so a caller's className
+  // replaced them and the empty text lost its muted color and centering.
+  test('keeps its base classes next to a caller className and textSize', () => {
+    render(
+      <Command>
+        <CommandList>
+          <CommandEmpty textSize="xs" className="mt-2">
+            Nothing
+          </CommandEmpty>
+        </CommandList>
+      </Command>,
+    );
+    const cls = screen.getByText('Nothing').className;
+    expect(cls).toContain('text-muted-foreground');
+    expect(cls).toContain('text-center');
+    expect(cls).toContain('py-3 text-xs');
+    expect(cls).toContain('mt-2');
   });
 });

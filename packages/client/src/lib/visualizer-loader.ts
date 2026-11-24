@@ -16,8 +16,12 @@ const defaultImport: ImportFn = (url) => import(/* @vite-ignore */ url);
 
 function isVisualizerPlugin(value: unknown): value is VisualizerPlugin {
   if (!value || typeof value !== 'object') return false;
-  const p = value as Record<string, unknown>;
-  return typeof p.id === 'string' && typeof p.Component === 'function';
+  return (
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'Component' in value &&
+    typeof value.Component === 'function'
+  );
 }
 
 /**
@@ -48,6 +52,9 @@ export async function loadInstalledVisualizers(
   await Promise.all(
     manifest.map(async (ext) => {
       try {
+        // SAFETY: a dynamic import resolves to a module namespace object, where a
+        // missing `default` or `plugin` export reads undefined; the candidate is
+        // checked with isVisualizerPlugin before use.
         const mod = (await importFn(ext.entryUrl)) as { default?: unknown; plugin?: unknown };
         const candidate = mod.default ?? mod.plugin;
         if (!isVisualizerPlugin(candidate)) {

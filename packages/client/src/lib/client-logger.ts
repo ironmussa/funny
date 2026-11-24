@@ -39,10 +39,14 @@ import { otlpEnabled, otlpEndpoint } from './otlp-config';
 type LevelName = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 const VALID_LEVELS: readonly LevelName[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
+function isLevelName(v: string): v is LevelName {
+  return VALID_LEVELS.some((level) => level === v);
+}
+
 function readStored(key: string): LevelName | undefined {
   try {
     const v = localStorage.getItem(key);
-    return v && (VALID_LEVELS as readonly string[]).includes(v) ? (v as LevelName) : undefined;
+    return v && isLevelName(v) ? v : undefined;
   } catch {
     return undefined;
   }
@@ -147,35 +151,37 @@ export function createClientLogger(namespace: string) {
 
 // Runtime control surface — available in prod via DevTools console.
 if (typeof window !== 'undefined') {
-  (window as any).__funnyLog = {
-    setLevel(level: LevelName) {
-      try {
-        localStorage.setItem(GLOBAL_KEY, level);
-      } catch {}
-      applyLevels();
+  Object.assign(window, {
+    __funnyLog: {
+      setLevel(level: LevelName) {
+        try {
+          localStorage.setItem(GLOBAL_KEY, level);
+        } catch {}
+        applyLevels();
+      },
+      setNamespaceLevel(namespace: string, level: LevelName) {
+        try {
+          localStorage.setItem(`${NS_PREFIX}${namespace}`, level);
+        } catch {}
+        applyLevels();
+      },
+      /** Drops a namespace override so the namespace follows the global floor again. */
+      clearNamespaceLevel(namespace: string) {
+        try {
+          localStorage.removeItem(`${NS_PREFIX}${namespace}`);
+        } catch {}
+        applyLevels();
+      },
+      clear() {
+        try {
+          localStorage.removeItem(GLOBAL_KEY);
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k?.startsWith(NS_PREFIX)) localStorage.removeItem(k);
+          }
+        } catch {}
+        applyLevels();
+      },
     },
-    setNamespaceLevel(namespace: string, level: LevelName) {
-      try {
-        localStorage.setItem(`${NS_PREFIX}${namespace}`, level);
-      } catch {}
-      applyLevels();
-    },
-    /** Drops a namespace override so the namespace follows the global floor again. */
-    clearNamespaceLevel(namespace: string) {
-      try {
-        localStorage.removeItem(`${NS_PREFIX}${namespace}`);
-      } catch {}
-      applyLevels();
-    },
-    clear() {
-      try {
-        localStorage.removeItem(GLOBAL_KEY);
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-          const k = localStorage.key(i);
-          if (k?.startsWith(NS_PREFIX)) localStorage.removeItem(k);
-        }
-      } catch {}
-      applyLevels();
-    },
-  };
+  });
 }

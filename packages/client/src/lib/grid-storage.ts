@@ -17,6 +17,8 @@ export type GridCellAssignments = Record<string, string>;
 export function getGridCells(): GridCellAssignments {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    // SAFETY: STORAGE_KEY is only written by this module and LiveColumnsView, both
+    // with JSON.stringify of a GridCellAssignments (cell index → thread id).
     return raw ? (JSON.parse(raw) as GridCellAssignments) : {};
   } catch {
     return {};

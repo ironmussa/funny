@@ -15,7 +15,12 @@ if (import.meta.env.DEV) {
     trackAllPureComponents: true,
     collapseGroups: true,
     notifier({ Component, displayName, reason }) {
-      const component = displayName || (Component as any)?.displayName || 'Unknown';
+      // SAFETY: WDYR passes the component type (a function or class), typed as a
+      // React.Component; its displayName is a string or undefined.
+      const component =
+        displayName ||
+        (Component as { displayName?: string } | undefined)?.displayName ||
+        'Unknown';
       const now = Date.now();
       const last = lastReport.get(component) ?? 0;
       if (now - last < THROTTLE_MS) return;

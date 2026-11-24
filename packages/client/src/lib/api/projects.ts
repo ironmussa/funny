@@ -36,6 +36,7 @@ export const projectsApi = {
   renameProject: (id: string, name: string) =>
     trpcCall(() => procedures.update.mutate({ projectId: id, data: { name } })),
   updateProject: (id: string, data: UpdateProjectInput) =>
+    // SAFETY: ProjectUpdateFields has the same fields as UpdateProjectBody, only
     // `defaultEffort` is a plain string in the UI's effort pickers; the
     // procedure's schema checks it is a real level (400 otherwise).
     trpcCall(() => procedures.update.mutate({ projectId: id, data: data as UpdateProjectBody })),

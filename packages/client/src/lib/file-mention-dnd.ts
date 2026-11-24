@@ -20,6 +20,8 @@ export function readFileMentionDragData(dataTransfer: DataTransfer): FileMention
   const raw = dataTransfer.getData(FILE_MENTION_MIME);
   if (!raw) return null;
   try {
+    // SAFETY: no field is trusted: path must be a non-empty string (else null) and
+    // fileType falls back to 'file' unless it is exactly 'folder'.
     const parsed = JSON.parse(raw) as Partial<FileMentionPayload>;
     if (typeof parsed?.path !== 'string' || !parsed.path) return null;
     const fileType = parsed.fileType === 'folder' ? 'folder' : 'file';

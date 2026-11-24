@@ -23,6 +23,8 @@ interface MemoryProfilerHandle {
 }
 
 function getRunningProfiler(): MemoryProfilerHandle | null {
+  // SAFETY: main.tsx installs __funnyMemory as the profiler handle (or leaves it
+  // unset); every handle field is optional and checked before use below.
   const handle = (globalThis as typeof globalThis & { __funnyMemory?: MemoryProfilerHandle })
     .__funnyMemory;
   if (!handle?.mark || !handle.status) return null;

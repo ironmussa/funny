@@ -76,6 +76,8 @@ function dataUrlToBase64(
   const m = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.+)$/i.exec(dataUrl);
   if (!m) return null;
   return {
+    // SAFETY: the regex only matches image/(png|jpeg|gif|webp), and lowercasing
+    // it gives one of the four media_type values.
     mediaType: m[1].toLowerCase() as ImageAttachment['source']['media_type'],
     data: m[2],
   };

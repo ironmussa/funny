@@ -31,7 +31,7 @@ export function sessionChangesFromEvents(
     if (e.type !== 'changed_files_summary') continue;
     let parsed: ChangedFilesSummaryEventData | null = null;
     try {
-      parsed = typeof e.data === 'string' ? JSON.parse(e.data) : (e.data as any);
+      parsed = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
     } catch {
       parsed = null;
     }

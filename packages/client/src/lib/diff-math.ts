@@ -246,6 +246,8 @@ export function buildSections(lines: DiffLine[], contextLines: number): DiffSect
     const kind = i < lines.length ? (lines[i].type === 'ctx' ? 'context' : 'change') : 'other';
     if (kind !== currentKind || i === lines.length) {
       sections.push({ kind: currentKind, startIdx, endIdx: i - 1, collapsed: false });
+      // SAFETY: kind is 'other' only when i === lines.length, the last iteration,
+      // after which currentKind is not read again.
       currentKind = kind as 'change' | 'context';
       startIdx = i;
     }

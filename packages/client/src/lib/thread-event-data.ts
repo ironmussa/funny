@@ -7,5 +7,5 @@ export function parseThreadEventData(data: string | Record<string, unknown>): Re
       return {};
     }
   }
-  return data as Record<string, any>;
+  return data;
 }

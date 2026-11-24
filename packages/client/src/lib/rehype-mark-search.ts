@@ -31,6 +31,8 @@ export function rehypeMarkSearch(options: RehypeMarkSearchOptions = { query: '' 
       const out: NodeContent[] = [];
       for (const child of children) {
         if (child.type === 'element') {
+          // SAFETY: a hast node of type 'element' always carries tagName and
+          // children, which is the ElementNode shape.
           const element = child as ElementNode;
           const tag = element.tagName;
           if (tag === 'code' || tag === 'pre') {
@@ -40,6 +42,7 @@ export function rehypeMarkSearch(options: RehypeMarkSearchOptions = { query: '' 
           element.children = transformChildren(element.children);
           out.push(element);
         } else if (child.type === 'text') {
+          // SAFETY: a hast node of type 'text' always carries a string value.
           out.push(...splitTextNode(child as TextNode));
         } else {
           out.push(child);

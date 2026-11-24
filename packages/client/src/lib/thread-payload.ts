@@ -186,6 +186,8 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
     throw new Error('projectId is required for idle/normal threads');
   }
 
+  // SAFETY: PromptInput fills threadMode from a ThreadMode ('local' | 'worktree',
+  // see prompt-submit.ts); when it is absent the project default is used.
   const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
   const isIdle = input.forceIdle || opts.sendToBacklog === true;
 
@@ -217,6 +219,8 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
       projectId: input.projectId,
       title,
       mode: inSandbox ? 'local' : threadMode,
+      // SAFETY: the prompt's runtime switch yields a runner mode ('local' /
+      // 'remote') or 'sandbox'; the server's create schema rejects anything else.
       runtime: opts.runtime as 'local' | 'remote' | 'sandbox' | undefined,
       provider: opts.provider,
       model: opts.model,

@@ -14,11 +14,13 @@ function inputRecord(input: unknown): Record<string, unknown> | null {
   if (typeof input === 'string') {
     try {
       const parsed = JSON.parse(input);
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+      return parsed && typeof parsed === 'object' ? parsed : null;
     } catch {
       return null;
     }
   }
+  // SAFETY: input is a non-null object here, so it can be read by string key; every
+  // caller checks the type of each value it reads.
   return input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
 }
 
@@ -106,7 +108,7 @@ function collectFromToolCall(
 
   if (toolCall.name === 'MultiEdit' && Array.isArray(input.edits)) {
     for (const edit of input.edits) {
-      const record = edit && typeof edit === 'object' ? (edit as Record<string, unknown>) : null;
+      const record: Record<string, unknown> | null = edit && typeof edit === 'object' ? edit : null;
       addDiff(diffs, key, record?.old_string, record?.new_string);
     }
     return;
@@ -142,7 +144,7 @@ export function buildToolCallDiffFallbacks(
   const diffs = new Map<string, string[]>();
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
-    const record = item as { type?: unknown };
+    const record: { type?: unknown } = item;
     if (
       record.type !== 'toolcall' &&
       record.type !== 'toolcall-group' &&
@@ -150,6 +152,9 @@ export function buildToolCallDiffFallbacks(
     ) {
       continue;
     }
+    // SAFETY: the check above kept only items tagged 'toolcall', 'toolcall-group' or
+    // 'toolcall-run'; the render-item builder gives those the tc / calls / items
+    // fields ToolItemLike describes.
     collectFromItem(item as ToolItemLike, files, diffs);
   }
   return new Map([...diffs].map(([path, chunks]) => [path, chunks.join('\n')]));

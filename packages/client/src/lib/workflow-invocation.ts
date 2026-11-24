@@ -22,7 +22,7 @@ export function parseWorkflowInvocation(prompt: string): WorkflowInvocationParse
 
   if (tail.startsWith('{')) {
     try {
-      const parsed = JSON.parse(tail) as unknown;
+      const parsed: unknown = JSON.parse(tail);
       if (!isPlainObject(parsed)) {
         return { ok: false, error: 'Workflow inputs must be a JSON object.' };
       }

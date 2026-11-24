@@ -13,7 +13,7 @@ export function turnOutcomesFromEvents(
     if (e.type !== 'turn_outcome') continue;
     let parsed: TurnOutcomeEventData | null = null;
     try {
-      parsed = typeof e.data === 'string' ? JSON.parse(e.data) : (e.data as any);
+      parsed = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
     } catch {
       parsed = null;
     }

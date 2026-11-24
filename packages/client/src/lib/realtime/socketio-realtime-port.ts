@@ -322,7 +322,11 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     return Promise.all(
       cursors.flatMap((cursor) =>
         cursor.scope
-          ? [this.subscribeScope({ scope: cursor.scope, cursor } as SubscriptionRequest)]
+          ? [
+              this.subscribeScope(
+                create(SubscriptionRequestSchema, { scope: cursor.scope, cursor }),
+              ),
+            ]
           : [],
       ),
     );
@@ -463,6 +467,8 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     }
 
     try {
+      // SAFETY: the server's `pty:list` handler (socketio/browser-pty-list.ts) always
+      // acks { status, sessions, error? }; each session field is type-checked below.
       const response = (await this.socket
         .timeout(this.acknowledgementTimeoutMs)
         .emitWithAck('pty:list', {})) as {

@@ -27,10 +27,9 @@ export function isOtlpEnabled(
   return true;
 }
 
-export const otlpEndpoint =
-  (import.meta.env.VITE_OTLP_ENDPOINT as string | undefined)?.trim() || undefined;
+const rawOtlpEndpoint: string | undefined = import.meta.env.VITE_OTLP_ENDPOINT;
+const rawOtlpEnabled: string | undefined = import.meta.env.VITE_OTLP_ENABLED;
 
-export const otlpEnabled = isOtlpEnabled(
-  otlpEndpoint,
-  import.meta.env.VITE_OTLP_ENABLED as string | undefined,
-);
+export const otlpEndpoint = rawOtlpEndpoint?.trim() || undefined;
+
+export const otlpEnabled = isOtlpEnabled(otlpEndpoint, rawOtlpEnabled);

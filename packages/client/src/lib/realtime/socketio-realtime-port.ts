@@ -41,6 +41,7 @@ import {
   type OperationRequest,
 } from '@funny/shared/browser-v1/operations';
 import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
+import type { SocketIoArgument } from '@funny/shared/socket-events';
 
 interface SocketLike {
   connected: boolean;
@@ -48,7 +49,7 @@ interface SocketLike {
   off(event: string, listener: (...args: any[]) => void): void;
   emit(event: string, payload: unknown): void;
   timeout(timeoutMs: number): {
-    emitWithAck(event: string, payload: unknown): Promise<unknown>;
+    emitWithAck(event: string, payload: unknown): Promise<SocketIoArgument>;
   };
 }
 
@@ -361,7 +362,7 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     });
   };
 
-  private readonly handleBrowserEvent = (wire: unknown): void => {
+  private readonly handleBrowserEvent = (wire: SocketIoArgument): void => {
     const decoded = decodeBrowserCarrier(wire, {
       expectedSchemaFingerprint: BROWSER_V1_SCHEMA_FINGERPRINT,
       allowedPayloads: ['event'],
@@ -394,7 +395,7 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     for (const listener of this.eventListeners) listener(payload.value);
   };
 
-  private readonly handleBrowserInteractive = (wire: unknown): void => {
+  private readonly handleBrowserInteractive = (wire: SocketIoArgument): void => {
     const decoded = decodeBrowserCarrier(wire, {
       expectedSchemaFingerprint: BROWSER_V1_SCHEMA_FINGERPRINT,
       allowedPayloads: ['interactive'],

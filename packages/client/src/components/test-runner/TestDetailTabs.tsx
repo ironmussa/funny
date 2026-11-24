@@ -258,7 +258,7 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
   );
 
   return (
-    <ScrollArea className="h-full font-mono text-xs">
+    <ScrollArea variant="code" className="h-full">
       {entries.length === 0 ? (
         <EmptyState title="No errors captured" />
       ) : (

@@ -315,6 +315,7 @@ export const factorySettings = pgTable(
     sensitivePaths: text('sensitive_paths'),
     /** More counted lines than this make a change high risk (null: 400). */
     maxLowRiskLines: integer('max_low_risk_lines'),
+    approvalAdjustMaxLines: integer('approval_adjust_max_lines'),
     /** JSON array of globs whose lines do not count toward a change's size, besides the default list. */
     sizeIgnoredPaths: text('size_ignored_paths'),
     /** JSON object: runs inside a flow node at once, per node id. */

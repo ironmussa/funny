@@ -44,6 +44,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { messages, threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
+import { recordServerActivity } from '../activities/server-activities.js';
 import type {
   StartedThread,
   StartThreadError,
@@ -64,6 +65,7 @@ import {
   type FactoryThreadMode,
   NO_CHANGE_TRIAGE_LABEL,
 } from './factory-action-provider.js';
+import { approvalMoveTitle, type ApprovalMove } from './factory-approval-carry.js';
 import {
   createFactoryBatchesRepository,
   type FactoryBatchesRepository,
@@ -117,6 +119,32 @@ export interface FactoryRunJob {
   /** The run's issue as GitHub has it; null for a run without one (change flow-triggers). */
   issue: FactoryIssue | null;
   run: FactoryRunView;
+}
+
+/** A merge approval the factory moved to another commit, as a row of the approver's activities. */
+function recordApprovalMove(
+  move: ApprovalMove,
+  projectId: string,
+  issueNumber: number | null,
+): Promise<void> {
+  return recordServerActivity(
+    {
+      kind: 'factory.approval-moved',
+      userId: move.userId,
+      projectId,
+      title: approvalMoveTitle(move, issueNumber),
+      input: {
+        ...(typeof issueNumber === 'number' && { issueNumber }),
+        from: move.from,
+        to: move.to,
+        change: move.kind,
+        lines: move.lines,
+        files: move.files.slice(0, 20),
+      },
+      origin: 'system',
+    },
+    { ok: true },
+  );
 }
 
 export interface FactoryFlowRunsDeps {
@@ -924,6 +952,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       split: splitDepsOf(job, scope),
       sensitivePaths: job.factory.sensitivePaths,
       maxLowRiskLines: job.factory.maxLowRiskLines,
+      approvalAdjustMaxLines: job.factory.approvalAdjustMaxLines,
       sizeIgnoredPaths: job.factory.sizeIgnoredPaths,
       autoMerge: job.factory.autoMerge,
       // Read from the row: the member approves while the run waits.
@@ -935,6 +964,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         const run = await deps.runs.get(job.run.id);
         return run.isOk() ? (run.value?.mergeApproval ?? null) : null;
       },
+      onApprovalMoved: (move) => recordApprovalMove(move, scope.projectId, job.run.issueNumber),
       carryMergeApproval: async (from, to, move) => {
         const carried = await deps.runs.carryMergeApproval(job.run.id, from, to, move);
         if (carried.isErr()) {

@@ -70,7 +70,11 @@ import { z } from 'zod';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
-import { approvalCovers } from './factory-approval-carry.js';
+import {
+  approvalCovers,
+  approvalMoveComment,
+  type ApprovalMove,
+} from './factory-approval-carry.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import {
   createEarlyIntegration,
@@ -94,7 +98,7 @@ import {
 import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
 import { withBatchStats, type FactoryQueuePort } from './factory-queue-port.js';
 import { createFactoryReviewer, reviewComment, reviewHeadline } from './factory-review.js';
-import { classifyRisk } from './factory-risk.js';
+import { classifyRisk, UNREADABLE_RISK_KEY } from './factory-risk.js';
 import {
   HIGH_RISK_HOLD,
   factoryRunLabel,
@@ -246,6 +250,8 @@ export interface FactoryActionProviderDeps {
   ) => Promise<void>;
   /** The largest adjustment an approval follows, in lines (default 0: only the same change). */
   approvalAdjustMaxLines?: number;
+  /** An approval moved to another commit: record it for the member who approved. */
+  onApprovalMoved?: (move: ApprovalMove) => Promise<void>;
   /** The review verdicts the run already has (a resumed run). */
   reviews?: readonly FactoryReviewVerdict[];
   /** The regression proof the run already has (a resumed run). */
@@ -981,6 +987,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           headSha: sha,
           level: 'high',
           reasons: [`the change could not be read: ${files.error.message}`],
+          keys: [UNREADABLE_RISK_KEY],
         };
     if (files.isOk()) {
       risk.changedLines = files.value.files.reduce((n, f) => n + f.additions + f.deletions, 0);
@@ -1385,7 +1392,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const change = await classifyHead();
     if (change?.sha !== sha || change.risk.level !== 'high') return null;
     if (await deps.mergeApproved?.(sha)) return null;
-    const refusal = await approvalNotMoved(sha);
+    const refusal = await approvalNotMoved(sha, change.risk.keys);
     if (refusal === null) return null;
     return refusal
       ? [...change.risk.reasons, `a member approved another commit, and ${refusal}`]
@@ -1402,7 +1409,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
    * approval to move). The delta is always taken from the commit the member
    * approved, so adjustments cannot add up.
    */
-  async function approvalNotMoved(sha: string): Promise<string | null> {
+  async function approvalNotMoved(
+    sha: string,
+    riskKeys: readonly string[] | undefined,
+  ): Promise<string | null> {
     const approval = (await deps.mergeApproval?.()) ?? null;
     if (!approval || approval.sha === sha) return '';
     const approved = approval.carriedFrom ?? approval.sha;
@@ -1413,17 +1423,52 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       delta: await changeSince(approved, sha),
       maxAdjustLines: deps.approvalAdjustMaxLines ?? 0,
       approvedRiskKeys: approval.riskKeys,
+      riskKeys,
     });
     if (coverage.covers) {
       const { kind, lines, files } = coverage;
       await deps.carryMergeApproval?.(approval.sha, sha, { kind, lines, files });
       await count(metrics, { event: `merge_approval_moved_${kind}` });
       // The move is a compare-and-set: a new approval written meanwhile wins.
-      if (await deps.mergeApproved?.(sha)) return null;
+      if (await deps.mergeApproved?.(sha)) {
+        await announceApprovalMove({
+          userId: approval.userId,
+          from: approved,
+          to: sha,
+          kind,
+          lines,
+          files,
+        });
+        return null;
+      }
     }
     const reason = coverage.covers ? 'the approval changed meanwhile' : coverage.reason;
     approvalRefusals.set(asked, reason);
     return reason;
+  }
+
+  /**
+   * Say where the approval went (D6): a comment on the pull request and a row
+   * in the approver's activities. The stored move is the record; a comment
+   * that fails is logged and never stops the merge.
+   */
+  async function announceApprovalMove(move: ApprovalMove): Promise<void> {
+    await deps.onApprovalMoved?.(move);
+    const pr = pullRequest();
+    if (!pr) return;
+    const commented = await deps.github.commentOnIssue(
+      reader,
+      pr.number,
+      approvalMoveComment(move),
+    );
+    if (commented.isOk()) return;
+    log.warn('Issue factory could not comment a moved merge approval on the pull request', {
+      namespace: 'factory',
+      runId: scope.runId,
+      from: move.from,
+      to: move.to,
+      error: commented.error.message,
+    });
   }
 
   /** How the pull request's change differs at `from` and at `to`, from the run's runner; null when it cannot say. */

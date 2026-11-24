@@ -398,6 +398,18 @@ reads the role's prose as a decision:
   each move is kept in the approval's `moves`. A delta that is not zero, a rewritten branch, or a
   runner that cannot answer (offline, or from before the step) leaves the run waiting, with the
   reason in the hold message. The delta is always taken from the commit the member approved.
+  A factory may also let the approval follow a **small adjustment** (`approvalAdjustMaxLines` in
+  the factory settings, 0 to 200 lines, **0 by default: off**): the delta is at most that many
+  lines, only in files the approved change touched, and the head's risk classification has no key
+  the approved commit lacked. `classifyRisk` gives each reason a stable key (`size`,
+  `sensitive:<path>`, `finding:<kind>:<path>`, `contract:<hash>`); approving stores them in the
+  approval's `riskKeys`, and an approval without them follows only the same change. With the
+  setting on the factory merges lines no person read: the review of the new commit is the
+  remaining guard.
+  Every move is announced (`announceApprovalMove`): a comment on the pull request that says it is
+  automated and that no person approved the new commit, the activity `factory.approval-moved` of
+  the member who approved, and the run detail's "Merge approved at … moved to …". A comment that
+  cannot be posted is logged and does not stop the merge.
 - **Take over**: when the thread's **owner** follows up on a parked run's last thread after it
   parked (noted by `POST /api/threads/:id/message`), the run resumes from that step when the thread
   completes (when the factory is full, the run stays parked; a later completion of the follow-up,

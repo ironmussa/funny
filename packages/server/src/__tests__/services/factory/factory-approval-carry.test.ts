@@ -10,6 +10,8 @@ import { err, ok } from 'neverthrow';
 
 import {
   approvalCovers,
+  approvalMoveComment,
+  approvalMoveTitle,
   type ApprovalCoverageInput,
 } from '../../../services/factory/factory-approval-carry.js';
 import { RUNNER_UNAVAILABLE_PREFIX } from '../../../services/factory/factory-runner-jobs.js';
@@ -126,6 +128,37 @@ describe('approvalCovers', () => {
       lines: 7,
       files: ['src/a.ts'],
     });
+  });
+});
+
+describe('what a moved approval says', () => {
+  const move = { userId: 'alice', from: 'a'.repeat(40), to: 'b'.repeat(40) };
+
+  test('the same change: both commits, and that nobody approved the new one', () => {
+    const body = approvalMoveComment({ ...move, kind: 'same', lines: 0, files: [] });
+    expect(body).toContain('aaaaaaa');
+    expect(body).toContain('bbbbbbb');
+    expect(body).toContain('the same lines at both commits');
+    expect(body).toContain('This comment is automated: no person approved the new commit');
+  });
+
+  test('an adjustment: its lines and its files, the list cut after twenty', () => {
+    const files = Array.from({ length: 23 }, (_, i) => `src/f${i}.ts`);
+    const body = approvalMoveComment({ ...move, kind: 'adjustment', lines: 7, files });
+    expect(body).toContain('differs from the approved one by 7 lines');
+    expect(body).toContain('- `src/f0.ts`');
+    expect(body).toContain('- … and 3 more');
+    expect(body).not.toContain('src/f22.ts');
+    expect(body).toContain('no person approved the new commit');
+  });
+
+  test('the activity title names the issue and what differs', () => {
+    expect(approvalMoveTitle({ ...move, kind: 'same', lines: 0, files: [] }, 451)).toBe(
+      'Merge approval of #451 moved from aaaaaaa to bbbbbbb (same change)',
+    );
+    expect(approvalMoveTitle({ ...move, kind: 'adjustment', lines: 1, files: ['a'] }, null)).toBe(
+      'Merge approval moved from aaaaaaa to bbbbbbb (1 line differs)',
+    );
   });
 });
 

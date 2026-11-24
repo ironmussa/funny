@@ -22,16 +22,16 @@
 
 ## 4. The approval follows a small adjustment (D4, D7)
 
-- [ ] 4.1 Return stable `keys` from `classifyRisk` and store them as `riskKeys` when a member approves; verify with `factory-risk` tests that a larger size keeps the key `size`, and a new sensitive path, finding or contract hint adds a key
-- [ ] 4.2 Add `approval_adjust_max_lines` to `factory_settings` (migration, sqlite and pg schemas, `saveFactorySettingsInput` 0..200, `factory-settings.ts`); verify with a settings test for the default 0, the range and that saving needs `steer`
-- [ ] 4.3 Pass the limit and both classifications to `approvalCovers` from `riskHeld`; verify with provider tests for each scenario of "A merge approval may follow a small adjustment" (7 lines pass, 852 hold, new file holds, new risk key holds, 40 then 30 against a limit of 50 holds, setting off holds, an approval without `riskKeys` only follows the same change)
-- [ ] 4.4 Add the setting row to the factory settings with `SettingRow`, a `data-testid`, its `settings-index.ts` entry and a description saying the factory then merges lines no person read; verify `bun run lint` (`fitness:settings-index`) passes and a component test saves the value
+- [x] 4.1 Return stable `keys` from `classifyRisk` and store them as `riskKeys` when a member approves; verify with `factory-risk` tests that a larger size keeps the key `size`, and a new sensitive path, finding or contract hint adds a key
+- [x] 4.2 Add `approval_adjust_max_lines` to `factory_settings` (migration, sqlite and pg schemas, `saveFactorySettingsInput` 0..200, `factory-settings.ts`); verify with a settings test for the default 0, the range and that saving needs `steer`
+- [x] 4.3 Pass the limit and both classifications to `approvalCovers` from `riskHeld`; verify with provider tests for each scenario of "A merge approval may follow a small adjustment" (7 lines pass, 852 hold, new file holds, new risk key holds, 40 then 30 against a limit of 50 holds, setting off holds, an approval without `riskKeys` only follows the same change)
+- [x] 4.4 Add the setting row to the factory settings with `SettingRow`, a `data-testid`, its `settings-index.ts` entry and a description saying the factory then merges lines no person read; verify `bun run lint` (`fitness:settings-index`) passes and a component test saves the value
 
 ## 5. The trace of a moved approval (D6)
 
-- [ ] 5.1 Post the pull request comment and write the `factory.approval-moved` activity for the approver after a successful move; verify with tests: the comment names both commits, the files and the lines, a failed comment does not stop the merge and is logged, a lost compare-and-set posts nothing
-- [ ] 5.2 Show the approved commit and its moves in the run detail of the factory board; verify with a component test for one `same` and one `adjustment` move
-- [ ] 5.3 Describe both carry rules and the trace in `openwiki/architecture/issue-factory.md`, and the activity kind in `openwiki/architecture/background-activities.md`; verify both pages name the setting and its default
+- [x] 5.1 Post the pull request comment and write the `factory.approval-moved` activity for the approver after a successful move; verify with tests: the comment names both commits, the files and the lines, a failed comment does not stop the merge and is logged, a lost compare-and-set posts nothing
+- [x] 5.2 Show the approved commit and its moves in the run detail of the factory board; verify with a component test for one `same` and one `adjustment` move
+- [x] 5.3 Describe both carry rules and the trace in `openwiki/architecture/issue-factory.md`, and the activity kind in `openwiki/architecture/background-activities.md`; verify both pages name the setting and its default
 
 ## 6. Paths of a run waiting for its approval (D8)
 

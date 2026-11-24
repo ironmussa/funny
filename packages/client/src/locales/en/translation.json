@@ -736,6 +736,8 @@
     "projectFactorySensitivePathsDesc": "Globs, separated by commas. A change that touches one is high risk, besides .github/, migrations and auth/",
     "projectFactoryMaxLowRiskLines": "Size of a low-risk change",
     "projectFactoryMaxLowRiskLinesDesc": "A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count",
+    "projectFactoryApprovalAdjust": "Adjustment an approval follows",
+    "projectFactoryApprovalAdjustDesc": "After you approve a high-risk change, the factory may merge a later commit that differs from it by at most this many lines, only in files you approved and with no new risk reason. It then merges lines no person read; the review still has to pass. 0: only the same change",
     "projectFactorySizeIgnoredPaths": "Not counted in size",
     "projectFactorySizeIgnoredPathsDesc": "Globs, separated by commas. Their lines do not count toward the size of a change. Sensitive paths still apply to them",
     "projectFactoryStageLimits": "Runs per step",
@@ -2096,6 +2098,10 @@
     }
   },
   "factoryRunDetail": {
+    "approvalAdjustment": "{{lines}} lines differ in {{files}} files",
+    "approvalMovedTo": "moved to",
+    "approvalSameChange": "same change",
+    "approvedAt": "Merge approved at",
     "carriedFrom": "from {{sha}}",
     "ci": "{{rounds}} CI rounds · {{red}} red · {{conflicts}} conflicts · {{fixes}} agent fixes",
     "flow": "Flow",

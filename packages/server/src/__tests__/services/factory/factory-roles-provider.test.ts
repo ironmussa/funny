@@ -43,6 +43,11 @@ const changed = (path: string, lines: string[]): PullRequestFile => ({
   patch: ['@@ -1 +1 @@', ...lines].join('\n'),
 });
 
+/** What the provider commented on an issue or a pull request; a test that reads it empties it first. */
+const posted: Array<{ number: number; body: string }> = [];
+/** When set, commenting fails with this message. */
+let commentError: string | null = null;
+
 function providerWith(pullRequests: Partial<PullRequestsPort>, over: Partial<ProviderDeps> = {}) {
   const risks: FactoryRisk[] = [];
   const provider = createFactoryActionProvider({
@@ -55,7 +60,13 @@ function providerWith(pullRequests: Partial<PullRequestsPort>, over: Partial<Pro
     waitThread: async () => ({ status: 'completed' as const, output: 'done' }),
     github: {
       branchAhead: () => okAsync(true),
-      commentOnIssue: () => okAsync(undefined),
+      commentOnIssue: (_reader, number, body) => {
+        if (commentError) {
+          return errAsync({ kind: 'github-error' as const, message: commentError });
+        }
+        posted.push({ number, body });
+        return okAsync(undefined);
+      },
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),
@@ -94,7 +105,14 @@ describe('risk class of the pull request head', () => {
     await provider.waitCi({});
     // With its size and paths, which order the merge queue (openspec factory-integration D11).
     expect(risks).toEqual([
-      { headSha: 'sha-1', level: 'low', reasons: [], changedLines: 1, paths: ['src/sum.ts'] },
+      {
+        headSha: 'sha-1',
+        level: 'low',
+        reasons: [],
+        keys: [],
+        changedLines: 1,
+        paths: ['src/sum.ts'],
+      },
     ]);
   });
 
@@ -112,6 +130,7 @@ describe('risk class of the pull request head', () => {
         headSha: 'sha-1',
         level: 'high',
         reasons: ["skip-marker in src/sum.test.ts: test.skip('adds', () => {});"],
+        keys: ['finding:skip-marker:src/sum.test.ts'],
         changedLines: 1,
         paths: ['src/sum.test.ts'],
       },
@@ -160,6 +179,7 @@ describe('risk class of the pull request head', () => {
         headSha: 'sha-1',
         level: 'high',
         reasons: ['the change could not be read: GitHub answered 502'],
+        keys: ['unreadable'],
       },
     ]);
   });
@@ -1098,10 +1118,16 @@ describe('merge brings the branch up to date with its base first', () => {
     const reviewedNew = { sha: SHA_NEW, verdict: 'pass' as const, findings: [], reviewedAt: at };
 
     /** A run approved at A whose head is SHA_NEW; the runner answers `answer` for the delta. */
-    function approvedAtA(answer: Record<string, unknown> | 'offline') {
-      let approval: FactoryMergeApproval = { sha: SHA_A, userId: 'alice', at };
+    function approvedAtA(
+      answer: Record<string, unknown> | 'offline',
+      over: { approval?: Partial<FactoryMergeApproval>; maxLines?: number } = {},
+    ) {
+      let approval: FactoryMergeApproval = { sha: SHA_A, userId: 'alice', at, ...over.approval };
       const asked: Array<Record<string, unknown>> = [];
       const moves: unknown[] = [];
+      const announced: unknown[] = [];
+      posted.length = 0;
+      commentError = null;
       const run = lane({
         head: SHA_NEW,
         reviews: [reviewedA, reviewedNew],
@@ -1109,6 +1135,10 @@ describe('merge brings the branch up to date with its base first', () => {
         deps: {
           mergeApproved: async (sha) => approval.sha === sha,
           mergeApproval: async () => approval,
+          onApprovalMoved: async (move) => {
+            announced.push(move);
+          },
+          approvalAdjustMaxLines: over.maxLines,
           carryMergeApproval: async (from, to, move) => {
             if (approval.sha !== from) return;
             approval = { ...approval, sha: to, carriedFrom: approval.carriedFrom ?? from };
@@ -1126,7 +1156,7 @@ describe('merge brings the branch up to date with its base first', () => {
           },
         },
       });
-      return { ...run, asked, moves, approval: () => approval };
+      return { ...run, asked, moves, announced, approval: () => approval };
     }
 
     const compared = (over: Record<string, unknown>) => ({
@@ -1150,6 +1180,37 @@ describe('merge brings the branch up to date with its base first', () => {
       expect(asked).toMatchObject([{ kind: 'change-delta', from: SHA_A, to: SHA_NEW }]);
       expect(moves).toEqual([{ kind: 'same', lines: 0, files: [] }]);
       expect(approval()).toMatchObject({ sha: SHA_NEW, carriedFrom: SHA_A });
+    });
+
+    // D6: the pull request and the approver are told where the approval went.
+    test('a moved approval is commented on the pull request and recorded for the approver', async () => {
+      const { merge, announced } = approvedAtA(compared({}));
+      expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+      expect(announced).toEqual([
+        { userId: 'alice', from: SHA_A, to: SHA_NEW, kind: 'same', lines: 0, files: [] },
+      ]);
+      expect(posted).toHaveLength(1);
+      expect(posted[0]).toMatchObject({ number: 12 });
+      expect(posted[0]!.body).toContain(SHA_A.slice(0, 7));
+      expect(posted[0]!.body).toContain(SHA_NEW.slice(0, 7));
+      expect(posted[0]!.body).toContain('no person approved the new commit');
+    });
+
+    test('a comment that cannot be posted does not stop the merge', async () => {
+      const { merge, merges, announced } = approvedAtA(compared({}));
+      commentError = 'GitHub answered 502';
+      expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+      commentError = null;
+      expect(merges).toMatchObject([{ sha: SHA_NEW }]);
+      expect(announced).toHaveLength(1);
+      expect(posted).toEqual([]);
+    });
+
+    test('an approval that does not move is not announced', async () => {
+      const { merge, announced } = approvedAtA(compared({ ancestor: false }));
+      await merge();
+      expect(announced).toEqual([]);
+      expect(posted).toEqual([]);
     });
 
     test('a change that differs waits for a person, who is told why', async () => {
@@ -1179,6 +1240,94 @@ describe('merge brings the branch up to date with its base first', () => {
       expect(merges).toEqual([]);
       // Asked once, although the gate looks at the head more than once.
       expect(asked).toHaveLength(1);
+    });
+
+    // openspec factory-approval-survives-integration, group 4. The workflow file
+    // change is the finding `ci-workflow-edit`: its key is what the member approved.
+    describe('and a small adjustment, where the factory allows one', () => {
+      const sevenLines = compared({ lines: 7, files: [{ path: 'src/a.ts', lines: 7 }] });
+      const riskKeysOfHead = async () => {
+        const { provider, risks } = providerWith({
+          changedFiles: () => okAsync({ files: highRisk, truncated: false }),
+        });
+        await provider.waitCi({});
+        return risks.at(-1)?.keys ?? [];
+      };
+
+      // #448, #458, #487: a base merge and a small fix by the agent.
+      test('7 lines in approved files, with no new risk reason, merge without a second approval', async () => {
+        const riskKeys = await riskKeysOfHead();
+        expect(riskKeys.length).toBeGreaterThan(0);
+        const { merge, merges, moves } = approvedAtA(sevenLines, {
+          approval: { riskKeys },
+          maxLines: 50,
+        });
+        expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+        expect(merges).toMatchObject([{ sha: SHA_NEW }]);
+        expect(moves).toEqual([{ kind: 'adjustment', lines: 7, files: ['src/a.ts'] }]);
+      });
+
+      test('the setting off: 7 lines wait for a person', async () => {
+        const { merge, merges } = approvedAtA(sevenLines, {
+          approval: { riskKeys: await riskKeysOfHead() },
+        });
+        const held = await merge();
+        expect(held.error).toContain('differs from the approved commit by 7 lines');
+        expect(merges).toEqual([]);
+      });
+
+      test('more lines than the factory follows wait for a person', async () => {
+        const { merge, merges } = approvedAtA(
+          compared({ lines: 852, files: [{ path: 'src/a.ts', lines: 852 }] }),
+          { approval: { riskKeys: await riskKeysOfHead() }, maxLines: 50 },
+        );
+        expect((await merge()).error).toContain('852 lines; this factory follows 50');
+        expect(merges).toEqual([]);
+      });
+
+      test('a file the approved change did not touch waits for a person', async () => {
+        const { merge, merges } = approvedAtA(
+          compared({
+            lines: 5,
+            files: [{ path: 'src/new.ts', lines: 5 }],
+            outsideFrom: ['src/new.ts'],
+          }),
+          { approval: { riskKeys: await riskKeysOfHead() }, maxLines: 50 },
+        );
+        expect((await merge()).error).toContain('src/new.ts');
+        expect(merges).toEqual([]);
+      });
+
+      test('a risk reason the approved commit did not have waits for a person', async () => {
+        // The member approved a commit whose only risk was its size.
+        const { merge, merges } = approvedAtA(sevenLines, {
+          approval: { riskKeys: ['size'] },
+          maxLines: 50,
+        });
+        expect((await merge()).error).toContain('a risk reason the approved commit did not have');
+        expect(merges).toEqual([]);
+      });
+
+      test('an approval recorded without risk keys follows only the same change', async () => {
+        const { merge, merges } = approvedAtA(sevenLines, { maxLines: 50 });
+        expect((await merge()).error).toContain('were not recorded');
+        expect(merges).toEqual([]);
+      });
+
+      // 40 lines moved the approval from A to B; the head is compared with A, not
+      // with B, so 30 more lines are 70 against a limit of 50.
+      test('the difference is measured from the commit the member approved', async () => {
+        const { merge, asked, merges } = approvedAtA(
+          compared({ lines: 70, files: [{ path: 'src/a.ts', lines: 70 }] }),
+          {
+            approval: { sha: SHA_B, carriedFrom: SHA_A, riskKeys: await riskKeysOfHead() },
+            maxLines: 50,
+          },
+        );
+        expect((await merge()).error).toContain('70 lines; this factory follows 50');
+        expect(asked).toMatchObject([{ from: SHA_A, to: SHA_NEW }]);
+        expect(merges).toEqual([]);
+      });
     });
   });
 

@@ -77,3 +77,56 @@ export function approvalCovers(input: ApprovalCoverageInput): ApprovalCoverage {
     files: delta.files.map((file) => file.path),
   };
 }
+
+/** A merge approval that moved from the commit a member approved to another. */
+export interface ApprovalMove {
+  /** Who approved. */
+  userId: string;
+  /** The commit they approved. */
+  from: string;
+  /** The commit the approval covers now. */
+  to: string;
+  kind: 'same' | 'adjustment';
+  lines: number;
+  files: string[];
+}
+
+const short = (sha: string) => sha.slice(0, 7);
+const SHOWN_FILES = 20;
+
+/** One line saying the move, for the approver's activities and the log. */
+export function approvalMoveTitle(move: ApprovalMove, issueNumber: number | null): string {
+  const what = issueNumber ? ` of #${issueNumber}` : '';
+  const how =
+    move.kind === 'same'
+      ? 'same change'
+      : `${linesOf(move.lines)} ${move.lines === 1 ? 'differs' : 'differ'}`;
+  return `Merge approval${what} moved from ${short(move.from)} to ${short(move.to)} (${how})`;
+}
+
+/**
+ * What the pull request is told when an approval moves: which commit a person
+ * approved, which one merges on it, and what differs. It says it is automated
+ * and that nobody approved the new commit, so the page does not read as a
+ * second approval.
+ */
+export function approvalMoveComment(move: ApprovalMove): string {
+  const head = `A member approved merging this high-risk change at ${short(move.from)}. The factory moved that approval to ${short(move.to)}.`;
+  const automated =
+    'This comment is automated: no person approved the new commit. Its review and its checks still have to pass before it merges.';
+  if (move.kind === 'same') {
+    return [
+      head,
+      `The pull request adds and removes the same lines at both commits: ${short(move.to)} only brings the base branch in.`,
+      automated,
+    ].join('\n\n');
+  }
+  const shown = move.files.slice(0, SHOWN_FILES).map((file) => `- \`${file}\``);
+  if (move.files.length > SHOWN_FILES)
+    shown.push(`- … and ${move.files.length - SHOWN_FILES} more`);
+  return [
+    head,
+    `The change differs from the approved one by ${linesOf(move.lines)}, in files the approved change already touched and with no new risk reason:\n${shown.join('\n')}`,
+    automated,
+  ].join('\n\n');
+}

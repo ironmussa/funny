@@ -1,3 +1,4 @@
+import type { JsonObject, JsonValue } from '@bufbuild/protobuf';
 import { runAsync } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
@@ -14,10 +15,18 @@ import type {
   RunnerGrpcHandler,
 } from './runner-grpc-server.js';
 import type { RunnerGrpcSessionRegistry } from './session-registry.js';
+import { decodeStruct, encodeStruct, type WireStruct } from './struct-codec.js';
 import { observeRunnerGrpc } from './transport-observability.js';
 
-type WireValue = null | boolean | number | string | WireValue[] | { [key: string]: WireValue };
-type WireRequest = Record<string, any> & {
+type OperationKind = (typeof OPERATION_KINDS)[number];
+
+/**
+ * An `OperationsRequest` as proto-loader decodes it: the envelope fields, and
+ * the request message under its operation's field name. Each operation message
+ * is plain JSON (longs as strings, enums as numbers; operations.proto has no
+ * bytes fields), with its `google.protobuf.Struct` fields still in wire form.
+ */
+type WireRequest = {
   operation?: string;
   session?: { sessionEpoch?: string | number | bigint };
   metadata?: {
@@ -25,10 +34,53 @@ type WireRequest = Record<string, any> & {
     deadline?: { seconds?: string | number | bigint; nanos?: number };
     idempotencyKey?: string;
   };
-};
+} & { [K in OperationKind]?: JsonObject };
+
+/** A field of a legacy data request: decoded JSON, or `undefined` for an absent optional field. */
+type DataRequestValue =
+  | JsonValue
+  | undefined
+  | DataRequestValue[]
+  | { [key: string]: DataRequestValue };
+
+/** The `data:*` message an operation becomes, handed to `handleDataMessageWithAck`. */
+type DataRequest = { type: string; [field: string]: DataRequestValue };
+
+/** `OperationSuccess`, one case of its `result` oneof. */
+type OperationSuccessWire =
+  | {
+      threadMessages: {
+        messages: WireStruct[];
+        hasMore: boolean;
+        hasMoreAfter: boolean;
+        total?: string;
+        windowStart?: string;
+        leadingUserMessage?: WireStruct;
+      };
+    }
+  | {
+      toolCall: {
+        id?: string;
+        name?: string | null;
+        input?: string | null;
+        output?: string | null;
+      };
+    }
+  | { thread: { value?: WireStruct } }
+  | { insertedRecord: { id: string } }
+  | { deletedRecords: { count: string } }
+  | { operationResponse: WireStruct };
+
+/** `OperationsResponse` as written to the stream. */
+interface OperationsResponseWire {
+  session: { sessionEpoch: string };
+  correlationId: string;
+  success?: OperationSuccessWire;
+  failure?: { code: FailureCode; message: string; retryable: boolean };
+}
 
 export interface OperationExecution {
-  request: Record<string, unknown>;
+  request: DataRequest;
   signal: AbortSignal;
 }
 
@@ -150,54 +202,7 @@ function requestKind(request: WireRequest): string | undefined {
   return OPERATION_KINDS.find((key) => request[key] !== undefined);
 }
 
-function decodeValue(value: any): WireValue {
-  if (!value || typeof value !== 'object' || typeof value.kind !== 'string') return value;
-  switch (value.kind) {
-    case 'nullValue':
-      return null;
-    case 'numberValue':
-      return value.numberValue;
-    case 'stringValue':
-      return value.stringValue;
-    case 'boolValue':
-      return value.boolValue;
-    case 'structValue':
-      return decodeStruct(value.structValue);
-    case 'listValue':
-      return (value.listValue?.values ?? []).map(decodeValue);
-    default:
-      return null;
-  }
-}
-
-function decodeStruct(value: any): Record<string, WireValue> {
-  if (!value || typeof value !== 'object') return {};
-  if (!value.fields || typeof value.fields !== 'object') return value;
-  return Object.fromEntries(
-    Object.entries(value.fields).map(([key, field]) => [key, decodeValue(field)]),
-  );
-}
-
-function encodeValue(value: unknown): Record<string, unknown> {
-  if (value === null || value === undefined) return { nullValue: 0 };
-  if (typeof value === 'number') return { numberValue: value };
-  if (typeof value === 'string') return { stringValue: value };
-  if (typeof value === 'boolean') return { boolValue: value };
-  if (Array.isArray(value)) return { listValue: { values: value.map(encodeValue) } };
-  return { structValue: encodeStruct(value) };
-}
-
-function encodeStruct(value: unknown): Record<string, unknown> {
-  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  return {
-    fields: Object.fromEntries(
-      Object.entries(record).map(([key, field]) => [key, encodeValue(field)]),
-    ),
-  };
-}
-
-type OperationKind = (typeof OPERATION_KINDS)[number];
-type LegacyMapper = (value: any, principalUserId: string | null) => Record<string, unknown>;
+type LegacyMapper = (value: JsonObject, principalUserId: string | null) => DataRequest;
 
 const threadScoped =
   (type: string): LegacyMapper =>
@@ -233,7 +238,7 @@ const idPatchPayload =
   (type: string, idField: string): LegacyMapper =>
   (value) => ({ type, payload: { id: value[idField], patch: decodeStruct(value.patch) } });
 
-function legacyInsertMessage(value: any): Record<string, unknown> {
+function legacyInsertMessage(value: JsonObject): DataRequest {
   return {
     type: 'data:insert_message',
     threadId: value.threadId,
@@ -255,7 +260,7 @@ function legacyInsertMessage(value: any): Record<string, unknown> {
   };
 }
 
-function legacyMessagePageDirection(direction: unknown): 'after' | 'before' {
+function legacyMessagePageDirection(direction: JsonValue | undefined): 'after' | 'before' {
   return direction === 2 || direction === 'MESSAGE_PAGE_DIRECTION_AFTER' ? 'after' : 'before';
 }
 
@@ -453,11 +458,10 @@ function isOperationKind(kind: string): kind is OperationKind {
 }
 
 function toLegacyRequest(
-  kind: string,
+  kind: OperationKind,
   request: WireRequest,
   principalUserId: string | null,
-): Record<string, unknown> | null {
-  if (!isOperationKind(kind)) return null;
+): DataRequest {
   return LEGACY_MAPPERS[kind](request[kind] ?? {}, principalUserId);
 }
 
@@ -467,7 +471,7 @@ function failure(
   code: FailureCode,
   message: string,
   retryable = false,
-): Record<string, unknown> {
+): OperationsResponseWire {
   return {
     session: { sessionEpoch: epoch.toString() },
     correlationId,
@@ -475,8 +479,8 @@ function failure(
   };
 }
 
-function success(epoch: bigint, correlationId: string, result: any): Record<string, unknown> {
-  let payload: Record<string, unknown>;
+function success(epoch: bigint, correlationId: string, result: any): OperationsResponseWire {
+  let payload: OperationSuccessWire;
   if (result?.type === 'data:get_thread_messages_response') {
     payload = {
       threadMessages: {
@@ -599,7 +603,7 @@ export function createOperationsHandler(
           sendFailure(FailureCode.DEADLINE_EXCEEDED, 'operation deadline exceeded', true);
           return;
         }
-        const kind = operationKind;
+        const kind = operationKind && isOperationKind(operationKind) ? operationKind : undefined;
         const legacyRequest = kind
           ? toLegacyRequest(kind, request, context.principal.userId)
           : null;

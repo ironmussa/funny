@@ -9,6 +9,7 @@
  * before dispatching here — see `handleDataMessageWithAck` in data-handler.ts.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import { errorMessage } from '@funny/shared/errors';
 import type { JobPatch, WatcherPatch } from '@funny/shared/repositories';
 import { and, eq, or } from 'drizzle-orm';
@@ -53,9 +54,10 @@ function stripRunnerImmutableThreadFields(
   runnerUserId: string | null,
   threadId: string,
   updates: unknown,
-): Record<string, unknown> {
+): JsonObject {
   if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return {};
-  const allowed: Record<string, unknown> = {};
+  // The updates arrive as the decoded `Struct` of an `UpdateThread` operation.
+  const allowed: JsonObject = {};
   const refused: string[] = [];
   for (const [key, value] of Object.entries(updates)) {
     if (RUNNER_IMMUTABLE_THREAD_FIELDS.has(key)) refused.push(key);
@@ -185,33 +187,41 @@ async function findAgentTemplateForRunner(ownerId: string, templateId: unknown):
 
 // ── Watcher / job patch allow-lists ──────────────────────────────
 
+/** A runner-sent patch's own fields (the decoded `Struct` of a watcher / job update). */
+type PatchFields = ReadonlyMap<string, unknown>;
+
+function ownFields(raw: unknown): PatchFields {
+  return new Map(raw && typeof raw === 'object' ? Object.entries(raw) : []);
+}
+
 /** Keep `patch[key]` when it passes `ok`; drop it otherwise. */
-function copyIf<T>(
-  out: Record<string, unknown>,
-  patch: Record<string, unknown>,
-  key: string,
+function copyIf<K extends string, T>(
+  out: Partial<Record<K, T>>,
+  patch: PatchFields,
+  key: K,
   ok: (v: unknown) => v is T,
 ): void {
-  if (Object.hasOwn(patch, key) && ok(patch[key])) out[key] = patch[key];
+  const value = patch.get(key);
+  if (patch.has(key) && ok(value)) out[key] = value;
 }
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
-const asRecord = (v: unknown): Record<string, unknown> =>
-  v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 
 /**
  * Fields a runner may change on its own watcher — never owner, thread, key,
  * or caps. Values are type-checked; anything else is dropped.
  */
 function pickWatcherPatch(raw: unknown): WatcherPatch {
-  const patch = asRecord(raw);
-  const out: Record<string, unknown> = {};
+  const patch = ownFields(raw);
+  const out: Partial<Record<keyof WatcherPatch, string | number>> = {};
   copyIf(out, patch, 'nextWakeAt', isNum);
   copyIf(out, patch, 'lastDelayMs', isNum);
   copyIf(out, patch, 'wakeCount', isNum);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: the numeric fields passed `isNum`; `status` is any string the
+  // runner sent, stored unchecked as it always was.
   return out as WatcherPatch;
 }
 
@@ -222,12 +232,14 @@ function pickWatcherPatch(raw: unknown): WatcherPatch {
  * ownership guard already restricts updates to the runner user's own jobs.
  */
 function pickJobPatch(raw: unknown): JobPatch {
-  const patch = asRecord(raw);
-  const out: Record<string, unknown> = {};
+  const patch = ownFields(raw);
+  const out: Partial<Record<keyof JobPatch, string | number | null>> = {};
   copyIf(out, patch, 'pid', isNumOrNull);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'exitCode', isNumOrNull);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: `pid` / `exitCode` passed `isNumOrNull`; `status` is any string the
+  // runner sent, stored unchecked as it always was.
   return out as JobPatch;
 }
 

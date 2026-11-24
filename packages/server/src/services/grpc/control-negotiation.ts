@@ -243,9 +243,8 @@ export function createControlNegotiationHandler(
     call.once('error', deactivate);
     call.once('finish', deactivate);
 
-    const handleRequest = async (raw: Record<string, unknown>): Promise<void> => {
+    const handleRequest = async (request: ControlRequestWire): Promise<void> => {
       if (state === 'closed') return;
-      const request = raw as ControlRequestWire;
       const kind = requestKind(request);
 
       if (state === 'awaiting-hello') {
@@ -400,7 +399,7 @@ export function createControlNegotiationHandler(
       );
     };
 
-    call.on('data', (request: Record<string, unknown>) => {
+    call.on('data', (request: ControlRequestWire) => {
       call.pause();
       void handleRequest(request)
         .catch(() => {

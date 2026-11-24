@@ -36,7 +36,12 @@ import {
   type TunnelHandlerOptions,
 } from './tunnel-handler.js';
 
-type StreamMessage = Record<string, unknown>;
+/**
+ * A message of one of the runner.v2 streams, as proto-loader decodes it or
+ * serializes it from a plain object. The interceptor is shared by every
+ * stream, so each handler declares the shape of its own messages.
+ */
+type StreamMessage = object;
 export type RunnerGrpcCall = grpc.ServerDuplexStream<StreamMessage, StreamMessage>;
 
 export interface RunnerGrpcPrincipal {

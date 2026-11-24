@@ -466,7 +466,12 @@ export function McpServerSettings() {
     recommendedLoadedRef.current = true;
     (async () => {
       const result = await api.getRecommendedMcpServers();
-      if (result.isOk()) setRecommended(result.value.servers as RecommendedServer[]);
+      if (result.isOk()) {
+        // SAFETY: /mcp/recommended answers the runtime's RECOMMENDED_SERVERS, whose
+        // entries all have a name, description and type; the API typing as McpServer
+        // just omits `description`.
+        setRecommended(result.value.servers as RecommendedServer[]);
+      }
     })();
   }, []);
 
@@ -667,6 +672,7 @@ export function McpServerSettings() {
             <Select
               value={selectedProvider}
               onValueChange={(v) => {
+                // SAFETY: the select's items are MCP_PROVIDER_OPTIONS, whose values are AgentProviders.
                 setSelectedProvider(v as AgentProvider);
                 setShowAddForm(false);
               }}
@@ -723,7 +729,12 @@ export function McpServerSettings() {
                 <label className="settings-label" htmlFor="mcp-custom-type">
                   {t('mcp.type')}
                 </label>
-                <Select value={addType} onValueChange={(v) => setAddType(v as McpServerType)}>
+                <Select
+                  value={addType}
+                  onValueChange={(v) => {
+                    if (v === 'stdio' || v === 'http' || v === 'sse') setAddType(v);
+                  }}
+                >
                   <SelectTrigger id="mcp-custom-type" className="h-8">
                     <SelectValue />
                   </SelectTrigger>

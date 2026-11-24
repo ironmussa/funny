@@ -265,8 +265,9 @@ export function LiveColumnsView() {
     const handler = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       if (e.key !== 'n' && e.key !== 'N') return;
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
         return;
       }
       if (gridCols >= MAX_GRID_COLS) return;
@@ -293,9 +294,12 @@ export function LiveColumnsView() {
         if (!targets.length) return;
 
         const targetData = targets[0].data;
+        // SAFETY: every 'grid-thread' draggable (ThreadColumn, useGridThreadDrag)
+        // puts the thread id string in `threadId`.
         const threadId = source.data.threadId as string;
 
         if (targetData.type === 'grid-cell') {
+          // SAFETY: GridCellDropTarget's 'grid-cell' data carries its `cellIndex: number` prop.
           const cellIndex = targetData.cellIndex as number;
           setGridCells((prev) => {
             const updated = { ...prev };
@@ -323,6 +327,8 @@ export function LiveColumnsView() {
         }
 
         if (targetData.type === 'grid-col-insert') {
+          // SAFETY: GridColumnInsertDropTarget's 'grid-col-insert' data carries its
+          // `insertIndex: number` prop.
           const insertIndex = targetData.insertIndex as number;
           if (gridCols >= MAX_GRID_COLS) {
             toast.info(t('live.gridFull', 'Grid is full'));

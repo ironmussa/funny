@@ -119,7 +119,13 @@ export function CreateDesignDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="px-6">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            if (v === 'prototype' || v === 'slides' || v === 'template' || v === 'other') setTab(v);
+          }}
+          className="px-6"
+        >
           <TabsList className="bg-sidebar-accent/50 h-7 p-0.5">
             <TabsTrigger
               value="prototype"

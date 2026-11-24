@@ -234,6 +234,8 @@ export function MonacoEditorDialog({
     // stable but absent from the public d.ts, hence the narrow cast. Capped so
     // huge files don't block on whole-document tokenization; the rest streams in
     // lazily as the user scrolls.
+    // SAFETY: Monaco 0.55 text models carry the internal `tokenization.forceTokenization`;
+    // both members are typed optional and called with `?.`, so a missing one is a no-op.
     const model = editor.getModel() as
       | (monacoEditor.ITextModel & {
           tokenization?: { forceTokenization?: (lineNumber: number) => void };

@@ -95,7 +95,9 @@ export function AutomationSettings() {
   // "Create automation" entry. Clear the history state so a refresh/back won't
   // re-trigger it.
   useEffect(() => {
-    if ((location.state as { openCreateAutomation?: boolean } | null)?.openCreateAutomation) {
+    // react-router types `location.state` as `any`; ProjectActionsMenu sets this shape.
+    const navState: { openCreateAutomation?: boolean } | null = location.state;
+    if (navState?.openCreateAutomation) {
       setEditingId(null);
       setForm(defaultForm);
       setDialogOpen(true);
@@ -114,7 +116,7 @@ export function AutomationSettings() {
     setForm({
       name: a.name,
       prompt: a.prompt,
-      schedule: a.schedule as AutomationSchedule,
+      schedule: a.schedule,
       model: a.model,
       permissionMode: a.permissionMode,
     });

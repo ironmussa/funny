@@ -192,6 +192,8 @@ function readStoredLayout(): SerializedDockview | null {
     const parsed = JSON.parse(raw);
     // Minimum-shape check — anything richer is for fromJSON to reject.
     if (typeof parsed === 'object' && parsed !== null && 'grid' in parsed && 'panels' in parsed) {
+      // SAFETY: the value was written by writeStoredLayout as a SerializedDockview and
+      // has its `grid` and `panels` keys (checked above); fromJSON rejects the rest.
       return parsed as SerializedDockview;
     }
     return null;
@@ -1029,6 +1031,8 @@ export function DockviewLayout({
   // plumbing.
   useEffect(() => {
     const handler = (e: Event) => {
+      // SAFETY: the only dispatcher, TerminalDockview, sends a CustomEvent whose
+      // detail is `{ tabId }`; the optional chain below still tolerates a missing detail.
       const detail = (e as CustomEvent<{ tabId: string }>).detail;
       const tabId = detail?.tabId;
       if (!tabId) return;

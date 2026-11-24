@@ -87,6 +87,8 @@ function readStoredLayout(): SerializedDockview | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (typeof parsed === 'object' && parsed !== null && 'grid' in parsed && 'panels' in parsed) {
+      // SAFETY: the value was written by writeStoredLayout as a SerializedDockview and has
+      // the `grid` and `panels` keys of a SerializedDockview, checked just above.
       return parsed as SerializedDockview;
     }
     return null;

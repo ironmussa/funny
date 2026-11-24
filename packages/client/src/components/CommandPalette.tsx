@@ -93,6 +93,8 @@ function useFilteredCommandItems(
 function usePaletteOpenTiming(open: boolean, projectCount: number) {
   useEffect(() => {
     if (!open) return;
+    // SAFETY: `__paletteOpenTs` is only ever set by use-global-shortcuts.ts to
+    // `performance.now()` (a number) or cleared to undefined below.
     const w = window as { __paletteOpenTs?: number };
     const t0 = w.__paletteOpenTs;
     if (t0 == null) return;

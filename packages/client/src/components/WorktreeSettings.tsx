@@ -1,9 +1,10 @@
-import type { Thread } from '@funny/shared';
+import type { Thread, ThreadStatus } from '@funny/shared';
 import {
   Trash2,
   Plus,
   Loader2,
   AlertCircle,
+  GitBranch,
   GitFork,
   House,
   ExternalLink,
@@ -14,11 +15,9 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
-import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
-import { ThreadStatusIndicator } from '@/components/thread/ThreadStatusPin';
+import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -26,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
@@ -35,11 +35,12 @@ import {
   listRowClassName,
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
-import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
-import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { goToThread } from '@/navigation/go-to-thread';
+import { buildThreadPath } from '@/navigation/thread-paths';
 import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { BranchPicker } from './SearchablePicker';
 
@@ -86,59 +87,89 @@ export function groupThreadsByWorktree(
   return byPath;
 }
 
-function WorktreeThreadLinks({ threads }: { threads: Thread[] }) {
-  const { t } = useTranslation();
+/** A thread whose agent is working, or about to. */
+const BUSY_STATUSES: ReadonlySet<ThreadStatus> = new Set([
+  'setting_up',
+  'pending',
+  'running',
+  'waiting',
+]);
+
+/** When a worktree's threads were last active (ISO), or '' when it has none. */
+function lastActivity(threads: Thread[]): string {
+  return threads.reduce((latest, thread) => {
+    return thread.updatedAt > latest ? thread.updatedAt : latest;
+  }, '');
+}
+
+/**
+ * The order the list shows worktrees in: the main checkout, then those whose
+ * agent is working, then the rest with threads by latest activity, then the
+ * ones no thread works in. Stable within each rank.
+ */
+export function orderWorktrees(
+  worktrees: WorktreeInfo[],
+  threadsByWorktree: Map<string, Thread[]>,
+): WorktreeInfo[] {
+  const rank = (wt: WorktreeInfo) => {
+    if (wt.isMain) return 0;
+    const threads = threadsByWorktree.get(wt.path) ?? [];
+    if (threads.some((thread) => BUSY_STATUSES.has(thread.status))) return 1;
+    return threads.length > 0 ? 2 : 3;
+  };
+  return worktrees
+    .map((wt, index) => ({
+      wt,
+      index,
+      rank: rank(wt),
+      at: lastActivity(threadsByWorktree.get(wt.path) ?? []),
+    }))
+    .sort((a, b) => a.rank - b.rank || b.at.localeCompare(a.at) || a.index - b.index)
+    .map(({ wt }) => wt);
+}
+
+/**
+ * One thread working in a worktree, drawn as the left sidebar draws it
+ * (`ThreadItem`: status, title, PR and git-state chips, branch powerline,
+ * snippet and time), so the two lists read the same. The worktree row keeps
+ * its own actions, so the thread's menu is hidden.
+ */
+function WorktreeThreadItem({ thread, projectPath }: { thread: Thread; projectPath: string }) {
   const navigate = useStableNavigate();
+  const gitStatus = useGitStatusForThread(thread.id);
+  const isSelected = useThreadStore((s) => s.selectedThreadId === thread.id);
+  const onSelect = useCallback(() => goToThread(navigate, thread), [navigate, thread]);
   return (
-    <div className="flex min-w-0 flex-col gap-0.5" data-testid="worktree-threads">
-      {threads.map((thread) => {
-        const href = buildPath(getThreadRoute(thread));
-        return (
-          <a
-            key={thread.id}
-            href={href}
-            onClick={(e) => {
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-              e.preventDefault();
-              navigate(href);
-            }}
-            title={t('worktreeSettings.openThread', { title: thread.title })}
-            // The title at the sidebar's thread-title size and color (`ThreadItemRows`).
-            className="text-thread-title flex min-w-0 items-center gap-1.5 text-sm leading-tight hover:underline"
-            data-testid={`worktree-thread-link-${thread.id}`}
-          >
-            {/* The sidebar's status glyph (`status-glyph-dots`: a dot theme shows dots here too). */}
-            <span
-              className="status-glyph-dots flex size-3.5 shrink-0 items-center justify-center"
-              data-testid={`worktree-thread-status-${thread.id}`}
-              data-status={thread.status}
-            >
-              <ThreadStatusIndicator thread={thread} withTooltip />
-            </span>
-            {/* The sidebar's title rendering: capitalized, attachments and commands as chips. */}
-            <ThreadTitle
-              title={thread.title}
-              as="span"
-              density="compact"
-              badgeTestId={`worktree-thread-attachments-${thread.id}`}
-            />
-          </a>
-        );
-      })}
-    </div>
+    <ThreadItem
+      thread={thread}
+      projectPath={projectPath}
+      isSelected={isSelected}
+      onSelect={onSelect}
+      gitStatus={gitStatus}
+      href={buildThreadPath(thread)}
+      hideActions
+    />
   );
 }
 
-/** Marks the repository's original checkout (the project folder, not a branch). */
-function WorktreeMainIcon() {
+/**
+ * The glyph a row without a thread shows in the column where a thread row
+ * shows its status, so every row's text starts at the same place: a house for
+ * the repository's original checkout, a branch for a worktree no thread works
+ * in (one made outside funny, or whose thread was deleted).
+ */
+function WorktreeRowGlyph({ isMain }: { isMain: boolean }) {
   const { t } = useTranslation();
+  const Icon = isMain ? House : GitBranch;
   return (
-    <House
-      className="icon-xs text-muted-foreground shrink-0"
-      role="img"
-      aria-label={t('worktreeSettings.main')}
-      data-testid="worktree-main-icon"
-    />
+    <span className="flex size-3.5 shrink-0 items-center justify-center">
+      <Icon
+        className="icon-xs text-muted-foreground"
+        role="img"
+        aria-label={isMain ? t('worktreeSettings.main') : t('worktreeSettings.noThread')}
+        data-testid={isMain ? 'worktree-main-icon' : 'worktree-no-thread-icon'}
+      />
+    </span>
   );
 }
 
@@ -150,22 +181,28 @@ function worktreeLabel(worktree: WorktreeInfo | null): string | undefined {
   return worktree.branch ?? worktree.commit.slice(0, 7);
 }
 
-/** The branch chip, or "detached at <commit>" for a worktree with no branch. */
+/**
+ * The name of a worktree no thread works in: its branch, or "detached at
+ * <commit>" when it has none. A worktree with threads is named by their rows.
+ */
 function WorktreeBranchLabel({ worktree }: { worktree: WorktreeInfo }) {
   const { t } = useTranslation();
+  const className = 'text-foreground min-w-0 truncate font-mono text-xs leading-5';
   if (worktree.branch) {
     return (
-      <BranchBadge
-        branch={worktree.branch}
-        size="xs"
+      <span
+        className={className}
+        title={worktree.branch}
         data-testid={`worktree-branch-${worktree.branch}`}
-      />
+      >
+        {worktree.branch}
+      </span>
     );
   }
   const shortCommit = worktreeLabel(worktree);
   return (
     <span
-      className="text-muted-foreground text-2xs font-mono"
+      className={className}
       title={worktree.commit}
       data-testid={`worktree-detached-${shortCommit}`}
     >
@@ -177,6 +214,7 @@ function WorktreeBranchLabel({ worktree }: { worktree: WorktreeInfo }) {
 function WorktreeCard({
   worktree,
   threads,
+  projectPath,
   onRemove,
   removing,
   active,
@@ -184,6 +222,7 @@ function WorktreeCard({
 }: {
   worktree: WorktreeInfo;
   threads: Thread[];
+  projectPath: string;
   onRemove: () => void;
   removing: boolean;
   active: boolean;
@@ -191,23 +230,42 @@ function WorktreeCard({
 }) {
   const { t } = useTranslation();
   const rowKey = worktreeLabel(worktree);
+  const hasThreads = threads.length > 0;
   return (
     <div
       // oxlint-disable-next-line shadcn/require-static-classes -- listRowClassName is a static constant from list-row-styles
-      className={cn(listRowClassName, active && 'bg-sidebar-selected hover:bg-sidebar-selected')}
+      className={cn(
+        listRowClassName,
+        // Thread rows bring the sidebar's own padding; a worktree with no thread is one line.
+        hasThreads ? 'px-1 py-1' : 'items-center py-1.5',
+        active && 'bg-sidebar-selected hover:bg-sidebar-selected',
+      )}
       aria-current={active || undefined}
       data-active={active || undefined}
       data-testid={`worktree-row-${rowKey}`}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2" title={worktree.path}>
-            {worktree.isMain && <WorktreeMainIcon />}
-            <WorktreeBranchLabel worktree={worktree} />
-          </div>
-          {threads.length > 0 && <WorktreeThreadLinks threads={threads} />}
+      {hasThreads ? (
+        // The thread is what a worktree is for: its sidebar row, branch included, names it.
+        <div
+          className="flex min-w-0 flex-1 flex-col"
+          data-testid="worktree-threads"
+          title={worktree.path}
+        >
+          {threads.map((thread) => (
+            <WorktreeThreadItem key={thread.id} thread={thread} projectPath={projectPath} />
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-1.5" title={worktree.path}>
+          <WorktreeRowGlyph isMain={worktree.isMain} />
+          <WorktreeBranchLabel worktree={worktree} />
+          {!worktree.isMain && (
+            <span className="text-muted-foreground text-2xs shrink-0">
+              {t('worktreeSettings.noThread')}
+            </span>
+          )}
+        </div>
+      )}
       {!readOnly && (
         <ButtonGroup data-testid={`worktree-actions-${rowKey}`}>
           <Tooltip>
@@ -441,6 +499,10 @@ export function WorktreeSettings({
     () => groupThreadsByWorktree(worktrees, projectThreads),
     [worktrees, projectThreads],
   );
+  const orderedWorktrees = useMemo(
+    () => orderWorktrees(worktrees, threadsByWorktree),
+    [worktrees, threadsByWorktree],
+  );
 
   const loadWorktrees = useCallback(async () => {
     if (!project) return;
@@ -602,11 +664,12 @@ export function WorktreeSettings({
               <EmptyWorktreeList loading={loading} loadError={loadError} />
             ) : (
               <div className="divide-sidebar-border flex flex-col divide-y">
-                {worktrees.map((wt) => (
+                {orderedWorktrees.map((wt) => (
                   <WorktreeCard
                     key={wt.path}
                     worktree={wt}
                     threads={threadsByWorktree.get(wt.path) ?? []}
+                    projectPath={project.path}
                     active={!!activePath && wt.path === activePath}
                     readOnly={readOnly}
                     onRemove={() => setConfirmRemove(wt)}

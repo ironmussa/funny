@@ -1135,7 +1135,8 @@
     "loadingWorktrees": "Loading worktrees...",
     "noWorktrees": "No worktrees found. Create one to get started.",
     "loadFailed": "Could not load worktrees",
-    "openThread": "Open thread: {{title}}"
+    "openThread": "Open thread: {{title}}",
+    "noThread": "no thread"
   },
   "common": {
     "cancel": "Cancel",

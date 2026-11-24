@@ -1133,7 +1133,8 @@
     "loadingWorktrees": "Cargando worktrees...",
     "noWorktrees": "No se encontraron worktrees. Crea uno para comenzar.",
     "loadFailed": "No se pudieron cargar los worktrees",
-    "openThread": "Abrir hilo: {{title}}"
+    "openThread": "Abrir hilo: {{title}}",
+    "noThread": "sin hilo"
   },
   "common": {
     "cancel": "Cancelar",

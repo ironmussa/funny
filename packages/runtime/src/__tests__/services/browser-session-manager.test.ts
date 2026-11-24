@@ -14,6 +14,7 @@ mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mock
 
 import {
   browserSessionManager,
+  panelViewportSize,
   type BrowserSession,
 } from '../../services/browser-session-manager.js';
 import {
@@ -188,5 +189,19 @@ describe('BrowserSessionManager lifecycle', () => {
     });
     await Promise.all([slow, fast]);
     expect(order).toEqual(['slow', 'fast']);
+  });
+});
+
+describe('panelViewportSize', () => {
+  test('accepts a phone size and a desktop size', () => {
+    expect(panelViewportSize({ width: 390, height: 844 })).toEqual({ width: 390, height: 844 });
+    expect(panelViewportSize({ width: 1920, height: 1080 })).toEqual({ width: 1920, height: 1080 });
+  });
+
+  test('refuses a missing, fractional or out-of-range size', () => {
+    expect(panelViewportSize({})).toBeNull();
+    expect(panelViewportSize({ width: 390.5, height: 844 })).toBeNull();
+    expect(panelViewportSize({ width: 100, height: 844 })).toBeNull();
+    expect(panelViewportSize({ width: 390, height: 5000 })).toBeNull();
   });
 });

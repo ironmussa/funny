@@ -33,7 +33,7 @@ function buildRegistry(
 
   function visit(node: ts.Node): void {
     if (isEvflowMethodCall(ts, node)) {
-      const call = node as ts.CallExpression;
+      const call = node;
       const method = getMethodName(ts, call);
       if (!method) return;
 

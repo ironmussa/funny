@@ -80,10 +80,13 @@ function isObjectOrNull(value: unknown): value is object | null {
 
 /** Default merge: fold each result's `outputs` map over the base, in order. */
 function defaultMerge<T>(base: T, results: T[]): T {
+  // SAFETY: only reads the `outputs` property, whose value is checked with isObjectOrNull before use;
+  // pipeline contexts are non-nullish values, and a missing property reads as undefined.
   const baseOutputs = (base as Record<string, unknown>).outputs;
   if (baseOutputs === undefined || !isObjectOrNull(baseOutputs)) return base;
-  const merged: Record<string, unknown> = { ...(baseOutputs as Record<string, unknown>) };
+  const merged: Record<string, unknown> = { ...baseOutputs };
   for (const r of results) {
+    // SAFETY: as for `base` above: a property read whose value is checked before use.
     const ro = (r as Record<string, unknown>).outputs;
     if (ro && isObjectOrNull(ro)) Object.assign(merged, ro);
   }
@@ -102,7 +105,7 @@ export async function runGraph<T>(
   // Attach onStateChange to a copy of the context so sub-pipelines can
   // forward their events without mutating the caller's object.
   const initial = onStateChange
-    ? ({ ...initialCtx, [SUB_PIPELINE_PARENT_CB]: onStateChange } as T)
+    ? { ...initialCtx, [SUB_PIPELINE_PARENT_CB]: onStateChange }
     : initialCtx;
   const refuse = (error: string): PipelineRunResult<T> => {
     onStateChange?.({
@@ -239,7 +242,7 @@ class GraphRun<T> {
     // A join may start (or skip) before every dependency finished: read those that did.
     const read = node.deps.filter((d) => readable(node, d) && d.out !== undefined);
     node.readFrom = new Set(read);
-    return this.fold(read.map((d) => d.out as T));
+    return this.fold(read.flatMap((d) => (d.out === undefined ? [] : [d.out])));
   }
 
   /** One context from several results, in declaration order. */
@@ -399,6 +402,8 @@ class GraphRun<T> {
     const readByFinished = (n: GraphNode<T>) =>
       n.dependents.some((d) => finished(d.state) && d.readFrom?.has(n) === true);
     const frontier = this.nodes.filter((n) => finished(n.state) && !readByFinished(n));
+    // SAFETY: every transition into a finished state (succeeded, skipped, failed) sets `out` to
+    // the node's context; only loopAgain clears it, and it resets the state to pending too.
     return this.fold(frontier.map((n) => n.out as T));
   }
 

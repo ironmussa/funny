@@ -22,9 +22,14 @@ function loadRunnerService(): grpc.ServiceDefinition {
     oneofs: true,
     includeDirs: [resolve(repositoryRoot, 'protocol')],
   });
-  const root = grpc.loadPackageDefinition(definition) as grpc.GrpcObject;
+  const root = grpc.loadPackageDefinition(definition);
+  // SAFETY: protocolPath's protos declare `package runner.v2` with `service
+  // RunnerTransportService`, so the loaded root nests namespaces runner → v2 and holds the
+  // service's client constructor there.
   const runner = root.runner as grpc.GrpcObject;
+  // SAFETY: as above, `v2` is the namespace object of package runner.v2.
   const v2 = runner.v2 as grpc.GrpcObject;
+  // SAFETY: RunnerTransportService is the service declared in package runner.v2.
   const constructor = v2.RunnerTransportService as grpc.ServiceClientConstructor;
   return constructor.service;
 }
@@ -134,6 +139,8 @@ try {
   ]);
   if (exitCode !== 0) throw new Error(`Tonic client failed (${exitCode}): ${stderr.trim()}`);
 
+  // SAFETY: stdout is the JSON object grpc-compat-client prints when it exits 0 (checked
+  // above); both fields are compared with their expected values below.
   const result = JSON.parse(stdout) as {
     authenticatedRunner?: string;
     protocolMajor?: number;

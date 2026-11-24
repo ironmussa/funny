@@ -27,7 +27,7 @@ interface GoldenFixture {
   wireHex: string;
 }
 
-const fixtures = (await Bun.file(fixturePath).json()) as GoldenFixture[];
+const fixtures: GoldenFixture[] = await Bun.file(fixturePath).json();
 for (const fixture of fixtures) {
   const schema = schemas[fixture.messageType];
   if (!schema) throw new Error(`No schema registered for ${fixture.messageType}`);

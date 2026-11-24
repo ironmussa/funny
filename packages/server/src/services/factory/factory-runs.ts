@@ -98,6 +98,7 @@ const WAIT_REASON_SCHEMA = z.object({
     'blockers-unreadable',
     'proof-not-configured',
     'paths-overlap',
+    'no-free-slot',
   ]),
   blockers: z.array(z.number().int()),
 });
@@ -145,6 +146,15 @@ const WAITING_STATES = ['requested'] as const satisfies FactoryRunState[];
 /** How a run ends without merging: what a thread must not show as done. */
 const UNMERGED_END_STATES = ['failed', 'stopped', 'no_change'] as const satisfies FactoryRunState[];
 
+/** States in which a run may still close by a pull request found on its branch. */
+const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies FactoryRunState[];
+
+/**
+ * States a run can be retried or taken over from: the ones above, and a run
+ * that ended with no change (a person may disagree with the agent).
+ */
+const RETRYABLE_STATES = [...REOPENABLE_STATES, 'no_change'] as const satisfies FactoryRunState[];
+
 /**
  * The queue's transitions, each written as a compare-and-set from the stored
  * state. Once `queued`, the flow drives the run through its own states
@@ -164,6 +174,11 @@ const QUEUE_TRANSITIONS = {
   hold: { from: ['triaging'], to: 'requested' },
   /** The issue changed (or a member retried): a `needs_info` run is triaged again. */
   retriage: { from: ['needs_info'], to: 'requested' },
+  /**
+   * A retry, merge approval or take-over found every slot taken: the run
+   * waits at the head of the queue, with the steps it keeps, until one frees.
+   */
+  reopenQueued: { from: RETRYABLE_STATES, to: 'requested' },
 } as const satisfies Record<string, { from: readonly FactoryRunState[]; to: FactoryRunState }>;
 
 /** States in which a flow is driving the run: neither terminal, parked nor waiting. */
@@ -198,15 +213,6 @@ export type FactoryRunStage = keyof typeof STAGE_TRANSITIONS;
  * again marks it failed instead of dropping it as never started.
  */
 export const REOPENED_STEP = 'retrying';
-
-/** States in which a run may still close by a pull request found on its branch. */
-const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies FactoryRunState[];
-
-/**
- * States a run can be retried or taken over from: the ones above, and a run
- * that ended with no change (a person may disagree with the agent).
- */
-const RETRYABLE_STATES = [...REOPENABLE_STATES, 'no_change'] as const satisfies FactoryRunState[];
 
 /**
  * How long a failed run keeps showing on its thread in the thread lists. The
@@ -600,7 +606,7 @@ function updateFromParked(
  */
 function moveRun(
   runId: string,
-  transition: 'admit' | 'requeue' | 'hold' | 'retriage',
+  transition: keyof typeof QUEUE_TRANSITIONS,
   changes: Partial<Row>,
 ): ResultAsync<boolean, FactoryRunsError> {
   const { from, to } = QUEUE_TRANSITIONS[transition];
@@ -729,6 +735,17 @@ async function nextQueueOrder(factoryId: string): Promise<number> {
   return (last?.order ?? 0) + 1;
 }
 
+/** A queue order ahead of every run of the factory: a reopened run goes first. */
+async function headOfQueue(factoryId: string): Promise<number> {
+  const [first] = await db
+    .select({ order: factoryRuns.queueOrder })
+    .from(factoryRuns)
+    .where(and(eq(factoryRuns.factoryId, factoryId), isNotNull(factoryRuns.queueOrder)))
+    .orderBy(asc(factoryRuns.queueOrder))
+    .limit(1);
+  return Math.min(first?.order ?? 1, 1) - 1;
+}
+
 /**
  * The queue's reads and writes (change factory-manual-queue): sent issues wait
  * in `requested` until the watcher admits them; each move out of the queue is
@@ -737,7 +754,7 @@ async function nextQueueOrder(factoryId: string): Promise<number> {
 function queueOperations(newId: () => string) {
   return {
     /**
-     * Queue sent issues, in the given order, behind the factory's queue, in one
+     * Queue issues (sent from funny, or found by their label), in the given order, behind the factory's queue, in one
      * statement: either every new row is written or none is. An issue the
      * one-run-per-issue index already holds (a run waiting, in flight or
      * parked) is skipped by the conflict clause and reported as a duplicate;
@@ -748,6 +765,8 @@ function queueOperations(newId: () => string) {
       factoryId: string;
       issueNumbers: number[];
       flowName: string;
+      /** `label`: an issue the watcher found by its label (automatic mode); default `manual`. */
+      source?: 'manual' | 'label';
     }): ResultAsync<{ queued: FactoryRunView[]; duplicates: number[] }, FactoryRunsError> {
       return ResultAsync.fromPromise(
         (async () => {
@@ -760,7 +779,7 @@ function queueOperations(newId: () => string) {
               issueNumber,
               state: 'requested',
               startedAt: now,
-              source: 'manual',
+              source: input.source ?? 'manual',
               flowName: input.flowName,
               queueOrder: first + index,
             }),
@@ -1358,6 +1377,44 @@ export function createFactoryRunsRepository(
       ).map((rows) => rows.length > 0);
     },
 
+    /**
+     * Move the run's merge approval of `from` to `to`, a merge of `from` with
+     * the base branch that settled nothing (the caller verified that). Nothing
+     * happens unless the stored approval is of `from`: a compare-and-set on the
+     * stored value, so a new approval written meanwhile is kept. Resolves
+     * whether it moved.
+     */
+    carryMergeApproval(
+      runId: string,
+      from: string,
+      to: string,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ mergeApproval: factoryRuns.mergeApproval })
+          .from(factoryRuns)
+          .where(eq(factoryRuns.id, runId)),
+        storage,
+      ).andThen((rows) => {
+        const stored = rows[0]?.mergeApproval ?? null;
+        const approval = parseMergeApproval(stored);
+        if (!stored || approval?.sha !== from) return okAsync(false);
+        const carried: FactoryMergeApproval = {
+          ...approval,
+          sha: to,
+          carriedFrom: approval.carriedFrom ?? from,
+        };
+        return ResultAsync.fromPromise(
+          db
+            .update(factoryRuns)
+            .set({ mergeApproval: JSON.stringify(carried) })
+            .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.mergeApproval, stored)))
+            .returning({ id: factoryRuns.id }),
+          storage,
+        ).map((updated) => updated.length > 0);
+      });
+    },
+
     /** The parked or failed runs a thread belongs to (a member following up on it). */
     reopenableByThread(threadId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
       return ResultAsync.fromPromise(
@@ -1378,9 +1435,12 @@ export function createFactoryRunsRepository(
     /**
      * Put a failed or parked run back in flight (`queued`) with `threadIds` as
      * the steps to replay — a retry or a take-over — when its factory has a
-     * free slot (`withFreeSlot`): `reopened`, `NO_FREE_SLOT`, or
-     * `not-reopenable` when it was not failed nor parked. The unique index
-     * refuses it while another run of the issue is in flight (a storage error).
+     * free slot (`withFreeSlot`): `reopened`. Without a free slot it goes to
+     * the head of the queue instead (`queued`: `requested` with the wait
+     * reason `no-free-slot`, the same steps to replay), and the watcher admits
+     * it when a slot frees. `not-reopenable` when it was not failed nor
+     * parked. The unique index refuses it while another run of the issue is
+     * in flight (a storage error).
      *
      * The run's journal is cleared: the reopened attempt replays `threadIds`
      * by call order (the steps the retry or take-over chose), then journals
@@ -1389,25 +1449,45 @@ export function createFactoryRunsRepository(
     reopen(
       run: Pick<FactoryRunView, 'id' | 'factoryId'>,
       threadIds: string[],
-    ): ResultAsync<'reopened' | 'not-reopenable' | typeof NO_FREE_SLOT, FactoryRunsError> {
+    ): ResultAsync<'reopened' | 'queued' | 'not-reopenable', FactoryRunsError> {
+      const reopening = {
+        // Marks a run with a history: a flow that cannot start again fails it, never drops it.
+        currentStep: REOPENED_STEP,
+        completedAt: null,
+        launchStartedAt: null,
+        threadIds: JSON.stringify(threadIds),
+        failureReason: null,
+      };
+      const clearJournal = () =>
+        db.delete(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, run.id));
       return withFreeSlot(run.factoryId, async () => {
         const reopened = await updateFromParked(
           run.id,
-          {
-            state: 'queued',
-            currentStep: REOPENED_STEP,
-            completedAt: null,
-            launchStartedAt: null,
-            threadIds: JSON.stringify(threadIds),
-            failureReason: null,
-          },
+          { state: 'queued', ...reopening },
           RETRYABLE_STATES,
         );
         if (reopened.isErr()) throw new Error(reopened.error.message);
         if (!reopened.value) return 'not-reopenable' as const;
-        await db.delete(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, run.id));
+        await clearJournal();
         return 'reopened' as const;
-      });
+      }).andThen((outcome) =>
+        outcome !== NO_FREE_SLOT
+          ? okAsync(outcome)
+          : ResultAsync.fromPromise(headOfQueue(run.factoryId), storage)
+              .andThen((queueOrder) =>
+                moveRun(run.id, 'reopenQueued', {
+                  ...reopening,
+                  admittedAt: null,
+                  queueOrder,
+                  waitReason: JSON.stringify({ kind: 'no-free-slot', blockers: [] }),
+                }),
+              )
+              .andThen((moved) =>
+                moved
+                  ? ResultAsync.fromPromise(clearJournal(), storage).map(() => 'queued' as const)
+                  : okAsync('not-reopenable' as const),
+              ),
+      );
     },
 
     /** Drop a run that never started (its launch failed before any agent ran). */

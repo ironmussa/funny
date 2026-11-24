@@ -46,11 +46,6 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-/** A non-null, non-array object: the metadata part of a lock entry. */
-function isPlainObject(part: unknown): part is object {
-  return Boolean(part) && typeof part === 'object' && !Array.isArray(part);
-}
-
 /** `name` from a lock entry's `name@version` (scoped names keep their `@`). */
 function entryName(key: string, entry: LockEntry): string {
   const spec = isString(entry[0]) ? entry[0] : '';
@@ -58,10 +53,16 @@ function entryName(key: string, entry: LockEntry): string {
   return at > 0 ? spec.slice(0, at) : key;
 }
 
+/** The metadata object of a lock entry: its dependency maps (`name → range`) by field. */
+type EntryMeta = { [Field in (typeof DEPENDENCY_FIELDS)[number]]?: Record<string, string> };
+
+/** A non-null, non-array object: the metadata part of a lock entry. */
+function isEntryMeta(part: unknown): part is EntryMeta {
+  return Boolean(part) && typeof part === 'object' && !Array.isArray(part);
+}
+
 function entryDeps(entry: LockEntry): string[] {
-  const meta = entry.find(isPlainObject) as
-    | Record<string, Record<string, string> | undefined>
-    | undefined;
+  const meta = entry.find(isEntryMeta);
   if (!meta) return [];
   return DEPENDENCY_FIELDS.flatMap((field) => Object.keys(meta[field] ?? {}));
 }

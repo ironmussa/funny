@@ -1,19 +1,10 @@
 import type { Thread, GitStatusInfo } from '@funny/shared';
-import {
-  Archive,
-  Trash2,
-  MoreVertical,
-  FolderOpenDot,
-  Terminal,
-  Pencil,
-  GitFork,
-  GitBranch,
-  Factory,
-} from 'lucide-react';
+import { Archive, Trash2, MoreVertical, Pencil, GitFork, GitBranch, Factory } from 'lucide-react';
 import { useState, memo, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { StopThreadMenuItem } from '@/components/thread/StopThreadMenuItem';
+import { ThreadOpenMenuItems } from '@/components/thread/ThreadOpenMenuItems';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +23,6 @@ import {
   type ThreadActivityView,
 } from '@/hooks/use-thread-activity';
 import { api } from '@/lib/api';
-import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
 import { canConvertToWorktree, getThreadRoute } from '@/lib/thread-variant';
@@ -190,29 +180,7 @@ function ThreadItemActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="bottom">
-          <DropdownMenuItem
-            onClick={async (e) => {
-              e.stopPropagation();
-              const result = await api.openDirectory({
-                threadId: thread.id,
-              });
-              if (result.isErr()) {
-                toastError(result.error);
-              }
-            }}
-          >
-            <FolderOpenDot className="icon-sm" />
-            {t('sidebar.openDirectory')}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              openThreadTerminal({ thread });
-            }}
-          >
-            <Terminal className="icon-sm" />
-            {t('sidebar.openTerminal')}
-          </DropdownMenuItem>
+          <ThreadOpenMenuItems thread={thread} />
           {canConvertToWorktree(thread) && !isBusy && (
             <>
               <DropdownMenuSeparator />

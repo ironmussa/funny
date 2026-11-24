@@ -16,7 +16,7 @@ import type {
 
 import type { NativeGitStatusState } from '../git-status-state';
 
-const THREAD_STATUSES = new Set<ThreadStatus>([
+const THREAD_STATUSES: ReadonlySet<string> = new Set<ThreadStatus>([
   'setting_up',
   'idle',
   'pending',
@@ -27,7 +27,7 @@ const THREAD_STATUSES = new Set<ThreadStatus>([
   'stopped',
   'interrupted',
 ]);
-const GIT_STATES = new Set<GitStatusInfo['state']>([
+const GIT_STATES: ReadonlySet<string> = new Set<GitStatusInfo['state']>([
   'dirty',
   'unpushed',
   'pushed',
@@ -35,15 +35,30 @@ const GIT_STATES = new Set<GitStatusInfo['state']>([
   'clean',
 ]);
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+function isThreadStatus(status: string): status is ThreadStatus {
+  return THREAD_STATUSES.has(status);
+}
+
+function isGitState(state: string): state is GitStatusInfo['state'] {
+  return GIT_STATES.has(state);
+}
+
+/** A realtime event's payload fields, read before they are checked. */
+type EventFields = Record<string, unknown>;
+
+function isEventFields(value: unknown): value is EventFields {
+  return typeof value === 'object' && value !== null;
+}
+
+function record(value: unknown): EventFields {
+  return isEventFields(value) ? value : {};
 }
 
 function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function eventIdentity(event: RealtimeEvent, data: Record<string, unknown>): string {
+function eventIdentity(event: RealtimeEvent, data: EventFields): string {
   const explicit = text(data.eventId) ?? text(data.id);
   if (explicit) return explicit;
   return `${event.type}:${text(data.messageId) ?? text(data.toolCallId) ?? ''}:${JSON.stringify(data)}`;
@@ -73,7 +88,7 @@ function gitStatus(value: unknown): GitStatusInfo | null {
     typeof data.threadId !== 'string' ||
     typeof data.branchKey !== 'string' ||
     typeof data.state !== 'string' ||
-    !GIT_STATES.has(data.state as GitStatusInfo['state']) ||
+    !isGitState(data.state) ||
     typeof data.dirtyFileCount !== 'number' ||
     typeof data.unpushedCommitCount !== 'number' ||
     typeof data.unpulledCommitCount !== 'number' ||
@@ -86,7 +101,7 @@ function gitStatus(value: unknown): GitStatusInfo | null {
   return {
     threadId: data.threadId,
     branchKey: data.branchKey,
-    state: data.state as GitStatusInfo['state'],
+    state: data.state,
     dirtyFileCount: data.dirtyFileCount,
     unpushedCommitCount: data.unpushedCommitCount,
     unpulledCommitCount: data.unpulledCommitCount,
@@ -121,6 +136,8 @@ function createAgentAction(options: {
       const messageId = text(data.messageId);
       const content = text(data.content);
       if (!messageId || content === undefined) return;
+      // SAFETY: `agent:message` events carry the persisted message's MessageRole in `role`;
+      // the native client keeps the web client's pass-through instead of rejecting a new role.
       const role = (text(data.role) ?? 'assistant') as MessageRole;
       if (role === 'assistant') {
         options.workspace.getState().applyStreamingDelta({
@@ -171,10 +188,10 @@ function createAgentAction(options: {
     }
     if (event.type === 'agent:status') {
       const status = text(data.status);
-      if (status && THREAD_STATUSES.has(status as ThreadStatus)) {
+      if (status && isThreadStatus(status)) {
         options.workspace.getState().setRun(threadId, {
           runId: text(data.runId) ?? undefined,
-          status: status as ThreadStatus,
+          status,
           error: text(data.error) ?? null,
         });
       }

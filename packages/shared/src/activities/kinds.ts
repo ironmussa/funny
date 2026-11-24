@@ -226,7 +226,7 @@ export const ACTIVITY_KINDS = {
     destructive: true,
     record: 'always',
     input: z.object({
-      action: z.enum(['pr-merge', 'pr-revert-file', 'repo-publish']),
+      action: z.enum(['pr-merge', 'pr-revert-file', 'repo-publish', 'issue-delete']),
       prNumber: z.number().int().optional(),
       filePath: z.string().max(1024).optional(),
       repo: z.string().max(256).optional(),
@@ -323,6 +323,7 @@ export const ACTIVITY_EFFECTS = [
   'agent-stopped',
   'factory-disabled',
   'repo-published',
+  'issue-deleted',
   'file-reverted',
   'changes-discarded',
   'commits-reset',

@@ -147,7 +147,7 @@ function testsBySource(map: ImpactMap): Map<string, string[]> {
 /** Whether `value` has the shape of an `ImpactMap`. */
 export function isImpactMap(value: unknown): value is ImpactMap {
   if (typeof value !== 'object' || value === null) return false;
-  const map = value as Record<string, unknown>;
+  const map: Partial<Record<keyof ImpactMap, unknown>> = value;
   const isRecord = (v: unknown): v is object =>
     typeof v === 'object' && v !== null && !Array.isArray(v);
   const isString = (v: unknown): v is string => typeof v === 'string';
@@ -156,7 +156,7 @@ export function isImpactMap(value: unknown): value is ImpactMap {
     isString(map.commit) &&
     /^[0-9a-f]{40}$/.test(map.commit) &&
     isRecord(map.tests) &&
-    Object.values(map.tests as object).every(
+    Object.values(map.tests).every(
       (sources) => Array.isArray(sources) && sources.every(isString),
     ) &&
     isRecord(map.alwaysRun) &&

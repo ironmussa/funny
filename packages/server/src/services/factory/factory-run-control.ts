@@ -12,15 +12,18 @@
  *   mode does not take it again.
  * - **Retry** a failed or parked run: it goes back in flight on the same
  *   branch and pull request, when the factory has a free slot (`maxConcurrent`,
- *   checked in the same step as the write; refused otherwise). A completed implement step is kept (its thread
+ *   checked in the same step as the write); otherwise it waits at the head of
+ *   the queue for the next one. A completed implement step is kept (its thread
  *   replays); every later step runs again, so a CI fix loop gets its fixes
  *   back. A "no change" run keeps nothing: a new agent implements the issue.
  *   The threads a retry does not keep are archived, so the list does not
  *   show the old failed thread next to the new one with the same title.
  * - **Approve the merge** of a run held because its change is high risk: the
  *   member's approval of that head commit is recorded, and the run is retried.
- *   The merge gate lets only the approved commit through, so a later push
- *   needs a new approval; every other gate (review, proof, CI) still applies.
+ *   The merge gate lets only the approved commit through, or a merge of it
+ *   with the base that settled nothing (the approval is carried with the
+ *   review and the proof); any other push needs a new approval. Every other
+ *   gate (review, proof, CI) still applies.
  * - **Take over** a run: a member follows up on the run's last agent thread;
  *   when that thread completes again, a failed or parked run goes back in
  *   flight with all its steps replayed, so the flow continues from that step
@@ -42,7 +45,6 @@ import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
 import {
   createFactoryRunsRepository,
   HIGH_RISK_HOLD,
-  NO_FREE_SLOT,
   threadsOf,
   type FactoryRunView,
 } from './factory-runs.js';
@@ -81,12 +83,13 @@ function wake(factoryId: string): void {
 }
 
 /**
- * A stopped run that the factory took by its label: take the label off the
- * issue, so automatic mode does not admit it again at the next poll. A person
+ * A stopped run (or one taken out of the queue) that the factory took by its
+ * label: take the label off the issue, so automatic mode does not queue it
+ * again at the next poll. A person
  * who wants it run again puts the label back (or retries the run). Best
  * effort: the stop has happened either way, and a failure is logged.
  */
-async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
+export async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
   if (run.source !== 'label' || run.issueNumber === null) return;
   const factory = await getWatchedFactory(run.factoryId);
   const port = factoryGithubPort();
@@ -166,7 +169,8 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
         .reopen(run, kept)
         .mapErr(reopenRefused)
         .andThen((outcome) => {
-          if (outcome === 'reopened') {
+          // Queued: every slot is taken, and the run is first in line for the next one.
+          if (outcome === 'reopened' || outcome === 'queued') {
             return ResultAsync.fromSafePromise(
               archiveReplacedFactoryThreads(
                 run.threadIds.filter((id) => !kept.includes(id)),
@@ -176,10 +180,7 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
           }
           return errAsync<undefined, FactoryRunControlError>({
             kind: 'conflict',
-            message:
-              outcome === NO_FREE_SLOT
-                ? 'The factory is already running as many runs as it may at once. Retry when one of them finishes.'
-                : 'Only a failed run, or one waiting for you, can be retried.',
+            message: 'Only a failed run, or one waiting for you, can be retried.',
           });
         }),
     );
@@ -230,8 +231,7 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     /**
      * Approve merging the run's held high-risk head commit, then retry it.
      * Refused unless the run waits for a person because of that risk. When
-     * the factory has no free slot the approval stays recorded, so a later
-     * Retry merges the same commit.
+     * the factory has no free slot the run waits at the head of the queue.
      */
     approveMerge(
       userId: string,
@@ -291,22 +291,14 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
       continue;
     }
     const reopened = await runs.reopen(run, run.threadIds);
-    if (reopened.isOk() && reopened.value === NO_FREE_SLOT) {
-      // The factory is full: the run stays parked, and a later completion of
-      // the member's follow-up (or a Retry) may still take it over.
-      log.info('Issue factory take-over deferred: the factory has no free slot', {
-        namespace: 'factory',
-        runId: run.id,
-        threadId,
-      });
-      continue;
-    }
     forgetOwnerFollowUp(threadId);
-    if (reopened.isOk() && reopened.value === 'reopened') {
+    // Queued: the factory is full, and the run takes the next free slot.
+    if (reopened.isOk() && (reopened.value === 'reopened' || reopened.value === 'queued')) {
       log.info('Issue factory run taken over by a follow-up', {
         namespace: 'factory',
         runId: run.id,
         threadId,
+        queued: reopened.value === 'queued',
       });
       wake(run.factoryId);
     }

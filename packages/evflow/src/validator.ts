@@ -1,14 +1,4 @@
-import type {
-  EventModelData,
-  ValidationIssue,
-  AutomationDef,
-  ReadModelDef,
-  AggregateDef,
-  ScreenDef,
-  ExternalDef,
-  SagaDef,
-  ElementKind,
-} from './types.js';
+import type { EventModelData, ValidationIssue, ElementKind } from './types.js';
 
 /**
  * Validate an EventModel for consistency issues.
@@ -42,7 +32,7 @@ export function validate(model: EventModelData): ValidationIssue[] {
 function checkReadModelSources(model: EventModelData, issues: ValidationIssue[]): void {
   for (const el of model.elements.values()) {
     if (el.kind !== 'readModel') continue;
-    const rm = el as ReadModelDef;
+    const rm = el;
     for (const source of rm.from) {
       const ref = model.elements.get(source);
       if (!ref) {
@@ -68,7 +58,7 @@ function checkReadModelSources(model: EventModelData, issues: ValidationIssue[])
 function checkAutomationReferences(model: EventModelData, issues: ValidationIssue[]): void {
   for (const el of model.elements.values()) {
     if (el.kind !== 'automation') continue;
-    const auto = el as AutomationDef;
+    const auto = el;
 
     // Check 'on' event
     const onRef = model.elements.get(auto.on);
@@ -115,7 +105,7 @@ function checkAutomationReferences(model: EventModelData, issues: ValidationIssu
 function checkAggregateReferences(model: EventModelData, issues: ValidationIssue[]): void {
   for (const el of model.elements.values()) {
     if (el.kind !== 'aggregate') continue;
-    const agg = el as AggregateDef;
+    const agg = el;
 
     for (const cmd of agg.handles) {
       const ref = model.elements.get(cmd);
@@ -161,7 +151,7 @@ function checkAggregateReferences(model: EventModelData, issues: ValidationIssue
 function checkScreenReferences(model: EventModelData, issues: ValidationIssue[]): void {
   for (const el of model.elements.values()) {
     if (el.kind !== 'screen') continue;
-    const scr = el as ScreenDef;
+    const scr = el;
 
     for (const rm of scr.displays) {
       const ref = model.elements.get(rm);
@@ -207,7 +197,7 @@ function checkScreenReferences(model: EventModelData, issues: ValidationIssue[])
 function checkExternalReferences(model: EventModelData, issues: ValidationIssue[]): void {
   for (const el of model.elements.values()) {
     if (el.kind !== 'external') continue;
-    const ext = el as ExternalDef;
+    const ext = el;
 
     for (const cmd of ext.receives) {
       const ref = model.elements.get(cmd);
@@ -253,7 +243,7 @@ function checkExternalReferences(model: EventModelData, issues: ValidationIssue[
 function checkSagaReferences(model: EventModelData, issues: ValidationIssue[]): void {
   for (const el of model.elements.values()) {
     if (el.kind !== 'saga') continue;
-    const saga = el as SagaDef;
+    const saga = el;
 
     for (const evtName of saga.on) {
       const ref = model.elements.get(evtName);
@@ -466,15 +456,15 @@ function checkDeadEvents(model: EventModelData, issues: ValidationIssue[]): void
 
   for (const el of model.elements.values()) {
     if (el.kind === 'readModel') {
-      for (const source of (el as ReadModelDef).from) {
+      for (const source of el.from) {
         consumed.add(source);
       }
     }
     if (el.kind === 'automation') {
-      consumed.add((el as AutomationDef).on);
+      consumed.add(el.on);
     }
     if (el.kind === 'saga') {
-      for (const evtName of (el as SagaDef).on) {
+      for (const evtName of el.on) {
         consumed.add(evtName);
       }
     }
@@ -525,7 +515,7 @@ function checkAutomationCycles(model: EventModelData, issues: ValidationIssue[])
   // Extract event→command edges from automations
   for (const el of model.elements.values()) {
     if (el.kind !== 'automation') continue;
-    const auto = el as AutomationDef;
+    const auto = el;
     const triggers = Array.isArray(auto.triggers) ? auto.triggers : [auto.triggers];
     for (const t of triggers) {
       if (model.elements.get(t)?.kind === 'command') {
@@ -537,7 +527,7 @@ function checkAutomationCycles(model: EventModelData, issues: ValidationIssue[])
   // Extract event→command edges from sagas
   for (const el of model.elements.values()) {
     if (el.kind !== 'saga') continue;
-    const saga = el as SagaDef;
+    const saga = el;
     const triggers = Array.isArray(saga.triggers) ? saga.triggers : [saga.triggers];
     for (const t of triggers) {
       if (model.elements.get(t)?.kind === 'command') {

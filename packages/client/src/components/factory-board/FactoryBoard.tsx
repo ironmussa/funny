@@ -18,6 +18,7 @@ import {
   layoutFactoryBoard,
 } from './board-columns';
 import { FactoryRunCard } from './FactoryRunCard';
+import type { FactoryRunDependencyLookup } from './run-dependencies';
 import { stageMedians } from './step-timings';
 import { StageMedian } from './StepTimeBadges';
 
@@ -148,6 +149,7 @@ interface ColumnProps {
   /** Opens the run's detail panel. */
   onSelect: (run: FactoryQueueRun) => void;
   onShowOlderDone: () => void;
+  dependencies?: FactoryRunDependencyLookup;
 }
 
 /** What a column header shows after its count: the stage's median, its limit, and Done's hidden runs. */
@@ -183,6 +185,7 @@ function FactoryBoardStage({
   medianMs,
   onSelect,
   onShowOlderDone,
+  dependencies,
 }: ColumnProps) {
   const { t } = useTranslation();
   const [limit, setLimit] = useState(PAGE);
@@ -222,6 +225,7 @@ function FactoryBoardStage({
           projectName={projectNameById.get(run.projectId)}
           now={now}
           onSelect={onSelect}
+          dependencies={dependencies}
         />
       ))}
       <ShowMore
@@ -243,6 +247,8 @@ interface Props {
   onSelect: (run: FactoryQueueRun) => void;
   /** Shows the finished runs the Done column hides, in the list. */
   onShowOlderDone: () => void;
+  /** How every listed run (not only the shown ones) holds the others back. */
+  dependencies?: FactoryRunDependencyLookup;
 }
 
 export function FactoryBoard({ runs, now, ...rest }: Props) {

@@ -170,7 +170,8 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    the queue; a conflict goes to the implementer at once. With `dependencies: stack` (factory
    setting, default `wait`), an issue whose one blocker is in flight with a pull request starts on
    the blocker's branch and opens its pull request against it (`stacked_on`, the prompts'
-   `{{stack_branch}}`; its merge group stays the base's). It waits for the blocker at the end of
+   `{{stack_branch}}`; its merge group stays the base's; a repository flow whose prompts never use
+   it gets a warning in Validate flow, `staleStackingIssues` in `factory-flow.ts`). It waits for the blocker at the end of
    `ci` (never inside `merge`, whose slot is the blocker's way in), parks when the blocker ends
    without merging, and at `merge` is retargeted to the default branch and sent round to
    `integrate` first (`factory-stacking.ts`). Each push to the blocker's branch integrates the runs

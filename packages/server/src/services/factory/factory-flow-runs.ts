@@ -769,6 +769,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       project: projectDefaults,
       overrides: job.factory.stepOverrides,
       batch: job.factory.batch,
+      dependencies: job.factory.dependencies,
     });
     if (flow.isErr()) {
       await flowUnavailable(job, flow.error);

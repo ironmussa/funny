@@ -424,6 +424,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     const context = {
       overrides: factory?.stepOverrides ?? {},
       project: await projectAgentDefaults(projectId),
+      dependencies: factory?.dependencies,
     };
     const where = factoryId ? await readerOf(factoryId) : null;
     const reads = where
@@ -444,6 +445,8 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
       source: flow.value.source,
       commit: flow.value.commit,
       ...summary,
+      // What loading the flow found too (stale wording of a repository copy).
+      warnings: [...summary.warnings, ...flow.value.warnings.map((warning) => warning.message)],
     });
   }
 

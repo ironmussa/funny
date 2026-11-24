@@ -38,6 +38,7 @@ function selectBackend(): PtyBackend {
   //    that owns the PTYs and communicates via Unix socket.
   if (process.platform !== 'win32') {
     try {
+      // SAFETY: a CommonJS require of this exact module path, so it returns that module's exports.
       const { DaemonPtyBackend } =
         require('./pty-backend-daemon.js') as typeof import('./pty-backend-daemon.js');
       const backend = new DaemonPtyBackend();
@@ -57,6 +58,7 @@ function selectBackend(): PtyBackend {
   //    (scrollback, colors, cursor) in memory via @xterm/headless + serialize.
   if (process.platform !== 'win32') {
     try {
+      // SAFETY: a CommonJS require of this exact module path, so it returns that module's exports.
       const { HeadlessPtyBackend } =
         require('./pty-backend-headless.js') as typeof import('./pty-backend-headless.js');
       const backend = new HeadlessPtyBackend();
@@ -74,6 +76,7 @@ function selectBackend(): PtyBackend {
 
   // 1. Try Bun native (POSIX only) — fallback without headless state tracking
   if (process.platform !== 'win32') {
+    // SAFETY: a CommonJS require of this exact module path, so it returns that module's exports.
     const { BunPtyBackend } =
       require('./pty-backend-bun.js') as typeof import('./pty-backend-bun.js');
     const backend = new BunPtyBackend();
@@ -85,6 +88,7 @@ function selectBackend(): PtyBackend {
 
   // 2. Try node-pty (Windows or POSIX fallback)
   try {
+    // SAFETY: a CommonJS require of this exact module path, so it returns that module's exports.
     const { NodePtyBackend } =
       require('./pty-backend-node-pty.js') as typeof import('./pty-backend-node-pty.js');
     const backend = new NodePtyBackend();
@@ -98,6 +102,7 @@ function selectBackend(): PtyBackend {
 
   // 3. Null fallback
   log.warn('No PTY backend available — terminal will not work', { namespace: 'pty-manager' });
+  // SAFETY: a CommonJS require of this exact module path, so it returns that module's exports.
   const { NullPtyBackend } =
     require('./pty-backend-null.js') as typeof import('./pty-backend-null.js');
   return new NullPtyBackend();
@@ -520,7 +525,7 @@ export function spawnPty(
     });
   }
 
-  backend.spawn(id, cwd, cols, rows, spawnEnv as Record<string, string>, safeShell);
+  backend.spawn(id, cwd, cols, rows, spawnEnv, safeShell);
 
   // Source the venv activate script so the prompt picks up the (.venv) marker.
   // detectEnv() already set VIRTUAL_ENV/PATH; the activate script just adds the
@@ -632,6 +637,8 @@ function capturePane(id: string): string | null {
  */
 export async function capturePaneAsync(id: string): Promise<string | null> {
   if (backend.name === 'daemon' && 'capturePaneAsync' in backend) {
+    // SAFETY: only DaemonPtyBackend has name 'daemon' and a capturePaneAsync method (both
+    // checked above); it is loaded lazily, so the class is not available for instanceof.
     const daemonBackend = backend as import('./pty-backend-daemon.js').DaemonPtyBackend;
     return daemonBackend.capturePaneAsync(id);
   }
@@ -732,6 +739,8 @@ export async function reattachSessions(): Promise<void> {
 
   // Daemon backend: query daemon for live sessions, sync with DB metadata
   if (backend.name === 'daemon' && 'listDaemonSessions' in backend) {
+    // SAFETY: only DaemonPtyBackend has name 'daemon' and a listDaemonSessions method (both
+    // checked above); it is loaded lazily, so the class is not available for instanceof.
     const daemonBackend = backend as import('./pty-backend-daemon.js').DaemonPtyBackend;
     const dbRows = loadPtySessions();
     const dbMap = new Map(dbRows.map((r) => [r.id, r]));
@@ -849,8 +858,12 @@ if (backend.name === 'daemon' && backend.detachAll) {
     'pty-manager',
     () => {
       // For headless-xterm: serialize all terminal states to DB before killing
-      if ('serializeAll' in backend && typeof (backend as any).serializeAll === 'function') {
-        const states = (backend as any).serializeAll() as Map<string, string>;
+      if ('serializeAll' in backend && typeof backend.serializeAll === 'function') {
+        // SAFETY: HeadlessPtyBackend is the only backend with a serializeAll method (checked
+        // above); it is loaded lazily, so the class is not available for instanceof.
+        const states = (
+          backend as import('./pty-backend-headless.js').HeadlessPtyBackend
+        ).serializeAll();
         for (const [id, state] of states) {
           const meta = activeSessions.get(id);
           if (meta) {

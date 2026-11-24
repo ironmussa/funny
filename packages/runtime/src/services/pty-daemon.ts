@@ -205,7 +205,7 @@ function spawnSession(cmd: SpawnCmd): void {
     const rows = cmd.rows || existing.rows;
     if (cols !== existing.cols || rows !== existing.rows) {
       try {
-        (existing.proc as any).terminal?.resize(cols, rows);
+        existing.proc.terminal?.resize(cols, rows);
         existing.headless.resize(cols, rows);
         existing.cols = cols;
         existing.rows = rows;
@@ -246,7 +246,7 @@ function spawnSession(cmd: SpawnCmd): void {
     // Secrets (security M8): this file is copied verbatim to dist/ and run
     // standalone, so it cannot import @funny/shared. Its own process.env is
     // already scrubbed — pty-daemon-launcher spawns it with buildChildEnv().
-    const mergedEnv = { ...process.env, ...(cmd.env || {}) } as Record<string, string>;
+    const mergedEnv = { ...process.env, ...(cmd.env || {}) };
     if (mergedEnv.PATH) {
       mergedEnv.PATH = mergedEnv.PATH.split(':')
         .filter((p) => !p.includes('node_modules/.bin'))
@@ -297,7 +297,7 @@ function writeToSession(id: string, data: string): void {
   const session = sessions.get(id);
   if (session) {
     try {
-      (session.proc as any).terminal?.write(data);
+      session.proc.terminal?.write(data);
     } catch (err: any) {
       daemonLog(`[pty-daemon] Write failed: ${id}`, err?.message);
     }
@@ -308,7 +308,7 @@ function resizeSession(id: string, cols: number, rows: number): void {
   const session = sessions.get(id);
   if (session) {
     try {
-      (session.proc as any).terminal?.resize(cols, rows);
+      session.proc.terminal?.resize(cols, rows);
       session.headless.resize(cols, rows);
       session.cols = cols;
       session.rows = rows;
@@ -452,6 +452,8 @@ const server = Bun.listen({
       if (!reader) return;
       for (const line of reader.push(data)) {
         try {
+          // SAFETY: lines on this socket come from the runner's PtyBackendDaemon, which only
+          // sends DaemonCommand objects; handleCommand switches on `cmd` and ignores others.
           const msg = JSON.parse(line) as DaemonCommand;
           handleCommand(socket, msg);
         } catch {

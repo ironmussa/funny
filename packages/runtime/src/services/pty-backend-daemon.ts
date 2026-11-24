@@ -66,7 +66,7 @@ export class DaemonPtyBackend implements PtyBackend {
       cols,
       rows,
       shell,
-      env: env as Record<string, string>,
+      env,
     });
   }
 

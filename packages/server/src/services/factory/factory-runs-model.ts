@@ -165,6 +165,11 @@ export const QUEUE_TRANSITIONS = {
    * waits at the head of the queue, with the steps it keeps, until one frees.
    */
   reopenQueued: { from: RETRYABLE_STATES, to: 'requested' },
+  /**
+   * A member split a run parked as too large: its parts are their own issues
+   * now, and the run is done (as when triage splits it by itself).
+   */
+  split: { from: ['needs_info'], to: 'done' },
 } as const satisfies Record<string, { from: readonly FactoryRunState[]; to: FactoryRunState }>;
 
 /** States in which a flow is driving the run: neither terminal, parked nor waiting. */

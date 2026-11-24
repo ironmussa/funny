@@ -1964,7 +1964,11 @@
       "declinedNote": "Nothing was approved. The run stays held.",
       "runNow": "The run now:",
       "boardMarker": "An agent asked for your approval"
-    }
+    },
+    "split_one": "Split into {{count}} issue",
+    "split_other": "Split into {{count}} issues",
+    "splitTitle": "Split issue #{{issue}}?",
+    "splitBody": "The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this."
   },
   "projectSecrets": {
     "title": "Secrets",

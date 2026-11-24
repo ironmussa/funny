@@ -25,7 +25,7 @@ import {
   type FactoryScope,
 } from './factory-port-shared.js';
 
-export type RunControlAction = 'stop' | 'retry' | 'approve-merge';
+export type RunControlAction = 'stop' | 'retry' | 'split' | 'approve-merge';
 
 /** A controlled run, and the commit the control was for (only an approval names one). */
 interface ControlledRun {
@@ -42,8 +42,12 @@ const withoutSha = (run: FactoryRunView): ControlledRun => ({
 const RUN_CONTROL: Record<
   RunControlAction,
   {
-    audit: 'factory.run_stopped' | 'factory.run_retried' | 'factory.merge_approved';
-    kind: 'factory.stop' | 'factory.retry' | 'factory.approve-merge';
+    audit:
+      | 'factory.run_stopped'
+      | 'factory.run_retried'
+      | 'factory.run_split'
+      | 'factory.merge_approved';
+    kind: 'factory.stop' | 'factory.retry' | 'factory.split' | 'factory.approve-merge';
     /** `label` names the run: `for issue #12`, or its id when it has no issue. */
     auditDetail: (label: string, sha: string | null) => string;
     /** Past tense when it worked; what was asked when it did not (the row shows why). */
@@ -63,6 +67,13 @@ const RUN_CONTROL: Record<
     auditDetail: (label) => `Factory run ${label} retried`,
     title: (issue, _sha, done) =>
       `${done ? 'Retried' : 'Retry'} the factory run${issue ? ` for #${issue}` : ''}`,
+  },
+  split: {
+    audit: 'factory.run_split',
+    kind: 'factory.split',
+    auditDetail: (label) => `Factory run ${label} split into its parts' issues`,
+    // The same words either way: the activity row shows whether it failed.
+    title: (issue) => `Split ${issue ? `#${issue}` : 'the factory run'} into its parts`,
   },
   'approve-merge': {
     audit: 'factory.merge_approved',
@@ -132,6 +143,7 @@ export function createRunControl(
         const run = {
           stop: () => control.stop(userId, factoryId, runId).map(withoutSha),
           retry: () => control.retry(factoryId, runId).map(withoutSha),
+          split: () => control.split(factoryId, runId).map(withoutSha),
           'approve-merge': () => control.approveMerge(userId, factoryId, runId, expectedSha),
         }[action];
         return run().mapErr(controlFailure);
@@ -202,6 +214,7 @@ export function runPortMethods(
   | 'save'
   | 'stopRun'
   | 'retryRun'
+  | 'splitRun'
   | 'approveMerge'
   | 'markRunDone'
   | 'closeReplacedPr'
@@ -288,6 +301,10 @@ export function runPortMethods(
 
     async retryRun(userId, projectId, runId) {
       return controlled('retry', userId, projectId, runId);
+    },
+
+    async splitRun(userId, projectId, runId) {
+      return controlled('split', userId, projectId, runId);
     },
 
     async approveMerge(userId, projectId, runId, expectedSha) {

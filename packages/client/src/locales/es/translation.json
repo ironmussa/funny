@@ -1957,7 +1957,11 @@
       "declinedNote": "No se aprobó nada. La ejecución sigue retenida.",
       "runNow": "La ejecución ahora:",
       "boardMarker": "Un agente pidió tu aprobación"
-    }
+    },
+    "split_one": "Dividir en {{count}} issue",
+    "split_other": "Dividir en {{count}} issues",
+    "splitTitle": "¿Dividir el issue #{{issue}}?",
+    "splitBody": "La factory abre un issue por cada parte, con la descripción de #{{issue}} como contexto, y los pone en la cola. #{{issue}} recibe la lista y sale de la factory. No corre ningún agente para esto."
   },
   "projectSecrets": {
     "title": "Secretos",

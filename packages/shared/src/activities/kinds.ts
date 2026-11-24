@@ -193,6 +193,14 @@ export const ACTIVITY_KINDS = {
     record: 'always',
     input: z.object({ issueNumber: z.number().int().optional() }),
   },
+  // A parked too-large run split into its parts' issues by a member.
+  'factory.split': {
+    scope: 'project',
+    // It opens issues on GitHub and takes the label off the parent.
+    destructive: false,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
   'factory.approve-merge': {
     scope: 'project',
     // The merge it allows is recorded as its own `factory.merge`.

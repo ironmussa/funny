@@ -33,6 +33,7 @@
 
 import { nullReporter, runPipeline } from '@funny/pipelines';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
+import { err, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import {
@@ -48,6 +49,7 @@ import {
   type MergeOrder,
 } from './factory-flow-runs-provider.js';
 import { createRunSettlement } from './factory-flow-runs-settle.js';
+import { createParkedSplit } from './factory-flow-runs-split.js';
 import {
   admissionPriority,
   flowGate,
@@ -264,6 +266,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     return trace.agentsRan ? 'started' : 'not-started';
   }
 
+  const parkedSplit = createParkedSplit(deps);
+
   return {
     /**
      * Run (or resume) a run's flow. Resolves once its first agent thread is
@@ -295,6 +299,15 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     },
 
     isActive: (runId: string) => active.has(runId),
+
+    /**
+     * A member splits a run parked because triage found its issue too large
+     * (`factory-flow-runs-split.ts`). The issues opened, or why nothing was.
+     */
+    async splitParked(job: FactoryRunJob): Promise<Result<number[], string>> {
+      if (active.has(job.run.id)) return err('The run is already being worked on.');
+      return parkedSplit.split(job);
+    },
 
     /**
      * Integrate a running flow's branch early (D8): the base moved and its pull

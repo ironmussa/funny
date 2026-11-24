@@ -269,9 +269,18 @@ function splitDepsOf(
   job: FactoryRunJob,
   scope: FactoryRunScope,
 ): FactorySplitDeps | undefined {
+  return job.factory.tooBig === 'split' ? splitDepsFor(deps, job, scope) : undefined;
+}
+
+/** Open, queue and release a split's parts, whatever the factory's `split` setting says. */
+export function splitDepsFor(
+  deps: FactoryFlowRunsDeps,
+  job: FactoryRunJob,
+  scope: FactoryRunScope,
+): FactorySplitDeps | undefined {
   const open = deps.github.createIssue;
   const parent = scope.issueNumber;
-  if (job.factory.tooBig !== 'split' || !open || parent === null) return undefined;
+  if (!open || parent === null) return undefined;
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
   return {
     openIssue: async (issue) => {

@@ -18,6 +18,8 @@
  *   back. A "no change" run keeps nothing: a new agent implements the issue.
  *   The threads a retry does not keep are archived, so the list does not
  *   show the old failed thread next to the new one with the same title.
+ * - **Split** a run parked because its issue is too large: the parts triage
+ *   proposed are opened as issues and queued, and the run ends `done`.
  * - **Approve the merge** of a run held because its change is high risk: the
  *   member's approval of that head commit is recorded, and the run is retried.
  *   The merge gate lets only the approved commit through, or a merge of it
@@ -64,6 +66,7 @@ import {
   factoryGithubPort,
   factoryRunnerPorts,
   pokeFactory,
+  splitParkedFactoryRun,
   stopFactoryFlow,
 } from './factory-watcher.js';
 
@@ -372,6 +375,35 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             return reread(runId);
           }),
       );
+    },
+
+    /**
+     * Split a run parked because triage found its issue too large: its
+     * proposed parts are opened as issues and queued in this factory, and the
+     * run ends `done` (no agent runs). Refused unless it is parked that way.
+     */
+    split(factoryId: string, runId: string): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId)
+        .andThen((run) =>
+          run.state === 'needs_info' && run.triage?.decision === 'too_big'
+            ? ResultAsync.fromSafePromise(splitParkedFactoryRun(run))
+            : errAsync<never, FactoryRunControlError>({
+                kind: 'conflict',
+                message: 'Only a run parked because its issue is too large can be split.',
+              }),
+        )
+        .andThen((opened) =>
+          opened.isOk()
+            ? okAsync(undefined)
+            : errAsync<undefined, FactoryRunControlError>({
+                kind: 'conflict',
+                message: opened.error,
+              }),
+        )
+        .andThen(() => {
+          wake(factoryId);
+          return reread(runId);
+        });
     },
 
     /**

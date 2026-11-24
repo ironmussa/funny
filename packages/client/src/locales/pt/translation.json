@@ -1923,7 +1923,11 @@
       "declinedNote": "Nada foi aprovado. A execução continua retida.",
       "runNow": "A execução agora:",
       "boardMarker": "Um agente pediu sua aprovação"
-    }
+    },
+    "split_one": "Dividir em {{count}} issue",
+    "split_other": "Dividir em {{count}} issues",
+    "splitTitle": "Dividir a issue #{{issue}}?",
+    "splitBody": "A factory abre uma issue por parte, com a descrição de #{{issue}} como contexto, e as coloca na fila. #{{issue}} recebe a lista e sai da factory. Nenhum agente roda para isso."
   },
   "projectSecrets": {
     "title": "Segredos",

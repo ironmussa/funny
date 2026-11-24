@@ -113,6 +113,7 @@ describe('parseActivityInput for the new kinds', () => {
     },
     'factory.stop': { issueNumber: 3 },
     'factory.retry': { issueNumber: 3 },
+    'factory.split': { issueNumber: 3 },
     'factory.approve-merge': { issueNumber: 3, sha: 'abc1234' },
     'factory.approval-moved': {
       issueNumber: 3,

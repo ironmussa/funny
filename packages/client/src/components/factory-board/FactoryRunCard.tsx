@@ -7,7 +7,7 @@
  */
 import type { GitStatusInfo } from '@funny/shared';
 import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
-import { Check, Clock, MoreVertical, RotateCcw, Sparkles, Square } from 'lucide-react';
+import { Check, Clock, MoreVertical, RotateCcw, Sparkles, Split, Square } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -196,6 +196,7 @@ const ACTION_ICON: Record<FactoryRunActionId, typeof Check> = {
   'lint-cleanup': Sparkles,
   'lint-cleanup-off': Sparkles,
   'mark-done': Check,
+  split: Split,
   retry: RotateCcw,
   stop: Square,
 };

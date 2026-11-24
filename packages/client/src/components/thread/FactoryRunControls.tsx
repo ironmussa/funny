@@ -1,7 +1,8 @@
 /**
  * A factory run's actions: open its pull request, and the member's controls
  * (retry a failed or parked run, approve merging a high-risk change the
- * factory held, stop one that has not ended). Shared by the
+ * factory held, split a run parked as too large into the issues triage
+ * proposed, stop one that has not ended). Shared by the
  * project's run list, the footer indicator's popover and the failure card in
  * the thread. Renders the buttons only; the caller lays them out.
  */
@@ -46,6 +47,7 @@ export type FactoryRunActionId =
   | 'lint-cleanup'
   | 'lint-cleanup-off'
   | 'mark-done'
+  | 'split'
   | 'retry'
   | 'stop';
 
@@ -59,6 +61,62 @@ export interface FactoryRunAction {
 interface OfferedAction {
   action: FactoryRunAction | null;
   dialog: ReactNode;
+}
+
+/** The parts triage proposed for a run parked because its issue is too large; none otherwise. */
+function factoryRunSplitParts(run: Pick<FactoryRun, 'state' | 'triage'>): string[] {
+  if (run.state !== 'needs_info' || run.triage?.decision !== 'too_big') return [];
+  return run.triage.items ?? [];
+}
+
+/**
+ * Split a run parked as too large: the factory opens the parts triage proposed
+ * as issues, behind a confirmation that lists them. No agent runs for it.
+ */
+function useSplitAction(projectId: string, run: FactoryRun): OfferedAction {
+  const { t } = useTranslation();
+  const [confirmingSplit, setConfirmingSplit] = useState(false);
+  const parts = factoryRunSplitParts(run);
+  if (parts.length === 0) return { action: null, dialog: null };
+  const split = () =>
+    void controlFactoryRun('split', projectId, run.id).orTee((error) =>
+      toastError(error, 'factory'),
+    );
+  const dialog = (
+    <ConfirmDialog
+      open={confirmingSplit}
+      onOpenChange={setConfirmingSplit}
+      title={t('factory.splitTitle', 'Split issue #{{issue}}?', { issue: run.issueNumber })}
+      description={t(
+        'factory.splitBody',
+        'The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this.',
+        { issue: run.issueNumber },
+      )}
+      warning={
+        <ol className="list-decimal space-y-1.5 pl-4" data-testid="factory-split-parts">
+          {parts.map((part) => (
+            <li key={part}>{part}</li>
+          ))}
+        </ol>
+      }
+      confirmLabel={t('factory.split', 'Split into {{count}} issues', { count: parts.length })}
+      cancelLabel={t('common.cancel', 'Cancel')}
+      variant="default"
+      onCancel={() => setConfirmingSplit(false)}
+      onConfirm={() => {
+        setConfirmingSplit(false);
+        split();
+      }}
+    />
+  );
+  return {
+    action: {
+      id: 'split',
+      label: t('factory.split', 'Split into {{count}} issues', { count: parts.length }),
+      run: () => setConfirmingSplit(true),
+    },
+    dialog,
+  };
 }
 
 /** The actions a run offers, and the confirmation dialogs they open. */
@@ -203,10 +261,16 @@ export function useFactoryRunActions(projectId: string, run: FactoryRun): Factor
       toastError(error, 'factory'),
     );
   const approval = useApproveMergeAction(projectId, run);
+  const split = useSplitAction(projectId, run);
   const lint = useLintCleanupAction(projectId, run);
   const done = useMarkDoneAction(projectId, run);
   if (!canSteer) return { actions: [], dialog: null };
-  const offered: Array<FactoryRunAction | null> = [approval.action, lint.action, done];
+  const offered: Array<FactoryRunAction | null> = [
+    approval.action,
+    split.action,
+    lint.action,
+    done,
+  ];
   // A high-risk change waits for the member's approval, which a retry would not give.
   if (RETRYABLE.has(run.state) && !approval.action) {
     offered.push({ id: 'retry', label: t('factory.retry', 'Retry'), run: () => control('retry') });
@@ -219,6 +283,7 @@ export function useFactoryRunActions(projectId: string, run: FactoryRun): Factor
     dialog: (
       <>
         {approval.dialog}
+        {split.dialog}
         {lint.dialog}
       </>
     ),
@@ -230,6 +295,7 @@ const BUTTON_VARIANT: Record<FactoryRunActionId, 'default' | 'outline' | 'ghost'
   'lint-cleanup': 'outline',
   'lint-cleanup-off': 'ghost',
   'mark-done': 'outline',
+  split: 'outline',
   retry: 'outline',
   stop: 'ghost',
 };

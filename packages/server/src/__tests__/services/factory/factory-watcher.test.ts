@@ -125,6 +125,8 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
 }
 
 interface GithubScript {
+  /** Issues opened from this many on fail (a split whose later parts cannot be opened). */
+  createIssueFailsFrom?: number;
   /** The default branch's `.funny/workflows/*` files, by path. */
   files?: Record<string, string>;
   /** No repository copy of `issue-to-merge`: the built-in flow, which has no proof rules. */
@@ -170,6 +172,8 @@ type FakeGithub = FactoryGithubPort & {
   relabels: Array<{ issue: number; remove?: string; add?: string }>;
   checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
+  /** Issues opened (a split's parts), numbered from 100. */
+  created: Array<{ number: number; title: string; body: string }>;
 };
 
 function fakeGithub(
@@ -187,7 +191,19 @@ function fakeGithub(
     relabels: [],
     checks: [],
     prLookups: [],
+    created: [],
     resolveRepo: async () => repo,
+    createIssue: (_reader: unknown, issue: { title: string; body: string }) => {
+      if (
+        script.createIssueFailsFrom !== undefined &&
+        port.created.length >= script.createIssueFailsFrom
+      ) {
+        return errAsync({ message: 'GitHub answered 502', status: 502 });
+      }
+      const number = 100 + port.created.length;
+      port.created.push({ number, ...issue });
+      return okAsync({ number, url: `u/${number}` });
+    },
     // An issue whose label was taken off is no longer listed, as on GitHub.
     listReadyIssues: () =>
       okAsync(issues.filter((i) => !port.relabels.some((r) => r.issue === i.number && r.remove))),
@@ -2585,6 +2601,107 @@ describe('factory operator controls', () => {
       sha: 'c'.repeat(40),
       userId: 'alice',
       at: 'later',
+    });
+  });
+
+  describe('splitting a run parked as too large', () => {
+    const PARTS = [
+      'Clear the client warnings',
+      'Clear the server warnings',
+      'Clear the core warnings',
+    ];
+
+    async function seedTooBig(factoryId: string, splitInto?: number[]) {
+      const run = await seedRun(factoryId, 'needs_info', []);
+      await createFactoryRunsRepository().update(run.id, {
+        failureReason: 'needs info',
+        triage: {
+          decision: 'too_big',
+          at: '2026-11-24T08:41:15Z',
+          threadId: 'triage-1',
+          items: PARTS,
+          ...(splitInto && { splitInto }),
+        },
+      });
+      return run;
+    }
+
+    test('opens the parts triage proposed, queues them, and ends the run done', async () => {
+      const { github } = await watch();
+      const factoryId = await enableFactory({ label: 'factory' });
+      const run = await seedTooBig(factoryId);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      const after = split._unsafeUnwrap();
+      expect(after.state).toBe('done');
+      expect(after.triage).toMatchObject({ decision: 'too_big', splitInto: [100, 101, 102] });
+      expect(github.created.map((issue) => issue.title)).toEqual([
+        'Clear the client warnings (part 1/3 of #7)',
+        'Clear the server warnings (part 2/3 of #7)',
+        'Clear the core warnings (part 3/3 of #7)',
+      ]);
+      // The parts wait in this factory's queue; no agent ran for the split.
+      const queued = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      expect(
+        queued
+          .filter((r) => r.state === 'requested')
+          .map((r) => r.issueNumber)
+          .sort(),
+      ).toEqual([100, 101, 102]);
+      // The parent lists them and is no longer the factory's.
+      expect(github.comments.at(-1)).toMatchObject({ issue: 7 });
+      expect(github.comments.at(-1)?.body).toContain('#100');
+      expect(github.relabels).toContainEqual({ issue: 7, remove: 'factory', add: undefined });
+    });
+
+    test('a run that is not parked as too large is refused and opens nothing', async () => {
+      const { github } = await watch();
+      const factoryId = await enableFactory();
+      const run = await seedRun(factoryId, 'failed', []);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split.isErr() && split.error.kind).toBe('conflict');
+      expect(github.created).toEqual([]);
+    });
+
+    test('parts an earlier attempt opened are not opened again', async () => {
+      const { github } = await watch();
+      const factoryId = await enableFactory();
+      const run = await seedTooBig(factoryId, [55]);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split._unsafeUnwrap().triage).toMatchObject({ splitInto: [55, 100, 101] });
+      expect(github.created).toHaveLength(2);
+      expect(github.created[0]?.title).toContain('part 2/3');
+    });
+
+    test('a part GitHub refuses leaves the run done with the ones opened, for a person to finish', async () => {
+      const { github } = await watch({ github: { createIssueFailsFrom: 1 } });
+      const factoryId = await enableFactory({ label: 'factory' });
+      const run = await seedTooBig(factoryId);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split._unsafeUnwrap().triage).toMatchObject({ splitInto: [100] });
+      expect(github.comments.at(-1)?.body).toContain('could not be opened');
+      // Incomplete: the parent goes to a person instead of just losing the label.
+      expect(github.relabels.at(-1)).toMatchObject({ issue: 7, remove: 'factory' });
+      expect(github.relabels.at(-1)?.add).toBeDefined();
+    });
+
+    test('nothing opened: the run stays parked and the member is told why', async () => {
+      await watch({ github: { createIssueFailsFrom: 0 } });
+      const factoryId = await enableFactory();
+      const run = await seedTooBig(factoryId);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split.isErr() && split.error.message).toContain('could be opened');
+      const after = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
+      expect(after?.state).toBe('needs_info');
     });
   });
 

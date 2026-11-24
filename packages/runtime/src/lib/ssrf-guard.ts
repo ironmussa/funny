@@ -234,7 +234,7 @@ export async function assertSafeOutboundUrl(
   // `fetch` will fail anyway, so the lookup failure is allowed to bubble.
   const records = await lookup(hostname, { all: true });
   for (const r of records) {
-    const family = (r.family === 6 ? 6 : 4) as 4 | 6;
+    const family = r.family === 6 ? 6 : 4;
     const reason = isBlockedForPolicy(family, r.address, policy);
     if (reason) {
       log.warn('SSRF blocked: hostname resolves to forbidden range', {
@@ -258,6 +258,8 @@ export async function assertSafeOutboundUrl(
   // the API is unavailable (different Bun version), silently skip.
   try {
     type BunDnsLike = { prefetch?: (h: string) => void } | undefined;
+    // SAFETY: only an optional `Bun.dns.prefetch` is read, and it is feature-detected below
+    // before it is called, so a runtime without it is skipped.
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun.dns is not in the DOM globalThis type; runtime feature-detection
     const bunDns = (globalThis as unknown as { Bun?: { dns?: BunDnsLike } }).Bun?.dns;
     if (bunDns && typeof bunDns.prefetch === 'function') {

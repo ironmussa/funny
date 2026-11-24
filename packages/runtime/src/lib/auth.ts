@@ -248,6 +248,8 @@ export async function initBetterAuth(): Promise<void> {
     }
 
     // Use admin plugin's createUser to bypass disableSignUp restriction
+    // SAFETY: the admin plugin's createUser accepts this body (`data` holds the username
+    // plugin's extra field), but its inferred input type does not include the plugin fields.
     const result = await auth.api.createUser({
       body: {
         email,
@@ -258,6 +260,8 @@ export async function initBetterAuth(): Promise<void> {
       },
     } as any);
 
+    // SAFETY: only `user` is read, through optional chaining, so a response without it
+    // (or a nullish one) is treated as "not created".
     if ((result as any)?.user) {
       if (isGenerated) {
         const passwordPath = resolve(DATA_DIR, 'admin-password.txt');

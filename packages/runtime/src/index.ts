@@ -88,8 +88,14 @@ if (existsSync(clientDistDir)) {
 }
 
 // Clean up previous instance on bun --watch restarts.
-const prev = (globalThis as any).__bunServer;
-const prevCleanup = (globalThis as any).__bunCleanup as (() => Promise<void>) | undefined;
+// SAFETY: only this file sets these two globals (below), with exactly these types; on a
+// fresh process they are absent, which the optional fields cover.
+const watchState = globalThis as typeof globalThis & {
+  __bunServer?: ReturnType<typeof Bun.serve>;
+  __bunCleanup?: () => Promise<void>;
+};
+const prev = watchState.__bunServer;
+const prevCleanup = watchState.__bunCleanup;
 if (prev) {
   prev.stop(true);
   if (prevCleanup) await prevCleanup();
@@ -129,8 +135,8 @@ shutdownManager.register(
 );
 
 // Store for next --watch restart
-(globalThis as any).__bunServer = server;
-(globalThis as any).__bunCleanup = () => shutdownManager.run('hotReload');
+watchState.__bunServer = server;
+watchState.__bunCleanup = () => shutdownManager.run('hotReload');
 
 // Graceful shutdown
 let shuttingDown = false;

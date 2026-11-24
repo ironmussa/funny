@@ -184,8 +184,13 @@ async function validateSession(cookie: string, cacheKey: string): Promise<Sessio
       headers: { Cookie: forwardCookie },
     });
     if (!res.ok) return null;
+    // SAFETY: Better Auth GET /api/auth/get-session response from the central server; a
+    // body without `user.id` is rejected on the next line.
     const data = (await res.json()) as any;
     if (!data?.user?.id) return null;
+    // SAFETY: Better Auth session fields: `user.id` (checked above) and `user.role` are
+    // strings, `session.activeOrganizationId` a string or null; a missing role falls back to
+    // 'user' and a missing org to null.
     const entry: SessionEntry = {
       userId: data.user.id as string,
       role: (data.user.role as string) || 'user',

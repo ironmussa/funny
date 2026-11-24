@@ -54,6 +54,8 @@ if (!isRunner) {
 // ── Exports ─────────────────────────────────────────────────────
 
 /** The Drizzle database instance. Throws in runner mode (no DB). */
+// SAFETY: the empty target is never read; every property access goes through the `get`
+// trap, which forwards it to the real AppDatabase (or throws when there is none).
 export const db: AppDatabase = new Proxy({} as AppDatabase, {
   get(_target, prop) {
     if (isRunner) {
@@ -64,6 +66,8 @@ export const db: AppDatabase = new Proxy({} as AppDatabase, {
     if (!providerInstance) {
       throw new Error('Database not initialized.');
     }
+    // SAFETY: `prop` comes from a property access on `db`, typed as AppDatabase, so it
+    // names a member of the real AppDatabase instance it is forwarded to.
     return (providerInstance.db as any)[prop];
   },
 });

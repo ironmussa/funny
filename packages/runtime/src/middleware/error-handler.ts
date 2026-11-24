@@ -16,6 +16,8 @@ import { metric } from '../lib/telemetry.js';
  * This handler only catches truly unexpected errors that bypass Result handling.
  */
 export const handleError: ErrorHandler = (err, c) => {
+  // SAFETY: `command` / `stderr` are only read after `e?.name === 'ProcessExecutionError'`,
+  // which has those fields; they are only logged, so a missing one logs as undefined.
   const e = err as any;
 
   // ProcessExecutionError — git / CLI command failures that escaped Result handling

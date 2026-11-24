@@ -252,10 +252,13 @@ function MarkdownPreview({
   return (
     <div
       data-testid="media-preview-markdown"
-      className={cn(markdownProseClassName, 'p-4')}
+      className={cn(
+        markdownProseClassName,
+        'p-4 text-[length:var(--media-preview-prose-font-size)] leading-[var(--media-preview-prose-line-height)]',
+      )}
       style={{
-        fontSize: PROSE_FONT_SIZE_PX[fontSize],
-        lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
+        '--media-preview-prose-font-size': `${PROSE_FONT_SIZE_PX[fontSize]}px`,
+        '--media-preview-prose-line-height': `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
       }}
     >
       {/* Security ME-9: rehypeSanitize is mandatory on every ReactMarkdown sink
@@ -289,8 +292,8 @@ function TextPreview({
   return (
     <pre
       data-testid="media-preview-text"
-      className="text-foreground m-0 max-h-[70vh] overflow-auto p-4 font-mono wrap-break-word whitespace-pre-wrap"
-      style={{ fontSize: EDITOR_FONT_SIZE_PX[fontSize] }}
+      className="text-foreground m-0 max-h-[70vh] overflow-auto p-4 font-mono text-[length:var(--media-preview-text-font-size)] wrap-break-word whitespace-pre-wrap"
+      style={{ '--media-preview-text-font-size': `${EDITOR_FONT_SIZE_PX[fontSize]}px` }}
     >
       {content}
     </pre>

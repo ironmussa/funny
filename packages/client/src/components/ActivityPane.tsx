@@ -148,10 +148,10 @@ function InlineTodoList({
         <div className="bg-muted h-1 flex-1 overflow-hidden rounded-full">
           <div
             className={cn(
-              'h-full rounded-full',
+              'h-full w-[var(--activity-progress-width)] rounded-full',
               allDone ? 'bg-status-success/80' : 'bg-status-info/80',
             )}
-            style={{ width: `${pct}%` }}
+            style={{ '--activity-progress-width': `${pct}%` }}
           />
         </div>
         <span

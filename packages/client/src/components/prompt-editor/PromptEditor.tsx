@@ -373,22 +373,29 @@ function SuggestionPopup({
 
   // Compute position synchronously to avoid flash/jump.
   // We recalculate on every render that changes rect or items.
-  const style = useMemo<React.CSSProperties>(() => {
-    if (!rect) return { position: 'fixed', visibility: 'hidden' as const, zIndex: 50 };
+  // `null` keeps the popup hidden until there is a rect to anchor it to.
+  const position = useMemo<{ left: number; bottom: number; width?: number } | null>(() => {
+    if (!rect) return null;
     const r = rect();
-    if (!r) return { position: 'fixed', visibility: 'hidden' as const, zIndex: 50 };
+    if (!r) return null;
     // If a container ref is provided, match its left edge and width
     const container = containerRef?.current;
     const containerRect = container?.getBoundingClientRect();
     return {
-      position: 'fixed',
       left: containerRect ? containerRect.left : r.left,
       width: containerRect ? containerRect.width : undefined,
       // Align the popup's bottom edge to the top of the container (or cursor)
       bottom: window.innerHeight - (containerRect ? containerRect.top : r.top) + 4,
-      zIndex: 50,
     };
   }, [rect, containerRef]);
+  const popupClassName = cn(
+    'fixed z-50 max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
+    position
+      ? 'bottom-[var(--suggestion-popup-bottom)] left-[var(--suggestion-popup-left)]'
+      : 'invisible',
+    position?.width !== undefined && 'w-[var(--suggestion-popup-width)]',
+    !containerRef?.current && 'w-80',
+  );
 
   // Scroll selected into view — use scrollTop manipulation instead of
   // scrollIntoView which can scroll parent containers and cause jumps.
@@ -411,11 +418,13 @@ function SuggestionPopup({
     return createPortal(
       <div
         data-suggestion-popup
-        style={style}
-        className={cn(
-          'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-          !containerRef?.current && 'w-80',
-        )}
+        style={{
+          '--suggestion-popup-left': position ? `${position.left}px` : undefined,
+          '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
+          '--suggestion-popup-width':
+            position?.width === undefined ? undefined : `${position.width}px`,
+        }}
+        className={popupClassName}
       >
         <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
           <Loader2 className="icon-xs animate-spin" />
@@ -430,11 +439,13 @@ function SuggestionPopup({
     return createPortal(
       <div
         data-suggestion-popup
-        style={style}
-        className={cn(
-          'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-          !containerRef?.current && 'w-80',
-        )}
+        style={{
+          '--suggestion-popup-left': position ? `${position.left}px` : undefined,
+          '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
+          '--suggestion-popup-width':
+            position?.width === undefined ? undefined : `${position.width}px`,
+        }}
+        className={popupClassName}
       >
         <div className="text-muted-foreground px-3 py-2 text-xs">
           {
@@ -457,11 +468,13 @@ function SuggestionPopup({
     <div
       ref={popupRef}
       data-suggestion-popup
-      style={style}
-      className={cn(
-        'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-        !containerRef?.current && 'w-80',
-      )}
+      style={{
+        '--suggestion-popup-left': position ? `${position.left}px` : undefined,
+        '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
+        '--suggestion-popup-width':
+          position?.width === undefined ? undefined : `${position.width}px`,
+      }}
+      className={popupClassName}
     >
       {items.map((item, i) => (
         <button

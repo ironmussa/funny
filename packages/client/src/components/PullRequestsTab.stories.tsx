@@ -311,10 +311,7 @@ function PullRequestsTabWrapper({
   return (
     <MemoryRouter>
       <Toaster />
-      <div
-        className="bg-sidebar fixed top-0 right-0 flex flex-col"
-        style={{ width: 400, height: '100vh', overflow: 'hidden' }}
-      >
+      <div className="bg-sidebar fixed top-0 right-0 flex h-screen w-[400px] flex-col overflow-hidden">
         <ThreadProvider threadId={threadId}>
           <PullRequestsTab visible />
         </ThreadProvider>

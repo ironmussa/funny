@@ -165,14 +165,18 @@ describe('TerminalPanel', () => {
     expect(screen.queryByTestId('terminal-tab-b')).toBeNull();
     // With no stored active tab, the last visible tab is the active one.
     expect(screen.getByTestId('terminal-tab-c').classList.contains('bg-accent')).toBe(true);
-    expect(panelRoot(container).style.height).toBe('300px');
+    expect(panelRoot(container).style.getPropertyValue('--terminal-panel-visible-height')).toBe(
+      '300px',
+    );
 
     // A scope with no tabs (and no stored visibility) is hidden and empty.
     scope = { scopeId: 'p3', scratchThreadId: null, worktreePath: null };
     rerender(<TerminalPanel />);
     expect(screen.queryByTestId('terminal-tab-a')).toBeNull();
     expect(screen.getByText('terminal.noProcesses')).toBeInTheDocument();
-    expect(panelRoot(container).style.height).toBe('0px');
+    expect(panelRoot(container).style.getPropertyValue('--terminal-panel-visible-height')).toBe(
+      '0px',
+    );
   });
 
   test('an active tab of another scope does not hide this scope’s tabs', () => {
@@ -191,7 +195,9 @@ describe('TerminalPanel', () => {
       panelVisibleByProject: { p1: false },
     });
     const { container } = renderPanel();
-    expect(panelRoot(container).style.height).toBe('0px');
+    expect(panelRoot(container).style.getPropertyValue('--terminal-panel-visible-height')).toBe(
+      '0px',
+    );
     expect(screen.getByTestId('terminal-tab-bell-a')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('terminal-tab-a'));
@@ -199,7 +205,9 @@ describe('TerminalPanel', () => {
     const state = useTerminalStore.getState();
     expect(state.activeTabId).toBe('a');
     expect(state.panelVisibleByProject.p1).toBe(true);
-    expect(panelRoot(container).style.height).toBe('300px');
+    expect(panelRoot(container).style.getPropertyValue('--terminal-panel-visible-height')).toBe(
+      '300px',
+    );
     expect(screen.queryByTestId('terminal-tab-bell-a')).toBeNull();
   });
 
@@ -285,7 +293,9 @@ describe('TerminalPanel', () => {
     fireEvent.click(hide);
 
     expect(useTerminalStore.getState().panelVisibleByProject).toEqual({ p1: false, p2: true });
-    expect(panelRoot(container).style.height).toBe('0px');
+    expect(panelRoot(container).style.getPropertyValue('--terminal-panel-visible-height')).toBe(
+      '0px',
+    );
   });
 
   test('double-click renames a tab on Enter and keeps the label on Escape', () => {

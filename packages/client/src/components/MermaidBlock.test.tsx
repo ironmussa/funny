@@ -50,12 +50,13 @@ describe('MermaidBlock', () => {
     const svg = screen.getByTestId('mermaid-diagram').querySelector('svg')!;
     expect(svg.textContent).toContain('Client');
     const wrapper = svg.parentElement!;
-    const fitted = wrapper.style.transform;
+    expect(wrapper).toHaveClass('[transform:var(--mermaid-transform)]');
+    const fitted = wrapper.style.getPropertyValue('--mermaid-transform');
     expect(fitted).not.toContain('scale(1)');
     fireEvent.click(screen.getByTestId('mermaid-inline-zoom-in'));
-    expect(wrapper.style.transform).not.toBe(fitted);
+    expect(wrapper.style.getPropertyValue('--mermaid-transform')).not.toBe(fitted);
     fireEvent.click(screen.getByTestId('mermaid-inline-zoom-reset'));
-    expect(wrapper.style.transform).toBe(fitted);
+    expect(wrapper.style.getPropertyValue('--mermaid-transform')).toBe(fitted);
     fireEvent.click(screen.getByTestId('mermaid-inline-expand'));
     expect(screen.getByRole('dialog').querySelector('svg text')).not.toBeNull();
     expect(screen.getByTestId('mermaid-copy-code')).toBeInTheDocument();

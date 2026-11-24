@@ -1,4 +1,5 @@
 import {
+  ArrowDown,
   ArrowUp,
   FileDiff,
   GitCommitHorizontal,
@@ -20,6 +21,9 @@ export const GIT_COMMIT_ICON = GitCommitHorizontal;
 
 /** Commits made but not pushed yet: what a push would send up. */
 export const GIT_UNPUSHED_ICON = ArrowUp;
+
+/** Commits on the remote not pulled yet: what a pull would bring down. */
+export const GIT_UNPULLED_ICON = ArrowDown;
 
 export type PRState = 'OPEN' | 'MERGED' | 'CLOSED';
 

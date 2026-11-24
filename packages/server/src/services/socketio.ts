@@ -22,10 +22,14 @@ export { isAllowedBrowserOrigin, getEngine, getIO };
  * Create and configure the Socket.IO server with Bun engine.
  * Must be called after auth is initialized.
  */
-export function createSocketIOServer(
-  auth: any,
-  corsOrigins: string[],
-): { io: SocketIOServer; engine: BunEngine; browserEvents: SocketIoBrowserEventSink } {
+/** The Socket.IO server, the Bun engine it is bound to, and its browser event sink. */
+interface SocketIOHandles {
+  io: SocketIOServer;
+  engine: BunEngine;
+  browserEvents: SocketIoBrowserEventSink;
+}
+
+export function createSocketIOServer(auth: any, corsOrigins: string[]): SocketIOHandles {
   const engine = new BunEngine({
     path: '/socket.io/',
     pingInterval: 25_000,

@@ -349,7 +349,8 @@ function BrowserSessionStatus() {
       {showCdpSpinner && (
         <LoadingState
           testId="browser-panel-spawning"
-          className="bg-background/80 absolute inset-0"
+          surface="scrim"
+          className="absolute inset-0"
           label="Spawning Chrome…"
         />
       )}

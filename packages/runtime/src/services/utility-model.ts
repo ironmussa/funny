@@ -82,6 +82,8 @@ function toUtilityError(error: unknown): UtilityModelError {
 /** A Claude alias such as `haiku` as its full model id; a full id passes through. */
 function claudeModelId(model: string): string {
   try {
+    // SAFETY: `model` is the user's saved utility model, a Claude alias or full id; an unknown value
+    // makes resolveModelId throw, and the catch below passes it through.
     return resolveModelId('claude', model as AgentModel);
   } catch {
     return model;

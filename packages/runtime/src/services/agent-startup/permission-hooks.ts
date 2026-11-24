@@ -33,6 +33,7 @@ export function buildPermissionRuleLookup(
         namespace: 'agent',
         threadId,
         toolName: query.toolName,
+        // SAFETY: only `.message` is read, optional-chained, for the log; a non-Error logs undefined.
         error: (err as Error)?.message,
       });
       return null;

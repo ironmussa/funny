@@ -91,6 +91,8 @@ export function generateThreadRecap(request: RecapRequest): ResultAsync<RecapRes
         message: 'Thread not found',
       });
     }
+    // SAFETY: getThreadWithMessages answers the server's message rows (role, content, tool calls,
+    // timestamp), which is the shape RecapMessage reads; it types them as any[].
     const transcript = buildRecapTranscript({
       since: request.since,
       status: thread.status,

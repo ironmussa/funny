@@ -214,6 +214,8 @@ shutdownManager.register(
     if (mode === 'hotReload') {
       const snapshot = extractActiveAgentSnapshot();
       if (snapshot.agents.size > 0) {
+        // SAFETY: untyped process-wide handoff global; the next instance's adoptSurvivingProcesses
+        // (agent-lifecycle.ts) reads it back as extractActiveAgentSnapshot()'s return type.
         (globalThis as any).__funnyActiveAgentSnapshot = snapshot;
         log.info(`Preserved ${snapshot.agents.size} agent(s) for next instance`, {
           namespace: 'agent',

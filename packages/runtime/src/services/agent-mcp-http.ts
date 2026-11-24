@@ -95,7 +95,7 @@ async function handle(req: Request): Promise<Response> {
     server.registerTool(
       def.name,
       { description: def.description, inputSchema: def.schema },
-      (args: unknown, extra: unknown) => def.run(args ?? {}, extra) as any,
+      (args: unknown, extra: unknown) => def.run(args ?? {}, extra),
     );
   }
   const transport = new WebStandardStreamableHTTPServerTransport({

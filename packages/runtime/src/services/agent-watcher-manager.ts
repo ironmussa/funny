@@ -21,7 +21,7 @@
  * NOTE: distinct from the git file-watchers in `git-watcher-service.ts`.
  */
 
-import type { Watcher, WatcherStatus, WSEvent } from '@funny/shared';
+import type { Watcher, WatcherStatus } from '@funny/shared';
 import { errorMessage } from '@funny/shared/errors';
 import { nanoid } from 'nanoid';
 
@@ -58,7 +58,7 @@ type WatcherEventType =
   | 'watcher:cancelled';
 
 function emit(userId: string, type: WatcherEventType, watcher: Watcher): void {
-  wsBroker.emitToUser(userId, { type, threadId: watcher.threadId, data: { watcher } } as WSEvent);
+  wsBroker.emitToUser(userId, { type, threadId: watcher.threadId, data: { watcher } });
 }
 
 // ── Create / reschedule (the sole creation path: funny_watch) ─────
@@ -134,7 +134,7 @@ async function scanOnce(): Promise<void> {
   scanning = true;
   try {
     const now = Date.now();
-    const due = (await getServices().watchers.listDueWatchers(now)) as Watcher[];
+    const due = await getServices().watchers.listDueWatchers(now);
     for (const w of due) {
       await fire(w, now).catch((err) => {
         log.error('Watcher fire failed', {
@@ -173,7 +173,7 @@ function armScannerAt(dueAt: number): void {
 async function rearmScanner(): Promise<void> {
   if (!started || scanning) return;
   try {
-    const pending = (await getServices().watchers.listPendingWatchers()) as Watcher[];
+    const pending = await getServices().watchers.listPendingWatchers();
     if (!started) return;
     const nextWakeAt = pending.reduce(
       (earliest, watcher) => Math.min(earliest, watcher.nextWakeAt),

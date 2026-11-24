@@ -23,11 +23,15 @@ interface ResolveAgentTemplateInput {
 
 /** Parse JSON text columns that may already be parsed. */
 function parseJsonCol<T>(val: unknown): T[] {
+  // SAFETY: the column holds a JSON array of T written by the server (as text or already parsed);
+  // the caller picks T for that column.
   return val ? ((typeof val === 'string' ? JSON.parse(val) : val) as T[]) : [];
 }
 
 function parseTemplateVariables(rawVars: unknown): Record<string, string> {
   if (typeof rawVars === 'string') return JSON.parse(rawVars);
+  // SAFETY: template variables are stored as a name → string map by the server; values are only
+  // interpolated into the prompt.
   return rawVars && typeof rawVars === 'object' ? (rawVars as Record<string, string>) : {};
 }
 

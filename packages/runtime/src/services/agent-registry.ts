@@ -6,7 +6,7 @@
  * live together instead of being scattered across context fields.
  */
 
-import type { AgentDefinition, AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
+import type { AgentDefinition } from '@funny/shared';
 
 // ── resolve helper ──────────────────────────────────────────
 
@@ -111,9 +111,9 @@ export const BUILTIN_AGENTS = {
     name: 'reviewer',
     label: 'Code Reviewer',
     systemPrompt: reviewerPrompt,
-    model: 'sonnet' as AgentModel,
-    provider: 'claude' as AgentProvider,
-    permissionMode: 'plan' as PermissionMode,
+    model: 'sonnet',
+    provider: 'claude',
+    permissionMode: 'plan',
     // Hard-deny mutating tools at the SDK level so the reviewer can't
     // edit files even if the system prompt is overridden or ignored.
     disallowedTools: ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'],
@@ -122,25 +122,25 @@ export const BUILTIN_AGENTS = {
     name: 'corrector',
     label: 'Code Corrector',
     systemPrompt: correctorPrompt(),
-    model: 'sonnet' as AgentModel,
-    provider: 'claude' as AgentProvider,
-    permissionMode: 'autoEdit' as PermissionMode,
+    model: 'sonnet',
+    provider: 'claude',
+    permissionMode: 'autoEdit',
   },
   precommitFixer: {
     name: 'precommit-fixer',
     label: 'Pre-commit Fixer',
     systemPrompt: precommitFixerPrompt(),
-    model: 'sonnet' as AgentModel,
-    provider: 'claude' as AgentProvider,
-    permissionMode: 'autoEdit' as PermissionMode,
+    model: 'sonnet',
+    provider: 'claude',
+    permissionMode: 'autoEdit',
   },
   testFixer: {
     name: 'test-fixer',
     label: 'Test Fixer',
     systemPrompt: testFixerPrompt(),
-    model: 'sonnet' as AgentModel,
-    provider: 'claude' as AgentProvider,
-    permissionMode: 'autoEdit' as PermissionMode,
+    model: 'sonnet',
+    provider: 'claude',
+    permissionMode: 'autoEdit',
   },
 } as const satisfies Record<string, AgentDefinition>;
 

@@ -32,8 +32,13 @@ const defaultFetch: FetchProjectSecrets = async (threadId) => {
 };
 
 function isSecretValue(value: unknown): value is SecretValue {
-  const candidate = value as SecretValue | null;
-  return typeof candidate?.name === 'string' && typeof candidate?.value === 'string';
+  if (typeof value !== 'object' || value === null) return false;
+  return (
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'value' in value &&
+    typeof value.value === 'string'
+  );
 }
 
 /** The thread's project secrets, or the reason they could not be read. */
@@ -88,11 +93,18 @@ export function composeAgentEnv(
 /** Applies `redact` (when there is one) to every string inside `value`, keeping its shape. */
 export function redactDeep<T>(value: T, redact: ((text: string) => string) | undefined): T {
   if (!redact) return value;
-  if (typeof value === 'string') return redact(value) as T;
-  if (Array.isArray(value)) return value.map((item) => redactDeep(item, redact)) as T;
+  if (typeof value === 'string') {
+    // SAFETY: `value` is a string here, and redacting a string yields a string, so the shape T holds.
+    return redact(value) as T;
+  }
+  if (Array.isArray(value)) {
+    // SAFETY: `value` is an array; mapping each item through redactDeep keeps each item's shape.
+    return value.map((item) => redactDeep(item, redact)) as T;
+  }
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) out[key] = redactDeep(item, redact);
+    // SAFETY: `out` has the same own enumerable keys as `value`, each with its value's shape kept.
     return out as T;
   }
   return value;

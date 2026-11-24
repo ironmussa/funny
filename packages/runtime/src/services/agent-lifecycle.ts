@@ -13,13 +13,7 @@
 import type { AgentOrchestrator } from '@funny/core/agents';
 import { reapOrphanedAgents, resolvePermissionApprovalCapability } from '@funny/core/agents';
 import { getDiffSummary } from '@funny/core/git';
-import type {
-  AgentProvider,
-  AgentModel,
-  PermissionMode,
-  Thread,
-  ThreadStatus,
-} from '@funny/shared';
+import type { AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
 import { internal, type DomainError, errorMessage as caughtMessage } from '@funny/shared/errors';
 import { createSecretRedactor, type SecretValue } from '@funny/shared/project-secrets';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
@@ -490,6 +484,8 @@ export class AgentLifecycleManager {
     if (currentThread?.userId) {
       this.state.threadUserIds.set(threadId, currentThread.userId);
     }
+    // SAFETY: threads.status is only written through the thread state machine, so the stored string
+    // is a ThreadStatus; a missing thread starts from 'pending'.
     const currentStatus = (currentThread?.status ?? 'pending') as ThreadStatus;
     const startEvent = this.pickStartEvent(currentStatus);
 
@@ -581,11 +577,7 @@ export class AgentLifecycleManager {
     thread: RuntimeThreadRecord,
     project: StartProject,
   ): string {
-    const cwdResult = resolveThreadCwd(
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      thread as unknown as Thread,
-      project ? { path: project.path } : null,
-    );
+    const cwdResult = resolveThreadCwd(thread, project ? { path: project.path } : null);
     if (cwdResult.isOk()) return cwdResult.value;
 
     const errInfo = cwdResult.error;
@@ -605,26 +597,24 @@ export class AgentLifecycleManager {
     project: StartProject,
     cwd: string,
   ): Promise<void> {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    const variant = thread as unknown as Thread;
     if (thread.mode === 'worktree' && project?.path && cwd !== project.path) {
       syncWorktreeProjectAssets(threadId, project.path, cwd);
     }
 
     // Ensure the scratch directory exists on disk before the agent starts.
-    if (hasLazyCwd(variant)) {
+    if (hasLazyCwd(thread)) {
       ensureLazyCwd(threadId, thread.userId, cwd);
     }
 
     // Rewind is funny-native for every provider: capture a Git snapshot for
     // the latest user message immediately before it can modify the worktree.
-    if (canDoGitOps(variant)) {
+    if (canDoGitOps(thread)) {
       await this.captureRewindCheckpoint(threadId, cwd);
     }
 
     // Baseline for the changed-files summary. Not awaited: the scan runs while
     // the agent spawns, long before its first tool call can edit anything.
-    if (canDoGitOps(variant)) {
+    if (canDoGitOps(thread)) {
       this.state.runDiffBaselines.set(
         threadId,
         getDiffSummary(cwd).match(
@@ -813,9 +803,13 @@ export class AgentLifecycleManager {
 
   /** Adopt surviving agent processes from a previous --watch restart */
   private adoptSurvivingProcesses(): void {
+    // SAFETY: agent-runner.ts stores extractActiveAgentSnapshot()'s result on this global before a
+    // --watch restart, and older instances stored the Map of live agents under __funnyActiveAgents;
+    // both are read once here and deleted below.
     const snapshot = (globalThis as any).__funnyActiveAgentSnapshot as
       | ReturnType<typeof this.orchestrator.extractActiveAgentSnapshot>
       | undefined;
+    // SAFETY: see the snapshot above; the legacy global holds the previous instance's agent Map.
     const legacySurviving = (globalThis as any).__funnyActiveAgents as Map<string, any> | undefined;
     const surviving = snapshot?.agents ?? legacySurviving;
     if (!surviving?.size) return;
@@ -857,7 +851,10 @@ export class AgentLifecycleManager {
         count: adopted,
       });
     }
+    // SAFETY: untyped process-wide handoff globals written by the previous instance; deleting an
+    // absent property is a no-op.
     delete (globalThis as any).__funnyActiveAgentSnapshot;
+    // SAFETY: same handoff global as above, legacy name.
     delete (globalThis as any).__funnyActiveAgents;
   }
 }

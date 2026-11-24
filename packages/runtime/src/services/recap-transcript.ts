@@ -94,14 +94,14 @@ function parseInput(raw: string): unknown {
 /** The pending question's text, from an `AskUserQuestion` input. */
 function questionText(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
-  const questions = (input as { questions?: unknown }).questions;
+  const questions = 'questions' in input ? input.questions : undefined;
   if (Array.isArray(questions)) {
     const texts = questions
-      .map((q) => (q && typeof q === 'object' ? (q as { question?: unknown }).question : null))
+      .map((q) => (q && typeof q === 'object' ? ('question' in q ? q.question : undefined) : null))
       .filter((q): q is string => typeof q === 'string' && q.length > 0);
     if (texts.length > 0) return texts.join(' / ');
   }
-  const question = (input as { question?: unknown }).question;
+  const question = 'question' in input ? input.question : undefined;
   return typeof question === 'string' ? question : null;
 }
 
@@ -113,6 +113,8 @@ export function summarizeToolInput(raw: string | null | undefined): string {
   if (input && typeof input === 'object' && !Array.isArray(input)) {
     const question = questionText(input);
     if (question) return clip(oneLine(question), TOOL_INPUT_SUMMARY_CHARS);
+    // SAFETY: `input` is a non-null, non-array object (checked above), parsed from JSON, so it is a
+    // plain string-keyed record.
     const record = input as Record<string, unknown>;
     for (const key of INPUT_SUMMARY_KEYS) {
       const value = record[key];

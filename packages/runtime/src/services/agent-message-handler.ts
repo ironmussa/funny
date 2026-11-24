@@ -74,8 +74,8 @@ function normalizeToolResultContent(content: unknown): string {
  */
 function serializeToolInput(toolName: string, input: unknown): string | undefined {
   if (!input || typeof input !== 'object') return undefined;
-  if (toolName === 'Bash' && 'command' in input && typeof (input as any).command === 'string') {
-    return (input as any).command as string;
+  if (toolName === 'Bash' && 'command' in input && typeof input.command === 'string') {
+    return input.command;
   }
   try {
     const s = JSON.stringify(input);
@@ -182,6 +182,9 @@ export class AgentMessageHandler {
   }
 
   private async emitWS(threadId: string, type: WSEvent['type'], data: unknown): Promise<void> {
+    // SAFETY: every caller passes the data payload of the WSEvent variant named by `type`
+    // (agent:status → status data, agent:result → result data, …); this is the one place
+    // the pair is joined into the union.
     const event = { type, threadId, data } as WSEvent;
 
     // Fast path: use cached userId to avoid a DB read on every emission
@@ -215,7 +218,7 @@ export class AgentMessageHandler {
       namespace: 'agent',
       threadId,
       type: msg.type,
-      subtype: (msg as any).subtype,
+      subtype: 'subtype' in msg ? msg.subtype : undefined,
     });
 
     // System init — capture session ID and broadcast init info
@@ -267,6 +270,8 @@ export class AgentMessageHandler {
       });
       const thread = await this.threadManager.getThread(threadId);
       await this.emitWS(threadId, 'agent:init', {
+        // SAFETY: initTools is only written by the init handler above as
+        // JSON.stringify(msg.tools ?? []), the CLI's array of tool-name strings.
         tools: thread?.initTools ? (JSON.parse(thread.initTools) as string[]) : [],
         cwd: thread?.initCwd ?? '',
         model: thread?.model ?? '',
@@ -399,21 +404,21 @@ export class AgentMessageHandler {
   ): Promise<{ profileId: string | null; profileName: string | null }> {
     const cached = this.state.runAgentProfiles.get(threadId);
     if (cached) return cached;
-    let ref = { profileId: null as string | null, profileName: null as string | null };
+    let thread: Awaited<ReturnType<IThreadManager['getThread']>>;
     try {
-      const thread = await this.threadManager.getThread(threadId);
-      ref = {
-        profileId: thread?.agentProfileId ?? null,
-        profileName: thread?.agentProfileName ?? null,
-      };
+      thread = await this.threadManager.getThread(threadId);
     } catch (err) {
       log.warn('Failed to read the thread agent profile', {
         namespace: 'agent',
         threadId,
         error: err,
       });
-      return ref;
+      return { profileId: null, profileName: null };
     }
+    const ref = {
+      profileId: thread?.agentProfileId ?? null,
+      profileName: thread?.agentProfileName ?? null,
+    };
     this.state.runAgentProfiles.set(threadId, ref);
     return ref;
   }
@@ -443,6 +448,8 @@ export class AgentMessageHandler {
 
     await this.threadManager.createPendingPermissionRequest?.(pendingPermissionRequest);
     this.state.structuredPermissionRequests.set(threadId, pendingPermissionRequest);
+    // SAFETY: threads.status only holds ThreadStatus values (written from transitionStatus);
+    // the row type widens it to string, and a missing one defaults to 'running'.
     const currentStatus = (thread?.status ?? 'running') as ThreadStatus;
     const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus);
     await this.threadManager.updateThread(threadId, { status });
@@ -583,25 +590,31 @@ export class AgentMessageHandler {
     const isCompactionSummary = msg.message.content.some(
       (b: any) => b && typeof b === 'object' && 'type' in b && b.type === 'compaction',
     );
+    // SAFETY: the assistant message's usage is the provider's token-usage object (Claude
+    // snake_case or ACP camelCase keys); only its numeric fields are read below.
     const usage = isCompactionSummary
       ? undefined
       : (msg.message.usage as Record<string, unknown> | undefined);
     if (usage) {
+      // SAFETY: usage token fields are numbers in both the Claude and ACP usage shapes.
       const inputTokens =
         (usage.input_tokens as number) ??
         (usage.inputTokens as number) ??
         (usage.used as number) ??
         0;
+      // SAFETY: usage token fields are numbers in both the Claude and ACP usage shapes.
       const cacheRead =
         (usage.cache_read_input_tokens as number) ??
         (usage.cachedReadTokens as number) ??
         (usage.cacheReadTokens as number) ??
         0;
+      // SAFETY: usage token fields are numbers in both the Claude and ACP usage shapes.
       const cacheCreation =
         (usage.cache_creation_input_tokens as number) ??
         (usage.cachedWriteTokens as number) ??
         (usage.cacheWriteTokens as number) ??
         0;
+      // SAFETY: usage token fields are numbers in both the Claude and ACP usage shapes.
       const outputTokens = (usage.output_tokens as number) ?? (usage.outputTokens as number) ?? 0;
       const totalInputTokens = inputTokens + cacheRead + cacheCreation;
 
@@ -764,6 +777,8 @@ export class AgentMessageHandler {
           });
           this.state.pendingUserInput.set(threadId, 'question');
           const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
+          // SAFETY: threads.status only holds ThreadStatus values (written from
+          // transitionStatus); the row type widens it to string, and a missing one is 'running'.
           const { status } = transitionStatus(
             threadId,
             { type: 'WAIT' },
@@ -784,6 +799,8 @@ export class AgentMessageHandler {
           });
           this.state.pendingUserInput.set(threadId, 'plan');
           const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
+          // SAFETY: threads.status only holds ThreadStatus values (written from
+          // transitionStatus); the row type widens it to string, and a missing one is 'running'.
           const { status } = transitionStatus(
             threadId,
             { type: 'WAIT' },
@@ -815,6 +832,8 @@ export class AgentMessageHandler {
             toolInput: serializedInput,
           });
           const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
+          // SAFETY: threads.status only holds ThreadStatus values (written from
+          // transitionStatus); the row type widens it to string, and a missing one is 'running'.
           const { status } = transitionStatus(
             threadId,
             { type: 'WAIT' },
@@ -1002,6 +1021,8 @@ export class AgentMessageHandler {
 
   /** Remember the provider's error text until the agent recovers or the run ends. */
   private recordProviderError(threadId: string, input: unknown): void {
+    // SAFETY: only `error` is read and it stays `unknown` (checked with typeof below); reading
+    // it off a primitive or an object without it yields undefined, as the fallback expects.
     const errorInput = (input ?? {}) as { error?: unknown };
     this.state.providerErrorPending.set(
       threadId,
@@ -1096,6 +1117,8 @@ export class AgentMessageHandler {
       duration: msg.duration_ms,
     };
 
+    // SAFETY: threads.status only holds ThreadStatus values (written from transitionStatus);
+    // the row type widens it to string, and a missing one defaults to 'running'.
     const { status: finalStatus } = transitionStatus(
       threadId,
       resultEvent,
@@ -1154,6 +1177,8 @@ export class AgentMessageHandler {
           userId: t.userId,
           worktreePath: t.worktreePath ?? null,
           cwd: t.worktreePath ?? proj?.path ?? '',
+          // SAFETY: this branch runs only when finalStatus !== 'waiting', and a result
+          // transition ends in completed, failed or stopped.
           status: finalStatus as 'completed' | 'failed' | 'stopped',
           cost: msg.total_cost_usd ?? 0,
         });
@@ -1187,6 +1212,8 @@ export class AgentMessageHandler {
     // and without recomputing the diff on every refresh. Best-effort.
     if (finalStatus !== 'waiting') {
       await this.persistChangedFilesSummary(threadId).catch((err) => {
+        // SAFETY: `?.message ?? String(err)` falls back to the string form for anything
+        // that is not an Error with a message.
         log.warn('Failed to persist changed-files summary', {
           namespace: 'agent',
           threadId,
@@ -1262,8 +1289,11 @@ export class AgentMessageHandler {
     const data = await this.loadLatestTurn(threadId);
     if (!data) return;
     // Scratch threads have no repo — nothing to diff or summarize.
+    // SAFETY: loadLatestTurn returns getThreadWithMessages' row (RuntimeThreadRecord, which
+    // has the optional isScratch flag) and it is non-null here.
     if (!canDoGitOps(data as { isScratch?: boolean })) return;
 
+    // SAFETY: getThreadWithMessages' row carries the `messages` array of the loaded window.
     const messages = (data as { messages?: any[] }).messages ?? [];
     if (messages.length === 0) return;
 
@@ -1315,6 +1345,8 @@ export class AgentMessageHandler {
     await getServices().threadEvents.saveThreadEvent(
       threadId,
       'changed_files_summary',
+      // SAFETY: latestSessionChanges returns a plain JSON object (files + counts) that the
+      // server stores as the event's JSON data and the client reads back as that summary.
       // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
       summary as unknown as Record<string, unknown>,
     );

@@ -194,8 +194,9 @@ function fakeGithub(
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
         : okAsync({
             number,
-            title: `Issue ${number}`,
-            url: `u/${number}`,
+            // A listed issue reads back as listed: a labelled issue is admitted from the queue.
+            title: issues.find((i) => i.number === number)?.title ?? `Issue ${number}`,
+            url: issues.find((i) => i.number === number)?.url ?? `u/${number}`,
             state: script.closed?.includes(number) ? ('closed' as const) : ('open' as const),
             pullRequest: false,
             createdAt: '2026-01-01T00:00:00Z',
@@ -659,6 +660,38 @@ describe('factory watcher', () => {
     expect(launcher.calls).toHaveLength(0);
   });
 
+  test('free slots fill together: each launch does not wait for the one before', async () => {
+    await enableFactory({ maxConcurrent: 3 });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    // Each first launch answers only once all three flows asked for one: one at a
+    // time, the first would hold the tick for ADMIT_WAIT_MS (past the test's timeout).
+    let asked = 0;
+    let allAsked: () => void = () => {};
+    const together = new Promise<void>((resolve) => (allAsked = resolve));
+    const launch = async (input: StartThreadInput) => {
+      if (++asked === 3) allAsked();
+      await together;
+      return launcher.launch(input);
+    };
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [
+        { number: 1, title: 'a', url: 'u/1' },
+        { number: 2, title: 'b', url: 'u/2' },
+        { number: 3, title: 'c', url: 'u/3' },
+      ]),
+      createPoll: poll.createPoll,
+      launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(asked).toBeGreaterThanOrEqual(3);
+  });
+
   test('a run waiting for a person frees its slot but still holds its issue', async () => {
     const factoryId = await enableFactory({ maxConcurrent: 1 });
     const runs = createFactoryRunsRepository();
@@ -809,7 +842,7 @@ describe('factory watcher', () => {
       await createFactoryRunsRepository().update(first.id, { state: 'waiting_human' });
       await poll.ticks[0]!();
       // Admitted from the queue, the second run's thread is named from the issue as it is now.
-      expect(implementing(launcher)).toEqual(['[Factory] #1 a', '[Factory] #2 Issue 2']);
+      expect(implementing(launcher)).toEqual(['[Factory] #1 a', '[Factory] #2 b']);
       expect(triages().n).toBe(2);
     });
 
@@ -1353,9 +1386,15 @@ describe('factory flow', () => {
     const runsOf = async (factoryId: string) =>
       (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
 
+    /** The issue waits in the queue, saying why. */
+    const waitingForRules = (runs: FactoryRunView[]) =>
+      runs.map((run) => ({ state: run.state, wait: run.waitReason?.kind }));
+
     test('the built-in flow, with no proof rules, admits nothing and says why', async () => {
       const { factoryId, launcher } = await runFlow({ builtInFlow: true }, pendingThreads);
-      expect(await runsOf(factoryId)).toEqual([]);
+      expect(waitingForRules(await runsOf(factoryId))).toEqual([
+        { state: 'requested', wait: 'proof-not-configured' },
+      ]);
       expect(launcher.calls).toHaveLength(0);
       expect(await blocked()).toContain('Regression proof not configured');
     });
@@ -1363,10 +1402,14 @@ describe('factory flow', () => {
     test('once rules are added the issue is admitted and the blocker clears', async () => {
       const script: GithubScript = { builtInFlow: true };
       const { factoryId, poll } = await runFlow(script, pendingThreads);
-      expect(await runsOf(factoryId)).toEqual([]);
+      expect(waitingForRules(await runsOf(factoryId))).toEqual([
+        { state: 'requested', wait: 'proof-not-configured' },
+      ]);
       script.builtInFlow = false;
       await poll.ticks[0]!();
-      expect(await runsOf(factoryId)).toHaveLength(1);
+      const [run, ...others] = await runsOf(factoryId);
+      expect(others).toEqual([]);
+      expect(run!.state).not.toBe('requested');
       expect(await blocked()).toBeNull();
     });
 
@@ -2664,8 +2707,12 @@ describe('factory capacity between admission and run controls (#328)', () => {
 
     expect(retried).toBe(true);
     expect(launcher.calls).toHaveLength(0);
+    // The labelled issue stays in the queue, waiting for the slot.
     const all = (await runsRepo().list(factoryId))._unsafeUnwrap();
-    expect(all.map((r) => r.issueNumber)).toEqual([1]);
+    expect(all.map((r) => [r.issueNumber, r.state]).sort()).toEqual([
+      [1, 'queued'],
+      [3, 'requested'],
+    ]);
     expect(await inFlightCount(factoryId)).toBe(1);
   });
 

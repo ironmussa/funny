@@ -206,6 +206,12 @@ export interface FactoryTriageDeps {
   busyPaths?(): Promise<Array<{ issue: number; paths: string[] }>>;
   /** Leave the slot and wait in the queue behind `blockers` (a compare-and-set from `triaging`). */
   hold?(blockers: number[]): Promise<boolean>;
+  /**
+   * Run `work` (record the contract, then check the paths) alone among the
+   * factory's runs, so two triages that finish together cannot both miss the
+   * other's paths. Default: no exclusion.
+   */
+  exclusive?<T>(work: () => Promise<T>): Promise<T>;
   record(input: UpdateRunInput): Promise<void>;
   count(event: string): Promise<void>;
 }
@@ -226,6 +232,7 @@ function proceed(triage: FactoryTriage): ActionResult {
 
 export function createFactoryTriage(deps: FactoryTriageDeps) {
   const { scope } = deps;
+  const exclusive = deps.exclusive ?? (<T>(work: () => Promise<T>) => work());
   // A superseded answer (the issue changed since) decides nothing: triage runs again.
   let current: FactoryTriage | null = deps.stored?.superseded ? null : deps.stored;
   /** The thread of the superseded answer: never adopted as this attempt's. */
@@ -362,13 +369,16 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     if (answer.decision === 'needs_info')
       return askOnIssue('needs_info', answer.questions, threadId);
     if (answer.decision === 'too_big') return askOnIssue('too_big', answer.parts, threadId);
-    const triage = await keep({
+    const ready: FactoryTriage = {
       decision: 'ready',
       at: new Date().toISOString(),
       threadId,
       contract: answer.contract,
+    };
+    return exclusive(async () => {
+      const triage = await keep(ready);
+      return (await heldForPaths(triage)) ?? proceed(triage);
     });
-    return (await heldForPaths(triage)) ?? proceed(triage);
   }
 
   return {
@@ -379,8 +389,9 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     async triage(opts: TriageOpts): Promise<ActionResult> {
       // Already decided (a resumed run, or one back from a path hold): not triaged twice.
       if (current?.decision === 'ready' || current?.decision === 'none') {
-        if (current.decision === 'ready') await deps.record({ state: 'triaging' });
-        return (await heldForPaths(current)) ?? proceed(current);
+        const decided = current;
+        if (decided.decision === 'ready') await deps.record({ state: 'triaging' });
+        return exclusive(async () => (await heldForPaths(decided)) ?? proceed(decided));
       }
       const thread = await startThread(opts);
       if (thread.isErr()) {
@@ -403,7 +414,8 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
 
 /**
  * States in which a run is changing files: its likely paths are taken. A run
- * still in triage, or waiting in the queue, holds none.
+ * waiting in the queue holds none; one in triage holds its paths once triage
+ * gave it a contract (`triaging` with a `ready` answer, see `busyPathsOf`).
  */
 const WORKING_ON_PATHS: ReadonlySet<string> = new Set([
   'working',
@@ -439,7 +451,9 @@ export function busyPathsOf(
     return run.issueNumber !== null &&
       run.id !== exceptRunId &&
       paths.length > 0 &&
-      WORKING_ON_PATHS.has(run.state)
+      // Triaged and going on to work: its paths are taken before it reaches
+      // `working`, or a run triaged right after it would miss them.
+      (WORKING_ON_PATHS.has(run.state) || run.state === 'triaging')
       ? [{ issue: run.issueNumber, paths }]
       : [];
   });

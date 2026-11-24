@@ -238,6 +238,8 @@ export interface FactoryActionProviderDeps {
   issueText?(): Promise<FactoryIssueText | null>;
   /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only). */
   holdForPaths?(blockers: number[]): Promise<boolean>;
+  /** Run `work` alone among the factory's runs (triage's contract and path check). */
+  exclusive?<T>(work: () => Promise<T>): Promise<T>;
   /** When the run was admitted: review threads from before are not this run's. */
   admittedAt?: string;
   /** The newest review thread of this run by its title prefix, since `since`. */
@@ -1015,6 +1017,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     issueUpdatedAt: deps.issueUpdatedAt,
     issueText: deps.issueText,
     hold: deps.holdForPaths,
+    exclusive: deps.exclusive,
     record: deps.record,
     count: (event) => count(metrics, { event }),
   });

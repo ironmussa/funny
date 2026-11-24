@@ -400,31 +400,3 @@ export function factoryRunReviewLabel(
       : t('factory.review.failed', 'Review failed'),
   };
 }
-
-/**
- * The run's contract as a short label: that triage wrote one (its criteria in
- * `detail`), or that the run went on without one. Null before triage decided.
- */
-export function factoryRunContractLabel(
-  t: TFunction,
-  run: Pick<FactoryRun, 'triage'>,
-): { text: string; detail: string; missing: boolean } | null {
-  const triage = run.triage;
-  if (!triage || triage.superseded) return null;
-  if (triage.decision === 'none') {
-    return {
-      missing: true,
-      text: t('factory.contract.none', 'No contract'),
-      detail: t(
-        'factory.contract.noneDetail',
-        'Triage gave no contract: the review judges against the issue',
-      ),
-    };
-  }
-  if (triage.decision !== 'ready' || !triage.contract) return null;
-  return {
-    missing: false,
-    text: t('factory.contract.ready', 'Contract'),
-    detail: triage.contract.acceptanceCriteria.join('\n'),
-  };
-}

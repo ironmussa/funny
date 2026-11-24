@@ -1,11 +1,4 @@
-import {
-  ArrowUp,
-  FileDiff,
-  GitCommitHorizontal,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-} from 'lucide-react';
+import { ArrowUp, FileDiff, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
 
 /**
  * One glyph per git concept, shared by every surface (sidebar rows, PR badges,
@@ -14,9 +7,6 @@ import {
 
 /** Uncommitted changes in the working tree. */
 export const GIT_CHANGES_ICON = FileDiff;
-
-/** A commit (made, unpushed, listed). */
-export const GIT_COMMIT_ICON = GitCommitHorizontal;
 
 /** Commits made but not pushed yet: what a push would send up. */
 export const GIT_UNPUSHED_ICON = ArrowUp;

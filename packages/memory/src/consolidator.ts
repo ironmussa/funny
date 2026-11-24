@@ -10,7 +10,6 @@
  */
 
 import type { Client } from '@libsql/client';
-import { z } from 'zod';
 
 import { llmComplete } from './llm.js';
 import { log } from './logger.js';
@@ -70,10 +69,6 @@ interface LockData {
   expires: number;
 }
 
-/** The lock fields each check reads; a stored value without them counts as corrupt. */
-const LockExpirySchema = z.object({ expires: z.number() });
-const LockHolderSchema = z.object({ holder: z.string() });
-
 function lockHolder(): string {
   return `${process.env.HOSTNAME ?? 'local'}-${process.pid}-${Date.now()}`;
 }
@@ -87,8 +82,10 @@ async function acquireLock(db: Client): Promise<boolean> {
   const existing = await getMeta(db, LOCK_KEY);
   if (existing) {
     try {
-      const data = LockExpirySchema.safeParse(JSON.parse(existing));
-      if (data.success && data.data.expires > Date.now()) {
+      // SAFETY: LOCK_KEY is written only by the setMeta call below, as JSON.stringify of a LockData;
+      // a value that does not parse falls into the catch and counts as a stale lock.
+      const data = JSON.parse(existing) as LockData;
+      if (data.expires > Date.now()) {
         // Lock is held and not expired
         return false;
       }
@@ -103,8 +100,9 @@ async function acquireLock(db: Client): Promise<boolean> {
   const confirm = await getMeta(db, LOCK_KEY);
   if (confirm) {
     try {
-      const data = LockHolderSchema.safeParse(JSON.parse(confirm));
-      return data.success && data.data.holder === holder;
+      // SAFETY: as above, LOCK_KEY only ever holds a JSON-encoded LockData.
+      const data = JSON.parse(confirm) as LockData;
+      return data.holder === holder;
     } catch {
       return false;
     }

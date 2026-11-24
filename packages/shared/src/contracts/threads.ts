@@ -55,13 +55,21 @@ const THREAD_MODE_VALUES = allOf<ThreadMode>()(['local', 'worktree']);
 // List queries have always clamped out-of-range paging instead of refusing it,
 // and read flags as the literal string "true"; these keep that behavior.
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** An integer clamped to [min, max]; missing or unparsable gives `fallback`. */
 const clampedInt = (fallback: number, min: number, max: number) =>
   z
     .union([z.number(), z.string()])
     .optional()
     .transform((value) => {
-      const n = typeof value === 'number' ? value : Number.parseInt(value ?? '', 10);
+      const n = isNumber(value) ? value : Number.parseInt(value ?? '', 10);
       return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.trunc(n))) : fallback;
     });
 
@@ -167,7 +175,7 @@ const lifecycleValueBody = <const T extends readonly [string, ...string[]]>(
   z.object({
     value: z.enum(values, {
       error: (issue) =>
-        typeof issue.input === 'string'
+        isString(issue.input)
           ? `Invalid ${field} "${issue.input}". Allowed: ${values.join(', ')}`
           : 'Missing required string field "value"',
     }),
@@ -175,7 +183,7 @@ const lifecycleValueBody = <const T extends readonly [string, ...string[]]>(
     reason: z
       .unknown()
       .optional()
-      .transform((reason) => (typeof reason === 'string' ? reason : undefined)),
+      .transform((reason) => (isString(reason) ? reason : undefined)),
   });
 
 export type ThreadPatchRequest = z.input<typeof threadPatchBody>;

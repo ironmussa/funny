@@ -40,6 +40,11 @@ const daemonLog = (...args: unknown[]) => process.stderr.write(`${args.join(' ')
 
 // ── Types ────────────────────────────────────────────────────────────
 
+/** A shell session's environment variables. */
+interface ShellEnv {
+  [name: string]: string;
+}
+
 interface DaemonSession {
   id: string;
   proc: Subprocess;

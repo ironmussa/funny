@@ -106,7 +106,12 @@ function isCommitAction(action: GitWorkflowAction): boolean {
 
 // ── Main executor ────────────────────────────────────────────
 
-export function executeWorkflow(params: WorkflowParams): { workflowId: string } {
+/** The id of a workflow that started; its progress and end arrive as events. */
+interface StartedWorkflow {
+  workflowId: string;
+}
+
+export function executeWorkflow(params: WorkflowParams): StartedWorkflow {
   if (activeWorkflows.has(params.contextId)) {
     throw new Error('A workflow is already in progress');
   }

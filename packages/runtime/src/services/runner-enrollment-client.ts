@@ -66,6 +66,11 @@ const defaultDependencies: RunnerEnrollmentClientDependencies = {
   env: process.env,
 };
 
+/** The headers of a request to the server, by name. */
+interface RequestHeaders {
+  [name: string]: string;
+}
+
 /** Internal retry signal: registration did not yield a session yet. */
 class RegistrationRetry extends Error {
   constructor(readonly reenrolled: boolean) {
@@ -273,7 +278,7 @@ export class RunnerEnrollmentClient {
    * Credential for `POST /api/runners/register`: a sandbox provisioning token
    * (thread-sandboxes, single-use, minted by the server) or a user invite token.
    */
-  private registrationHeaders(): Record<string, string> {
+  private registrationHeaders(): RequestHeaders {
     const { RUNNER_PROVISION_TOKEN, RUNNER_INVITE_TOKEN } = this.dependencies.env;
     if (RUNNER_PROVISION_TOKEN) return { 'X-Runner-Provision-Token': RUNNER_PROVISION_TOKEN };
     if (RUNNER_INVITE_TOKEN) return { 'X-Runner-Invite-Token': RUNNER_INVITE_TOKEN };

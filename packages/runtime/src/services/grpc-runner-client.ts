@@ -63,7 +63,13 @@ export interface RunnerGrpcClientOptions {
   onStreamMessage?: (name: RunnerGrpcStreamName, message: RunnerGrpcWireMessage) => void;
 }
 
-function normalizeEndpoint(raw: string): { address: string; secure: boolean } {
+/** A gRPC endpoint's `host:port` and whether to connect over TLS. */
+interface RunnerGrpcEndpoint {
+  address: string;
+  secure: boolean;
+}
+
+function normalizeEndpoint(raw: string): RunnerGrpcEndpoint {
   const value = raw.trim();
   if (!value) throw new Error('runner gRPC endpoint is required');
   if (!value.includes('://')) return { address: value, secure: false };

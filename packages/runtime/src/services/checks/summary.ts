@@ -25,7 +25,13 @@ const at = (file?: string, line?: number, column?: number) =>
     ? `${file}${line !== undefined ? `:${line}` : ''}${column !== undefined ? `:${column}` : ''}`
     : '';
 
-function testLines(result: CheckRunResult): { lines: string[]; issues: number } {
+/** A section of a run summary: its lines, and how many issues it reported. */
+interface SummaryLines {
+  lines: string[];
+  issues: number;
+}
+
+function testLines(result: CheckRunResult): SummaryLines {
   if (result.progress.kind !== 'test') return { lines: [], issues: 0 };
   const suites = result.progress.progress.suites;
   const sum = (key: 'passed' | 'failed' | 'skipped') => suites.reduce((n, s) => n + s[key], 0);
@@ -55,7 +61,7 @@ function checked(step: { files?: number; lines?: number; rules?: number }): stri
   return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
-function taskLines(result: CheckRunResult): { lines: string[]; issues: number } {
+function taskLines(result: CheckRunResult): SummaryLines {
   if (result.progress.kind !== 'task') return { lines: [], issues: 0 };
   const { steps, issues } = result.progress.progress;
   const lines = steps.map(

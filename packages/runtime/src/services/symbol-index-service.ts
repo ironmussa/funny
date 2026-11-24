@@ -102,6 +102,13 @@ export async function indexProject(projectPath: string): Promise<void> {
   }
 }
 
+/** The best symbol matches, whether more matched, and whether the index is ready. */
+interface SymbolSearch {
+  symbols: SymbolSearchResult[];
+  truncated: boolean;
+  indexed: boolean;
+}
+
 /**
  * Search symbols across a project's index.
  * Returns fuzzy-matched results sorted by relevance.
@@ -110,7 +117,7 @@ export function searchSymbols(
   projectPath: string,
   query?: string,
   fileScope?: string,
-): { symbols: SymbolSearchResult[]; truncated: boolean; indexed: boolean } {
+): SymbolSearch {
   const index = touch(projectPath);
 
   if (!index || index.files.size === 0) {

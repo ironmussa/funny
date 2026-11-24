@@ -19,7 +19,13 @@ interface PtySession {
   proc: Subprocess;
 }
 
-function resolveShell(shellId?: string): { exe: string; args: string[] } {
+/** The shell executable a session starts, and its arguments. */
+interface ShellCommand {
+  exe: string;
+  args: string[];
+}
+
+function resolveShell(shellId?: string): ShellCommand {
   if (!shellId || shellId === 'default') {
     return { exe: process.env.SHELL || 'bash', args: [] };
   }

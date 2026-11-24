@@ -26,5 +26,8 @@ export {
   type ToolResult,
 } from './agent-executor.js';
 
+// ── One-shot completion ───────────────────────────────────────
+export { completeOnce, type CompleteOnceError, type CompleteOnceOptions } from './complete.js';
+
 // ── Bridge Process ────────────────────────────────────────────
 export { LLMApiProcess } from './llm-api-process.js';

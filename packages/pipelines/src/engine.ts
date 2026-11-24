@@ -299,6 +299,9 @@ export function node<T>(
   return { ...opts, name, execute };
 }
 
+/** A context that runGraph gave its parent run's onStateChange callback. */
+type ParentCbCarrier<T> = { [SUB_PIPELINE_PARENT_CB]?: OnStateChange<T> };
+
 /**
  * Embed an entire pipeline as a single node in a parent pipeline.
  * The sub-pipeline runs inline (same context, same signal) with its own
@@ -320,7 +323,9 @@ export function subPipeline<T>(
       // We prefix node names so the parent can distinguish sub-pipeline nodes.
       onStateChange: (change) => {
         // Forward to parent's onStateChange if available via the runtime context
-        const parentCb = (ctx as any)?.[SUB_PIPELINE_PARENT_CB];
+        // SAFETY: runGraph is the only writer of SUB_PIPELINE_PARENT_CB on a context, and it
+        // stores the parent run's onStateChange callback there.
+        const parentCb = (ctx as ParentCbCarrier<T> | null | undefined)?.[SUB_PIPELINE_PARENT_CB];
         if (parentCb) {
           parentCb({
             ...change,

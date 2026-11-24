@@ -289,7 +289,8 @@ function SortPopover({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-auto min-w-[140px] p-1"
+        padding="xs"
+        className="w-auto min-w-[140px]"
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

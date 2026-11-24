@@ -212,11 +212,12 @@ type ResolvedProps = Omit<PromptInputUIProps, keyof typeof PROP_DEFAULTS> & type
 
 /** Applies {@link PROP_DEFAULTS} for every prop that is `undefined` (destructuring-default semantics). */
 function withDefaults(props: PromptInputUIProps): ResolvedProps {
-  const resolved: Record<string, unknown> = { ...props };
-  for (const [key, value] of Object.entries(PROP_DEFAULTS)) {
-    if (resolved[key] === undefined) resolved[key] = value;
-  }
-  return resolved as ResolvedProps;
+  const defined = Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== undefined),
+  );
+  // SAFETY: `defined` is `props` without its undefined entries, and every key it
+  // lost that has a default gets it from PROP_DEFAULTS.
+  return { ...PROP_DEFAULTS, ...defined } as ResolvedProps;
 }
 
 function resolvePlaceholder(

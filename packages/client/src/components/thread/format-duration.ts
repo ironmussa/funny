@@ -1,7 +1,7 @@
 /** Run duration as "12s", "1m 5s" or "1h 2m" through the `duration.*` strings. */
 export function formatDuration(
   ms: number,
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: (key: string, opts?: { [option: string]: string | number }) => string,
 ): string {
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return t('duration.seconds', { count: seconds });

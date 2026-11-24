@@ -286,11 +286,14 @@ function matchSlashSuggestions(
   return matched;
 }
 
+/** A chip node's attributes: the suggestion item's ids, labels, paths and line numbers. */
+type InlineNodeAttrs = { [attr: string]: string | number | undefined };
+
 function insertInlineNodeWithTrailingSpace(
   editor: any,
   range: { from: number; to: number },
   typeName: string,
-  attrs: Record<string, unknown>,
+  attrs: InlineNodeAttrs,
 ) {
   const docSize = editor.state.doc.content.size;
   const safeFrom = Math.min(range.from, docSize);
@@ -645,7 +648,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   const [suggestionTruncated, setSuggestionTruncated] = useState(false);
   const [suggestionQuery, setSuggestionQuery] = useState('');
   const [suggestionRect, setSuggestionRect] = useState<(() => DOMRect | null) | null>(null);
-  const suggestionCommandRef = useRef<((props: Record<string, unknown>) => void) | null>(null);
+  const suggestionCommandRef = useRef<((item: SuggestionItem) => void) | null>(null);
 
   // Dictation partial tracking: [startPos, endPos] in the document
   const dictationRangeRef = useRef<{ from: number; to: number } | null>(null);
@@ -783,8 +786,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           // re-applies the stale range and deletes the text after the chip.
           const item = suggestionItemsRef.current[suggestionIndexRef.current];
           if (item) {
-            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-            suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+            suggestionCommandRef.current?.(item);
           }
           return true;
         }
@@ -1476,8 +1478,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // ── Handle suggestion item selection from the popup ──
   const handleSuggestionSelect = useCallback((item: SuggestionItem) => {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+    suggestionCommandRef.current?.(item);
   }, []);
 
   // ── Close suggestion popup on click outside ──

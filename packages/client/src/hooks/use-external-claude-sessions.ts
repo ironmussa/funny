@@ -20,6 +20,21 @@ const listeners = new Set<() => void>();
 const snapshots = new Map<string, ExternalClaudeSessionsSnapshot>();
 const inflightByKey = new Map<string, Promise<void>>();
 
+function isFunction(value: unknown): value is (...args: never[]) => unknown {
+  return typeof value === 'function';
+}
+
+/** Runs `run` when the browser is idle (or after `fallbackMs`), and returns its cancel. */
+function scheduleIdle(run: () => void, timeout: number, fallbackMs: number): () => void {
+  const id = isFunction(globalThis.requestIdleCallback)
+    ? requestIdleCallback(run, { timeout })
+    : window.setTimeout(run, fallbackMs);
+  return () => {
+    if (isFunction(globalThis.cancelIdleCallback)) cancelIdleCallback(id);
+    else window.clearTimeout(id);
+  };
+}
+
 function emit() {
   for (const listener of listeners) listener();
 }
@@ -89,22 +104,13 @@ export function useExternalClaudeSessionsSync(): void {
     // holds one of the browser's ~6 sockets during app refresh and competes
     // with the on-screen thread's own loads. The 15s polling interval is
     // unaffected.
-    let idleId: number | undefined;
-    const kickoff = () => void loadExternalClaudeSessions({});
-    if (typeof requestIdleCallback === 'function') {
-      idleId = requestIdleCallback(kickoff, { timeout: 3000 });
-    } else {
-      idleId = window.setTimeout(kickoff, 500);
-    }
+    const cancelKickoff = scheduleIdle(() => void loadExternalClaudeSessions({}), 3000, 500);
     const interval = window.setInterval(() => {
       void loadExternalClaudeSessions({ force: true });
     }, REFRESH_INTERVAL_MS);
     return () => {
       window.clearInterval(interval);
-      if (idleId !== undefined) {
-        if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleId);
-        else window.clearTimeout(idleId);
-      }
+      cancelKickoff();
     };
   }, []);
 }

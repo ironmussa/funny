@@ -67,6 +67,10 @@ type BrowserSessionClosedData = {
   closeId?: string;
 };
 
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
 function handleReady(d: BrowserSessionReadyData): void {
   // The browser.v1 `ready` carries no threadId: read it from the session id,
   // as `closed` does, or the sidebar globe never shows after a reload.
@@ -76,7 +80,7 @@ function handleReady(d: BrowserSessionReadyData): void {
   if (store.sessionId !== d.sessionId) return;
   store.setSessionStatus('ready', null);
   if (d.viewport) store.setSessionViewport(d.sessionId, d.viewport.width, d.viewport.height);
-  if (typeof d.audioMuted === 'boolean') store.setSessionAudio(d.sessionId, d.audioMuted);
+  if (isBoolean(d.audioMuted)) store.setSessionAudio(d.sessionId, d.audioMuted);
   // Attaching to an existing session: show the page it is on.
   if (d.url) followSessionUrl(d.sessionId, d.url);
 }

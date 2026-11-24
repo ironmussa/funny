@@ -84,6 +84,23 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     return c.json({ shells: detectShells() });
   });
 
+  registerExternalSessionRoutes(app);
+  registerProviderRoutes(app);
+  registerSetupRoutes(app);
+
+  app.get('/api/bootstrap', (c) => {
+    c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    c.header('Pragma', 'no-cache');
+    // When the runtime serves the client directly (standalone all-in-one),
+    // the Claude CLI is co-located on this machine, so onboarding's Claude
+    // check is meaningful and runs against this runtime's real detection.
+    // The central server reports `mode: 'team'` instead (see packages/server).
+    return c.json({ mode: 'standalone' });
+  });
+}
+
+/** Claude Code sessions started outside funny: list (sync), read, import, dismiss. */
+function registerExternalSessionRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/system/claude-code/external-sessions', async (c) => {
     const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
@@ -139,7 +156,10 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       return c.json({ ok: true });
     }),
   );
+}
 
+/** Model discovery, provider setup, provider extensions and built-in provider toggles. */
+function registerProviderRoutes(app: Hono<HonoEnv>): void {
   // Dynamic model discovery. Pi uses its native SDK; dynamic ACP providers use
   // manifest-driven ACP probing. The `:provider` param keeps existing URLs
   // (`/api/system/pi/models`, etc.) working unchanged. Static-catalog and
@@ -344,7 +364,10 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   app.post('/api/system/providers/enable-builtin', (c) => toggleBuiltin(c, true));
   app.post('/api/system/providers/disable-builtin', (c) => toggleBuiltin(c, false));
+}
 
+/** Setup status and the native-git build. */
+function registerSetupRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();
     resetBinaryCache();
@@ -464,15 +487,5 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     });
 
     return c.json({ status: 'started' });
-  });
-
-  app.get('/api/bootstrap', (c) => {
-    c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
-    c.header('Pragma', 'no-cache');
-    // When the runtime serves the client directly (standalone all-in-one),
-    // the Claude CLI is co-located on this machine, so onboarding's Claude
-    // check is meaningful and runs against this runtime's real detection.
-    // The central server reports `mode: 'team'` instead (see packages/server).
-    return c.json({ mode: 'standalone' });
   });
 }

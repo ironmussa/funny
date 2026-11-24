@@ -9,12 +9,17 @@ function init(modules: { typescript: typeof ts }) {
 
   function create(info: ts.server.PluginCreateInfo): ts.LanguageService {
     const oldLS = info.languageService;
-    const proxy = Object.create(null) as ts.LanguageService;
+    const proxy: ts.LanguageService = Object.create(null);
 
     // Pass through all methods by default
     for (const k in oldLS) {
-      const x = oldLS[k as keyof ts.LanguageService];
-      (proxy as any)[k] = typeof x === 'function' ? (...args: any[]) => x.apply(oldLS, args) : x;
+      // SAFETY: k is produced by for-in over oldLS, so it is an enumerable key of that LanguageService object
+      const x: unknown = oldLS[k as keyof ts.LanguageService];
+      Reflect.set(
+        proxy,
+        k,
+        typeof x === 'function' ? (...args: unknown[]) => x.apply(oldLS, args) : x,
+      );
     }
 
     info.project.projectService.logger.info('[evflow] Plugin loaded');

@@ -50,7 +50,7 @@ function evflowConvertPlugin(): Plugin {
               for (const val of Object.values(mod)) {
                 if (typeof val === 'function') {
                   try {
-                    const result = (val as Function)();
+                    const result = val();
                     if (result?.toJSON) {
                       model = result;
                       break;
@@ -63,7 +63,7 @@ function evflowConvertPlugin(): Plugin {
             // 3. Named export that IS an EventModel instance
             if (!model) {
               for (const val of Object.values(mod)) {
-                if (val && typeof val === 'object' && typeof (val as any).toJSON === 'function') {
+                if (val && typeof val === 'object' && typeof val.toJSON === 'function') {
                   model = val;
                   break;
                 }
@@ -77,7 +77,7 @@ function evflowConvertPlugin(): Plugin {
             }
 
             res.setHeader('Content-Type', 'application/json');
-            res.end((model as any).toJSON());
+            res.end(model.toJSON());
           } catch (err: any) {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');

@@ -39,15 +39,18 @@ export interface FactoryRunAction {
   run: () => void;
 }
 
+/** A run's offered actions, and the merge approval's dialog to render apart. */
+interface FactoryRunActions {
+  actions: FactoryRunAction[];
+  dialog: ReactNode;
+}
+
 /**
  * What the member may do to a run now, in the order they are offered, and the
  * confirmation dialog the merge approval opens. The dialog is returned apart
  * so a menu can close without taking it along: render it outside the menu.
  */
-export function useFactoryRunActions(
-  projectId: string,
-  run: FactoryRun,
-): { actions: FactoryRunAction[]; dialog: ReactNode } {
+export function useFactoryRunActions(projectId: string, run: FactoryRun): FactoryRunActions {
   const { t } = useTranslation();
   const canSteer = useCanSteerProject(projectId);
   const [confirmingMerge, setConfirmingMerge] = useState(false);

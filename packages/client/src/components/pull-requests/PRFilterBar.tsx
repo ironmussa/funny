@@ -121,7 +121,7 @@ export function PRFilterBar({
           </SelectTrigger>
           <SelectContent>
             {STATE_KEYS.map((s) => (
-              <SelectItem key={s} value={s} className="text-xs" data-testid={`prs-filter-${s}`}>
+              <SelectItem key={s} value={s} textSize="xs" data-testid={`prs-filter-${s}`}>
                 {stateLabel(s)}
               </SelectItem>
             ))}
@@ -139,7 +139,7 @@ export function PRFilterBar({
         </SelectTrigger>
         <SelectContent>
           {SORT_KEYS.map((key) => (
-            <SelectItem key={key} value={key} className="text-xs" data-testid={`prs-sort-${key}`}>
+            <SelectItem key={key} value={key} textSize="xs" data-testid={`prs-sort-${key}`}>
               {sortLabel(key)}
             </SelectItem>
           ))}

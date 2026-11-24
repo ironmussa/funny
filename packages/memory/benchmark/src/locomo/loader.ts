@@ -42,6 +42,14 @@ export async function loadLocomoDataset(dataDir: string): Promise<LocomoDataset>
   return parseLocomoData(data);
 }
 
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function parseLocomoData(data: unknown): LocomoDataset {
   // LOCOMO format: array of conversation objects or object with conversations key
   const conversations: LocomoConversation[] = [];
@@ -49,7 +57,7 @@ function parseLocomoData(data: unknown): LocomoDataset {
 
   if (Array.isArray(data)) {
     rawConvos = data;
-  } else if (typeof data === 'object' && data !== null && 'conversations' in data) {
+  } else if (isObject(data) && 'conversations' in data) {
     rawConvos = (data as { conversations: unknown[] }).conversations;
   } else {
     throw new Error('Unexpected LOCOMO dataset format');
@@ -77,7 +85,7 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
   const turns: LocomoTurn[] = [];
   let turnIndex = 0;
 
-  if (convObj && typeof convObj === 'object' && !Array.isArray(convObj)) {
+  if (isObject(convObj) && !Array.isArray(convObj)) {
     // Extract sessions in order: session_1, session_2, ...
     const sessionKeys = Object.keys(convObj)
       .filter((k) => /^session_\d+$/.test(k))
@@ -123,10 +131,9 @@ function parseConversation(raw: Record<string, unknown>, index: number): LocomoC
   const questions: LocomoQuestion[] = rawQs.map((q, j) => {
     const question = q as Record<string, unknown>;
     const rawCat = question.category;
-    const category =
-      typeof rawCat === 'number'
-        ? (categoryMap[rawCat] ?? 'single-hop')
-        : normalizeCategory(String(rawCat ?? 'single-hop'));
+    const category = isNumber(rawCat)
+      ? (categoryMap[rawCat] ?? 'single-hop')
+      : normalizeCategory(String(rawCat ?? 'single-hop'));
 
     return {
       question_id: (question.question_id ?? question.id ?? `${id}-q${j}`) as string,

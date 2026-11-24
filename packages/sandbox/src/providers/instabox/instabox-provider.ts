@@ -116,6 +116,10 @@ export function instaboxTemplateName(serverVersion: string): string {
 }
 
 /** `ms` as whole seconds within InstaBox's deadline bounds. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function deadlineSeconds(ms: number): number {
   return Math.min(MAX_DEADLINE_SECONDS, Math.max(MIN_DEADLINE_SECONDS, Math.round(ms / 1000)));
 }
@@ -188,7 +192,7 @@ const mapInstaboxError = (res: Response, body: any) =>
 
 /** The new machine of a `create` operation. */
 function machineHandle(body: any): ResultAsync<SandboxHandle, SandboxError> {
-  return typeof body?.machineId === 'string'
+  return isString(body?.machineId)
     ? okAsync({ providerId: INSTABOX_PROVIDER_ID, sandboxId: body.machineId })
     : errAsync({ kind: 'provider', message: 'InstaBox create returned no machine id' });
 }
@@ -407,7 +411,7 @@ export function createInstaboxProvider(
         access: 'private',
         rotateToken: true,
       }).andThen((body): ResultAsync<SandboxIngress, SandboxError> => {
-        if (typeof body?.url !== 'string' || !body.url || typeof body?.token !== 'string') {
+        if (!isString(body?.url) || !body.url || !isString(body?.token)) {
           return errAsync({
             kind: 'provider',
             message: 'InstaBox publish returned no URL or token',

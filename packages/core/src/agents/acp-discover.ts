@@ -112,17 +112,15 @@ export async function discoverAcpModels(
 
       const discovered: DiscoveredAcpModel[] = [];
       for (const m of raw) {
-        if (!m || typeof m !== 'object') continue;
+        if (!m || !isObject(m)) continue;
         const modelId = String((m as { modelId?: unknown }).modelId ?? '').trim();
         if (!modelId) continue;
         const name = String((m as { name?: unknown }).name ?? modelId);
         discovered.push({ modelId, name });
       }
 
-      const currentModelId =
-        typeof (models as { currentModelId?: unknown } | undefined)?.currentModelId === 'string'
-          ? (models as { currentModelId: string }).currentModelId
-          : null;
+      const reportedModelId = (models as { currentModelId?: unknown } | undefined)?.currentModelId;
+      const currentModelId = isString(reportedModelId) ? reportedModelId : null;
 
       cleanup();
 
@@ -157,4 +155,13 @@ export async function discoverAcpModels(
   } finally {
     cleanup();
   }
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

@@ -49,8 +49,12 @@ function createRef(name: string, kind: ElementKind): ElementRef {
   };
 }
 
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
 function resolveRefs(arr: Array<ElementRef | string>): string[] {
-  return arr.map((x) => (typeof x === 'string' ? x : x.name));
+  return arr.map((x) => (isString(x) ? x : x.name));
 }
 
 /** Public API surface available inside context() callbacks */
@@ -204,8 +208,9 @@ export class EventModel {
    *   - A plain string like "A -> B -> C"
    */
   sequence(name: string, steps: SequenceStep[] | string): void {
-    const parsed: string[] =
-      typeof steps === 'string' ? parseStringSequence(steps) : steps.map((s) => s.name);
+    const parsed: string[] = isString(steps)
+      ? parseStringSequence(steps)
+      : steps.map((s) => s.name);
     this.#sequences.push({ name, steps: parsed });
   }
 

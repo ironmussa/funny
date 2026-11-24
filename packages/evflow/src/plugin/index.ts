@@ -4,6 +4,10 @@ import { getEvflowCompletions } from './completions.js';
 import { getEvflowDiagnostics } from './diagnostics.js';
 import { buildProjectRegistry } from './registry.js';
 
+function isFunction<T>(value: T): value is Extract<T, CallableFunction> {
+  return typeof value === 'function';
+}
+
 function init(modules: { typescript: typeof ts }) {
   const tsModule = modules.typescript;
 
@@ -14,7 +18,7 @@ function init(modules: { typescript: typeof ts }) {
     // Pass through all methods by default
     for (const k in oldLS) {
       const x = oldLS[k as keyof ts.LanguageService];
-      (proxy as any)[k] = typeof x === 'function' ? (...args: any[]) => x.apply(oldLS, args) : x;
+      (proxy as any)[k] = isFunction(x) ? (...args: any[]) => x.apply(oldLS, args) : x;
     }
 
     info.project.projectService.logger.info('[evflow] Plugin loaded');

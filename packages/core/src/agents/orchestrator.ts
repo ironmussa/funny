@@ -202,6 +202,20 @@ export interface AdoptedAgentState {
   lastOptions?: ProcessOptionsSnapshot;
 }
 
+/** A live process that can cancel its turn and queue a new prompt on the same session. */
+function canSteer(
+  process: IAgentProcess,
+): process is IAgentProcess & Required<Pick<IAgentProcess, 'steerPrompt'>> {
+  return typeof process.steerPrompt === 'function';
+}
+
+/** A live process that accepts a follow-up prompt without a respawn. */
+function canSendPrompt(
+  process: IAgentProcess,
+): process is IAgentProcess & Required<Pick<IAgentProcess, 'sendPrompt'>> {
+  return typeof process.sendPrompt === 'function';
+}
+
 /** Stable JSON of mcpServers (keys sorted) — '' when none. */
 function mcpServersKeyOf(mcpServers: Record<string, any> | undefined): string {
   if (!mcpServers) return '';
@@ -413,10 +427,10 @@ export class AgentOrchestrator extends EventEmitter {
     // implement it (or steerPrompt throws), fall through to the regular
     // sendPrompt reuse path. Never falls through to kill+respawn because
     // that would discard the cancelled turn's partial output.
-    if (steer && liveAndCompatible && typeof existing!.steerPrompt === 'function') {
+    if (steer && liveAndCompatible && canSteer(existing!)) {
       dlog.info('Steering live agent process', { threadId, provider });
       try {
-        await existing!.steerPrompt!(prompt, images);
+        await existing!.steerPrompt(prompt, images);
         this.lastOptions.set(threadId, nextSnapshot);
         this.lastActivityAt.set(threadId, Date.now());
         this.emit('agent:started', threadId);
@@ -430,7 +444,7 @@ export class AgentOrchestrator extends EventEmitter {
       }
     }
 
-    if (liveAndCompatible && typeof existing!.sendPrompt === 'function') {
+    if (liveAndCompatible && canSendPrompt(existing!)) {
       dlog.info('Reusing live agent process via sendPrompt', { threadId, provider });
       try {
         await existing!.sendPrompt(prompt, images);

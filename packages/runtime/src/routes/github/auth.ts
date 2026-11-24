@@ -29,6 +29,7 @@ authRoutes.get('/status', async (c) => {
   try {
     const res = await githubApiFetch('/user', resolved.token);
     if (res.ok) {
+      // SAFETY: GitHub REST GET /user response (res.ok above); only `login` is read, for display.
       const user = (await res.json()) as { login: string };
       return c.json({ connected: true, login: user.login, source: resolved.source });
     }
@@ -65,6 +66,8 @@ authRoutes.post('/oauth/device', async (c) => {
       return c.json({ error: `GitHub device code request failed: ${body}` }, 502);
     }
 
+    // SAFETY: GitHub OAuth device-code response (res.ok above, JSON via Accept header); its
+    // documented fields are relayed to the client unchanged.
     const data = (await res.json()) as {
       device_code: string;
       user_code: string;
@@ -114,6 +117,8 @@ authRoutes.post('/oauth/poll', async (c) => {
       }),
     });
 
+    // SAFETY: GitHub OAuth access-token poll response; every field is optional and `error` is
+    // checked first, so a pending/expired answer never reads `access_token`.
     const data = (await res.json()) as {
       access_token?: string;
       token_type?: string;
@@ -170,6 +175,8 @@ authRoutes.get('/user', async (c) => {
     return c.json({ error: 'Failed to fetch GitHub user' }, 502);
   }
 
+  // SAFETY: GitHub REST GET /user response (res.ok above); the three documented fields are
+  // relayed to the client unchanged.
   const user = (await res.json()) as { login: string; avatar_url: string; name: string | null };
   return c.json({ login: user.login, avatar_url: user.avatar_url, name: user.name });
 });

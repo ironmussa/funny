@@ -163,6 +163,8 @@ export function requireProjectCwdFromContext(
   c: Context<HonoEnv>,
 ): Promise<Result<string, DomainError>> {
   return requireProjectCwd(
+    // SAFETY: only mounted on routes whose path declares `:projectId`; Hono always fills a
+    // declared path param, the untyped Context just cannot see the path.
     c.req.param('projectId') as string,
     c.get('userId'),
     c.get('organizationId'),
@@ -177,6 +179,8 @@ export function requireProjectCwdFromContext(
 export function requireSteerableThreadCwdFromContext(
   c: Context<HonoEnv>,
 ): Promise<Result<string, DomainError>> {
+  // SAFETY: only mounted on routes whose path declares `:threadId`; Hono always fills a
+  // declared path param, the untyped Context just cannot see the path.
   return requireThreadCwd(c.req.param('threadId') as string, c.get('userId'), steerFromContext(c));
 }
 

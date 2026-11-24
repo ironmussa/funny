@@ -1,7 +1,6 @@
 import { execute, getRemoteUrl } from '@funny/core/git';
 import type { GitHubIssue, PRIssueComment, PRReactionSummary } from '@funny/shared';
 import type { Context } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import { parseGithubOwnerRepo } from '../../lib/github-remote.js';
 import { log } from '../../lib/logger.js';
@@ -148,8 +147,12 @@ export async function githubGraphQL<T = any>(
     body: JSON.stringify({ query, variables }),
   });
   if (!res.ok) throw new Error(`GitHub GraphQL error: ${res.status}`);
+  // SAFETY: GitHub GraphQL response envelope; the caller's query decides the shape of `data`
+  // (T), and `errors` is checked below before `data` is returned. A response with neither
+  // returns undefined as before.
   const body = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
   if (body.errors?.length) throw new Error(body.errors.map((e) => e.message).join('; '));
+  // SAFETY: no `errors` above, so GitHub answered the query and `data` holds its T result.
   return body.data as T;
 }
 
@@ -186,6 +189,8 @@ export async function fetchRepoIssues(
       });
   if (!res.ok) return null;
 
+  // SAFETY: GitHub REST search/issues response; `items` is checked with Array.isArray below
+  // and the issue fields are read as GitHub documents them.
   const body = (await res.json()) as { total_count: number; items: GitHubIssue[] };
   const items = Array.isArray(body.items) ? body.items : [];
   // Defensive: type:issue should already exclude PRs, but keep the guard.
@@ -283,6 +288,8 @@ export async function fetchAllPages(
   for (let page = 1; ; page++) {
     const res = await githubApiFetch(`${path}${separator}per_page=100&page=${page}`, token);
     if (!res.ok) return { ok: false, status: res.status };
+    // SAFETY: GitHub REST list response, either an array or an object holding it in `field`;
+    // read with optional chaining and a `?? []` fallback, items passed through as before.
     const body = (await res.json()) as any;
     const data: any[] = (field ? body?.[field] : body) ?? [];
     items.push(...data);
@@ -324,7 +331,7 @@ async function resolveGithubProjectContext(
   organizationId: string | null,
 ): Promise<
   | { ok: true; owner: string; repo: string; token: string }
-  | { ok: false; status: number; error: string }
+  | { ok: false; status: 400 | 401 | 404; error: string }
 > {
   const project = await requireAccessibleProject(projectId, userId, organizationId);
   if (!project) return { ok: false, status: 404, error: 'Project not found' };
@@ -359,7 +366,7 @@ export async function githubRepoFor(
     c.get('userId'),
     c.get('organizationId'),
   );
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as ContentfulStatusCode);
+  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status);
   return { owner: ctx.owner, repo: ctx.repo, token: ctx.token };
 }
 

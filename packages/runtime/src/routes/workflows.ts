@@ -127,7 +127,7 @@ workflowRuntimeRoutes.put('/:name', async (c) => {
   const validation = validateWorkflowYaml(parsed.data.yaml);
   if (!validation.ok || !validation.parsed) return c.json(validation, 400);
 
-  const workflow = validation.parsed as ParsedWorkflow;
+  const workflow = validation.parsed;
   if (workflow.name !== name) {
     return c.json(
       {
@@ -272,7 +272,9 @@ function summaryOf(entry: WorkflowCatalogEntry) {
   };
 }
 
-function validateWorkflowYaml(yaml: string): WorkflowValidateResponse {
+function validateWorkflowYaml(
+  yaml: string,
+): WorkflowValidateResponse & { parsed?: ParsedWorkflow } {
   const result = parseWorkflowYaml(yaml);
   if (!result.ok) {
     return {

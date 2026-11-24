@@ -40,9 +40,7 @@ app.get('/resources', async (c) => {
   const projectId = c.req.query('projectId') || undefined;
   const model = c.req.query('model') || undefined;
   const phaseParam = c.req.query('phase');
-  const phase: ResourcePhase = VALID_PHASES.includes(phaseParam as ResourcePhase)
-    ? (phaseParam as ResourcePhase)
-    : 'composer';
+  const phase: ResourcePhase = VALID_PHASES.find((p) => p === phaseParam) ?? 'composer';
   const projectPath = c.req.query('projectPath');
   if (projectPath) {
     const denied = await requireProjectPath(projectPath, c.get('userId'));

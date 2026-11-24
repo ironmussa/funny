@@ -89,6 +89,8 @@ app.get('/files', async (c) => {
 
     const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
+      // SAFETY: errorStatus maps every DomainError type to a 4xx/5xx code from STATUS_MAP;
+      // `400` is only the literal Hono's c.json overload needs, the real code is sent unchanged.
       return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
     }
     cwd = cwdResult.value;
@@ -135,6 +137,8 @@ app.post('/files/selection', async (c) => {
 
     const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
+      // SAFETY: errorStatus maps every DomainError type to a 4xx/5xx code from STATUS_MAP;
+      // `400` is only the literal Hono's c.json overload needs, the real code is sent unchanged.
       return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
     }
     cwd = cwdResult.value;
@@ -203,6 +207,8 @@ app.get('/text', async (c) => {
 
     const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
+      // SAFETY: errorStatus maps every DomainError type to a 4xx/5xx code from STATUS_MAP;
+      // `400` is only the literal Hono's c.json overload needs, the real code is sent unchanged.
       return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
     }
     cwd = cwdResult.value;

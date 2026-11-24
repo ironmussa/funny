@@ -71,6 +71,8 @@ projectHooksRoutes.put('/:id/hooks/:hookType/:index', async (c) => {
   const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
+  // SAFETY: unchecked route param, used only as the `.husky/<hookType>` file name; an unknown
+  // name reads as a missing file with no commands, so the service throws "not found" (404 below).
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
   const index = parseInt(c.req.param('index'), 10);
 
@@ -95,6 +97,8 @@ projectHooksRoutes.delete('/:id/hooks/:hookType/:index', async (c) => {
   const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
+  // SAFETY: unchecked route param, used only as the `.husky/<hookType>` file name; an unknown
+  // name reads as a missing file with no commands, so the service throws "not found" (404 below).
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
   const index = parseInt(c.req.param('index'), 10);
 

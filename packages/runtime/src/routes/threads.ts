@@ -104,6 +104,8 @@ function toDomainError(error: unknown): DomainError {
     }
   }
 
+  // SAFETY: callers pass errors caught from the thread service (Error instances); only
+  // `.message` is read, with optional chaining and a fallback text when it is missing.
   const e = error as any;
   const isBinaryError =
     e.message?.includes('Could not find the claude CLI binary') ||

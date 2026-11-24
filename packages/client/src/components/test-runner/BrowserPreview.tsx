@@ -107,6 +107,157 @@ interface OutputLine {
   timestamp: number;
 }
 
+interface ActionNavControlsProps {
+  isRunning: boolean;
+  isStreaming: boolean;
+  hasActions: boolean;
+  activeIndex: number;
+  actionCount: number;
+  isViewingHistorical: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onStop?: () => void;
+  onGoLive: () => void;
+}
+
+/** Toolbar left side: previous / play-stop / next, the action counter and "Go Live". */
+function ActionNavControls({
+  isRunning,
+  isStreaming,
+  hasActions,
+  activeIndex,
+  actionCount,
+  isViewingHistorical,
+  onPrev,
+  onNext,
+  onStop,
+  onGoLive,
+}: ActionNavControlsProps) {
+  return (
+    <div className="flex items-center gap-1">
+      <TooltipIconButton
+        data-testid="browser-prev-action"
+        tooltip="Previous action"
+        disabled={!hasActions}
+        size="icon-sm"
+        onClick={onPrev}
+      >
+        <ChevronLeft className="icon-base" />
+      </TooltipIconButton>
+      {isRunning ? (
+        <TooltipIconButton
+          variant="ghost-destructive"
+          data-testid="browser-stop"
+          tooltip="Stop"
+          size="icon-sm"
+          onClick={onStop}
+        >
+          <Square className="icon-base fill-current" />
+        </TooltipIconButton>
+      ) : (
+        <TooltipIconButton
+          data-testid="browser-play"
+          tooltip="Play"
+          disabled={!isStreaming}
+          size="icon-sm"
+        >
+          <Play className="icon-base" />
+        </TooltipIconButton>
+      )}
+      <TooltipIconButton
+        data-testid="browser-next-action"
+        tooltip="Next action"
+        disabled={!hasActions}
+        size="icon-sm"
+        onClick={onNext}
+      >
+        <ChevronRight className="icon-base" />
+      </TooltipIconButton>
+
+      {/* Action counter */}
+      {hasActions && (
+        <span className="text-muted-foreground text-2xs ml-1 tabular-nums">
+          {activeIndex >= 0 ? activeIndex + 1 : '-'} / {actionCount}
+        </span>
+      )}
+
+      {/* Live indicator */}
+      {isViewingHistorical && (
+        <button
+          className="bg-muted text-muted-foreground hover:bg-muted/80 text-2xs ml-2 rounded px-1.5 py-0.5 font-medium"
+          onClick={onGoLive}
+          data-testid="browser-go-live"
+        >
+          Go Live
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface ZoomControlsProps {
+  zoom: number;
+  isFullscreen: boolean;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onResetZoom: () => void;
+  onToggleFullscreen: () => void;
+}
+
+/** Toolbar right side: zoom out / reset / in and fullscreen. */
+function ZoomControls({
+  zoom,
+  isFullscreen,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  onToggleFullscreen,
+}: ZoomControlsProps) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <TooltipIconButton
+        data-testid="browser-zoom-out"
+        tooltip="Zoom out"
+        size="icon-sm"
+        disabled={zoom <= ZOOM_LEVELS[0]}
+        onClick={onZoomOut}
+      >
+        <ZoomOut className="icon-base" />
+      </TooltipIconButton>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            data-testid="browser-zoom-level"
+            className="text-muted-foreground hover:bg-muted min-w-[32px] rounded px-1 text-center text-xs tabular-nums"
+            onClick={onResetZoom}
+            aria-label="Reset zoom"
+          >
+            {zoom === 1 ? '1x' : `${zoom}x`}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Reset zoom</TooltipContent>
+      </Tooltip>
+      <TooltipIconButton
+        data-testid="browser-zoom-in"
+        tooltip="Zoom in"
+        size="icon-sm"
+        disabled={zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
+        onClick={onZoomIn}
+      >
+        <ZoomIn className="icon-base" />
+      </TooltipIconButton>
+      <TooltipIconButton
+        data-testid="browser-fullscreen"
+        tooltip={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+        size="icon-sm"
+        onClick={onToggleFullscreen}
+      >
+        <Maximize2 className="icon-base" />
+      </TooltipIconButton>
+    </div>
+  );
+}
+
 interface BrowserPreviewProps {
   isRunning: boolean;
   isStreaming: boolean;
@@ -259,111 +410,29 @@ export function BrowserPreview({
     <div ref={browserContainerRef} className="flex h-full flex-col overflow-hidden">
       {/* Browser toolbar */}
       <div className="bg-muted/30 flex items-center justify-between border-b px-2 py-1">
-        {/* Left: action navigation */}
-        <div className="flex items-center gap-1">
-          <TooltipIconButton
-            data-testid="browser-prev-action"
-            tooltip="Previous action"
-            disabled={!hasActions}
-            size="icon-sm"
-            onClick={prevAction}
-          >
-            <ChevronLeft className="icon-base" />
-          </TooltipIconButton>
-          {isRunning ? (
-            <TooltipIconButton
-              variant="ghost-destructive"
-              data-testid="browser-stop"
-              tooltip="Stop"
-              size="icon-sm"
-              onClick={onStop}
-            >
-              <Square className="icon-base fill-current" />
-            </TooltipIconButton>
-          ) : (
-            <TooltipIconButton
-              data-testid="browser-play"
-              tooltip="Play"
-              disabled={!isStreaming}
-              size="icon-sm"
-            >
-              <Play className="icon-base" />
-            </TooltipIconButton>
-          )}
-          <TooltipIconButton
-            data-testid="browser-next-action"
-            tooltip="Next action"
-            disabled={!hasActions}
-            size="icon-sm"
-            onClick={nextAction}
-          >
-            <ChevronRight className="icon-base" />
-          </TooltipIconButton>
-
-          {/* Action counter */}
-          {hasActions && (
-            <span className="text-muted-foreground text-2xs ml-1 tabular-nums">
-              {activeIndex >= 0 ? activeIndex + 1 : '-'} / {actions.length}
-            </span>
-          )}
-
-          {/* Live indicator */}
-          {isViewingHistorical && (
-            <button
-              className="bg-muted text-muted-foreground hover:bg-muted/80 text-2xs ml-2 rounded px-1.5 py-0.5 font-medium"
-              onClick={() => {
-                setSelectedActionIndex(-1);
-                setHoveredActionIndex(-1);
-              }}
-              data-testid="browser-go-live"
-            >
-              Go Live
-            </button>
-          )}
-        </div>
-
-        {/* Right: zoom controls */}
-        <div className="flex items-center gap-0.5">
-          <TooltipIconButton
-            data-testid="browser-zoom-out"
-            tooltip="Zoom out"
-            size="icon-sm"
-            disabled={zoom <= ZOOM_LEVELS[0]}
-            onClick={zoomOut}
-          >
-            <ZoomOut className="icon-base" />
-          </TooltipIconButton>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                data-testid="browser-zoom-level"
-                className="text-muted-foreground hover:bg-muted min-w-[32px] rounded px-1 text-center text-xs tabular-nums"
-                onClick={() => setZoom(1)}
-                aria-label="Reset zoom"
-              >
-                {zoom === 1 ? '1x' : `${zoom}x`}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Reset zoom</TooltipContent>
-          </Tooltip>
-          <TooltipIconButton
-            data-testid="browser-zoom-in"
-            tooltip="Zoom in"
-            size="icon-sm"
-            disabled={zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
-            onClick={zoomIn}
-          >
-            <ZoomIn className="icon-base" />
-          </TooltipIconButton>
-          <TooltipIconButton
-            data-testid="browser-fullscreen"
-            tooltip={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            size="icon-sm"
-            onClick={toggleFullscreen}
-          >
-            <Maximize2 className="icon-base" />
-          </TooltipIconButton>
-        </div>
+        <ActionNavControls
+          isRunning={isRunning}
+          isStreaming={isStreaming}
+          hasActions={hasActions}
+          activeIndex={activeIndex}
+          actionCount={actions.length}
+          isViewingHistorical={isViewingHistorical}
+          onPrev={prevAction}
+          onNext={nextAction}
+          onStop={onStop}
+          onGoLive={() => {
+            setSelectedActionIndex(-1);
+            setHoveredActionIndex(-1);
+          }}
+        />
+        <ZoomControls
+          zoom={zoom}
+          isFullscreen={isFullscreen}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onResetZoom={() => setZoom(1)}
+          onToggleFullscreen={toggleFullscreen}
+        />
       </div>
 
       {/* Timeline */}

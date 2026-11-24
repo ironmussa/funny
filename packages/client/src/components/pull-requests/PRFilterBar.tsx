@@ -115,7 +115,7 @@ export function PRFilterBar({
     >
       {showState && (
         <Select value={state} onValueChange={(v) => onStateChange(v as PRStateFilter)}>
-          <SelectTrigger size="xs" className="w-auto gap-1" data-testid="prs-state-trigger">
+          <SelectTrigger size="xs" className="w-auto" data-testid="prs-state-trigger">
             <CircleDot className="icon-xs opacity-70" />
             <span>{stateLabel(state)}</span>
           </SelectTrigger>
@@ -133,7 +133,7 @@ export function PRFilterBar({
         value={value.sort}
         onValueChange={(v) => onChange({ ...value, sort: v as PRSortKey })}
       >
-        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="prs-sort-trigger">
+        <SelectTrigger size="xs" className="w-auto" data-testid="prs-sort-trigger">
           <ArrowUpDown className="icon-xs opacity-70" />
           <span>{sortLabel(value.sort)}</span>
         </SelectTrigger>

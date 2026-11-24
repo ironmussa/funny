@@ -113,8 +113,14 @@ function parseCount(result: GitResult | null): number {
   return result && result.exitCode === 0 ? parseInt(result.stdout.trim(), 10) || 0 : 0;
 }
 
+/** Lines added and deleted by a diff. */
+interface LineTotals {
+  added: number;
+  deleted: number;
+}
+
 /** Sum `git diff --numstat` output; binary entries ("-") are skipped. */
-function sumNumstat(stdout: string): { added: number; deleted: number } {
+function sumNumstat(stdout: string): LineTotals {
   let added = 0;
   let deleted = 0;
   if (!stdout) return { added, deleted };
@@ -139,15 +145,18 @@ function parseBranchHeader(headerLine: string): string | null {
   return ref && ref !== 'HEAD (no branch)' ? ref : null;
 }
 
+/** The checked-out branch and the number of dirty files of a working tree. */
+interface PorcelainSummary {
+  branch: string | null;
+  dirtyFileCount: number;
+}
+
 /**
  * Parse `status --porcelain -b` into the branch name and dirty file count.
  * The untracked count prefers ls-files (expands directories) over porcelain
  * (collapses them).
  */
-function parsePorcelainStatus(
-  statusStdout: string,
-  untrackedFiles: string[],
-): { branch: string | null; dirtyFileCount: number } {
+function parsePorcelainStatus(statusStdout: string, untrackedFiles: string[]): PorcelainSummary {
   if (!statusStdout) return { branch: null, dirtyFileCount: 0 };
   const lines = statusStdout.split('\n');
   const branch = parseBranchHeader(lines[0]);

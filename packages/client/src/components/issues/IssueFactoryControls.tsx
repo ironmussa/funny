@@ -381,7 +381,7 @@ export function IssuesFactoryBar({
               <SelectItem
                 key={option.name}
                 value={option.name}
-                className="text-xs"
+                textSize="xs"
                 data-testid={`issues-factory-flow-${option.name}`}
               >
                 {option.name}

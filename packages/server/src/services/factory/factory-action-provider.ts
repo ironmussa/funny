@@ -1325,6 +1325,22 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   });
 
   /**
+   * The review verdict of `sha`. A head with none that only merges the base
+   * branch into the last reviewed commit keeps that commit's review, proof and
+   * approval (`carryChecks`): the merge lane carries them when it makes such a
+   * merge, but a step that ended before the merge's checks were green (a wait
+   * that failed, a restart) leaves the merged head without them.
+   */
+  async function verdictOf(sha: string): Promise<FactoryReviewVerdict | undefined> {
+    const own = reviewer.verdicts().find((review) => review.sha === sha);
+    if (own) return own;
+    const last = reviewer.verdicts().at(-1);
+    if (!last || !(await lane.isBaseMergeOf(last.sha, sha))) return undefined;
+    await carryChecks(last.sha, sha);
+    return reviewer.verdicts().find((review) => review.sha === sha);
+  }
+
+  /**
    * What `merge` checks itself on entry, whatever path led to it (a repository
    * flow draws its own): the head commit has a verdict of the flow's own
    * `review` step that allows a merge (unless `require_review: false`), and
@@ -1338,7 +1354,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const rewritten = opts.regenerate ? null : await historyRewritten(sha);
     if (rewritten) return rewritten;
     if (opts.requireReview !== false) {
-      const verdict = reviewer.verdicts().find((review) => review.sha === sha);
+      const verdict = await verdictOf(sha);
       if (!verdict) {
         return holdMerge(
           MERGE_HOLD_REASONS.noReview,

@@ -1,5 +1,6 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
 import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
+import { MAX_ISSUES_PER_DELETE } from '@funny/shared/contracts/github-issues';
 import { CircleCheck, CircleDot, ExternalLink, MessageSquare, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,14 +9,15 @@ import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { IssueLabelBadges, IssueLinkBadges } from '@/components/IssueBadges';
 import { IssueDetailDialog } from '@/components/IssueDetailDialog';
 import {
+  canSelectIssue,
   canSendIssue,
   IssueFactoryStatus,
-  IssuesFactoryBar,
   IssuesFactoryUnavailable,
   IssueSelectToggle,
   useIssueFactory,
   type IssueFactory,
 } from '@/components/issues/IssueFactoryControls';
+import { IssuesSelectionBar } from '@/components/issues/IssuesSelectionBar';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import {
   TabToolbar,
@@ -141,6 +143,7 @@ function IssuesContent({ visible }: IssuesTabProps) {
         state={state}
         hasMore={list.hasMore}
         onLoadMore={list.loadMore}
+        onRefresh={list.refresh}
         onCreateThread={handleCreateThread}
         onOpenIssue={setSelectedIssue}
       />
@@ -223,6 +226,7 @@ function IssuesBody({
   state,
   hasMore,
   onLoadMore,
+  onRefresh,
   onCreateThread,
   onOpenIssue,
 }: {
@@ -233,6 +237,7 @@ function IssuesBody({
   state: IssueState;
   hasMore: boolean;
   onLoadMore: () => void;
+  onRefresh: () => void;
   onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpenIssue: (issue: EnrichedGitHubIssue) => void;
 }) {
@@ -274,15 +279,19 @@ function IssuesBody({
       loading={loading}
       hasMore={hasMore}
       onLoadMore={onLoadMore}
+      onRefresh={onRefresh}
       onCreateThread={onCreateThread}
       onOpenIssue={onOpenIssue}
     />
   );
 }
 
+/** The most issues one selection takes: what one send or one delete accepts. */
+const MAX_SELECTED = Math.min(MAX_ISSUES_PER_SEND, MAX_ISSUES_PER_DELETE);
+
 /**
- * The issues, plus their state in the caller's factory and the selection sent
- * to it (change factory-manual-queue).
+ * The issues, plus their state in the caller's factory, and the selection
+ * that is sent to it (change factory-manual-queue) or deleted.
  */
 function IssuesList({
   projectId,
@@ -290,6 +299,7 @@ function IssuesList({
   loading,
   hasMore,
   onLoadMore,
+  onRefresh,
   onCreateThread,
   onOpenIssue,
 }: {
@@ -298,43 +308,40 @@ function IssuesList({
   loading: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
+  onRefresh: () => void;
   onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpenIssue: (issue: EnrichedGitHubIssue) => void;
 }) {
   const now = useMinuteTick();
   const factory = useIssueFactory(projectId);
   const [selected, setSelected] = useState<number[]>([]);
-  // One send takes at most MAX_ISSUES_PER_SEND issues: past that, a checkbox adds nothing.
+  // One send or delete takes at most MAX_SELECTED issues: past that, a checkbox adds nothing.
   const toggle = useCallback(
     (n: number) =>
       setSelected((current) => {
         if (current.includes(n)) return current.filter((x) => x !== n);
-        return current.length < MAX_ISSUES_PER_SEND ? [...current, n] : current;
+        return current.length < MAX_SELECTED ? [...current, n] : current;
       }),
     [],
   );
-  // A selected issue that can no longer be sent (it entered the factory) leaves
-  // the selection for good, so it does not come back if its run is cancelled.
-  const sendable = selected.filter((n) => {
+  // A selected issue that can no longer be selected (it entered the factory,
+  // or left the list) leaves the selection for good, so it does not come back
+  // if its run is cancelled.
+  const selectable = selected.filter((n) => {
+    const issue = issues.find((i) => i.number === n);
+    return issue ? canSelectIssue(factory, issue) : false;
+  });
+  if (selectable.length !== selected.length) setSelected(selectable);
+  const sendable = selectable.filter((n) => {
     const issue = issues.find((i) => i.number === n);
     return issue ? canSendIssue(factory, issue) : false;
   });
-  if (sendable.length !== selected.length) setSelected(sendable);
+  const leave = (gone: number[]) =>
+    setSelected((current) => current.filter((n) => !gone.includes(n)));
 
   return (
     <>
       {factory.unavailable && <IssuesFactoryUnavailable projectId={projectId} />}
-      {factory.settings && sendable.length > 0 && (
-        <IssuesFactoryBar
-          projectId={projectId}
-          settings={factory.settings}
-          selected={sendable}
-          onSent={(accepted) =>
-            setSelected((current) => current.filter((n) => !accepted.includes(n)))
-          }
-          onClear={() => setSelected([])}
-        />
-      )}
       <ScrollArea className="min-h-0 flex-1">
         <div className="divide-sidebar-border divide-y">
           {issues.map((issue) => (
@@ -344,7 +351,7 @@ function IssuesList({
               issue={issue}
               now={now}
               factory={factory}
-              selected={sendable.includes(issue.number)}
+              selected={selectable.includes(issue.number)}
               onToggle={toggle}
               onCreateThread={onCreateThread}
               onOpen={onOpenIssue}
@@ -360,6 +367,20 @@ function IssuesList({
           testId="issues-load-more"
         />
       </ScrollArea>
+      {selectable.length > 0 && (
+        <IssuesSelectionBar
+          projectId={projectId}
+          factory={factory}
+          selected={selectable}
+          sendable={sendable}
+          onSent={leave}
+          onDeleted={(deleted) => {
+            leave(deleted);
+            if (deleted.length > 0) onRefresh();
+          }}
+          onClear={() => setSelected([])}
+        />
+      )}
     </>
   );
 }
@@ -396,7 +417,7 @@ function IssueRow({
   const factoryRun = factory.active ? factory.latestRun.get(issue.number) : undefined;
   return (
     <div className={listRowClassName} data-testid={`issue-item-${issue.number}`}>
-      {canSendIssue(factory, issue) ? (
+      {canSelectIssue(factory, issue) ? (
         <IssueSelectToggle
           issueNumber={issue.number}
           icon={<IssueStateIcon state={issue.state} className="icon-base" />}

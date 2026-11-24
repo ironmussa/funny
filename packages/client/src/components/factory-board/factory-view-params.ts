@@ -7,7 +7,7 @@
  * - `status` — run states, comma separated
  * - `search` / `cs=1` — the text filter and its case sensitivity
  * - `active=1` — only runs that have not ended
- * - `view=list|board` — the layout; without it the view uses the saved one
+ * - `view=list|board|analytics` — the layout; without it the view uses the saved one
  *
  * Other parameters (the detail panel's `run`) are left as they are.
  */
@@ -40,7 +40,7 @@ export function parseFactoryViewParams(params: URLSearchParams): FactoryViewFilt
     states: readList(params, 'status'),
     projectIds: readList(params, 'project'),
     activeOnly: params.get('active') === '1',
-    layout: view === 'list' || view === 'board' ? view : null,
+    layout: view === 'list' || view === 'board' || view === 'analytics' ? view : null,
   };
 }
 

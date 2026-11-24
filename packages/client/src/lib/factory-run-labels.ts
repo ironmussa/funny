@@ -110,6 +110,11 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
         'Waiting for {{blockers}}: it works on the same files',
         { blockers },
       );
+    case 'no-free-slot':
+      return t(
+        'factory.wait.noFreeSlot',
+        'Waiting for a free slot: the factory is running as many runs as it may',
+      );
     case 'proof-not-configured':
       return t(
         'factory.wait.proofNotConfigured',

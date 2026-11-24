@@ -109,7 +109,7 @@ async function listYamlFiles(dir: string, required: boolean): Promise<string[]> 
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException)?.code;
+    const code = err instanceof Error && 'code' in err ? err.code : undefined;
     if (code === 'ENOENT' && !required) return [];
     throw err;
   }

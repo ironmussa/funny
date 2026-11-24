@@ -66,7 +66,8 @@ export class NativeCookieJar {
 
   capture(headers: NativeHeaders): void {
     const values =
-      headers.getSetCookie?.() ?? ([headers.get('set-cookie')].filter(Boolean) as string[]);
+      headers.getSetCookie?.() ??
+      [headers.get('set-cookie')].filter((header): header is string => Boolean(header));
     if (values.length === 0) return;
     for (const value of values) {
       const pair = cookiePairs(value)[0];

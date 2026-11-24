@@ -85,7 +85,17 @@ function packageDirOf(file: string): string | null {
   return match ? `packages/${match[1]}` : null;
 }
 
-function readManifests(root: string): { dir: string; manifest: Record<string, any> }[] {
+/** The `package.json` fields the runner reads. */
+interface PackageManifest {
+  name?: string;
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+}
+
+function readManifests(root: string): { dir: string; manifest: PackageManifest }[] {
   const packagesDir = join(root, 'packages');
   return readdirSync(packagesDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -116,9 +126,9 @@ export function discoverPackages(root = ROOT): TestPackage[] {
         ...manifest.optionalDependencies,
         ...manifest.peerDependencies,
       });
-      const testScript = manifest.scripts?.test as string | undefined;
+      const testScript = manifest.scripts?.test;
       return {
-        name: (manifest.name as string | undefined) ?? dir,
+        name: manifest.name ?? dir,
         dir,
         hasTest: Boolean(testScript),
         testScript: testScript || undefined,

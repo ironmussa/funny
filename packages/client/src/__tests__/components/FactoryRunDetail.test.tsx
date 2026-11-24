@@ -282,13 +282,20 @@ describe('the run search parameter', () => {
   });
 });
 
-describe('the health header', () => {
-  test('its figures cover every listed run, whatever the filters', () => {
+describe('the analytics layout', () => {
+  test('the list header shows no health figures', () => {
+    mocks.queue = [queueRun({ id: 'a', state: 'working' })];
+    renderView('/factory?view=list');
+    expect(screen.queryByTestId('factory-view-health')).toBeNull();
+    expect(screen.queryByTestId('factory-metrics')).toBeNull();
+  });
+
+  test('its health figures cover every listed run, whatever the filters', () => {
     mocks.queue = [
       queueRun({ id: 'a', state: 'working' }),
       queueRun({ id: 'b', state: 'failed', projectId: 'p2' }),
     ];
-    renderView('/factory');
+    renderView('/factory?view=analytics');
     expect(screen.getByTestId('factory-view-health-in-flight')).toHaveTextContent('1');
     fireEvent.click(screen.getByTestId('factory-view-show-active'));
     fireEvent.change(screen.getByTestId('factory-view-search-input'), {

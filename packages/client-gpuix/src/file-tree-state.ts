@@ -45,16 +45,19 @@ function targetKey(target: NativeFileTreeTarget): string {
   return `path:${target.path}`;
 }
 
-type BrowseEntry = string | { path?: unknown; type?: unknown };
-
 /** `/browse/files` returns bare paths or `{ path, type }` entries; the tree derives folders itself. */
 function filePaths(entries: unknown[]): string[] | null {
   const paths: string[] = [];
-  for (const entry of entries as BrowseEntry[]) {
+  for (const entry of entries) {
     if (typeof entry === 'string') {
       paths.push(entry);
-    } else if (entry && typeof entry === 'object' && typeof entry.path === 'string') {
-      if (entry.type !== 'folder') paths.push(entry.path);
+    } else if (
+      entry &&
+      typeof entry === 'object' &&
+      'path' in entry &&
+      typeof entry.path === 'string'
+    ) {
+      if (!('type' in entry) || entry.type !== 'folder') paths.push(entry.path);
     } else {
       return null;
     }

@@ -5,6 +5,8 @@ interface Props {
   value: number | string;
   icon: React.ReactNode;
   color: 'blue' | 'green' | 'amber' | 'gray' | 'violet' | 'red';
+  /** Test id of the value, for a card whose value a test reads. */
+  valueTestId?: string;
 }
 
 const colorClasses: Record<string, string> = {
@@ -16,14 +18,16 @@ const colorClasses: Record<string, string> = {
   red: 'bg-status-error/10 text-status-error/80',
 };
 
-export function MetricCard({ title, value, icon, color }: Props) {
+export function MetricCard({ title, value, icon, color, valueTestId }: Props) {
   return (
     <div className="border-border rounded-lg border p-4" data-testid={`analytics-metric-${color}`}>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-muted-foreground text-xs">{title}</span>
         <div className={cn('p-1.5 rounded-md', colorClasses[color])}>{icon}</div>
       </div>
-      <p className="text-2xl font-bold">{value}</p>
+      <p className="text-2xl font-bold tabular-nums" data-testid={valueTestId}>
+        {value}
+      </p>
     </div>
   );
 }

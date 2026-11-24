@@ -7,7 +7,10 @@ import { protectedProcedure, router, threadProcedure } from '../trpc.js';
 const id = z.string().min(1);
 
 /** A list query whose every field is optional: a call without input reads the defaults. */
-const listInput = <T extends z.ZodType>(schema: T) => schema.prefault({} as z.input<T>);
+const listInput = <T extends z.ZodType>(schema: T) =>
+  // SAFETY: listInput only wraps list query schemas, z.objects whose fields are all optional,
+  // so the empty object is a valid input for each of them.
+  schema.prefault({} as z.input<T>);
 
 export const threadsRouter = router({
   list: protectedProcedure

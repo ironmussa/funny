@@ -1061,6 +1061,7 @@ export type ActivityEffectType =
   | 'agent-stopped'
   | 'factory-disabled'
   | 'repo-published'
+  | 'issue-deleted'
   | 'file-reverted'
   | 'changes-discarded'
   | 'commits-reset'

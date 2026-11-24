@@ -722,6 +722,10 @@
     "projectFactoryAutoMergeAllDesc": "Toda mudança que passou na revisão, também as de risco alto",
     "projectFactorySensitivePaths": "Caminhos sensíveis",
     "projectFactorySensitivePathsDesc": "Globs separados por vírgulas. Uma mudança que toca um deles é de risco alto, além de .github/, migrações e auth/",
+    "projectFactoryMaxLowRiskLines": "Tamanho de uma mudança de risco baixo",
+    "projectFactoryMaxLowRiskLinesDesc": "Uma mudança com mais linhas alteradas que isto é de risco alto. Testes, Markdown, traduções, stories, snapshots e lockfiles não contam",
+    "projectFactorySizeIgnoredPaths": "Não contam no tamanho",
+    "projectFactorySizeIgnoredPathsDesc": "Globs separados por vírgulas. Suas linhas não contam para o tamanho de uma mudança. Os caminhos sensíveis continuam valendo para eles",
     "projectFactoryStageLimits": "Execuções por etapa",
     "projectFactoryStageLimitsDesc": "Quantas execuções podem estar implementando ou em revisão ao mesmo tempo. Os merges são sempre um lote de cada vez por repositório",
     "projectFactoryTriggers": "Agendamentos",
@@ -738,6 +742,11 @@
     "projectFactoryDependenciesStackDesc": "Um issue cujo bloqueador tem um pull request aberto começa sobre a branch do bloqueador, e é mesclado depois dele",
     "projectFactoryDependenciesWait": "Esperar",
     "projectFactoryDependenciesStack": "Empilhar",
+    "projectFactoryTooBig": "Issues grandes demais para uma mudança",
+    "projectFactoryTooBigAsk": "Perguntar",
+    "projectFactoryTooBigSplit": "Dividir",
+    "projectFactoryTooBigAskDesc": "O factory comenta no issue a divisão que a triagem propõe e espera até uma pessoa mudar o issue",
+    "projectFactoryTooBigSplitDesc": "O factory abre cada parte que a triagem propõe como um issue próprio e trabalha nelas; o issue original sai do factory. Uma parte nunca é dividida de novo sozinha",
     "projectFactoryLimitImplement": "Implementando",
     "projectFactoryLimitReview": "Em revisão",
     "projectFactoryLimitNone": "Sem limite",
@@ -1511,6 +1520,17 @@
     "closed": "Fechados",
     "noIssues": "Nenhuma issue encontrada",
     "viewOnGithub": "Ver no GitHub",
+    "selectIssue": "Selecionar #{{number}}",
+    "selectedCount": "{{count}} selecionadas",
+    "clearSelection": "Limpar",
+    "delete": "Excluir",
+    "deleteTitle_one": "Excluir {{count}} issue?",
+    "deleteTitle_other": "Excluir {{count}} issues?",
+    "deleteDesc": "Isto exclui {{issues}} no GitHub de forma permanente, com os comentários. Não pode ser desfeito.",
+    "deleteWarning": "Só administradores do repositório podem excluir issues. Para manter o histórico, feche-as no GitHub.",
+    "deleted_one": "{{count}} issue excluída",
+    "deleted_other": "{{count}} issues excluídas",
+    "deleteFailed": "Não foi possível excluir #{{number}}: {{message}}",
     "notGithub": "Este projeto não está hospedado no GitHub",
     "error": "Erro ao carregar issues",
     "createThread": "Criar thread",
@@ -1733,7 +1753,6 @@
     }
   },
   "factory": {
-    "pullRequest": "PR",
     "thread": "Thread",
     "retry": "Tentar de novo",
     "stop": "Parar",
@@ -1757,7 +1776,9 @@
       "merged": "Merged",
       "noChange": "Sem alterações necessárias",
       "failed": "Falhou",
-      "stopped": "Parada"
+      "stopped": "Parada",
+      "split": "Dividido",
+      "tooBig": "Grande demais"
     },
     "wait": {
       "notSent": "Bloqueada por {{blockers}}, que não está no factory",
@@ -1767,9 +1788,9 @@
       "otherRepo": "Bloqueada por {{blockers}} em outro repositório",
       "circular": "Dependência circular com {{blockers}}",
       "unreadable": "Não foi possível ler as bloqueadoras no GitHub",
-      "proofNotConfigured": "Prova de regressão não configurada: o fluxo não tem regras de prova, então nunca faria merge"
+      "proofNotConfigured": "Prova de regressão não configurada: o fluxo não tem regras de prova, então nunca faria merge",
+      "noFreeSlot": "Esperando um slot livre: o factory já roda todas as runs que pode ao mesmo tempo"
     },
-    "selectIssue": "Selecionar #{{number}} para o factory",
     "queuePosition": "{{label}} · #{{position}}",
     "issueInFactory": "No seu factory de issues",
     "sendBlockers": "Enviar {{blockers}}",
@@ -1849,7 +1870,6 @@
       "rewritten": "A branch não contém mais o commit que foi revisado (um rebase ou um force push), então o que seria mesclado não foi verificado. Veja o novo head no pull request antes de fazer o merge você.",
       "mergeRounds": "As rodadas de correções do agente não conseguiram mesclar a mudança com a branch base. Veja o pull request e resolva você."
     },
-    "viewPullRequest": "Ver PR",
     "approveMerge": "Aprovar e fazer merge",
     "approveMergeTitle": "Fazer merge desta mudança de risco alto?",
     "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação."
@@ -1930,6 +1950,7 @@
       "agent-stopped": "Agente interrompido",
       "factory-disabled": "Factory desativada",
       "repo-published": "Repositório publicado",
+      "issue-deleted": "Issue excluída",
       "file-reverted": "Arquivo revertido",
       "changes-discarded": "Alterações descartadas",
       "commits-reset": "Reset",
@@ -1956,6 +1977,7 @@
     "showActive": "Ativas",
     "layoutList": "Lista",
     "layoutBoard": "Quadro",
+    "layoutAnalytics": "Análises",
     "details": "Detalhes da execução",
     "health": {
       "inFlight": "Em andamento",
@@ -1964,6 +1986,11 @@
       "firstPass": "Revisão aprovada de primeira, 7 d",
       "mergeHolds": "Merges retidos, 7 d",
       "toMerge": "Mediana até o merge, 7 d"
+    },
+    "analytics": {
+      "health": "Agora",
+      "noIntegration": "Nenhuma execução dos filtros começou neste período",
+      "empty": "Nenhuma execução da fábrica para medir"
     }
   },
   "factoryBoard": {
@@ -2008,6 +2035,8 @@
     "waiting": {
       "questions": "A triagem fez {{count}} perguntas na issue",
       "needsInfo": "A triagem perguntou na issue",
+      "split": "A triagem propôs dividir em {{count}} partes",
+      "splitInto": "Dividido em {{issues}}",
       "noChange": "Nada a mudar: a issue precisa de uma pessoa",
       "failed": "Falhou",
       "unsaved": "Sem commit, mas com trabalho não salvo no checkout",
@@ -2017,6 +2046,12 @@
       "inStep": "Em {{step}} {{duration}}",
       "waiting": "Aguardando {{step}} {{duration}}",
       "medianTitle": "Tempo mediano nesta etapa, últimos 7 dias"
+    },
+    "deps": {
+      "stuckBehind": "Presa atrás de",
+      "needsPerson": "precisa de uma pessoa",
+      "blocks": "Bloqueia",
+      "then": "depois"
     }
   },
   "factoryRunDetail": {

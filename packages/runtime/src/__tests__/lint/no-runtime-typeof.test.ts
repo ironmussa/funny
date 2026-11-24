@@ -3,11 +3,13 @@ import { join } from 'path';
 
 // Issue #459: packages/runtime/src narrows unparsed values with value guards
 // (src/lib/value-guards.ts), never with an inline `typeof` outside a
-// `value is T` guard. Lint the package and require zero findings.
+// `value is T` guard. Run the rule on the package and require zero findings.
+// scripts/fitness/check-runtime-typeof.ts runs the vendored rule itself, so this
+// does not need `bun lint` (Bun canary only; CI tests run the pinned Bun).
 const ROOT = join(import.meta.dir, '../../../../..');
 const GUARDS = join(import.meta.dir, '../../lib/value-guards.ts');
-// Linting spawns oxlint with the JS plugins; under the parallel suite that can
-// take longer than the default per-test timeout.
+// The check parses every source file of the package; under the parallel suite
+// that can take longer than the default per-test timeout.
 const LINT_TIMEOUT_MS = 120_000;
 const SAMPLES = [
   '',
@@ -26,14 +28,14 @@ const SAMPLES = [
 
 describe('no-runtime-typeof in packages/runtime', () => {
   test(
-    'lint reports no inline typeof checks',
+    'the rule reports no inline typeof checks',
     () => {
       const run = Bun.spawnSync(
-        ['bun', 'scripts/bun-lint.ts', 'packages/runtime/src', '--format', 'unix'],
+        [process.execPath, 'scripts/fitness/check-runtime-typeof.ts', 'packages/runtime/src'],
         { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
       );
       const output = run.stdout.toString() + run.stderr.toString();
-      const findings = output.split('\n').filter((line) => line.includes('no-runtime-typeof'));
+      const findings = output.split('\n').filter((line) => line.endsWith(': no-runtime-typeof'));
       expect(run.exitCode).toBe(0);
       expect(findings).toEqual([]);
     },

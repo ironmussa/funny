@@ -10,6 +10,7 @@
 
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
+import { retargetPullRequestsOn } from './pull-request-base.js';
 import type { GithubCallError, RepoGithub } from './repo-github.js';
 
 /** A failed check and the end of its log (or its summary). */
@@ -116,8 +117,16 @@ export interface PullRequestCi {
   findOpen(repo: string, branch: string): ResultAsync<string | null, GithubCallError>;
   /** Comment on the pull request. */
   comment(repo: string, number: number, body: string): ResultAsync<void, GithubCallError>;
-  /** Delete a branch on GitHub; a branch already gone is not an error. */
-  deleteBranch(repo: string, branch: string): ResultAsync<void, GithubCallError>;
+  /**
+   * Delete a branch on GitHub; a branch already gone is not an error. With
+   * `retargetTo`, the open pull requests based on it move there first (the
+   * branch stays when they cannot).
+   */
+  deleteBranch(
+    repo: string,
+    branch: string,
+    retargetTo?: string,
+  ): ResultAsync<void, GithubCallError>;
 }
 
 interface RestPull {
@@ -471,12 +480,18 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
         .map(() => undefined);
     },
 
-    deleteBranch(repo, branch) {
+    deleteBranch(repo, branch, retargetTo) {
       const ref = `/repos/${repo}/git/refs/heads/${branch.split('/').map(encodeURIComponent).join('/')}`;
-      return github
-        .json(repo, 'DELETE', ref)
-        .map(() => undefined)
-        .orElse((e) => (e.status === 404 || e.status === 422 ? okAsync(undefined) : errAsync(e)));
+      const moved = retargetTo
+        ? retargetPullRequestsOn(github, repo, branch, retargetTo).map(() => undefined)
+        : okAsync<void, GithubCallError>(undefined);
+      // Only the deletion may find the branch already gone; a refused retarget keeps it.
+      return moved.andThen(() =>
+        github
+          .json(repo, 'DELETE', ref)
+          .map(() => undefined)
+          .orElse((e) => (e.status === 404 || e.status === 422 ? okAsync(undefined) : errAsync(e))),
+      );
     },
   };
 

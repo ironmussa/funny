@@ -546,8 +546,12 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
               if (!options.deleteBranch || !pr.branch) {
                 return ResultAsync.fromSafePromise(recordMerge(pr, null, false)).map(() => outcome);
               }
+              const branch = pr.branch;
+              // Pull requests stacked on this one move to its base first (D10):
+              // GitHub closes them when their base branch is deleted.
               return github
-                .deleteBranch(pr.repo, pr.branch)
+                .mergeState(pr.repo, pr.number)
+                .andThen((merge) => github.deleteBranch(pr.repo, branch, merge.baseRef))
                 .map(() => null)
                 .orElse((error) => okAsync<string | null, never>(error.message))
                 .andThen((branchError) =>

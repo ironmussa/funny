@@ -10,9 +10,30 @@ import { ToolContentArea } from './MobileContentPreview';
 
 const JOB_STATUSES = new Set(['running', 'exited', 'failed', 'killed', 'cancelled']);
 
+/** The job fields a background tool call reports; any of them may be missing. */
+interface BackgroundJobInput {
+  command?: unknown;
+  cwd?: unknown;
+  label?: unknown;
+  status?: unknown;
+  exitCode?: unknown;
+}
+
 /** A non-blank string. */
 function isText(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
+}
+
+/** The job fields the card shows, each null when the call did not report it. */
+function jobFields(parsed: BackgroundJobInput) {
+  const command = isText(parsed.command) ? parsed.command : null;
+  return {
+    command,
+    cwd: isText(parsed.cwd) ? parsed.cwd : null,
+    summary: (isText(parsed.label) ? parsed.label : null) ?? command,
+    status: isText(parsed.status) ? parsed.status : null,
+    exitCode: typeof parsed.exitCode === 'number' ? parsed.exitCode : null,
+  };
 }
 
 function JobStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
@@ -49,11 +70,7 @@ export function BackgroundCard({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const command = isText(parsed.command) ? parsed.command : null;
-  const cwd = isText(parsed.cwd) ? parsed.cwd : null;
-  const summary = (isText(parsed.label) ? parsed.label : null) ?? command;
-  const status = isText(parsed.status) ? parsed.status : null;
-  const exitCode = typeof parsed.exitCode === 'number' ? parsed.exitCode : null;
+  const { command, cwd, summary, status, exitCode } = jobFields(parsed);
 
   return (
     <div

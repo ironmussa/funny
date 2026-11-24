@@ -57,6 +57,13 @@ function readCheckResult(text: string): CheckResult {
   };
 }
 
+/** The files or packages the call asked to run, from its `scope` list. */
+function requestedScope(parsed: { scope?: unknown }): string[] {
+  return Array.isArray(parsed.scope)
+    ? parsed.scope.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
 /**
  * What the run covers: the command it ran once the result names it (it already
  * includes the scope and filter), else what the call asked for (a custom
@@ -73,9 +80,7 @@ function CheckRunDetails({
 }) {
   const { t } = useTranslation();
   const requested = typeof parsed.command === 'string' ? parsed.command : null;
-  const scope = Array.isArray(parsed.scope)
-    ? parsed.scope.filter((item): item is string => typeof item === 'string')
-    : [];
+  const scope = requestedScope(parsed);
   const filter = typeof parsed.filter === 'string' ? parsed.filter : null;
   const shown = command ?? requested;
 

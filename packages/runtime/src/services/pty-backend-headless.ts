@@ -23,6 +23,7 @@ import type { Subprocess } from 'bun';
 import { log } from '../lib/logger.js';
 import { metric, recordHistogram, startSpan } from '../lib/telemetry.js';
 import type { PtyBackend, PtyBackendCallbacks } from './pty-backend.js';
+import { runPtyTerminalOp } from './pty-terminal-op.js';
 import { detectShells } from './shell-detector.js';
 
 interface HeadlessSession {
@@ -168,35 +169,26 @@ export class HeadlessPtyBackend implements PtyBackend {
 
   write(id: string, data: string): void {
     const session = this.sessions.get(id);
-    if (session) {
-      try {
-        session.proc.terminal?.write(data);
-      } catch (err: any) {
-        log.error('Failed to write to headless PTY', {
-          namespace: 'pty-headless',
-          ptyId: id,
-          error: err?.message,
-        });
-      }
-    }
+    if (!session) return;
+    runPtyTerminalOp(() => session.proc.terminal?.write(data), {
+      message: 'Failed to write to headless PTY',
+      namespace: 'pty-headless',
+      ptyId: id,
+    });
   }
 
   resize(id: string, cols: number, rows: number): void {
     const session = this.sessions.get(id);
-    if (session) {
-      try {
+    if (!session) return;
+    runPtyTerminalOp(
+      () => {
         session.proc.terminal?.resize(cols, rows);
         session.headless.resize(cols, rows);
         session.dirty = true;
         session.cachedSerialization = null;
-      } catch (err: any) {
-        log.error('Failed to resize headless PTY', {
-          namespace: 'pty-headless',
-          ptyId: id,
-          error: err?.message,
-        });
-      }
-    }
+      },
+      { message: 'Failed to resize headless PTY', namespace: 'pty-headless', ptyId: id },
+    );
   }
 
   signal(id: string, sig: number): void {

@@ -13,6 +13,7 @@ import type { Subprocess } from 'bun';
 
 import { log } from '../lib/logger.js';
 import type { PtyBackend, PtyBackendCallbacks } from './pty-backend.js';
+import { runPtyTerminalOp } from './pty-terminal-op.js';
 import { detectShells } from './shell-detector.js';
 
 interface PtySession {
@@ -104,34 +105,25 @@ export class BunPtyBackend implements PtyBackend {
 
   write(id: string, data: string): void {
     const session = this.sessions.get(id);
-    if (session) {
-      try {
-        // In terminal mode, proc.stdin is null — use proc.terminal.write() instead
-        session.proc.terminal?.write(data);
-      } catch (err: any) {
-        log.error('Failed to write to Bun PTY', {
-          namespace: 'pty-bun',
-          ptyId: id,
-          error: err?.message,
-        });
-      }
-    }
+    if (!session) return;
+    // In terminal mode, proc.stdin is null — use proc.terminal.write() instead
+    runPtyTerminalOp(() => session.proc.terminal?.write(data), {
+      message: 'Failed to write to Bun PTY',
+      namespace: 'pty-bun',
+      ptyId: id,
+    });
   }
 
   resize(id: string, cols: number, rows: number): void {
     const session = this.sessions.get(id);
-    if (session) {
-      try {
+    if (!session) return;
+    runPtyTerminalOp(
+      () => {
         // In terminal mode, resize is on proc.terminal
         session.proc.terminal?.resize(cols, rows);
-      } catch (err: any) {
-        log.error('Failed to resize Bun PTY', {
-          namespace: 'pty-bun',
-          ptyId: id,
-          error: err?.message,
-        });
-      }
-    }
+      },
+      { message: 'Failed to resize Bun PTY', namespace: 'pty-bun', ptyId: id },
+    );
   }
 
   signal(id: string, sig: number): void {

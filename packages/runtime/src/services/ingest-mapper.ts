@@ -426,17 +426,46 @@ async function onStarted(event: IngestEvent): Promise<void> {
 }
 
 /**
- * pipeline.completed — FALLBACK finalization.
- * If handleCLIResult already processed the result CLI message, skip.
+ * State for a pipeline.completed / pipeline.failed fallback, or null when the CLI
+ * result message already finalized the thread (or no state can be resolved).
  */
-async function onCompleted(event: IngestEvent): Promise<void> {
+async function resolveFallbackState(event: IngestEvent): Promise<ExternalThreadState | null> {
   const stateKey = resolveStateKey(event);
 
   // Check if CLI result already handled this
   const cliState = cliStates.get(stateKey);
-  if (cliState?.resultHandled) return;
+  if (cliState?.resultHandled) return null;
 
-  const state = await resolveState(event);
+  return resolveState(event);
+}
+
+/** Store an assistant chat message on the thread and emit it to the client. */
+async function insertAssistantMessage(state: ExternalThreadState, content: string): Promise<void> {
+  const msgId = await tm.insertMessage({ threadId: state.threadId, role: 'assistant', content });
+  emitWS(state, {
+    type: 'agent:message',
+    threadId: state.threadId,
+    data: { messageId: msgId, role: 'assistant', content },
+  });
+}
+
+/** Cost and duration carried by a pipeline.completed / pipeline.failed event. */
+function finalCostAndDuration(event: IngestEvent): { costUsd: number; durationMs?: number } {
+  // SAFETY: pipeline.completed / pipeline.failed send cost_usd / cost as a number of US
+  // dollars and duration_ms / duration as a number of milliseconds.
+  const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
+  // SAFETY: same events as above; duration_ms / duration are numbers of milliseconds.
+  const durationMs =
+    (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
+  return { costUsd, durationMs };
+}
+
+/**
+ * pipeline.completed — FALLBACK finalization.
+ * If handleCLIResult already processed the result CLI message, skip.
+ */
+async function onCompleted(event: IngestEvent): Promise<void> {
+  const state = await resolveFallbackState(event);
   if (!state) return;
 
   // If the event carries an error_message (e.g. non-fatal warning from agent),
@@ -445,24 +474,11 @@ async function onCompleted(event: IngestEvent): Promise<void> {
   // and emitted as message text.
   const errorMessage = event.data.error_message as string | undefined;
   if (errorMessage) {
-    const msgId = await tm.insertMessage({
-      threadId: state.threadId,
-      role: 'assistant',
-      content: errorMessage,
-    });
-    emitWS(state, {
-      type: 'agent:message',
-      threadId: state.threadId,
-      data: { messageId: msgId, role: 'assistant', content: errorMessage },
-    });
+    await insertAssistantMessage(state, errorMessage);
   }
 
   const now = new Date().toISOString();
-  // SAFETY: pipeline.completed sends cost_usd / cost as a number of US dollars.
-  const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
-  // SAFETY: pipeline.completed sends duration_ms / duration as a number of milliseconds.
-  const durationMs =
-    (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
+  const { costUsd, durationMs } = finalCostAndDuration(event);
 
   await tm.updateThread(state.threadId, {
     status: 'completed',
@@ -484,6 +500,7 @@ async function onCompleted(event: IngestEvent): Promise<void> {
     },
   });
 
+  const stateKey = resolveStateKey(event);
   cliStates.delete(stateKey);
   threadStates.delete(stateKey);
 }
@@ -493,13 +510,7 @@ async function onCompleted(event: IngestEvent): Promise<void> {
  * If handleCLIResult already processed the result CLI message, skip.
  */
 async function onFailed(event: IngestEvent): Promise<void> {
-  const stateKey = resolveStateKey(event);
-
-  // Check if CLI result already handled this
-  const cliState = cliStates.get(stateKey);
-  if (cliState?.resultHandled) return;
-
-  const state = await resolveState(event);
+  const state = await resolveFallbackState(event);
   if (!state) return;
 
   // If the event carries an error_message, insert it as a visible chat message before failing.
@@ -508,26 +519,13 @@ async function onFailed(event: IngestEvent): Promise<void> {
   const errorMessage =
     (event.data.error_message as string) ?? (event.data.error as string) ?? undefined;
   if (errorMessage) {
-    const msgId = await tm.insertMessage({
-      threadId: state.threadId,
-      role: 'assistant',
-      content: `Error: ${errorMessage}`,
-    });
-    emitWS(state, {
-      type: 'agent:message',
-      threadId: state.threadId,
-      data: { messageId: msgId, role: 'assistant', content: `Error: ${errorMessage}` },
-    });
+    await insertAssistantMessage(state, `Error: ${errorMessage}`);
   }
 
   const now = new Date().toISOString();
   // SAFETY: pipeline.failed sends error / message as strings, shown as the result text.
   const error = (event.data.error as string) ?? (event.data.message as string) ?? 'Failed';
-  // SAFETY: pipeline.failed sends cost_usd / cost as a number of US dollars.
-  const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
-  // SAFETY: pipeline.failed sends duration_ms / duration as a number of milliseconds.
-  const durationMs =
-    (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
+  const { costUsd, durationMs } = finalCostAndDuration(event);
 
   await tm.updateThread(state.threadId, {
     status: 'failed',
@@ -548,6 +546,7 @@ async function onFailed(event: IngestEvent): Promise<void> {
     },
   });
 
+  const stateKey = resolveStateKey(event);
   cliStates.delete(stateKey);
   threadStates.delete(stateKey);
 }

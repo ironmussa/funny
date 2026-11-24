@@ -218,7 +218,8 @@ export class AgentMessageHandler {
       namespace: 'agent',
       threadId,
       type: msg.type,
-      subtype: 'subtype' in msg ? msg.subtype : undefined,
+      // SAFETY: debug log only; message variants without `subtype` log it as undefined.
+      subtype: (msg as any).subtype,
     });
 
     // System init — capture session ID and broadcast init info

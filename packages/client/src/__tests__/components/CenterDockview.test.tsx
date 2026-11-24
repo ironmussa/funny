@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:tes
 import { render, screen, waitFor, within } from '@testing-library/react';
 
 import { CenterDockview } from '@/components/CenterDockview';
-import type { RightTabSpec } from '@/components/DockviewLayout';
+import type { RightTabSpec } from '@/components/dockview/types';
 
 interface DockviewMockState {
   api: MockDockviewApi | undefined;

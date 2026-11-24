@@ -19,7 +19,7 @@ import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import { useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 
-import { type BottomTabSpec } from '../DockviewLayout';
+import { type BottomTabSpec } from '../dockview/types';
 
 // TerminalPanel carries drag/drop, xstate, ANSI rendering, and the terminal
 // adapters. None of it is needed to paint the first thread while the bottom

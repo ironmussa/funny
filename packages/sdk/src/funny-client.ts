@@ -34,6 +34,8 @@ import type {
   PipelineEventType,
   WebhookResponse,
   WebhookErrorResponse,
+  WireObject,
+  WireValue,
 } from './types.js';
 
 export class FunnyClient {
@@ -105,7 +107,7 @@ export class FunnyClient {
       title?: string;
       model?: string;
     },
-    metadata?: Record<string, unknown>,
+    metadata?: WireObject,
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: 'pipeline.accepted',
@@ -121,8 +123,8 @@ export class FunnyClient {
    */
   async started(
     requestId: string,
-    data?: Record<string, unknown>,
-    metadata?: Record<string, unknown>,
+    data?: WireObject,
+    metadata?: WireObject,
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: 'pipeline.started',
@@ -138,8 +140,8 @@ export class FunnyClient {
    */
   async completed(
     requestId: string,
-    data?: { cost_usd?: number; duration_ms?: number; [key: string]: unknown },
-    metadata?: Record<string, unknown>,
+    data?: { cost_usd?: number; duration_ms?: number; [key: string]: WireValue },
+    metadata?: WireObject,
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: 'pipeline.completed',
@@ -155,8 +157,8 @@ export class FunnyClient {
    */
   async failed(
     requestId: string,
-    data?: { error?: string; cost_usd?: number; [key: string]: unknown },
-    metadata?: Record<string, unknown>,
+    data?: { error?: string; cost_usd?: number; [key: string]: WireValue },
+    metadata?: WireObject,
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: 'pipeline.failed',
@@ -172,8 +174,8 @@ export class FunnyClient {
    */
   async stopped(
     requestId: string,
-    data?: Record<string, unknown>,
-    metadata?: Record<string, unknown>,
+    data?: WireObject,
+    metadata?: WireObject,
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: 'pipeline.stopped',
@@ -192,7 +194,7 @@ export class FunnyClient {
   async message(
     requestId: string,
     content: string,
-    options?: { threadId?: string; metadata?: Record<string, unknown> },
+    options?: { threadId?: string; metadata?: WireObject },
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: 'pipeline.message',
@@ -227,8 +229,8 @@ export class FunnyClient {
    */
   async cliMessage(
     requestId: string,
-    cliMessage: Record<string, unknown>,
-    options?: { threadId?: string; metadata?: Record<string, unknown> },
+    cliMessage: WireObject,
+    options?: { threadId?: string; metadata?: WireObject },
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: 'pipeline.cli_message',
@@ -289,7 +291,7 @@ export class FunnyClient {
   async cliToolUse(
     requestId: string,
     messageId: string,
-    toolUse: { id: string; name: string; input: Record<string, unknown> },
+    toolUse: { id: string; name: string; input: WireObject },
     options?: { threadId?: string },
   ): Promise<WebhookResponse> {
     return this.cliMessage(
@@ -353,8 +355,8 @@ export class FunnyClient {
   async emit(
     eventType: PipelineEventType | string,
     requestId: string,
-    data: Record<string, unknown>,
-    options?: { threadId?: string; metadata?: Record<string, unknown> },
+    data: WireObject,
+    options?: { threadId?: string; metadata?: WireObject },
   ): Promise<WebhookResponse> {
     return this.send({
       event_type: eventType,

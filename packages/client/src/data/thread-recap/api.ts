@@ -12,7 +12,7 @@ export interface ThreadRecapRequest {
   language: string;
 }
 
-export interface ThreadRecapResponse {
+interface ThreadRecapResponse {
   /** `null` when nothing happened after `since`. */
   recap: string | null;
   newestMessageId: string;

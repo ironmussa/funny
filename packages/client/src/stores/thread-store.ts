@@ -603,7 +603,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // Before the open marks it read: the recap card's `since` is the read
       // marker as the owner left it (openspec thread-recap).
       recordThreadOpened(threadId, {
-        createdAt: thread.createdAt ?? null,
+        createdAt: thread.createdAt,
         ...newestActivity(thread.messages, thread.hasMoreAfter),
       });
 

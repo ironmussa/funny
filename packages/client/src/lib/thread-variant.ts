@@ -282,7 +282,7 @@ export function canShowRecap(
 }
 
 /** How long the owner must have been away before a recap is offered. */
-export const RECAP_MIN_ABSENCE_MS = 5 * 60_000;
+const RECAP_MIN_ABSENCE_MS = 5 * 60_000;
 
 function timeOf(iso: string | null | undefined): number | null {
   if (!iso) return null;

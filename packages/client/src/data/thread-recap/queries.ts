@@ -18,7 +18,7 @@ import { threadRecapApi, UTILITY_MODEL_UNAVAILABLE, type ThreadRecapRequest } fr
 
 const log = createClientLogger('thread-recap');
 
-export function threadRecapKey(threadId: string, newestMessageId: string) {
+function threadRecapKey(threadId: string, newestMessageId: string) {
   return ['thread-recap', threadId, newestMessageId] as const;
 }
 

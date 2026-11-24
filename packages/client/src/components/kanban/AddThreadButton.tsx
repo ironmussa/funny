@@ -70,7 +70,7 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
         </TooltipTrigger>
         <TooltipContent>{t('kanban.addThread')}</TooltipContent>
       </Tooltip>
-      <PopoverContent align="start" className="w-64 p-0">
+      <PopoverContent align="start" padding="none" className="w-64">
         <div className="border-border/50 border-b px-2 py-1.5">
           <SearchBar
             inputRef={inputRef}

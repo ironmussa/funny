@@ -52,8 +52,8 @@ export const githubRateLimitQuery = {
   enabled: false,
 };
 
-function isRateLimitError(error: unknown): boolean {
-  const message = error instanceof DataRequestError ? error.domainError.message : '';
+function isRateLimitError(cause: unknown): boolean {
+  const message = cause instanceof DataRequestError ? cause.domainError.message : '';
   return message.includes('403') || message.includes('429');
 }
 
@@ -69,12 +69,12 @@ export function trackRateLimit<T>(
       setRateLimited(false);
       return value;
     },
-    (error: unknown) => {
-      if (isRateLimitError(error)) {
+    (cause: unknown) => {
+      if (isRateLimitError(cause)) {
         log.warn('GitHub rate limit reached; PR polling paused');
         setRateLimited(true);
       }
-      throw error;
+      throw cause;
     },
   );
 }
@@ -90,8 +90,8 @@ export interface PRFetchOptions {
   force?: boolean;
 }
 
-function fetchPRQuery(
-  query: { queryKey: readonly unknown[]; queryFn: () => unknown; staleTime: number },
+function fetchPRQuery<Data>(
+  query: { queryKey: readonly unknown[]; queryFn: () => Data; staleTime: number },
   { force = false }: PRFetchOptions,
   layer: DataLayer,
 ): Promise<void> {

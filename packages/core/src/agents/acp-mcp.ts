@@ -31,6 +31,8 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
         .map((e) => ({ name: String(e.name), value: String(e.value) }));
     }
     if (typeof rec === 'object') {
+      // SAFETY: `rec` is a non-null, non-array object (checked above); each value is
+      // coerced with `String`.
       return Object.entries(rec as Record<string, unknown>).map(([name, value]) => ({
         name,
         value: String(value ?? ''),
@@ -42,7 +44,11 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
   const out: ACPMcpServer[] = [];
   for (const [name, raw] of Object.entries(mcpServers)) {
     if (!raw || typeof raw !== 'object') continue;
+    // SAFETY: `raw` is a non-null object (checked above); every field is read
+    // optionally and coerced before use.
     const cfg = raw as Record<string, unknown>;
+    // SAFETY: the Claude-shaped config declares `type` as a transport name string;
+    // configs without a `type` are treated as stdio below.
     const type = (cfg.type as string | undefined)?.toLowerCase();
 
     // In-process SDK MCP servers (createSdkMcpServer) run inside this process
@@ -52,6 +58,8 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
     if (type === 'sdk') continue;
 
     if (type === 'http' || type === 'sse') {
+      // SAFETY: `type` is exactly 'http' or 'sse' in this branch, and `name`, `url`
+      // and `headers` are always set, which is the ACP http / sse server shape.
       out.push({
         type,
         name,
@@ -59,6 +67,9 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
         headers: recordToPairs(cfg.headers),
       } as ACPMcpServer);
     } else {
+      // SAFETY: the object carries every field of the ACP stdio server shape
+      // (`name`, `command`, `args`, `env`); `args` is checked to be an array and each
+      // element is coerced with `String`.
       out.push({
         name,
         command: String(cfg.command ?? ''),

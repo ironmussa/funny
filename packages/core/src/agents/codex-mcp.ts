@@ -46,7 +46,7 @@ type CodexEntry = CodexMcpConfig['mcpServers'][string];
 
 /** The bearer token in an entry's `Authorization` header, if any. */
 function bearerToken(headers: unknown): string | undefined {
-  const authorization = Object.entries((headers ?? {}) as Record<string, unknown>).find(
+  const authorization = Object.entries(headers ?? {}).find(
     ([key]) => key.toLowerCase() === 'authorization',
   )?.[1];
   return /^Bearer\s+(\S+)$/i.exec(String(authorization ?? ''))?.[1];
@@ -60,6 +60,9 @@ function codexEntry(
   env: Record<string, string>,
 ): CodexEntry | null {
   if (!raw || typeof raw !== 'object') return null;
+  // SAFETY: `raw` is a non-null object (checked above) from the caller's MCP config;
+  // every field is optional here and is checked before use: `type` through `String`,
+  // `url` with `typeof`, `headers` by `bearerToken`, which reads only a string header.
   const { type, url, headers } = raw as { type?: unknown; url?: unknown; headers?: unknown };
   if (String(type ?? '').toLowerCase() !== 'http' || typeof url !== 'string') return null;
   const timeout = isFunnyServer(url) ? { tool_timeout_sec: FUNNY_TOOL_TIMEOUT_SEC } : {};

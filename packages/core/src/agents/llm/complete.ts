@@ -62,6 +62,8 @@ function toError(error: unknown, signal: AbortSignal | undefined): CompleteOnceE
     return { kind: 'aborted', message: signal?.reason ? messageOf(signal.reason) : 'Aborted' };
   }
   if (typeof error === 'object' && error !== null && 'kind' in error) {
+    // SAFETY: the only non-Error value thrown inside this module with a `kind`
+    // is post()'s `{ kind: 'provider-error', ... }` object, a CompleteOnceError.
     return error as CompleteOnceError;
   }
   return { kind: 'provider-error', message: messageOf(error) };

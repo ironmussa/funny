@@ -8,7 +8,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
  * Drop-in replacement for the former ClaudeProcess (CLI subprocess).
  * AgentRunner and AgentMessageHandler work unchanged.
  */
-import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent-sdk';
+import type { SDKMessage, Query } from '@anthropic-ai/claude-agent-sdk';
 import { consumeAsync } from '@funny/shared/async';
 import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 
@@ -207,8 +207,10 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // orchestrator's sendPrompt/steer branches are skipped for Claude and
     // follow-ups fall back to kill+respawn (the historical behavior).
     if (options.steerable) {
+      // SAFETY: this class implements `IAgentProcess`, whose `sendPrompt` is an optional hook the
+      // class does not declare; viewing `this` as the interface lets a steerable instance own it.
       (this as IAgentProcess).sendPrompt = this.steerableSendPrompt.bind(this);
-      (this as IAgentProcess).steerPrompt = this.steerableSteerPrompt.bind(this);
+      this.steerPrompt = this.steerableSteerPrompt.bind(this);
     }
   }
 
@@ -362,7 +364,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         PreToolUse: [
           {
             matcher: '.*',
-            hooks: [this.preToolUseHook.bind(this) as HookCallback],
+            hooks: [this.preToolUseHook.bind(this)],
             // Long timeout so the SDK doesn't auto-deny interactive tools
             // (AskUserQuestion, ExitPlanMode) while waiting for user input.
             // Without this, the SDK's default hook timeout (~3s) fires,
@@ -446,7 +448,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         const child = spawn(options.command, options.args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.cwd,
-          env: spawnEnv as NodeJS.ProcessEnv,
+          env: spawnEnv,
           windowsHide: true,
         });
         child.stderr?.on('data', (data: Buffer) => {
@@ -532,7 +534,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           msgCount++;
           dlog.debug(`SDK message #${msgCount}`, {
             type: sdkMsg.type,
-            subtype: (sdkMsg as any).subtype,
+            subtype: 'subtype' in sdkMsg ? sdkMsg.subtype : undefined,
           });
           if (this.screenResumeResult(sdkMsg)) return;
           // Before trackInputLifetime: it may close the input channel on this
@@ -591,7 +593,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
    */
   private handleSyntheticError(sdkMsg: SDKMessage): boolean {
     if (sdkMsg.type !== 'assistant') return false;
-    const rawMsg = (sdkMsg as any).message;
+    const rawMsg = sdkMsg.message;
     if (rawMsg?.model !== '<synthetic>') return false;
     const errorText = (rawMsg.content ?? [])
       .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
@@ -624,6 +626,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
    * did nothing). Returns true when `sdkMsg` is held.
    */
   private screenResumeResult(sdkMsg: SDKMessage): boolean {
+    // SAFETY: the helpers below take any SDK message and test `type` / `subtype` before reading
+    // anything else; `duration_ms` and `toResultMessage` are reached only for an empty success
+    // `result` (`isEmptySuccessResult`), which carries those fields.
     const msg = sdkMsg as any;
     if (this.heldResumeResult) {
       if (isSessionIdle(msg)) this.releaseResumeResult();
@@ -665,6 +670,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     }
     this.emit('message', result);
     // The result would have closed the one-shot input channel.
+    // SAFETY: `trackInputLifetime` reads only `type` (and `subtype` fields of `system` messages), so
+    // a bare `result` stub takes its `type === 'result'` branch, as the real result did.
     this.trackInputLifetime({ type: 'result' } as SDKMessage);
   }
 
@@ -753,7 +760,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
    * so we only close once no background task is pending.
    */
   private trackInputLifetime(sdkMsg: SDKMessage): void {
-    const msg = sdkMsg as any;
+    const msg = sdkMsg;
     this.trackBackgroundTasks(msg);
     if (this.inputClosed || this.steerable || this.backgroundTaskIds.size > 0) return;
     // `session_state_changed: idle` also fires right after a turn whose
@@ -836,12 +843,14 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   /** The deny that points a plain check command at funny_run_checks, or null. */
   private checkRedirect(toolName: string, toolInput: unknown): object | null {
     if (!this.options.redirectChecks || toolName !== 'Bash') return null;
+    // SAFETY: `toolInput` is the SDK's unvalidated Bash input; `command` is read optionally
+    // (a missing or non-object input gives `undefined`) and used only once it is a string.
     const command = (toolInput as { command?: unknown } | undefined)?.command;
     const reason = typeof command === 'string' ? checkRedirectReason(command) : null;
     if (!reason) return null;
     dlog.info('preToolUseHook REDIRECT check to funny_run_checks', {
       cwd: this.options.cwd,
-      command: command as string,
+      command,
     });
     return {
       hookSpecificOutput: {
@@ -904,8 +913,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     const serializedToolInputForRule = ((): string | undefined => {
       const ti = input.tool_input;
       if (!ti || typeof ti !== 'object') return undefined;
-      if (toolName === 'Bash' && typeof (ti as any).command === 'string') {
-        return (ti as any).command as string;
+      if (toolName === 'Bash' && 'command' in ti && typeof ti.command === 'string') {
+        return ti.command;
       }
       try {
         return JSON.stringify(ti);
@@ -1073,16 +1082,16 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           return {
             type: 'system',
             subtype: 'init',
-            session_id: (sdkMsg as any).session_id,
-            tools: (sdkMsg as any).tools,
-            model: (sdkMsg as any).model,
-            cwd: (sdkMsg as any).cwd,
+            session_id: sdkMsg.session_id,
+            tools: sdkMsg.tools,
+            model: sdkMsg.model,
+            cwd: sdkMsg.cwd,
             // `slash_commands` is a string[] of command names (no leading slash).
-            slashCommands: (sdkMsg as any).slash_commands ?? [],
+            slashCommands: sdkMsg.slash_commands ?? [],
           };
         }
         if ('subtype' in sdkMsg && sdkMsg.subtype === 'commands_changed') {
-          const raw = sdkMsg as any;
+          const raw = sdkMsg;
           // SlashCommand objects → flat list of names + aliases (no leading slash).
           const commands: string[] = (raw.commands ?? []).flatMap(
             (c: { name?: string; aliases?: string[] }) =>
@@ -1091,7 +1100,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           return { type: 'commands_changed', commands, sessionId: raw.session_id ?? '' };
         }
         if ('subtype' in sdkMsg && sdkMsg.subtype === 'compact_boundary') {
-          const raw = sdkMsg as any;
+          const raw = sdkMsg;
           return {
             type: 'compact_boundary',
             trigger: raw.compact_metadata?.trigger ?? 'auto',
@@ -1103,15 +1112,21 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         return null;
 
       case 'assistant': {
+        // SAFETY: the SDK's Anthropic `message` is passed through as the CLI message: its `text` and
+        // `tool_use` blocks are the ones `CLIAssistantMessage` names (other block types, such as
+        // `thinking`, ride along and are handled by type downstream).
         const rawMsg = (sdkMsg as any).message;
         return {
           type: 'assistant',
           message: rawMsg,
-          parent_tool_use_id: (sdkMsg as any).parent_tool_use_id,
+          parent_tool_use_id: sdkMsg.parent_tool_use_id,
         };
       }
 
       case 'user': {
+        // SAFETY: an SDK `user` message; its `content` is a string or an array of blocks. The array
+        // case is checked by `.map` below (a string has no `.map` and the SDK sends user tool
+        // results as arrays), and each block is read by `type`, other blocks pass unchanged.
         const raw = sdkMsg as any;
         if (!raw.message?.content) return null;
         // Ensure tool_result content is always a string
@@ -1136,6 +1151,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       }
 
       case 'rate_limit_event': {
+        // SAFETY: `rate_limit_info` is passed through unchanged; the SDK's `rateLimitType` also has
+        // `seven_day_overage_included`, which `CLIRateLimitInfo` does not list, and consumers
+        // (the runtime's `agent-message-handler.ts`) forward it as a plain string.
         const r = sdkMsg as any;
         return {
           type: 'rate_limit',
@@ -1145,7 +1163,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       }
 
       case 'result': {
-        const r = sdkMsg as any;
+        const r = sdkMsg;
         const result = toResultMessage(r);
         // A turn result is not session completion while background agents
         // still run. Publishing it would complete the thread and cause the

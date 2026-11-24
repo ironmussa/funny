@@ -200,6 +200,9 @@ export class PiSDKProcess extends BaseAgentProcess {
 
   private handleSessionEvent(event: unknown): void {
     if (!event || typeof event !== 'object') return;
+    // SAFETY: pi session events are unvalidated SDK payloads, a non-null object here (checked
+    // above). Each case reads its fields optionally and passes them on as unknown values
+    // (`emitToolUse`, `captureUsage`, … check them again), so a missing field is skipped.
     const e = event as Record<string, any>;
     switch (e.type) {
       case 'message_update':
@@ -232,7 +235,7 @@ export class PiSDKProcess extends BaseAgentProcess {
             preTokens: e.result.tokensBefore ?? 0,
             postTokens: e.result.tokensAfter ?? 0,
             sessionId: this.session?.sessionId ?? '',
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
         break;
       default:
@@ -242,6 +245,9 @@ export class PiSDKProcess extends BaseAgentProcess {
 
   private handleMessageUpdate(event: unknown): void {
     if (!event || typeof event !== 'object') return;
+    // SAFETY: a non-null object (checked above) from pi's `assistantMessageEvent`; `delta` is
+    // used only after a `typeof` string check, and `toolCall` fields go to `emitToolUse`, which
+    // re-checks the id and normalizes the name and arguments.
     const e = event as Record<string, any>;
     if (e.type === 'text_delta' && typeof e.delta === 'string' && e.delta) {
       this.flushPendingThought();
@@ -252,7 +258,7 @@ export class PiSDKProcess extends BaseAgentProcess {
           id: this.assistantMessageId,
           content: [{ type: 'text', text: this.accumulatedText }],
         },
-      } as CLIMessage);
+      } satisfies CLIMessage);
       return;
     }
     if (e.type === 'thinking_delta' && typeof e.delta === 'string' && e.delta) {
@@ -284,7 +290,7 @@ export class PiSDKProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private emitToolResult(
@@ -306,7 +312,7 @@ export class PiSDKProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private flushPendingThought(): void {
@@ -322,13 +328,13 @@ export class PiSDKProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id, name: 'Think', input: { content: text } }],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
     this.emit('message', {
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: id, content: text }],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private resetTurnState(): void {
@@ -347,6 +353,8 @@ export class PiSDKProcess extends BaseAgentProcess {
 
   private captureUsage(message: unknown): void {
     if (!message || typeof message !== 'object') return;
+    // SAFETY: `message` is a non-null object (checked above); `usage` is used only once it is a
+    // non-null object, and each counter goes through `Number(... ?? 0)`.
     const usage = (message as Record<string, any>).usage;
     if (!usage || typeof usage !== 'object') return;
     const input = Number(usage.input ?? 0);
@@ -451,7 +459,7 @@ function normalizeSearchInput(input: unknown): unknown {
 
 function cloneRecord(input: unknown): Record<string, unknown> | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  return { ...(input as Record<string, unknown>) };
+  return { ...input };
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -626,8 +634,12 @@ export function piToolsFromMcp(bridge: McpToolBridge) {
     name: tool.name,
     label: tool.name,
     description: tool.description,
+    // SAFETY: pi validates `parameters` as plain JSON Schema (its TypeBox type is JSON Schema
+    // plus type-level brands), and `inputSchema` is the JSON Schema the MCP server published.
     parameters: tool.inputSchema as any,
     execute: async (_toolCallId: string, params: unknown, signal: AbortSignal | undefined) => {
+      // SAFETY: pi validates `params` against the tool's MCP `inputSchema`, an object schema
+      // (MCP requires `type: "object"`; the bridge defaults to it), before calling `execute`.
       const result = await tool.call((params ?? {}) as Record<string, unknown>, signal);
       if (result.isError) throw new Error(result.text || 'tool failed');
       return { content: [{ type: 'text' as const, text: result.text }], details: undefined };
@@ -683,7 +695,7 @@ function resolvePiExtensionPath(path: string, cwd: string): string[] {
   if (!safeStat(resolved)?.isDirectory()) return [resolved];
 
   const manifestPath = join(resolved, 'package.json');
-  const manifest = readJson(manifestPath) as { pi?: { extensions?: unknown } } | null;
+  const manifest = readJson(manifestPath);
   const extensions = manifest?.pi?.extensions;
   if (Array.isArray(extensions)) {
     const entries = extensions.filter((entry): entry is string => typeof entry === 'string');
@@ -718,7 +730,7 @@ function safeStat(path: string) {
   }
 }
 
-function readJson(path: string): unknown {
+function readJson(path: string): z.infer<typeof PI_EXTENSION_PACKAGE_SCHEMA> | null {
   try {
     const parsed = parseStoredJson(PI_EXTENSION_PACKAGE_SCHEMA, readFileSync(path, 'utf8'), path);
     return parsed.ok ? parsed.value : null;
@@ -768,6 +780,8 @@ function stringifyToolResult(result: unknown): string {
   if (result == null) return '';
   if (typeof result === 'string') return result;
   if (typeof result !== 'object') return String(result);
+  // SAFETY: `result` is a non-null object here (null, strings and primitives returned above);
+  // `content` is used only if it is an array, and each block is read with optional chaining.
   const content = (result as Record<string, any>).content;
   if (Array.isArray(content)) {
     const text = content

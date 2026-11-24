@@ -263,6 +263,9 @@ export function readOnlyDenial(
   if (!ALLOWED.has(toolName)) {
     return `This thread may only read: ${toolName} is not available. Use ${READ_ONLY_AGENT_TOOLS.join(', ')}.`;
   }
+  // SAFETY: toolInput is narrowed to a non-null object (or replaced by {});
+  // every field is read as unknown: path fields go through text(), the Bash
+  // sandbox flag is a truthiness check.
   const input = (toolInput && typeof toolInput === 'object' ? toolInput : {}) as Record<
     string,
     unknown

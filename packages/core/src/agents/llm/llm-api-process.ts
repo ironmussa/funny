@@ -34,6 +34,9 @@ function bridgedToolDefs(bridge: McpToolBridge, signal: AbortSignal): Record<str
         parameters: z.record(z.string(), z.unknown()),
         jsonSchema: tool.inputSchema,
         execute: async (args: unknown) => {
+          // SAFETY: the executor parses the model's arguments with `parameters`
+          // (`z.record(z.string(), z.unknown())`) before calling execute, so
+          // `args` is a string-keyed object here.
           const result = await tool.call((args ?? {}) as Record<string, unknown>, signal);
           return result.isError ? `Error: ${result.text}` : result.text;
         },

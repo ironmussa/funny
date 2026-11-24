@@ -35,6 +35,8 @@ function isTodoToolName(name: string): boolean {
 
 function inferTodoToolFromRawInput(rawInput: unknown): boolean {
   if (rawInput == null || typeof rawInput !== 'object') return false;
+  // SAFETY: `rawInput` is a non-null object (checked above); the name fields are read
+  // optionally and only a string one is used.
   const raw = rawInput as Record<string, unknown>;
   const rawName = raw._toolName ?? raw._TOOLNAME ?? raw.toolName ?? raw.tool_name ?? raw.toolname;
   return typeof rawName === 'string' && isTodoToolName(rawName);
@@ -110,6 +112,8 @@ export function buildACPToolInput(
   toolName: string,
   data: ACPToolCallData,
 ): Record<string, unknown> {
+  // SAFETY: `rawInput` is spread only when it is a non-null object; its fields are
+  // treated as unknown values by every filler below.
   const raw: Record<string, unknown> =
     data.rawInput != null && typeof data.rawInput === 'object'
       ? { ...(data.rawInput as Record<string, unknown>) }
@@ -223,7 +227,7 @@ const fillBash: ToolInputFiller = (input, data) => {
 
 const fillGlob: ToolInputFiller = (input, data) => {
   if (!input.pattern) {
-    input.pattern = (input.glob as string) ?? extractGlobFromTitle(data.title) ?? data.title;
+    input.pattern = input.glob ?? extractGlobFromTitle(data.title) ?? data.title;
   }
   return undefined;
 };
@@ -241,12 +245,12 @@ const fillGrep: ToolInputFiller = (input, data) => {
 };
 
 const fillWebFetch: ToolInputFiller = (input, data) => {
-  if (!input.url) input.url = (input.href as string) ?? data.title;
+  if (!input.url) input.url = input.href ?? data.title;
   return undefined;
 };
 
 const fillWebSearch: ToolInputFiller = (input, data) => {
-  if (!input.query) input.query = (input.search as string) ?? data.title;
+  if (!input.query) input.query = input.search ?? data.title;
   return undefined;
 };
 
@@ -304,6 +308,8 @@ function parseTodoItemsFromArray(entries: unknown[] | undefined): ACPTodoItem[] 
   const todos: ACPTodoItem[] = [];
   for (const raw of entries ?? []) {
     if (!raw || typeof raw !== 'object') continue;
+    // SAFETY: `raw` is a non-null object (checked above); each field is checked with
+    // `typeof` or compared to a literal before use.
     const e = raw as Record<string, unknown>;
     const content =
       (typeof e.content === 'string' && e.content) ||
@@ -344,6 +350,8 @@ export function buildTodoWriteInputFromRaw(
   }
   const outcome = raw.outcome;
   if (outcome && typeof outcome === 'object') {
+    // SAFETY: `outcome` is a non-null object (checked above); `outcome` and `todos`
+    // are checked before use.
     const o = outcome as Record<string, unknown>;
     if (o.outcome === 'accepted' && Array.isArray(o.todos)) {
       const todos = parseTodoItemsFromArray(o.todos);
@@ -360,13 +368,18 @@ export function enrichTodoWriteInputFromOutput(
 ): Record<string, unknown> {
   if (hasRenderableTodoInput(input)) return input;
   if (rawOutput != null && typeof rawOutput === 'object') {
+    // SAFETY: `rawOutput` is a non-null object (checked above), and
+    // `buildTodoWriteInputFromRaw` checks every field it reads.
     const built = buildTodoWriteInputFromRaw(rawOutput as Record<string, unknown>);
     if (built) return { todos: built.todos };
   }
   if (typeof rawOutput === 'string') {
     try {
+      // SAFETY: widening to `unknown` only; the value is narrowed below.
       const parsed = JSON.parse(rawOutput) as unknown;
       if (parsed && typeof parsed === 'object') {
+        // SAFETY: `parsed` is a non-null object (checked above), and
+        // `buildTodoWriteInputFromRaw` checks every field it reads.
         const built = buildTodoWriteInputFromRaw(parsed as Record<string, unknown>);
         if (built) return { todos: built.todos };
       }
@@ -395,6 +408,8 @@ export function extractACPToolOutput(
     // Cursor read_file returns `{ content: "<file text>" }`; unwrap so the
     // ReadFileCard sees the actual file contents instead of a JSON blob.
     if (typeof rawOutput === 'object') {
+      // SAFETY: `rawOutput` is a non-null object here (null and strings returned
+      // above); only string fields are used.
       const obj = rawOutput as Record<string, unknown>;
       const inner =
         (typeof obj.content === 'string' && obj.content) ||
@@ -407,6 +422,8 @@ export function extractACPToolOutput(
   }
 
   if (content?.length) {
+    // SAFETY: ACP ToolCallContent blocks are unvalidated provider payloads; each is
+    // read by its `type` with optional fields, and an unknown shape yields ''.
     const output = (content as any[])
       .map((c: any) => {
         if (c.type === 'content' && c.content) {
@@ -443,6 +460,8 @@ export function extractACPToolOutput(
  */
 function extractPathFromContent(content: unknown[] | undefined): string | null {
   if (!content?.length) return null;
+  // SAFETY: ACP ToolCallContent blocks are unvalidated provider payloads; each block
+  // and nested item is checked to be an object and its `uri` to be a string.
   for (const c of content as any[]) {
     if (!c || typeof c !== 'object') continue;
     if (c.type === 'content' && c.content) {
@@ -474,6 +493,8 @@ function extractDiffBlock(
   content: unknown[] | undefined,
 ): { path?: string; oldText?: string; newText?: string } | null {
   if (!content?.length) return null;
+  // SAFETY: ACP ToolCallContent blocks are unvalidated provider payloads; a block is
+  // used only when it is an object of type 'diff', and its fields only when strings.
   for (const c of content as any[]) {
     if (c && typeof c === 'object' && c.type === 'diff') {
       return {

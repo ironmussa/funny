@@ -212,7 +212,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
     let totalCost = 0;
 
     // Current assistant message ID — rotated after each tool call
-    let assistantMsgId = randomUUID() as Uuid;
+    let assistantMsgId = randomUUID();
 
     // Accumulate text chunks so we emit the full content, not just deltas
     let accumulatedText = '';
@@ -393,7 +393,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
         // After tool calls, start a new message so new text doesn't merge
         // with the tool-call parent message from the previous turn.
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID() as Uuid;
+          assistantMsgId = randomUUID();
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -443,7 +443,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                 id: assistantMsgId,
                 content: contentBlocks,
               },
-            } as CLIMessage);
+            } satisfies CLIMessage);
           }
 
           // Emit tool result for completed Think blocks
@@ -461,7 +461,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                   },
                 ],
               },
-            } as CLIMessage);
+            } satisfies CLIMessage);
           }
         }
         return ret(accumulatedText);
@@ -470,7 +470,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
       case 'agent_thought_chunk': {
         // After tool calls, start a new message for new thoughts.
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID() as Uuid;
+          assistantMsgId = randomUUID();
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -511,7 +511,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
               id: assistantMsgId,
               content: contentBlocks,
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
 
           // Update the tool result with accumulated thought content
           toolCallsSeen.set(this.thinkToolCallId, 'done');
@@ -526,7 +526,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                 },
               ],
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
         return ret(accumulatedText);
       }
@@ -535,11 +535,9 @@ export class DeepAgentProcess extends BaseAgentProcess {
         const toolCallId = update.toolCallId;
         if (toolCallsSeen.has(toolCallId)) return ret(accumulatedText);
 
-        const acpKind = (update as any).kind as string | undefined;
+        const acpKind = update.kind;
         const title = update.title || '';
-        const locations = (update as any).locations as
-          | Array<{ path: string; line?: number | null }>
-          | undefined;
+        const locations = update.locations;
         const toolName = inferACPToolName(acpKind, title, { thinkToolName: 'Think' });
 
         toolCallsSeen.set(toolCallId, toolName);
@@ -571,10 +569,10 @@ export class DeepAgentProcess extends BaseAgentProcess {
         this.lastEmittedToolCall = true;
 
         // If tool_call already carries a completed result, emit it immediately
-        const tcStatus = (update as any).status as string | undefined;
+        const tcStatus = update.status;
         if (tcStatus === 'completed' || tcStatus === 'failed') {
           toolCallsSeen.set(toolCallId, 'done');
-          const output = extractACPToolOutput(update.rawOutput, (update as any).content, title);
+          const output = extractACPToolOutput(update.rawOutput, update.content, title);
           this.emit('message', {
             type: 'user',
             message: {
@@ -586,7 +584,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                 },
               ],
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
 
         // Keep the same assistantMsgId — consecutive tool calls will share
@@ -604,7 +602,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
           toolCallsSeen.set(toolCallId, 'done');
           const output = extractACPToolOutput(
             update.rawOutput,
-            (update as any).content,
+            update.content ?? undefined,
             update.title || '',
           );
           const msg: CLIMessage = {
@@ -626,7 +624,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
       case 'plan': {
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID() as Uuid;
+          assistantMsgId = randomUUID();
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -656,7 +654,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                     },
                   ],
                 },
-              } as CLIMessage);
+              } satisfies CLIMessage);
             }
           }
 

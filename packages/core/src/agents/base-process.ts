@@ -21,8 +21,9 @@ import { EventEmitter } from 'events';
 import { waitFor } from '@funny/shared/async';
 
 import type {
-  CLIMessage,
+  CLIAssistantMessage,
   CLISystemMessage,
+  CLIUserMessage,
   CLIResultMessage,
   ClaudeProcessOptions,
 } from './types.js';
@@ -300,19 +301,19 @@ export abstract class BaseAgentProcess extends EventEmitter {
     const inputTokens = params.inputTokens;
     if (!Number.isFinite(inputTokens) || inputTokens <= 0) return;
 
-    this.emit('message', {
+    // The cache fields ride along for the runtime's context ring; they are
+    // extra fields on top of the declared `usage` shape.
+    const usage = {
+      input_tokens: inputTokens,
+      output_tokens: params.outputTokens ?? 0,
+      cache_read_input_tokens: params.cacheReadTokens ?? 0,
+      cache_creation_input_tokens: params.cacheWriteTokens ?? 0,
+    };
+    const msg: CLIAssistantMessage = {
       type: 'assistant',
-      message: {
-        id: randomUUID(),
-        content: [],
-        usage: {
-          input_tokens: inputTokens,
-          output_tokens: params.outputTokens ?? 0,
-          cache_read_input_tokens: params.cacheReadTokens ?? 0,
-          cache_creation_input_tokens: params.cacheWriteTokens ?? 0,
-        },
-      },
-    } as CLIMessage);
+      message: { id: randomUUID(), content: [], usage },
+    };
+    this.emit('message', msg);
   }
 
   /** Handle ACP `sessionUpdate: "usage_update"`. Returns true when handled. */
@@ -327,7 +328,12 @@ export abstract class BaseAgentProcess extends EventEmitter {
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
   protected emitAcpPromptResponseUsage(usage: unknown): void {
     if (!usage || typeof usage !== 'object') return;
+    // SAFETY: `usage` is an object (checked above) from the ACP PromptResponse,
+    // whose token fields are numbers when present. They are not checked here:
+    // a missing one becomes undefined and falls back to 0, and
+    // emitContextUsageMessage drops a non-finite input count.
     const u = usage as Record<string, unknown>;
+    // SAFETY: see the note on `u` above; each field is read optionally.
     this.emitContextUsageMessage({
       inputTokens: (u.inputTokens as number | undefined) ?? 0,
       outputTokens: (u.outputTokens as number | undefined) ?? 0,
@@ -409,7 +415,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   protected emitErrorToolCall(errorText: string): void {
     const toolCallId = randomUUID();
     // tool_use (assistant)
-    this.emit('message', {
+    const toolUse: CLIAssistantMessage = {
       type: 'assistant',
       message: {
         id: randomUUID(),
@@ -422,9 +428,10 @@ export abstract class BaseAgentProcess extends EventEmitter {
           },
         ],
       },
-    } as CLIMessage);
+    };
+    this.emit('message', toolUse);
     // tool_result (user) — mark as error
-    this.emit('message', {
+    const toolResult: CLIUserMessage = {
       type: 'user',
       message: {
         content: [
@@ -436,7 +443,8 @@ export abstract class BaseAgentProcess extends EventEmitter {
           },
         ],
       },
-    } as CLIMessage);
+    };
+    this.emit('message', toolResult);
   }
 
   /**
@@ -453,12 +461,11 @@ export abstract class BaseAgentProcess extends EventEmitter {
     if (typeof err === 'string') return this.cleanErrorDetails(err);
     if (typeof err !== 'object') return String(err);
 
-    const e = err as Record<string, unknown>;
-    const base = typeof e.message === 'string' ? e.message : String(err);
+    const base = 'message' in err && typeof err.message === 'string' ? err.message : String(err);
 
     // ACP RequestError: { code, message, data: { details } }
-    if (e.data && typeof e.data === 'object') {
-      const details = (e.data as Record<string, unknown>).details;
+    if ('data' in err && err.data && typeof err.data === 'object' && 'details' in err.data) {
+      const details = err.data.details;
       if (typeof details === 'string') {
         return this.cleanErrorDetails(details);
       }

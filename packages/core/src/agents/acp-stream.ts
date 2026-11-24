@@ -13,6 +13,8 @@ export function childAcpStream(
   ndJsonStream: NdJsonStream,
 ): ReturnType<NdJsonStream> {
   const outputStream: WritableStream<Uint8Array> = Writable.toWeb(child.stdin!);
+  // SAFETY: every caller spawns the child with a piped stdout and never sets an
+  // encoding, so the web stream yields Buffer chunks, which are Uint8Array instances.
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Node.js Readable.toWeb returns ReadableStream<any>
   const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;
   return ndJsonStream(outputStream, inputStream);

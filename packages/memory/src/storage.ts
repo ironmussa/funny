@@ -101,9 +101,13 @@ export async function initSchema(db: Client): Promise<Result<void, string>> {
 
 // ─── Sync helper ───────────────────────────────────────
 
+function isFunction(value: unknown): value is (...args: never[]) => void {
+  return typeof value === 'function';
+}
+
 export async function syncDb(db: Client): Promise<void> {
   try {
-    if ('sync' in db && typeof (db as any).sync === 'function') {
+    if ('sync' in db && isFunction((db as any).sync)) {
       await (db as any).sync();
     }
   } catch {

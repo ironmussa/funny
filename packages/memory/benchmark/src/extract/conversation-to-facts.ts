@@ -79,6 +79,14 @@ export async function extractFactsFromConversation(
 }
 
 /** Parse LLM response into ExtractedFact array, tolerant of formatting issues */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function parseFactsResponse(raw: string): ExtractedFact[] {
   // Strip markdown code fences if present
   let cleaned = raw.trim();
@@ -92,16 +100,16 @@ function parseFactsResponse(raw: string): ExtractedFact[] {
 
     return parsed
       .filter(
-        (f: Record<string, unknown>) =>
+        (f: Record<string, unknown>): f is { content: string; type: string } =>
           typeof f.content === 'string' && f.content.length > 0 && typeof f.type === 'string',
       )
       .map((f: Record<string, unknown>): ExtractedFact => ({
         content: f.content as string,
         type: validateFactType(f.type as string),
         tags: Array.isArray(f.tags) ? (f.tags as string[]).map((t) => String(t).toLowerCase()) : [],
-        confidence: typeof f.confidence === 'number' ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
-        validFrom: typeof f.validFrom === 'string' ? (f.validFrom as string) : undefined,
-        supersedes: typeof f.supersedes === 'string' ? (f.supersedes as string) : undefined,
+        confidence: isNumber(f.confidence) ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
+        validFrom: isString(f.validFrom) ? (f.validFrom as string) : undefined,
+        supersedes: isString(f.supersedes) ? (f.supersedes as string) : undefined,
       }));
   } catch {
     // Try to extract JSON array from mixed content

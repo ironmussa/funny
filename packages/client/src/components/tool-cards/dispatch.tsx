@@ -62,48 +62,55 @@ const renderTask: CardRenderer = ({
   />
 );
 
-const CARD_RENDERERS: Record<string, CardRenderer> = {
-  Bash: ({ parsed, output, author, hideLabel, displayTime }) => (
-    <BashCard
-      parsed={parsed}
-      output={output}
-      author={author}
-      hideLabel={hideLabel}
-      displayTime={displayTime}
-    />
-  ),
-  Background: ({ parsed, output, hideLabel, displayTime }) => (
-    <BackgroundCard
-      parsed={parsed}
-      output={output}
-      hideLabel={hideLabel}
-      displayTime={displayTime}
-    />
-  ),
-  Read: ({ parsed, output, hideLabel, displayTime }) => (
-    <ReadFileCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
-  ),
-  Write: ({ parsed, hideLabel, displayTime }) => (
-    <WriteFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />
-  ),
-  Edit: ({ parsed, hideLabel, displayTime }) => (
-    <EditFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />
-  ),
-  AskUserQuestion: ({ parsed, output, onRespond, hideLabel, displayTime }) => (
-    <AskQuestionCard
-      parsed={parsed}
-      onRespond={output ? undefined : onRespond}
-      output={output}
-      hideLabel={hideLabel}
-      displayTime={displayTime}
-    />
-  ),
-  Task: renderTask,
-  Agent: renderTask,
-  Think: ({ parsed, output, hideLabel, displayTime }) => (
-    <ThinkCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
-  ),
-};
+const CARD_RENDERERS = new Map<string, CardRenderer>(
+  Object.entries({
+    Bash: ({ parsed, output, author, hideLabel, displayTime }) => (
+      <BashCard
+        parsed={parsed}
+        output={output}
+        author={author}
+        hideLabel={hideLabel}
+        displayTime={displayTime}
+      />
+    ),
+    Background: ({ parsed, output, hideLabel, displayTime }) => (
+      <BackgroundCard
+        parsed={parsed}
+        output={output}
+        hideLabel={hideLabel}
+        displayTime={displayTime}
+      />
+    ),
+    Read: ({ parsed, output, hideLabel, displayTime }) => (
+      <ReadFileCard
+        parsed={parsed}
+        output={output}
+        hideLabel={hideLabel}
+        displayTime={displayTime}
+      />
+    ),
+    Write: ({ parsed, hideLabel, displayTime }) => (
+      <WriteFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />
+    ),
+    Edit: ({ parsed, hideLabel, displayTime }) => (
+      <EditFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />
+    ),
+    AskUserQuestion: ({ parsed, output, onRespond, hideLabel, displayTime }) => (
+      <AskQuestionCard
+        parsed={parsed}
+        onRespond={output ? undefined : onRespond}
+        output={output}
+        hideLabel={hideLabel}
+        displayTime={displayTime}
+      />
+    ),
+    Task: renderTask,
+    Agent: renderTask,
+    Think: ({ parsed, output, hideLabel, displayTime }) => (
+      <ThinkCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
+    ),
+  } satisfies Record<string, CardRenderer>),
+);
 
 /**
  * Routes a tool call to its specialized renderer. Returns `null` when the
@@ -142,6 +149,6 @@ export function dispatchToolCard(args: Args): ReactNode | null {
     return (
       <PlanCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
     );
-  const render = Object.hasOwn(CARD_RENDERERS, name) ? CARD_RENDERERS[name] : null;
+  const render = CARD_RENDERERS.get(name);
   return render ? render(args) : null;
 }

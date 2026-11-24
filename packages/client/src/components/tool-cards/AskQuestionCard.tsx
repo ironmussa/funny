@@ -43,10 +43,13 @@ const OTHER_INDEX = -1;
  *   → Option Label — Option Description
  *   → Other — free text
  */
-function parseOutputToSelections(
-  output: string,
-  questions: Question[],
-): { selections: Map<number, Set<number>>; otherTexts: Map<number, string> } {
+/** The options picked per question index, and any free "Other" text. */
+interface ParsedSelections {
+  selections: Map<number, Set<number>>;
+  otherTexts: Map<number, string>;
+}
+
+function parseOutputToSelections(output: string, questions: Question[]): ParsedSelections {
   const selections = new Map<number, Set<number>>();
   const otherTexts = new Map<number, string>();
 

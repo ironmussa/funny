@@ -20,47 +20,51 @@ export function parseMcpToolName(name: string): McpToolName | null {
 }
 
 /** Display names of MCP servers seen in threads; others are humanized from their id. */
-const SERVER_NAMES: Record<string, string> = {
-  linear: 'Linear',
-  'linear-server': 'Linear',
-  railway: 'Railway',
-  'chrome-devtools': 'Chrome DevTools',
-  'playwright-test': 'Playwright',
-  playwright: 'Playwright',
-  codegraph: 'CodeGraph',
-  convex: 'Convex',
-  supabase: 'Supabase',
-  github: 'GitHub',
-  funny: 'funny',
-  funny_browser: 'Browser',
-  cua_repl: 'REPL',
-  'coplay-mcp': 'Coplay',
-};
+const SERVER_NAMES = new Map(
+  Object.entries({
+    linear: 'Linear',
+    'linear-server': 'Linear',
+    railway: 'Railway',
+    'chrome-devtools': 'Chrome DevTools',
+    'playwright-test': 'Playwright',
+    playwright: 'Playwright',
+    codegraph: 'CodeGraph',
+    convex: 'Convex',
+    supabase: 'Supabase',
+    github: 'GitHub',
+    funny: 'funny',
+    funny_browser: 'Browser',
+    cua_repl: 'REPL',
+    'coplay-mcp': 'Coplay',
+  }),
+);
 
 /**
  * Friendly actions of well-known tools, as i18n keys under `tools.mcp`.
  * Tools not listed get their id humanized (`get_issue` → "Get issue").
  */
-const KNOWN_ACTIONS: Record<string, string> = {
-  'funny/funny_spawn': 'backgroundJob',
-  'funny/funny_watch': 'scheduledCheck',
-  'funny/funny_spawn_thread': 'newThread',
-  'funny/funny_search_threads': 'searchThreads',
-  'cua_repl/js': 'runJavaScript',
-  'funny_browser/browser_open': 'browserOpen',
-  'funny_browser/browser_navigate': 'browserNavigate',
-  'funny_browser/browser_snapshot': 'browserSnapshot',
-  'funny_browser/browser_act': 'browserAct',
-  'funny_browser/browser_evaluate': 'browserEvaluate',
-  'funny_browser/browser_wait_for': 'browserWaitFor',
-  'funny_browser/browser_status': 'browserStatus',
-  'funny_browser/browser_resize': 'browserResize',
-  'funny_browser/browser_close': 'browserClose',
-  'funny_browser/browser_dialog': 'browserDialog',
-  'funny_browser/browser_set_appearance': 'browserSetAppearance',
-  'funny_browser/browser_recording_start': 'browserRecordingStart',
-  'funny_browser/browser_recording_stop': 'browserRecordingStop',
-};
+const KNOWN_ACTIONS = new Map(
+  Object.entries({
+    'funny/funny_spawn': 'backgroundJob',
+    'funny/funny_watch': 'scheduledCheck',
+    'funny/funny_spawn_thread': 'newThread',
+    'funny/funny_search_threads': 'searchThreads',
+    'cua_repl/js': 'runJavaScript',
+    'funny_browser/browser_open': 'browserOpen',
+    'funny_browser/browser_navigate': 'browserNavigate',
+    'funny_browser/browser_snapshot': 'browserSnapshot',
+    'funny_browser/browser_act': 'browserAct',
+    'funny_browser/browser_evaluate': 'browserEvaluate',
+    'funny_browser/browser_wait_for': 'browserWaitFor',
+    'funny_browser/browser_status': 'browserStatus',
+    'funny_browser/browser_resize': 'browserResize',
+    'funny_browser/browser_close': 'browserClose',
+    'funny_browser/browser_dialog': 'browserDialog',
+    'funny_browser/browser_set_appearance': 'browserSetAppearance',
+    'funny_browser/browser_recording_start': 'browserRecordingStart',
+    'funny_browser/browser_recording_stop': 'browserRecordingStop',
+  }),
+);
 
 /** funny's own browser tools (`mcp__funny_browser__*`) — the card offers "Show in panel". */
 export function isBrowserTool(mcp: McpToolName): boolean {
@@ -111,25 +115,28 @@ const summarizeWait: Summarizer = (parsed) => {
 };
 
 /** One-line summaries of funny's browser tool calls, by tool. */
-const BROWSER_SUMMARIES: Record<string, Summarizer> = {
-  browser_open: (p) => str(p.url),
-  browser_navigate: (p) => str(p.url) ?? str(p.action),
-  browser_act: summarizeAct,
-  browser_evaluate: (p) => (str(p.expression) ? firstLine(str(p.expression) as string, 120) : null),
-  browser_wait_for: summarizeWait,
-  browser_resize: (p) => {
-    const w = num(p.width);
-    const h = num(p.height);
-    return w !== null && h !== null ? `${w}×${h}` : null;
-  },
-  browser_snapshot: (p) => (p.screenshot === true ? 'with screenshot' : null),
-  browser_dialog: (p) => {
-    if (typeof p.accept !== 'boolean') return null;
-    const text = str(p.promptText);
-    return p.accept ? (text ? `accept · "${firstLine(text, 60)}"` : 'accept') : 'dismiss';
-  },
-  browser_set_appearance: (p) => str(p.colorScheme),
-};
+const BROWSER_SUMMARIES = new Map<string, Summarizer>(
+  Object.entries({
+    browser_open: (p) => str(p.url),
+    browser_navigate: (p) => str(p.url) ?? str(p.action),
+    browser_act: summarizeAct,
+    browser_evaluate: (p) =>
+      str(p.expression) ? firstLine(str(p.expression) as string, 120) : null,
+    browser_wait_for: summarizeWait,
+    browser_resize: (p) => {
+      const w = num(p.width);
+      const h = num(p.height);
+      return w !== null && h !== null ? `${w}×${h}` : null;
+    },
+    browser_snapshot: (p) => (p.screenshot === true ? 'with screenshot' : null),
+    browser_dialog: (p) => {
+      if (typeof p.accept !== 'boolean') return null;
+      const text = str(p.promptText);
+      return p.accept ? (text ? `accept · "${firstLine(text, 60)}"` : 'accept') : 'dismiss';
+    },
+    browser_set_appearance: (p) => str(p.colorScheme),
+  } satisfies Record<string, Summarizer>),
+);
 
 /** The MP4 a `browser_recording_stop` call saved ("Recording saved: <path>"), if any. */
 export function browserRecordingPath(mcp: McpToolName, resultText: string): string | null {
@@ -158,7 +165,7 @@ function humanizeAction(server: string, tool: string): string {
 }
 
 function humanizeServer(server: string): string {
-  const known = SERVER_NAMES[server] ?? SERVER_NAMES[server.toLowerCase()];
+  const known = SERVER_NAMES.get(server) ?? SERVER_NAMES.get(server.toLowerCase());
   if (known) return known;
   return server
     .split(/[_\-.]+/)
@@ -169,7 +176,7 @@ function humanizeServer(server: string): string {
 
 /** The card title: "Linear · Get issue", "funny · Background job". */
 export function mcpToolTitle(mcp: McpToolName, t: (key: string) => string): string {
-  const known = KNOWN_ACTIONS[`${mcp.server}/${mcp.tool}`];
+  const known = KNOWN_ACTIONS.get(`${mcp.server}/${mcp.tool}`);
   const action = known ? t(`tools.mcp.${known}`) : humanizeAction(mcp.server, mcp.tool);
   return `${humanizeServer(mcp.server)} · ${action}`;
 }
@@ -199,7 +206,7 @@ export function getMcpSummary(
   mcp?: McpToolName,
 ): { key: string; text: string } | null {
   if (mcp && isBrowserTool(mcp)) {
-    const text = BROWSER_SUMMARIES[mcp.tool]?.(parsed) ?? null;
+    const text = BROWSER_SUMMARIES.get(mcp.tool)?.(parsed) ?? null;
     // `key: ''` — the summary is composed from several inputs; keep them all listed.
     return text ? { key: '', text } : null;
   }
@@ -246,21 +253,20 @@ function resourcePart(b: ContentBlock): McpResultPart | null {
   return { kind: 'resource', uri: r.uri, text: typeof r.text === 'string' ? r.text : null };
 }
 
-const CONTENT_PARSERS: Record<string, (b: ContentBlock) => McpResultPart | null> = {
-  text: (b) => (typeof b.text === 'string' ? textPart(b.text) : null),
-  image: imagePart,
-  resource: resourcePart,
-  resource_link: (b) =>
-    typeof b.uri === 'string' ? { kind: 'resource', uri: b.uri, text: null } : null,
-};
+const CONTENT_PARSERS = new Map<string, (b: ContentBlock) => McpResultPart | null>(
+  Object.entries({
+    text: (b) => (typeof b.text === 'string' ? textPart(b.text) : null),
+    image: imagePart,
+    resource: resourcePart,
+    resource_link: (b) =>
+      typeof b.uri === 'string' ? { kind: 'resource', uri: b.uri, text: null } : null,
+  } satisfies Record<string, (b: ContentBlock) => McpResultPart | null>),
+);
 
 function contentPart(block: unknown): McpResultPart | null {
   if (!block || typeof block !== 'object') return null;
   const b = block as ContentBlock;
-  const parse =
-    typeof b.type === 'string' && Object.hasOwn(CONTENT_PARSERS, b.type)
-      ? CONTENT_PARSERS[b.type]
-      : null;
+  const parse = typeof b.type === 'string' ? CONTENT_PARSERS.get(b.type) : undefined;
   return parse ? parse(b) : null;
 }
 

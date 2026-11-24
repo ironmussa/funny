@@ -122,10 +122,13 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
   ];
 }
 
-function getDialogDiffData(changeEntries: EditChangeEntry[]): {
+/** The diff dialog's file list and its raw diffs, when an edit touched several files. */
+interface DialogDiffData {
   dialogFiles?: FileDiffSummary[];
   diffCache?: Map<string, string>;
-} {
+}
+
+function getDialogDiffData(changeEntries: EditChangeEntry[]): DialogDiffData {
   const dialogFiles =
     changeEntries.length > 1
       ? changeEntries.map((entry) => ({

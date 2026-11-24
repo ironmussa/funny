@@ -56,9 +56,18 @@ export interface RunnerResolutionPort {
   ): Promise<RunnerResolution>;
 }
 
+/** A JSON value as the runner sent it: the reply body of a thread creation or fork. */
+export type RunnerJson =
+  | string
+  | number
+  | boolean
+  | null
+  | RunnerJson[]
+  | { [key: string]: RunnerJson };
+
 export type RemoteCreationResponse =
   /** `thread` is the runner's parsed JSON response, returned to the client verbatim. */
-  | { readonly ok: true; readonly thread: unknown }
+  | { readonly ok: true; readonly thread: RunnerJson }
   | { readonly ok: false; readonly status: number; readonly message: string };
 
 export interface RemoteThreadCreationPort {

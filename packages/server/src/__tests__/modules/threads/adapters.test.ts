@@ -17,7 +17,7 @@ import {
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import { makeCreateThread } from '../../../modules/threads/application/create-thread.js';
-import type { ActorContext } from '../../../modules/threads/application/ports.js';
+import type { ActorContext, RunnerJson } from '../../../modules/threads/application/ports.js';
 import type { CreationTarget } from '../../../modules/threads/domain/creation-target.js';
 import {
   authenticatedUserId,
@@ -216,7 +216,7 @@ describe('remote creation adapter', () => {
 });
 
 describe('registry and cache adapters (real thread registry)', () => {
-  function useCaseWith(runnerId: string, thread: unknown) {
+  function useCaseWith(runnerId: string, thread: RunnerJson) {
     return makeCreateThread({
       runners: { resolve: async () => okRunner(runnerId) },
       remote: { create: async () => ({ ok: true, thread }) },

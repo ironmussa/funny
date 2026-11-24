@@ -41,6 +41,7 @@ import {
   threadOwnedBy,
   type CreationIntent,
   type ForkVariant,
+  type RunnerJson,
 } from '../modules/threads/index.js';
 import { forgetThreadOwnership } from '../services/data-ownership.js';
 import { noteOwnerFollowUp } from '../services/factory/factory-follow-ups.js';
@@ -291,7 +292,11 @@ const createdThreadIdSchema = z.object({ id: z.string().min(1) });
  * If the row is somehow missing, the original payload goes out unchanged
  * rather than failing a creation that succeeded.
  */
-async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, status: 201 | 202) {
+async function createdThreadResponse(
+  c: Context<ServerEnv>,
+  created: RunnerJson,
+  status: 201 | 202,
+) {
   const parsed = createdThreadIdSchema.safeParse(created);
   const row = parsed.success ? await threadRepo.getThread(parsed.data.id) : undefined;
   if (!row) {

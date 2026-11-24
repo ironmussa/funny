@@ -19,6 +19,8 @@ const REVERSE_LINK_CALLER_IP = {
 
 type ReverseLinkCallerIp = typeof REVERSE_LINK_CALLER_IP;
 
+import type { CarrierWebSocketData } from '../../grpc/websocket-carrier.js';
+
 export interface ReverseLinkListener {
   target: { hostname: string; port: number };
   stop(): void;
@@ -29,7 +31,7 @@ export function startReverseLinkListener(options: {
   serve: Omit<Parameters<typeof Bun.serve>[0], 'fetch' | 'port' | 'hostname'>;
   fetch(
     req: Request,
-    server: Bun.Server<any>,
+    server: Bun.Server<CarrierWebSocketData>,
     ip: ReverseLinkCallerIp,
   ): Response | Promise<Response | undefined> | undefined;
 }): ReverseLinkListener {

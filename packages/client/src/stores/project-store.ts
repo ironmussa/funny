@@ -82,6 +82,11 @@ interface ProjectState {
 
 let loadProjectsPromise: Promise<void> | null = null;
 
+/** True when a browser API (e.g. `requestIdleCallback`) exists as a function in this engine. */
+function isCallable(value: unknown): value is (...args: never[]) => unknown {
+  return typeof value === 'function';
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   expandedProjects: loadExpandedProjects(),
   selectedProjectId: null,
@@ -156,7 +161,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             }
           }
         };
-        if (typeof requestIdleCallback === 'function') {
+        if (isCallable(globalThis.requestIdleCallback)) {
           requestIdleCallback(loadExpandedProjects, { timeout: 1000 });
         } else {
           setTimeout(loadExpandedProjects, 0);
@@ -179,7 +184,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             }
           }
         };
-        if (typeof requestIdleCallback === 'function') {
+        if (isCallable(globalThis.requestIdleCallback)) {
           requestIdleCallback(fireGitStatus, { timeout: 2000 });
         } else {
           setTimeout(fireGitStatus, 200);
@@ -207,7 +212,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // The collapsible animation and thread list render first, then git
       // status icons fill in once the browser is idle.
       const fetchGitStatus = () => fetchGitStatusForProject(projectId);
-      if (typeof requestIdleCallback === 'function') {
+      if (isCallable(globalThis.requestIdleCallback)) {
         requestIdleCallback(fetchGitStatus);
       } else {
         setTimeout(fetchGitStatus, 100);
@@ -236,7 +241,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     get().fetchBranch(projectId);
     // Defer git status fetch to avoid blocking the interaction (INP)
     const fetchGitStatus = () => fetchGitStatusForProject(projectId);
-    if (typeof requestIdleCallback === 'function') {
+    if (isCallable(globalThis.requestIdleCallback)) {
       requestIdleCallback(fetchGitStatus);
     } else {
       setTimeout(fetchGitStatus, 100);

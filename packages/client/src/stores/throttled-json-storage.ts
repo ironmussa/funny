@@ -18,6 +18,16 @@ export function discardPendingPersistWrites(): void {
   for (const discard of discarders) discard();
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** True when a browser API (e.g. `requestIdleCallback`) exists as a function in this engine. */
+function isCallable(value: unknown): value is (...args: never[]) => unknown {
+  return typeof value === 'function';
+}
+
 /**
  * A zustand `persist` storage that coalesces writes.
  *
@@ -67,7 +77,7 @@ export function createThrottledJSONStorage<S>(
     pending.clear();
   });
 
-  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  if (typeof window !== 'undefined' && isCallable(window.addEventListener)) {
     window.addEventListener('pagehide', flush);
   }
 
@@ -76,7 +86,7 @@ export function createThrottledJSONStorage<S>(
       const queued = pending.get(name);
       if (queued) return queued;
       const raw = getStorage().getItem(name);
-      if (typeof raw !== 'string') return null;
+      if (!isString(raw)) return null;
       try {
         return JSON.parse(raw) as StorageValue<S>;
       } catch {

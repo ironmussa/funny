@@ -487,6 +487,14 @@ interface HeldProof {
   checkPublished: boolean;
 }
 
+/** A stored proof that names its commit and whose verdict allows a merge; null otherwise. */
+function heldProofRecord(
+  record: RegressionProofRecord | null | undefined,
+  testRequired: boolean,
+): RegressionProofRecord | null {
+  return record?.headSha && proofAllowsMerge(record, testRequired) ? record : null;
+}
+
 const PROOF_NOT_CONFIGURED: ActionResult = {
   ok: false,
   error:
@@ -838,15 +846,18 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
    * same verdict, and a retry or a merge approval reruns the step on a head
    * that did not change. Null when there is none, so the proof runs.
    */
-  async function reusedProof(testRequired: boolean): Promise<ActionResult | null> {
-    const record = lastProof?.record ?? deps.storedProof ?? null;
-    if (!record?.headSha || !proofAllowsMerge(record, testRequired)) return null;
+  /** The pull request's head commit now; null when there is no pull request or it cannot be read. */
+  async function pullHeadSha(): Promise<string | null> {
     const pr = pullRequest();
     if (!pr) return null;
     const head = await deps.github.pullRequests.pullHead(pr);
-    if (head.isErr() || head.value.sha !== record.headSha) return null;
-    const checkPublished = record.checkPublished ?? false;
-    lastProof = { record, testRequired, ok: true, checkPublished };
+    return head.isOk() ? head.value.sha : null;
+  }
+
+  async function reusedProof(testRequired: boolean): Promise<ActionResult | null> {
+    const record = heldProofRecord(lastProof?.record ?? deps.storedProof, testRequired);
+    if (!record || (await pullHeadSha()) !== record.headSha) return null;
+    lastProof = { record, testRequired, ok: true, checkPublished: record.checkPublished === true };
     // The check may not have reached GitHub the first time: auto-merge needs it.
     await checkOnGithub(lastProof);
     await count(metrics, { event: 'regression_proof_reused' });

@@ -203,59 +203,34 @@ function FactoryRunMenu({
   );
 }
 
-/**
- * A run with a thread is the thread's own kanban card (title, footer with the
- * powerline, diff, PR and time, menu) with the run's chips under the title; a run
- * with no thread yet (still queued) is the same card frame with the issue as
- * its title.
- */
-export const FactoryRunCard = memo(function FactoryRunCard({
+/** The card of a run with no thread yet (still queued): the issue as its title. */
+function QueuedFactoryRunCard({
   run,
   projectName,
   now,
-  onSelect,
-  dependencies = NO_FACTORY_RUN_DEPENDENCIES,
-}: Props) {
+  testId,
+  stepTime,
+  menuItems,
+  children,
+  onOpen,
+}: {
+  run: FactoryQueueRun;
+  projectName: string | undefined;
+  now: number;
+  testId: string;
+  stepTime: ReactNode;
+  menuItems: ReactNode;
+  children: ReactNode;
+  onOpen: () => void;
+}) {
   const { t } = useTranslation();
-  const threadId = factoryRunCardThread(run);
-  const thread = useThreadById(threadId);
-  const gitStatus = useGitStatusForThread(thread?.id);
-  const open = () => onSelect(run);
-  const testId = `factory-board-card-${run.id}`;
-  const { actions, dialog } = useFactoryRunActions(run.projectId, run);
-  const menuItems = factoryRunMenuItems(run, actions);
   const [menuOpen, setMenuOpen] = useState(false);
   const prNumber = run.prUrl ? pullRequestNumber(run.prUrl) : null;
-  // The time in the step takes the footer's time slot, in place of the card's age.
-  const stepTime =
-    timeInCurrentStep(run) && run.currentStep ? (
-      <FactoryRunTimeInStep run={run} now={now} />
-    ) : undefined;
-
-  if (thread) {
-    return (
-      <KanbanCard
-        thread={thread}
-        projectInfo={projectName ? { name: projectName } : undefined}
-        stage={thread.stage ?? 'in_progress'}
-        gitStatus={withRunPullRequest(gitStatus, run, thread.id)}
-        onOpen={open}
-        draggable={false}
-        testId={testId}
-        menuItems={menuItems}
-        time={stepTime}
-      >
-        <FactoryRunCardBody run={run} onSelect={onSelect} dependencies={dependencies} />
-        {dialog}
-      </KanbanCard>
-    );
-  }
-
   return (
     <BoardCard
       testId={testId}
       draggable={false}
-      onOpen={open}
+      onOpen={onOpen}
       status={<Clock className="icon-sm text-muted-foreground" />}
       title={
         <span className={BOARD_CARD_TITLE_CLASS} data-testid={`factory-board-open-${run.id}`}>
@@ -287,8 +262,72 @@ export const FactoryRunCard = memo(function FactoryRunCard({
         ) : undefined
       }
     >
+      {children}
+    </BoardCard>
+  );
+}
+
+/**
+ * A run with a thread is the thread's own kanban card (title, footer with the
+ * powerline, diff, PR and time, menu) with the run's chips under the title; a run
+ * with no thread yet (still queued) is the same card frame with the issue as
+ * its title.
+ */
+export const FactoryRunCard = memo(function FactoryRunCard({
+  run,
+  projectName,
+  now,
+  onSelect,
+  dependencies = NO_FACTORY_RUN_DEPENDENCIES,
+}: Props) {
+  const threadId = factoryRunCardThread(run);
+  const thread = useThreadById(threadId);
+  const gitStatus = useGitStatusForThread(thread?.id);
+  const open = () => onSelect(run);
+  const testId = `factory-board-card-${run.id}`;
+  const { actions, dialog } = useFactoryRunActions(run.projectId, run);
+  const menuItems = factoryRunMenuItems(run, actions);
+  // The time in the step takes the footer's time slot, in place of the card's age.
+  const stepTime =
+    timeInCurrentStep(run) && run.currentStep ? (
+      <FactoryRunTimeInStep run={run} now={now} />
+    ) : undefined;
+  const body = (
+    <>
       <FactoryRunCardBody run={run} onSelect={onSelect} dependencies={dependencies} />
       {dialog}
-    </BoardCard>
+    </>
+  );
+
+  if (!thread) {
+    return (
+      <QueuedFactoryRunCard
+        run={run}
+        projectName={projectName}
+        now={now}
+        testId={testId}
+        stepTime={stepTime}
+        menuItems={menuItems}
+        onOpen={open}
+      >
+        {body}
+      </QueuedFactoryRunCard>
+    );
+  }
+
+  return (
+    <KanbanCard
+      thread={thread}
+      projectInfo={projectName ? { name: projectName } : undefined}
+      stage={thread.stage ?? 'in_progress'}
+      gitStatus={withRunPullRequest(gitStatus, run, thread.id)}
+      onOpen={open}
+      draggable={false}
+      testId={testId}
+      menuItems={menuItems}
+      time={stepTime}
+    >
+      {body}
+    </KanbanCard>
   );
 });

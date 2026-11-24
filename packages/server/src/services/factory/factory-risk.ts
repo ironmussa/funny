@@ -52,7 +52,7 @@ const NOT_CODE =
  * count, nor what matches one of the factory's `ignoredPaths`. Sensitive paths
  * are checked on every file, counted or not.
  */
-export function countsTowardSize(path: string, ignoredPaths: readonly string[] = []): boolean {
+function countsTowardSize(path: string, ignoredPaths: readonly string[] = []): boolean {
   return !(
     LOCKFILE.test(path) ||
     MARKDOWN.test(path) ||

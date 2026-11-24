@@ -36,6 +36,7 @@ import {
   MAX_TRIAGE_ITEM_CHARS,
   MAX_TRIAGE_ITEMS,
   type FactoryTriage,
+  type FactoryTriageResult,
 } from '@funny/shared/contracts/factory';
 import type { ActionResult, TriageOpts } from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
@@ -147,7 +148,7 @@ export function triageComment(
 }
 
 /** Whether the issue is a part the factory opened in a split. */
-export const isSplitPart = (issue: FactoryIssueText | null): boolean =>
+const isSplitPart = (issue: FactoryIssueText | null): boolean =>
   issue !== null && issue.body.includes(SPLIT_MARKER);
 
 /** Mentions turned into plain text, so copying a description pings nobody again. */
@@ -306,6 +307,23 @@ export interface FactoryTriageDeps {
   count(event: string): Promise<void>;
 }
 
+/** The parts a resumed run already opened from the same triage thread; none otherwise. */
+function resumedParts(stored: FactoryTriage | null, threadId: string): number[] {
+  if (stored?.decision !== 'too_big' || stored.threadId !== threadId) return [];
+  return stored.splitInto ?? [];
+}
+
+/** The parent issue a part issue names: its live text when readable, else the run's title. */
+function splitParent(scope: IssueRunScope, issue: FactoryIssueText | null) {
+  return {
+    number: scope.issueNumber,
+    title: issue?.title ?? scope.issueTitle,
+    body: issue?.body ?? null,
+  };
+}
+
+const STOPPED: ActionResult = { ok: false, error: 'The run was stopped.' };
+
 /** The run goes on: with its contract as text, or without one. */
 function proceed(triage: FactoryTriage): ActionResult {
   const contract = triage.decision === 'ready' ? triage.contract : undefined;
@@ -388,6 +406,17 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     return proceed(await keep({ decision: 'none', at: new Date().toISOString(), threadId }));
   }
 
+  /** Log a failed issue comment; the run goes on without it. */
+  function warnIfFailed(result: Result<void, string>, message: string): void {
+    if (result.isOk()) return;
+    log.warn(message, {
+      namespace: 'factory',
+      runId: scope.runId,
+      issue: scope.issueNumber,
+      error: result.error,
+    });
+  }
+
   /** Ask on the issue and park the run there. Not ok: the flow stops here. */
   async function askOnIssue(
     decision: 'needs_info' | 'too_big',
@@ -395,15 +424,10 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     threadId: string,
   ): Promise<ActionResult> {
     const shown = publicItems(items);
-    const commented = await deps.comment(triageComment(decision, items));
-    if (commented.isErr()) {
-      log.warn('Issue factory could not post the triage comment', {
-        namespace: 'factory',
-        runId: scope.runId,
-        issue: scope.issueNumber,
-        error: commented.error,
-      });
-    }
+    warnIfFailed(
+      await deps.comment(triageComment(decision, items)),
+      'Issue factory could not post the triage comment',
+    );
     // The baseline a later change is compared with is GitHub's own time of the
     // issue after this comment, so neither the comment nor a clock difference
     // between the server and GitHub looks like an answer.
@@ -422,29 +446,18 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   }
 
   /**
-   * Open the parts as issues and end the run (the factory's `split` setting).
-   * The issues opened so far are recorded after each one, so a resumed run
-   * answering from the same thread does not open them again. Nothing opened:
-   * the split is commented and the run parks, as without the setting.
+   * Open the parts not opened yet, recording the list after each one; stops at
+   * the first that cannot be opened. The parts opened, the earlier ones first.
    */
-  async function splitIssue(
+  async function openParts(
     split: FactorySplitDeps,
-    parts: readonly string[],
+    shown: string[],
     threadId: string,
     issue: FactoryIssueText | null,
-  ): Promise<ActionResult> {
-    const shown = publicItems(parts);
-    const at = new Date().toISOString();
-    const resumed =
-      deps.stored?.decision === 'too_big' && deps.stored.threadId === threadId
-        ? (deps.stored.splitInto ?? [])
-        : [];
-    const opened = [...resumed];
-    const parent = {
-      number: scope.issueNumber,
-      title: issue?.title ?? scope.issueTitle,
-      body: issue?.body ?? null,
-    };
+    at: string,
+  ): Promise<number[]> {
+    const opened = [...resumedParts(deps.stored, threadId)];
+    const parent = splitParent(scope, issue);
     while (opened.length < shown.length) {
       const index = opened.length;
       const created = await split.openIssue(splitPartIssue({ parent, parts: shown, index }));
@@ -462,20 +475,33 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       current = { decision: 'too_big', at, threadId, items: shown, splitInto: [...opened] };
       await deps.record({ triage: current });
     }
+    return opened;
+  }
+
+  /**
+   * Open the parts as issues and end the run (the factory's `split` setting).
+   * The issues opened so far are recorded after each one, so a resumed run
+   * answering from the same thread does not open them again. Nothing opened:
+   * the split is commented and the run parks, as without the setting.
+   */
+  async function splitIssue(
+    split: FactorySplitDeps,
+    parts: readonly string[],
+    threadId: string,
+    issue: FactoryIssueText | null,
+  ): Promise<ActionResult> {
+    const shown = publicItems(parts);
+    const at = new Date().toISOString();
+    const resumedCount = resumedParts(deps.stored, threadId).length;
+    const opened = await openParts(split, shown, threadId, issue, at);
     if (opened.length === 0) return askOnIssue('too_big', parts, threadId);
 
-    await split.queue(opened.slice(resumed.length));
-    const commented = await deps.comment(splitComment(shown, opened));
-    if (commented.isErr()) {
-      log.warn('Issue factory could not comment the split on the issue', {
-        namespace: 'factory',
-        runId: scope.runId,
-        issue: scope.issueNumber,
-        error: commented.error,
-      });
-    }
-    const complete = opened.length === shown.length;
-    await split.release(complete);
+    await split.queue(opened.slice(resumedCount));
+    warnIfFailed(
+      await deps.comment(splitComment(shown, opened)),
+      'Issue factory could not comment the split on the issue',
+    );
+    await split.release(opened.length === shown.length);
     current = { decision: 'too_big', at, threadId, items: shown, splitInto: opened };
     await deps.record({ state: 'done', failureReason: null, triage: current });
     await deps.count('triage_too_big');
@@ -515,26 +541,22 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     );
   }
 
-  /** Wait for the triage thread and act on its answer. */
-  async function decide(threadId: string): Promise<ActionResult> {
-    const outcome = await deps.waitThread(threadId, deps.signal);
-    if (deps.signal.aborted) return { ok: false, error: 'The run was stopped.' };
-    if (outcome.status !== 'completed') {
-      return degrade(threadId, `its thread ended ${outcome.status}`);
-    }
-    const result = await resultOf(threadId);
-    if (deps.signal.aborted) return { ok: false, error: 'The run was stopped.' };
-    if (result.isErr()) return degrade(threadId, result.error.reason);
-    const answer = result.value;
-    if (answer.decision === 'needs_info')
+  /** A too-large issue: open its parts when the factory splits, else ask on it. */
+  async function tooBig(parts: readonly string[], threadId: string): Promise<ActionResult> {
+    const split = deps.split;
+    const issue = split ? await issueText() : null;
+    // A part is never split again by itself; one whose text is unreadable is not split either.
+    return split && issue && !isSplitPart(issue)
+      ? splitIssue(split, parts, threadId, issue)
+      : askOnIssue('too_big', parts, threadId);
+  }
+
+  /** Act on triage's valid answer. */
+  async function actOn(answer: FactoryTriageResult, threadId: string): Promise<ActionResult> {
+    if (answer.decision === 'needs_info') {
       return askOnIssue('needs_info', answer.questions, threadId);
-    if (answer.decision === 'too_big') {
-      const issue = deps.split ? await issueText() : null;
-      // A part is never split again by itself; one whose text is unreadable is not split either.
-      return deps.split && issue && !isSplitPart(issue)
-        ? splitIssue(deps.split, answer.parts, threadId, issue)
-        : askOnIssue('too_big', answer.parts, threadId);
     }
+    if (answer.decision === 'too_big') return tooBig(answer.parts, threadId);
     const ready: FactoryTriage = {
       decision: 'ready',
       at: new Date().toISOString(),
@@ -545,6 +567,18 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       const triage = await keep(ready);
       return (await heldForPaths(triage)) ?? proceed(triage);
     });
+  }
+
+  /** Wait for the triage thread and act on its answer. */
+  async function decide(threadId: string): Promise<ActionResult> {
+    const outcome = await deps.waitThread(threadId, deps.signal);
+    if (deps.signal.aborted) return STOPPED;
+    if (outcome.status !== 'completed') {
+      return degrade(threadId, `its thread ended ${outcome.status}`);
+    }
+    const result = await resultOf(threadId);
+    if (deps.signal.aborted) return STOPPED;
+    return result.isErr() ? degrade(threadId, result.error.reason) : actOn(result.value, threadId);
   }
 
   return {
@@ -612,17 +646,23 @@ export function busyPathsOf(
     // Neither way round: a blocker is not held by the runs stacked on it
     // either, since they wait for it to merge (holding it would deadlock).
     if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
-    const paths = run.triage?.decision === 'ready' ? (run.triage.contract?.likelyPaths ?? []) : [];
     // A run without an issue has no triage contract, so no likely paths.
-    return run.issueNumber !== null &&
-      run.id !== exceptRunId &&
-      paths.length > 0 &&
-      // Triaged and going on to work: its paths are taken before it reaches
-      // `working`, or a run triaged right after it would miss them.
-      (WORKING_ON_PATHS.has(run.state) || run.state === 'triaging')
-      ? [{ issue: run.issueNumber, paths }]
-      : [];
+    if (run.issueNumber === null || run.id === exceptRunId || !takesPaths(run.state)) return [];
+    const paths = readyPathsOf(run.triage);
+    return paths.length > 0 ? [{ issue: run.issueNumber, paths }] : [];
   });
+}
+
+/**
+ * Triaged and going on to work: its paths are taken before it reaches
+ * `working`, or a run triaged right after it would miss them.
+ */
+const takesPaths = (state: string): boolean => WORKING_ON_PATHS.has(state) || state === 'triaging';
+
+/** The likely paths of a `ready` triage; none for any other answer. */
+function readyPathsOf(triage: FactoryTriage | null): string[] {
+  if (triage?.decision !== 'ready') return [];
+  return triage.contract?.likelyPaths ?? [];
 }
 
 /**

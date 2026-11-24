@@ -223,22 +223,20 @@ export function GenericToolCard({
   );
 }
 
-function formatToolValue(value: unknown): string {
-  if (isString(value)) return value;
-  try {
-    return JSON.stringify(value, null, 2) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
 /**
  * One tool input value: JSON highlighted for objects, `language` highlighted
  * for code strings, and ANSI colors for any other string.
  */
 export function ToolValue({ value, language }: { value: unknown; language?: string | null }) {
   const isJson = !isString(value);
-  const text = useMemo(() => formatToolValue(value), [value]);
+  const text = useMemo(() => {
+    if (isString(value)) return value;
+    try {
+      return JSON.stringify(value, null, 2) ?? String(value);
+    } catch {
+      return String(value);
+    }
+  }, [value]);
   const codeLanguage = isJson ? 'json' : (language ?? null);
   const ansiConverter = useMemo(
     () => createAnsiConverter({ fg: '#a1a1aa', bg: 'transparent', newline: false }),

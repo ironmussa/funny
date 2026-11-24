@@ -72,10 +72,10 @@ const requestLink: TRPCLink<AppRouter> =
 /** Typed procedures of the server-answered API (`@funny/api`). Call them through `trpcCall`. */
 export const trpc = createTRPCClient<AppRouter>({ links: [requestLink] });
 
-function toDomainError(error: unknown): DomainError {
-  const cause = error instanceof TRPCClientError ? error.cause : error;
-  if (cause instanceof RequestFailure) return cause.domainError;
-  return { type: 'INTERNAL', message: error instanceof Error ? error.message : String(error) };
+function toDomainError(cause: unknown): DomainError {
+  const failure = cause instanceof TRPCClientError ? cause.cause : cause;
+  if (failure instanceof RequestFailure) return failure.domainError;
+  return { type: 'INTERNAL', message: cause instanceof Error ? cause.message : String(cause) };
 }
 
 /** Runs a procedure call and returns it as a `ResultAsync`, like every other API function. */

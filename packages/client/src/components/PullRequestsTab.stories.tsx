@@ -203,7 +203,7 @@ function installMockFetch(opts: MockFetchOptions = {}) {
   window.fetch = async (input: RequestInfo | URL): Promise<Response> => {
     const url = isUrlString(input) ? input : input instanceof URL ? input.toString() : input.url;
 
-    const json = (data: unknown, status = 200) =>
+    const json = <Body,>(data: Body, status = 200) =>
       new Response(JSON.stringify(data), {
         status,
         headers: { 'Content-Type': 'application/json' },

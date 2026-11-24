@@ -428,8 +428,8 @@ async function svgToPngBlob(svgHtml: string): Promise<Blob> {
   });
 }
 
-function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function errorText(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 function downloadBlob(blob: Blob, filename: string): void {

@@ -79,68 +79,73 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
 }
 
-function str(value: unknown): string | null {
+type Summarizer = (parsed: Record<string, unknown>) => string | null;
+
+/** The trimmed text in `parsed[key]`, or null when it is not a non-blank string. */
+function str(parsed: Record<string, unknown>, key: string): string | null {
+  const value = parsed[key];
   return isString(value) && value.trim() ? value.trim() : null;
 }
 
-type Summarizer = (parsed: Record<string, unknown>) => string | null;
-
-function num(value: unknown): number | null {
+/** The number in `parsed[key]`, or null when it is not a number. */
+function num(parsed: Record<string, unknown>, key: string): number | null {
+  const value = parsed[key];
   return isNumber(value) ? value : null;
 }
 
 function actTarget(parsed: Record<string, unknown>): string | null {
-  const x = num(parsed.x);
-  const y = num(parsed.y);
-  return str(parsed.ref) ?? (x !== null && y !== null ? `(${x}, ${y})` : null);
+  const x = num(parsed, 'x');
+  const y = num(parsed, 'y');
+  return str(parsed, 'ref') ?? (x !== null && y !== null ? `(${x}, ${y})` : null);
 }
 
 function actDetail(parsed: Record<string, unknown>): string | null {
-  const text = str(parsed.text);
+  const text = str(parsed, 'text');
   if (text) return `"${firstLine(text, 60)}"`;
   if (Array.isArray(parsed.paths)) return parsed.paths.join(', ');
-  return str(parsed.key) ?? (Array.isArray(parsed.values) ? parsed.values.join(', ') : null);
+  return str(parsed, 'key') ?? (Array.isArray(parsed.values) ? parsed.values.join(', ') : null);
 }
 
 /** `click e7`, `fill e3 · "me@x.com"`, `press · Enter`, `double click (10, 20)`. */
 const summarizeAct: Summarizer = (parsed) => {
-  const action = str(parsed.action)?.replace(/_/g, ' ') ?? 'act';
+  const action = str(parsed, 'action')?.replace(/_/g, ' ') ?? 'act';
   const head = [action, actTarget(parsed)].filter(Boolean).join(' ');
   const detail = actDetail(parsed);
   return detail ? `${head} · ${detail}` : head;
 };
 
 const summarizeWait: Summarizer = (parsed) => {
-  const gone = str(parsed.textGone);
-  const ms = num(parsed.timeMs);
+  const gone = str(parsed, 'textGone');
+  const ms = num(parsed, 'timeMs');
   return (
-    str(parsed.text) ??
+    str(parsed, 'text') ??
     (gone ? `gone: ${gone}` : null) ??
-    str(parsed.url) ??
-    str(parsed.ref) ??
+    str(parsed, 'url') ??
+    str(parsed, 'ref') ??
     (ms !== null ? `${ms}ms` : null)
   );
 };
 
 /** One-line summaries of funny's browser tool calls, by tool. */
 const BROWSER_SUMMARIES: Record<string, Summarizer> = {
-  browser_open: (p) => str(p.url),
-  browser_navigate: (p) => str(p.url) ?? str(p.action),
+  browser_open: (p) => str(p, 'url'),
+  browser_navigate: (p) => str(p, 'url') ?? str(p, 'action'),
   browser_act: summarizeAct,
-  browser_evaluate: (p) => (str(p.expression) ? firstLine(str(p.expression) as string, 120) : null),
+  browser_evaluate: (p) =>
+    str(p, 'expression') ? firstLine(str(p, 'expression') as string, 120) : null,
   browser_wait_for: summarizeWait,
   browser_resize: (p) => {
-    const w = num(p.width);
-    const h = num(p.height);
+    const w = num(p, 'width');
+    const h = num(p, 'height');
     return w !== null && h !== null ? `${w}×${h}` : null;
   },
   browser_snapshot: (p) => (p.screenshot === true ? 'with screenshot' : null),
   browser_dialog: (p) => {
     if (!isBoolean(p.accept)) return null;
-    const text = str(p.promptText);
+    const text = str(p, 'promptText');
     return p.accept ? (text ? `accept · "${firstLine(text, 60)}"` : 'accept') : 'dismiss';
   },
-  browser_set_appearance: (p) => str(p.colorScheme),
+  browser_set_appearance: (p) => str(p, 'colorScheme'),
 };
 
 /** The MP4 a `browser_recording_stop` call saved ("Recording saved: <path>"), if any. */
@@ -250,6 +255,15 @@ function isContentBlock(value: unknown): value is ContentBlock {
   return !!value && typeof value === 'object';
 }
 
+/** What `JSON.parse` returns for the tool output. */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 function imagePart(b: ContentBlock): McpResultPart | null {
   const mimeType = isString(b.mimeType) ? b.mimeType : 'image/png';
   // Only inline raster/vector data the browser renders as an image.
@@ -270,15 +284,15 @@ const CONTENT_PARSERS: Record<string, (b: ContentBlock) => McpResultPart | null>
   resource_link: (b) => (isString(b.uri) ? { kind: 'resource', uri: b.uri, text: null } : null),
 };
 
-function contentPart(block: unknown): McpResultPart | null {
-  if (!isContentBlock(block)) return null;
-  const b = block;
+function contentPart(block: JsonValue): McpResultPart | null {
+  const b: unknown = block;
+  if (!isContentBlock(b)) return null;
   const parse =
     isString(b.type) && Object.hasOwn(CONTENT_PARSERS, b.type) ? CONTENT_PARSERS[b.type] : null;
   return parse ? parse(b) : null;
 }
 
-function durationFromMeta(meta: unknown): number | null {
+function durationFromMeta(meta: JsonValue | undefined): number | null {
   if (!isContentBlock(meta)) return null;
   for (const [key, value] of Object.entries(meta)) {
     if (/durationms$/i.test(key) && isNumber(value) && Number.isFinite(value)) {
@@ -296,7 +310,7 @@ export function parseMcpResult(output: string | undefined): McpResult | null {
   if (!output) return null;
   const trimmed = output.trim();
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
-  let value: unknown;
+  let value: JsonValue;
   try {
     value = JSON.parse(trimmed);
   } catch {

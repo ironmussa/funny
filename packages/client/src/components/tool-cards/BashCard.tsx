@@ -17,7 +17,9 @@ function isPrintablePrimitive(value: unknown): value is number | boolean | bigin
   return typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint';
 }
 
-function commandToText(command: unknown): string | null {
+/** The call's `command` as text: a string unwrapped from its shell, anything else as JSON. */
+function commandToText(parsed: { command?: unknown }): string | null {
+  const command = parsed.command;
   if (isString(command)) return unwrapShellCommand(command);
   if (command == null) return null;
   if (isPrintablePrimitive(command)) {
@@ -46,7 +48,7 @@ export function BashCard({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(author === 'shell');
-  const command = useMemo(() => commandToText(parsed.command), [parsed.command]);
+  const command = useMemo(() => commandToText(parsed), [parsed]);
 
   return (
     <div

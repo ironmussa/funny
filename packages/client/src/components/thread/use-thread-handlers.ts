@@ -221,7 +221,7 @@ export function useThreadHandlers(refs: Refs) {
   };
 }
 
-function applyQueuedCount(threadId: string, responseQueuedCount: unknown) {
+function applyQueuedCount(threadId: string, responseQueuedCount: number | undefined) {
   if (!isNumber(responseQueuedCount)) return;
   applyQueueCount(threadId, responseQueuedCount);
 }

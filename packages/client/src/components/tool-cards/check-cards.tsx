@@ -61,8 +61,12 @@ function readCheckResult(text: string): CheckResult {
   };
 }
 
-const stringList = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter(isString) : [];
+/** The files or packages the call asked to run, from its `scope` list. */
+function requestedScope(parsed: { scope?: unknown }): string[] {
+  return Array.isArray(parsed.scope)
+    ? parsed.scope.filter((item): item is string => isString(item))
+    : [];
+}
 
 /**
  * What the run covers: the command it ran once the result names it (it already
@@ -80,7 +84,7 @@ function CheckRunDetails({
 }) {
   const { t } = useTranslation();
   const requested = isString(parsed.command) ? parsed.command : null;
-  const scope = stringList(parsed.scope);
+  const scope = requestedScope(parsed);
   const filter = isString(parsed.filter) ? parsed.filter : null;
   const shown = command ?? requested;
 

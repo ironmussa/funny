@@ -691,11 +691,10 @@ function inspectorSources(
   node: ParsedNode | null,
   action: { value: unknown } | null,
 ): { action: string; retry: string; loop: string } {
-  const pretty = (value: unknown) => JSON.stringify(value, null, 2);
   return {
-    action: pretty(action?.value ?? {}),
-    retry: node?.retry ? pretty(node.retry) : '',
-    loop: node?.loop ? pretty(node.loop) : '',
+    action: JSON.stringify(action?.value ?? {}, null, 2),
+    retry: node?.retry ? JSON.stringify(node.retry, null, 2) : '',
+    loop: node?.loop ? JSON.stringify(node.loop, null, 2) : '',
   };
 }
 

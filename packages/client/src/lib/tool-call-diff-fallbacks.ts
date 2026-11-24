@@ -19,7 +19,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
 }
 
-function inputRecord(input: unknown): Record<string, unknown> | null {
+/** The tool call's input as an object: parsed when it arrived as JSON text. */
+function inputRecord(toolCall: ToolCallLike): Record<string, unknown> | null {
+  const input = toolCall.input;
   if (isString(input)) {
     try {
       const parsed: unknown = JSON.parse(input);
@@ -83,12 +85,14 @@ function computeUnifiedDiff(filePath: string, oldValue: string, newValue: string
   return lines.join('\n');
 }
 
+/** Add the diff of an edit's `old_string` → `new_string`, when both are text that differs. */
 function addDiff(
   diffs: Map<string, string[]>,
   key: string,
-  oldValue: unknown,
-  newValue: unknown,
+  edit: { old_string?: unknown; new_string?: unknown } | null,
 ): void {
+  const oldValue = edit?.old_string;
+  const newValue = edit?.new_string;
   if (!isString(oldValue) || !isString(newValue)) return;
   if (oldValue === newValue) return;
   const list = diffs.get(key) ?? [];
@@ -101,7 +105,7 @@ function collectFromToolCall(
   files: FileDiffSummary[],
   diffs: Map<string, string[]>,
 ): void {
-  const input = inputRecord(toolCall.input);
+  const input = inputRecord(toolCall);
   if (!input) return;
   const toolPath = input?.file_path;
   if (!isString(toolPath)) return;
@@ -109,20 +113,20 @@ function collectFromToolCall(
   if (!key) return;
 
   if (toolCall.name === 'Edit') {
-    addDiff(diffs, key, input.old_string, input.new_string);
+    addDiff(diffs, key, input);
     return;
   }
 
   if (toolCall.name === 'MultiEdit' && Array.isArray(input.edits)) {
     for (const edit of input.edits) {
       const record = isRecord(edit) ? edit : null;
-      addDiff(diffs, key, record?.old_string, record?.new_string);
+      addDiff(diffs, key, record);
     }
     return;
   }
 
   if (toolCall.name === 'Write' && isString(input.content)) {
-    addDiff(diffs, key, '', input.content);
+    addDiff(diffs, key, { old_string: '', new_string: input.content });
   }
 }
 

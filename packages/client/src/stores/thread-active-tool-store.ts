@@ -1,3 +1,4 @@
+import type { WSToolCallData } from '@funny/shared';
 import { create } from 'zustand';
 
 import { omitThread } from './by-thread';
@@ -44,8 +45,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/** Tool call input arrives as an object or as its JSON string. */
-export function parseToolInput(input: unknown): Record<string, unknown> {
+/** A tool call's input as an object: it arrives as an object or as its JSON string. */
+export function parseToolInput(toolCall: Pick<WSToolCallData, 'input'>): Record<string, unknown> {
+  const input = toolCall.input;
   if (isString(input)) {
     try {
       const parsed = JSON.parse(input);

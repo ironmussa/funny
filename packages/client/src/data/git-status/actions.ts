@@ -47,11 +47,11 @@ const rootKey = (projectId: string) => ['git-status', 'root', projectId] as cons
  * function itself starts a microtask later, after events that arrived in
  * between, which must still win over this (older) response.
  */
-async function request(
+async function request<Status>(
   layer: DataLayer,
   queryKey: readonly unknown[],
   force: boolean,
-  queryFn: (signal: AbortSignal, seq: number) => Promise<unknown>,
+  queryFn: (signal: AbortSignal, seq: number) => Promise<Status>,
 ): Promise<void> {
   const seq = nextStatusSeq(getGitStatusData(layer));
   const { queryClient } = layer;

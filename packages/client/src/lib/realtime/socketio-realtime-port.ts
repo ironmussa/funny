@@ -1,4 +1,4 @@
-import { create } from '@bufbuild/protobuf';
+import { create, type JsonValue } from '@bufbuild/protobuf';
 import {
   BrowserEventRecoveryState,
   type ClientRealtimePort,
@@ -42,13 +42,36 @@ import {
 } from '@funny/shared/browser-v1/operations';
 import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 
+/**
+ * What Socket.IO hands a listener or returns as an acknowledgement: the bytes of
+ * a browser.v1 carrier, or the JSON of a legacy event. `decodeBrowserCarrier`
+ * checks the bytes; the legacy handlers check the fields they read. An
+ * acknowledgement sent with no argument is `undefined`.
+ */
+export type SocketWirePayload = ArrayBuffer | ArrayBufferView | JsonValue | undefined;
+
+/**
+ * A field of a legacy event this port sends: JSON, where an absent optional
+ * field is `undefined`. The terminal `reconnect` forwards its protobuf output
+ * sequence as a `bigint`.
+ */
+type SocketEventValue =
+  | JsonValue
+  | bigint
+  | undefined
+  | SocketEventValue[]
+  | { [key: string]: SocketEventValue };
+
+/** What this port sends: an encoded browser.v1 carrier, or a legacy event's fields. */
+type SocketEmitPayload = Uint8Array | { [key: string]: SocketEventValue };
+
 interface SocketLike {
   connected: boolean;
   on(event: string, listener: (...args: any[]) => void): void;
   off(event: string, listener: (...args: any[]) => void): void;
-  emit(event: string, payload: unknown): void;
+  emit(event: string, payload: SocketEmitPayload): void;
   timeout(timeoutMs: number): {
-    emitWithAck(event: string, payload: unknown): Promise<unknown>;
+    emitWithAck(event: string, payload: SocketEmitPayload): Promise<SocketWirePayload>;
   };
 }
 
@@ -357,15 +380,15 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     this.update({ phase: 'disconnected', protocol: this.snapshot.protocol, error: null });
   };
 
-  private readonly handleError = (error: unknown): void => {
+  private readonly handleError = (cause: unknown): void => {
     this.update({
       phase: 'error',
       protocol: this.snapshot.protocol,
-      error: error instanceof Error ? error.message : String(error),
+      error: cause instanceof Error ? cause.message : String(cause),
     });
   };
 
-  private readonly handleBrowserEvent = (wire: unknown): void => {
+  private readonly handleBrowserEvent = (wire: SocketWirePayload): void => {
     const decoded = decodeBrowserCarrier(wire, {
       expectedSchemaFingerprint: BROWSER_V1_SCHEMA_FINGERPRINT,
       allowedPayloads: ['event'],
@@ -398,7 +421,7 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     for (const listener of this.eventListeners) listener(payload.value);
   };
 
-  private readonly handleBrowserInteractive = (wire: unknown): void => {
+  private readonly handleBrowserInteractive = (wire: SocketWirePayload): void => {
     const decoded = decodeBrowserCarrier(wire, {
       expectedSchemaFingerprint: BROWSER_V1_SCHEMA_FINGERPRINT,
       allowedPayloads: ['interactive'],

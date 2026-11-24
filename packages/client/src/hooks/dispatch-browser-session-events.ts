@@ -17,9 +17,13 @@ import {
   type WSBrowserSessionPointerData,
 } from '@funny/shared';
 
-import { resolveBrowserSessionRequest } from '@/lib/browser-session-client';
+import {
+  resolveBrowserSessionRequest,
+  type BrowserSessionResult,
+} from '@/lib/browser-session-client';
 import { ingestBrowserSessionFrame } from '@/lib/browser-session-frames';
 import { createClientLogger } from '@/lib/client-logger';
+import type { BrowserSessionRealtimeEvent } from '@/lib/realtime/browser-session-v1-events';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
 import { forgetOwnCloses, takeOwnClose, useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
@@ -146,7 +150,7 @@ const BROWSER_SESSION_HANDLERS: Record<string, (data: any) => void> = {
   'browser-session:result': (d: {
     requestId: string;
     ok: boolean;
-    value?: unknown;
+    value?: BrowserSessionResult;
     error?: string;
   }) => resolveBrowserSessionRequest(d.requestId, d.ok, d.value, d.error),
 
@@ -158,7 +162,10 @@ const BROWSER_SESSION_HANDLERS: Record<string, (data: any) => void> = {
   'browser-session:closed': handleClosed,
 };
 
-export function dispatchBrowserSessionEvent(type: string, data: unknown): boolean {
+export function dispatchBrowserSessionEvent(
+  type: string,
+  data: BrowserSessionRealtimeEvent['data'],
+): boolean {
   if (!Object.hasOwn(BROWSER_SESSION_HANDLERS, type)) return false;
   BROWSER_SESSION_HANDLERS[type](data);
   return true;

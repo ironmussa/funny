@@ -18,8 +18,30 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number';
 }
 
-function text(value: unknown): string | null {
-  return isString(value) && value.trim() ? value : null;
+/** The job fields a background tool call reports; any of them may be missing. */
+interface BackgroundJobInput {
+  command?: unknown;
+  cwd?: unknown;
+  label?: unknown;
+  status?: unknown;
+  exitCode?: unknown;
+}
+
+/** A non-blank string. */
+function isText(value: unknown): value is string {
+  return isString(value) && value.trim() !== '';
+}
+
+/** The job fields the card shows, each null when the call did not report it. */
+function jobFields(parsed: BackgroundJobInput) {
+  const command = isText(parsed.command) ? parsed.command : null;
+  return {
+    command,
+    cwd: isText(parsed.cwd) ? parsed.cwd : null,
+    summary: (isText(parsed.label) ? parsed.label : null) ?? command,
+    status: isText(parsed.status) ? parsed.status : null,
+    exitCode: isNumber(parsed.exitCode) ? parsed.exitCode : null,
+  };
 }
 
 function JobStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
@@ -56,11 +78,7 @@ export function BackgroundCard({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const command = text(parsed.command);
-  const cwd = text(parsed.cwd);
-  const summary = text(parsed.label) ?? command;
-  const status = text(parsed.status);
-  const exitCode = isNumber(parsed.exitCode) ? parsed.exitCode : null;
+  const { command, cwd, summary, status, exitCode } = jobFields(parsed);
 
   return (
     <div

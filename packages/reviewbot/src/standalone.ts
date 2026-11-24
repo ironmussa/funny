@@ -92,6 +92,8 @@ app.post('/webhook', async (c) => {
 
   let body: PRWebhookPayload;
   try {
+    // SAFETY: the body carries a valid GitHub signature and no event other than pull_request
+    // (both checked above), whose payload has this shape; its required fields are checked below.
     body = JSON.parse(rawBody.toString('utf8')) as PRWebhookPayload;
   } catch {
     return c.json({ error: 'Invalid JSON payload' }, 400);

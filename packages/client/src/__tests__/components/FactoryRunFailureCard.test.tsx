@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 
@@ -28,8 +29,16 @@ mock.module('@/data/factory/actions', () => ({
 mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));
 mock.module('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_k: string, fallback?: string, vars?: Record<string, unknown>) =>
-      (fallback ?? _k).replace(/\{\{(\w+)\}\}/g, (_m, name) => String(vars?.[name] ?? '')),
+    // A fallback string with its values, or `{ defaultValue, ...values }` (PRBadge's form).
+    t: (
+      _k: string,
+      fallback?: string | Record<string, unknown>,
+      vars?: Record<string, unknown>,
+    ) => {
+      const values = typeof fallback === 'string' ? vars : fallback;
+      const text = typeof fallback === 'string' ? fallback : String(values?.defaultValue ?? _k);
+      return text.replace(/\{\{(\w+)\}\}/g, (_m, name) => String(values?.[name] ?? ''));
+    },
   }),
 }));
 
@@ -63,7 +72,9 @@ beforeEach(() => {
 
 describe('FactoryRunFailureCard', () => {
   test('shows where the pipeline stopped, why, and lets the member retry it', () => {
-    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
     const card = screen.getByTestId('factory-run-failure-card');
     expect(card).toHaveTextContent('The factory pipeline stopped at ci');
     expect(card).toHaveTextContent('wait_ci[ci] failed: Checks that need a person');
@@ -86,7 +97,9 @@ describe('FactoryRunFailureCard', () => {
         paths: ['packages/server/src/db/migrate.ts'],
       },
     });
-    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
     const card = screen.getByTestId('factory-run-failure-card');
     expect(card).toHaveTextContent('Not merged: high risk, it needs you');
     expect(card).not.toHaveTextContent('The factory pipeline stopped at merge');
@@ -103,33 +116,50 @@ describe('FactoryRunFailureCard', () => {
       risk: {
         headSha: 'c2b585c51b2e',
         level: 'high',
-        reasons: ['touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)'],
+        reasons: [
+          'touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)',
+          '1511 changed lines outside tests and docs (more than 400)',
+        ],
         changedLines: 345,
         paths: ['packages/server/src/db/migrate.ts'],
       },
     });
-    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
     // Retry would hold the same commit again: it is not offered.
     expect(screen.queryByTestId('factory-run-failure-retry')).not.toBeInTheDocument();
-    expect(screen.getByTestId('factory-run-failure-pr')).toHaveTextContent('View PR');
+    expect(screen.getByTestId('factory-run-failure-pr')).toHaveTextContent('#9');
 
     fireEvent.click(screen.getByTestId('factory-run-failure-approve-merge'));
     expect(mocks.control).not.toHaveBeenCalled();
     expect(await screen.findByText('Merge this high-risk change?')).toBeInTheDocument();
+    // One line per risk reason, not one run-on sentence.
+    const reasons = within(screen.getByTestId('factory-approve-merge-reasons')).getAllByRole(
+      'listitem',
+    );
+    expect(reasons.map((item) => item.textContent)).toEqual([
+      'touches a sensitive path: packages/server/src/db/migrate.ts (**/migrate.ts)',
+      '1511 changed lines outside tests and docs (more than 400)',
+    ]);
     fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     expect(mocks.control).toHaveBeenCalledWith('approve-merge', 'p1', 'r1');
   });
 
   test('a run held for another reason keeps Retry and offers no approval', () => {
     mocks.run = runOf({ currentStep: 'merge', failureReason: 'review failed' });
-    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
     expect(screen.getByTestId('factory-run-failure-retry')).toBeInTheDocument();
     expect(screen.queryByTestId('factory-run-failure-approve-merge')).not.toBeInTheDocument();
   });
 
   test('a failed run without a known step still shows its error', () => {
     mocks.run = runOf({ state: 'failed', currentStep: null, failureReason: 'merge conflict' });
-    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
     const card = screen.getByTestId('factory-run-failure-card');
     expect(card).toHaveTextContent('The factory pipeline stopped on an error');
     expect(card).toHaveTextContent('merge conflict');
@@ -137,7 +167,9 @@ describe('FactoryRunFailureCard', () => {
 
   test('shows nothing while the run works, waits without an error, the agent runs, or for another thread', () => {
     mocks.run = runOf({ state: 'waiting_ci', failureReason: null });
-    const { rerender } = render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />);
+    const { rerender } = render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
     expect(screen.queryByTestId('factory-run-failure-card')).toBeNull();
 
     mocks.run = runOf({ failureReason: null });

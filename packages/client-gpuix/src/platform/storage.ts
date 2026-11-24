@@ -8,16 +8,23 @@ import type {
   Unsubscribe,
 } from '@funny/client-core';
 
-function parseStoredValues(raw: string): Record<string, string> {
+/** Whether a file-system error says the file does not exist yet. */
+export function isMissingFile(error: unknown): error is Error & { code: 'ENOENT' } {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+/** The key-value pairs held in the native storage file, in file order. */
+function parseStoredValues(raw: string): Array<[key: string, value: string]> {
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Native storage root must be an object');
   }
-  const entries = Object.entries(value);
-  if (entries.some(([, entry]) => typeof entry !== 'string')) {
-    throw new Error('Native storage values must be strings');
+  const values: Array<[key: string, value: string]> = [];
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== 'string') throw new Error('Native storage values must be strings');
+    values.push([key, entry]);
   }
-  return Object.fromEntries(entries) as Record<string, string>;
+  return values;
 }
 
 export class NativeKeyValueStorage implements StorageService {
@@ -30,9 +37,9 @@ export class NativeKeyValueStorage implements StorageService {
   ) {
     try {
       const parsed = parseStoredValues(readFileSync(filePath, 'utf8'));
-      for (const [key, value] of Object.entries(parsed)) this.values.set(key, value);
+      for (const [key, value] of parsed) this.values.set(key, value);
     } catch (error) {
-      if ((error as { code?: string }).code !== 'ENOENT') {
+      if (!isMissingFile(error)) {
         diagnostics.report({ capability: 'storage', operation: 'load', error });
       }
     }

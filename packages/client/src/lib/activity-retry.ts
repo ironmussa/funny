@@ -74,7 +74,10 @@ const RETRY_TARGETS: Record<string, RetryTarget> = {
   'github.write': (activity, deps) => {
     if (!activity.projectId) return false;
     deps.navigate(buildPath(`/projects/${activity.projectId}`));
-    if (activity.input.action !== 'repo-publish') deps.openPullRequests();
+    // A pull request write is redone from its pull request; a publish or an issue delete from the project.
+    if (activity.input.action === 'pr-merge' || activity.input.action === 'pr-revert-file') {
+      deps.openPullRequests();
+    }
     return true;
   },
   'sandbox.provision': (activity, deps) => openThreadOrProject(activity, deps) !== null,

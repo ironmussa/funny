@@ -105,6 +105,11 @@ export interface ApprovalNodeOpts<T extends PipelineContext> {
 
 // ── Builder ─────────────────────────────────────────────────
 
+/** Narrows a value-or-resolver option to its resolver member. */
+function isResolver<V>(value: V): value is Extract<V, (...args: never[]) => void> {
+  return typeof value === 'function';
+}
+
 /**
  * Build an approval node. Drop into any pipeline's `nodes` array exactly
  * like a regular `node()` — the engine handles it generically.
@@ -135,11 +140,11 @@ export function approvalNode<T extends PipelineContext>(
   return node<T>(
     name,
     async (ctx) => {
-      const message = typeof opts.message === 'function' ? opts.message(ctx) : opts.message;
+      const message = isResolver(opts.message) ? opts.message(ctx) : opts.message;
 
       ctx.progress.onStepProgress(name, { status: 'running' });
 
-      const timeoutMs = typeof opts.timeoutMs === 'function' ? opts.timeoutMs(ctx) : opts.timeoutMs;
+      const timeoutMs = isResolver(opts.timeoutMs) ? opts.timeoutMs(ctx) : opts.timeoutMs;
 
       ctx.progress.onStepProgress(name, {
         status: 'running',
@@ -157,6 +162,8 @@ export function approvalNode<T extends PipelineContext>(
         ctx.progress.onStepProgress(name, { status: 'completed' });
 
         if (opts.captureResponse) {
+          // SAFETY: approval gates are the only writers of ctx.approvalOutputs, and they always
+          // write a Record<string, string> of gate name → comment (or leave it absent).
           const augmented = ctx as T & ApprovalCapturedOutputs;
           augmented.approvalOutputs = {
             ...(augmented.approvalOutputs ?? {}),

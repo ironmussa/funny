@@ -85,7 +85,17 @@ function packageDirOf(file: string): string | null {
   return match ? `packages/${match[1]}` : null;
 }
 
-function readManifests(root: string): { dir: string; manifest: Record<string, any> }[] {
+/** The `package.json` fields the runner reads. */
+interface PackageManifest {
+  name?: string;
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+}
+
+function readManifests(root: string): { dir: string; manifest: PackageManifest }[] {
   const packagesDir = join(root, 'packages');
   return readdirSync(packagesDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -97,11 +107,15 @@ function readManifests(root: string): { dir: string; manifest: Record<string, an
     .map(({ dir, path }) => ({ dir, manifest: JSON.parse(readFileSync(path, 'utf8')) }));
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function discoverPackages(root = ROOT): TestPackage[] {
   const manifests = readManifests(root);
   const nameToDir = new Map<string, string>();
   for (const { dir, manifest } of manifests) {
-    if (typeof manifest.name === 'string') nameToDir.set(manifest.name, dir);
+    if (isString(manifest.name)) nameToDir.set(manifest.name, dir);
   }
 
   return manifests
@@ -112,9 +126,9 @@ export function discoverPackages(root = ROOT): TestPackage[] {
         ...manifest.optionalDependencies,
         ...manifest.peerDependencies,
       });
-      const testScript = manifest.scripts?.test as string | undefined;
+      const testScript = manifest.scripts?.test;
       return {
-        name: (manifest.name as string | undefined) ?? dir,
+        name: manifest.name ?? dir,
         dir,
         hasTest: Boolean(testScript),
         testScript: testScript || undefined,

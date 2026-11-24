@@ -3,11 +3,11 @@
  * factory-flow-execution).
  *
  * Holds one polling job per enabled factory and, on each tick, resolves the
- * project's GitHub repo, admits the issues sent to the factory (its queue, in
- * the order they were sent) and, in automatic mode, then its open labelled
- * issues — the ones not already running, not blocked by an unfinished issue
- * (`factory-dependencies.ts`) and under the concurrency cap — and runs each run's flow
- * for each as the ENABLING user (`factory-flow-runs.ts`): its agent steps are
+ * project's GitHub repo, queues its open labelled issues in automatic mode
+ * (behind the issues sent to the factory), then admits from that queue, in
+ * order, the issues not blocked by an unfinished issue
+ * (`factory-dependencies.ts`), as many as the concurrency cap leaves free, all
+ * started together — and runs each run's flow as the ENABLING user (`factory-flow-runs.ts`): its agent steps are
  * threads started through `startThreadOnRunner` — the same path interactive
  * threads take, so runner isolation and the project ↔ runner binding apply
  * unchanged. Each admitted issue becomes a `factory_runs` row; a run in flight
@@ -71,7 +71,12 @@ import {
   type FactoryFlow,
   type FactoryFlowError,
 } from './factory-flow.js';
-import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './factory-github.js';
+import {
+  READY_ISSUES_PAGE,
+  type FactoryGithubPort,
+  type FactoryIssue,
+  type FactoryRepoReader,
+} from './factory-github.js';
 import {
   createFactoryIncidentsRepository,
   type FactoryIncidentsRepository,
@@ -866,26 +871,22 @@ async function freeSlots(factory: WatchedFactory): Promise<number> {
 }
 
 /**
- * Fill the free slots: first the issues sent to the factory, in the order they
- * were sent, then (automatic mode) its labelled issues. A blocked issue is
- * skipped, not waited on, so it does not hold up the ones behind it.
+ * Fill the free slots from the factory's queue, in its order: the issues sent
+ * to the factory and (automatic mode) its labelled issues, which each pass
+ * records there first (`syncLabelledQueue`), so the queue shows every issue
+ * that waits for a slot. A blocked issue is skipped, not waited on, so it does
+ * not hold up the ones behind it.
  */
 async function admitWork(factory: WatchedFactory, repo: string, mode: LaunchMode): Promise<void> {
-  const slots = runs ? await freeSlots(factory) : 0;
+  if (!runs) return;
+  await syncLabelledQueue(factory, repo);
+  const slots = await freeSlots(factory);
   if (slots <= 0) return;
-  const all = await runs!.list(factory.id);
-  const queue = await runs!.queue(factory.id);
+  const all = await runs.list(factory.id);
+  const queue = await runs.queue(factory.id);
   if (all.isErr() || queue.isErr()) return;
   const ctx = admissionContext(factory, repo, all.value);
-
-  const left = await admitQueue(factory, repo, mode, queue.value, slots, ctx);
-  if (factory.mode !== 'automatic' || left <= 0) return;
-  // A flow that could never merge admits nothing; runs in flight go on.
-  if (!(await flowProofReady(ctx, factory.flowName))) {
-    await reportBlocked(factory.id, proofNotConfigured(factory.flowName));
-    return;
-  }
-  await admitFromGithub(factory, repo, mode, left, ctx);
+  await admitQueue(factory, repo, mode, queue.value, slots, ctx);
 }
 
 /** The factory blocker of a flow that is not proof-ready. */
@@ -908,7 +909,18 @@ function flowProofReady(ctx: AdmissionContext, name: string): Promise<boolean> {
   return ready;
 }
 
-/** Admit sent issues in queue order while slots remain; the slots left. */
+/** An admitted run whose flow is starting: whether its first agent started. */
+interface Launch {
+  started: Promise<boolean>;
+}
+
+/**
+ * Admit queued runs in queue order while slots remain. The runs admitted in
+ * one round start together, so free slots fill at once instead of one launch
+ * after another; the round ends when each first agent started (or
+ * `ADMIT_WAIT_MS` passed). A launch that failed gives its slot back, and the
+ * next round offers it to the runs behind.
+ */
 async function admitQueue(
   factory: WatchedFactory,
   repo: string,
@@ -916,21 +928,30 @@ async function admitQueue(
   queue: FactoryRunView[],
   slots: number,
   ctx: AdmissionContext,
-): Promise<number> {
+): Promise<void> {
   let left = slots;
-  for (const run of queue) {
-    if (left <= 0) break;
-    const admitted = await admitQueued(factory, repo, mode, run, ctx);
-    // Another writer (a Retry, a take-over) took the last slot meanwhile.
-    if (admitted === NO_FREE_SLOT) return 0;
-    if (admitted) left--;
+  let next = 0;
+  let full = false;
+  while (!full && left > 0 && next < queue.length) {
+    const launches: Promise<boolean>[] = [];
+    while (launches.length < left && next < queue.length) {
+      const admitted = await admitQueued(factory, repo, mode, queue[next++], ctx);
+      // Another writer (a Retry, a take-over) took the last slot meanwhile.
+      if (admitted === NO_FREE_SLOT) {
+        full = true;
+        break;
+      }
+      if (admitted) launches.push(admitted.started);
+    }
+    const started = await Promise.all(launches);
+    left -= started.filter(Boolean).length;
   }
-  return left;
 }
 
 /**
- * Admit one sent issue when nothing holds it back; whether an agent started,
- * or `NO_FREE_SLOT` when the factory filled up since the pass counted.
+ * Admit one queued issue when nothing holds it back: its starting flow, false
+ * when it waits, or `NO_FREE_SLOT` when the factory filled up since the pass
+ * counted.
  */
 async function admitQueued(
   factory: WatchedFactory,
@@ -938,7 +959,7 @@ async function admitQueued(
   mode: LaunchMode,
   run: FactoryRunView,
   ctx: AdmissionContext,
-): Promise<boolean | typeof NO_FREE_SLOT> {
+): Promise<Launch | false | typeof NO_FREE_SLOT> {
   if (!runs || !deps) return false;
   if (run.issueNumber === null) return admitAndStart(factory, repo, mode, null, run);
   if (await heldWithoutProofRules(factory, run, ctx)) return false;
@@ -957,8 +978,8 @@ async function admitQueued(
 }
 
 /**
- * Take the run out of the queue and start its flow; whether an agent started,
- * or `NO_FREE_SLOT`. A run without an issue (change flow-triggers) comes
+ * Take the run out of the queue and start its flow (not awaited: the caller
+ * waits for a round of launches together), or `NO_FREE_SLOT`. A run without an issue (change flow-triggers) comes
  * straight here: nothing to read from GitHub and no blockers.
  */
 async function admitAndStart(
@@ -969,7 +990,7 @@ async function admitAndStart(
   run: FactoryRunView,
   /** The run it starts on top of instead of waiting for (D10), or null. */
   stackedOn: FactoryStackedOn | null = null,
-): Promise<boolean | typeof NO_FREE_SLOT> {
+): Promise<Launch | false | typeof NO_FREE_SLOT> {
   if (!runs) return false;
   // The capacity check is part of the write: the slots counted at the start of
   // the pass may have been taken during the GitHub reads above.
@@ -978,12 +999,13 @@ async function admitAndStart(
   // Cancelled meanwhile (or another pass took it): not ours to start.
   if (admitted.isErr() || admitted.value !== 'admitted') return false;
   if (stackedOn) await runs.update(run.id, { stackedOn });
-  return startFlow(factory, repo, mode, issue, {
+  const started = startFlow(factory, repo, mode, issue, {
     ...run,
     state: 'queued',
     waitReason: null,
     stackedOn,
   });
+  return { started };
 }
 
 /**
@@ -1084,15 +1106,24 @@ async function openQueuedIssue(
   return null;
 }
 
-/** List the labelled issues and admit what fits (automatic mode). */
-async function admitFromGithub(
-  factory: WatchedFactory,
-  repo: string,
-  mode: LaunchMode,
-  slots: number,
-  ctx: AdmissionContext,
-): Promise<void> {
-  const issues = await deps!.github.listReadyIssues({
+/**
+ * Keep the factory's labelled issues in its queue (automatic mode), so the
+ * queue shows every issue that waits for a slot, not only the ones sent from
+ * funny: a labelled issue that may run and has no run yet is queued behind
+ * the others, oldest first as GitHub lists them, and a labelled issue that
+ * waits there leaves it once it lost its label or was closed. A factory in
+ * manual mode takes no issue by its label: its labelled ones leave the queue.
+ */
+async function syncLabelledQueue(factory: WatchedFactory, repo: string): Promise<void> {
+  if (!runs || !deps) return;
+  const waiting = await runs.queue(factory.id);
+  if (waiting.isErr()) return;
+  const labelled = waiting.value.filter((run) => run.source === 'label');
+  if (factory.mode !== 'automatic') {
+    await dropLabelled(factory, labelled, 'the factory is not in automatic mode');
+    return;
+  }
+  const issues = await deps.github.listReadyIssues({
     repo,
     ownerId: factory.userId,
     projectId: factory.projectId,
@@ -1111,7 +1142,63 @@ async function admitFromGithub(
     );
     return;
   }
-  await admitIssues(factory, repo, mode, issues.value, slots, ctx);
+  const listed = new Set(issues.value.map((issue) => issue.number));
+  // A full page may leave issues out: missing from it is not proof the label is gone.
+  if (issues.value.length < READY_ISSUES_PAGE) {
+    const unlabelled = labelled.filter(
+      (run) => run.issueNumber !== null && !listed.has(run.issueNumber),
+    );
+    await dropLabelled(factory, unlabelled, 'its issue lost the label or was closed');
+  }
+  await queueLabelled(factory, issues.value, waiting.value);
+}
+
+/** Queue the labelled issues that may run and are not waiting yet, in listing order. */
+async function queueLabelled(
+  factory: WatchedFactory,
+  issues: FactoryIssue[],
+  waiting: FactoryRunView[],
+): Promise<void> {
+  const inQueue = new Set(waiting.map((run) => run.issueNumber));
+  const fresh: number[] = [];
+  for (const issue of issues) {
+    if (!inQueue.has(issue.number) && (await isAdmissible(factory.id, issue.number))) {
+      fresh.push(issue.number);
+    }
+  }
+  if (fresh.length === 0) return;
+  // An issue another writer queued meanwhile is skipped by the one-run-per-issue index.
+  const queued = await runs!.enqueue({
+    factoryId: factory.id,
+    issueNumbers: fresh,
+    flowName: factory.flowName,
+    source: 'label',
+  });
+  if (queued.isErr()) {
+    log.error('Issue factory could not queue its labelled issues', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      error: queued.error.message,
+    });
+  }
+}
+
+/** Take waiting labelled runs out of the queue (their label stays as it is). */
+async function dropLabelled(
+  factory: WatchedFactory,
+  dropped: FactoryRunView[],
+  reason: string,
+): Promise<void> {
+  for (const run of dropped) {
+    await runs!.cancel(factory.id, run.id);
+    log.info('Issue factory dropped a labelled issue from its queue', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      runId: run.id,
+      issue: run.issueNumber,
+      reason,
+    });
+  }
 }
 
 /**
@@ -1168,33 +1255,10 @@ async function defaultCheckAccess(userId: string, projectId: string): Promise<bo
   return (await decideProjectAccess(projectRole, 'steer', projectId, userId)) === null;
 }
 
-/** Admit each labelled issue not already running nor blocked, while slots remain. */
-async function admitIssues(
-  factory: WatchedFactory,
-  repo: string,
-  mode: LaunchMode,
-  issues: FactoryIssue[],
-  slots: number,
-  ctx: AdmissionContext,
-): Promise<void> {
-  let free = slots;
-  for (const issue of issues) {
-    if (free <= 0) break;
-    if (!(await isAdmissible(factory.id, issue.number))) continue;
-    const blocked = await blockedReason(ctx, issue.number);
-    const stackedOn = stackTarget(factory, ctx, blocked);
-    if (blocked && !stackedOn) continue;
-    const started = await startImplement(factory, repo, mode, issue, stackedOn);
-    // Another writer (a Retry, a take-over) took the last slot meanwhile.
-    if (started === NO_FREE_SLOT) return;
-    if (started) free--;
-  }
-}
-
 /**
- * An issue may be admitted when it has no run in progress (or parked for a
- * person), none that ended with no change, and has failed fewer than
- * `MAX_ATTEMPTS` times. A lookup that fails skips the issue this tick rather
+ * A labelled issue may be queued when it has no run open (waiting, in
+ * progress or parked for a person), none that ended with no change, and has
+ * failed fewer than `MAX_ATTEMPTS` times. A lookup that fails skips the issue this tick rather
  * than risk a second run.
  */
 async function isAdmissible(factoryId: string, issueNumber: number): Promise<boolean> {
@@ -1513,42 +1577,6 @@ async function resumeRuns(factory: WatchedFactory, repo: string, mode: LaunchMod
     // the tick must stay free (`isActive` keeps a second start out).
     void flows.start({ factory, repo, mode, issue: issue.value, run });
   }
-}
-
-/**
- * Record a run for an issue and start its flow; whether an agent started, or
- * `NO_FREE_SLOT` when the factory filled up since the pass counted.
- */
-async function startImplement(
-  factory: WatchedFactory,
-  repo: string,
-  mode: LaunchMode,
-  issue: FactoryIssue,
-  stackedOn: FactoryStackedOn | null = null,
-): Promise<boolean | typeof NO_FREE_SLOT> {
-  if (!runs || !flows) return false;
-
-  // Record the run before launching, so the issue is taken while the launch is
-  // in flight: no later tick (or reschedule) can admit it a second time. The
-  // capacity check is part of the write.
-  const run = await runs.startInFlight({
-    factoryId: factory.id,
-    issueNumber: issue.number,
-    source: 'label',
-    flowName: factory.flowName,
-  });
-  if (run.isErr()) {
-    log.error('Issue factory run could not be recorded', {
-      namespace: 'factory',
-      factoryId: factory.id,
-      issue: issue.number,
-      error: run.error.message,
-    });
-    return false;
-  }
-  if (run.value === NO_FREE_SLOT) return NO_FREE_SLOT;
-  if (stackedOn) await runs.update(run.value.id, { stackedOn });
-  return startFlow(factory, repo, mode, issue, { ...run.value, stackedOn });
 }
 
 /** Start an admitted run's flow; whether its first agent started. */

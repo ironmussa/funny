@@ -10,6 +10,8 @@ const stagingDirectory = join(artifactsDirectory, 'client-gpuix-stage');
 // installs them. Take their versions from this package's manifest so the
 // release cannot drift from what the app is built and tested against.
 const RELEASE_EXTERNALS = ['@gpuix/native', '@gpuix/react', 'react'] as const;
+// SAFETY: this reads client-gpuix's own checked-in package.json, which declares a
+// `dependencies` map of package name to version range.
 const manifest = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8')) as {
   dependencies: Record<string, string>;
 };

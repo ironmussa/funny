@@ -37,7 +37,7 @@ export function GpuixVisualParityFixtureHost({
                       testId={`parity-navigation-${row.id}`}
                       title={row.label}
                       selected={row.selected}
-                      status={row.status?.replace('-', '_') as never}
+                      status={row.status}
                       onSelect={() => undefined}
                     />
                   ))}

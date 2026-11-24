@@ -26,11 +26,15 @@ export interface ChangedFilesSummaryEventData {
   files: FileDiffSummary[];
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** Extract the file path a file-mutating tool call targeted, or null. */
 export function toolCallFilePath(tc: any): string | null {
   if (!tc || !FILE_MUTATING_TOOLS.has(tc.name)) return null;
   let input: any = tc.input;
-  if (typeof input === 'string') {
+  if (isString(input)) {
     try {
       input = JSON.parse(input);
     } catch {
@@ -38,7 +42,7 @@ export function toolCallFilePath(tc: any): string | null {
     }
   }
   const p = input?.file_path ?? input?.notebook_path;
-  return typeof p === 'string' && p ? p : null;
+  return isString(p) && p ? p : null;
 }
 
 /** Turn an absolute tool-call path into a repo-root-relative display path. */

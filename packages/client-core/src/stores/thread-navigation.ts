@@ -17,7 +17,7 @@ function upsertEntities<T extends { id: string }>(
   current: Readonly<Record<string, T>>,
   incoming: readonly T[],
 ): Record<string, T> {
-  if (incoming.length === 0) return current as Record<string, T>;
+  if (incoming.length === 0) return current;
   const next = { ...current };
   for (const entity of incoming) next[entity.id] = entity;
   return next;

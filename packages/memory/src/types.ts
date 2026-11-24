@@ -215,6 +215,8 @@ export interface FactRow {
 
 /** Convert a DB row to the public MemoryFact type */
 export function rowToFact(row: FactRow): MemoryFact {
+  // SAFETY: type and decay_class hold the FactType / DecayClass strings the fact was stored with
+  // (insertFact writes them from a MemoryFact; the HTTP API types its body the same way, unchecked).
   return {
     id: row.id,
     type: row.type as FactType,

@@ -37,11 +37,15 @@ export function NativeRendererFailureSurface({ error }: { error: string }): Reac
   );
 }
 
+interface NativeRendererErrorBoundaryState {
+  error: string | null;
+}
+
 export class NativeRendererErrorBoundary extends Component<
   { children: ReactNode; diagnostics: DiagnosticService },
-  { error: string | null }
+  NativeRendererErrorBoundaryState
 > {
-  state = { error: null as string | null };
+  state: NativeRendererErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: unknown): { error: string } {
     return { error: error instanceof Error ? error.message : String(error) };

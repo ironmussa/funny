@@ -1,12 +1,24 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { GitStatusInfo, Thread, ThreadStage } from '@funny/shared';
-import { Archive, FolderOpenDot, MoreVertical, Terminal, Trash2 } from 'lucide-react';
-import { memo, startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { Archive, MoreVertical, Trash2 } from 'lucide-react';
+import {
+  type ReactNode,
+  type RefObject,
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { BOARD_CARD_TITLE_CLASS, BoardCard } from '@/components/board/BoardCard';
+import { PRBadge } from '@/components/PRBadge';
 import { StopThreadMenuItem } from '@/components/thread/StopThreadMenuItem';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
+import { ThreadOpenMenuItems } from '@/components/thread/ThreadOpenMenuItems';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
@@ -20,11 +32,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
-import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { timeAgo } from '@/lib/thread-utils';
-import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useThreadStore } from '@/stores/thread-store';
@@ -33,7 +42,8 @@ import { useUIStore } from '@/stores/ui-store';
 interface Props {
   thread: Thread;
   projectInfo?: { name: string; color?: string; path?: string };
-  onDelete: (thread: Thread) => void;
+  /** Shows "Delete" in the card's menu. */
+  onDelete?: (thread: Thread) => void;
   onArchive?: (thread: Thread) => void;
   search?: string;
   caseSensitive?: boolean;
@@ -43,6 +53,186 @@ interface Props {
   highlighted?: boolean;
   stage: ThreadStage;
   gitStatus?: GitStatusInfo;
+  /** What a board adds under the title (the factory board: the run's chips and notes). */
+  children?: ReactNode;
+  /** Replaces opening the thread (the factory board opens the run's panel). */
+  onOpen?: () => void;
+  /** False on a board whose cards only the server moves. */
+  draggable?: boolean;
+  testId?: string;
+  /** Items a board puts first in the card's menu (the factory board: the run's actions). */
+  menuItems?: ReactNode;
+  /** Replaces the footer's time (the factory board: the run's time in its step). */
+  time?: ReactNode;
+}
+
+/** Scrolls a highlighted card into view and makes the card draggable between columns. */
+function useKanbanCardDrag(
+  ref: RefObject<HTMLDivElement | null>,
+  thread: Thread,
+  canDrag: boolean,
+  highlighted: boolean | undefined,
+): boolean {
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (highlighted && ref.current) {
+      ref.current.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [highlighted, ref]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !canDrag) return;
+    return draggable({
+      element: el,
+      getInitialData: () => ({
+        type: 'kanban-card',
+        threadId: thread.id,
+        sourceStage: thread.archived ? 'archived' : thread.stage || 'backlog',
+        projectId: thread.projectId,
+      }),
+      onGenerateDragPreview: ({ nativeSetDragImage }) =>
+        setDashedDragPreview({ nativeSetDragImage, source: el }),
+      onDragStart: () => setIsDragging(true),
+      onDrop: () => setIsDragging(false),
+    });
+  }, [ref, thread.id, thread.stage, thread.archived, thread.projectId, canDrag]);
+
+  return isDragging;
+}
+
+/** The card's footer: powerline, watcher indicator and pull request. */
+function KanbanCardFooter({
+  thread,
+  projectInfo,
+  gitStatus,
+}: {
+  thread: Thread;
+  projectInfo: Props['projectInfo'];
+  gitStatus: GitStatusInfo | undefined;
+}) {
+  return (
+    <>
+      <ThreadPowerline
+        thread={thread}
+        showPRBadge={false}
+        projectName={projectInfo?.name}
+        projectColor={projectInfo?.color}
+        gitStatus={gitStatus}
+        diffStatsSize="xxs"
+        data-testid={`kanban-card-powerline-${thread.id}`}
+      />
+      <ThreadWatcherIndicator threadId={thread.id} />
+      {gitStatus?.prNumber ? (
+        <PRBadge
+          prNumber={gitStatus.prNumber}
+          prState={gitStatus.prState ?? 'OPEN'}
+          prUrl={gitStatus.prUrl}
+          variant="plain"
+          size="compact"
+          showExternalIcon={false}
+          data-testid={`kanban-card-pr-${thread.id}`}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** The card's three-dot menu. */
+function KanbanCardMenu({
+  thread,
+  menuItems,
+  onArchive,
+  onDelete,
+  onOpenChange,
+}: {
+  thread: Thread;
+  menuItems: ReactNode;
+  onArchive: Props['onArchive'];
+  onDelete: Props['onDelete'];
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const isRunning = thread.status === 'running';
+  const isBusy = isRunning || thread.status === 'setting_up';
+  return (
+    <DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="muted"
+          size="icon-xs"
+          tabIndex={-1}
+          data-testid={`kanban-card-more-${thread.id}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreVertical className="icon-sm" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="bottom">
+        {menuItems && (
+          <>
+            {menuItems}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <ThreadOpenMenuItems thread={thread} />
+        {isRunning && (
+          <>
+            <DropdownMenuSeparator />
+            <StopThreadMenuItem threadId={thread.id} />
+          </>
+        )}
+        {onArchive && !isBusy && (
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchive(thread);
+            }}
+          >
+            <Archive className="icon-sm" />
+            {t('sidebar.archive')}
+          </DropdownMenuItem>
+        )}
+        {onDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              data-testid={`kanban-card-delete-${thread.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(thread);
+              }}
+            >
+              <Trash2 className="icon-sm" />
+              {t('common.delete')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** A message snippet that matched the search, shown when the title did not. */
+function KanbanCardSnippet({
+  title,
+  contentSnippet,
+  search,
+}: {
+  title: string;
+  contentSnippet: string | undefined;
+  search: string | undefined;
+}) {
+  if (!contentSnippet || !search || normalize(title).includes(normalize(search))) return null;
+  return (
+    <HighlightText
+      text={contentSnippet}
+      query={search}
+      className="text-muted-foreground text-compact line-clamp-2 block italic"
+    />
+  );
 }
 
 export const KanbanCard = memo(function KanbanCard({
@@ -58,6 +248,12 @@ export const KanbanCard = memo(function KanbanCard({
   highlighted,
   stage: _stage,
   gitStatus: gitStatusProp,
+  children,
+  onOpen,
+  draggable: canDrag = true,
+  testId,
+  menuItems,
+  time,
 }: Props) {
   const { t } = useTranslation();
   const now = useMinuteTick();
@@ -65,200 +261,72 @@ export const KanbanCard = memo(function KanbanCard({
   const setKanbanContext = useUIStore((s) => s.setKanbanContext);
   const pinThread = useThreadStore((s) => s.pinThread);
   const ref = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  useEffect(() => {
-    if (highlighted && ref.current) {
-      ref.current.scrollIntoView({ block: 'center', behavior: 'instant' });
-    }
-  }, [highlighted]);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    return draggable({
-      element: el,
-      getInitialData: () => ({
-        type: 'kanban-card',
-        threadId: thread.id,
-        sourceStage: thread.archived ? 'archived' : thread.stage || 'backlog',
-        projectId: thread.projectId,
-      }),
-      onGenerateDragPreview: ({ nativeSetDragImage }) =>
-        setDashedDragPreview({ nativeSetDragImage, source: el }),
-      onDragStart: () => setIsDragging(true),
-      onDrop: () => setIsDragging(false),
-    });
-  }, [thread.id, thread.stage, thread.archived, thread.projectId]);
-
-  const isRunning = thread.status === 'running';
-  const isBusy = isRunning || thread.status === 'setting_up';
+  const isDragging = useKanbanCardDrag(ref, thread, canDrag, highlighted);
 
   const [openDropdown, setOpenDropdown] = useState(false);
   const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
 
+  const open = () => {
+    if (isDragging) return;
+    if (onOpen) return onOpen();
+    startTransition(() => {
+      setKanbanContext({
+        projectId,
+        search,
+        caseSensitive,
+        threadId: thread.id,
+        viewMode: 'board',
+      });
+      navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
+    });
+  };
+
   return (
-    <div
+    <BoardCard
       ref={ref}
-      data-testid={`kanban-card-${thread.id}`}
-      role="link"
-      tabIndex={0}
+      testId={testId ?? `kanban-card-${thread.id}`}
+      draggable={canDrag ? undefined : false}
+      onOpen={open}
       className={cn(
-        'group/card flex items-stretch rounded-md border bg-card cursor-pointer transition-[opacity,box-shadow] duration-300',
         isDragging && 'opacity-40',
         ghost && !isDragging && 'opacity-50 hover:opacity-80',
         highlighted && 'ring-2 ring-ring shadow-md',
       )}
-      onClick={() => {
-        if (!isDragging) {
-          startTransition(() => {
-            setKanbanContext({
-              projectId,
-              search,
-              caseSensitive,
-              threadId: thread.id,
-              viewMode: 'board',
-            });
-            navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-          });
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.target === event.currentTarget && event.key === 'Enter' && !isDragging) {
-          startTransition(() => {
-            setKanbanContext({
-              projectId,
-              search,
-              caseSensitive,
-              threadId: thread.id,
-              viewMode: 'board',
-            });
-            navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-          });
-        }
-      }}
-    >
-      <div className="min-w-0 flex-1 px-3.5 py-3">
-        <div className="mb-2 flex min-w-0 items-start gap-2">
-          <ThreadStatusPin
-            thread={thread}
-            onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
-            hoverGroup="card"
-            className="mt-0.5"
-          />
-          <ThreadTitle
-            title={thread.title}
-            search={search || ''}
-            multiline
-            containerClassName="flex-1"
-            className="text-muted-foreground group-hover/card:text-foreground line-clamp-3 text-sm leading-relaxed font-medium transition-colors"
-            stopBadgePropagation
-            badgeTestId={`kanban-card-attachments-${thread.id}`}
-          />
-          <ThreadWatcherIndicator threadId={thread.id} className="mt-1" />
-        </div>
-
-        <ThreadPowerline
+      status={
+        <ThreadStatusPin
           thread={thread}
-          projectName={projectInfo?.name}
-          projectColor={projectInfo?.color}
-          gitStatus={gitStatusProp}
-          diffStatsSize="xxs"
-          className="mb-2"
-          data-testid={`kanban-card-powerline-${thread.id}`}
+          onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
+          hoverGroup="card"
         />
-
-        {contentSnippet && search && !normalize(thread.title).includes(normalize(search)) && (
-          <HighlightText
-            text={contentSnippet}
-            query={search}
-            className="text-muted-foreground text-compact mb-1 line-clamp-2 block italic"
-          />
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center px-1.5">
-        <div className="grid min-w-10 place-items-center justify-items-center">
-          <span
-            className={cn(
-              'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/card:opacity-0 group-hover/card:pointer-events-none',
-              openDropdown && 'opacity-0 pointer-events-none',
-            )}
-          >
-            {timeAgo(thread.completedAt || thread.createdAt, t, now)}
-          </span>
-          <div
-            className={cn(
-              'col-start-1 row-start-1 flex items-center opacity-0 group-hover/card:opacity-100',
-              openDropdown && 'opacity-100!',
-            )}
-          >
-            <DropdownMenu onOpenChange={handleDropdownChange}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="muted"
-                  size="icon-xs"
-                  tabIndex={-1}
-                  data-testid={`kanban-card-more-${thread.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreVertical className="icon-sm" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="bottom">
-                <DropdownMenuItem
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const result = await api.openDirectory({ threadId: thread.id });
-                    if (result.isErr()) toastError(result.error);
-                  }}
-                >
-                  <FolderOpenDot className="icon-sm" />
-                  {t('sidebar.openDirectory')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openThreadTerminal({ thread });
-                  }}
-                >
-                  <Terminal className="icon-sm" />
-                  {t('sidebar.openTerminal')}
-                </DropdownMenuItem>
-                {isRunning && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <StopThreadMenuItem threadId={thread.id} />
-                  </>
-                )}
-                {onArchive && !isBusy && (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onArchive(thread);
-                    }}
-                  >
-                    <Archive className="icon-sm" />
-                    {t('sidebar.archive')}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  data-testid={`kanban-card-delete-${thread.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(thread);
-                  }}
-                >
-                  <Trash2 className="icon-sm" />
-                  {t('common.delete')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-    </div>
+      }
+      title={
+        <ThreadTitle
+          title={thread.title}
+          search={search || ''}
+          multiline
+          containerClassName="flex-1"
+          className={BOARD_CARD_TITLE_CLASS}
+          stopBadgePropagation
+          badgeTestId={`kanban-card-attachments-${thread.id}`}
+        />
+      }
+      footer={
+        <KanbanCardFooter thread={thread} projectInfo={projectInfo} gitStatus={gitStatusProp} />
+      }
+      time={time ?? timeAgo(thread.completedAt || thread.createdAt, t, now)}
+      actionsOpen={openDropdown}
+      actions={
+        <KanbanCardMenu
+          thread={thread}
+          menuItems={menuItems}
+          onArchive={onArchive}
+          onDelete={onDelete}
+          onOpenChange={handleDropdownChange}
+        />
+      }
+    >
+      <KanbanCardSnippet title={thread.title} contentSnippet={contentSnippet} search={search} />
+      {children}
+    </BoardCard>
   );
 });

@@ -22,9 +22,13 @@ export function toACPImageBlocks(images: unknown): ACPImageBlock[] {
     const src = (img as any)?.source;
     const data: string | undefined = src?.data ?? (img as any)?.data;
     const mimeType: string | undefined = src?.media_type ?? (img as any)?.mimeType;
-    if (typeof data === 'string' && typeof mimeType === 'string') {
+    if (isString(data) && isString(mimeType)) {
       blocks.push({ type: 'image', data, mimeType });
     }
   }
   return blocks;
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
 }

@@ -258,7 +258,7 @@ async function answerQuestion(
   recallResult: { totalFound: number; formattedContext: string };
 }> {
   // Level-specific recall strategies
-  const recallOptions: Record<string, unknown> = {
+  const recallOptions: Parameters<typeof pp.recall>[1] = {
     limit: config.recallLimit,
     minConfidence: config.minConfidence,
   };
@@ -266,10 +266,7 @@ async function answerQuestion(
   // Level 4 (temporal): could use validAt filter if the question contains a date
   // For now, rely on the LLM to interpret temporal context from fact metadata
 
-  const recallResult = await pp.recall(
-    q.question,
-    recallOptions as Parameters<typeof pp.recall>[1],
-  );
+  const recallResult = await pp.recall(q.question, recallOptions);
 
   // Level 5 (abstention): if no facts found or very low relevance, abstain
   if (q.level === 5 || q.requires_abstention) {

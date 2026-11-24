@@ -209,6 +209,8 @@ interface BrowserPanelState {
   setSessionAudio: (sessionId: string, muted: boolean) => void;
   /** Turn the session's page audio on or off. */
   setAudioMuted: (muted: boolean) => Promise<void>;
+  /** Resize the session's page viewport (e.g. to a phone size and back). */
+  resizeViewport: (width: number, height: number) => Promise<void>;
   /** Take the session over from the agent (or hand it back with `false`). */
   setUserControl: (userControls: boolean) => Promise<void>;
   /** Answer the pending dialog from the panel. */
@@ -750,6 +752,18 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     metric('browser_panel.audio_toggled', 1, {
       type: 'sum',
       attributes: { muted: String(muted) },
+    });
+  },
+
+  resizeViewport: async (width, height) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const { browserSessionClient } = await loadClient();
+    // The runner answers with `browser-session:viewport`, which updates `viewport`.
+    browserSessionClient.input(sessionId, { kind: 'viewport', width, height });
+    metric('browser_panel.viewport_resized', 1, {
+      type: 'sum',
+      attributes: { size: `${width}x${height}` },
     });
   },
 

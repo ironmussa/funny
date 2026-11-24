@@ -111,7 +111,7 @@ import { runStepOnRunner, type FactoryStepDeps } from './factory-step-runner.js'
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
-import { createFactoryTriage } from './factory-triage.js';
+import { createFactoryTriage, type FactorySplitDeps } from './factory-triage.js';
 
 /**
  * A proof the agent can fix (its test): the flows retry it with the agent.
@@ -214,6 +214,10 @@ export interface FactoryActionProviderDeps {
   issueLabels?: string[];
   /** The factory's own sensitive path globs (they make a change high risk). */
   sensitivePaths?: readonly string[];
+  /** The factory's size limit for a low-risk change. */
+  maxLowRiskLines?: number;
+  /** The factory's globs left out of a change's size. */
+  sizeIgnoredPaths?: readonly string[];
   /** Which reviewed changes the factory merges by itself (default: only low-risk ones). */
   autoMerge?: FactoryAutoMerge;
   /**
@@ -221,8 +225,15 @@ export interface FactoryActionProviderDeps {
    * when the merge gate runs (the approval is written while the run waits).
    */
   mergeApproved?: (sha: string) => Promise<boolean>;
+  /**
+   * Move a member's merge approval of `from` to `to`, a merge of `from` with
+   * the base branch that settled nothing (as the review and the proof move).
+   */
+  carryMergeApproval?: (from: string, to: string) => Promise<void>;
   /** The review verdicts the run already has (a resumed run). */
   reviews?: readonly FactoryReviewVerdict[];
+  /** The regression proof the run already has (a resumed run). */
+  storedProof?: RegressionProofRecord | null;
   /** What the run already stores of its triage (a resumed run, or one back from a path hold). */
   triage?: FactoryTriage | null;
   /** The newest triage thread of this run by its title prefix, since `since`. */
@@ -235,6 +246,10 @@ export interface FactoryActionProviderDeps {
   issueText?(): Promise<FactoryIssueText | null>;
   /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only). */
   holdForPaths?(blockers: number[]): Promise<boolean>;
+  /** Open a too-large issue's parts as issues (the factory's `split` setting); absent: comment the split. */
+  split?: FactorySplitDeps;
+  /** Run `work` alone among the factory's runs (triage's contract and path check). */
+  exclusive?<T>(work: () => Promise<T>): Promise<T>;
   /** When the run was admitted: review threads from before are not this run's. */
   admittedAt?: string;
   /** The newest review thread of this run by its title prefix, since `since`. */
@@ -471,6 +486,14 @@ interface HeldProof {
   ok: boolean;
   /** Its check is on GitHub. */
   checkPublished: boolean;
+}
+
+/** A stored proof that names its commit and whose verdict allows a merge; null otherwise. */
+function heldProofRecord(
+  record: RegressionProofRecord | null | undefined,
+  testRequired: boolean,
+): RegressionProofRecord | null {
+  return record?.headSha && proofAllowsMerge(record, testRequired) ? record : null;
 }
 
 const PROOF_NOT_CONFIGURED: ActionResult = {
@@ -811,9 +834,35 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const threadId = threadIds[0];
     if (!threadId) return proofUnavailable('no implementing thread.');
     const testRequired = regressionTestRequired(opts, deps.issueLabels ?? []);
+    const reused = await reusedProof(testRequired);
+    if (reused) return reused;
     const run = await proveOnRunner(deps.proof, threadId, opts, deps.signal);
     if (run.kind === 'unavailable') return proofUnavailable(run.why);
     return proofVerdict(run.result, testRequired);
+  }
+
+  /**
+   * The passing proof the run already has of the pull request's head, held
+   * again instead of proving the same commit twice: a commit's tests give the
+   * same verdict, and a retry or a merge approval reruns the step on a head
+   * that did not change. Null when there is none, so the proof runs.
+   */
+  /** The pull request's head commit now; null when there is no pull request or it cannot be read. */
+  async function pullHeadSha(): Promise<string | null> {
+    const pr = pullRequest();
+    if (!pr) return null;
+    const head = await deps.github.pullRequests.pullHead(pr);
+    return head.isOk() ? head.value.sha : null;
+  }
+
+  async function reusedProof(testRequired: boolean): Promise<ActionResult | null> {
+    const record = heldProofRecord(lastProof?.record ?? deps.storedProof, testRequired);
+    if (!record || (await pullHeadSha()) !== record.headSha) return null;
+    lastProof = { record, testRequired, ok: true, checkPublished: record.checkPublished === true };
+    // The check may not have reached GitHub the first time: auto-merge needs it.
+    await checkOnGithub(lastProof);
+    await count(metrics, { event: 'regression_proof_reused' });
+    return { ok: true, output: record.verdict, metadata: { ...lastProof.record, reused: true } };
   }
 
   /**
@@ -908,6 +957,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           change: files.value,
           findings,
           sensitivePaths: deps.sensitivePaths,
+          maxLowRiskLines: deps.maxLowRiskLines,
+          sizeIgnoredPaths: deps.sizeIgnoredPaths,
           riskHints: contractOf({ triage: triager.current() })?.riskHints,
         })
       : {
@@ -1010,6 +1061,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     issueUpdatedAt: deps.issueUpdatedAt,
     issueText: deps.issueText,
     hold: deps.holdForPaths,
+    split: deps.split,
+    exclusive: deps.exclusive,
     record: deps.record,
     count: (event) => count(metrics, { event }),
   });
@@ -1090,10 +1143,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     signal: deps.signal,
     metrics: () => metrics,
     count: (next, attributes) => count(next, attributes),
-    carry: async (from, to) => {
-      await reviewer.carry(from, to);
-      await carryProof(from, to);
-    },
+    carry: (from, to) => carryChecks(from, to),
     toImplementer: () => mergeRoundToImplementer(),
   });
 
@@ -1201,6 +1251,18 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     lastProof = { ...lastProof, record, checkPublished: false };
     await deps.record({ regressionProof: record });
     await count(metrics, { event: 'regression_proof_carried' });
+  }
+
+  /**
+   * `to` merges only the base branch into `from` and settled nothing: what was
+   * judged of `from` holds for `to`, its review, its proof, and a member's
+   * approval to merge it although it is high risk. Without the approval, every
+   * base merge of an approved commit would wait for a person again.
+   */
+  async function carryChecks(from: string, to: string): Promise<void> {
+    await reviewer.carry(from, to);
+    await carryProof(from, to);
+    await deps.carryMergeApproval?.(from, to);
   }
 
   /** Whether the proof's check is on GitHub, publishing it now when an earlier try failed. */
@@ -1351,10 +1413,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const current = await lane.bringUpToDate();
     if (current.kind === 'failed') return { ok: false, error: current.error };
     if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
-    for (const step of current.carried) {
-      await reviewer.carry(step.from, step.to);
-      await carryProof(step.from, step.to);
-    }
+    for (const step of current.carried) await carryChecks(step.from, step.to);
     if (current.sha === sha) return sha;
     return (await mergeHeld(opts, current.sha)) ?? current.sha;
   }

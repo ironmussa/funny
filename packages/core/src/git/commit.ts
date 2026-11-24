@@ -58,6 +58,11 @@ export function commit(
 /** Hard cap on the size of a hook command body to avoid pathological payloads. */
 const MAX_HOOK_COMMAND_BYTES = 64 * 1024;
 
+/** The command arrives typed as a string, but a caller may still pass anything at runtime. */
+function isNonEmptyString<T>(value: T): value is T & string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 /**
  * Run a single hook command (e.g. one step from .husky/pre-commit) in the given cwd.
  *
@@ -78,7 +83,7 @@ export function runHookCommand(
 ): ResultAsync<{ success: boolean; output: string }, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
-      if (typeof command !== 'string' || command.length === 0) {
+      if (!isNonEmptyString(command)) {
         return { success: false, output: 'Empty hook command' };
       }
       if (Buffer.byteLength(command, 'utf-8') > MAX_HOOK_COMMAND_BYTES) {

@@ -1,25 +1,19 @@
 /**
- * The factory view's health (openspec factory-run-detail, D4 and D5): a row of
- * figures over every listed run (the filters do not change them), and a banner
- * for each project whose factory is paused by an incident.
+ * The factory's health (openspec factory-run-detail, D4 and D5): figures over
+ * every listed run (the filters do not change them), shown in the view's
+ * analytics layout, and a banner for each project whose factory is paused by
+ * an incident, shown above every layout.
  */
+import { Activity, CheckCircle2, GitMerge, PauseCircle, Timer, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { MetricCard } from '@/components/analytics/MetricCard';
 import { ProjectFactoryIncident } from '@/components/general-settings-project/ProjectFactoryIncident';
 import { useFactorySettings } from '@/data/factory/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 import { formatActionDuration } from '@/lib/github-actions';
 
 import { summarizeFactoryHealth } from './factory-health';
-
-function Stat({ id, label, value }: { id: string; label: string; value: string }) {
-  return (
-    <div className="flex flex-col" data-testid={`factory-view-health-${id}`}>
-      <span className="text-muted-foreground text-2xs truncate">{label}</span>
-      <span className="text-sm font-medium tabular-nums">{value}</span>
-    </div>
-  );
-}
 
 const DASH = '—';
 
@@ -30,36 +24,48 @@ export function FactoryHealthStats({ runs, now }: { runs: FactoryQueueRun[]; now
   const rate = health.firstPassReviewRate;
   const toMerge = health.medianToMergeMs;
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-1" data-testid="factory-view-health">
-      <Stat
-        id="in-flight"
-        label={t('factoryView.health.inFlight', 'In flight')}
-        value={String(health.inFlight)}
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" data-testid="factory-view-health">
+      <MetricCard
+        title={t('factoryView.health.inFlight', 'In flight')}
+        value={health.inFlight}
+        icon={<Activity className="icon-sm" />}
+        color="blue"
+        valueTestId="factory-view-health-in-flight"
       />
-      <Stat
-        id="needs-person"
-        label={t('factoryView.health.needsPerson', 'Need a person')}
-        value={String(health.needsPerson)}
+      <MetricCard
+        title={t('factoryView.health.needsPerson', 'Need a person')}
+        value={health.needsPerson}
+        icon={<UserRound className="icon-sm" />}
+        color="amber"
+        valueTestId="factory-view-health-needs-person"
       />
-      <Stat
-        id="merged-day"
-        label={t('factoryView.health.mergedDay', 'Merged, 24 h')}
-        value={String(health.mergedLastDay)}
+      <MetricCard
+        title={t('factoryView.health.mergedDay', 'Merged, 24 h')}
+        value={health.mergedLastDay}
+        icon={<GitMerge className="icon-sm" />}
+        color="green"
+        valueTestId="factory-view-health-merged-day"
       />
-      <Stat
-        id="first-pass"
-        label={t('factoryView.health.firstPass', 'First review passed, 7 d')}
+      <MetricCard
+        title={t('factoryView.health.firstPass', 'First review passed, 7 d')}
         value={rate === null ? DASH : `${Math.round(rate * 100)}%`}
+        icon={<CheckCircle2 className="icon-sm" />}
+        color="violet"
+        valueTestId="factory-view-health-first-pass"
       />
-      <Stat
-        id="merge-holds"
-        label={t('factoryView.health.mergeHolds', 'Merge holds, 7 d')}
-        value={String(health.mergeHolds)}
+      <MetricCard
+        title={t('factoryView.health.mergeHolds', 'Merge holds, 7 d')}
+        value={health.mergeHolds}
+        icon={<PauseCircle className="icon-sm" />}
+        color="red"
+        valueTestId="factory-view-health-merge-holds"
       />
-      <Stat
-        id="to-merge"
-        label={t('factoryView.health.toMerge', 'Median to merge, 7 d')}
+      <MetricCard
+        title={t('factoryView.health.toMerge', 'Median to merge, 7 d')}
         value={toMerge === null ? DASH : formatActionDuration(toMerge)}
+        icon={<Timer className="icon-sm" />}
+        color="gray"
+        valueTestId="factory-view-health-to-merge"
       />
     </div>
   );

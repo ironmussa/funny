@@ -5,14 +5,14 @@ import type { FactoryRun } from '@/lib/api/factory';
 
 import { formatStepDuration, timeInCurrentStep } from './step-timings';
 
-/** "In review 2h", or "Waiting 20m" when the step has not started (its slot). */
+/** "In review 2h", or "Waiting for merge 20m" when the step has not started (its slot): the card's footer time. */
 export function FactoryRunTimeInStep({ run, now }: { run: FactoryRun; now: number }) {
   const { t } = useTranslation();
   const time = timeInCurrentStep(run);
   if (!time || !run.currentStep) return null;
   const duration = formatStepDuration(Math.max(0, now - time.since));
   return (
-    <p className="text-muted-foreground text-xs" data-testid={`factory-board-time-${run.id}`}>
+    <span className="whitespace-nowrap" data-testid={`factory-board-time-${run.id}`}>
       {time.kind === 'in-step'
         ? t('factoryBoard.time.inStep', 'In {{step}} {{duration}}', {
             step: run.currentStep,
@@ -22,7 +22,7 @@ export function FactoryRunTimeInStep({ run, now }: { run: FactoryRun; now: numbe
             step: run.currentStep,
             duration,
           })}
-    </p>
+    </span>
   );
 }
 

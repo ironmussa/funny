@@ -49,7 +49,7 @@ export function ThreadSearchBar({
   onNavigateToMessage,
   onClearHighlights,
   testIdPrefix = 'thread-search',
-  className,
+  className = 'absolute top-0 right-4 z-30',
 }: ThreadSearchBarProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -260,9 +260,10 @@ export function ThreadSearchBar({
       placeholder={t('thread.searchPlaceholder', 'Search in thread...')}
       showIcon={false}
       testIdPrefix={testIdPrefix}
-      // Default: the find bar hanging from the top edge of the chat view.
-      variant={className === undefined ? 'floating' : 'default'}
-      className={className ?? 'absolute top-0 right-4 z-30'}
+      // The find bar hanging from the top edge of the chat view; a caller's
+      // className repositions or reshapes it.
+      variant="floating"
+      className={className}
     />
   );
 }

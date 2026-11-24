@@ -145,6 +145,9 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
       waitingReason: undefined,
       pendingPermission: undefined,
       resultInfo: {
+        // SAFETY: machineEvent is non-null only for a completed / failed / waiting result, and
+        // waiting returned above; COMPLETE and FAIL only move to 'completed' or 'failed', and an
+        // unchanged status falls back to the server's, so finalStatus is one of those two.
         status: finalStatus as 'completed' | 'failed',
         cost: data.cost ?? t.cost,
         duration: data.duration ?? 0,
@@ -154,7 +157,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     };
   });
 
-  set(payloadPatch as any);
+  set(payloadPatch);
 
   // Flush any orphaned dequeued message for this thread. The buffer is set by
   // a `queue:update` event between the previous turn's result and the next
@@ -190,10 +193,11 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
       mutations.applyThreadDataPatch(s, threadId, (t) => {
         if (hasAssistantContentAfterLastUser(t.messages)) return t;
         appendedResultMessage = true;
+        const role: MessageRole = 'assistant';
         const message = {
           id: crypto.randomUUID(),
           threadId,
-          role: 'assistant' as MessageRole,
+          role,
           content: resultText,
           timestamp: new Date().toISOString(),
         };

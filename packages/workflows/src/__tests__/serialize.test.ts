@@ -61,3 +61,41 @@ nodes:
     if (reparsed.ok) expect(reparsed.workflow).toEqual(parsed.workflow);
   });
 });
+
+describe('serializeWorkflow key order', () => {
+  test('writes the workflow and node keys in their fixed order', () => {
+    const parsed = parseWorkflowYaml(`
+nodes:
+  - notify:
+      message: Done
+    on_error: continue
+    depends_on: [ask]
+    id: done
+  - id: ask
+    spawn_agent:
+      prompt: hi
+description: Demo
+name: sample
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(serializeWorkflow(parsed.workflow)).toBe(
+      [
+        'name: sample',
+        'description: Demo',
+        'nodes:',
+        '  - id: done',
+        '    depends_on:',
+        '      - ask',
+        '    on_error: continue',
+        '    notify:',
+        '      message: Done',
+        '  - id: ask',
+        '    spawn_agent:',
+        '      prompt: hi',
+        '',
+      ].join('\n'),
+    );
+  });
+});

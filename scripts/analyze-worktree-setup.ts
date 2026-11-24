@@ -42,8 +42,12 @@ function safeId(value: string): string {
   return value;
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function seconds(ms: unknown): string {
-  return typeof ms === 'number' ? `${(ms / 1000).toFixed(1)}s` : '—';
+  return isNumber(ms) ? `${(ms / 1000).toFixed(1)}s` : '—';
 }
 
 /** SQL filter for the runs to read: one thread, or the last N days. */

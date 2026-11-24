@@ -102,7 +102,7 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem className="min-w-0">
-                <BreadcrumbPage className="truncate">{label}</BreadcrumbPage>
+                <BreadcrumbPage truncate>{label}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -137,7 +137,7 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
               <>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem className="min-w-0">
-                  <BreadcrumbPage className="truncate">{project.name}</BreadcrumbPage>
+                  <BreadcrumbPage truncate>{project.name}</BreadcrumbPage>
                 </BreadcrumbItem>
               </>
             )}

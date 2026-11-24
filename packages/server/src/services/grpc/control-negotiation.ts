@@ -169,14 +169,20 @@ function effectiveLimits(
   };
 }
 
-function duration(milliseconds: number): { seconds: string; nanos: number } {
+/** A protobuf `Duration` / `Timestamp` as JSON: whole seconds (int64 as a string) and nanoseconds. */
+interface SecondsAndNanos {
+  seconds: string;
+  nanos: number;
+}
+
+function duration(milliseconds: number): SecondsAndNanos {
   return {
     seconds: String(Math.floor(milliseconds / 1_000)),
     nanos: (milliseconds % 1_000) * 1_000_000,
   };
 }
 
-function timestamp(now = Date.now()): { seconds: string; nanos: number } {
+function timestamp(now = Date.now()): SecondsAndNanos {
   return {
     seconds: String(Math.floor(now / 1_000)),
     nanos: (now % 1_000) * 1_000_000,
@@ -207,7 +213,7 @@ function writeFailure(
   call.end();
 }
 
-function supportedRange(versions: Version[]): Record<string, number> {
+function supportedRange(versions: Version[]) {
   const ordered = [...versions].sort((a, b) => a.major - b.major || a.minor - b.minor);
   const first = ordered[0];
   const last = ordered.at(-1);

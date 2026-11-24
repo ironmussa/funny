@@ -87,7 +87,10 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
   relayToThreadStream(event.scope.threadId, browserEvent);
 }
 
-function decodeValue(value: any): unknown {
+/** A protobuf `Value` decoded to plain JSON (a struct as `decodeStruct` returns it). */
+type DecodedValue = null | number | string | boolean | Record<string, unknown> | DecodedValue[];
+
+function decodeValue(value: any): DecodedValue {
   if (!value || typeof value !== 'object' || typeof value.kind !== 'string') return value;
   switch (value.kind) {
     case 'nullValue':
@@ -130,7 +133,7 @@ function requestKind(request: WireRequest): 'event' | 'gap' | undefined {
   return undefined;
 }
 
-function responseBase(epoch: bigint, scope?: EventScopeIdentity): Record<string, unknown> {
+function responseBase(epoch: bigint, scope?: EventScopeIdentity) {
   return {
     session: { sessionEpoch: epoch.toString() },
     scope: scope ?? undefined,

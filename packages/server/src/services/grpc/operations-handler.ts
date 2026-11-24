@@ -178,7 +178,17 @@ function decodeStruct(value: any): Record<string, WireValue> {
   );
 }
 
-function encodeValue(value: unknown): Record<string, unknown> {
+/** A protobuf `Value` as JSON: one `*Value` field naming its kind. */
+interface EncodedValue {
+  [kind: string]: unknown;
+}
+
+/** A protobuf `Struct` as JSON: `{ fields }`. */
+interface EncodedStruct {
+  [field: string]: unknown;
+}
+
+function encodeValue(value: unknown): EncodedValue {
   if (value === null || value === undefined) return { nullValue: 0 };
   if (typeof value === 'number') return { numberValue: value };
   if (typeof value === 'string') return { stringValue: value };
@@ -187,7 +197,7 @@ function encodeValue(value: unknown): Record<string, unknown> {
   return { structValue: encodeStruct(value) };
 }
 
-function encodeStruct(value: unknown): Record<string, unknown> {
+function encodeStruct(value: unknown): EncodedStruct {
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   return {
     fields: Object.fromEntries(
@@ -233,7 +243,12 @@ const idPatchPayload =
   (type: string, idField: string): LegacyMapper =>
   (value) => ({ type, payload: { id: value[idField], patch: decodeStruct(value.patch) } });
 
-function legacyInsertMessage(value: any): Record<string, unknown> {
+/** A legacy `data:*` message, as the data message handlers receive it. */
+interface LegacyDataMessage {
+  [field: string]: unknown;
+}
+
+function legacyInsertMessage(value: any): LegacyDataMessage {
   return {
     type: 'data:insert_message',
     threadId: value.threadId,
@@ -461,13 +476,23 @@ function toLegacyRequest(
   return LEGACY_MAPPERS[kind](request[kind] ?? {}, principalUserId);
 }
 
+/** An operations stream message sent back to the runner. */
+interface OperationReply {
+  [field: string]: unknown;
+}
+
+/** The `success` case of a reply: one result field naming its kind. */
+interface OperationSuccessPayload {
+  [field: string]: unknown;
+}
+
 function failure(
   epoch: bigint,
   correlationId: string,
   code: FailureCode,
   message: string,
   retryable = false,
-): Record<string, unknown> {
+): OperationReply {
   return {
     session: { sessionEpoch: epoch.toString() },
     correlationId,
@@ -475,8 +500,8 @@ function failure(
   };
 }
 
-function success(epoch: bigint, correlationId: string, result: any): Record<string, unknown> {
-  let payload: Record<string, unknown>;
+function success(epoch: bigint, correlationId: string, result: any): OperationReply {
+  let payload: OperationSuccessPayload;
   if (result?.type === 'data:get_thread_messages_response') {
     payload = {
       threadMessages: {

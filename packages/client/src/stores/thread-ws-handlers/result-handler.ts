@@ -254,7 +254,12 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
 // ── Toast helper ────────────────────────────────────────────────
 
-const ERROR_REASON_MESSAGES: Record<string, string> = {
+/** Toast messages, keyed by the agent's error reason. */
+interface ErrorReasonMessages {
+  [reason: string]: string;
+}
+
+const ERROR_REASON_MESSAGES: ErrorReasonMessages = {
   error_max_turns: 'Max turns reached — send a follow-up to continue',
   error_max_budget_usd: 'Budget limit exceeded',
   error_during_execution: 'Error during execution',

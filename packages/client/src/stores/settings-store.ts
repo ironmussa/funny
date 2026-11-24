@@ -47,7 +47,12 @@ export const ALL_STANDARD_TOOLS = [
   'NotebookEdit',
 ] as const;
 
-export const TOOL_LABELS: Record<string, string> = {
+/** i18n keys of tool labels, keyed by tool name. */
+interface ToolLabels {
+  [tool: string]: string;
+}
+
+export const TOOL_LABELS: ToolLabels = {
   Read: 'tools.readFile',
   Edit: 'tools.editFile',
   Write: 'tools.writeFile',
@@ -229,11 +234,14 @@ function syncToServer(data: Record<string, any>) {
   );
 }
 
-/** Derive allowedTools and disallowedTools arrays from the permissions record. */
-export function deriveToolLists(permissions: Record<string, ToolPermission>): {
+/** The tools a permissions record allows, and the ones it denies. */
+interface ToolLists {
   allowedTools: string[];
   disallowedTools: string[];
-} {
+}
+
+/** Derive allowedTools and disallowedTools arrays from the permissions record. */
+export function deriveToolLists(permissions: Record<string, ToolPermission>): ToolLists {
   const allowedTools: string[] = [];
   const disallowedTools: string[] = [];
   for (const [tool, perm] of Object.entries(permissions)) {

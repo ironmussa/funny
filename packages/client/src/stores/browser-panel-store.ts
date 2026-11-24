@@ -243,11 +243,16 @@ function readInitialWidth(): number {
   return DEFAULT_WIDTH;
 }
 
-function readDefaults(): { defaultModel: string } {
+/** The browser panel's saved defaults. */
+interface BrowserPanelDefaults {
+  defaultModel: string;
+}
+
+function readDefaults(): BrowserPanelDefaults {
   try {
     const raw = localStorage.getItem(DEFAULTS_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<{ defaultModel: string }>;
+      const parsed = JSON.parse(raw) as Partial<BrowserPanelDefaults>;
       return {
         defaultModel: typeof parsed.defaultModel === 'string' ? parsed.defaultModel : 'sonnet',
       };
@@ -258,7 +263,7 @@ function readDefaults(): { defaultModel: string } {
   return { defaultModel: 'sonnet' };
 }
 
-function writeDefaults(defaults: { defaultModel: string }) {
+function writeDefaults(defaults: BrowserPanelDefaults) {
   try {
     localStorage.setItem(DEFAULTS_KEY, JSON.stringify(defaults));
   } catch {
@@ -448,7 +453,7 @@ function threadKey(threadId: string | null | undefined): string {
 function rememberOpen(
   state: Pick<BrowserPanelState, 'openByThread' | 'panelThreadId'>,
   open: boolean,
-): Record<string, boolean> {
+): BrowserPanelState['openByThread'] {
   return { ...state.openByThread, [threadKey(state.panelThreadId)]: open };
 }
 

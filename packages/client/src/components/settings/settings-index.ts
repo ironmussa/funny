@@ -97,6 +97,53 @@ const ENTRIES = [
     keywords: ['sound', 'audio', 'sonido'],
   },
 
+  // ── Preferences › Models ──────────────────────────────────────────────
+  {
+    id: 'models.utility-model',
+    scope: 'preferences',
+    page: 'models',
+    kind: 'section',
+    title: 'settings.utilityModel',
+    description: 'settings.utilityModelDesc',
+    keywords: ['utility', 'helper', 'recap', 'summary', 'resumen', 'commit message', 'haiku'],
+  },
+  {
+    id: 'models.thread-recap',
+    scope: 'preferences',
+    page: 'models',
+    kind: 'row',
+    title: 'settings.threadRecap',
+    description: 'settings.threadRecapDesc',
+    keywords: ['recap', 'summary', 'resumen', 'resumo', 'away', 'catch up'],
+  },
+  {
+    id: 'models.utility-model-provider',
+    scope: 'preferences',
+    page: 'models',
+    kind: 'row',
+    title: 'settings.utilityModelProvider',
+    description: 'settings.utilityModelProviderDesc',
+    keywords: ['utility model', 'recap', 'summary', 'resumen', 'openai', 'ollama', 'anthropic'],
+  },
+  {
+    id: 'models.utility-model-name',
+    scope: 'preferences',
+    page: 'models',
+    kind: 'row',
+    title: 'settings.utilityModelName',
+    description: 'settings.utilityModelNameDesc',
+    keywords: ['utility model', 'recap', 'summary', 'resumen', 'haiku'],
+  },
+  {
+    id: 'models.utility-model-base-url',
+    scope: 'preferences',
+    page: 'models',
+    kind: 'row',
+    title: 'settings.utilityModelBaseUrl',
+    description: 'settings.utilityModelBaseUrlDesc',
+    keywords: ['utility model', 'endpoint', 'openai-compatible', 'url'],
+  },
+
   // ── Preferences › Appearance ──────────────────────────────────────────
   {
     id: 'appearance.theme',

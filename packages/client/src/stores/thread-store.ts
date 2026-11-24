@@ -45,6 +45,7 @@ import { create } from 'zustand';
 import { restoreAgentAccounts } from '@/data/agent-account/store';
 import { restoreContextUsage } from '@/data/context-usage/store';
 import { seedQueueSummary } from '@/data/queue/store';
+import { newestActivity } from '@/data/thread-recap/activity';
 import {
   archiveThread as archiveThreadRow,
   deleteThread as deleteThreadRow,
@@ -104,7 +105,7 @@ import {
   isThreadDataLoaded,
 } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
-import { useThreadReadStore } from './thread-read-store';
+import { recordThreadOpened, useThreadReadStore } from './thread-read-store';
 import { patchThreadRow } from './thread-row-writes';
 import {
   computeNextActiveThread,
@@ -598,6 +599,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       }
 
       bridgeSelectProject(projectId);
+
+      // Before the open marks it read: the recap card's `since` is the read
+      // marker as the owner left it (openspec thread-recap).
+      recordThreadOpened(threadId, {
+        createdAt: thread.createdAt ?? null,
+        ...newestActivity(thread.messages, thread.hasMoreAfter),
+      });
 
       // Mark the thread as read so the unread blue dot in the sidebar clears.
       if (thread.completedAt) {

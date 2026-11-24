@@ -265,6 +265,48 @@ export function canShowComments(thread: ThreadLike): boolean {
   return !thread.isScratch;
 }
 
+// ── Thread recap ─────────────────────────────────────────────────
+
+/**
+ * Whether a recap of the thread's activity may be offered to the viewer
+ * (openspec `thread-recap`): only to its owner, never to a sharee (the server
+ * refuses them too), and never for a sandbox thread, whose runner has no
+ * credential for the user's utility model.
+ */
+export function canShowRecap(
+  thread: (Pick<Thread, 'userId'> & { runtime?: string | null }) | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  if (!thread || !currentUserId) return false;
+  return thread.userId === currentUserId && !runsInSandbox(thread);
+}
+
+/** How long the owner must have been away before a recap is offered. */
+export const RECAP_MIN_ABSENCE_MS = 5 * 60_000;
+
+function timeOf(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Whether the thread has activity the owner has not seen after an absence of
+ * at least `RECAP_MIN_ABSENCE_MS`. A thread never read counts as read at its
+ * creation time. `now` is passed in so the rule stays pure.
+ */
+export function shouldOfferRecap(
+  readAt: string | null | undefined,
+  newestActivityAt: string | null | undefined,
+  now: number,
+  createdAt: string | null | undefined,
+): boolean {
+  const read = timeOf(readAt) ?? timeOf(createdAt);
+  const newest = timeOf(newestActivityAt);
+  if (read === null || newest === null) return false;
+  return newest > read && now - read >= RECAP_MIN_ABSENCE_MS;
+}
+
 // ── Routing ──────────────────────────────────────────────────────
 
 /**

@@ -414,6 +414,36 @@ describe('factory over tRPC', () => {
     }
   });
 
+  // openspec factory-approval-survives-integration, 4.2.
+  test('the adjustment a merge approval follows is off by default, saved within its range, and needs steer', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      approvalAdjustMaxLines: 0,
+    });
+    const saved = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      approvalAdjustMaxLines: 50,
+    });
+    expect(saved.body).toMatchObject({ approvalAdjustMaxLines: 50 });
+    // Omitted, it keeps its value; 0 turns it off again.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      approvalAdjustMaxLines: 50,
+    });
+    for (const approvalAdjustMaxLines of [-1, 201, 12.5]) {
+      expect(
+        (await save('alice', { projectId: 'p1', enabled: true, approvalAdjustMaxLines })).status,
+      ).toBe(400);
+    }
+    // A viewer of the project may not set it.
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect(
+      (await save('vic', { projectId: 'p1', enabled: true, approvalAdjustMaxLines: 10 })).status,
+    ).toBe(403);
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: true, approvalAdjustMaxLines: 0 })).body,
+    ).toMatchObject({ approvalAdjustMaxLines: 0 });
+  });
+
   // openspec factory-flow-step-options, 4.1.
   test('step overrides are saved and read back; a permission mode or a bad pair is refused', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({

@@ -32,13 +32,16 @@ import {
 } from '@funny/shared/browser-v1/operations';
 import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 
-import { SocketIoClientRealtimePort } from '@/lib/realtime/socketio-realtime-port';
+import {
+  SocketIoClientRealtimePort,
+  type SocketWirePayload,
+} from '@/lib/realtime/socketio-realtime-port';
 
 class FakeSocket {
   connected = false;
   readonly emitted: Array<{ event: string; payload: unknown }> = [];
   readonly handlers = new Map<string, Set<(...args: any[]) => void>>();
-  readonly acknowledgements = new Map<string, unknown>();
+  readonly acknowledgements = new Map<string, SocketWirePayload | Error>();
 
   on(event: string, listener: (...args: any[]) => void): void {
     const listeners = this.handlers.get(event) ?? new Set();
@@ -51,7 +54,9 @@ class FakeSocket {
   emit(event: string, payload: unknown): void {
     this.emitted.push({ event, payload });
   }
-  timeout(): { emitWithAck: (event: string, payload: unknown) => Promise<unknown> } {
+  timeout(): {
+    emitWithAck: (event: string, payload: unknown) => Promise<SocketWirePayload>;
+  } {
     return {
       emitWithAck: async (event, payload) => {
         this.emitted.push({ event, payload });

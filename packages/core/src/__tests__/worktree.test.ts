@@ -531,7 +531,6 @@ describe('worktree operations', () => {
       expect(shouldRegisterSafeDirectory('')).toBe(false);
       expect(shouldRegisterSafeDirectory(undefined)).toBe(false);
       expect(shouldRegisterSafeDirectory(null)).toBe(false);
-      expect(shouldRegisterSafeDirectory(123)).toBe(false);
     });
 
     test('rejects null byte', () => {

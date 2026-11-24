@@ -44,9 +44,16 @@ function tokenEnvVar(name: string): string {
 
 type CodexEntry = CodexMcpConfig['mcpServers'][string];
 
+/** One entry of the internal MCP server map; `type` and `url` are checked before use. */
+interface InternalMcpEntry {
+  type?: unknown;
+  url?: unknown;
+  headers?: Readonly<Record<string, unknown>> | null;
+}
+
 /** The bearer token in an entry's `Authorization` header, if any. */
-function bearerToken(headers: unknown): string | undefined {
-  const authorization = Object.entries((headers ?? {}) as Record<string, unknown>).find(
+function bearerToken(headers: InternalMcpEntry['headers']): string | undefined {
+  const authorization = Object.entries(headers ?? {}).find(
     ([key]) => key.toLowerCase() === 'authorization',
   )?.[1];
   return /^Bearer\s+(\S+)$/i.exec(String(authorization ?? ''))?.[1];
@@ -55,12 +62,12 @@ function bearerToken(headers: unknown): string | undefined {
 /** One streamable-HTTP server as a Codex entry, its token moved to `env`; null for others. */
 function codexEntry(
   name: string,
-  raw: unknown,
+  raw: InternalMcpEntry | null | undefined,
   extra: Partial<CodexEntry>,
   env: Record<string, string>,
 ): CodexEntry | null {
   if (!raw || !isObject(raw)) return null;
-  const { type, url, headers } = raw as { type?: unknown; url?: unknown; headers?: unknown };
+  const { type, url, headers } = raw;
   if (String(type ?? '').toLowerCase() !== 'http' || !isString(url)) return null;
   const timeout = isFunnyServer(url) ? { tool_timeout_sec: FUNNY_TOOL_TIMEOUT_SEC } : {};
   const token = bearerToken(headers);

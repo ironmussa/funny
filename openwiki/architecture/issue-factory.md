@@ -385,6 +385,31 @@ reads the role's prose as a decision:
   with its review and proof (`carryChecks` in `factory-action-provider.ts`,
   `carryMergeApproval` in `factory-runs.ts`, `carriedFrom` names the approved commit). Any other
   new commit needs a new approval.
+  The hold is on a head that includes the base: before `merge` parks a high-risk change, it brings
+  the base in (`heldOnCurrentBase`, the lane's `updateBase`) without waiting for the new head's
+  checks, which run while the member decides. A conflict goes to integration first. Not where
+  GitHub's merge queue is required (openspec `factory-approval-survives-integration`).
+  The approval also follows the **same change** to any later commit: when the head is not the
+  approved commit, the risk gate asks the run's runner for the change's delta (the factory step
+  `change-delta`, `runtime/services/factory-change-delta.ts`: per file, the lines the pull request
+  adds and removes against its base at the approved commit and at the head, without positions).
+  A head that descends from the approved commit with a delta of zero is covered, whoever merged
+  the base in and whatever that merge settled (`approvalCovers` in `factory-approval-carry.ts`);
+  each move is kept in the approval's `moves`. A delta that is not zero, a rewritten branch, or a
+  runner that cannot answer (offline, or from before the step) leaves the run waiting, with the
+  reason in the hold message. The delta is always taken from the commit the member approved.
+  A factory may also let the approval follow a **small adjustment** (`approvalAdjustMaxLines` in
+  the factory settings, 0 to 200 lines, **0 by default: off**): the delta is at most that many
+  lines, only in files the approved change touched, and the head's risk classification has no key
+  the approved commit lacked. `classifyRisk` gives each reason a stable key (`size`,
+  `sensitive:<path>`, `finding:<kind>:<path>`, `contract:<hash>`); approving stores them in the
+  approval's `riskKeys`, and an approval without them follows only the same change. With the
+  setting on the factory merges lines no person read: the review of the new commit is the
+  remaining guard.
+  Every move is announced (`announceApprovalMove`): a comment on the pull request that says it is
+  automated and that no person approved the new commit, the activity `factory.approval-moved` of
+  the member who approved, and the run detail's "Merge approved at … moved to …". A comment that
+  cannot be posted is logged and does not stop the merge.
 - **Take over**: when the thread's **owner** follows up on a parked run's last thread after it
   parked (noted by `POST /api/threads/:id/message`), the run resumes from that step when the thread
   completes (when the factory is full, the run stays parked; a later completion of the follow-up,

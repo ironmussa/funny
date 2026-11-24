@@ -191,6 +191,22 @@ export const ACTIVITY_KINDS = {
       sha: z.string().max(64).optional(),
     }),
   },
+  // A member's merge approval moved to another commit of the pull request
+  // (openspec factory-approval-survives-integration): recorded for the approver.
+  'factory.approval-moved': {
+    scope: 'project',
+    // The merge it allows is recorded as its own `factory.merge`.
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      issueNumber: z.number().int().optional(),
+      from: z.string().max(64),
+      to: z.string().max(64),
+      change: z.enum(['same', 'adjustment']),
+      lines: z.number().int().min(0),
+      files: z.array(z.string()).max(20),
+    }),
+  },
   // flow-triggers: a schedule occurrence that started no run.
   'factory.trigger_skipped': {
     scope: 'project',

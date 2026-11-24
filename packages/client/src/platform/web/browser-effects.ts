@@ -1,5 +1,8 @@
 import type { DiagnosticService, EffectService, SemanticEffect } from '@funny/client-core';
 
+/** An effect the browser forwards to the page as a DOM `CustomEvent`. */
+type ApplicationEventEffect = Extract<SemanticEffect, { type: 'application-event' }>;
+
 export interface BrowserEffectRuntime {
   toast(
     level: Extract<SemanticEffect, { type: 'toast' }>['level'],
@@ -8,7 +11,7 @@ export interface BrowserEffectRuntime {
   ): void;
   notify(title: string, options?: NotificationOptions): void;
   notificationPermission(): NotificationPermission | 'unsupported';
-  dispatch(name: string, detail: unknown): void;
+  dispatch(event: ApplicationEventEffect): void;
 }
 
 export function createBrowserEffectService(
@@ -23,7 +26,7 @@ export function createBrowserEffectService(
         return;
       }
       if (effect.type === 'application-event') {
-        runtime.dispatch(effect.name, effect.detail);
+        runtime.dispatch(effect);
         return;
       }
       if (runtime.notificationPermission() !== 'granted') {
@@ -51,6 +54,6 @@ export function browserEffectRuntime(
     notify: (title, options) => {
       new Notification(title, options);
     },
-    dispatch: (name, detail) => win.dispatchEvent(new CustomEvent(name, { detail })),
+    dispatch: ({ name, detail }) => win.dispatchEvent(new CustomEvent(name, { detail })),
   };
 }

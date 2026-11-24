@@ -3,6 +3,19 @@ import { EventEmitter } from 'events';
 import { sleep as effectSleep } from '@funny/shared/async';
 import CDP from 'chrome-remote-interface';
 
+/**
+ * A page value returned by value (`Runtime.evaluate` with `returnByValue`):
+ * CDP sends it as JSON, and `undefined` for `undefined` and unserializable numbers.
+ */
+export type EvaluatedValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | EvaluatedValue[]
+  | { [key: string]: EvaluatedValue };
+
 export interface ScreencastFrame {
   data: string; // base64 JPEG
   timestamp: number;
@@ -207,7 +220,7 @@ export class ChromeSession extends EventEmitter {
     }
   }
 
-  async execute(expression: string): Promise<unknown> {
+  async execute(expression: string): Promise<EvaluatedValue> {
     if (!this.client) throw new Error('Not connected');
     const result = await this.client.Runtime.evaluate({
       expression,

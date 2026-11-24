@@ -12,6 +12,8 @@
  * person.
  */
 
+import { createHash } from 'node:crypto';
+
 import type { PullRequestFiles } from '@funny/core/github-app';
 import { DEFAULT_MAX_LOW_RISK_LINES, type FactoryRisk } from '@funny/shared/contracts/factory';
 
@@ -88,26 +90,48 @@ function matches(glob: string, path: string): boolean {
   }
 }
 
-function sensitiveReasons(input: RiskInput): string[] {
+/**
+ * A reason a change is high risk, with its stable key: what the reason is
+ * about, without its numbers. Two commits with the same keys have the same
+ * kinds of risk (openspec factory-approval-survives-integration, D4), so a
+ * change that was over the size limit and grew has no new one.
+ */
+interface RiskReason {
+  key: string;
+  text: string;
+}
+
+/** The key of a change that could not be read (the caller classes it high risk itself). */
+export const UNREADABLE_RISK_KEY = 'unreadable';
+
+function sensitiveReasons(input: RiskInput): RiskReason[] {
   const globs = [...DEFAULT_SENSITIVE_PATHS, ...(input.sensitivePaths ?? [])];
-  const reasons: string[] = [];
+  const reasons: RiskReason[] = [];
   for (const file of input.change.files) {
     const paths = file.previousPath ? [file.path, file.previousPath] : [file.path];
     const glob = globs.find((candidate) => paths.some((path) => matches(candidate, path)));
-    if (glob) reasons.push(`touches a sensitive path: ${file.path} (${glob})`);
+    if (glob) {
+      reasons.push({
+        key: `sensitive:${file.path}`,
+        text: `touches a sensitive path: ${file.path} (${glob})`,
+      });
+    }
   }
   return reasons;
 }
 
-function sizeReasons(input: RiskInput): string[] {
+function sizeReasons(input: RiskInput): RiskReason[] {
   const limit = input.maxLowRiskLines ?? MAX_LOW_RISK_LINES;
   const lines = input.change.files
     .filter((file) => countsTowardSize(file.path, input.sizeIgnoredPaths))
     .reduce((sum, file) => sum + file.additions + file.deletions, 0);
   return lines > limit
-    ? [`${lines} changed lines outside tests and docs (more than ${limit})`]
+    ? [{ key: 'size', text: `${lines} changed lines outside tests and docs (more than ${limit})` }]
     : [];
 }
+
+const hintKey = (hint: string) =>
+  `contract:${createHash('sha1').update(hint).digest('hex').slice(0, 12)}`;
 
 function capped(reasons: string[]): string[] {
   if (reasons.length <= MAX_REASONS) return reasons;
@@ -116,17 +140,23 @@ function capped(reasons: string[]): string[] {
 }
 
 export function classifyRisk(input: RiskInput): FactoryRisk {
-  const reasons = [
-    ...input.findings.map(
-      (finding) => `${finding.kind}${finding.path ? ` in ${finding.path}` : ''}: ${finding.detail}`,
-    ),
+  const reasons: RiskReason[] = [
+    ...input.findings.map((finding) => ({
+      key: `finding:${finding.kind}:${finding.path ?? ''}`,
+      text: `${finding.kind}${finding.path ? ` in ${finding.path}` : ''}: ${finding.detail}`,
+    })),
     ...sizeReasons(input),
     ...sensitiveReasons(input),
-    ...(input.riskHints ?? []).map((hint) => `the contract names a risk: ${hint.slice(0, 200)}`),
+    ...(input.riskHints ?? []).map((hint) => ({
+      key: hintKey(hint),
+      text: `the contract names a risk: ${hint.slice(0, 200)}`,
+    })),
   ];
   return {
     headSha: input.headSha,
     level: reasons.length > 0 ? 'high' : 'low',
-    reasons: capped(reasons),
+    reasons: capped(reasons.map((reason) => reason.text)),
+    // Every key, not only those of the reasons shown: a hidden reason is still a reason.
+    keys: [...new Set(reasons.map((reason) => reason.key))],
   };
 }

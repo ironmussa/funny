@@ -2,7 +2,11 @@
  * The sections of a run's detail panel (openspec factory-run-detail, D3), in
  * pipeline order. Each one shows only what the run has reached.
  */
-import type { FactoryReviewVerdict, FactoryTriage } from '@funny/shared/contracts/factory';
+import type {
+  FactoryMergeApproval,
+  FactoryReviewVerdict,
+  FactoryTriage,
+} from '@funny/shared/contracts/factory';
 import { ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -222,10 +226,47 @@ export function RunReviews({ run }: { run: FactoryQueueRun }) {
   );
 }
 
+/**
+ * A member's approval to merge the high-risk change: the commit they approved
+ * and each commit the factory moved it to (openspec
+ * factory-approval-survives-integration), so what merged on a moved approval
+ * can be read afterwards.
+ */
+function RunMergeApproval({ approval }: { approval: FactoryMergeApproval }) {
+  const { t } = useTranslation();
+  const moves = approval.moves ?? [];
+  return (
+    <div className="flex flex-col gap-0.5" data-testid="factory-run-detail-approval">
+      <p>
+        {t('factoryRunDetail.approvedAt', 'Merge approved at')}{' '}
+        <span className="font-mono">{short(approval.carriedFrom ?? approval.sha)}</span>
+      </p>
+      {moves.length > 0 && (
+        <ul className="flex flex-col gap-0.5 border-l pl-2">
+          {moves.map((move, index) => (
+            <li key={move.to} data-testid={`factory-run-detail-approval-move-${index}`}>
+              {t('factoryRunDetail.approvalMovedTo', 'moved to')}{' '}
+              <span className="font-mono">{short(move.to)}</span>
+              {' · '}
+              {move.kind === 'same'
+                ? t('factoryRunDetail.approvalSameChange', 'same change')
+                : t(
+                    'factoryRunDetail.approvalAdjustment',
+                    '{{lines}} lines differ in {{files}} files',
+                    { lines: move.lines, files: move.files.length },
+                  )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
   const { t } = useTranslation();
   const { ciRounds, ciRed, conflicts, agentFixes } = run.metrics;
-  if (!run.risk && ciRounds === 0) return null;
+  if (!run.risk && !run.mergeApproval && ciRounds === 0) return null;
   return (
     <DetailSection id="risk-ci" title={t('factoryRunDetail.riskCi', 'Risk and CI')}>
       {run.risk && (
@@ -237,6 +278,7 @@ export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
             : t('factoryRunDetail.riskLow', 'Low risk')}
         </p>
       )}
+      {run.mergeApproval && <RunMergeApproval approval={run.mergeApproval} />}
       {ciRounds > 0 && (
         <p data-testid="factory-run-detail-ci">
           {t(

@@ -183,7 +183,11 @@ describe('web client platform', () => {
     effects.emit({ type: 'application-event', name: 'thread:done', detail: { id: '1' } });
     effects.emit({ type: 'notification', title: 'Done' });
     expect(toast).toHaveBeenCalledWith('success', 'done');
-    expect(dispatch).toHaveBeenCalledWith('thread:done', { id: '1' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'application-event',
+      name: 'thread:done',
+      detail: { id: '1' },
+    });
     expect(notify).not.toHaveBeenCalled();
     expect(log.values.at(-1)?.optional).toBe(true);
   });

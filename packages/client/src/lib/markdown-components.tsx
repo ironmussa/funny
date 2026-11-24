@@ -219,7 +219,8 @@ export const baseMarkdownComponents = {
           disabled={disabled ?? true}
           // Task-list checkboxes are always read-only; keep full contrast (no
           // disabled dimming) so they render consistently across every theme.
-          className="relative top-[2px] mr-1 inline-flex align-baseline disabled:cursor-default disabled:opacity-100"
+          variant="readonly"
+          className="relative top-[2px] mr-1 inline-flex align-baseline"
           {...props}
         />
       );

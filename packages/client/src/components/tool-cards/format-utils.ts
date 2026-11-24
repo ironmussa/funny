@@ -55,18 +55,22 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
   return todos.length > 0 ? todos : null;
 }
 
-/** A tool call's input, as fields by name. */
-interface ToolInput {
-  [field: string]: unknown;
+/** A tool input that is not JSON, kept as its text. */
+type UnparsedToolInput = { value: string };
+
+function unparsedToolInput(text: string): UnparsedToolInput {
+  return { value: text };
 }
 
-export function formatInput(input: string | Record<string, unknown> | null | undefined): ToolInput {
+export function formatInput(
+  input: string | Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
   if (!input) return {};
   if (typeof input === 'string') {
     try {
       return JSON.parse(input);
     } catch {
-      return { value: input };
+      return unparsedToolInput(input);
     }
   }
   return input;

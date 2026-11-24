@@ -482,9 +482,9 @@ function JobRow({ projectId, job }: { projectId: string; job: ActionJob }) {
         {failed && (
           <Button
             variant="muted"
-            size="xs"
+            size="2xs"
             onClick={() => setShowLog((v) => !v)}
-            className="h-5 shrink-0 px-1.5"
+            className="shrink-0"
             data-testid={`actions-job-log-toggle-${job.id}`}
           >
             {showLog
@@ -566,7 +566,8 @@ function ScopeToggle({
       <ToggleGroupItem
         value="branch"
         disabled={!currentBranch}
-        className="h-6 max-w-40 truncate px-2 text-xs"
+        size="xs"
+        className="max-w-40 truncate"
         title={currentBranch}
         data-testid="actions-scope-branch"
       >
@@ -576,7 +577,7 @@ function ScopeToggle({
           t('review.actions.thisBranch', 'This branch')
         )}
       </ToggleGroupItem>
-      <ToggleGroupItem value="all" className="h-6 px-2 text-xs" data-testid="actions-scope-all">
+      <ToggleGroupItem value="all" size="xs" data-testid="actions-scope-all">
         {t('review.actions.allBranches', 'All branches')}
       </ToggleGroupItem>
     </ToggleGroup>

@@ -148,9 +148,8 @@ function ReactionBar({
         <Button
           key={key}
           variant="outline"
-          size="xs"
+          size="3xs"
           gap="tight"
-          className="text-2xs h-5 px-1.5"
           disabled={disabled}
           onClick={() => onReact(key)}
           data-testid={`${testIdBase}-reaction-${key}`}
@@ -839,9 +838,8 @@ export function PinnedPRCard({
                         {th.node_id && (
                           <Button
                             variant="ghost"
-                            size="xs"
+                            size="3xs"
                             gap="tight"
-                            className="text-2xs h-5 px-1.5"
                             disabled={resolving}
                             onClick={() => handleResolve(th)}
                             data-testid={`pinned-pr-thread-resolve-${th.id}`}
@@ -906,9 +904,8 @@ export function PinnedPRCard({
                         <div className="pl-3">
                           <Button
                             variant="ghost"
-                            size="xs"
+                            size="3xs"
                             gap="tight"
-                            className="text-2xs h-5 px-1.5"
                             onClick={() => {
                               setReplyForThread(th.id);
                               setReplyBody('');

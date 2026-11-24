@@ -128,7 +128,7 @@ function McpServerToggle({
           {switchControl}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="left" className="max-w-xs p-3 text-left">
+      <TooltipContent side="left" variant="padded" className="max-w-xs text-left">
         <p className="leading-snug">{t(tooltipKey)}</p>
       </TooltipContent>
     </Tooltip>
@@ -146,8 +146,9 @@ function McpProtocolBadge({ type }: { type: McpServerType }) {
     <Badge
       variant={PROTOCOL_BADGE_VARIANT[type]}
       size="xs"
+      corners="square"
+      caps
       data-testid={`mcp-protocol-badge-${type}`}
-      className="rounded-md tracking-wider uppercase"
     >
       {type === 'stdio' ? <Terminal className="icon-2xs" /> : <Globe className="icon-2xs" />}
       {type}
@@ -166,18 +167,13 @@ function McpStatusBadge({
 }) {
   if (tone === 'error') {
     return (
-      <Badge variant="error" size="xs" data-testid={testId} className="rounded-md">
+      <Badge variant="error" size="xs" corners="square" data-testid={testId}>
         {children}
       </Badge>
     );
   }
   return (
-    <Badge
-      variant="outline"
-      size="xs"
-      data-testid={testId}
-      className="bg-muted text-muted-foreground rounded-md border-transparent"
-    >
+    <Badge variant="subtle" size="xs" corners="square" data-testid={testId}>
       {children}
     </Badge>
   );
@@ -215,26 +211,22 @@ function InstalledServerCard({
   return (
     <Card
       data-testid={`mcp-installed-card-${server.name}`}
-      className={cn(
-        'flex flex-col shadow-none',
+      flat
+      tone={
         isDisabled
-          ? 'border-border/30 opacity-60'
+          ? 'disabled'
           : server.status === 'needs_auth'
-            ? 'border-status-warning/50'
+            ? 'warning'
             : server.status === 'error'
-              ? 'border-status-error/50'
-              : undefined,
-      )}
+              ? 'error'
+              : 'default'
+      }
+      className="flex flex-col"
     >
-      <CardHeader className="flex flex-row items-start gap-3 space-y-0 p-4 pb-2">
+      <CardHeader size="sm" className="flex flex-row items-start gap-3 space-y-0">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle
-              className={cn(
-                'truncate text-sm font-medium leading-snug',
-                isDisabled && 'text-muted-foreground',
-              )}
-            >
+            <CardTitle size="sm" className={cn('truncate', isDisabled && 'text-muted-foreground')}>
               {server.name}
             </CardTitle>
             <McpProtocolBadge type={server.type} />
@@ -255,7 +247,7 @@ function InstalledServerCard({
               </McpStatusBadge>
             )}
           </div>
-          <CardDescription className="mt-1 truncate text-xs">
+          <CardDescription size="sm" className="mt-1 truncate">
             {server.url || [server.command, ...(server.args || [])].join(' ')}
           </CardDescription>
         </div>
@@ -283,7 +275,7 @@ function InstalledServerCard({
         </div>
       </CardHeader>
       {needsAuthActions && (
-        <CardFooter className="flex-col items-stretch gap-2 p-4 pt-0">
+        <CardFooter size="sm" className="flex-col items-stretch gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
@@ -365,20 +357,17 @@ function RecommendedServerCard({
   const { t } = useTranslation();
 
   return (
-    <Card
-      data-testid={`mcp-recommended-card-${server.name}`}
-      className="flex h-full flex-col shadow-none"
-    >
-      <CardHeader className="flex-1 space-y-2 p-4 pb-2">
+    <Card data-testid={`mcp-recommended-card-${server.name}`} flat className="flex h-full flex-col">
+      <CardHeader size="sm" className="flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-sm leading-snug font-medium">{server.name}</CardTitle>
+          <CardTitle size="sm">{server.name}</CardTitle>
           <McpProtocolBadge type={server.type} />
         </div>
-        <CardDescription className="line-clamp-3 text-xs leading-relaxed">
+        <CardDescription size="sm" className="line-clamp-3 leading-relaxed">
           {server.description}
         </CardDescription>
       </CardHeader>
-      <CardFooter className="p-4 pt-0">
+      <CardFooter size="sm">
         <Button
           variant={installed ? 'ghost' : 'outline'}
           size="sm"
@@ -684,12 +673,7 @@ export function McpServerSettings() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="px-2"
-            >
+            <Button variant="ghost" size="sm-tight" onClick={() => setShowAddForm(!showAddForm)}>
               {showAddForm ? (
                 <ChevronUp className="icon-xs mr-1" />
               ) : (
@@ -714,7 +698,7 @@ export function McpServerSettings() {
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
                   placeholder="my-server"
-                  className="h-8 px-2"
+                  size="sm-tight"
                 />
               </div>
               <div>
@@ -745,7 +729,7 @@ export function McpServerSettings() {
                   value={addUrl}
                   onChange={(e) => setAddUrl(e.target.value)}
                   placeholder="https://api.example.com/mcp"
-                  className="h-8 px-2"
+                  size="sm-tight"
                 />
               </div>
             ) : (
@@ -760,7 +744,7 @@ export function McpServerSettings() {
                     value={addCommand}
                     onChange={(e) => setAddCommand(e.target.value)}
                     placeholder="npx"
-                    className="h-8 px-2"
+                    size="sm-tight"
                   />
                 </div>
                 <div>
@@ -773,7 +757,7 @@ export function McpServerSettings() {
                     value={addArgs}
                     onChange={(e) => setAddArgs(e.target.value)}
                     placeholder="-y @package/name"
-                    className="h-8 px-2"
+                    size="sm-tight"
                   />
                 </div>
               </div>

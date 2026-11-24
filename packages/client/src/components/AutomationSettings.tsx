@@ -328,8 +328,7 @@ export function AutomationSettings() {
                       </div>
                       <Button
                         variant="ghost"
-                        size="xs"
-                        className="h-5 px-1.5"
+                        size="2xs"
                         onClick={() => {
                           navigate(
                             buildPath(`/projects/${selectedProjectId}/threads/${run.threadId}`),
@@ -368,7 +367,7 @@ export function AutomationSettings() {
               </label>
               <Input
                 id="automation-name"
-                className="settings-form-input"
+                size="form"
                 placeholder="e.g. Daily Issue Triage"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -381,7 +380,8 @@ export function AutomationSettings() {
               </label>
               <Textarea
                 id="automation-prompt"
-                className="min-h-[100px] resize-y text-sm"
+                textSize="sm"
+                className="min-h-[100px] resize-y"
                 placeholder="What should the agent do?"
                 value={form.prompt}
                 onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}

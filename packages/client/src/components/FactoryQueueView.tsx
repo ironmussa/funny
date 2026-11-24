@@ -345,7 +345,8 @@ function FactoryQueueSearch({
       autoFocus={false}
       placeholder={t('factoryView.searchPlaceholder', 'Filter by issue, project or step')}
       testIdPrefix="factory-view-search"
-      className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
+      variant="outline"
+      className="h-7 w-72 shrink-0"
     />
   );
 }

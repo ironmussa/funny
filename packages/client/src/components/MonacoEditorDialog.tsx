@@ -653,7 +653,8 @@ export function MonacoEditorDialog({
                 regex={showAdvancedToggles ? regex : undefined}
                 onRegexChange={showAdvancedToggles ? setRegex : undefined}
                 testIdPrefix="editor-search"
-                className="border-border bg-popover absolute top-3 right-4 z-10 rounded-md border px-2 py-1 shadow-md"
+                variant="overlay"
+                className="absolute top-3 right-4 z-10"
               />
             )}
             {showPreview && isHtml ? (

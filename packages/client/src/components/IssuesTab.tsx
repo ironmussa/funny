@@ -197,7 +197,7 @@ function IssuesToolbar({
         </SelectTrigger>
         <SelectContent>
           {(['open', 'closed'] as IssueState[]).map((s) => (
-            <SelectItem key={s} value={s} className="text-xs" data-testid={`issues-filter-${s}`}>
+            <SelectItem key={s} value={s} textSize="xs" data-testid={`issues-filter-${s}`}>
               {stateLabel(s)}
             </SelectItem>
           ))}

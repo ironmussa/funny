@@ -351,12 +351,7 @@ export function SkillsSettings() {
           <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             {t('skills.globalSkills')}
           </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCustom(!showCustom)}
-            className="px-2"
-          >
+          <Button variant="ghost" size="sm-tight" onClick={() => setShowCustom(!showCustom)}>
             {showCustom ? (
               <ChevronUp className="icon-xs mr-1" />
             ) : (

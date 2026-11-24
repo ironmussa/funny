@@ -48,7 +48,8 @@ const DesktopModeSelect = memo(function DesktopModeSelect({
         data-testid="prompt-mode-select"
         tabIndex={-1}
         size="xs"
-        className="w-auto border-none bg-transparent shadow-none"
+        variant="ghost"
+        className="w-auto"
       >
         <SelectValue />
       </SelectTrigger>
@@ -370,7 +371,8 @@ const DesktopTemplateSelect = memo(function DesktopTemplateSelect({
         data-testid="prompt-template-select"
         tabIndex={-1}
         size="xs"
-        className="w-auto border-none bg-transparent shadow-none"
+        variant="ghost"
+        className="w-auto"
       >
         <span className="flex items-center gap-1">
           <Bot className="icon-xs" />
@@ -384,21 +386,21 @@ const DesktopTemplateSelect = memo(function DesktopTemplateSelect({
         {userTemplates.length > 0 && (
           <SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-2xs">My Templates</SelectLabel>
+            <SelectLabel size="2xs">My Templates</SelectLabel>
             {userTemplates.map(renderItem)}
           </SelectGroup>
         )}
         {sharedTemplates.length > 0 && (
           <SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-2xs">Shared</SelectLabel>
+            <SelectLabel size="2xs">Shared</SelectLabel>
             {sharedTemplates.map(renderItem)}
           </SelectGroup>
         )}
         {builtinTemplates.length > 0 && (
           <SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-2xs">Built-in</SelectLabel>
+            <SelectLabel size="2xs">Built-in</SelectLabel>
             {builtinTemplates.map(renderItem)}
           </SelectGroup>
         )}

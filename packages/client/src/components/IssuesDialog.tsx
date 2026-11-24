@@ -193,7 +193,8 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="size-6 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                          reveal="hover-fade"
+                          className="size-6 shrink-0 p-0"
                           onClick={() => handleCreateThread(issue)}
                           data-testid={`issue-create-thread-${issue.number}`}
                         >

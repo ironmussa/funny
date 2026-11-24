@@ -269,9 +269,10 @@ function SearchablePickerContent({
           onKeyDown={handleSearchKeyDown}
           placeholder={searchPlaceholder}
           aria-label={label}
+          variant="bare"
           autoComplete="off"
           className={cn(
-            'h-auto w-full rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0',
+            'h-auto w-full',
             // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
             mobile && 'min-h-[48px] text-[16px]',
           )}
@@ -588,8 +589,9 @@ export function BranchPicker({
           data-testid={suffixTestId(testId, '-new-input')}
           size="xs"
           mono
+          variant="bare"
           className={cn(
-            'text-foreground h-auto w-40 rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0',
+            'text-foreground h-auto w-40',
             // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
             mobile && 'min-h-[48px] text-[16px]',
           )}

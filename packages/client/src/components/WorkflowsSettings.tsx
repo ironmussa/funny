@@ -440,7 +440,7 @@ function RunPanel({
         onChange={(event) => onInputsChange(event.target.value)}
         spellCheck={false}
         mono
-        className="text-xs"
+        textSize="xs"
         rows={4}
       />
     </section>
@@ -577,7 +577,8 @@ function Inspector({
           onBlur={applyAction}
           spellCheck={false}
           mono
-          className="min-h-28 text-xs"
+          textSize="xs"
+          className="min-h-28"
         />
         <Textarea
           value={retrySource}
@@ -586,7 +587,8 @@ function Inspector({
           placeholder='{"max_attempts":2}'
           spellCheck={false}
           mono
-          className="min-h-20 text-xs"
+          textSize="xs"
+          className="min-h-20"
         />
         <Textarea
           value={loopSource}
@@ -595,7 +597,8 @@ function Inspector({
           placeholder='{"until":"done = true","back_to":"review"}'
           spellCheck={false}
           mono
-          className="min-h-20 text-xs"
+          textSize="xs"
+          className="min-h-20"
         />
       </div>
     </section>
@@ -624,7 +627,9 @@ function SourcePanel({
         onChange={(event) => onSourceChange(event.target.value)}
         spellCheck={false}
         mono
-        className="min-h-64 flex-1 resize-none rounded-none border-0 text-xs focus-visible:ring-0"
+        variant="bare"
+        textSize="xs"
+        className="min-h-64 flex-1 resize-none"
       />
       {diagnostics.length > 0 ? (
         <div className="border-border max-h-28 overflow-auto border-t p-2">

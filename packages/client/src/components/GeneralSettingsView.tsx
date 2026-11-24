@@ -22,7 +22,7 @@ export function GeneralSettingsView() {
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
-                <BreadcrumbPage className="truncate">{label}</BreadcrumbPage>
+                <BreadcrumbPage truncate>{label}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>

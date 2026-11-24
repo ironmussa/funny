@@ -74,13 +74,13 @@ export function AppShellSkeleton() {
         </div>
         {/* Message area */}
         <div className="flex-1 space-y-4 p-4">
-          <Skeleton className="h-14 w-3/4 rounded-lg" />
-          <Skeleton className="h-10 w-1/2 rounded-lg" />
-          <Skeleton className="h-14 w-2/3 rounded-lg" />
+          <Skeleton className="h-14 w-3/4" corners="lg" />
+          <Skeleton className="h-10 w-1/2" corners="lg" />
+          <Skeleton className="h-14 w-2/3" corners="lg" />
         </div>
         {/* Input area */}
         <div className="border-border border-t p-4">
-          <Skeleton className="h-20 w-full rounded-lg" />
+          <Skeleton className="h-20 w-full" corners="lg" />
         </div>
       </div>
     </div>

@@ -128,7 +128,8 @@ export function CommentsPane() {
                         <Button
                           variant="muted-destructive"
                           size="icon-sm"
-                          className="ml-auto h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
+                          reveal="hover"
+                          className="ml-auto h-6 w-6 shrink-0"
                           onClick={() => void deleteComment(threadId, c.id)}
                           data-testid={`comment-delete-${c.id}`}
                           aria-label={t('comments.delete', 'Delete comment')}
@@ -160,7 +161,8 @@ export function CommentsPane() {
               }
             }}
             placeholder={t('comments.placeholder', 'Write a comment…')}
-            className="max-h-32 min-h-9 resize-none text-sm"
+            textSize="sm"
+            className="max-h-32 min-h-9 resize-none"
             rows={1}
             data-testid="comment-input"
           />

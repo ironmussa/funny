@@ -122,33 +122,17 @@ export function CreateDesignDialog({
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mx-6 mt-4">
-          <TabsList className="bg-sidebar-accent/50 h-7 p-0.5">
-            <TabsTrigger
-              value="prototype"
-              data-testid="create-design-tab-prototype"
-              className="h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+          <TabsList variant="pane" size="sm">
+            <TabsTrigger value="prototype" data-testid="create-design-tab-prototype" size="sm">
               {t('createDesign.tabs.prototype', 'Prototype')}
             </TabsTrigger>
-            <TabsTrigger
-              value="slides"
-              data-testid="create-design-tab-slides"
-              className="h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+            <TabsTrigger value="slides" data-testid="create-design-tab-slides" size="sm">
               {t('createDesign.tabs.slides', 'Slide deck')}
             </TabsTrigger>
-            <TabsTrigger
-              value="template"
-              data-testid="create-design-tab-template"
-              className="h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+            <TabsTrigger value="template" data-testid="create-design-tab-template" size="sm">
               {t('createDesign.tabs.template', 'From template')}
             </TabsTrigger>
-            <TabsTrigger
-              value="other"
-              data-testid="create-design-tab-other"
-              className="h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+            <TabsTrigger value="other" data-testid="create-design-tab-other" size="sm">
               {t('createDesign.tabs.other', 'Other')}
             </TabsTrigger>
           </TabsList>

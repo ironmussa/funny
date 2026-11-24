@@ -194,7 +194,7 @@ export function StartupCommandsSettings() {
                   </label>
                   <Input
                     id={`startup-label-${cmd.id}`}
-                    className="settings-form-input"
+                    size="form"
                     placeholder={t('startup.label')}
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
@@ -208,7 +208,7 @@ export function StartupCommandsSettings() {
                   <Input
                     mono
                     id={`startup-command-${cmd.id}`}
-                    className="settings-form-input"
+                    size="form"
                     placeholder={t('startup.command')}
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
@@ -309,7 +309,7 @@ export function StartupCommandsSettings() {
               </label>
               <Input
                 id="startup-new-label"
-                className="h-auto py-1.5"
+                size="form"
                 placeholder={t('startup.label')}
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
@@ -323,7 +323,7 @@ export function StartupCommandsSettings() {
               <Input
                 mono
                 id="startup-new-command"
-                className="h-auto py-1.5"
+                size="form"
                 placeholder={t('startup.commandPlaceholder')}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}

@@ -500,7 +500,8 @@ function PromptField({
         onBlur={() => onBlur(localValue)}
         placeholder={placeholder}
         rows={3}
-        className="resize-y text-xs"
+        textSize="xs"
+        className="resize-y"
         data-testid={testId}
       />
     </div>

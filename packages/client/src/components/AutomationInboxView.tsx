@@ -196,7 +196,7 @@ export function AutomationInboxView() {
             </PopoverTrigger>
             <PopoverContent padding="none" className="w-[200px]" align="start">
               <Command>
-                <CommandInput placeholder="Search project..." className="h-8 text-xs" />
+                <CommandInput placeholder="Search project..." textSize="xs" className="h-8" />
                 <CommandList id={filterListId}>
                   <CommandEmpty className="py-3 text-xs">No project found.</CommandEmpty>
                   <CommandGroup>
@@ -206,7 +206,7 @@ export function AutomationInboxView() {
                         setFilterProjectId(null);
                         setFilterOpen(false);
                       }}
-                      className="text-xs"
+                      textSize="xs"
                     >
                       <Check
                         className={cn(
@@ -224,7 +224,7 @@ export function AutomationInboxView() {
                           setFilterProjectId(p.id);
                           setFilterOpen(false);
                         }}
-                        className="text-xs"
+                        textSize="xs"
                       >
                         <Check
                           className={cn(

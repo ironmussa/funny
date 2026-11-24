@@ -392,7 +392,8 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                   if (e.key === 'Escape') cancelCreateFolder();
                 }}
                 placeholder={t('folderPicker.newFolderPlaceholder')}
-                className="font-mono-explorer h-6 flex-1 text-xs"
+                textSize="xs"
+                className="font-mono-explorer h-6 flex-1"
                 data-testid="folder-picker-new-folder-input"
               />
               <TooltipIconButton

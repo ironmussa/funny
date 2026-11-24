@@ -195,7 +195,7 @@ export function ProjectConfigSettings() {
               <TooltipIconButton
                 variant="muted-destructive"
                 onClick={() => removeEnvFile(i)}
-                className="opacity-0 group-hover:opacity-100"
+                reveal="hover"
                 data-testid={`env-file-remove-${i}`}
                 tooltip={t('common.delete')}
               >
@@ -250,7 +250,8 @@ export function ProjectConfigSettings() {
                 <div className="flex items-center gap-2">
                   <Input
                     size="xs"
-                    className="w-32 text-sm font-medium"
+                    textSize="sm"
+                    className="w-32 font-medium"
                     defaultValue={group.name}
                     onBlur={(e) => updatePortGroup(gi, 'name', e.target.value)}
                     onKeyDown={(e) => {
@@ -275,7 +276,7 @@ export function ProjectConfigSettings() {
                 <TooltipIconButton
                   variant="muted-destructive"
                   onClick={() => removePortGroup(gi)}
-                  className="opacity-0 group-hover:opacity-100"
+                  reveal="hover"
                   data-testid={`port-group-remove-${gi}`}
                   tooltip={t('common.delete')}
                 >
@@ -417,7 +418,7 @@ export function ProjectConfigSettings() {
                 variant="muted-destructive"
                 size="icon-xs"
                 onClick={() => removePostCreate(i)}
-                className="opacity-0 group-hover:opacity-100"
+                reveal="hover"
                 data-testid={`post-create-remove-${i}`}
               >
                 <Trash2 className="icon-xs" />

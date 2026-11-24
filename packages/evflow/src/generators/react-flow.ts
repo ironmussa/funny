@@ -1,14 +1,4 @@
-import type {
-  EventModelData,
-  ElementKind,
-  AggregateDef,
-  ScreenDef,
-  ExternalDef,
-  AutomationDef,
-  SagaDef,
-  ReadModelDef,
-  SourceRef,
-} from '../types.js';
+import type { EventModelData, ElementKind, SourceRef } from '../types.js';
 
 // ── React Flow types (minimal, no runtime dependency) ─────
 
@@ -146,7 +136,7 @@ export function generateReactFlowGraph(
         position: { x: 0, y: 0 },
         data: {
           label: slice.name,
-          kind: 'command' as ElementKind, // placeholder
+          kind: 'command', // placeholder
           slices: [],
         },
         style: {
@@ -178,10 +168,10 @@ export function generateReactFlowGraph(
 
     // Add kind-specific data
     if ('fields' in el) {
-      node.data.fields = el.fields as Record<string, string>;
+      node.data.fields = el.fields;
     }
     if (el.kind === 'aggregate') {
-      node.data.invariants = (el as AggregateDef).invariants;
+      node.data.invariants = el.invariants;
     }
     if (el.source) {
       node.data.source = el.source;
@@ -227,37 +217,37 @@ export function generateReactFlowGraph(
 
     switch (el.kind) {
       case 'aggregate': {
-        const agg = el as AggregateDef;
+        const agg = el;
         for (const cmd of agg.handles) addEdge(cmd, agg.name, 'handles');
         for (const evt of agg.emits) addEdge(agg.name, evt, 'emits');
         break;
       }
       case 'screen': {
-        const scr = el as ScreenDef;
+        const scr = el;
         for (const rm of scr.displays) addEdge(rm, scr.name, 'displays');
         for (const cmd of scr.triggers) addEdge(scr.name, cmd, 'triggers');
         break;
       }
       case 'external': {
-        const ext = el as ExternalDef;
+        const ext = el;
         for (const cmd of ext.receives) addEdge(cmd, ext.name, 'receives');
         for (const evt of ext.emits) addEdge(ext.name, evt, 'emits');
         break;
       }
       case 'readModel': {
-        const rm = el as ReadModelDef;
+        const rm = el;
         for (const evt of rm.from) addEdge(evt, rm.name, 'projects');
         break;
       }
       case 'automation': {
-        const auto = el as AutomationDef;
+        const auto = el;
         addEdge(auto.on, auto.name, 'on');
         const triggers = Array.isArray(auto.triggers) ? auto.triggers : [auto.triggers];
         for (const cmd of triggers) addEdge(auto.name, cmd, 'triggers');
         break;
       }
       case 'saga': {
-        const saga = el as SagaDef;
+        const saga = el;
         for (const evt of saga.on) addEdge(evt, saga.name, 'listens');
         const triggers = Array.isArray(saga.triggers) ? saga.triggers : [saga.triggers];
         for (const cmd of triggers) addEdge(saga.name, cmd, 'triggers');

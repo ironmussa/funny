@@ -57,6 +57,7 @@ export function DataLoader() {
         const reader = new FileReader();
         reader.onload = (e) => {
           try {
+            // SAFETY: this reader is started with readAsText(file) below, so on load its result is the file's text (a string)
             loadJSON(e.target?.result as string);
           } catch (err) {
             alert(`Failed to parse JSON: ${err instanceof Error ? err.message : err}`);

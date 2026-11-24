@@ -41,7 +41,7 @@ export function isEvflowMethodCall(
   if (!ts.isPropertyAccessExpression(expr)) return false;
   const name = expr.name.text;
   if (methodName) return name === methodName;
-  return (EVFLOW_METHODS as readonly string[]).includes(name);
+  return EVFLOW_METHODS.some((method) => method === name);
 }
 
 /**

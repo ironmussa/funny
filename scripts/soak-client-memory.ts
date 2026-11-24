@@ -45,7 +45,12 @@ interface MemoryProfilerApi {
   }>;
 }
 
-type MemoryProfilerWindow = typeof window & { __funnyMemory?: MemoryProfilerApi };
+declare global {
+  interface Window {
+    /** The client's memory profiler (`packages/client`), installed on the page. */
+    __funnyMemory?: MemoryProfilerApi;
+  }
+}
 
 const repositoryRoot = resolve(import.meta.dir, '..');
 const MIB = 1024 * 1024;
@@ -142,12 +147,12 @@ function longThread(threadId: string, projectId: string) {
   };
 }
 
-async function responseJson(response: APIResponse) {
+async function responseJson(response: APIResponse): Promise<Record<string, unknown>> {
   const body = await response.text();
   if (!response.ok()) {
     throw new Error(`${response.url()} failed: ${response.status()} ${body}`);
   }
-  return JSON.parse(body) as Record<string, unknown>;
+  return JSON.parse(body);
 }
 
 async function prepareApplication(state: HarnessState, options: Options): Promise<void> {
@@ -224,7 +229,7 @@ async function prepareApplication(state: HarnessState, options: Options): Promis
     .getByTestId(`project-item-${state.projectId}`)
     .waitFor({ state: 'visible', timeout: 30_000 });
   state.profilerSessionId = await state.page.evaluate((sampleIntervalMs) => {
-    const profiler = (window as MemoryProfilerWindow)['__funnyMemory'];
+    const profiler = window.__funnyMemory;
     if (!profiler) return null;
     const status = profiler.status();
     if (status.active) return status.sessionId ?? null;
@@ -248,7 +253,7 @@ async function captureSample(
     state.cdp?.send('Runtime.getHeapUsage'),
     state.cdp?.send('Memory.getDOMCounters'),
     state.page?.evaluate(() => {
-      const api = (window as MemoryProfilerWindow)['__funnyMemory'];
+      const api = window.__funnyMemory;
       if (!api) return null;
       const status = api.status();
       const latest = api.getSamples().at(-1);
@@ -274,7 +279,7 @@ async function captureSample(
 
 async function markPhase(page: Page, phase: SoakPhaseName): Promise<void> {
   await page.evaluate((label) => {
-    const api = (window as MemoryProfilerWindow)['__funnyMemory'];
+    const api = window.__funnyMemory;
     api?.mark(`soak:${label}`);
   }, phase);
 }

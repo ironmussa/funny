@@ -22,23 +22,25 @@ export function resolveNativeDockLayout(value: string | null): DockLayoutState {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return normalizeDockLayout(NATIVE_DOCK_PANELS);
     }
-    const candidate = parsed as { version?: unknown; order?: unknown; sizes?: unknown };
-    const order = Array.isArray(candidate.order)
-      ? candidate.order.filter((id): id is string => typeof id === 'string')
+    const storedOrder = 'order' in parsed ? parsed.order : undefined;
+    const storedSizes = 'sizes' in parsed ? parsed.sizes : undefined;
+    const order = Array.isArray(storedOrder)
+      ? storedOrder.filter((id): id is string => typeof id === 'string')
       : undefined;
-    const legacyLayout = candidate.version !== NATIVE_DOCK_LAYOUT_VERSION;
+    const legacyLayout =
+      ('version' in parsed ? parsed.version : undefined) !== NATIVE_DOCK_LAYOUT_VERSION;
     if (order && legacyLayout) {
       const filesIndex = order.indexOf('files');
       if (filesIndex >= 0) order.splice(filesIndex, 1);
       order.push('files');
     }
-    const normalized = normalizeDockLayout(NATIVE_DOCK_PANELS, {
-      order,
-      sizes:
-        candidate.sizes && typeof candidate.sizes === 'object' && !Array.isArray(candidate.sizes)
-          ? (candidate.sizes as Record<string, number>)
-          : undefined,
-    });
+    // SAFETY: normalizeDockLayout drops every size that is not a finite positive number
+    // (`finitePositive`), so a non-number value read from storage never reaches the layout.
+    const sizes =
+      storedSizes && typeof storedSizes === 'object' && !Array.isArray(storedSizes)
+        ? (storedSizes as Record<string, number>)
+        : undefined;
+    const normalized = normalizeDockLayout(NATIVE_DOCK_PANELS, { order, sizes });
     return legacyLayout
       ? { ...normalized, order: [...normalized.order.filter((id) => id !== 'files'), 'files'] }
       : normalized;

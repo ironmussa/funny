@@ -38,8 +38,12 @@ function unsupported(reason: string): NativeHostSupport {
   return { supported: false, reason, fallbackCommand: 'bun run dev:client' };
 }
 
+function isNativeHostPlatform(platform: string): platform is NativeHostPlatform {
+  return platform in TARGETS;
+}
+
 export function detectNativeHostSupport(input: NativeHostInput): NativeHostSupport {
-  if (!(input.platform in TARGETS)) {
+  if (!isNativeHostPlatform(input.platform)) {
     return unsupported(`GPUIX does not publish a native binary for ${input.platform}`);
   }
   if (input.architecture !== 'arm64' && input.architecture !== 'x64') {
@@ -52,8 +56,7 @@ export function detectNativeHostSupport(input: NativeHostInput): NativeHostSuppo
       `GPUIX 0.11.0 requires glibc on Linux; detected ${input.linuxLibc ?? 'unknown libc'}`,
     );
   }
-  const platform = input.platform as NativeHostPlatform;
-  const architecture = input.architecture as NativeHostArchitecture;
+  const { platform, architecture } = input;
   const target = TARGETS[platform][architecture];
   const packageTarget =
     // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
@@ -70,10 +73,12 @@ export function detectNativeHostSupport(input: NativeHostInput): NativeHostSuppo
 }
 
 export function currentNativeHostInput(): NativeHostInput {
-  const report = process.report?.getReport() as
-    | { header?: { glibcVersionRuntime?: string } }
-    | undefined;
-  const glibc = report?.header?.glibcVersionRuntime;
+  const report = process.report?.getReport();
+  const header = report && 'header' in report ? report.header : undefined;
+  const glibc =
+    header instanceof Object && 'glibcVersionRuntime' in header
+      ? header.glibcVersionRuntime
+      : undefined;
   return {
     platform: process.platform,
     architecture: process.arch,

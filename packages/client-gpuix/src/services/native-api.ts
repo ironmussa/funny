@@ -39,16 +39,23 @@ export async function nativeJsonRequest<T>(options: {
   }
   if (!response.ok) {
     const error =
-      decoded && typeof decoded === 'object' ? (decoded as { error?: unknown }).error : null;
+      decoded && typeof decoded === 'object'
+        ? 'error' in decoded
+          ? decoded.error
+          : undefined
+        : null;
     const message =
       typeof error === 'string'
         ? error
         : error &&
             typeof error === 'object' &&
-            typeof (error as { message?: unknown }).message === 'string'
-          ? String((error as { message: string }).message)
+            'message' in error &&
+            typeof error.message === 'string'
+          ? error.message
           : `HTTP ${response.status}`;
     throw new NativeApiError(response.status, message);
   }
+  // SAFETY: `T` is the response shape the caller declares for this endpoint; like the web
+  // client, the native client does not validate response bodies.
   return decoded as T;
 }

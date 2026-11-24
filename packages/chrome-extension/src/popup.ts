@@ -19,19 +19,19 @@ import {
   type ProviderInfo,
 } from './api';
 
-const $ = (sel: string) => document.querySelector(sel) as HTMLElement | null;
+const $ = (sel: string) => document.querySelector<HTMLElement>(sel);
 
-// Elements
+// Elements (all declared in popup.html, with the element types given here)
 const connectionDot = $('#connectionDot')!;
 const activateBtn = $('#activateBtn')!;
 const annotationList = $('#annotationList')!;
-const serverUrlInput = $('#serverUrl') as HTMLInputElement;
-const apiTokenInput = $('#apiToken') as HTMLInputElement;
+const serverUrlInput = document.querySelector<HTMLInputElement>('#serverUrl')!;
+const apiTokenInput = document.querySelector<HTMLInputElement>('#apiToken')!;
 const apiTokenToggle = $('#apiTokenToggle')!;
-const projectSelect = $('#projectSelect') as HTMLSelectElement;
-const providerSelect = $('#providerSelect') as HTMLSelectElement;
-const modelSelect = $('#modelSelect') as HTMLSelectElement;
-const modeSelect = $('#modeSelect') as HTMLSelectElement;
+const projectSelect = document.querySelector<HTMLSelectElement>('#projectSelect')!;
+const providerSelect = document.querySelector<HTMLSelectElement>('#providerSelect')!;
+const modelSelect = document.querySelector<HTMLSelectElement>('#modelSelect')!;
+const modeSelect = document.querySelector<HTMLSelectElement>('#modeSelect')!;
 const testConnectionBtn = $('#testConnectionBtn')!;
 const statusBar = $('#statusBar')!;
 const statusText = $('#statusText')!;
@@ -97,9 +97,7 @@ async function loadProviderOptions() {
     providerData = result.providers || {};
 
     providerSelect.innerHTML = '';
-    const availableProviders = Object.entries(providerData!).filter(
-      ([, info]) => (info as ProviderInfo).available,
-    );
+    const availableProviders = Object.entries(providerData!).filter(([, info]) => info.available);
 
     if (availableProviders.length === 0) {
       providerSelect.innerHTML = '<option value="">No providers available</option>';
@@ -110,7 +108,7 @@ async function loadProviderOptions() {
     availableProviders.forEach(([key, info]) => {
       const opt = document.createElement('option');
       opt.value = key;
-      opt.textContent = (info as ProviderInfo).label || key;
+      opt.textContent = info.label || key;
       providerSelect.appendChild(opt);
     });
   } catch {

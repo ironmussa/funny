@@ -64,6 +64,8 @@ for (let run = 1; run <= repetitions; run += 1) {
   clearTimeout(timeout);
   if (timedOut) throw new Error(`Ingress run ${run} exceeded 45 seconds: ${stderr}`);
   if (exitCode !== 0) throw new Error(`Ingress run ${run} failed (${exitCode}): ${stderr}`);
+  // SAFETY: stdout is the JSON report `run-sustained.ts --ingress` prints with console.info
+  // when it passes (exit code 0, checked above); that report has the IngressRun fields.
   const result = JSON.parse(stdout) as IngressRun;
   if (result.status !== 'passed') throw new Error(`Ingress run ${run} did not pass`);
   if (result.durationMs > thresholds.maxDurationMs) {

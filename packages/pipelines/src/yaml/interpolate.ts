@@ -17,7 +17,7 @@
  *     fall-through-on-empty respectively.
  */
 
-import Mustache from 'mustache';
+import Mustache, { type TemplateSpans } from 'mustache';
 
 // Disable HTML escaping globally — see header comment for rationale.
 Mustache.escape = (text: string) => text;
@@ -97,23 +97,24 @@ export function interpolate(
  */
 export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: InterpolateOptions): T {
   if (value === null || value === undefined) return value;
-  if (isString(value)) return interpolate(value, scope, opts) as T & string;
+  if (isString(value)) {
+    // SAFETY: `value` is a string here, and rendering a string template yields a string.
+    return interpolate(value, scope, opts) as T & string;
+  }
   if (Array.isArray(value)) {
+    // SAFETY: `value` is an array here; the result maps it element by element, keeping its shape.
     return value.map((v) => interpolateObject(v, scope, opts)) as T & unknown[];
   }
   if (isObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    for (const [k, v] of Object.entries(value)) {
       out[k] = interpolateObject(v, scope, opts);
     }
+    // SAFETY: `out` has exactly `value`'s own keys, each holding the interpolated field value.
     return out as T & Record<string, unknown>;
   }
   return value;
 }
-
-// ── Internal helpers ────────────────────────────────────────
-
-type MustacheToken = [type: string, key: string, ...rest: unknown[]];
 
 function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
@@ -123,8 +124,14 @@ function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
-function assertScopeCoversTokens(tokens: unknown[], scope: TemplateScope, template: string): void {
-  for (const tok of tokens as MustacheToken[]) {
+// ── Internal helpers ────────────────────────────────────────
+
+function assertScopeCoversTokens(
+  tokens: TemplateSpans,
+  scope: TemplateScope,
+  template: string,
+): void {
+  for (const tok of tokens) {
     const [type, key] = tok;
     // Variable tags (`{{x}}`, `{{{x}}}`, `{{&x}}`) — must resolve.
     if (type === 'name' || type === '&') {
@@ -134,7 +141,7 @@ function assertScopeCoversTokens(tokens: unknown[], scope: TemplateScope, templa
     }
     // Section / inverted section — recurse into children.
     if ((type === '#' || type === '^') && Array.isArray(tok[4])) {
-      assertScopeCoversTokens(tok[4] as unknown[], scope, template);
+      assertScopeCoversTokens(tok[4], scope, template);
     }
   }
 }
@@ -146,6 +153,8 @@ function resolvePath(scope: TemplateScope, path: string): unknown {
   for (const seg of segments) {
     if (current === null || current === undefined) return undefined;
     if (!isObject(current)) return undefined;
+    // SAFETY: `current` is a non-null object here (both checked above); a missing key reads as
+    // undefined, which ends the path.
     current = (current as Record<string, unknown>)[seg];
   }
   return current;
@@ -157,7 +166,7 @@ function resolvePath(scope: TemplateScope, path: string): unknown {
  * Throws `TemplateInterpolationError` when the template does not parse.
  */
 export function templateVariables(template: string): string[] {
-  let tokens: unknown[];
+  let tokens: TemplateSpans;
   try {
     tokens = Mustache.parse(template);
   } catch (err) {
@@ -169,8 +178,8 @@ export function templateVariables(template: string): string[] {
   return namesIn(tokens);
 }
 
-function namesIn(tokens: unknown[]): string[] {
-  return (tokens as MustacheToken[]).flatMap((tok) => {
+function namesIn(tokens: TemplateSpans): string[] {
+  return tokens.flatMap((tok) => {
     const [type, key] = tok;
     const own = ['name', '&', '#', '^'].includes(type) ? [key] : [];
     // Sections keep their children at index 4.

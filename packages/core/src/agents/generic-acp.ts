@@ -762,7 +762,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       kind: acpKind,
       title,
       rawInput: toolCall.rawInput,
-      locations: toolCall.locations ?? undefined,
+      locations: toolCall.locations,
     });
     const toolInputForRule = serializeToolInputForRule(toolName, toolInput);
 

@@ -15,7 +15,7 @@ export interface ACPToolCallData {
   kind?: string; // ACP ToolKind: "read" | "edit" | "search" | "execute" | etc.
   title: string; // Human-readable description from ACP
   rawInput?: unknown; // Opaque input from the provider (often empty)
-  locations?: Array<{ path: string; line?: number | null }>; // File paths
+  locations?: Array<{ path: string; line?: number | null }> | null; // File paths (ACP may send null)
   content?: unknown[]; // ACP ToolCallContent blocks (resource / resource_link can carry a file path)
 }
 

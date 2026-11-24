@@ -350,21 +350,23 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     resetBinaryCache();
     const providers = await getAvailableProviders();
 
-    const providerInfo: Record<string, any> = {};
-    for (const [name, info] of providers) {
-      providerInfo[name] = {
-        available: info.available,
-        sdkAvailable: info.sdkAvailable,
-        cliAvailable: info.cliAvailable,
-        cliPath: info.cliPath ?? null,
-        cliVersion: info.cliVersion ?? null,
-        error: info.error ?? null,
-        label: PROVIDER_LABELS[name] ?? name,
-        defaultModel: info.available ? getDefaultModel(name as any) : null,
-        models: info.available ? getProviderModels(name as any) : [],
-        modelsWithLabels: info.available ? getProviderModelsWithLabels(name as any) : [],
-      };
-    }
+    const providerInfo = Object.fromEntries(
+      Array.from(providers, ([name, info]) => [
+        name,
+        {
+          available: info.available,
+          sdkAvailable: info.sdkAvailable,
+          cliAvailable: info.cliAvailable,
+          cliPath: info.cliPath ?? null,
+          cliVersion: info.cliVersion ?? null,
+          error: info.error ?? null,
+          label: PROVIDER_LABELS[name] ?? name,
+          defaultModel: info.available ? getDefaultModel(name) : null,
+          models: info.available ? getProviderModels(name) : [],
+          modelsWithLabels: info.available ? getProviderModelsWithLabels(name) : [],
+        },
+      ]),
+    );
 
     const claude = providers.get('claude');
 

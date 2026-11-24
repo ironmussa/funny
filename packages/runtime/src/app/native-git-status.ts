@@ -1,8 +1,15 @@
 import type { NativeGitStatus } from '@funny/core/git';
 
+/** Log metadata of the native git status line. */
+export interface NativeGitStatusMeta {
+  namespace: 'native-git';
+  /** Why the native binary could not be loaded (`unavailable` only). */
+  error?: string;
+}
+
 interface StatusLogger {
-  info(message: string, meta: Record<string, unknown>): unknown;
-  warn(message: string, meta: Record<string, unknown>): unknown;
+  info(message: string, meta: NativeGitStatusMeta): unknown;
+  warn(message: string, meta: NativeGitStatusMeta): unknown;
 }
 
 /**
@@ -11,7 +18,7 @@ interface StatusLogger {
  * hid production runners that shipped without the native binary.
  */
 export function reportNativeGitStatus(status: NativeGitStatus, logger: StatusLogger): void {
-  const meta = { namespace: 'native-git' };
+  const meta: NativeGitStatusMeta = { namespace: 'native-git' };
   switch (status.state) {
     case 'loaded':
       logger.info('Native git (gitoxide) loaded', meta);

@@ -33,6 +33,7 @@
     "./services/service-registry": "./src/services/service-registry.ts",
     "./services/automation-manager": "./src/services/automation-manager.ts",
     "./services/mcp-oauth": "./src/services/mcp-oauth.ts",
+    "./validation/schemas": "./src/validation/schemas.ts",
     "./services/ws-broker": "./src/services/ws-broker.ts",
     "./services/grpc-team-transport": "./src/services/grpc-team-transport.ts",
     "./services/grpc-operation-outbox": "./src/services/grpc-operation-outbox.ts",

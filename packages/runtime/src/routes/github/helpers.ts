@@ -132,10 +132,16 @@ export async function githubApiFetch(
   return res;
 }
 
+/**
+ * A GraphQL variable as sent in the JSON request body. `undefined` drops the
+ * variable from the body, which GraphQL reads as "not provided".
+ */
+type GraphQLVariableValue = string | number | boolean | null | undefined | readonly string[];
+
 /** Run a GitHub GraphQL query. Returns parsed `data` or throws. */
 export async function githubGraphQL<T = any>(
   query: string,
-  variables: Record<string, unknown>,
+  variables: Record<string, GraphQLVariableValue>,
   token: string,
 ): Promise<T> {
   const res = await fetch('https://api.github.com/graphql', {

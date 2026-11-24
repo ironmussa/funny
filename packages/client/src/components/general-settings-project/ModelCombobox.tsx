@@ -48,7 +48,7 @@ export function ModelCombobox({ value, onChange, options, placeholder, searchPla
       </PopoverTrigger>
       <PopoverContent className="w-[200px]" padding="none" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} className="h-8 text-xs" />
+          <CommandInput placeholder={searchPlaceholder} textSize="xs" className="h-8" />
           <CommandList id={listId}>
             <CommandEmpty>No results.</CommandEmpty>
             <CommandGroup>
@@ -60,7 +60,7 @@ export function ModelCombobox({ value, onChange, options, placeholder, searchPla
                     onChange(opt.value);
                     setOpen(false);
                   }}
-                  className="text-xs"
+                  textSize="xs"
                 >
                   <Check
                     className={cn(

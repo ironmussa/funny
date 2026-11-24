@@ -94,7 +94,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-3" align="start">
+          <PopoverContent className="w-72" padding="md" align="start">
             <ColorPicker
               value={currentColor || '#7CB9E8'}
               onChange={([r, g, b]) => {

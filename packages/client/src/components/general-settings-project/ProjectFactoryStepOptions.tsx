@@ -112,7 +112,12 @@ function OverrideSelect({
       value={value ?? FLOW_DEFAULT}
       onValueChange={(next) => onChange(next === FLOW_DEFAULT ? null : next)}
     >
-      <SelectTrigger className="h-7 w-[132px] text-xs" aria-label={label} data-testid={testId}>
+      <SelectTrigger
+        textSize="xs"
+        className="h-7 w-[132px]"
+        aria-label={label}
+        data-testid={testId}
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

@@ -33,6 +33,15 @@ const buttonVariants = cva(
         'ghost-info': 'text-status-info hover:bg-accent hover:text-status-info/80',
         // The full-width action closing a list (view all, clear finished), ruled off above.
         'ghost-divided': 'border-t hover:bg-accent hover:text-accent-foreground',
+        // A quiet row or menu action whose label turns to the foreground on hover.
+        'muted-strong': 'text-muted-foreground hover:bg-accent hover:text-foreground',
+        // The selected tool in a toolbar of ghost buttons.
+        selected: 'bg-secondary text-foreground hover:bg-secondary/80',
+        // A ghost action in the primary color (accept, open the plan).
+        'ghost-primary': 'text-primary hover:bg-accent hover:text-primary',
+        // An outlined action that needs attention (a server that needs auth).
+        'outline-warning':
+          'border border-status-warning/30 bg-background text-status-warning hover:bg-status-warning/10',
       },
       // Field heights / padding / text come from the shared control scale so a
       // text button lines up with an input or select of the same `size`. The
@@ -48,6 +57,19 @@ const buttonVariants = cva(
         'icon-xs': cn(ICON_SIZE.xs, CONTROL_ICON.sm),
         'icon-sm': cn(ICON_SIZE.sm, CONTROL_ICON.md),
         'icon-md': cn(ICON_SIZE.md, CONTROL_ICON.md),
+        // Tiny inline actions inside a row or a chip (20px).
+        '2xs': cn('h-5 px-1.5 text-xs', CONTROL_ICON.xs),
+        '3xs': cn('h-5 px-1.5 text-2xs', CONTROL_ICON.xs),
+        // The `sm` height with tight side padding (show more / less toggles).
+        'sm-tight': cn('h-8 px-2 text-sm', CONTROL_ICON.sm),
+        // A full-height, square-cornered button in a tab strip.
+        strip: cn('h-full rounded-none px-2.5 text-sm', CONTROL_ICON.sm),
+      },
+      // Row actions that stay hidden until the pointer is over the row (`group`).
+      reveal: {
+        none: '',
+        hover: 'opacity-0 group-hover:opacity-100',
+        'hover-fade': 'opacity-0 transition-opacity group-hover:opacity-100',
       },
       // Space between the icon and the label: tighter than the default 8px in
       // dense toolbars and chips.
@@ -61,6 +83,7 @@ const buttonVariants = cva(
       variant: 'default',
       size: 'default',
       gap: 'default',
+      reveal: 'none',
     },
   },
 );
@@ -76,6 +99,7 @@ function Button({
   variant,
   size,
   gap,
+  reveal,
   asChild = false,
   loading = false,
   children,
@@ -86,7 +110,7 @@ function Button({
   const Comp = asChild ? Slot : 'button';
   return (
     <Comp
-      className={cn(buttonVariants({ variant, size, gap, className }))}
+      className={cn(buttonVariants({ variant, size, gap, reveal, className }))}
       ref={ref}
       disabled={disabled || loading}
       {...props}

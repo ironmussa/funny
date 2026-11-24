@@ -24,6 +24,8 @@ const badgeVariants = cva(
         violet: 'border-transparent bg-status-violet/15 text-status-violet',
         // A quiet role or state pill, one step below secondary.
         muted: 'border-transparent bg-muted text-muted-foreground hover:bg-secondary/80',
+        // The muted pill with no hover: a label that does nothing when pointed at.
+        subtle: 'border-transparent bg-muted text-muted-foreground',
       },
       size: {
         default: 'px-2.5 py-0.5 text-base',
@@ -43,12 +45,24 @@ const badgeVariants = cva(
         true: 'font-mono',
         false: '',
       },
+      // Square-cornered tag (a transport, a scope) instead of a round pill.
+      corners: {
+        pill: '',
+        square: 'rounded-md',
+      },
+      // Short all-caps tag text.
+      caps: {
+        true: 'uppercase tracking-wider',
+        false: '',
+      },
     },
     defaultVariants: {
       variant: 'default',
       size: 'default',
       weight: 'default',
       mono: false,
+      corners: 'pill',
+      caps: false,
     },
   },
 );
@@ -56,11 +70,11 @@ const badgeVariants = cva(
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, size, weight, mono, ...props }: BadgeProps) {
+function Badge({ className, variant, size, weight, mono, corners, caps, ...props }: BadgeProps) {
   return (
     <div
       data-slot="badge"
-      className={cn(badgeVariants({ variant, size, weight, mono }), className)}
+      className={cn(badgeVariants({ variant, size, weight, mono, corners, caps }), className)}
       {...props}
     />
   );

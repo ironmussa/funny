@@ -20,6 +20,8 @@ export const STATE_SURFACE = {
   card: 'settings-card',
   dashed: 'rounded-md border border-dashed p-6',
   'dashed-muted': 'rounded-lg border border-dashed border-border/50',
+  // Over the content it is loading, dimming it.
+  scrim: 'bg-background/80',
 } as const;
 
 export type StateSurface = keyof typeof STATE_SURFACE;

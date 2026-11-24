@@ -9,6 +9,7 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 /** Inner padding: `default` for prose, the tighter steps for menus and lists that pad their own rows. */
 const POPOVER_PADDING = {
   default: 'p-4',
+  md: 'p-3',
   sm: 'p-2',
   xs: 'p-1',
   none: 'p-0',

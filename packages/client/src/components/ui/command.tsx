@@ -66,10 +66,13 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  textSize = 'default',
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+}: Omit<React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>, 'size'> & {
   ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Input>>;
+  /** `xs` for pickers inside dense popovers. */
+  textSize?: 'default' | 'xs';
 }) {
   return (
     <div className="border-border flex items-center border-b px-3" cmdk-input-wrapper="">
@@ -78,6 +81,7 @@ function CommandInput({
         ref={ref}
         className={cn(
           'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
+          textSize === 'xs' && 'text-xs',
           className,
         )}
         {...props}
@@ -147,16 +151,20 @@ function CommandSeparator({
 }
 function CommandItem({
   className,
+  textSize = 'default',
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item> & {
   ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Item>>;
+  /** `xs` for pickers inside dense popovers. */
+  textSize?: 'default' | 'xs';
 }) {
   return (
     <CommandPrimitive.Item
       ref={ref}
       className={cn(
         'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
+        textSize === 'xs' && 'text-xs',
         className,
       )}
       {...props}

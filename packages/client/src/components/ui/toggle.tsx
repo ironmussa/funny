@@ -16,6 +16,8 @@ const toggleVariants = cva(
       size: {
         default: 'h-9 px-2 min-w-9',
         sm: 'h-8 px-1.5 min-w-8',
+        // Dense segmented switches in footers and pane headers (24px).
+        xs: 'h-6 min-w-8 gap-1 px-2 text-xs',
         lg: 'h-10 px-2.5 min-w-10',
       },
     },

@@ -9,6 +9,10 @@ const SCROLL_AREA_VARIANT = {
   muted: 'rounded bg-muted',
   'muted-outline': 'rounded border border-border bg-muted',
   divided: 'border-t border-border/40',
+  // A list pane beside a detail pane.
+  'divided-end': 'border-r',
+  // The output well of a failed step.
+  destructive: 'rounded bg-destructive/5',
 } as const;
 
 interface ScrollAreaProps extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {

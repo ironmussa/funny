@@ -33,6 +33,8 @@ const TOOLTIP_VARIANT_CLASSES = {
   default: '',
   /** A full identifier (branch, path, hash, test id): monospace, wrapped at any character. */
   mono: 'max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all',
+  /** Several lines of help (a server's details): padded like a small card. */
+  padded: 'p-3',
 } as const;
 
 function TooltipContent({

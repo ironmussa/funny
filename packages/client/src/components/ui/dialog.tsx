@@ -157,6 +157,7 @@ function DialogTitle({
   size = 'default',
   withIcon = false,
   mono = false,
+  leading = 'none',
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title> & {
@@ -167,6 +168,8 @@ function DialogTitle({
   withIcon?: boolean;
   /** A path or other identifier as the title. */
   mono?: boolean;
+  /** Line height for a title that may wrap (default `none`). */
+  leading?: 'none' | 'tight' | 'snug';
 }) {
   return (
     <DialogPrimitive.Title
@@ -176,6 +179,8 @@ function DialogTitle({
         size === 'sm' ? 'text-sm' : 'text-base',
         withIcon && 'flex min-w-0 items-center gap-2 overflow-hidden',
         mono && 'font-mono',
+        leading === 'tight' && 'leading-tight',
+        leading === 'snug' && 'leading-snug',
         className,
       )}
       {...props}
@@ -186,15 +191,18 @@ DialogTitle.displayName = 'DialogTitle';
 
 function DialogDescription({
   className,
+  size = 'default',
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description> & {
   ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Description>>;
+  /** `xs` under a `size="sm"` title. */
+  size?: 'default' | 'xs';
 }) {
   return (
     <DialogPrimitive.Description
       ref={ref}
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-muted-foreground', size === 'xs' ? 'text-xs' : 'text-sm', className)}
       {...props}
     />
   );

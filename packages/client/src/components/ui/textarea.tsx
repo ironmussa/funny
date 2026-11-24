@@ -17,10 +17,25 @@ const textareaVariants = cva(
         true: 'font-mono',
         false: '',
       },
+      // A field filling an editor pane, with no frame of its own.
+      variant: {
+        default: '',
+        bare: 'rounded-none border-0 focus-visible:ring-0',
+      },
+      // Text size only, keeping the size's height and padding.
+      textSize: {
+        default: '',
+        '2xs': 'text-2xs',
+        compact: 'text-compact',
+        xs: 'text-xs',
+        sm: 'text-sm',
+      },
     },
     defaultVariants: {
       size: 'default',
       mono: false,
+      variant: 'default',
+      textSize: 'default',
     },
   },
 );
@@ -32,11 +47,17 @@ function Textarea({
   className,
   size,
   mono,
+  variant,
+  textSize,
   ref,
   ...props
 }: TextareaProps & { ref?: React.Ref<HTMLTextAreaElement> }) {
   return (
-    <textarea className={cn(textareaVariants({ size, mono }), className)} ref={ref} {...props} />
+    <textarea
+      className={cn(textareaVariants({ size, mono, variant, textSize }), className)}
+      ref={ref}
+      {...props}
+    />
   );
 }
 export { Textarea };

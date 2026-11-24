@@ -70,6 +70,13 @@ export interface SearchBarProps {
 const SEARCH_BAR_VARIANT = {
   default: '',
   floating: 'rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md',
+  // A find bar over an editor or terminal, framed on every side.
+  overlay: 'rounded-md border border-border bg-popover px-2 py-1 shadow-md',
+  'overlay-compact': 'rounded-md border border-border bg-popover px-1.5 py-1 shadow-md',
+  // A filter field in a toolbar, framed like an input on a transparent background.
+  outline: 'rounded-md border border-input bg-transparent px-2',
+  // A search field in a form, the height and text of an input.
+  field: 'rounded-md border border-input bg-background px-3 [&_input]:px-0 [&_input]:text-sm',
 } as const;
 
 export function SearchBar({

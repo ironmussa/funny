@@ -15,6 +15,10 @@ const inputVariants = cva(
         sm: FIELD_SIZE.sm,
         md: FIELD_SIZE.md,
         lg: FIELD_SIZE.lg,
+        // The `sm` height with tight side padding.
+        'sm-tight': 'h-8 px-2 text-sm',
+        // Grows with its text: the fields of the settings edit forms.
+        form: 'h-auto px-3 py-1.5 text-sm',
       },
       // Paths, commands, branch names and other values read character by character.
       mono: {
@@ -26,11 +30,26 @@ const inputVariants = cva(
         none: '',
         icon: 'pl-8',
       },
+      // Inline field drawn inside another control (a picker's search row).
+      variant: {
+        default: '',
+        bare: 'rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0',
+      },
+      // Text size only, keeping the size's height and padding.
+      textSize: {
+        default: '',
+        '2xs': 'text-2xs',
+        compact: 'text-compact',
+        xs: 'text-xs',
+        sm: 'text-sm',
+      },
     },
     defaultVariants: {
       size: 'sm',
       mono: false,
       inset: 'none',
+      variant: 'default',
+      textSize: 'default',
     },
   },
 );
@@ -41,6 +60,8 @@ function Input({
   size,
   mono,
   inset,
+  variant,
+  textSize,
   ref,
   ...props
 }: Omit<React.ComponentProps<'input'>, 'size'> &
@@ -48,7 +69,7 @@ function Input({
   return (
     <input
       type={type}
-      className={cn(inputVariants({ size, mono, inset }), className)}
+      className={cn(inputVariants({ size, mono, inset, variant, textSize }), className)}
       ref={ref}
       {...props}
     />

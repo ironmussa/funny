@@ -14,19 +14,26 @@ function ToggleGroup({
   className,
   variant,
   size,
+  segmented = false,
   children,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
   VariantProps<typeof toggleVariants> & {
     ref?: React.Ref<React.ComponentRef<typeof ToggleGroupPrimitive.Root>>;
+    /** One framed control with the items side by side, no gap between them. */
+    segmented?: boolean;
   }) {
   const contextValue = React.useMemo(() => ({ variant, size }), [variant, size]);
 
   return (
     <ToggleGroupPrimitive.Root
       ref={ref}
-      className={cn('flex items-center justify-center gap-1', className)}
+      className={cn(
+        'flex items-center justify-center gap-1',
+        segmented && 'gap-0 rounded-md border border-border',
+        className,
+      )}
       {...props}
     >
       <ToggleGroupContext.Provider value={contextValue}>{children}</ToggleGroupContext.Provider>

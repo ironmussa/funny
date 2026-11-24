@@ -373,7 +373,7 @@ export function IssuesFactoryBar({
         </Button>
         <div className="min-w-0 flex-1" />
         <Select value={flow} onValueChange={setFlow}>
-          <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-factory-flow">
+          <SelectTrigger size="xs" className="w-auto" data-testid="issues-factory-flow">
             <span className="truncate">{flow}</span>
           </SelectTrigger>
           <SelectContent>

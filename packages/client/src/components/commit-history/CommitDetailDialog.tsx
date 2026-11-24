@@ -1,5 +1,6 @@
 import type { FileDiffSummary, FileStatus } from '@funny/shared';
 import { FileCode, GitBranch, GitCommit, History, Loader2, RotateCcw, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -56,37 +57,10 @@ interface Props {
   onAfterAction: () => void;
 }
 
-/**
- * Modal that opens when the user clicks a commit row: shows commit metadata,
- * a filtered file tree on the left, the diff for the selected file on the
- * right, plus checkout/revert/reset actions (each gated by a ConfirmDialog).
- *
- * Owns its own loaded-files / commit-body / file-search / diff-content
- * state and the 3 destructive-action handlers, so its parent doesn't have
- * to import the Dialog cluster, FileTree, ExpandedDiffView,
- * diff-parse, ScrollArea, SearchBar, AuthorBadge, ConfirmDialog, or the
- * checkout/revert/reset icons.
- */
-export function CommitDetailDialog({
-  selectedCommit,
-  selectedHash,
-  effectiveThreadId,
-  projectModeId,
-  githubAvatarBySha,
-  onClose,
-  onAfterAction,
-}: Props) {
-  const { t } = useTranslation();
-  const now = useMinuteTick();
-  const [commitFiles, setCommitFiles] = useState<CommitFile[]>([]);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [commitBody, setCommitBody] = useState<string | null>(null);
-  const [fileSearch, setFileSearch] = useState('');
-  const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
-  const [expandedFile, setExpandedFile] = useState<string | null>(null);
-  const [diffContent, setDiffContent] = useState<string | null>(null);
-  const [diffLoading, setDiffLoading] = useState(false);
+type CommitActionKind = 'checkout' | 'revert' | 'reset';
 
+/** Sidebar width, kept within bounds while dragging and saved once the drag ends. */
+function useSidebarWidth() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
     return Number.isFinite(stored) && stored >= SIDEBAR_MIN_WIDTH && stored <= SIDEBAR_MAX_WIDTH
@@ -94,7 +68,7 @@ export function CommitDetailDialog({
       : SIDEBAR_DEFAULT_WIDTH;
   });
   const sidebarWidthAtDragStart = useRef(sidebarWidth);
-  const { resizing, handlePointerDown, handlePointerMove, handlePointerUp } = useResizeHandle({
+  const resize = useResizeHandle({
     direction: 'horizontal',
     onResizeStart: () => {
       sidebarWidthAtDragStart.current = sidebarWidth;
@@ -107,37 +81,37 @@ export function CommitDetailDialog({
       setSidebarWidth(next);
     },
   });
+  const { resizing } = resize;
 
   useEffect(() => {
     if (resizing) return;
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
   }, [resizing, sidebarWidth]);
 
+  return { sidebarWidth, ...resize };
+}
+
+/**
+ * The selected commit's files, body and the diff of the expanded file. Loads the
+ * files and body when the selection changes, and the first file's diff with them.
+ */
+function useCommitDetailData({
+  selectedCommit,
+  selectedHash,
+  effectiveThreadId,
+  projectModeId,
+}: Pick<Props, 'selectedCommit' | 'selectedHash' | 'effectiveThreadId' | 'projectModeId'>) {
+  const { t } = useTranslation();
+  const [commitFiles, setCommitFiles] = useState<CommitFile[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [commitBody, setCommitBody] = useState<string | null>(null);
+  const [fileSearch, setFileSearch] = useState('');
+  const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
+  const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const [diffContent, setDiffContent] = useState<string | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+
   const hasGitContext = !!(effectiveThreadId || projectModeId);
-
-  // Shared checkout / revert / hard-reset logic (also used by the graph context
-  // menu). Closes the dialog on success; the confirm UI is <CommitActionConfirm>.
-  const { pending, inProgress, request, cancel, confirm } = useCommitActions({
-    effectiveThreadId,
-    projectModeId,
-    onAfterAction,
-    onSuccess: onClose,
-  });
-  const busy = (kind: 'checkout' | 'revert' | 'reset') => inProgress && pending?.kind === kind;
-
-  const handleCopyCommitHash = useCallback(() => {
-    if (!selectedCommit) return;
-    void copyCommitHashToClipboard(selectedCommit).then(
-      (shortHash) =>
-        toast.success(
-          t('history.hashCopied', {
-            hash: shortHash,
-            defaultValue: `Copied ${shortHash}`,
-          }),
-        ),
-      () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
-    );
-  }, [selectedCommit, t]);
 
   // Load commit files + body when selection changes
   // Async writes are owned by this selection and ignored after cleanup flips cancelled.
@@ -243,10 +217,297 @@ export function CommitDetailDialog({
     return m;
   }, [expandedFile, diffContent]);
 
-  const handleClose = () => {
-    onClose();
+  const resetExpanded = () => {
     setExpandedFile(null);
     setDiffContent(null);
+  };
+
+  return {
+    commitFiles,
+    filesLoading,
+    commitBody,
+    fileSearch,
+    setFileSearch,
+    fileSearchCaseSensitive,
+    setFileSearchCaseSensitive,
+    expandedFile,
+    diffContent,
+    diffLoading,
+    handleFileClick,
+    treeFiles,
+    historyDiffCache,
+    resetExpanded,
+  };
+}
+
+type CommitDetailData = ReturnType<typeof useCommitDetailData>;
+
+function CommitActionButton({
+  kind,
+  variant,
+  icon,
+  label,
+  tooltip,
+  busy,
+  disabled,
+  onRequest,
+}: {
+  kind: CommitActionKind;
+  variant: 'ghost' | 'ghost-destructive';
+  icon: ReactNode;
+  label: string;
+  tooltip: string;
+  busy: boolean;
+  disabled: boolean;
+  onRequest: (kind: CommitActionKind) => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant={variant}
+          size="xs"
+          onClick={() => onRequest(kind)}
+          disabled={disabled}
+          data-testid={`commit-${kind}-btn`}
+        >
+          {busy ? <Loader2 className="animate-spin" /> : icon}
+          {label}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function CommitMetaRow({
+  commit,
+  avatarUrl,
+  fileCount,
+  inProgress,
+  busy,
+  onRequest,
+  onClose,
+}: {
+  commit: LogEntry;
+  avatarUrl: string | undefined;
+  fileCount: number;
+  inProgress: boolean;
+  busy: (kind: CommitActionKind) => boolean;
+  onRequest: (kind: CommitActionKind) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const now = useMinuteTick();
+
+  const handleCopyCommitHash = useCallback(() => {
+    void copyCommitHashToClipboard(commit).then(
+      (shortHash) =>
+        toast.success(
+          t('history.hashCopied', {
+            hash: shortHash,
+            defaultValue: `Copied ${shortHash}`,
+          }),
+        ),
+      () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
+    );
+  }, [commit, t]);
+
+  return (
+    <div className="text-muted-foreground text-compact flex items-center gap-1.5 pt-1">
+      <GitCommit className="icon-xs shrink-0" />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={handleCopyCommitHash}
+            className="text-primary shrink-0 cursor-pointer border-0 bg-transparent p-0 font-mono hover:underline"
+            data-testid={`commit-detail-hash-${commit.shortHash}`}
+          >
+            <code>{commit.shortHash}</code>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{t('history.copyHash', 'Click to copy hash')}</TooltipContent>
+      </Tooltip>
+      <AuthorBadge
+        name={commit.author}
+        email={commit.authorEmail}
+        avatarUrl={avatarUrl}
+        size="sm"
+      />
+      <span className="shrink-0">{shortTimeAgo(commit.authoredAt, now)}</span>
+      <span className="text-muted-foreground shrink-0">
+        &middot; {fileCount} file{fileCount !== 1 ? 's' : ''}
+      </span>
+      <div className="ml-auto flex items-center gap-1">
+        <CommitActionButton
+          kind="checkout"
+          variant="ghost"
+          icon={<GitBranch />}
+          label={t('history.checkout', 'Checkout')}
+          tooltip={t('history.checkoutTooltip', 'Checkout this commit (detached HEAD)')}
+          busy={busy('checkout')}
+          disabled={inProgress}
+          onRequest={onRequest}
+        />
+        <CommitActionButton
+          kind="revert"
+          variant="ghost"
+          icon={<RotateCcw />}
+          label={t('history.revert', 'Revert')}
+          tooltip={t('history.revertTooltip', 'Undo this commit with a new commit')}
+          busy={busy('revert')}
+          disabled={inProgress}
+          onRequest={onRequest}
+        />
+        <CommitActionButton
+          kind="reset"
+          variant="ghost-destructive"
+          icon={<History />}
+          label={t('history.reset', 'Reset')}
+          tooltip={t('history.resetTooltip', 'Hard reset branch to this commit')}
+          busy={busy('reset')}
+          disabled={inProgress}
+          onRequest={onRequest}
+        />
+        <div className="bg-border mx-1 h-4 w-px" />
+        <Button
+          variant="muted"
+          size="icon-xs"
+          onClick={onClose}
+          className="shrink-0"
+          data-testid="commit-detail-close"
+        >
+          <X className="icon-xs" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CommitFilesSidebar({ width, data }: { width: number; data: CommitDetailData }) {
+  const { t } = useTranslation();
+  const {
+    commitFiles,
+    treeFiles,
+    fileSearch,
+    setFileSearch,
+    fileSearchCaseSensitive,
+    setFileSearchCaseSensitive,
+    expandedFile,
+    handleFileClick,
+  } = data;
+  return (
+    <div className="flex shrink-0 flex-col" style={{ width }} data-testid="commit-detail-file-tree">
+      {commitFiles.length > 0 && (
+        <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
+          <SearchBar
+            query={fileSearch}
+            onQueryChange={setFileSearch}
+            placeholder={t('review.searchFiles', 'Filter files…')}
+            totalMatches={treeFiles.length}
+            resultLabel={fileSearch ? `${treeFiles.length}/${commitFiles.length}` : ''}
+            caseSensitive={fileSearchCaseSensitive}
+            onCaseSensitiveChange={setFileSearchCaseSensitive}
+            onClose={fileSearch ? () => setFileSearch('') : undefined}
+            autoFocus={false}
+            testIdPrefix="commit-detail-file-filter"
+          />
+        </div>
+      )}
+      <ScrollArea className="min-h-0 flex-1">
+        {commitFiles.length === 0 ? (
+          <EmptyState fill={false} title={t('history.noFiles', 'No files changed')} />
+        ) : treeFiles.length === 0 ? (
+          <EmptyState fill={false} title={t('history.noMatchingFiles', 'No matching files')} />
+        ) : (
+          <FileTree
+            files={treeFiles}
+            selectedFile={expandedFile}
+            onFileClick={handleFileClick}
+            testIdPrefix="commit-detail"
+            searchQuery={fileSearch || undefined}
+          />
+        )}
+      </ScrollArea>
+    </div>
+  );
+}
+
+function CommitDiffPane({ data }: { data: CommitDetailData }) {
+  const { t } = useTranslation();
+  const { expandedFile, diffContent, diffLoading, treeFiles, handleFileClick, historyDiffCache } =
+    data;
+  return (
+    <div className="flex min-w-0 flex-1 flex-col" data-testid="commit-detail-diff-pane">
+      {!expandedFile ? (
+        <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
+          <FileCode className="size-8 opacity-30" />
+          <p className="text-xs">{t('history.selectFile', 'Select a file to view changes')}</p>
+        </div>
+      ) : (
+        <ExpandedDiffView
+          filePath={expandedFile}
+          oldValue={diffContent ? parseDiffOld(diffContent) : ''}
+          newValue={diffContent ? parseDiffNew(diffContent) : ''}
+          loading={diffLoading}
+          rawDiff={diffContent ?? undefined}
+          files={treeFiles}
+          onFileSelect={handleFileClick}
+          diffCache={historyDiffCache}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Modal that opens when the user clicks a commit row: shows commit metadata,
+ * a filtered file tree on the left, the diff for the selected file on the
+ * right, plus checkout/revert/reset actions (each gated by a ConfirmDialog).
+ *
+ * Owns its own loaded-files / commit-body / file-search / diff-content
+ * state and the 3 destructive-action handlers, so its parent doesn't have
+ * to import the Dialog cluster, FileTree, ExpandedDiffView,
+ * diff-parse, ScrollArea, SearchBar, AuthorBadge, ConfirmDialog, or the
+ * checkout/revert/reset icons.
+ */
+export function CommitDetailDialog({
+  selectedCommit,
+  selectedHash,
+  effectiveThreadId,
+  projectModeId,
+  githubAvatarBySha,
+  onClose,
+  onAfterAction,
+}: Props) {
+  const { t } = useTranslation();
+  const data = useCommitDetailData({
+    selectedCommit,
+    selectedHash,
+    effectiveThreadId,
+    projectModeId,
+  });
+  const { commitFiles, filesLoading, commitBody } = data;
+  const { sidebarWidth, resizing, handlePointerDown, handlePointerMove, handlePointerUp } =
+    useSidebarWidth();
+
+  // Shared checkout / revert / hard-reset logic (also used by the graph context
+  // menu). Closes the dialog on success; the confirm UI is <CommitActionConfirm>.
+  const { pending, inProgress, request, cancel, confirm } = useCommitActions({
+    effectiveThreadId,
+    projectModeId,
+    onAfterAction,
+    onSuccess: onClose,
+  });
+  const busy = (kind: CommitActionKind) => inProgress && pending?.kind === kind;
+  const requestAction = (kind: CommitActionKind) => {
+    if (selectedHash) request(kind, selectedHash);
+  };
+
+  const handleClose = () => {
+    onClose();
+    data.resetExpanded();
   };
 
   return (
@@ -281,97 +542,15 @@ export function CommitDetailDialog({
               Commit detail with file changes and diffs
             </DialogDescription>
             {selectedCommit && (
-              <div className="text-muted-foreground text-compact flex items-center gap-1.5 pt-1">
-                <GitCommit className="icon-xs shrink-0" />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={handleCopyCommitHash}
-                      className="text-primary shrink-0 cursor-pointer border-0 bg-transparent p-0 font-mono hover:underline"
-                      data-testid={`commit-detail-hash-${selectedCommit.shortHash}`}
-                    >
-                      <code>{selectedCommit.shortHash}</code>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {t('history.copyHash', 'Click to copy hash')}
-                  </TooltipContent>
-                </Tooltip>
-                <AuthorBadge
-                  name={selectedCommit.author}
-                  email={selectedCommit.authorEmail}
-                  avatarUrl={githubAvatarBySha.get(selectedCommit.hash)}
-                  size="sm"
-                />
-                <span className="shrink-0">{shortTimeAgo(selectedCommit.authoredAt, now)}</span>
-                <span className="text-muted-foreground shrink-0">
-                  &middot; {commitFiles.length} file{commitFiles.length !== 1 ? 's' : ''}
-                </span>
-                <div className="ml-auto flex items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => selectedHash && request('checkout', selectedHash)}
-                        disabled={inProgress}
-                        data-testid="commit-checkout-btn"
-                      >
-                        {busy('checkout') ? <Loader2 className="animate-spin" /> : <GitBranch />}
-                        {t('history.checkout', 'Checkout')}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      {t('history.checkoutTooltip', 'Checkout this commit (detached HEAD)')}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => selectedHash && request('revert', selectedHash)}
-                        disabled={inProgress}
-                        data-testid="commit-revert-btn"
-                      >
-                        {busy('revert') ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-                        {t('history.revert', 'Revert')}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      {t('history.revertTooltip', 'Undo this commit with a new commit')}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost-destructive"
-                        size="xs"
-                        onClick={() => selectedHash && request('reset', selectedHash)}
-                        disabled={inProgress}
-                        data-testid="commit-reset-btn"
-                      >
-                        {busy('reset') ? <Loader2 className="animate-spin" /> : <History />}
-                        {t('history.reset', 'Reset')}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      {t('history.resetTooltip', 'Hard reset branch to this commit')}
-                    </TooltipContent>
-                  </Tooltip>
-                  <div className="bg-border mx-1 h-4 w-px" />
-                  <Button
-                    variant="muted"
-                    size="icon-xs"
-                    onClick={handleClose}
-                    className="shrink-0"
-                    data-testid="commit-detail-close"
-                  >
-                    <X className="icon-xs" />
-                  </Button>
-                </div>
-              </div>
+              <CommitMetaRow
+                commit={selectedCommit}
+                avatarUrl={githubAvatarBySha.get(selectedCommit.hash)}
+                fileCount={commitFiles.length}
+                inProgress={inProgress}
+                busy={busy}
+                onRequest={requestAction}
+                onClose={handleClose}
+              />
             )}
             {commitBody && (
               <ScrollArea className="mt-1.5 max-h-[80px]">
@@ -388,46 +567,7 @@ export function CommitDetailDialog({
             />
           ) : (
             <div className="flex min-h-0 flex-1">
-              <div
-                className="flex shrink-0 flex-col"
-                style={{ width: sidebarWidth }}
-                data-testid="commit-detail-file-tree"
-              >
-                {commitFiles.length > 0 && (
-                  <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
-                    <SearchBar
-                      query={fileSearch}
-                      onQueryChange={setFileSearch}
-                      placeholder={t('review.searchFiles', 'Filter files…')}
-                      totalMatches={treeFiles.length}
-                      resultLabel={fileSearch ? `${treeFiles.length}/${commitFiles.length}` : ''}
-                      caseSensitive={fileSearchCaseSensitive}
-                      onCaseSensitiveChange={setFileSearchCaseSensitive}
-                      onClose={fileSearch ? () => setFileSearch('') : undefined}
-                      autoFocus={false}
-                      testIdPrefix="commit-detail-file-filter"
-                    />
-                  </div>
-                )}
-                <ScrollArea className="min-h-0 flex-1">
-                  {commitFiles.length === 0 ? (
-                    <EmptyState fill={false} title={t('history.noFiles', 'No files changed')} />
-                  ) : treeFiles.length === 0 ? (
-                    <EmptyState
-                      fill={false}
-                      title={t('history.noMatchingFiles', 'No matching files')}
-                    />
-                  ) : (
-                    <FileTree
-                      files={treeFiles}
-                      selectedFile={expandedFile}
-                      onFileClick={handleFileClick}
-                      testIdPrefix="commit-detail"
-                      searchQuery={fileSearch || undefined}
-                    />
-                  )}
-                </ScrollArea>
-              </div>
+              <CommitFilesSidebar width={sidebarWidth} data={data} />
               <ResizeHandle
                 direction="horizontal"
                 resizing={resizing}
@@ -436,27 +576,7 @@ export function CommitDetailDialog({
                 onPointerUp={handlePointerUp}
                 data-testid="commit-detail-sidebar-resize"
               />
-              <div className="flex min-w-0 flex-1 flex-col" data-testid="commit-detail-diff-pane">
-                {!expandedFile ? (
-                  <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
-                    <FileCode className="size-8 opacity-30" />
-                    <p className="text-xs">
-                      {t('history.selectFile', 'Select a file to view changes')}
-                    </p>
-                  </div>
-                ) : (
-                  <ExpandedDiffView
-                    filePath={expandedFile}
-                    oldValue={diffContent ? parseDiffOld(diffContent) : ''}
-                    newValue={diffContent ? parseDiffNew(diffContent) : ''}
-                    loading={diffLoading}
-                    rawDiff={diffContent ?? undefined}
-                    files={treeFiles}
-                    onFileSelect={handleFileClick}
-                    diffCache={historyDiffCache}
-                  />
-                )}
-              </div>
+              <CommitDiffPane data={data} />
             </div>
           )}
         </DialogContent>

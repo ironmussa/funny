@@ -16,6 +16,7 @@ import type { Context, Hono } from 'hono';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import {
   isInstallableProvider,
   providerSetupStatus,
@@ -50,7 +51,7 @@ async function readJsonOrRefuse<Body>(c: Context<HonoEnv>): Promise<Body | Respo
 }
 
 function isProviderId(id: unknown): id is string {
-  return typeof id === 'string' && id.length > 0;
+  return isString(id) && id.length > 0;
 }
 
 /** The body's provider `id` for a signed-in caller, or the response refusing the request. */
@@ -113,7 +114,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       const body = (await c.req.json().catch(() => ({}))) as {
         projectId?: unknown;
       };
-      const projectId = typeof body.projectId === 'string' ? body.projectId : null;
+      const projectId = isString(body.projectId) ? body.projectId : null;
       const { importExternalClaudeSession } =
         await import('../services/external-claude-sessions.js');
       const result = await importExternalClaudeSession({
@@ -257,13 +258,13 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     const body = raw;
     const agents = await import('@funny/core/agents');
     let result;
-    if (typeof body.git === 'string' && body.git.trim()) {
+    if (isString(body.git) && body.git.trim()) {
       result = await agents.installProviderExtensionFromGit(
         body.git.trim(),
         { ref: body.ref, subdir: body.subdir },
         providerExtDir(),
       );
-    } else if (typeof body.path === 'string' && body.path.trim()) {
+    } else if (isString(body.path) && body.path.trim()) {
       result = agents.installProviderExtensionFromPath(body.path.trim(), providerExtDir());
     } else {
       return c.json({ ok: false, error: 'provide a `git` or `path` source' }, 400);

@@ -260,7 +260,7 @@ export async function assertSafeOutboundUrl(
     type BunDnsLike = { prefetch?: (h: string) => void } | undefined;
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun.dns is not in the DOM globalThis type; runtime feature-detection
     const bunDns = (globalThis as unknown as { Bun?: { dns?: BunDnsLike } }).Bun?.dns;
-    if (bunDns && typeof bunDns.prefetch === 'function') {
+    if (bunDns?.prefetch) {
       bunDns.prefetch(hostname);
     }
   } catch {

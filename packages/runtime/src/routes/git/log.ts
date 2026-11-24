@@ -27,6 +27,7 @@ import { type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { resolveIdentity, resolveThreadIdentity } from '../../services/git-service.js';
 import type { RuntimeThreadRecord } from '../../services/server-interfaces.js';
@@ -172,7 +173,7 @@ function respondWithLog<E extends { hash: string }>(
 type GraphRefPullRequest = NonNullable<GraphRef['pullRequest']>;
 
 function branchNameForGraphPRLookup(ref: GraphRef | string): string | null {
-  if (typeof ref === 'string') return null;
+  if (isString(ref)) return null;
   if (ref.kind === 'tag' || ref.name === 'HEAD') return null;
   if (ref.kind === 'local') return ref.name;
   const slashIndex = ref.name.indexOf('/');

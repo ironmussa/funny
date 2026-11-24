@@ -26,6 +26,8 @@ async function readBody(c: Context<ServerEnv>): Promise<Record<string, unknown>>
     const cloned = c.req.raw.clone();
     const text = await cloned.text();
     if (!text) return {};
+    // SAFETY: Better Auth sign-in bodies are JSON objects, and pickIdentifier checks
+    // every field it reads with typeof before using it.
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return {};

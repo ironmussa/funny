@@ -5,12 +5,24 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import {
-  buildRecapTranscript,
-  RECAP_TRANSCRIPT_MAX_CHARS,
-  summarizeToolInput,
-  type RecapMessage,
-} from '../../services/recap-transcript.js';
+import type { RecapMessage, RecapTranscriptInput } from '../../services/recap-transcript.js';
+
+// Loaded at test time, so a missing module fails an assertion, not the file load.
+const transcriptModule = await import('../../services/recap-transcript.js').catch(() => undefined);
+const RECAP_TRANSCRIPT_MAX_CHARS = 12_000;
+
+function loaded() {
+  expect(transcriptModule?.buildRecapTranscript).toBeFunction();
+  return transcriptModule!;
+}
+
+function buildRecapTranscript(input: RecapTranscriptInput, opts?: { maxChars?: number }) {
+  return loaded().buildRecapTranscript(input, opts);
+}
+
+function summarizeToolInput(raw: string | null | undefined) {
+  return loaded().summarizeToolInput(raw);
+}
 
 const SINCE = '2026-11-23T10:00:00.000Z';
 const before = (s: number) => new Date(Date.parse(SINCE) - s * 1000).toISOString();

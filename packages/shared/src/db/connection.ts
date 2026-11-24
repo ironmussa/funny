@@ -54,10 +54,13 @@ export type CreateDatabaseOptions =
  */
 export function createDatabase(options: CreateDatabaseOptions): DatabaseProvider {
   if (options.dialect === 'pg') {
+    // SAFETY: `require` returns any; it loads the module the type import names,
+    // lazily so a SQLite-only install never loads pg.
     const { createPgProvider } = require('./adapters/pg.js') as typeof import('./adapters/pg.js');
     return createPgProvider(options);
   }
 
+  // SAFETY: `require` returns any; it loads the module the type import names.
   const { createSqliteProvider } =
     require('./adapters/sqlite.js') as typeof import('./adapters/sqlite.js');
   return createSqliteProvider(options);
@@ -76,13 +79,15 @@ export interface CreateSqliteLegacyOptions {
  * @deprecated Use `createDatabase({ dialect: 'sqlite', path, log })` instead.
  */
 export function createSqliteDatabase(options: CreateSqliteLegacyOptions): DatabaseConnection {
+  // SAFETY: `require` returns any; it loads the module the type import names.
   const { createSqliteProvider } =
     require('./adapters/sqlite.js') as typeof import('./adapters/sqlite.js');
   const provider = createSqliteProvider({ path: options.path, log: options.log });
 
   return {
-    db: provider.db as AppDatabase,
+    db: provider.db,
     schema: provider.schema,
+    // SAFETY: createSqliteProvider sets `rawDriver` to the bun:sqlite Database it opened.
     sqlite: provider.rawDriver as import('bun:sqlite').Database,
     mode: 'sqlite',
     close: () => provider.close(),

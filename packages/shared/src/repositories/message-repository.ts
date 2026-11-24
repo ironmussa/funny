@@ -261,6 +261,8 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       windowStart,
       lastUserMessage: enrichedLastUser,
       leadingUserMessage: enrichedLeadingUser,
+      // SAFETY: init_tools and init_slash_commands are written only as JSON.stringify
+      // of the agent's init tool and slash-command name lists (string[]).
       initInfo: thread.initTools
         ? {
             tools: JSON.parse(thread.initTools) as string[],

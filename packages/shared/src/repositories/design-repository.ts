@@ -35,7 +35,10 @@ function rowToDesign(row: DesignRow): Design {
     projectId: row.projectId,
     userId: row.userId,
     name: row.name,
+    // SAFETY: designs rows are written only by createDesign / updateDesign, whose
+    // inputs are typed DesignType and DesignFidelity; the column is plain text.
     type: row.type as DesignType,
+    // SAFETY: as above, written only from a DesignFidelity or null.
     fidelity: row.fidelity as DesignFidelity | null,
     speakerNotes: row.speakerNotes === 1,
     folderPath: row.folderPath,
@@ -48,20 +51,20 @@ export function createDesignRepository(deps: DesignRepositoryDeps) {
   const { db, schema, dbAll, dbGet, dbRun } = deps;
 
   async function listDesigns(projectId: string, userId: string): Promise<Design[]> {
-    const rows = (await dbAll(
+    const rows = await dbAll<DesignRow>(
       db
         .select()
         .from(schema.designs)
         .where(and(eq(schema.designs.projectId, projectId), eq(schema.designs.userId, userId)))
         .orderBy(desc(schema.designs.createdAt)),
-    )) as DesignRow[];
+    );
     return rows.map(rowToDesign);
   }
 
   async function getDesign(id: string): Promise<Design | undefined> {
-    const row = (await dbGet(db.select().from(schema.designs).where(eq(schema.designs.id, id)))) as
-      | DesignRow
-      | undefined;
+    const row = await dbGet<DesignRow>(
+      db.select().from(schema.designs).where(eq(schema.designs.id, id)),
+    );
     return row ? rowToDesign(row) : undefined;
   }
 

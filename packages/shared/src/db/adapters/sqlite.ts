@@ -26,7 +26,9 @@ const noop = { info: () => {}, warn: () => {} };
  */
 export function createSqliteProvider(options: CreateSqliteOptions): DatabaseProvider {
   // Dynamic import to avoid errors when bun:sqlite is not available
+  // SAFETY: `require` returns any; these are the same modules the type imports name.
   const { Database } = require('bun:sqlite') as typeof import('bun:sqlite');
+  // SAFETY: as above, the lazily required module is the one the type import names.
   const { drizzle } = require('drizzle-orm/bun-sqlite') as typeof import('drizzle-orm/bun-sqlite');
 
   const logger = options.log ?? noop;
@@ -66,7 +68,7 @@ export function createSqliteProvider(options: CreateSqliteOptions): DatabaseProv
   }, WAL_CHECKPOINT_INTERVAL_MS);
   if (walCheckpointTimer.unref) walCheckpointTimer.unref();
 
-  const db = drizzle(sqliteDb, { schema: sqliteSchema }) as BunSQLiteDatabase<typeof sqliteSchema>;
+  const db: BunSQLiteDatabase<typeof sqliteSchema> = drizzle(sqliteDb, { schema: sqliteSchema });
 
   return {
     db,

@@ -132,10 +132,14 @@ export function ignoreNotFound(result: ResultAsync<unknown, SandboxError>) {
     );
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 /** A provider's `exec` response body → `ExecResult`. */
 export function execResultFrom(body: any): ExecResult {
   return {
-    exitCode: typeof body?.exitCode === 'number' ? body.exitCode : -1,
+    exitCode: isNumber(body?.exitCode) ? body.exitCode : -1,
     stdout: String(body?.stdout ?? ''),
     stderr: String(body?.stderr ?? ''),
   };

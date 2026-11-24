@@ -5,6 +5,10 @@ import { HarnessError } from './errors.js';
 
 export type { HarnessTool, HarnessToolDefinition, ToolExecutionContext } from './contracts.js';
 
+function isFunction(value: unknown): value is (...args: never[]) => void {
+  return typeof value === 'function';
+}
+
 export function defineTool<TSchema extends ZodTypeAny, TResult>(
   definition: HarnessToolDefinition<TSchema, TResult>,
 ): HarnessTool<TSchema, TResult> {
@@ -14,10 +18,10 @@ export function defineTool<TSchema extends ZodTypeAny, TResult>(
   if (!definition.description?.trim()) {
     throw new HarnessError('invalid_runtime_request', 'Tool description is required');
   }
-  if (!definition.inputSchema || typeof definition.inputSchema.safeParse !== 'function') {
+  if (!definition.inputSchema || !isFunction(definition.inputSchema.safeParse)) {
     throw new HarnessError('invalid_runtime_request', 'Tool inputSchema must be a Zod schema');
   }
-  if (typeof definition.handler !== 'function') {
+  if (!isFunction(definition.handler)) {
     throw new HarnessError('invalid_runtime_request', 'Tool handler is required');
   }
   return Object.freeze({

@@ -171,9 +171,9 @@ function isAgentDefinition(
   agent: HarnessAgentDefinition | HarnessAgentOptions,
 ): agent is HarnessAgentDefinition {
   return (
-    typeof (agent as HarnessAgentDefinition).provider === 'string' &&
-    Array.isArray((agent as HarnessAgentDefinition).allowedTools) &&
-    Array.isArray((agent as HarnessAgentDefinition).disallowedTools) &&
-    (agent as HarnessAgentDefinition).sandbox !== undefined
+    typeof agent.provider === 'string' &&
+    Array.isArray(agent.allowedTools) &&
+    Array.isArray(agent.disallowedTools) &&
+    agent.sandbox !== undefined
   );
 }

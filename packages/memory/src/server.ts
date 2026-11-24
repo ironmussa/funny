@@ -18,7 +18,13 @@ import { runConsolidation, checkAdmission } from './consolidator.js';
 import { runGC } from './gc.js';
 import { PaisleyPark, getPaisleyPark } from './index.js';
 import { log } from './logger.js';
-import type { SearchFilters, StorageConfig, TimelineOptions } from './types.js';
+import type {
+  FactType,
+  MemoryScope,
+  SearchFilters,
+  StorageConfig,
+  TimelineOptions,
+} from './types.js';
 
 // ─── Config from env ───────────────────────────────────
 
@@ -113,7 +119,7 @@ app.post('/v1/recall', async (c) => {
   const body = await c.req.json<{
     query: string;
     limit?: number;
-    scope?: string;
+    scope?: MemoryScope;
     minConfidence?: number;
     asOf?: string;
   }>();
@@ -126,7 +132,7 @@ app.post('/v1/recall', async (c) => {
     const pp = getMemory();
     const result = await pp.recall(body.query, {
       limit: body.limit,
-      scope: body.scope as any,
+      scope: body.scope,
       minConfidence: body.minConfidence,
       asOf: body.asOf,
     });
@@ -141,7 +147,7 @@ app.post('/v1/recall', async (c) => {
 app.post('/v1/facts', async (c) => {
   const body = await c.req.json<{
     content: string;
-    type: string;
+    type: FactType;
     tags?: string[];
     confidence?: number;
     relatedTo?: string[];
@@ -171,7 +177,7 @@ app.post('/v1/facts', async (c) => {
 
     const pp = getMemory();
     const fact = await pp.add(body.content, {
-      type: body.type as any,
+      type: body.type,
       tags: body.tags,
       confidence: body.confidence,
       relatedTo: body.relatedTo,
@@ -193,7 +199,9 @@ app.get('/v1/facts', async (c) => {
   try {
     const pp = getMemory();
     const facts = await pp.search('', {
-      type: type as any,
+      // SAFETY: the query string is forwarded unvalidated, as this endpoint always has: search()
+      // only compares it with each stored type, so a string that is not a FactType matches no fact.
+      type: type as FactType | undefined,
     });
     return c.json({ facts: limit ? facts.slice(0, limit) : facts });
   } catch (e) {
@@ -205,7 +213,7 @@ app.get('/v1/facts', async (c) => {
 
 app.patch('/v1/facts/:id/invalidate', async (c) => {
   const factId = c.req.param('id');
-  const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
+  const body = await c.req.json<{ reason?: string }>().catch((): { reason?: string } => ({}));
 
   try {
     const pp = getMemory();
@@ -238,7 +246,7 @@ app.patch('/v1/facts/:id/evolve', async (c) => {
 app.post('/v1/search', async (c) => {
   const body = await c.req.json<{
     query: string;
-    type?: string;
+    type?: FactType;
     tags?: string[];
     validAt?: string;
     createdAfter?: string;
@@ -249,7 +257,7 @@ app.post('/v1/search', async (c) => {
   try {
     const pp = getMemory();
     const filters: SearchFilters = {};
-    if (body.type) filters.type = body.type as any;
+    if (body.type) filters.type = body.type;
     if (body.tags?.length) filters.tags = body.tags;
     if (body.validAt) filters.validAt = body.validAt;
     if (body.createdAfter) filters.createdAfter = body.createdAfter;
@@ -272,7 +280,11 @@ app.get('/v1/timeline', async (c) => {
   const type = c.req.query('type');
   if (from) options.from = from;
   if (to) options.to = to;
-  if (type) options.type = type as any;
+  if (type) {
+    // SAFETY: the query string is forwarded unvalidated, as this endpoint always has: timeline()
+    // only compares it with each stored type, so a string that is not a FactType matches no fact.
+    options.type = type as FactType;
+  }
   options.includeInvalidated = c.req.query('includeInvalidated') === 'true';
 
   try {

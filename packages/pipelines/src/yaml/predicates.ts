@@ -68,7 +68,7 @@ export async function evaluatePredicate(
   predicate: string | CompiledPredicate,
   scope: TemplateScope,
 ): Promise<boolean> {
-  const compiled = typeof predicate === 'string' ? compilePredicate(predicate) : predicate;
+  const compiled = isString(predicate) ? compilePredicate(predicate) : predicate;
 
   try {
     const result = await compiled.evaluator.evaluate(scope);
@@ -81,12 +81,28 @@ export async function evaluatePredicate(
 
 // ── Internal helpers ────────────────────────────────────────
 
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
 function toBoolean(value: unknown): boolean {
   if (value === undefined || value === null) return false;
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value !== 0 && !Number.isNaN(value);
-  if (typeof value === 'string') return value.length > 0;
+  if (isBoolean(value)) return value;
+  if (isNumber(value)) return value !== 0 && !Number.isNaN(value);
+  if (isString(value)) return value.length > 0;
   if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'object') return Object.keys(value).length > 0;
+  if (isObject(value)) return Object.keys(value).length > 0;
   return Boolean(value);
 }

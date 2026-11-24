@@ -83,11 +83,15 @@ function isGitDiffReadRequest(method: string, path: string): boolean {
   return /^\/git\/(?:project\/[^/]+|[^/]+)\/diff(?:\/|$)/.test(pathname);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function parseBody(text: string): Record<string, unknown> {
   if (!text) return {};
   try {
     const value: unknown = JSON.parse(text);
-    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+    return isRecord(value) ? value : {};
   } catch {
     return {};
   }
@@ -98,17 +102,10 @@ function parseBody(text: string): Record<string, unknown> {
  * where a REST route answers `{ error: string, friendlyMessage? }`; read both the same way.
  */
 function flattenTrpcError(body: Record<string, unknown>): Record<string, unknown> {
-  const error = body.error as
-    | { message?: unknown; friendlyMessage?: unknown; data?: { httpStatus?: unknown } }
-    | undefined;
-  if (
-    !error ||
-    typeof error !== 'object' ||
-    typeof error.message !== 'string' ||
-    typeof error.data?.httpStatus !== 'number'
-  ) {
-    return body;
-  }
+  const error = body.error;
+  if (!isRecord(error) || typeof error.message !== 'string') return body;
+  const { data } = error;
+  if (!isRecord(data) || typeof data.httpStatus !== 'number') return body;
   return typeof error.friendlyMessage === 'string'
     ? { error: error.message, friendlyMessage: error.friendlyMessage }
     : { error: error.message };
@@ -146,6 +143,8 @@ function httpError(body: Record<string, unknown>, status: number, message: strin
 
 function asApiError(error: unknown): ApiClientError {
   if (error && typeof error === 'object' && 'type' in error && 'message' in error) {
+    // SAFETY: the only objects with `type` and `message` that reach this catch are the
+    // ApiClientError values this client throws itself (httpError and the network branch).
     return error as ApiClientError;
   }
   return { type: 'INTERNAL', message: String(error) };
@@ -214,7 +213,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
         });
       } catch (error) {
         span.end('ERROR');
-        if (init.cancellation?.aborted || (error as { name?: string })?.name === 'AbortError') {
+        if (init.cancellation?.aborted || (isRecord(error) && error.name === 'AbortError')) {
           throw { type: 'INTERNAL', message: 'Request aborted' } satisfies ApiClientError;
         }
         recordFailure(startedAt);
@@ -259,6 +258,8 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
       dependencies.circuitBreaker.recordSuccess();
       try {
         const responseText = await response.text();
+        // SAFETY: `T` is the response shape the caller declares for this endpoint; the client
+        // does not validate response bodies (the server contracts own that shape).
         return JSON.parse(responseText) as T;
       } catch (error) {
         throw asApiError(error);

@@ -110,7 +110,7 @@ export const visualThemes: Readonly<Record<VisualThemeName, VisualContract>> = {
 };
 
 export function isVisualThemeName(value: unknown): value is VisualThemeName {
-  return typeof value === 'string' && VISUAL_THEME_NAMES.includes(value as VisualThemeName);
+  return typeof value === 'string' && VISUAL_THEME_NAMES.some((name) => name === value);
 }
 
 export function visualContract(name: VisualThemeName = 'reference-dark'): VisualContract {

@@ -21,8 +21,11 @@ export default {
       });
     } catch (error) {
       appPromise = null;
-      const e = error as Error;
-      return new Response(`probe error: ${e?.message}\n${e?.stack ?? ''}`, { status: 500 });
+      // `Object()` boxes a thrown primitive and maps null / undefined to `{}`.
+      const thrown: object = Object(error);
+      const message = 'message' in thrown ? thrown.message : undefined;
+      const stack = 'stack' in thrown ? thrown.stack : undefined;
+      return new Response(`probe error: ${message}\n${stack ?? ''}`, { status: 500 });
     }
   },
 };

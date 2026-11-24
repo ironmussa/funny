@@ -28,6 +28,11 @@ export { SelectGroup, SelectScrollDownButton, SelectScrollUpButton, SelectValue 
 type SelectLabelProps = ComponentProps<typeof GpuixSelectLabel>;
 type SelectSeparatorProps = ComponentProps<typeof GpuixSelectSeparator>;
 
+/** Narrows a style prop that may be a function of the component state. */
+function isStyleFunction<T>(style: T): style is Extract<T, (...args: never[]) => void> {
+  return typeof style === 'function';
+}
+
 export function SelectTrigger({ style, ...props }: SelectTriggerProps): ReactElement {
   const theme = useGpuixUiTheme();
   return (
@@ -49,7 +54,7 @@ export function SelectTrigger({ style, ...props }: SelectTriggerProps): ReactEle
         borderRadius: theme.radii.medium,
         cursor: state.disabled ? 'not-allowed' : 'pointer',
         opacity: state.disabled ? 0.55 : 1,
-        ...(typeof style === 'function' ? style(state) : style),
+        ...(isStyleFunction(style) ? style(state) : style),
       })}
     />
   );
@@ -102,7 +107,7 @@ export function SelectItem({ style, ...props }: SelectItemProps): ReactElement {
             : theme.colors.text,
         cursor: state.disabled ? 'not-allowed' : 'pointer',
         opacity: state.disabled ? 0.55 : 1,
-        ...(typeof style === 'function' ? style(state) : style),
+        ...(isStyleFunction(style) ? style(state) : style),
       })}
     />
   );

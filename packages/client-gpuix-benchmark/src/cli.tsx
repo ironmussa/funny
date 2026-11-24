@@ -38,6 +38,8 @@ function rendererItemCounts(renderer: {
   getAutomationTree: () => string;
   getPaintedText: () => string[];
 }): { retained: number; visible: number | null; paintedText: number } {
+  // SAFETY: getAutomationTree() is the renderer's JSON dump of its own automation tree (null
+  // before the first frame); AutomationTreeNode names the node fields this benchmark reads.
   const root = JSON.parse(renderer.getAutomationTree()) as AutomationTreeNode | null;
   let retained = 0;
   let boundedVisible = 0;

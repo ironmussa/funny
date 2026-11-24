@@ -68,6 +68,8 @@ export class FunnyClient {
         });
 
         if (!response.ok) {
+          // SAFETY: the ingest webhook answers its errors as WebhookErrorResponse; a body that is
+          // not JSON becomes {}, whose missing `error` falls back to the HTTP status below.
           const body = (await response.json().catch(() => ({}))) as WebhookErrorResponse;
           throw new FunnyClientError(
             body.error ?? `HTTP ${response.status} ${response.statusText}`,
@@ -75,6 +77,8 @@ export class FunnyClient {
           );
         }
 
+        // SAFETY: the ingest webhook answers a 2xx (response.ok, checked above) with a
+        // WebhookResponse body.
         return response.json() as Promise<WebhookResponse>;
       },
       {

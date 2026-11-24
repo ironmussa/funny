@@ -82,6 +82,8 @@ async function acquireLock(db: Client): Promise<boolean> {
   const existing = await getMeta(db, LOCK_KEY);
   if (existing) {
     try {
+      // SAFETY: LOCK_KEY is written only by the setMeta call below, as JSON.stringify of a LockData;
+      // a value that does not parse falls into the catch and counts as a stale lock.
       const data = JSON.parse(existing) as LockData;
       if (data.expires > Date.now()) {
         // Lock is held and not expired
@@ -98,6 +100,7 @@ async function acquireLock(db: Client): Promise<boolean> {
   const confirm = await getMeta(db, LOCK_KEY);
   if (confirm) {
     try {
+      // SAFETY: as above, LOCK_KEY only ever holds a JSON-encoded LockData.
       const data = JSON.parse(confirm) as LockData;
       return data.holder === holder;
     } catch {
@@ -348,7 +351,7 @@ function findClusters(
 
 function inferConsolidatedType(facts: MemoryFact[]): MemoryFact['type'] {
   // Use the most common type in the cluster
-  const counts = new Map<string, number>();
+  const counts = new Map<MemoryFact['type'], number>();
   for (const f of facts) {
     counts.set(f.type, (counts.get(f.type) ?? 0) + 1);
   }
@@ -356,7 +359,7 @@ function inferConsolidatedType(facts: MemoryFact[]): MemoryFact['type'] {
   let maxCount = 0;
   for (const [type, count] of counts) {
     if (count > maxCount) {
-      maxType = type as MemoryFact['type'];
+      maxType = type;
       maxCount = count;
     }
   }

@@ -126,13 +126,21 @@ export class InvalidClientPlatformError extends Error {
   }
 }
 
+/** Properties of a candidate platform, read before they are checked. */
+type UncheckedProperties = Record<string, unknown>;
+
+/** Whether `value` can carry properties (an object or a function). */
+function hasProperties(value: unknown): value is UncheckedProperties {
+  return (typeof value === 'object' && value !== null) || typeof value === 'function';
+}
+
 export function validateClientPlatform(candidate: unknown): asserts candidate is ClientPlatform {
-  const value = candidate as Partial<Record<keyof ClientPlatform, unknown>> | null;
+  const value = hasProperties(candidate) ? candidate : null;
   const missing: string[] = [];
 
   for (const [capability, methods] of Object.entries(REQUIRED_METHODS)) {
-    const service = value?.[capability as keyof ClientPlatform] as Record<string, unknown> | null;
-    if (!service || typeof service !== 'object') {
+    const service = value?.[capability];
+    if (!hasProperties(service) || typeof service !== 'object') {
       missing.push(capability);
       continue;
     }
@@ -141,8 +149,9 @@ export function validateClientPlatform(candidate: unknown): asserts candidate is
     }
   }
 
-  const transport = value?.transport as { environment?: unknown } | undefined;
-  if (transport && (!transport.environment || typeof transport.environment !== 'object')) {
+  const transport = value?.transport;
+  const environment = hasProperties(transport) ? transport.environment : undefined;
+  if (transport && (!environment || typeof environment !== 'object')) {
     missing.push('transport.environment');
   }
 

@@ -68,9 +68,7 @@ function pickEnv(...keys: string[]): string | null {
 }
 
 export function getBuildInfo(): BuildInfo {
-  const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
-    version?: string;
-  };
+  const pkg: { version?: string } = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'));
   const version = pkg.version ?? '0.0.0';
 
   // Canonical identity = short commit SHA. Take the FULL sha (from git locally,

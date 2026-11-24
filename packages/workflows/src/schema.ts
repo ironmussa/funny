@@ -364,6 +364,7 @@ const duration = z.union([
     .regex(/^\d+(ms|s|m|h)$/, { message: 'Use a duration like 500ms, 60s, 5m or 1h' })
     .transform((raw) => {
       const [, amount, unit] = /^(\d+)(ms|s|m|h)$/.exec(raw)!;
+      // SAFETY: the regex only matches the units ms|s|m|h, exactly the keys of DURATION_UNITS_MS.
       return Number(amount) * DURATION_UNITS_MS[unit as keyof typeof DURATION_UNITS_MS];
     }),
 ]);
@@ -492,7 +493,7 @@ const pipelineNodeFields = z
 
 const pipelineNode = pipelineNodeFields.superRefine((val, ctx) => {
   for (const field of Object.keys(val.triage ?? {})) {
-    if ((TRIAGE_FIELDS as readonly string[]).includes(field)) continue;
+    if (TRIAGE_FIELDS.some((allowed) => allowed === field)) continue;
     ctx.addIssue({
       code: 'custom',
       path: ['triage', field],
@@ -500,14 +501,14 @@ const pipelineNode = pipelineNodeFields.superRefine((val, ctx) => {
     });
   }
   for (const field of Object.keys(val.review ?? {})) {
-    if ((REVIEW_FIELDS as readonly string[]).includes(field)) continue;
+    if (REVIEW_FIELDS.some((allowed) => allowed === field)) continue;
     ctx.addIssue({
       code: 'custom',
       path: ['review', field],
       message: `Review step "${val.id}" does not accept "${field}": a review always runs on a new read-only thread and accepts only ${REVIEW_FIELDS.join(', ')}.`,
     });
   }
-  const present = ACTION_KEYS.filter((k) => (val as Record<string, unknown>)[k] !== undefined);
+  const present = ACTION_KEYS.filter((k) => val[k] !== undefined);
   if (present.length === 0) {
     ctx.addIssue({
       code: 'custom',

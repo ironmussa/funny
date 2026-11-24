@@ -10,7 +10,13 @@ import { log } from './logger.js';
  * Temporal engine: bi-temporal tracking, decay scoring, conflict detection,
  * fact invalidation and evolution.
  */
-import type { ConflictResult, ConflictRelation, EmbeddingProvider, MemoryFact } from './types.js';
+import type {
+  ConflictResult,
+  ConflictRelation,
+  DecayClass,
+  EmbeddingProvider,
+  MemoryFact,
+} from './types.js';
 import { DECAY_LAMBDAS, DEFAULT_DECAY_CLASS } from './types.js';
 
 // ─── Decay scoring ─────────────────────────────────────
@@ -31,7 +37,8 @@ export function calculateDecayScore(fact: MemoryFact, now: Date = new Date()): n
  * Infer the default decay class from a fact type.
  */
 export function inferDecayClass(type: string): 'slow' | 'normal' | 'fast' {
-  return DEFAULT_DECAY_CLASS[type as keyof typeof DEFAULT_DECAY_CLASS] ?? 'normal';
+  const byType: Partial<Record<string, DecayClass>> = DEFAULT_DECAY_CLASS;
+  return byType[type] ?? 'normal';
 }
 
 // ─── Bi-temporal queries ───────────────────────────────

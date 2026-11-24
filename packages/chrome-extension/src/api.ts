@@ -15,6 +15,10 @@ export const INVALID_TOKEN_MESSAGE = 'The API token is invalid, expired or revok
 const PUBLIC_PERMISSION_MODES = ['ask', 'confirmEdit', 'plan'] as const;
 type PublicPermissionMode = (typeof PUBLIC_PERMISSION_MODES)[number];
 
+function isPublicPermissionMode(mode: string): mode is PublicPermissionMode {
+  return PUBLIC_PERMISSION_MODES.some((m) => m === mode);
+}
+
 /** Largest decoded image the public API accepts. */
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -44,6 +48,10 @@ export function normalizeServerUrl(serverUrl: string): string {
 }
 
 /** The origin of a server URL, or null when it is not an http(s) URL. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function serverOrigin(serverUrl: string): string | null {
   try {
     const url = new URL(normalizeServerUrl(serverUrl));
@@ -99,13 +107,14 @@ export function apiErrorFromResponse(status: number, bodyText: string): ApiError
 
   let message = '';
   try {
-    const body = JSON.parse(bodyText) as {
+    // JSON.parse may yield any value; every field read below is checked first.
+    const body: {
       message?: unknown;
       issues?: Array<{ message?: unknown; path?: unknown }>;
-    };
-    if (typeof body?.message === 'string') message = body.message;
+    } | null = JSON.parse(bodyText);
+    if (isString(body?.message)) message = body.message;
     const issue = Array.isArray(body?.issues) ? body.issues[0] : undefined;
-    if (issue && typeof issue.message === 'string' && !message.includes(issue.message)) {
+    if (issue && isString(issue.message) && !message.includes(issue.message)) {
       const where =
         Array.isArray(issue.path) && issue.path.length ? `${issue.path.join('.')}: ` : '';
       message = message ? `${message} (${where}${issue.message})` : `${where}${issue.message}`;
@@ -130,9 +139,7 @@ export function unreachableError(serverUrl: string): ApiError {
 
 /** The stored permission mode if the public API accepts it, else undefined (the server uses `ask`). */
 export function toPublicPermissionMode(mode: string | undefined): PublicPermissionMode | undefined {
-  return (PUBLIC_PERMISSION_MODES as readonly string[]).includes(mode ?? '')
-    ? (mode as PublicPermissionMode)
-    : undefined;
+  return mode !== undefined && isPublicPermissionMode(mode) ? mode : undefined;
 }
 
 /** Bytes a base64 string decodes to. */
@@ -147,8 +154,9 @@ export function dataUrlToImage(
   if (!dataUrl) return null;
   const match = /^data:(image\/[a-z]+);base64,(.+)$/.exec(dataUrl);
   if (!match) return null;
-  const mediaType = (match[1] === 'image/jpg' ? 'image/jpeg' : match[1]) as ImageMediaType;
-  if (!IMAGE_MEDIA_TYPES.includes(mediaType)) return null;
+  const declared = match[1] === 'image/jpg' ? 'image/jpeg' : match[1];
+  const mediaType = IMAGE_MEDIA_TYPES.find((t) => t === declared);
+  if (!mediaType) return null;
   return { mediaType, data: match[2] };
 }
 
@@ -227,6 +235,11 @@ export function resolveConnection(
   return { serverUrl: serverUrl || saved.serverUrl, apiToken: apiToken ?? saved.apiToken };
 }
 
+/** Any value but null / undefined can be read for `.message` (a primitive reads undefined). */
+function hasMessage(err: unknown): err is { message?: unknown } {
+  return err !== null && err !== undefined;
+}
+
 /** A failed call as the message the settings UI receives. */
 export function connectionFailure(err: unknown): {
   success: false;
@@ -234,7 +247,11 @@ export function connectionFailure(err: unknown): {
   error: string;
 } {
   if (err instanceof ApiError) return { success: false, reason: err.reason, error: err.message };
-  return { success: false, reason: 'unreachable', error: String((err as Error)?.message ?? err) };
+  return {
+    success: false,
+    reason: 'unreachable',
+    error: String((hasMessage(err) ? err.message : undefined) ?? err),
+  };
 }
 
 /** Whether a settings response failed only for a missing host permission. */

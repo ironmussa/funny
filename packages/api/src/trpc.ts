@@ -19,11 +19,15 @@ export interface ApiContext {
   ports: ApiPorts;
 }
 
+/** A validation cause (zod, Standard Schema) whose first issue has a message. */
+const validationCause = z.object({
+  issues: z.tuple([z.object({ message: z.string() })], z.unknown()),
+});
+
 /** Validation causes (zod, Standard Schema) expose their issues. */
 function firstIssueMessage(cause: unknown): string | undefined {
-  const issues = (cause as { issues?: { message?: unknown }[] } | undefined)?.issues;
-  const message = Array.isArray(issues) ? issues[0]?.message : undefined;
-  return typeof message === 'string' ? message : undefined;
+  const parsed = validationCause.safeParse(cause);
+  return parsed.success ? parsed.data.issues[0].message : undefined;
 }
 
 const t = initTRPC.context<ApiContext>().create({

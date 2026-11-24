@@ -4,7 +4,11 @@ import {
   type RealtimeEffect,
   type RealtimeEvent,
 } from '@funny/client-core';
-import type { GitRefsUpdatedChange, WSGitRefsUpdatedData } from '@funny/shared';
+import type {
+  GitRefsUpdatedChange,
+  WSGitRefsUpdatedData,
+  WSThreadDeletedData,
+} from '@funny/shared';
 import { isTerminalSessionUnavailable } from '@funny/shared/socket-events';
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
@@ -613,7 +617,10 @@ function handleShareRevoked(threadId: string): void {
   useThreadStore.getState().handleShareRevoked(threadId);
 }
 
-function handleThreadDeleted(threadId: string, data: any): void {
+function handleThreadDeleted(
+  threadId: string,
+  data: Partial<WSThreadDeletedData> | undefined,
+): void {
   // Deleted here, in another tab, or by another client (spec: thread deleted
   // elsewhere): drop it from every list and leave its detail view if open.
   const wasOpen = clientComposition.platform.navigation.current().pathname.includes(threadId);
@@ -621,7 +628,7 @@ function handleThreadDeleted(threadId: string, data: any): void {
   useThreadStore.getState().handleThreadDeleted(threadId);
   if (!wasOpen) return;
   const navigate = getNavigate();
-  const projectId = data?.projectId as string | undefined;
+  const projectId = data?.projectId;
   navigate?.(buildPath(projectId ? `/projects/${projectId}` : '/'));
 }
 
@@ -859,8 +866,11 @@ function buildNotificationTitle(info: { title?: string; branch?: string }): stri
   return parts.join(' — ');
 }
 
-function maybeNotifyAgentResult(threadId: string, data: any): void {
-  const status = data.status as string | undefined;
+function maybeNotifyAgentResult(
+  threadId: string,
+  data: Extract<RealtimeEffect, { type: 'agent-result' }>,
+): void {
+  const status = data.status;
   const info = findThread(threadId);
   const title = buildNotificationTitle(info);
   const onClick = () => {

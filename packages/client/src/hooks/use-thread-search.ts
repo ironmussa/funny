@@ -54,8 +54,10 @@ export function useThreadSearchState(
     });
     const matches: { node: Text; start: number; end: number }[] = [];
 
-    let node: Text | null;
-    while ((node = walker.nextNode() as Text | null)) {
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      // SHOW_TEXT yields only Text nodes; the check narrows the type.
+      if (!(node instanceof Text)) continue;
       const text = node.textContent || '';
       for (const match of findTextSearchMatches(text, query)) {
         matches.push({ node, start: match.start, end: match.end });
@@ -107,7 +109,7 @@ export function useThreadSearchState(
         });
 
         if (!el) return false;
-        const marks = el.querySelectorAll('mark[data-search-hl]');
+        const marks = el.querySelectorAll<HTMLElement>('mark[data-search-hl]');
         reportMarkCount?.(messageId, marks.length);
 
         if (marks.length === 0) {
@@ -115,13 +117,12 @@ export function useThreadSearchState(
           return true;
         }
 
-        marks.forEach((m) => {
-          const mEl = m as HTMLElement;
+        marks.forEach((mEl) => {
           mEl.removeAttribute('data-search-current');
           Object.assign(mEl.style, { backgroundColor: 'var(--search-highlight)', boxShadow: '' });
         });
         const clampedIdx = Math.max(0, Math.min(withinIdx, marks.length - 1));
-        const target = marks[clampedIdx] as HTMLElement | undefined;
+        const target: HTMLElement | undefined = marks[clampedIdx];
         if (target) {
           target.setAttribute('data-search-current', '');
           target.style.backgroundColor = 'var(--search-highlight-current)';

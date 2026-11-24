@@ -7,11 +7,11 @@ import { useSettingsStore } from '@/stores/settings-store';
 
 const log = createClientLogger('notifications');
 
-type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
+type NotificationPermissionState = NotificationPermission | 'unsupported';
 
 function readPermission(): NotificationPermissionState {
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
-  return Notification.permission as NotificationPermissionState;
+  return Notification.permission;
 }
 
 /** True if browser supports the Notification API. */
@@ -25,7 +25,11 @@ export function isNotificationsSupported(): boolean {
  */
 export function playNotificationSound(): void {
   try {
-    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const Ctx =
+      window.AudioContext ||
+      // SAFETY: webkitAudioContext is older Safari's prefixed AudioContext constructor, with the
+      // same signature; the window type does not declare it, and it is undefined elsewhere.
+      (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) {
       log.warn('audio sound skipped: no AudioContext');
       return;
@@ -157,8 +161,7 @@ export function useNotifications() {
 
   const requestPermission = useCallback(async (): Promise<NotificationPermissionState> => {
     if (!isNotificationsSupported()) return 'unsupported';
-    const result = await Notification.requestPermission();
-    const next = result as NotificationPermissionState;
+    const next = await Notification.requestPermission();
     setPermission(next);
     return next;
   }, []);

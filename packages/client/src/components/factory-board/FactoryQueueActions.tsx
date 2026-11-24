@@ -65,8 +65,7 @@ export function FactoryQueueActions({
       {toStop.length > 0 && (
         <Button
           size="xs"
-          variant="ghost"
-          className="text-destructive"
+          variant="destructive-text"
           data-testid="factory-stop-all"
           onClick={() => setConfirming(true)}
         >

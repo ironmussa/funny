@@ -43,12 +43,12 @@ export function factorySettingsQuery(projectId: string) {
   return {
     queryKey: factorySettingsKey(projectId),
     queryFn: (): Promise<FactorySettings | null> =>
-      unwrapResult(factoryApi.getSettings(projectId)).catch((error: unknown) => {
+      unwrapResult(factoryApi.getSettings(projectId)).catch((cause: unknown) => {
         log.warn('failed to load factory settings', {
           projectId,
-          error: error instanceof Error ? error.message : String(error),
+          error: cause instanceof Error ? cause.message : String(cause),
         });
-        throw error;
+        throw cause;
       }),
     staleTime: 30_000,
     refetchInterval: (query: QueryStatusView) =>

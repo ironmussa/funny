@@ -158,12 +158,12 @@ export function ExtensionsSettings() {
       {/* Installed list */}
       {extensions.length === 0 ? (
         loading ? (
-          <LoadingState padding="md" fill={false} className="settings-card" label="Loading…" />
+          <LoadingState padding="md" fill={false} surface="card" label="Loading…" />
         ) : (
           <EmptyState
             padding="md"
             fill={false}
-            className="settings-card"
+            surface="card"
             icon={Puzzle}
             title="No extensions installed."
           />

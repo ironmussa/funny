@@ -10,11 +10,12 @@ import { classifyCheckCommand } from '@funny/shared/checks';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { isString } from '../../lib/value-guards.js';
 
 /** Records a Bash tool call that runs a check; ignores any other tool or command. */
 export function recordBashCheck(threadId: string, tool: string, input: unknown): void {
   const command = tool === 'Bash' ? (input as { command?: unknown } | null)?.command : undefined;
-  if (typeof command !== 'string') return;
+  if (!isString(command)) return;
   const check = classifyCheckCommand(command);
   if (!check) return;
   // Redirected only where the hook runs (Claude, project setting on); the

@@ -1,5 +1,6 @@
 import type { Project, ResolvedAgentExecutionProfileResponse } from '@funny/shared';
 
+import { isObject } from '../lib/value-guards.js';
 import { sendRemoteData } from './remote-data-channel.js';
 import type { RemoteDataRequest } from './remote-thread-data-client.js';
 
@@ -104,7 +105,7 @@ class RemoteProjectIdentityClient {
     });
     return {
       profile: response?.profile ?? null,
-      env: response?.env && typeof response.env === 'object' ? response.env : {},
+      env: isObject(response?.env) ? response.env : {},
     };
   }
   async createProject(

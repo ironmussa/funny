@@ -25,6 +25,8 @@ import { runPipeline, type PipelineDefinition, type ProgressReporter } from '@fu
 import type { ParsedInputDef } from '@funny/workflows';
 import { nanoid } from 'nanoid';
 
+import { isBoolean, isNumber, isObject, isString } from '../lib/value-guards.js';
+
 // ── Public types ──────────────────────────────────────────────
 
 export type DispatchOutcome =
@@ -320,15 +322,15 @@ function resolvePipelineInputs(args: {
 function matchesInputType(value: unknown, type: PipelineInputDefinition['type']): boolean {
   switch (type) {
     case 'string':
-      return typeof value === 'string';
+      return isString(value);
     case 'number':
-      return typeof value === 'number' && Number.isFinite(value);
+      return isNumber(value) && Number.isFinite(value);
     case 'boolean':
-      return typeof value === 'boolean';
+      return isBoolean(value);
     case 'array':
       return Array.isArray(value);
     case 'object':
-      return typeof value === 'object' && value !== null && !Array.isArray(value);
+      return isObject(value) && !Array.isArray(value);
   }
   return false;
 }

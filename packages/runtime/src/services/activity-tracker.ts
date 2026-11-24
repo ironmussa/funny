@@ -34,6 +34,7 @@ import { Effect, Schedule } from 'effect';
 import type { Result } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { isObject, isString } from '../lib/value-guards.js';
 import { sendRemoteData } from './remote-data-channel.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -86,16 +87,12 @@ const PROGRESS_INTERVAL_MS = 500;
 
 /** A server answer that refuses the write (scope, ownership, unknown type). */
 function isRefusal(response: unknown): boolean {
-  return (
-    !!response &&
-    typeof response === 'object' &&
-    (response as { success?: unknown }).success === false
-  );
+  return isObject(response) && (response as { success?: unknown }).success === false;
 }
 
 function messageOf(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error) {
+  if (isString(error)) return error;
+  if (isObject(error) && 'message' in error) {
     return String((error as { message: unknown }).message);
   }
   return String(error);

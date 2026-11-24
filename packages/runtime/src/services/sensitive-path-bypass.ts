@@ -19,6 +19,7 @@ import { errorMessage } from '@funny/shared/errors';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 
 interface BypassQuery {
   toolName: string;
@@ -37,8 +38,8 @@ export async function runSensitivePathBypass(query: BypassQuery): Promise<Bypass
   const ti = (toolInput ?? {}) as Record<string, unknown>;
 
   if (toolName === 'Write') {
-    const filePath = typeof ti.file_path === 'string' ? ti.file_path : null;
-    const content = typeof ti.content === 'string' ? ti.content : null;
+    const filePath = isString(ti.file_path) ? ti.file_path : null;
+    const content = isString(ti.content) ? ti.content : null;
     if (!filePath || content === null) return null;
     const existed = await fileExists(filePath);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -57,9 +58,9 @@ export async function runSensitivePathBypass(query: BypassQuery): Promise<Bypass
   }
 
   if (toolName === 'Edit') {
-    const filePath = typeof ti.file_path === 'string' ? ti.file_path : null;
-    const oldString = typeof ti.old_string === 'string' ? ti.old_string : null;
-    const newString = typeof ti.new_string === 'string' ? ti.new_string : null;
+    const filePath = isString(ti.file_path) ? ti.file_path : null;
+    const oldString = isString(ti.old_string) ? ti.old_string : null;
+    const newString = isString(ti.new_string) ? ti.new_string : null;
     const replaceAll = ti.replace_all === true;
     if (!filePath || oldString === null || newString === null) return null;
     const original = await fs.readFile(filePath, 'utf8');
@@ -84,7 +85,7 @@ export async function runSensitivePathBypass(query: BypassQuery): Promise<Bypass
   }
 
   if (toolName === 'Read') {
-    const filePath = typeof ti.file_path === 'string' ? ti.file_path : null;
+    const filePath = isString(ti.file_path) ? ti.file_path : null;
     if (!filePath) return null;
     const data = await fs.readFile(filePath, 'utf8');
     log.info('sensitive bypass Read executed', {
@@ -107,7 +108,7 @@ export async function runSensitivePathBypass(query: BypassQuery): Promise<Bypass
   }
 
   if (toolName === 'Bash') {
-    const command = typeof ti.command === 'string' ? ti.command : null;
+    const command = isString(ti.command) ? ti.command : null;
     if (!command) return null;
     return await runBash(command, cwd);
   }

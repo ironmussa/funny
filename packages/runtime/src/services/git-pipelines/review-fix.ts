@@ -13,6 +13,7 @@ import { gitRead, gitWrite } from '@funny/core/git';
 import { definePipeline, node } from '@funny/pipelines';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import { parseReviewVerdict, cleanupReviewerThread } from '../pipeline-manager.js';
 import { buildReviewerPrompt, buildCorrectorPrompt } from '../pipeline-prompts.js';
 import * as tm from '../thread-manager.js';
@@ -102,8 +103,7 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
     throw new Error('Fix requires threadId and projectId');
   }
 
-  const findingsStr =
-    typeof ctx.findings === 'string' ? ctx.findings : JSON.stringify(ctx.findings, null, 2);
+  const findingsStr = isString(ctx.findings) ? ctx.findings : JSON.stringify(ctx.findings, null, 2);
   const prompt = buildCorrectorPrompt(findingsStr, ctx.correctorPrompt);
 
   ctx.setStep('fix', { status: 'running' });

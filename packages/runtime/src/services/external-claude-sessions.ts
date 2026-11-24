@@ -17,6 +17,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { DATA_DIR } from '../lib/data-dir.js';
+import { isObject, isString } from '../lib/value-guards.js';
 import { readFileLines } from './file-lines.js';
 import { getServices } from './service-registry.js';
 
@@ -1079,14 +1080,14 @@ function extractToolCalls(
 
   const toolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
-    if (!block || typeof block !== 'object') return;
+    if (!isObject(block)) return;
     const record = block as Record<string, unknown>;
     if (record.type !== 'tool_use') return;
 
-    const claudeToolId = typeof record.id === 'string' ? record.id : null;
+    const claudeToolId = isString(record.id) ? record.id : null;
     const toolCall: ExternalClaudeTranscriptToolCall = {
       id: claudeToolId ?? `${entry.uuid ?? `assistant-${index}`}-tool-${blockIndex}`,
-      name: typeof record.name === 'string' && record.name ? record.name : 'Tool',
+      name: isString(record.name) && record.name ? record.name : 'Tool',
       input: stringifyToolInput(record.input),
       timestamp: entry.timestamp ?? null,
       author: 'Claude Code',
@@ -1108,12 +1109,12 @@ function applyToolResults(
 
   const orphanToolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
-    if (!block || typeof block !== 'object') return;
+    if (!isObject(block)) return;
     const record = block as Record<string, unknown>;
     if (record.type !== 'tool_result') return;
 
     const output = contentToText(record.content);
-    const claudeToolId = typeof record.tool_use_id === 'string' ? record.tool_use_id : null;
+    const claudeToolId = isString(record.tool_use_id) ? record.tool_use_id : null;
     const existing = claudeToolId ? toolCallsByClaudeId.get(claudeToolId) : null;
     if (existing) {
       existing.output = output;
@@ -1134,15 +1135,14 @@ function applyToolResults(
 }
 
 function contentToText(content: unknown): string {
-  const text =
-    typeof content === 'string'
-      ? content
-      : !Array.isArray(content)
-        ? stringifyUnknown(content)
-        : content
-            .map((block) => blockToText(block))
-            .filter(Boolean)
-            .join('\n\n');
+  const text = isString(content)
+    ? content
+    : !Array.isArray(content)
+      ? stringifyUnknown(content)
+      : content
+          .map((block) => blockToText(block))
+          .filter(Boolean)
+          .join('\n\n');
 
   return stripClaudeInternalPromptMarkers(stripIdeOpenedFileMarkers(text));
 }
@@ -1156,20 +1156,20 @@ function extractImages(content: unknown): ImageAttachment[] {
 }
 
 function blockToText(block: unknown): string {
-  if (typeof block === 'string') return block;
-  if (!block || typeof block !== 'object') return stringifyUnknown(block);
+  if (isString(block)) return block;
+  if (!isObject(block)) return stringifyUnknown(block);
 
   const record = block as Record<string, unknown>;
-  const type = typeof record.type === 'string' ? record.type : null;
+  const type = isString(record.type) ? record.type : null;
 
-  if (type === 'text' && typeof record.text === 'string') return record.text;
+  if (type === 'text' && isString(record.text)) return record.text;
   if (type && NON_TEXT_BLOCK_TYPES.has(type)) return '';
   if (type === 'tool_result') {
     return `Tool result\n\n${contentToText(record.content)}`;
   }
 
-  if (typeof record.text === 'string') return record.text;
-  if (typeof record.content === 'string') return record.content;
+  if (isString(record.text)) return record.text;
+  if (isString(record.content)) return record.content;
   return stringifyUnknown(record);
 }
 
@@ -1178,23 +1178,20 @@ function contentLooksLikeToolResult(content: unknown): boolean {
     Array.isArray(content) &&
     content.length > 0 &&
     content.every(
-      (block) =>
-        !!block &&
-        typeof block === 'object' &&
-        (block as Record<string, unknown>).type === 'tool_result',
+      (block) => isObject(block) && (block as Record<string, unknown>).type === 'tool_result',
     )
   );
 }
 
 function stringifyToolInput(input: unknown): string {
   if (input === null || input === undefined) return '{}';
-  if (typeof input === 'string') return input;
+  if (isString(input)) return input;
   return stringifyUnknown(input) || '{}';
 }
 
 function stringifyUnknown(value: unknown): string {
   if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
+  if (isString(value)) return value;
   try {
     return JSON.stringify(value, null, 2);
   } catch {

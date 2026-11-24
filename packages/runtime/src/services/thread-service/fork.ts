@@ -22,6 +22,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
+import { isString } from '../../lib/value-guards.js';
 import { copyGitCheckpoint } from '../git-checkpoints.js';
 import { getServices } from '../service-registry.js';
 import { canDoGitOps } from '../thread-context.js';
@@ -144,7 +145,7 @@ async function forkThreadImpl(params: ForkThreadParams) {
           parentToolCallId: remappedParent ?? null,
         });
         toolCallIdMap.set(tc.id, newToolCallId);
-        if (typeof tc.output === 'string' && tc.output.length > 0) {
+        if (isString(tc.output) && tc.output.length > 0) {
           await tm.updateToolCallOutput(newToolCallId, tc.output);
         }
       }

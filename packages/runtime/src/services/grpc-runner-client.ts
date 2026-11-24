@@ -15,6 +15,7 @@ import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
 import { metric, recordHistogram } from '../lib/telemetry.js';
+import { isString } from '../lib/value-guards.js';
 import { isWebSocketEndpoint, startGrpcWebSocketBridge } from './grpc-websocket-bridge.js';
 
 export type RunnerGrpcStreamName = 'operations' | 'events' | 'tunnel' | 'terminal';
@@ -124,8 +125,7 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
   return {
     open(name) {
       const method = client[name];
-      if (typeof method !== 'function')
-        throw new Error(`runner gRPC method ${name} is unavailable`);
+      if (!isDuplexMethod(method)) throw new Error(`runner gRPC method ${name} is unavailable`);
       const callMetadata = metadata.clone();
       callMetadata.set('x-correlation-id', nanoid());
       return method.call(client, callMetadata);
@@ -137,8 +137,15 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
   };
 }
 
+/** The client's stub for a stream method, absent when the proto does not define it. */
+function isDuplexMethod(
+  value: ((metadata: grpc.Metadata) => RunnerGrpcDuplexStream) | undefined,
+): value is (metadata: grpc.Metadata) => RunnerGrpcDuplexStream {
+  return typeof value === 'function';
+}
+
 function durationMilliseconds(value: unknown, fallback: number): number {
-  if (typeof value === 'string') {
+  if (isString(value)) {
     const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))s$/.exec(value);
     if (match) {
       const milliseconds = Number(match[1]) * 1_000;

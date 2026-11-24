@@ -2,6 +2,7 @@ import type { AgentProvider } from '@funny/shared';
 import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../../lib/logger.js';
+import { isObject, isString } from '../../lib/value-guards.js';
 import type { RuntimeThreadRecord } from '../server-interfaces.js';
 
 export interface AgentTemplateResolution {
@@ -23,12 +24,12 @@ interface ResolveAgentTemplateInput {
 
 /** Parse JSON text columns that may already be parsed. */
 function parseJsonCol<T>(val: unknown): T[] {
-  return val ? ((typeof val === 'string' ? JSON.parse(val) : val) as T[]) : [];
+  return val ? ((isString(val) ? JSON.parse(val) : val) as T[]) : [];
 }
 
 function parseTemplateVariables(rawVars: unknown): Record<string, string> {
-  if (typeof rawVars === 'string') return JSON.parse(rawVars);
-  return rawVars && typeof rawVars === 'object' ? (rawVars as Record<string, string>) : {};
+  if (isString(rawVars)) return JSON.parse(rawVars);
+  return isObject(rawVars) ? (rawVars as Record<string, string>) : {};
 }
 
 /** Replace `{{VAR_NAME}}` placeholders with the thread's template variables. */

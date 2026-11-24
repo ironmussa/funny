@@ -23,6 +23,7 @@ import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import { isObject, isString } from '../lib/value-guards.js';
 import { computeBranchKey } from '../utils/git-status-helpers.js';
 import { redactDeep } from './agent-startup/project-secrets.js';
 import type { AgentStateTracker } from './agent-state.js';
@@ -51,14 +52,14 @@ function decodeUnicodeEscapes(str: string): string {
  * any payload at all.
  */
 function normalizeToolResultContent(content: unknown): string {
-  if (typeof content === 'string') return content;
+  if (isString(content)) return content;
   if (Array.isArray(content)) {
     return content
       .map((b: any) => {
-        if (typeof b === 'string') return b;
-        if (b && typeof b === 'object') {
-          if (typeof b.text === 'string') return b.text;
-          if (b.type === 'image') return '[image]';
+        if (isString(b)) return b;
+        if (isObject(b)) {
+          if ('text' in b && isString(b.text)) return b.text;
+          if ('type' in b && b.type === 'image') return '[image]';
         }
         return '';
       })
@@ -73,8 +74,8 @@ function normalizeToolResultContent(content: unknown): string {
  * a truncated JSON representation.
  */
 function serializeToolInput(toolName: string, input: unknown): string | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-  if (toolName === 'Bash' && 'command' in input && typeof (input as any).command === 'string') {
+  if (!isObject(input)) return undefined;
+  if (toolName === 'Bash' && 'command' in input && isString((input as any).command)) {
     return (input as any).command as string;
   }
   try {
@@ -581,7 +582,7 @@ export class AgentMessageHandler {
     // pre-compaction value (the "compacted but the meter didn't move" bug).
     // The boundary is authoritative for post-compaction usage, so skip this.
     const isCompactionSummary = msg.message.content.some(
-      (b: any) => b && typeof b === 'object' && 'type' in b && b.type === 'compaction',
+      (b: any) => isObject(b) && 'type' in b && b.type === 'compaction',
     );
     const usage = isCompactionSummary
       ? undefined
@@ -1005,7 +1006,7 @@ export class AgentMessageHandler {
     const errorInput = (input ?? {}) as { error?: unknown };
     this.state.providerErrorPending.set(
       threadId,
-      typeof errorInput.error === 'string' ? errorInput.error : 'Provider error',
+      isString(errorInput.error) ? errorInput.error : 'Provider error',
     );
   }
 

@@ -7,6 +7,7 @@ import { canonicalJson } from '@funny/shared/lib/canonical-json';
 import { z } from 'zod';
 
 import { DATA_DIR } from '../lib/data-dir.js';
+import { isBoolean, isNumber, isObject, isString } from '../lib/value-guards.js';
 
 export interface GrpcOutboxOperation {
   idempotencyKey: string;
@@ -31,14 +32,14 @@ function assertDurableJson(
   path = 'payload',
   ancestors = new WeakSet<object>(),
 ): void {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+  if (value === null || isString(value) || isBoolean(value)) {
     return;
   }
-  if (typeof value === 'number') {
+  if (isNumber(value)) {
     if (Number.isFinite(value)) return;
     throw new Error(`${path} must contain only finite JSON numbers`);
   }
-  if (typeof value !== 'object') {
+  if (!isObject(value)) {
     throw new Error(`${path} must contain only durable JSON values`);
   }
   if (ancestors.has(value)) throw new Error(`${path} must not contain circular references`);
@@ -55,7 +56,7 @@ function assertDurableJson(
       throw new Error(`${path} must contain only plain JSON objects`);
     }
     for (const key of Reflect.ownKeys(value)) {
-      if (typeof key !== 'string') {
+      if (!isString(key)) {
         if (Object.prototype.propertyIsEnumerable.call(value, key)) {
           throw new Error(`${path} must not contain symbol keys`);
         }

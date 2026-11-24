@@ -31,6 +31,7 @@ import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 import {
   recordActivity as defaultRecordActivity,
   trackActivity as defaultTrackActivity,
@@ -78,7 +79,7 @@ export interface WorkspaceCleanupDeps {
 }
 
 function messageOf(error: unknown): string {
-  if (error && typeof error === 'object' && 'message' in error) {
+  if (isObject(error) && 'message' in error) {
     return String((error as { message: unknown }).message);
   }
   return String(error);

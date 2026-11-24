@@ -80,6 +80,13 @@ railway up --service funny-server --detach
   build fails the deploy; set `FUNNY_NATIVE_GIT_OPTIONAL=1` on the service to
   ship with the git CLI fallback instead. After deploying, the runner logs
   `Native git (gitoxide) loaded`, or a `native-git` warning with the load error.
+- The same build then compiles weave's merge driver (`weave-driver`, tag
+  `FUNNY_WEAVE_VERSION`, default `v0.7.1`) into `packages/runtime/dist/tools/bin`,
+  and `scripts/start-railway-runner.sh` puts it on `PATH` (the runner's boot log
+  prints `weave-driver <version>`). The issue factory's `integrate` step uses it
+  to settle conflicts between separate edits of one file without an agent. It is
+  optional: a failed build only warns, and integrations use git's own driver
+  (Settings > Factory then advises installing weave).
 - **Deploy both services** when your change touches models/agents:
   - server → the model registry (`packages/shared/src/models.ts`), so the UI
     offers the model and the API doesn't reject it.

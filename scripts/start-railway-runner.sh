@@ -42,5 +42,11 @@ fi
 mkdir -p "$FUNNY_DATA_DIR"
 rm -f "$FUNNY_DATA_DIR/pty-daemon.pid" "$FUNNY_DATA_DIR/pty.sock"
 git --version
+# weave's merge driver, when the build produced it (scripts/build-runner-deploy.sh).
+tools_bin="$(cd "$(dirname "$0")/../packages/runtime" && pwd)/dist/tools/bin"
+if [ -x "$tools_bin/weave-driver" ]; then
+  export PATH="$tools_bin:$PATH"
+  "$tools_bin/weave-driver" --version || true
+fi
 cd "$(dirname "$0")/../packages/runtime"
 exec bun run start

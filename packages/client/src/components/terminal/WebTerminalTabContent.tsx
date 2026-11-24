@@ -275,7 +275,7 @@ export function WebTerminalTabContent({
     send({ type: 'RESTART' });
   }, [id, send]);
 
-  const phase: TerminalRenderPhase = renderPhaseFromState(snapshot.value as string, runnerStatus);
+  const phase: TerminalRenderPhase = renderPhaseFromState(snapshot.value, runnerStatus);
 
   return (
     <div className={cn('absolute inset-0', active ? 'z-10' : 'z-0 invisible pointer-events-none')}>

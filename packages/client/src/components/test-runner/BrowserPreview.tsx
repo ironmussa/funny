@@ -149,14 +149,14 @@ export function BrowserPreview({
 
   const zoomIn = useCallback(() => {
     setZoom((z) => {
-      const idx = ZOOM_LEVELS.indexOf(z as any);
+      const idx = ZOOM_LEVELS.findIndex((level) => level === z);
       return idx < ZOOM_LEVELS.length - 1 ? ZOOM_LEVELS[idx + 1] : z;
     });
   }, []);
 
   const zoomOut = useCallback(() => {
     setZoom((z) => {
-      const idx = ZOOM_LEVELS.indexOf(z as any);
+      const idx = ZOOM_LEVELS.findIndex((level) => level === z);
       return idx > 0 ? ZOOM_LEVELS[idx - 1] : z;
     });
   }, []);

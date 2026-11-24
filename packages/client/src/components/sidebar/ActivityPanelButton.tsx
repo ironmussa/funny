@@ -666,7 +666,11 @@ export function ActivityPanelButton() {
           />
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-96 p-1" data-testid="activity-panel">
-          <Tabs value={tab} onValueChange={(value) => setTab(value as ActivityPanelTab)}>
+          <Tabs
+            value={tab}
+            // SAFETY: value comes from the triggers in PanelTabs, whose values are only ActivityPanelTab entries.
+            onValueChange={(value) => setTab(value as ActivityPanelTab)}
+          >
             <PanelTabs />
             <TabsContent value="activity" className="mt-1">
               <ActivityTab now={now} onClose={() => setOpen(false)} />

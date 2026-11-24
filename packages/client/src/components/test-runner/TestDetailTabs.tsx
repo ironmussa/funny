@@ -755,7 +755,12 @@ function ResponseDetail({ entry }: { entry: TestNetworkEntry }) {
   // All hooks must be called unconditionally (React rules of hooks)
   const { isJson, lines } = useMemo(() => {
     if (!entry.responseBody || entry.responseBodyBase64) {
-      return { formatted: '', isJson: false, lines: [] as Array<{ key: string; value: string }> };
+      const noLines: string[] = [];
+      return {
+        formatted: '',
+        isJson: false,
+        lines: withStableOccurrenceKeys(noLines, (line) => line),
+      };
     }
     try {
       const f = JSON.stringify(JSON.parse(entry.responseBody), null, 2);

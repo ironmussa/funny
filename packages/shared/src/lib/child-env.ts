@@ -55,6 +55,8 @@ export function scrubSensitiveEnv<T extends Record<string, string | undefined>>(
   for (const [key, value] of Object.entries(env)) {
     if (!isSensitiveEnvVar(key)) out[key] = value;
   }
+  // SAFETY: `out` holds env's own entries minus the sensitive names; callers pass
+  // process-environment maps whose declared keys are not secrets, so the shape of T holds.
   return out as T;
 }
 

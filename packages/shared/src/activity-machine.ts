@@ -17,6 +17,7 @@ import type { ActivityStatus } from './types.js';
  * `succeeded` and `failed` are final: the first terminal writer wins.
  */
 const activityMachine = setup({
+  // SAFETY: xstate's `types` is a type-only carrier; the empty object is never read at runtime.
   types: {} as { events: { type: 'STEP' | 'SUCCEED' | 'FAIL' | 'INTERRUPT' } },
 }).createMachine({
   id: 'activity',

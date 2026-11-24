@@ -303,6 +303,8 @@ export const ACP_MANIFESTS = {
 export type KnownAcpProvider = keyof typeof ACP_MANIFESTS;
 
 /** Runtime list of bundled ACP provider ids. */
+// SAFETY: ACP_MANIFESTS is a const literal, so Object.keys returns exactly its
+// KnownAcpProvider keys.
 export const KNOWN_ACP_PROVIDER_IDS = Object.keys(ACP_MANIFESTS) as KnownAcpProvider[];
 
 /** Bundled ACP providers that still launch through an ACP CLI and can be toggled off. */
@@ -319,7 +321,8 @@ export const DYNAMIC_MODEL_PROVIDER_IDS = ['pi', ...DYNAMIC_ACP_PROVIDER_IDS] as
 
 /** Look up a manifest by provider id (any string; returns undefined if unknown). */
 export function getManifest(providerId: string): ProviderManifest | undefined {
-  return (ACP_MANIFESTS as Record<string, ProviderManifest>)[providerId];
+  const manifests: Record<string, ProviderManifest | undefined> = ACP_MANIFESTS;
+  return manifests[providerId];
 }
 
 /** True when the provider id is a bundled ACP provider. */

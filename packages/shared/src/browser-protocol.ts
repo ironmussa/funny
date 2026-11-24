@@ -148,6 +148,8 @@ export function decodeBrowserCarrier(
   }
   if (
     options.allowedPayloads &&
+    // SAFETY: widening only: an undefined case is not in `allowedPayloads`, so
+    // `includes` returns false and the message is refused below.
     !options.allowedPayloads.includes(envelope.payload.case as BrowserCarrierPayloadCase)
   ) {
     return {

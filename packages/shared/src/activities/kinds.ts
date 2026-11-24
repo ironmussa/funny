@@ -283,6 +283,8 @@ export function isActivityKind(kind: string): kind is ActivityKind {
 export function parseActivityInput(kind: string, input: unknown): Record<string, unknown> | null {
   if (!isActivityKind(kind)) return null;
   const parsed = ACTIVITY_KINDS[kind].input.safeParse(input ?? {});
+  // SAFETY: every ACTIVITY_KINDS input schema is a z.object, so a successful
+  // parse always yields a plain object keyed by field name.
   return parsed.success ? (parsed.data as Record<string, unknown>) : null;
 }
 
@@ -305,7 +307,7 @@ export const ACTIVITY_ORIGINS = [
 ] as const satisfies readonly ActivityOrigin[];
 
 export function isActivityOrigin(value: unknown): value is ActivityOrigin {
-  return typeof value === 'string' && (ACTIVITY_ORIGINS as readonly string[]).includes(value);
+  return typeof value === 'string' && ACTIVITY_ORIGINS.some((origin) => origin === value);
 }
 
 export const ACTIVITY_EFFECTS = [

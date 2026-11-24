@@ -165,7 +165,9 @@ export type FunnyProviderFile = z.infer<typeof funnyProviderFileSchema>;
 // ── Contract sync guards (compile-time only) ──────────────────────────────
 // Keep the zod schema and the frozen `ProviderManifest` contract in lockstep:
 // if either drifts, one of these assignments fails to type-check.
+// SAFETY: the empty objects are never read; these expressions exist only for their `satisfies` checks.
 void ({} as ValidatedProviderManifest satisfies ProviderManifest);
+// SAFETY: as above, a type-only guard whose value is discarded.
 void ({} as ProviderManifest satisfies ValidatedProviderManifest);
 
 /**

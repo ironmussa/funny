@@ -72,9 +72,8 @@ export type OutputParser = (line: string) => SuiteCounts;
 
 /** The counts as test-progress suite fields (without the parser's own flags). */
 export function suiteFields(counts: SuiteCounts): Omit<SuiteCounts, 'summarized'> {
-  const fields: Partial<SuiteCounts> = { ...counts };
-  delete fields.summarized;
-  return fields as Omit<SuiteCounts, 'summarized'>;
+  const { summarized: _summarized, ...fields } = counts;
+  return fields;
 }
 
 /** Where a stack frame or location line points: `(file:line:col)`, ` ❯ file:line:col`. */
@@ -134,6 +133,8 @@ class Counter {
 
   /** A runner's summary: its run's totals, on top of the runs before it. */
   summary(totals: Partial<Record<TestState, number>>): void {
+    // SAFETY: `totals` is typed Partial<Record<TestState, number>> and every caller
+    // builds it from TestState keys with numeric values, so each entry is one.
     for (const [state, n] of Object.entries(totals) as [TestState, number][]) {
       this.counts[state] = this.base[state] + n;
     }
@@ -262,6 +263,8 @@ class Counter {
 }
 
 function stripEmpty<T extends object>(value: T): Partial<T> {
+  // SAFETY: the entries are T's own keys and values with only the undefined ones
+  // dropped, which is exactly a Partial<T>.
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
@@ -436,6 +439,8 @@ const playwrightLine = readWith([
     (c, m) => {
       // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       const field = m[2] === 'flaky' ? 'passed' : m[2] === 'did not run' ? 'skipped' : m[2];
+      // SAFETY: the pattern captures passed|failed|skipped|flaky|did not run, and the
+      // two non-states were mapped to `passed` / `skipped` above.
       c.summary({ [field as TestState]: Number(m[1]) });
     },
   ],

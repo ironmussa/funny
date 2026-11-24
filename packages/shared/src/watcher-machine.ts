@@ -17,6 +17,7 @@ import type { WatcherStatus } from './types.js';
  * fired or re-armed; a new one is created instead.
  */
 const watcherMachine = setup({
+  // SAFETY: xstate's `types` is a type-only carrier; the empty object is never read at runtime.
   types: {} as {
     events: { type: 'FIRE' | 'RESCHEDULE' | 'EXPIRE' | 'COMPLETE' | 'CANCEL' };
   },

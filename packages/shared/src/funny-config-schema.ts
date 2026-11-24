@@ -38,4 +38,5 @@ export const funnyProjectConfigSchema = z
 export type ValidatedFunnyProjectConfig = z.infer<typeof funnyProjectConfigSchema>;
 
 // Compile-time only: fails to type-check if the schema drifts from the contract.
+// SAFETY: the empty object is never read; the expression exists only for its `satisfies` check.
 void ({} as ValidatedFunnyProjectConfig satisfies FunnyProjectConfig);

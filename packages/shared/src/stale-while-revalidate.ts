@@ -145,7 +145,11 @@ export function createStaleWhileRevalidate<A, E = unknown>(
       const exit = await Effect.runPromiseExit(read(key));
       if (Exit.isSuccess(exit)) return ok(exit.value);
       const failure = Cause.squash(exit.cause);
-      if (failure instanceof LookupFailure) return err(failure.error as E);
+      if (failure instanceof LookupFailure) {
+        // SAFETY: LookupFailure is private to this module and only created from the
+        // lookup's own Err(E) above, so its `error` is an E.
+        return err(failure.error as E);
+      }
       throw failure;
     },
 

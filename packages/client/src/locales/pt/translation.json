@@ -295,6 +295,12 @@
       "automation": "Criado por automação",
       "ingest": "Criado por fonte externa",
       "factory": "Criado pela fábrica de issues"
+    },
+    "recap": {
+      "title": "Enquanto você esteve fora",
+      "dismiss": "Dispensar resumo",
+      "unavailableHint": "Os resumos de threads precisam de um modelo utilitário com uma credencial válida.",
+      "openUtilityModelSetting": "Configurar o modelo utilitário"
     }
   },
   "review": {
@@ -762,7 +768,27 @@
     "projectFactoryMergeDriverGit": "o do git",
     "projectFactoryMergeDriverUnknown": "conhecido após a primeira integração",
     "projectFactoryMergeDriver": "Merge driver no runner: {{driver}}",
-    "projectFactoryQueueCiTime": "O CI de um lote leva {{ci}} (mediana); a espera do lote é {{wait}}"
+    "projectFactoryQueueCiTime": "O CI de um lote leva {{ci}} (mediana); a espera do lote é {{wait}}",
+    "utilityModel": "Modelo utilitário",
+    "utilityModelDesc": "O modelo que o funny usa para textos auxiliares, como resumos de threads e mensagens de commit.",
+    "threadRecap": "Mostrar resumos de threads",
+    "threadRecapDesc": "Ao voltar a uma thread depois de 5 minutos ou mais, mostra um breve resumo do que o agente fez.",
+    "utilityModelProvider": "Provedor",
+    "utilityModelProviderDesc": "Onde o modelo utilitário é executado. O Claude Code usa o login do Claude do runner.",
+    "utilityModelName": "Modelo",
+    "utilityModelNameDesc": "O id ou alias do modelo, por exemplo haiku ou gpt-4o-mini.",
+    "utilityModelBaseUrl": "URL base",
+    "utilityModelBaseUrlDesc": "O endereço do endpoint compatível com OpenAI.",
+    "utilityModelSave": "Salvar",
+    "utilityModelReset": "Usar o padrão",
+    "utilityModelInvalid": "Informe um modelo, e uma URL base para este provedor.",
+    "utilityModelProviders": {
+      "claude-sdk": "Claude Code",
+      "anthropic": "API da Anthropic",
+      "openai": "OpenAI",
+      "ollama": "Ollama",
+      "openai-compatible": "Compatível com OpenAI"
+    }
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

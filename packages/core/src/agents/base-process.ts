@@ -318,7 +318,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   /** Handle ACP `sessionUpdate: "usage_update"`. Returns true when handled. */
   protected handleAcpUsageUpdate(update: { sessionUpdate?: string; used?: number }): boolean {
     if (update.sessionUpdate !== 'usage_update') return false;
-    if (typeof update.used === 'number') {
+    if (isNumber(update.used)) {
       this.emitContextUsageMessage({ inputTokens: update.used });
     }
     return true;
@@ -326,7 +326,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
 
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
   protected emitAcpPromptResponseUsage(usage: unknown): void {
-    if (!usage || typeof usage !== 'object') return;
+    if (!usage || !isObject(usage)) return;
     const u = usage as Record<string, unknown>;
     this.emitContextUsageMessage({
       inputTokens: (u.inputTokens as number | undefined) ?? 0,
@@ -450,16 +450,16 @@ export abstract class BaseAgentProcess extends EventEmitter {
    */
   protected extractErrorMessage(err: unknown): string {
     if (err == null) return 'Unknown error';
-    if (typeof err === 'string') return this.cleanErrorDetails(err);
-    if (typeof err !== 'object') return String(err);
+    if (isString(err)) return this.cleanErrorDetails(err);
+    if (!isObject(err)) return String(err);
 
     const e = err as Record<string, unknown>;
-    const base = typeof e.message === 'string' ? e.message : String(err);
+    const base = isString(e.message) ? e.message : String(err);
 
     // ACP RequestError: { code, message, data: { details } }
-    if (e.data && typeof e.data === 'object') {
+    if (e.data && isObject(e.data)) {
       const details = (e.data as Record<string, unknown>).details;
-      if (typeof details === 'string') {
+      if (isString(details)) {
         return this.cleanErrorDetails(details);
       }
     }
@@ -539,4 +539,17 @@ export abstract class BaseAgentProcess extends EventEmitter {
     this.hasExited = true;
     this.emit('exit', exitCode);
   }
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+function isNumber<T>(value: T): value is T & number {
+  return typeof value === 'number';
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

@@ -84,8 +84,15 @@ function selectActionPort(type: string): keyof RealtimeActionPorts {
   return 'infrastructure';
 }
 
+/** A realtime event's payload fields, read before they are checked. */
+type EventPayload = Record<string, unknown>;
+
+function isRecord(value: unknown): value is EventPayload {
+  return typeof value === 'object' && value !== null;
+}
+
 function deriveEffects(event: RealtimeEvent): RealtimeEffect[] {
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data: EventPayload = isRecord(event.data) ? event.data : {};
   if (event.type === 'agent:result') {
     const status = String(data.status ?? '');
     if (status === 'completed' || status === 'failed' || status === 'error') {
@@ -111,11 +118,8 @@ function deriveEffects(event: RealtimeEvent): RealtimeEffect[] {
   if (event.type === 'pty:env_activated') {
     const activations = Array.isArray(data.activations)
       ? data.activations.filter(
-          (value): value is { kind: string; detail: string } =>
-            !!value &&
-            typeof value === 'object' &&
-            typeof (value as { kind?: unknown }).kind === 'string' &&
-            typeof (value as { detail?: unknown }).detail === 'string',
+          (value: unknown): value is { kind: string; detail: string } =>
+            isRecord(value) && typeof value.kind === 'string' && typeof value.detail === 'string',
         )
       : [];
     return [{ type: 'environment-activated', activations }];
@@ -135,12 +139,9 @@ function deriveEffects(event: RealtimeEvent): RealtimeEffect[] {
   if (event.type === 'git:workflow_progress') {
     if (data.status === 'step_update' && Array.isArray(data.steps)) {
       const failedHook = data.steps.find(
-        (step) =>
-          !!step &&
-          typeof step === 'object' &&
-          (step as { id?: unknown }).id === 'hooks' &&
-          (step as { status?: unknown }).status === 'failed',
-      ) as { error?: unknown } | undefined;
+        (step: unknown): step is EventPayload =>
+          isRecord(step) && step.id === 'hooks' && step.status === 'failed',
+      );
       if (failedHook) {
         return [
           {

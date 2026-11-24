@@ -90,8 +90,12 @@ mock.module('@/stores/thread-machine-bridge', () => ({
   invalidateThreadData: vi.fn(),
 }));
 
+const readCalls: string[] = [];
+const mockMarkRead = vi.fn((id: string) => readCalls.push(`markRead:${id}`));
+const mockRecordThreadOpened = vi.fn((id: string) => readCalls.push(`opened:${id}`));
 mock.module('@/stores/thread-read-store', () => ({
-  useThreadReadStore: { getState: () => ({ markRead: vi.fn() }) },
+  useThreadReadStore: { getState: () => ({ markRead: mockMarkRead }) },
+  recordThreadOpened: mockRecordThreadOpened,
 }));
 
 mock.module('@/stores/ui-store', () => ({
@@ -757,6 +761,33 @@ describe('thread store actions', () => {
       expect(useThreadStore.getState().selectedThreadId).toBe('t1');
       expect(useThreadStore.getState().threadDataById.t1).toBeDefined();
       expect(useThreadStore.getState().activeThread?.id).toBe('t1');
+    });
+
+    // Regression (openspec thread-recap): the recap's `since` is the read
+    // marker as the owner left it, so the open is recorded before the
+    // thread is marked read.
+    test('records the open, with its newest activity, before marking the thread read', async () => {
+      readCalls.length = 0;
+      mockLoadThreadData.mockResolvedValue({
+        thread: {
+          ...baseThread,
+          completedAt: '2026-01-01T00:02:00.000Z',
+          messages: [
+            { id: 'm1', role: 'assistant', content: 'hi', timestamp: '2026-01-01T00:01:00.000Z' },
+          ],
+        },
+        events: [],
+      });
+      useThreadStore.setState(withThreadIndex(seedThreads({ p1: [baseThread] })));
+
+      await useThreadStore.getState().selectThread('t1');
+
+      expect(mockRecordThreadOpened).toHaveBeenCalledWith('t1', {
+        createdAt: baseThread.createdAt,
+        newestMessageId: 'm1',
+        newestActivityAt: '2026-01-01T00:01:00.000Z',
+      });
+      expect(readCalls).toEqual(['opened:t1', 'markRead:t1']);
     });
 
     test('clears selection when hydration fails', async () => {

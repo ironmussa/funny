@@ -103,7 +103,7 @@ export class ModelFactory {
     switch (provider) {
       case 'anthropic': {
         const baseURL =
-          overrides?.baseURL ?? this.config.anthropic?.baseURL ?? 'https://api.anthropic.com';
+          overrides?.baseURL ?? this.config.anthropic?.baseURL ?? 'https://api.anthropic.com/v1';
         const apiKey =
           overrides?.apiKey ?? this.config.anthropic?.apiKey ?? process.env.ANTHROPIC_API_KEY;
         return { baseURL, apiKey, modelId: resolvedId };

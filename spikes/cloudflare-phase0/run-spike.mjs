@@ -114,7 +114,8 @@ const mintRunnerToken = (runnerId, owner) =>
 const runnerHeaders = (runnerId, owner, token = mintRunnerToken(runnerId, owner)) => ({
   authorization: `Bearer ${token}`,
 });
-const json = (m) => (typeof m.data === 'string' ? JSON.parse(m.data) : null);
+// binaryType is 'arraybuffer', so a frame's data is a string or an ArrayBuffer.
+const json = (m) => (m.data instanceof ArrayBuffer ? null : JSON.parse(m.data));
 
 // ── Better Auth schema in Postgres (what migrations would do at deploy) ──
 console.error('[spike] migrating');
@@ -206,7 +207,7 @@ console.error('[spike] E3 frame size limits, both directions');
   for (const size of sizes) {
     s2.ws.send(JSON.stringify({ type: 'heartbeat' }));
     s2.ws.send(JSON.stringify({ type: 'echo-size', size }));
-    const frame = await s2.next((m) => typeof m.data !== 'string', 8000);
+    const frame = await s2.next((m) => m.data instanceof ArrayBuffer, 8000);
     down[size] = frame ? `ok (${frame.data.byteLength})` : 'not received';
     if (!frame) break;
   }

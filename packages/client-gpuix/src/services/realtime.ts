@@ -29,6 +29,13 @@ export interface NativeRealtimeSnapshot {
   error: string | null;
 }
 
+/** A Socket.IO event's envelope fields, read before they are checked. */
+type SocketEnvelope = Record<string, unknown>;
+
+function isSocketEnvelope(payload: unknown): payload is SocketEnvelope {
+  return typeof payload === 'object' && payload !== null;
+}
+
 function defaultSocketFactory(options: {
   origin: string;
   cookie: string;
@@ -108,8 +115,7 @@ export class NativeRealtimeService {
       },
     });
     const onAny = (type: string, payload: unknown) => {
-      const envelope =
-        payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+      const envelope: SocketEnvelope = isSocketEnvelope(payload) ? payload : {};
       const threadId = typeof envelope.threadId === 'string' ? envelope.threadId : '';
       dispatcher.dispatch({ type, threadId, data: envelope.data ?? envelope });
     };

@@ -188,6 +188,18 @@ interface UIState {
   clearIssueContext: () => void;
   /** Set the prefill prompt used by the next compose mount (cleared after pickup). */
   setComposePrefillPrompt: (prompt: string | null) => void;
+  /**
+   * Dismissed thread recap cards (openspec thread-recap), keyed
+   * `threadId:newestMessageId`: a recap for a newer message shows again.
+   */
+  dismissedRecaps: Record<string, true>;
+  dismissRecap: (key: string) => void;
+  /**
+   * The thread open the one-time "utility model unavailable" hint was shown
+   * for this session (`threadId:openedAt`); null until it is shown.
+   */
+  recapHintOpenKey: string | null;
+  claimRecapHint: (openKey: string) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -740,6 +752,16 @@ export const useUIStore = create<UIState>((set) => ({
   clearIssueContext: () => set({ newThreadIssueContext: null }),
 
   setComposePrefillPrompt: (prompt) => set({ composePrefillPrompt: prompt }),
+
+  dismissedRecaps: {},
+  dismissRecap: (key) =>
+    set((s) =>
+      s.dismissedRecaps[key] ? s : { dismissedRecaps: { ...s.dismissedRecaps, [key]: true } },
+    ),
+
+  recapHintOpenKey: null,
+  claimRecapHint: (openKey) =>
+    set((s) => (s.recapHintOpenKey === null ? { recapHintOpenKey: openKey } : s)),
 }));
 
 // Reset transient UI panes whenever a thread is selected.

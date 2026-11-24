@@ -88,7 +88,7 @@ export function ElementsView() {
             'automation',
             'external',
             'saga',
-          ] as ElementKind[]
+          ] satisfies ElementKind[]
         ).map((kind) => {
           const items = grouped.get(kind);
           if (!items || items.length === 0) return null;
@@ -125,7 +125,7 @@ export function ElementsView() {
                     )}
                     {'fields' in el && el.fields && (
                       <span className="text-muted-foreground/60 mt-0.5 text-xs">
-                        {Object.keys(el.fields as Record<string, string>).length} fields
+                        {Object.keys(el.fields).length} fields
                       </span>
                     )}
                   </Button>

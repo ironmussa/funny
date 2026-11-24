@@ -79,6 +79,14 @@ export async function extractFactsFromConversation(
 }
 
 /** Parse LLM response into ExtractedFact array, tolerant of formatting issues */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function parseFactsResponse(raw: string): ExtractedFact[] {
   // Strip markdown code fences if present
   let cleaned = raw.trim();
@@ -90,19 +98,14 @@ function parseFactsResponse(raw: string): ExtractedFact[] {
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
 
-    return parsed
-      .filter(
-        (f: Record<string, unknown>) =>
-          typeof f.content === 'string' && f.content.length > 0 && typeof f.type === 'string',
-      )
-      .map((f: Record<string, unknown>): ExtractedFact => ({
-        content: f.content as string,
-        type: validateFactType(f.type as string),
-        tags: Array.isArray(f.tags) ? (f.tags as string[]).map((t) => String(t).toLowerCase()) : [],
-        confidence: typeof f.confidence === 'number' ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
-        validFrom: typeof f.validFrom === 'string' ? (f.validFrom as string) : undefined,
-        supersedes: typeof f.supersedes === 'string' ? (f.supersedes as string) : undefined,
-      }));
+    return parsed.filter(isFactCandidate).map((f): ExtractedFact => ({
+      content: f.content,
+      type: validateFactType(f.type),
+      tags: Array.isArray(f.tags) ? f.tags.map((t) => String(t).toLowerCase()) : [],
+      confidence: isNumber(f.confidence) ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
+      validFrom: isString(f.validFrom) ? f.validFrom : undefined,
+      supersedes: isString(f.supersedes) ? f.supersedes : undefined,
+    }));
   } catch {
     // Try to extract JSON array from mixed content
     const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
@@ -117,11 +120,28 @@ function parseFactsResponse(raw: string): ExtractedFact[] {
   }
 }
 
+/** An element of the LLM's JSON array with a non-empty string content and a string type. */
+function isFactCandidate(
+  f: Record<string, unknown>,
+): f is Record<string, unknown> & { content: string; type: string } {
+  return typeof f.content === 'string' && f.content.length > 0 && typeof f.type === 'string';
+}
+
+const FACT_TYPES = [
+  'decision',
+  'bug',
+  'pattern',
+  'convention',
+  'insight',
+  'context',
+] as const satisfies readonly ExtractedFact['type'][];
+
+function isFactType(type: string): type is (typeof FACT_TYPES)[number] {
+  return FACT_TYPES.some((valid) => valid === type);
+}
+
 function validateFactType(type: string): ExtractedFact['type'] {
-  const valid = ['decision', 'bug', 'pattern', 'convention', 'insight', 'context'] as const;
-  return valid.includes(type as (typeof valid)[number])
-    ? (type as ExtractedFact['type'])
-    : 'context';
+  return isFactType(type) ? type : 'context';
 }
 
 /** Simple content-based deduplication using normalized string similarity */

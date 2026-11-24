@@ -58,7 +58,7 @@ function isImdsOrAliasV6(ip: string): boolean {
   return false;
 }
 
-async function assertNotImds(rawUrl: string): Promise<void> {
+export async function assertNotImds(rawUrl: string): Promise<void> {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);

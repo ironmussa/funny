@@ -301,6 +301,12 @@
       "automation": "Creado desde automatización",
       "ingest": "Creado desde fuente externa",
       "factory": "Creado por la fábrica de issues"
+    },
+    "recap": {
+      "title": "Mientras no estabas",
+      "dismiss": "Descartar resumen",
+      "unavailableHint": "Los resúmenes de hilos necesitan un modelo utilitario con una credencial válida.",
+      "openUtilityModelSetting": "Configurar el modelo utilitario"
     }
   },
   "review": {
@@ -772,7 +778,27 @@
     "projectFactoryMergeDriverGit": "el de git",
     "projectFactoryMergeDriverUnknown": "se sabe tras la primera integración",
     "projectFactoryMergeDriver": "Merge driver en el runner: {{driver}}",
-    "projectFactoryQueueCiTime": "El CI de un lote tarda {{ci}} (mediana); la espera del lote es {{wait}}"
+    "projectFactoryQueueCiTime": "El CI de un lote tarda {{ci}} (mediana); la espera del lote es {{wait}}",
+    "utilityModel": "Modelo utilitario",
+    "utilityModelDesc": "El modelo que funny usa para textos auxiliares, como los resúmenes de hilos y los mensajes de commit.",
+    "threadRecap": "Mostrar resúmenes de hilos",
+    "threadRecapDesc": "Al volver a un hilo después de 5 minutos o más, muestra un breve resumen de lo que hizo el agente.",
+    "utilityModelProvider": "Proveedor",
+    "utilityModelProviderDesc": "Dónde se ejecuta el modelo utilitario. Claude Code usa la sesión de Claude del runner.",
+    "utilityModelName": "Modelo",
+    "utilityModelNameDesc": "El id o alias del modelo, por ejemplo haiku o gpt-4o-mini.",
+    "utilityModelBaseUrl": "URL base",
+    "utilityModelBaseUrlDesc": "La dirección del endpoint compatible con OpenAI.",
+    "utilityModelSave": "Guardar",
+    "utilityModelReset": "Usar el predeterminado",
+    "utilityModelInvalid": "Indica un modelo, y una URL base para este proveedor.",
+    "utilityModelProviders": {
+      "claude-sdk": "Claude Code",
+      "anthropic": "API de Anthropic",
+      "openai": "OpenAI",
+      "ollama": "Ollama",
+      "openai-compatible": "Compatible con OpenAI"
+    }
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

@@ -27,6 +27,7 @@ import {
   ThreadPreparationView,
   type PreparationMessageMetadata,
 } from './thread/ThreadPreparationView';
+import { ThreadRecapCard } from './thread/ThreadRecapCard';
 
 export interface ThreadViewProps {
   /** Called once the primary route has enough data to paint its real view. */
@@ -228,5 +229,10 @@ function ThreadBody({
     return <PreparingThread activeThread={activeThread} pendingMetadata={pendingMetadata} />;
   if (activeThread.status === 'idle' && queuedCount === 0)
     return <ThreadIdleStarter activeThread={activeThread} />;
-  return <ThreadChatView activeThread={activeThread} />;
+  return (
+    <>
+      <ThreadRecapCard thread={activeThread} />
+      <ThreadChatView activeThread={activeThread} />
+    </>
+  );
 }

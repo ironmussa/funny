@@ -171,8 +171,9 @@ export class RunnerSessionDO extends DurableObject {
   }
 
   async webSocketMessage(ws, message) {
-    const size = typeof message === 'string' ? message.length : message.byteLength;
-    if (typeof message !== 'string') {
+    // A Durable Object WebSocket message is a string or an ArrayBuffer.
+    const size = message instanceof ArrayBuffer ? message.byteLength : message.length;
+    if (message instanceof ArrayBuffer) {
       ws.send(JSON.stringify({ type: 'size-ack', size }));
       return;
     }

@@ -27,9 +27,9 @@ interface AcceptanceThresholds {
   maxRssGrowthBytes: number;
 }
 
-const thresholds = (await Bun.file(
+const thresholds: AcceptanceThresholds = await Bun.file(
   new URL('../protocol/browser/v1/acceptance.json', import.meta.url),
-).json()) as AcceptanceThresholds;
+).json();
 const event = create(ApplicationEventSchema, {
   metadata: {
     eventId: 'benchmark-event-1',
@@ -101,7 +101,7 @@ const measurements = {
 };
 console.log(JSON.stringify({ thresholds, measurements }, null, 2));
 
-const failures = [
+const checks: Array<[name: string, actual: number, maximum: number]> = [
   ['encodeAverageMicros', measurements.encodeAverageMicros, thresholds.maxEncodeAverageMicros],
   ['decodeAverageMicros', measurements.decodeAverageMicros, thresholds.maxDecodeAverageMicros],
   [
@@ -115,7 +115,8 @@ const failures = [
   ['generatedSourceBytes', measurements.generatedSourceBytes, thresholds.maxGeneratedSourceBytes],
   ['heapGrowthBytes', measurements.heapGrowthBytes, thresholds.maxHeapGrowthBytes],
   ['rssGrowthBytes', measurements.rssGrowthBytes, thresholds.maxRssGrowthBytes],
-].filter(([, actual, maximum]) => (actual as number) > (maximum as number));
+];
+const failures = checks.filter(([, actual, maximum]) => actual > maximum);
 
 if (failures.length > 0) {
   for (const [name, actual, maximum] of failures) {

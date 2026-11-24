@@ -186,10 +186,14 @@ function touchedPathFromPrefix(head: string): string | null | undefined {
   return value.value || null;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function touchedPathFromInput(input: string | null): string | null {
   if (!input) return null;
   const parsed = parseStoredJson(TOOL_INPUT_PATHS, input, 'tool input');
   if (!parsed.ok) return null; // skip invalid JSON
   const fp = parsed.value.file_path ?? parsed.value.notebook_path ?? null;
-  return typeof fp === 'string' && fp ? fp : null;
+  return isString(fp) && fp ? fp : null;
 }

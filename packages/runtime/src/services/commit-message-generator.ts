@@ -1,75 +1,52 @@
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import { resolveSDKCliPath } from '@funny/core/agents';
-import { runAsync } from '@funny/shared/async';
+import type { UtilityModelSetting } from '@funny/shared/contracts/profile';
 
 import { log } from '../lib/logger.js';
 import { COMMIT_MESSAGE_SYSTEM_PROMPT } from './pipeline-prompts.js';
+import {
+  describeUtilityModelError,
+  loadUtilityModel,
+  runUtilityGeneration,
+} from './utility-model.js';
 
-/** Own the SDK query for the request lifetime, including its underlying process. */
+/** A commit message for `prompt`, generated on the requesting user's utility model. */
 export async function generateCommitMessage(options: {
+  userId: string;
   cwd: string;
   prompt: string;
   signal?: AbortSignal;
   timeoutMs?: number;
 }): Promise<{ text: string } | { error: string }> {
+  let setting: UtilityModelSetting | null;
   try {
-    const text = await runAsync(
-      async (signal) => {
-        const controller = new AbortController();
-        let gen: ReturnType<typeof query> | undefined;
-        const close = () => {
-          const owned = gen;
-          gen = undefined;
-          owned?.close();
-        };
-        const abort = () => {
-          controller.abort(signal.reason);
-          close();
-        };
-        signal.addEventListener('abort', abort, { once: true });
-        if (signal.aborted) abort();
-        try {
-          gen = query({
-            prompt: options.prompt,
-            options: {
-              cwd: options.cwd,
-              maxTurns: 1,
-              permissionMode: 'plan',
-              abortController: controller,
-              pathToClaudeCodeExecutable: resolveSDKCliPath(),
-              systemPrompt: COMMIT_MESSAGE_SYSTEM_PROMPT,
-              tools: [],
-            },
-          });
-          let resultText = '';
-          for await (const msg of gen) {
-            if (msg.type === 'assistant') {
-              const text = msg.message.content
-                .filter((block) => block.type === 'text')
-                .map((block) => block.text)
-                .join('\n');
-              if (text) resultText = text;
-            }
-            if (msg.type === 'result') {
-              return ('result' in msg && msg.result) || resultText;
-            }
-          }
-          return resultText;
-        } finally {
-          signal.removeEventListener('abort', abort);
-          close();
-        }
-      },
-      {
-        signal: options.signal,
-        timeoutMs: options.timeoutMs ?? 60_000,
-        timeoutError: () => new Error('Commit message generation timed out'),
-      },
-    );
-    return text ? { text } : { error: 'No output received' };
+    setting = await loadUtilityModel(options.userId);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    log.error('SDK query error generating commit message', { namespace: 'git', error: message });
+    log.error('Could not load the utility model for a commit message', {
+      namespace: 'git',
+      error: message,
+    });
     return { error: message };
   }
+  const result = await runUtilityGeneration({
+    setting,
+    userId: options.userId,
+    cwd: options.cwd,
+    system: COMMIT_MESSAGE_SYSTEM_PROMPT,
+    prompt: options.prompt,
+    signal: options.signal,
+    timeoutMs: options.timeoutMs,
+  });
+  if (result.isErr()) {
+    const message =
+      result.error.kind === 'timeout'
+        ? 'Commit message generation timed out'
+        : describeUtilityModelError(result.error);
+    log.error('Utility model error generating commit message', {
+      namespace: 'git',
+      kind: result.error.kind,
+      error: message,
+    });
+    return { error: message };
+  }
+  return result.value ? { text: result.value } : { error: 'No output received' };
 }

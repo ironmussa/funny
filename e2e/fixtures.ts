@@ -130,7 +130,7 @@ class ApiHelper {
     const res = await this.request.get(`${this.baseURL}/api/trpc/threads.list?input=${input}`, {
       headers: this.headers(),
     });
-    const body = (await res.json()) as { result: { data: { threads: Thread[] } } };
+    const body: { result: { data: { threads: Thread[] } } } = await res.json();
     return body.result.data.threads;
   }
 

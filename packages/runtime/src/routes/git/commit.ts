@@ -212,7 +212,12 @@ async function writeCommitMessage(
     diffLength: diffSummary.length,
     fileCount: diffs.length,
   });
-  const output = await generateCommitMessage({ cwd, prompt, signal: c.req.raw.signal });
+  const output = await generateCommitMessage({
+    userId: c.get('userId'),
+    cwd,
+    prompt,
+    signal: c.req.raw.signal,
+  });
   if ('error' in output) {
     span.end('error', output.error);
     return err(internal(output.error));

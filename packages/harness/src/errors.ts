@@ -27,7 +27,7 @@ export class HarnessError extends Error {
     this.code = code;
     this.metadata = options.metadata;
     if (options.cause !== undefined) {
-      (this as Error & { cause?: unknown }).cause = options.cause;
+      this.cause = options.cause;
     }
   }
 }

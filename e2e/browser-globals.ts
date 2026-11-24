@@ -62,3 +62,6 @@ declare global {
 
   var LayoutShift: { prototype: LayoutShift; new (): LayoutShift };
 }
+
+// A module, so `declare global` above augments the global scope.
+export {};

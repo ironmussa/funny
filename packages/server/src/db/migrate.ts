@@ -2430,6 +2430,16 @@ const migrations: Migration[] = [
     },
   },
   {
+    // Change thread-recap, D4: the user's utility model for helper generations
+    // (JSON `UtilityModelSetting`, null = the default) and whether recaps are
+    // shown. Existing users start with recaps on.
+    name: '122_user_profiles_utility_model',
+    async up() {
+      await ctx().addColumn('user_profiles', 'utility_model', 'TEXT');
+      await ctx().addColumn('user_profiles', 'thread_recap_enabled', 'INTEGER NOT NULL', '1');
+    },
+  },
+  {
     // A member's approval to merge a high-risk change the factory held (JSON:
     // the approved head commit, who, when). Numbered after master's 119-121
     // and #443's 122, so the two sides keep distinct names when merged.

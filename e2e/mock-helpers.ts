@@ -1,5 +1,7 @@
 import type { Page, Request, Route } from '@playwright/test';
 
+import './browser-globals';
+
 /* ------------------------------------------------------------------ */
 /*  Mock data factories                                                */
 /* ------------------------------------------------------------------ */
@@ -332,7 +334,7 @@ export async function injectWSEvent(
 ) {
   await page.evaluate((evt) => {
     // Find the active WebSocket instance
-    const allWs = (window as any).__playwright_ws_instances;
+    const allWs = window.__playwright_ws_instances;
     if (allWs && allWs.length > 0) {
       const ws = allWs[allWs.length - 1];
       const msgEvent = new MessageEvent('message', {
@@ -357,7 +359,7 @@ export async function injectSocketIOEvent(
   },
 ) {
   await page.evaluate((evt) => {
-    const allWs = (window as any).__playwright_ws_instances as WebSocket[] | undefined;
+    const allWs = window.__playwright_ws_instances;
     const ws = allWs
       ?.slice()
       .reverse()
@@ -378,14 +380,14 @@ export async function injectSocketIOEvent(
  */
 export async function setupWSIntercept(page: Page) {
   await page.addInitScript(() => {
-    (window as any).__playwright_ws_instances = [];
+    window.__playwright_ws_instances = [];
     const OrigWebSocket = window.WebSocket;
     window.WebSocket = class extends OrigWebSocket {
       constructor(url: string | URL, protocols?: string | string[]) {
         super(url, protocols);
-        (window as any).__playwright_ws_instances.push(this);
+        window.__playwright_ws_instances?.push(this);
       }
-    } as any;
+    };
   });
 }
 
@@ -406,8 +408,12 @@ export async function setupWSIntercept(page: Page) {
  * Several mocks can share a procedure (one per thread): a handler that does not
  * own the call must `route.fallback()` to the next one, not `route.continue()`.
  */
+function isProcedureName(procedure: string | ((name: string) => boolean)): procedure is string {
+  return typeof procedure === 'string';
+}
+
 export function trpcProcedure(procedure: string | ((name: string) => boolean)) {
-  const matches = typeof procedure === 'string' ? (name: string) => name === procedure : procedure;
+  const matches = isProcedureName(procedure) ? (name: string) => name === procedure : procedure;
   return (url: URL) =>
     url.pathname.startsWith('/api/trpc/') && matches(url.pathname.slice('/api/trpc/'.length));
 }
@@ -418,6 +424,8 @@ export function trpcInput<T = Record<string, any>>(request: Request): T | undefi
     request.method() === 'GET'
       ? new URL(request.url()).searchParams.get('input')
       : request.postData();
+  // SAFETY: each mock picks T to match the input the web client's tRPC call
+  // serializes for that procedure; the helper only decodes that JSON.
   return raw ? (JSON.parse(raw) as T) : undefined;
 }
 

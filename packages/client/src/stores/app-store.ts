@@ -127,11 +127,9 @@ useAppStore.setState = (partial: Partial<CombinedState>) => {
     }
   }
 
-  // SAFETY: every value comes from `partial`, a Partial<CombinedState>, and zustand's
-  // setState only shallow-merges it; this helper exists only for tests and stories.
-  if (Object.keys(projectPartial).length > 0) useProjectStore.setState(projectPartial as any);
-  // SAFETY: as above, the values come from the caller's Partial<CombinedState>.
-  if (Object.keys(threadPartial).length > 0) useThreadStore.setState(threadPartial as any);
-  // SAFETY: as above, the values come from the caller's Partial<CombinedState>.
-  if (Object.keys(uiPartial).length > 0) useUIStore.setState(uiPartial as any);
+  // Every value comes from `partial`, a Partial<CombinedState>, and zustand's setState only
+  // shallow-merges it; this helper exists only for tests and stories.
+  if (Object.keys(projectPartial).length > 0) useProjectStore.setState(projectPartial);
+  if (Object.keys(threadPartial).length > 0) useThreadStore.setState(threadPartial);
+  if (Object.keys(uiPartial).length > 0) useUIStore.setState(uiPartial);
 };

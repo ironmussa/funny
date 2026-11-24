@@ -44,5 +44,7 @@ export function parseToolInput(input: unknown): Record<string, unknown> {
       return {};
     }
   }
+  // SAFETY: the typeof check makes `input` a non-null object here, and its values are typed
+  // unknown, so the record claims nothing about them.
   return input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
 }

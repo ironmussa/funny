@@ -27,6 +27,8 @@ interface ThreadContextValue {
 // Keep the context object stable across Vite hot replacements. Otherwise an
 // already-mounted provider can hold the previous module's context while newly
 // evaluated hooks read from a fresh one and incorrectly report no ancestor.
+// SAFETY: the only writer of `hot.data.threadContext` is the block below, which stores the
+// ThreadContext this module created.
 const ThreadContext =
   (import.meta.hot?.data?.threadContext as Context<ThreadContextValue | null> | undefined) ??
   createContext<ThreadContextValue | null>(null);

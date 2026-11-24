@@ -78,6 +78,9 @@ export function createThrottledJSONStorage<S>(
       const raw = getStorage().getItem(name);
       if (typeof raw !== 'string') return null;
       try {
+        // SAFETY: the value under `name` was written by flush() above as the JSON of a
+        // StorageValue<S> (as zustand's createJSONStorage does); persist's `version` / `migrate`
+        // handles a value saved by an older shape of the store.
         return JSON.parse(raw) as StorageValue<S>;
       } catch {
         return null;

@@ -763,7 +763,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       (() => {
         const projectPath = getProjectPath(pid);
         const cwd = entry.worktreePath || projectPath || '';
-        return { model: model || entry.model, cwd, tools: [] as string[] };
+        const tools: string[] = [];
+        return { model: model || entry.model, cwd, tools };
       })();
 
     // Path-only entries so chips render in the optimistic message, merged
@@ -775,10 +776,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       ),
     );
 
+    const role: MessageRole = 'user';
     const newMessage = {
       id: `${OPTIMISTIC_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
       threadId,
-      role: 'user' as MessageRole,
+      role,
       content: messageContent,
       images,
       timestamp: new Date().toISOString(),
@@ -1116,7 +1118,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Use the functional set() form so the merge base + spread base read the
     // freshest payload from the map. Without this, a WS agent:message that
     // arrives during the await above gets clobbered.
-    const freshMessages = (thread.messages ?? []) as LocalMessage[];
+    const freshMessages: LocalMessage[] = thread.messages ?? [];
     set((state) => {
       // Sidebar row fields go to the threads collection (fenced against
       // confirmed user writes); threadsById is projected from it.
@@ -1158,10 +1160,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
             current.resultInfo ??
             (thread.status === 'completed' || thread.status === 'failed'
               ? {
-                  status: thread.status as 'completed' | 'failed',
+                  status: thread.status,
                   cost: thread.cost,
                   duration: 0,
-                  error: (thread as any).error,
+                  // SAFETY: the thread detail type has no `error` field and the server's toThread
+                  // sets none, so this reads undefined for a server row.
+                  error: (thread as typeof thread & { error?: string }).error,
                 }
               : undefined);
           return {
@@ -1221,12 +1225,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         // Drop any payload entries that belonged to the cleared project. Use a
         // working state so multiple deletions compose without losing earlier
         // map mutations.
-        let working: ThreadState = { ...state, ...patch } as ThreadState;
+        let working: ThreadState = { ...state, ...patch };
         for (const id of ids) {
           liveThreadRefCounts.delete(id);
           const sub = mutations.clearThreadData(working, id);
           Object.assign(patch, sub);
-          working = Object.assign({ ...working }, sub) as ThreadState;
+          working = Object.assign({ ...working }, sub);
         }
       }
       const active = state.activeThread;
@@ -1267,7 +1271,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     if ((liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
     settlePreSendStateFromFetch(result.value.id, result.value.status);
     adoptThreadDetail(result.value);
-    set((state) => mutations.setThreadData(state, threadId, result.value as ThreadWithMessages));
+    set((state) => mutations.setThreadData(state, threadId, result.value));
   },
 
   unregisterLiveThread: (threadId) => {

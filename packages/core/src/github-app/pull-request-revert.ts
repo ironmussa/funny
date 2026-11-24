@@ -4,6 +4,7 @@
  * merged here: a person merges a revert.
  */
 
+import type { JsonObject } from '@funny/shared/json';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 
 import type { GithubCallError, RepoGithub } from './repo-github.js';
@@ -49,7 +50,7 @@ export function revertPullRequest(
   text: { title?: string; body?: string } = {},
 ): ResultAsync<RevertPullRequest, GithubCallError> {
   const [owner, name] = repo.split('/');
-  const graphql = <T>(query: string, variables: Record<string, unknown>) =>
+  const graphql = <T>(query: string, variables: JsonObject) =>
     github.json<GraphqlAnswer<T>>(repo, 'POST', '/graphql', { query, variables });
   return graphql<IdQuery>(PULL_REQUEST_ID, { owner, name, number }).andThen(
     (found): ResultAsync<RevertPullRequest, GithubCallError> => {

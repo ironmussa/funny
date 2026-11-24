@@ -8,6 +8,7 @@
  * (`createRepoGithub`). Nothing here bypasses branch protections.
  */
 
+import type { JsonObject } from '@funny/shared/json';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { retargetPullRequestsOn } from './pull-request-base.js';
@@ -495,7 +496,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     },
   };
 
-  function graphql(repo: string, query: string, variables: Record<string, unknown>) {
+  function graphql(repo: string, query: string, variables: JsonObject) {
     return github.json<GraphqlAnswer>(repo, 'POST', '/graphql', { query, variables });
   }
 

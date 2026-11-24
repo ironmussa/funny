@@ -32,10 +32,12 @@
 import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import type { Options, Settings } from '@anthropic-ai/claude-agent-sdk';
+import type { JsonObject } from '@funny/shared/json';
 import { READ_ONLY_AGENT_TOOLS } from '@funny/shared/models';
 
 import { execute } from '../git/process.js';
+import { isJsonPayloadObject } from './json-payload.js';
 
 /** Environment variables a sandboxed command never sees. */
 const CREDENTIAL_ENV_VARS = [
@@ -210,7 +212,7 @@ function isObject(value: unknown): value is object {
  * into a command that prints nothing in the sandbox. funny's own pre-tool hook
  * is an SDK callback, not a settings hook, and keeps running.
  */
-export function withSettingsHooksOff(settings: unknown): Record<string, unknown> {
+export function withSettingsHooksOff(settings: Options['settings']): Settings {
   const current = isObject(settings) ? settings : {};
   return { ...current, disableAllHooks: true };
 }
@@ -234,7 +236,7 @@ function patternRoot(pattern: string | null): string[] {
 const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
 
 /** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
-function targetsOf(toolName: string, input: Record<string, unknown>, cwd: string): string[] {
+function targetsOf(toolName: string, input: JsonObject, cwd: string): string[] {
   if (toolName === 'Read') return [text(input.file_path) ?? ''];
   const field = PATTERN_FIELD[toolName];
   if (!field) return [];
@@ -272,7 +274,7 @@ export function readOnlyDenial(
   if (!ALLOWED.has(toolName)) {
     return `This thread may only read: ${toolName} is not available. Use ${READ_ONLY_AGENT_TOOLS.join(', ')}.`;
   }
-  const input = (isObject(toolInput) ? toolInput : {}) as Record<string, unknown>;
+  const input: JsonObject = isJsonPayloadObject(toolInput) ? toolInput : {};
   if (toolName === 'Bash' && input.dangerouslyDisableSandbox) {
     return 'This thread may only read: commands run in the sandbox, without network or writes.';
   }

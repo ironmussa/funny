@@ -30,6 +30,7 @@ import {
   isInside,
   readPackageJson,
   removeExtensionDir,
+  type ExtensionPackageJson,
   type InstallResult,
   type KindHandler,
 } from '../extensions/index.js';
@@ -144,7 +145,7 @@ function isNonEmptyString(value: unknown): value is string {
  */
 function parseProviderExtensionDir(dir: string, dirName: string): DirParse {
   const pkgDir = join(dir, dirName);
-  let pkg: Record<string, any> | null;
+  let pkg: ExtensionPackageJson | null;
   try {
     if (!statSync(pkgDir).isDirectory()) return null;
     pkg = readPackageJson(pkgDir);

@@ -325,20 +325,13 @@ export abstract class BaseAgentProcess extends EventEmitter {
   }
 
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
-  protected emitAcpPromptResponseUsage(usage: unknown): void {
+  protected emitAcpPromptResponseUsage(usage: AcpPromptUsage | null | undefined): void {
     if (!usage || !isObject(usage)) return;
-    const u = usage as Record<string, unknown>;
     this.emitContextUsageMessage({
-      inputTokens: (u.inputTokens as number | undefined) ?? 0,
-      outputTokens: (u.outputTokens as number | undefined) ?? 0,
-      cacheReadTokens:
-        (u.cachedReadTokens as number | undefined) ??
-        (u.cacheReadTokens as number | undefined) ??
-        0,
-      cacheWriteTokens:
-        (u.cachedWriteTokens as number | undefined) ??
-        (u.cacheWriteTokens as number | undefined) ??
-        0,
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      cacheReadTokens: usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0,
     });
   }
 
@@ -453,12 +446,11 @@ export abstract class BaseAgentProcess extends EventEmitter {
     if (isString(err)) return this.cleanErrorDetails(err);
     if (!isObject(err)) return String(err);
 
-    const e = err as Record<string, unknown>;
-    const base = isString(e.message) ? e.message : String(err);
+    const base = 'message' in err && isString(err.message) ? err.message : String(err);
 
     // ACP RequestError: { code, message, data: { details } }
-    if (e.data && isObject(e.data)) {
-      const details = (e.data as Record<string, unknown>).details;
+    if ('data' in err && err.data && isObject(err.data)) {
+      const details = 'details' in err.data ? err.data.details : undefined;
       if (isString(details)) {
         return this.cleanErrorDetails(details);
       }
@@ -539,6 +531,19 @@ export abstract class BaseAgentProcess extends EventEmitter {
     this.hasExited = true;
     this.emit('exit', exitCode);
   }
+}
+
+/**
+ * The token counts of an ACP `PromptResponse.usage` (camelCase). Agents also
+ * send the `cache*` spelling; omitted and `null` both mean "not reported".
+ */
+interface AcpPromptUsage {
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  cachedReadTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cachedWriteTokens?: number | null;
+  cacheWriteTokens?: number | null;
 }
 
 function isString<T>(value: T): value is T & string {

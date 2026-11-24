@@ -6,6 +6,7 @@
  * enqueues and follows.
  */
 
+import type { JsonObject } from '@funny/shared/json';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 
 import type { GithubCallError, RepoGithub } from './repo-github.js';
@@ -83,7 +84,7 @@ function graphql<T>(
   github: RepoGithub,
   repo: string,
   query: string,
-  variables: Record<string, unknown>,
+  variables: JsonObject,
 ): ResultAsync<GraphqlAnswer<T>, GithubCallError> {
   return github.json<GraphqlAnswer<T>>(repo, 'POST', '/graphql', { query, variables });
 }

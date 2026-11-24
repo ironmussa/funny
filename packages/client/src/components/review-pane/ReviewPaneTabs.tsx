@@ -14,8 +14,6 @@ import { PullRequestsTab } from '../PullRequestsTab';
 import { WorktreeSettings } from '../WorktreeSettings';
 import { StashTab } from './StashTab';
 
-const TAB_TRIGGER_CLASS = 'focus-visible:ring-0';
-
 const TAB_CONTENT_CLASS = 'flex min-h-0 flex-1 data-[state=inactive]:hidden';
 
 const TABS: Array<{ value: ReviewSubTab; labelKey: string; fallback: string }> = [
@@ -39,7 +37,7 @@ export function ReviewPaneTabsHeader({ onClose }: { onClose: () => void }) {
             key={tab.value}
             value={tab.value}
             size="sm"
-            className={TAB_TRIGGER_CLASS}
+            focusRing={false}
             data-testid={`review-tab-${tab.value}`}
           >
             {t(tab.labelKey, tab.fallback)}

@@ -18,6 +18,7 @@ import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import {
   listRowActionBusyClassName,
   listRowActionClassName,
+  listRowDestructiveActionClassName,
   listRowClassName,
   listRowTitleClassName,
 } from '@/lib/list-row-styles';
@@ -439,11 +440,7 @@ function StashDropButton({
           size="icon-xs"
           aria-label={t('review.dropStash', 'Discard stash')}
           // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
-          className={cn(
-            listRowActionClassName,
-            'hover:text-destructive',
-            dropping && listRowActionBusyClassName,
-          )}
+          className={cn(listRowDestructiveActionClassName, dropping && listRowActionBusyClassName)}
           // oxlint-enable shadcn/require-static-classes
           onClick={(e) => {
             e.stopPropagation();

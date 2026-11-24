@@ -383,7 +383,8 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
       <div className="flex min-h-0 flex-1">
         {/* Request list */}
         <ScrollArea
-          className={cn('min-h-0 border-r', selectedEntry ? 'w-[280px] shrink-0' : 'flex-1')}
+          variant="divided-end"
+          className={cn('min-h-0', selectedEntry ? 'w-[280px] shrink-0' : 'flex-1')}
         >
           {filtered.length === 0 ? (
             <EmptyState
@@ -1162,7 +1163,8 @@ export function TestDetailTabs({
   return (
     <Tabs defaultValue="log" className="flex h-full flex-col">
       <TabsList
-        className="h-auto w-full justify-start gap-0 rounded-none border-b bg-transparent p-0"
+        variant="underline"
+        className="h-auto w-full justify-start"
         data-testid="test-detail-tabs"
       >
         <TabTrigger value="locator" icon={<Crosshair className="size-3.5" />} label="Locator" />
@@ -1242,11 +1244,7 @@ function TabTrigger({
   count?: number;
 }) {
   return (
-    <TabsTrigger
-      value={value}
-      className="data-[state=active]:border-primary gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-      data-testid={`test-detail-tab-${value}`}
-    >
+    <TabsTrigger value={value} variant="underline" data-testid={`test-detail-tab-${value}`}>
       {icon}
       {label}
       {count != null && count > 0 && (

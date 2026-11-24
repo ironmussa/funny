@@ -156,7 +156,8 @@ function SpecItem({
             <TooltipIconButton
               data-testid={`test-spec-play-${spec.file}-${spec.line}`}
               size="icon"
-              className="size-5 opacity-0 group-hover:opacity-100"
+              reveal="hover"
+              className="size-5"
               disabled={isRunning}
               onClick={() => onRunSpec(spec.file, spec.line)}
               tooltip={t('common.run')}
@@ -179,7 +180,8 @@ function SpecItem({
             <TooltipIconButton
               data-testid={`test-spec-play-${spec.file}-${spec.line}-${project}`}
               size="icon"
-              className="size-5 opacity-0 group-hover:opacity-100"
+              reveal="hover"
+              className="size-5"
               disabled={isRunning}
               onClick={() => onRunSpec(spec.file, spec.line, project)}
               tooltip={`${t('common.run')} (${project})`}
@@ -467,7 +469,8 @@ function TreeItem({
             data-testid={`test-play-${node.path}`}
             variant="ghost"
             size="icon"
-            className="size-5 opacity-0 group-hover:opacity-100"
+            reveal="hover"
+            className="size-5"
             disabled={isRunning}
             onClick={(e) => {
               e.stopPropagation();

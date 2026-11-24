@@ -1,14 +1,14 @@
 import type { TestFile, TestFileStatus, TestSpec, TestSuite } from '@funny/shared';
 import {
   ChevronRight,
-  Folder,
+  FolderIcon,
   FolderOpen,
   Play,
   Square,
   Loader2,
   CheckCircle2,
   XCircle,
-  Circle,
+  CircleIcon,
   MoreHorizontal,
   ExternalLink,
 } from 'lucide-react';
@@ -75,9 +75,9 @@ function StatusDot({ status }: { status: TestFileStatus | undefined }) {
     case 'failed':
       return <XCircle className="icon-xs text-status-error" />;
     case 'stopped':
-      return <Circle className="icon-xs text-status-warning" />;
+      return <CircleIcon className="icon-xs text-status-warning" />;
     default:
-      return <Circle className="icon-xs text-muted-foreground/30" />;
+      return <CircleIcon className="icon-xs text-muted-foreground/30" />;
   }
 }
 
@@ -146,7 +146,7 @@ function SpecItem({
               variant="ghost-destructive"
               data-testid={`test-spec-stop-${spec.file}-${spec.line}`}
               size="icon"
-              className="size-5 opacity-100"
+              className="size-5"
               onClick={onStop}
               tooltip={t('common.stop')}
             >
@@ -369,7 +369,7 @@ function TreeItem({
           {isExpanded ? (
             <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
           ) : (
-            <Folder className="icon-base text-muted-foreground/70 shrink-0" />
+            <FolderIcon className="icon-base text-muted-foreground/70 shrink-0" />
           )}
           <span className="font-mono-explorer flex-1 truncate text-xs">{node.name}</span>
         </button>
@@ -453,7 +453,7 @@ function TreeItem({
             data-testid={`test-stop-${node.path}`}
             variant="ghost-destructive"
             size="icon"
-            className="size-5 opacity-100"
+            className="size-5"
             onClick={(e) => {
               e.stopPropagation();
               onStop();
@@ -723,7 +723,8 @@ export function TestFileBrowser({
             data-testid="test-stop"
             variant="destructive"
             size="xs"
-            className="shrink-0 gap-1"
+            gap="tight"
+            className="shrink-0"
             onClick={onStop}
           >
             <Square className="icon-sm" />
@@ -734,7 +735,8 @@ export function TestFileBrowser({
             data-testid="test-run-all"
             variant="ghost"
             size="xs"
-            className="shrink-0 gap-1"
+            gap="tight"
+            className="shrink-0"
             disabled={files.length === 0}
             onClick={onRunAll}
           >
@@ -765,7 +767,7 @@ export function TestFileBrowser({
       )}
 
       {/* File tree */}
-      <ScrollArea className="flex-1 pr-3">
+      <ScrollArea className="flex-1" viewportProps={{ className: 'pr-3' }}>
         {isLoading ? (
           <LoadingState
             padding="md"

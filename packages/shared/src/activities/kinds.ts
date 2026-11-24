@@ -276,11 +276,20 @@ export function isActivityKind(kind: string): kind is ActivityKind {
   return Object.hasOwn(ACTIVITY_KINDS, kind);
 }
 
+/** An activity as a runner or a server caller reports it: its kind and its still unchecked input. */
+export interface ReportedActivityInput {
+  kind: string;
+  input?: unknown;
+}
+
 /**
  * Validates an activity input against its kind. Returns the stripped input, or
  * null for an unknown kind or an input that does not match.
  */
-export function parseActivityInput(kind: string, input: unknown): Record<string, unknown> | null {
+export function parseActivityInput({
+  kind,
+  input,
+}: ReportedActivityInput): Record<string, unknown> | null {
   if (!isActivityKind(kind)) return null;
   const parsed = ACTIVITY_KINDS[kind].input.safeParse(input ?? {});
   return parsed.success ? (parsed.data as Record<string, unknown>) : null;
@@ -342,12 +351,19 @@ const effectSchema = z.object({
   target: z.string(),
 });
 
+/** An activity report whose `effects` field is still unchecked. */
+export interface ReportedActivityEffects {
+  effects?: unknown;
+}
+
 /**
  * Keeps the well-formed effects of a reported list: unknown effects and extra
  * fields are dropped, the list is capped at 20 and each target at 512
  * characters. Anything that is not a list reads as null.
  */
-export function parseActivityEffects(raw: unknown): ActivityEffect[] | null {
+export function parseActivityEffects({
+  effects: raw,
+}: ReportedActivityEffects): ActivityEffect[] | null {
   if (!Array.isArray(raw)) return null;
   const effects: ActivityEffect[] = [];
   for (const item of raw) {

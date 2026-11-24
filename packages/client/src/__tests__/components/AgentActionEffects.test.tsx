@@ -34,8 +34,9 @@ describe('AgentActionEffects', () => {
     );
     expect(await screen.findByTestId('browser-agent-action-key')).toHaveTextContent('Enter');
     const label = screen.getByTestId('browser-agent-action-label');
-    expect(label.style.left).toBe('25%');
-    expect(label.style.top).toBe('80%');
+    expect(label.style.getPropertyValue('--agent-action-left')).toBe('25%');
+    expect(label.style.getPropertyValue('--agent-action-top')).toBe('80%');
+    expect(label).toHaveClass('left-[var(--agent-action-left)]', 'top-[var(--agent-action-top)]');
   });
 
   test('a screenshot flashes the page once', async () => {

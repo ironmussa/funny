@@ -119,6 +119,10 @@ interface BrowserPreviewProps {
   onStop?: () => void;
 }
 
+/** The screencast canvas, zoomed around its center by `--browser-preview-zoom`. */
+const PREVIEW_CANVAS_CLASSES =
+  'max-h-full max-w-full origin-center [transform:scale(var(--browser-preview-zoom))] object-contain';
+
 export function BrowserPreview({
   isRunning,
   isStreaming,
@@ -408,8 +412,8 @@ export function BrowserPreview({
           ) : null}
           <canvas
             ref={canvasRef}
-            className={cn('max-h-full max-w-full object-contain', !isStreaming && 'hidden')}
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+            className={cn(PREVIEW_CANVAS_CLASSES, !isStreaming && 'hidden')}
+            style={{ '--browser-preview-zoom': `${zoom}` }}
           />
         </div>
       </div>

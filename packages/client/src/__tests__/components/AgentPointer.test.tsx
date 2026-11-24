@@ -28,8 +28,12 @@ describe('AgentPointer', () => {
       }),
     );
     const pointer = await screen.findByTestId('browser-agent-pointer');
-    expect(pointer.style.left).toBe('25%');
-    expect(pointer.style.top).toBe('80%');
+    expect(pointer.style.getPropertyValue('--agent-pointer-left')).toBe('25%');
+    expect(pointer.style.getPropertyValue('--agent-pointer-top')).toBe('80%');
+    expect(pointer).toHaveClass(
+      'left-[var(--agent-pointer-left)]',
+      'top-[var(--agent-pointer-top)]',
+    );
     expect(pointer).toHaveAttribute('data-pointer-kind', 'click');
   });
 

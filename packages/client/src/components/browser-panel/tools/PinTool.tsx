@@ -95,8 +95,8 @@ export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
               type="button"
               data-pin-marker="true"
               data-testid={`browser-panel-pin-${index}`}
-              className="border-background bg-primary text-primary-foreground absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-md transition-transform hover:scale-110"
-              style={{ left: a.x, top: a.y, pointerEvents: 'auto' }}
+              className="border-background bg-primary text-primary-foreground pointer-events-auto absolute top-[var(--pin-marker-top)] left-[var(--pin-marker-left)] flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-md transition-transform hover:scale-110"
+              style={{ '--pin-marker-left': `${a.x}px`, '--pin-marker-top': `${a.y}px` }}
               onClick={(e) => {
                 e.stopPropagation();
                 setOpenPinId(a.id);
@@ -132,10 +132,6 @@ function PinNoteEditor({
 }) {
   const [value, setValue] = useState(initial);
   const fontSize = useSettingsStore((s) => s.fontSize);
-  const fontStyle: React.CSSProperties = {
-    fontSize: PROSE_FONT_SIZE_PX[fontSize],
-    lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
-  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -145,7 +141,11 @@ function PinNoteEditor({
         placeholder="What's wrong here?"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        style={fontStyle}
+        size="prose"
+        style={{
+          '--textarea-font-size': `${PROSE_FONT_SIZE_PX[fontSize]}px`,
+          '--textarea-line-height': `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();

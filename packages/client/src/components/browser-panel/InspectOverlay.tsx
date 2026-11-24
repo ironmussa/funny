@@ -146,13 +146,21 @@ function ActiveInspectOverlay({
       className="pointer-events-none absolute inset-0"
     >
       <div
-        className="border-primary bg-primary/10 absolute border-2"
-        style={{ left: hlLeft, top: hlTop, width: hlW, height: hlH }}
+        className="border-primary bg-primary/10 absolute top-[var(--inspect-highlight-top)] left-[var(--inspect-highlight-left)] h-[var(--inspect-highlight-height)] w-[var(--inspect-highlight-width)] border-2"
+        style={{
+          '--inspect-highlight-left': `${hlLeft}px`,
+          '--inspect-highlight-top': `${hlTop}px`,
+          '--inspect-highlight-width': `${hlW}px`,
+          '--inspect-highlight-height': `${hlH}px`,
+        }}
       />
       <div
         data-testid="browser-panel-inspect-tooltip"
-        className="border-border bg-card absolute max-w-[320px] rounded-md border p-2 text-xs shadow-md"
-        style={{ left: tooltipLeft, top: tooltipTop }}
+        className="border-border bg-card absolute top-[var(--inspect-tooltip-top)] left-[var(--inspect-tooltip-left)] max-w-[320px] rounded-md border p-2 text-xs shadow-md"
+        style={{
+          '--inspect-tooltip-left': `${tooltipLeft}px`,
+          '--inspect-tooltip-top': `${tooltipTop}px`,
+        }}
       >
         <div className="text-foreground font-mono">
           {hover.info.tagName.toLowerCase()}

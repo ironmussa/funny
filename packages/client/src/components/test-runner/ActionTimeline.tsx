@@ -86,15 +86,15 @@ export function ActionTimeline({
                   type="button"
                   aria-label={tooltipLabel}
                   className={cn(
-                    'absolute top-0 h-full cursor-pointer rounded-[1px] transition-opacity',
+                    'absolute top-0 left-[var(--timeline-marker-left)] h-full w-[var(--timeline-marker-width)] cursor-pointer rounded-[1px] transition-opacity',
                     colorClass,
                     isActive
                       ? 'opacity-100 ring-1 ring-foreground/40'
                       : 'opacity-60 hover:opacity-90',
                   )}
                   style={{
-                    left: `${Math.min(left, 99.5)}%`,
-                    width: `${Math.max(width, 0.5)}%`,
+                    '--timeline-marker-left': `${Math.min(left, 99.5)}%`,
+                    '--timeline-marker-width': `${Math.max(width, 0.5)}%`,
                   }}
                   onMouseEnter={() => onHover(origIndex)}
                   onMouseLeave={() => onHover(-1)}
@@ -112,9 +112,9 @@ export function ActionTimeline({
         {/* Playhead for active action */}
         {activeIndex >= 0 && activeIndex < actions.length && (
           <div
-            className="bg-foreground/70 absolute top-0 h-full w-px"
+            className="bg-foreground/70 absolute top-0 left-[var(--timeline-playhead-left)] h-full w-px"
             style={{
-              left: `${Math.min(
+              '--timeline-playhead-left': `${Math.min(
                 ((actions[activeIndex].startTime - testStart) / totalDuration) * 100,
                 100,
               )}%`,

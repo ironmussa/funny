@@ -42,8 +42,8 @@ describe('browser viewport control and annotations', () => {
       useBrowserPanelStore.getState().setSessionController('thread:t1', 'user');
       useBrowserPanelStore.setState({ overlaysVisible: false });
     });
-    expect(viewport.style.visibility).not.toBe('hidden');
-    expect(viewport.style.pointerEvents).toBe('auto');
+    expect(viewport).not.toHaveClass('invisible');
+    expect(viewport).toHaveClass('pointer-events-auto');
     fireEvent.mouseDown(viewport);
     fireEvent.keyDown(viewport, { key: 'a' });
     expect(mocks.input).toHaveBeenCalledWith(
@@ -60,13 +60,13 @@ describe('browser viewport control and annotations', () => {
     useBrowserPanelStore.setState({ controller: 'user' });
     render(<BrowserViewport />);
     const canvas = screen.getByTestId('draft-canvas');
-    expect(canvas.parentElement?.style.visibility).toBe('visible');
+    expect(canvas.parentElement).toHaveClass('visible');
     act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'agent'));
     expect(screen.getByTestId('draft-canvas')).toBe(canvas);
-    expect(canvas.parentElement?.style.visibility).toBe('hidden');
+    expect(canvas.parentElement).toHaveClass('invisible');
     act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'user'));
     expect(screen.getByTestId('draft-canvas')).toBe(canvas);
-    expect(canvas.parentElement?.style.visibility).toBe('visible');
+    expect(canvas.parentElement).toHaveClass('visible');
   });
 
   test("hides the agent's pointer once the session disconnects", () => {

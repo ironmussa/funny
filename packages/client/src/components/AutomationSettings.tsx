@@ -243,10 +243,9 @@ export function AutomationSettings() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="ghost"
+                      variant="ghost-success-soft"
                       size="icon-sm"
                       onClick={() => handleTrigger(a)}
-                      className="text-status-success/80 hover:text-status-success"
                     >
                       <Play className="icon-sm" />
                     </Button>
@@ -367,7 +366,6 @@ export function AutomationSettings() {
               </label>
               <Input
                 id="automation-name"
-                size="form"
                 placeholder="e.g. Daily Issue Triage"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -416,7 +414,7 @@ export function AutomationSettings() {
                   <Input
                     mono
                     size="xs"
-                    className="settings-form-input mt-1.5"
+                    className="mt-1.5"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}

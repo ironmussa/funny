@@ -104,7 +104,7 @@ export function AutomationInboxView() {
           <Inbox className="icon-base text-muted-foreground" />
           <h2 className="text-sm font-medium">Automation Inbox</h2>
           {inboxCount > 0 && (
-            <Badge variant="secondary" className="h-5 min-w-5 px-1 leading-none">
+            <Badge variant="secondary" size="count" className="h-5 min-w-5">
               {inboxCount}
             </Badge>
           )}
@@ -186,7 +186,8 @@ export function AutomationInboxView() {
                 aria-expanded={filterOpen}
                 aria-controls={filterListId}
                 data-testid="inbox-project-filter"
-                className="w-[200px] justify-between font-normal"
+                weight="normal"
+                className="w-[200px] justify-between"
               >
                 {filterProjectId
                   ? projectsWithItems.find((p) => p.id === filterProjectId)?.name
@@ -198,7 +199,7 @@ export function AutomationInboxView() {
               <Command>
                 <CommandInput placeholder="Search project..." textSize="xs" className="h-8" />
                 <CommandList id={filterListId}>
-                  <CommandEmpty className="py-3 text-xs">No project found.</CommandEmpty>
+                  <CommandEmpty textSize="xs">No project found.</CommandEmpty>
                   <CommandGroup>
                     <CommandItem
                       value="all"

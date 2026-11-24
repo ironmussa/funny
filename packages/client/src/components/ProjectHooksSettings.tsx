@@ -460,7 +460,6 @@ export function ProjectHooksSettings() {
                     </label>
                     <Input
                       id="hooks-edit-label"
-                      size="form"
                       placeholder={t('hooks.label')}
                       value={label}
                       onChange={(e) => setLabel(e.target.value)}
@@ -531,7 +530,6 @@ export function ProjectHooksSettings() {
             </label>
             <Input
               id="hooks-add-label"
-              size="form"
               placeholder={t('hooks.label')}
               value={label}
               onChange={(e) => setLabel(e.target.value)}

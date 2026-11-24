@@ -32,6 +32,7 @@ import { api } from '@/lib/api';
 import {
   listRowActionBusyClassName,
   listRowActionClassName,
+  listRowDestructiveActionClassName,
   listRowClassName,
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
@@ -306,8 +307,7 @@ function WorktreeCard({
                   disabled={removing}
                   // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
                   className={cn(
-                    listRowActionClassName,
-                    'hover:text-destructive',
+                    listRowDestructiveActionClassName,
                     removing && listRowActionBusyClassName,
                   )}
                   // oxlint-enable shadcn/require-static-classes

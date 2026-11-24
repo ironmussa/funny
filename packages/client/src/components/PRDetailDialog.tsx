@@ -532,7 +532,7 @@ export function PRDetailDialog({
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="border-border shrink-0 border-b px-4 py-2">
-            <TabsList size="sm" className="rounded-md" data-testid="pr-detail-tabs">
+            <TabsList size="sm" corners="md" data-testid="pr-detail-tabs">
               <TabsTrigger
                 value="info"
                 onClick={() => setActiveTab('info')}

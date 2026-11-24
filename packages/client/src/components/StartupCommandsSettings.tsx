@@ -194,7 +194,6 @@ export function StartupCommandsSettings() {
                   </label>
                   <Input
                     id={`startup-label-${cmd.id}`}
-                    size="form"
                     placeholder={t('startup.label')}
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
@@ -208,7 +207,6 @@ export function StartupCommandsSettings() {
                   <Input
                     mono
                     id={`startup-command-${cmd.id}`}
-                    size="form"
                     placeholder={t('startup.command')}
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}

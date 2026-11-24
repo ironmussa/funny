@@ -270,12 +270,9 @@ function SearchablePickerContent({
           placeholder={searchPlaceholder}
           aria-label={label}
           variant="bare"
+          touch={mobile}
           autoComplete="off"
-          className={cn(
-            'h-auto w-full',
-            // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
-            mobile && 'min-h-[48px] text-[16px]',
-          )}
+          className="h-auto w-full"
         />
       </div>
       <div
@@ -589,12 +586,9 @@ export function BranchPicker({
           data-testid={suffixTestId(testId, '-new-input')}
           size="xs"
           mono
-          variant="bare"
-          className={cn(
-            'text-foreground h-auto w-40',
-            // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
-            mobile && 'min-h-[48px] text-[16px]',
-          )}
+          variant="bare-strong"
+          touch={mobile}
+          className="h-auto w-40"
         />
         <button
           type="button"

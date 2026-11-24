@@ -223,10 +223,10 @@ function InstalledServerCard({
       }
       className="flex flex-col"
     >
-      <CardHeader size="sm" className="flex flex-row items-start gap-3 space-y-0">
+      <CardHeader size="sm" layout="row">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle size="sm" className={cn('truncate', isDisabled && 'text-muted-foreground')}>
+            <CardTitle size="sm" truncate muted={isDisabled}>
               {server.name}
             </CardTitle>
             <McpProtocolBadge type={server.type} />
@@ -247,7 +247,7 @@ function InstalledServerCard({
               </McpStatusBadge>
             )}
           </div>
-          <CardDescription size="sm" className="mt-1 truncate">
+          <CardDescription size="sm" truncate className="mt-1">
             {server.url || [server.command, ...(server.args || [])].join(' ')}
           </CardDescription>
         </div>
@@ -275,14 +275,14 @@ function InstalledServerCard({
         </div>
       </CardHeader>
       {needsAuthActions && (
-        <CardFooter size="sm" className="flex-col items-stretch gap-2">
+        <CardFooter size="sm" layout="stack">
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outline"
+              variant="outline-warning"
               size="xs"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
-              className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 h-6"
+              className="h-6"
               data-testid={`mcp-oauth-${server.name}`}
             >
               {authenticating ? (
@@ -358,12 +358,12 @@ function RecommendedServerCard({
 
   return (
     <Card data-testid={`mcp-recommended-card-${server.name}`} flat className="flex h-full flex-col">
-      <CardHeader size="sm" className="flex-1 space-y-2">
+      <CardHeader size="sm" spacing="loose" className="flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle size="sm">{server.name}</CardTitle>
           <McpProtocolBadge type={server.type} />
         </div>
-        <CardDescription size="sm" className="line-clamp-3 leading-relaxed">
+        <CardDescription size="sm" clamp>
           {server.description}
         </CardDescription>
       </CardHeader>

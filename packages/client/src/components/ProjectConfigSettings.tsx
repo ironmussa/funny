@@ -251,7 +251,8 @@ export function ProjectConfigSettings() {
                   <Input
                     size="xs"
                     textSize="sm"
-                    className="w-32 font-medium"
+                    weight="medium"
+                    className="w-32"
                     defaultValue={group.name}
                     onBlur={(e) => updatePortGroup(gi, 'name', e.target.value)}
                     onKeyDown={(e) => {
@@ -291,7 +292,7 @@ export function ProjectConfigSettings() {
                     key={vi}
                     variant="outline"
                     mono
-                    className="hover:bg-destructive/10 hover:text-status-error cursor-pointer"
+                    removable
                     onClick={() => removeEnvVarFromGroup(gi, vi)}
                     data-testid={`port-group-${gi}-var-${vi}`}
                   >

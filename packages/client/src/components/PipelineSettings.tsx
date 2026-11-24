@@ -55,7 +55,8 @@ const ModelSelect = memo(function ModelSelect({
         side="bottom"
         align="end"
         padding="xs"
-        className="w-auto min-w-40 data-[state=closed]:animate-none data-[state=open]:animate-none"
+        animated={false}
+        className="w-auto min-w-40"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {PROVIDERS.map((provider) => {

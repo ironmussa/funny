@@ -49,11 +49,12 @@ export function MediaPreviewDialog({ open, onOpenChange, filePath }: MediaPrevie
           <ExpandedImage src={src} name={fileName} />
         ) : (
           <DialogContent
-            className="flex max-h-[90vh] w-[90vw] max-w-5xl flex-col gap-3 p-4"
+            compact
+            className="flex max-h-[90vh] w-[90vw] max-w-5xl flex-col"
             data-testid="media-preview-dialog"
           >
             <DialogHeader>
-              <DialogTitle size="sm" className="truncate font-medium">
+              <DialogTitle size="sm" weight="medium" truncate>
                 {fileName ?? 'Preview'}
               </DialogTitle>
             </DialogHeader>
@@ -91,7 +92,7 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
       data-testid="media-preview-dialog"
     >
       <DialogHeader bordered>
-        <DialogTitle size="sm" className="truncate font-medium">
+        <DialogTitle size="sm" weight="medium" truncate>
           {name ?? 'Preview'}
         </DialogTitle>
         <DialogDescription className="sr-only">Expanded image view</DialogDescription>

@@ -503,8 +503,8 @@ export function FileTree({
             name={fileName}
             query={searchQuery}
             preserveExtension={!isSubmodule}
+            font="explorer"
             className={cn(
-              'font-mono-explorer',
               // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
               fontSize,
             )}

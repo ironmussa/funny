@@ -192,9 +192,9 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon-2xs"
                           reveal="hover-fade"
-                          className="size-6 shrink-0 p-0"
+                          className="shrink-0"
                           onClick={() => handleCreateThread(issue)}
                           data-testid={`issue-create-thread-${issue.number}`}
                         >

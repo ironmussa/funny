@@ -268,9 +268,11 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent flush className="flex flex-col" style={{ maxWidth: '60vw', height: '70vh' }}>
-        <DialogHeader className="p-4 pb-2">
-          <DialogTitle size="sm">{t('folderPicker.title')}</DialogTitle>
-        </DialogHeader>
+        <div className="p-4 pb-2">
+          <DialogHeader>
+            <DialogTitle size="sm">{t('folderPicker.title')}</DialogTitle>
+          </DialogHeader>
+        </div>
 
         {/* Navigation bar: back/forward + breadcrumbs */}
         <div className="border-border bg-muted/30 flex items-center gap-1 border-b px-4 py-2">
@@ -365,7 +367,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('folderPicker.searchPlaceholder')}
-                className="pl-7"
+                inset="icon-sm"
                 autoFocus={false}
               />
             </div>
@@ -393,7 +395,8 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                 }}
                 placeholder={t('folderPicker.newFolderPlaceholder')}
                 textSize="xs"
-                className="font-mono-explorer h-6 flex-1"
+                mono="explorer"
+                className="h-6 flex-1"
                 data-testid="folder-picker-new-folder-input"
               />
               <TooltipIconButton
@@ -457,7 +460,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         </div>
 
         {/* Actions */}
-        <DialogFooter className="border-border border-t p-4">
+        <DialogFooter bordered="roomy">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t('folderPicker.cancel')}
           </Button>

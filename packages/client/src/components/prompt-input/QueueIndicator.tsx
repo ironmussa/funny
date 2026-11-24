@@ -13,8 +13,8 @@ interface QueueIconButtonProps {
   label: string;
   onClick: () => void;
   disabled: boolean;
-  variant?: 'ghost';
-  className: string;
+  variant?: 'ghost' | 'ghost-destructive';
+  className?: string;
   children: React.ReactNode;
 }
 
@@ -78,7 +78,7 @@ function QueueItemEditor({ message, index, queue }: QueueItemProps) {
         value={queue.editingContent}
         onChange={(event) => queue.setEditingContent(event.target.value)}
         disabled={isBusy}
-        className="bg-background flex-1"
+        className="flex-1"
       />
       <div className="flex shrink-0 items-center gap-0.5">
         <QueueIconButton
@@ -136,10 +136,9 @@ function QueueItemView({ message, index, queue }: QueueItemProps) {
         <QueueIconButton
           testId={`queue-delete-${message.id}`}
           label={t('prompt.deleteQueuedMessage', 'Delete')}
-          variant="ghost"
+          variant="ghost-destructive"
           onClick={() => queue.deleteMessage(message.id)}
           disabled={actionsDisabled}
-          className="text-destructive hover:text-destructive"
         >
           <BusyIcon busy={isBusy}>
             <Trash2 className="icon-xs" />

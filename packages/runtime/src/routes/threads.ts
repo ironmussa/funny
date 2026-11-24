@@ -57,12 +57,16 @@ import {
   convertToWorktreeSchema,
   validate,
 } from '../validation/schemas.js';
+import { threadRecapRoutes } from './thread-recap.js';
 import { threadWorkspaceRoutes } from './thread-workspace.js';
 
 export const threadRoutes = new Hono<HonoEnv>();
 
 // DELETE /api/threads/:id/scratch — removes a deleted scratch thread's directory.
 threadRoutes.route('/', threadWorkspaceRoutes);
+
+// POST /api/threads/:id/recap — owner-only recap on the utility model (thread-recap).
+threadRoutes.route('/', threadRecapRoutes);
 
 type SendMessageBody = z.infer<typeof sendMessageSchema>;
 

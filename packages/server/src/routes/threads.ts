@@ -450,6 +450,13 @@ threadRoutes.post('/:id/permission-requests/:requestId/respond', requireThreadOw
 // Owner-only git operation.
 threadRoutes.post('/:id/convert-to-worktree', requireThreadOwner, proxyToRunner);
 
+// POST /api/threads/:id/recap — a short summary of the thread's activity since
+// the owner last read it, generated on the OWNER's runner by their utility model
+// (openspec thread-recap, D1). Owner-only, NOT on the steer allow-list: a
+// sharee or a stranger gets 404 here and no runner is asked; for the owner the
+// proxy certifies the owner's own runner (`withRunnerFor`, no delegation).
+threadRoutes.post('/:id/recap', requireThreadOwner, proxyToRunner);
+
 // ── Thread fork (proxied to runner, then registered locally) ─────
 
 /** HTTP strings per fork variant. Everything else is shared. */

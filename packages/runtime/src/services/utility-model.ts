@@ -16,7 +16,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { completeOnce, resolveSDKCliPath, type CompleteOnceError } from '@funny/core/agents';
 import { runAsync } from '@funny/shared/async';
-import { resolveUtilityModel, type UtilityModelSetting } from '@funny/shared/contracts/profile';
+import { resolveUtilityModel, UtilityModelSetting } from '@funny/shared/contracts/profile';
 import { resolveModelId, type AgentModel } from '@funny/shared/models';
 import { ResultAsync } from 'neverthrow';
 
@@ -41,6 +41,24 @@ export interface UtilityGenerationOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+
+/** The user's saved utility model; `null` when they never set one. Throws on an invalid saved value. */
+export async function loadUtilityModel(userId: string): Promise<UtilityModelSetting | null> {
+  const profile = await getServices().profile.getProfile(userId);
+  const saved = profile?.utilityModel ?? null;
+  if (saved === null) return null;
+  const parsed = UtilityModelSetting.safeParse(saved);
+  if (!parsed.success) throw new Error('The saved utility model setting is invalid');
+  return parsed.data;
+}
+
+/** A user-facing sentence for a utility model failure. */
+export function describeUtilityModelError(error: UtilityModelError): string {
+  if (error.kind === 'utility-model-unavailable') {
+    return `The utility model is unavailable: no ${error.provider} API key is saved in Settings > Profile`;
+  }
+  return error.message;
+}
 
 /** Providers whose LLM API endpoint refuses requests without the user's key. */
 const KEYED_PROVIDERS: ReadonlySet<string> = new Set(['openai', 'anthropic']);

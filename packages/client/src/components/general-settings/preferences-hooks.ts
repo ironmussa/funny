@@ -20,7 +20,10 @@ export function toastSettingsSaved(t: (key: string) => string) {
 
 // ── Provider keys (GitHub token, AI provider keys, AssemblyAI) ────────
 
-type KeyMap<T> = Record<string, T>;
+/** A value per provider id. */
+interface KeyMap<T> {
+  [providerId: string]: T;
+}
 
 const NO_KEYS: KeyMap<boolean> = {};
 

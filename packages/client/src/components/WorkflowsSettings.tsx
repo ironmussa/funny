@@ -499,7 +499,7 @@ function Inspector({
       nodes: current.nodes.map((item) => {
         if (item.id !== node.id) return item;
         const cleared = { ...item };
-        for (const key of ACTION_KEYS) delete (cleared as Record<string, unknown>)[key];
+        for (const key of ACTION_KEYS) delete cleared[key];
         return { ...cleared, [nextType]: defaultActionValue(nextType) } as ParsedNode;
       }),
     }));
@@ -686,11 +686,18 @@ function applyGraph(
   setEdges(edges);
 }
 
+/** The JSON text of the inspector's action, retry and loop editors. */
+interface InspectorSources {
+  action: string;
+  retry: string;
+  loop: string;
+}
+
 /** The JSON text the inspector's editors start from for a node. */
 function inspectorSources(
   node: ParsedNode | null,
   action: { value: unknown } | null,
-): { action: string; retry: string; loop: string } {
+): InspectorSources {
   const pretty = (value: unknown) => JSON.stringify(value, null, 2);
   return {
     action: pretty(action?.value ?? {}),
@@ -699,7 +706,13 @@ function inspectorSources(
   };
 }
 
-function actionOf(node: ParsedNode): { type: keyof ParsedNode; value: unknown } {
+/** A node's action: the field that holds it, and its value. */
+interface NodeAction {
+  type: keyof ParsedNode;
+  value: unknown;
+}
+
+function actionOf(node: ParsedNode): NodeAction {
   for (const key of ACTION_KEYS) {
     const value = node[key];
     if (value !== undefined) return { type: key, value };
@@ -728,6 +741,6 @@ const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string,
   integrate: {},
 };
 
-function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]): Record<string, unknown> {
+function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]) {
   return { ...DEFAULT_ACTION_VALUES[actionType] };
 }

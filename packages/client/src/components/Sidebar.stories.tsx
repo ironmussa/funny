@@ -113,7 +113,7 @@ function seedDefault() {
     }),
   ];
 
-  const threadsByProject: Record<string, Thread[]> = {
+  const threadsByProject = {
     'proj-1': [
       makeThread({
         id: 't1',
@@ -161,7 +161,7 @@ function seedDefault() {
       }),
     ],
     'proj-3': [],
-  };
+  } satisfies Record<string, Thread[]>;
 
   seedProjectCurrentBranches({ 'proj-1': 'master', 'proj-2': 'main' });
   useProjectStore.setState(

@@ -22,8 +22,17 @@ import { walkSources } from './walk-sources';
 const ROOT = join(import.meta.dir, '..', '..');
 const SCANNED = ['packages/server/src', 'packages/runtime/src', 'packages/shared/src'];
 
+interface StatusOwner {
+  files: string[];
+  why: string;
+}
+
 /** Table identifier (as the Drizzle schema exports it) → files allowed to update it, and why. */
-const OWNERS: Record<string, { files: string[]; why: string }> = {
+interface StatusOwners {
+  readonly [table: string]: StatusOwner;
+}
+
+const OWNERS: StatusOwners = {
   threadSandboxes: {
     files: ['packages/server/src/services/thread-sandboxes/thread-sandbox-store.ts'],
     why: 'sandbox-machine transitions (ThreadSandboxStore.transition)',

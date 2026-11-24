@@ -22,9 +22,9 @@ import * as tm from './thread-manager.js';
 import { loadUtilityModel, runUtilityGeneration, type UtilityModelError } from './utility-model.js';
 
 /** A recap generation never runs longer than this. */
-export const RECAP_TIMEOUT_MS = 30_000;
+const RECAP_TIMEOUT_MS = 30_000;
 /** Newest messages read for a recap; the transcript then keeps what fits its size limit. */
-export const RECAP_MESSAGE_LIMIT = 200;
+const RECAP_MESSAGE_LIMIT = 200;
 
 export type RecapError = UtilityModelError | { kind: 'thread-not-found'; message: string };
 
@@ -53,12 +53,12 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 /** A language code as a name the model reads unambiguously. */
-export function languageName(language: string): string {
+function languageName(language: string): string {
   const base = language.toLowerCase().split('-')[0];
   return LANGUAGE_NAMES[base] ?? language;
 }
 
-export function recapSystemPrompt(language: string): string {
+function recapSystemPrompt(language: string): string {
   return [
     'You summarize what a coding agent did while its user was away.',
     `Answer in ${languageName(language)}, in at most three short sentences of plain text: no markdown, no lists, no links.`,

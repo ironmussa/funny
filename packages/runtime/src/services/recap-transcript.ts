@@ -57,7 +57,7 @@ export interface RecapTranscript {
 /** Total size of the transcript, in characters. */
 export const RECAP_TRANSCRIPT_MAX_CHARS = 12_000;
 /** Size of the excerpt kept from each tool output. */
-export const TOOL_OUTPUT_EXCERPT_CHARS = 300;
+const TOOL_OUTPUT_EXCERPT_CHARS = 300;
 /** Size of the one-line tool input summary. */
 const TOOL_INPUT_SUMMARY_CHARS = 160;
 /** A single message never fills the whole budget on its own. */

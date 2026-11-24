@@ -46,7 +46,7 @@ function useRowsById(data: ThreadsData, ids: string[]): Record<string, Thread> {
   return useMemo(() => {
     const byId: Record<string, Thread> = {};
     for (const row of rows ?? []) {
-      const thread = data.fromRow(row as Thread);
+      const thread = data.fromRow(row);
       byId[thread.id] = thread;
     }
     return byId;
@@ -71,7 +71,7 @@ export function useThreadById(threadId: string | null | undefined): Thread | und
         ? q.from({ thread: data.collection }).where(({ thread }) => eq(thread.id, threadId))
         : null,
   });
-  const row = rows?.[0] as Thread | undefined;
+  const row = rows?.[0];
   return row ? data.fromRow(row) : undefined;
 }
 

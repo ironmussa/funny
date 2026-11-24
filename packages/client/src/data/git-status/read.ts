@@ -1,5 +1,3 @@
-import type { GitStatusInfo } from '@funny/shared';
-
 import type { DataLayer } from '../data-layer';
 import type { EntityStore } from '../entities';
 import { getDataLayer } from '../runtime';
@@ -14,7 +12,11 @@ const plainCopies = new WeakMap<object, unknown>();
 /** A row without its collection key (the `id` the collections need). */
 export function withoutId<T extends WithId>(row: T): Omit<T, 'id'> {
   const cached = plainCopies.get(row);
-  if (cached) return cached as Omit<T, 'id'>;
+  if (cached) {
+    // SAFETY: plainCopies is written only below, with this same row's own rest
+    // object, so a cached value for `row` is `row` without its id.
+    return cached as Omit<T, 'id'>;
+  }
   const { id: _id, ...rest } = row;
   plainCopies.set(row, rest);
   return rest;
@@ -32,7 +34,7 @@ function recordOf<T extends WithId, V>(
 export function readGitStatusMaps(layer: DataLayer = getDataLayer()): GitStatusMaps {
   const data = getGitStatusData(layer);
   return {
-    statusByBranch: recordOf(data.statuses, (row) => withoutId(row) as GitStatusInfo),
+    statusByBranch: recordOf(data.statuses, (row) => withoutId(row)),
     threadToBranchKey: recordOf(data.threadKeys, (row) => row.branchKey),
   };
 }

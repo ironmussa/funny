@@ -13,7 +13,7 @@ function useQueueRow(threadId: string | undefined): QueueRow | undefined {
     queryKey: liveQueryKey('queue:useQueueRow', store.collection, id),
     query: (q) => q.from({ r: store.collection }).where(({ r }) => eq(r.id, id)),
   });
-  const row = rows?.[0] as QueueRow | undefined;
+  const row = rows?.[0];
   return row ? store.fromRow(row) : undefined;
 }
 

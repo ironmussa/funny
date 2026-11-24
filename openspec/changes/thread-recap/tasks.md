@@ -2,9 +2,9 @@
 
 ## 1. Utility model setting (shared + server)
 
-- [ ] 1.1 Add `UtilityModelSetting` zod schema (provider enum, model, optional baseURL required for `openai-compatible`) and `resolveUtilityModel(setting | null)` returning the `claude-sdk` / `haiku` default to `@funny/shared` (profile contract); verify with unit tests for the default, a valid OpenAI setting and the refused `openai-compatible` without base URL
-- [ ] 1.2 Add the nullable `user_profiles.utility_model` JSON column and `thread_recap_enabled INTEGER NOT NULL DEFAULT 1` to both schemas and `db/migrate.ts`; verify the migration test creates them on SQLite and PG and that an existing user's row reads `thread_recap_enabled = 1`
-- [ ] 1.3 Read and write `utilityModel` and `threadRecapEnabled` (integer ↔ boolean) through the `profile` tRPC port (invalid input → 400); verify with a port test covering save, read-back, the default `true` and the refused invalid save
+- [x] 1.1 Add `UtilityModelSetting` zod schema (provider enum, model, optional baseURL required for `openai-compatible`) and `resolveUtilityModel(setting | null)` returning the `claude-sdk` / `haiku` default to `@funny/shared` (profile contract); verify with unit tests for the default, a valid OpenAI setting and the refused `openai-compatible` without base URL
+- [x] 1.2 Add the nullable `user_profiles.utility_model` JSON column and `thread_recap_enabled INTEGER NOT NULL DEFAULT 1` to both schemas and `db/migrate.ts`; verify the migration test creates them on SQLite and PG and that an existing user's row reads `thread_recap_enabled = 1`
+- [x] 1.3 Read and write `utilityModel` and `threadRecapEnabled` (integer ↔ boolean) through the `profile` tRPC port (invalid input → 400); verify with a port test covering save, read-back, the default `true` and the refused invalid save
 
 ## 2. One-shot generation backends (core + runtime)
 

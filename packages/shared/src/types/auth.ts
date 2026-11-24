@@ -1,3 +1,5 @@
+import type { UtilityModelSetting } from '../contracts/profile.js';
+
 // ─── Auth ────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'user';
@@ -89,6 +91,10 @@ export interface UserProfile {
   toolPermissions: Record<string, string> | null;
   theme: string | null;
   runnerInviteToken: string | null;
+  /** Model for helper generations (thread recap, commit message); null = the default. */
+  utilityModel: UtilityModelSetting | null;
+  /** Whether a recap card is shown when the user comes back to a thread. */
+  threadRecapEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -110,4 +116,7 @@ export interface UpdateProfileRequest {
   terminalShell?: string;
   toolPermissions?: Record<string, string>;
   theme?: string;
+  /** null clears the setting back to the default utility model. */
+  utilityModel?: UtilityModelSetting | null;
+  threadRecapEnabled?: boolean;
 }

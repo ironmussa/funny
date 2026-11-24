@@ -660,6 +660,10 @@ export const userProfiles = sqliteTable('user_profiles', {
   runnerInviteTokenUsedAt: text('runner_invite_token_used_at'),
   /** Runner designated as this user's general runner (project-runner-binding). */
   generalRunnerId: text('general_runner_id'),
+  /** JSON `UtilityModelSetting` for helper generations; null = the default (thread-recap). */
+  utilityModel: text('utility_model'),
+  /** 1 = show a recap when the user comes back to a thread (thread-recap). */
+  threadRecapEnabled: integer('thread_recap_enabled').notNull().default(1),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

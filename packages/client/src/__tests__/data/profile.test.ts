@@ -39,6 +39,8 @@ function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     toolPermissions: null,
     theme: null,
     runnerInviteToken: null,
+    utilityModel: null,
+    threadRecapEnabled: true,
     createdAt: '2026-11-09T00:00:00.000Z',
     updatedAt: '2026-11-09T00:00:00.000Z',
     ...overrides,

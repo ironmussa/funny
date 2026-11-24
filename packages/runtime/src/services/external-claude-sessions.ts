@@ -17,6 +17,14 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { DATA_DIR } from '../lib/data-dir.js';
+import {
+  CLAUDE_CODE_SYNTHETIC_AUTHOR,
+  contentToText,
+  entryToTranscriptMessage,
+  firstLine,
+  parseJsonlEntry,
+  type ClaudeJsonlEntry,
+} from './external-claude-sessions/transcript-entries.js';
 import { readFileLines } from './file-lines.js';
 import { getServices } from './service-registry.js';
 
@@ -27,54 +35,9 @@ const MAX_PROJECT_SESSION_FILES = 200;
 const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
 /** Session files whose metadata is remembered between syncs (oldest dropped first). */
 const MAX_CACHED_SESSION_FILES = 2 * MAX_PROJECT_SESSION_FILES;
-const IDE_OPENED_FILE_RE = /<ide_opened_file>[\s\S]*?<\/ide_opened_file>/g;
-const PREVIEWABLE_ASSETS_BLOCK_RE = /\[PREVIEWABLE ASSETS\][\s\S]*?\[\/PREVIEWABLE ASSETS\]/g;
-const LOCAL_COMMAND_CAVEAT_BLOCK_RE =
-  /<local-command-caveat>[\s\S]*?(?:<\/local-command-caveat>|$)/g;
-const CONTEXT_RECOVERY_PREFIX =
-  '[SYSTEM NOTE: Your previous session cannot be resumed. Below is the conversation history to restore context.';
-const RESUME_NOTE_PREFIX =
-  '[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution.';
-const RECOVERED_USER_MESSAGE_MARKER = 'USER (new message):';
-const CLAUDE_CODE_SYNTHETIC_AUTHOR = 'Claude Code';
-/** Claude Code's meta note naming the file a pasted image was saved to. */
-const IMAGE_SOURCE_NOTE_RE = /^(?:\s*\[Image(?: #\d+)?: source: [^\]\n]+\]\s*)+$/;
-/** Content blocks that never render as message text (images travel as attachments). */
-const NON_TEXT_BLOCK_TYPES = new Set(['thinking', 'redacted_thinking', 'tool_use', 'image']);
 let dismissedSessionIdsCache: Set<string> | null = null;
 
 const dismissedSessionIdsSchema = z.array(z.string());
-
-const imageBlockSchema = z.object({
-  type: z.literal('image'),
-  source: z.object({
-    type: z.literal('base64'),
-    media_type: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
-    data: z.string(),
-  }),
-});
-
-const claudeJsonlEntrySchema = z
-  .object({
-    type: z.string().optional(),
-    sessionId: z.string().optional(),
-    cwd: z.string().optional(),
-    gitBranch: z.string().optional(),
-    timestamp: z.string().optional(),
-    lastPrompt: z.string().optional(),
-    aiTitle: z.string().optional(),
-    summary: z.string().optional(),
-    uuid: z.string().optional(),
-    isMeta: z.boolean().optional(),
-    message: z
-      .object({
-        role: z.enum(['user', 'assistant', 'system']).optional(),
-        content: z.unknown().optional(),
-      })
-      .passthrough()
-      .optional(),
-  })
-  .passthrough();
 
 export interface ProcessInfo {
   pid: number;
@@ -786,8 +749,6 @@ function sessionTitle(
   return metadata?.aiTitle ?? metadata?.lastPrompt ?? fallback;
 }
 
-type ClaudeJsonlEntry = z.infer<typeof claudeJsonlEntrySchema>;
-
 function emptySessionMetadata(sessionId: string): SessionMetadata {
   return {
     sessionId,
@@ -799,13 +760,6 @@ function emptySessionMetadata(sessionId: string): SessionMetadata {
     updatedAt: null,
     hasDisplayableContent: false,
   };
-}
-
-/** One line of a session JSONL file as an entry; null for blank and invalid lines. */
-function parseJsonlEntry(line: string): ClaudeJsonlEntry | null {
-  if (!line.trim()) return null;
-  const parsed = parseStoredJson(claudeJsonlEntrySchema, line, 'Claude Code session JSONL');
-  return parsed.ok ? parsed.value : null;
 }
 
 /** Fold one JSONL entry's session-level fields (ids, timestamps, prompt, title) into `metadata`. */
@@ -968,298 +922,4 @@ async function findClaudeSessionFile(homeDir: string, sessionId: string): Promis
 
 function isSafeSessionId(sessionId: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(sessionId);
-}
-
-function summaryTranscriptMessage(
-  entry: z.infer<typeof claudeJsonlEntrySchema>,
-  index: number,
-): ExternalClaudeTranscriptMessage | null {
-  if (entry.type === 'summary' && entry.summary) {
-    return {
-      id: entry.uuid ?? `summary-${index}`,
-      role: 'system',
-      content: entry.summary,
-      timestamp: entry.timestamp ?? null,
-    };
-  }
-  return null;
-}
-
-/**
- * Newer Claude Code versions also log the raw API request (`api-request-blob`: system
- * prompt, tool definitions, reminders, a copy of the assistant turn) with a
- * `message.role`; only `user` / `assistant` entries are conversation.
- */
-function isConversationEntry(entry: z.infer<typeof claudeJsonlEntrySchema>): boolean {
-  return entry.type === 'user' || entry.type === 'assistant';
-}
-
-function entryToTranscriptMessage(
-  entry: z.infer<typeof claudeJsonlEntrySchema>,
-  index: number,
-  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
-): ExternalClaudeTranscriptMessage | null {
-  // Besides summaries, only conversation entries are messages.
-  if (!isConversationEntry(entry)) return summaryTranscriptMessage(entry, index);
-
-  const message = entry.message;
-  const role = message?.role;
-  if (!role || message.content === undefined) return null;
-
-  if (role === 'user' && contentLooksLikeToolResult(message.content)) {
-    return toolResultTranscriptMessage(entry, message.content, index, toolCallsByClaudeId);
-  }
-
-  const content = contentToText(message.content);
-  const parts =
-    role === 'user'
-      ? userMessageParts(entry, message.content, content)
-      : { toolCalls: extractToolCalls(message.content, entry, index, toolCallsByClaudeId) };
-  if (!parts || !hasVisibleContent(content, parts)) return null;
-
-  return {
-    id: entry.uuid ?? `${role}-${index}`,
-    role,
-    content,
-    ...withoutEmptyLists(parts),
-    timestamp: entry.timestamp ?? null,
-  };
-}
-
-/** A user turn of bare tool results: fills earlier tool cards, keeping only orphans. */
-function toolResultTranscriptMessage(
-  entry: z.infer<typeof claudeJsonlEntrySchema>,
-  content: unknown,
-  index: number,
-  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
-): ExternalClaudeTranscriptMessage | null {
-  const orphanToolCalls = applyToolResults(content, entry, index, toolCallsByClaudeId);
-  if (orphanToolCalls.length === 0) return null;
-  return {
-    id: entry.uuid ?? `tool-results-${index}`,
-    role: 'assistant',
-    content: '',
-    timestamp: entry.timestamp ?? null,
-    toolCalls: orphanToolCalls,
-  };
-}
-
-function hasVisibleContent(
-  content: string,
-  parts: Pick<ExternalClaudeTranscriptMessage, 'images' | 'toolCalls'>,
-): boolean {
-  return content.trim().length > 0 || !!parts.toolCalls?.length || !!parts.images?.length;
-}
-
-/** Attachments and authorship of a user turn, or null when the turn is not shown. */
-function userMessageParts(
-  entry: z.infer<typeof claudeJsonlEntrySchema>,
-  rawContent: unknown,
-  content: string,
-): Pick<ExternalClaudeTranscriptMessage, 'images' | 'author' | 'toolCalls'> | null {
-  if (!entry.isMeta) return { images: extractImages(rawContent) };
-  // Claude Code follows a pasted image with a meta note holding only its temp path.
-  if (IMAGE_SOURCE_NOTE_RE.test(content)) return null;
-  return { images: extractImages(rawContent), author: CLAUDE_CODE_SYNTHETIC_AUTHOR };
-}
-
-function withoutEmptyLists<T extends Record<string, unknown>>(parts: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(parts).filter(([, value]) => !Array.isArray(value) || value.length > 0),
-  ) as Partial<T>;
-}
-
-function extractToolCalls(
-  content: unknown,
-  entry: z.infer<typeof claudeJsonlEntrySchema>,
-  index: number,
-  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
-): ExternalClaudeTranscriptToolCall[] {
-  if (!Array.isArray(content)) return [];
-
-  const toolCalls: ExternalClaudeTranscriptToolCall[] = [];
-  content.forEach((block, blockIndex) => {
-    if (!block || typeof block !== 'object') return;
-    const record = block as Record<string, unknown>;
-    if (record.type !== 'tool_use') return;
-
-    const claudeToolId = typeof record.id === 'string' ? record.id : null;
-    const toolCall: ExternalClaudeTranscriptToolCall = {
-      id: claudeToolId ?? `${entry.uuid ?? `assistant-${index}`}-tool-${blockIndex}`,
-      name: typeof record.name === 'string' && record.name ? record.name : 'Tool',
-      input: stringifyToolInput(record.input),
-      timestamp: entry.timestamp ?? null,
-      author: 'Claude Code',
-    };
-    toolCalls.push(toolCall);
-    if (claudeToolId) toolCallsByClaudeId.set(claudeToolId, toolCall);
-  });
-
-  return toolCalls;
-}
-
-function applyToolResults(
-  content: unknown,
-  entry: z.infer<typeof claudeJsonlEntrySchema>,
-  index: number,
-  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
-): ExternalClaudeTranscriptToolCall[] {
-  if (!Array.isArray(content)) return [];
-
-  const orphanToolCalls: ExternalClaudeTranscriptToolCall[] = [];
-  content.forEach((block, blockIndex) => {
-    if (!block || typeof block !== 'object') return;
-    const record = block as Record<string, unknown>;
-    if (record.type !== 'tool_result') return;
-
-    const output = contentToText(record.content);
-    const claudeToolId = typeof record.tool_use_id === 'string' ? record.tool_use_id : null;
-    const existing = claudeToolId ? toolCallsByClaudeId.get(claudeToolId) : null;
-    if (existing) {
-      existing.output = output;
-      return;
-    }
-
-    orphanToolCalls.push({
-      id: claudeToolId ?? `${entry.uuid ?? `tool-result-${index}`}-tool-${blockIndex}`,
-      name: 'ToolResult',
-      input: '{}',
-      output,
-      timestamp: entry.timestamp ?? null,
-      author: 'Claude Code',
-    });
-  });
-
-  return orphanToolCalls;
-}
-
-function contentToText(content: unknown): string {
-  const text =
-    typeof content === 'string'
-      ? content
-      : !Array.isArray(content)
-        ? stringifyUnknown(content)
-        : content
-            .map((block) => blockToText(block))
-            .filter(Boolean)
-            .join('\n\n');
-
-  return stripClaudeInternalPromptMarkers(stripIdeOpenedFileMarkers(text));
-}
-
-function extractImages(content: unknown): ImageAttachment[] {
-  if (!Array.isArray(content)) return [];
-  return content.flatMap((block): ImageAttachment[] => {
-    const parsed = imageBlockSchema.safeParse(block);
-    return parsed.success ? [parsed.data] : [];
-  });
-}
-
-function blockToText(block: unknown): string {
-  if (typeof block === 'string') return block;
-  if (!block || typeof block !== 'object') return stringifyUnknown(block);
-
-  const record = block as Record<string, unknown>;
-  const type = typeof record.type === 'string' ? record.type : null;
-
-  if (type === 'text' && typeof record.text === 'string') return record.text;
-  if (type && NON_TEXT_BLOCK_TYPES.has(type)) return '';
-  if (type === 'tool_result') {
-    return `Tool result\n\n${contentToText(record.content)}`;
-  }
-
-  if (typeof record.text === 'string') return record.text;
-  if (typeof record.content === 'string') return record.content;
-  return stringifyUnknown(record);
-}
-
-function contentLooksLikeToolResult(content: unknown): boolean {
-  return (
-    Array.isArray(content) &&
-    content.length > 0 &&
-    content.every(
-      (block) =>
-        !!block &&
-        typeof block === 'object' &&
-        (block as Record<string, unknown>).type === 'tool_result',
-    )
-  );
-}
-
-function stringifyToolInput(input: unknown): string {
-  if (input === null || input === undefined) return '{}';
-  if (typeof input === 'string') return input;
-  return stringifyUnknown(input) || '{}';
-}
-
-function stringifyUnknown(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function stripIdeOpenedFileMarkers(value: string): string {
-  if (!value.includes('<ide_opened_file>')) return value;
-  return value
-    .replace(IDE_OPENED_FILE_RE, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function stripClaudeInternalPromptMarkers(value: string): string {
-  if (!containsClaudeInternalPromptMarker(value)) return value;
-
-  const trimmedStart = value.trimStart();
-  if (trimmedStart.startsWith(CONTEXT_RECOVERY_PREFIX)) {
-    const markerIndex = trimmedStart.lastIndexOf(RECOVERED_USER_MESSAGE_MARKER);
-    if (markerIndex === -1) return '';
-    return trimmedStart
-      .slice(markerIndex + RECOVERED_USER_MESSAGE_MARKER.length)
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  }
-
-  if (trimmedStart.startsWith(RESUME_NOTE_PREFIX)) {
-    const noteEnd = trimmedStart.indexOf(']');
-    return (noteEnd === -1 ? '' : trimmedStart.slice(noteEnd + 1))
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  }
-
-  const stripped = value
-    .replace(PREVIEWABLE_ASSETS_BLOCK_RE, '')
-    .replace(LOCAL_COMMAND_CAVEAT_BLOCK_RE, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-  const remaining = stripped.trimStart();
-  if (
-    remaining.startsWith('[PREVIEWABLE ASSETS]') ||
-    remaining.startsWith('<local-command-caveat>')
-  ) {
-    return '';
-  }
-
-  return stripped;
-}
-
-function containsClaudeInternalPromptMarker(value: string): boolean {
-  return (
-    value.includes('[PREVIEWABLE ASSETS]') ||
-    value.includes('<local-command-caveat>') ||
-    value.includes(CONTEXT_RECOVERY_PREFIX) ||
-    value.includes(RESUME_NOTE_PREFIX)
-  );
-}
-
-function firstLine(value: string): string | null {
-  const line = value
-    .split('\n')
-    .map((part) => part.trim())
-    .find(Boolean);
-  return line ? line.slice(0, 160) : null;
 }

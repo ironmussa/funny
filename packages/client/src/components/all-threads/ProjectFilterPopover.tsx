@@ -59,7 +59,8 @@ export function ProjectFilterPopover({
         <Command>
           <CommandInput
             placeholder={t('kanban.searchProject')}
-            className="h-9 text-xs"
+            textSize="xs"
+            className="h-9"
             data-testid="all-threads-project-filter-search"
           />
           <CommandList>
@@ -71,7 +72,7 @@ export function ProjectFilterPopover({
                   onChange(null);
                   onOpenChange(false);
                 }}
-                className="text-xs"
+                textSize="xs"
               >
                 <span
                   className={cn(
@@ -95,7 +96,7 @@ export function ProjectFilterPopover({
                       onChange(p.id);
                       onOpenChange(false);
                     }}
-                    className="text-xs"
+                    textSize="xs"
                   >
                     <span
                       className={cn(

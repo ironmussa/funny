@@ -1,5 +1,5 @@
 import type { FileDiffSummary } from '@funny/shared';
-import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import {
   AlertTriangle,
   FileCheck2,
@@ -98,7 +98,9 @@ interface ChangesFilesPanelProps {
 }
 
 type FileListProps = ChangesFilesPanelProps & {
-  virtualizer: Virtualizer<HTMLDivElement, Element>;
+  /** Read off the virtualizer in `ChangesFilesPanel` (see there), never in a compiled component. */
+  virtualItems: VirtualItem[];
+  totalSize: number;
   /** Timestamp of the last row-menu close (see MENU_CLOSE_CLICK_GUARD_MS). */
   dropdownCloseRef: RefObject<number>;
 };
@@ -114,6 +116,11 @@ type FileListProps = ChangesFilesPanelProps & {
  * `ChangesFolderRow`, `ChangesFileRow` and `ChangesRowParts`.
  */
 export function ChangesFilesPanel(props: ChangesFilesPanelProps) {
+  // Opted out of the React Compiler, like `useGraphVirtualizer`: the virtualizer
+  // is one stable object, so a compiled memo keyed on it kept the old total
+  // height after folders collapsed (a huge empty scroll). Its values are read
+  // here, every render, and passed down.
+  'use no memo';
   const { treeRows } = props;
   const fileListRef = useRef<HTMLDivElement>(null);
   const dropdownCloseRef = useRef(0);
@@ -136,7 +143,12 @@ export function ChangesFilesPanel(props: ChangesFilesPanelProps) {
 
       {/* File list (virtualized) — wrapper ensures flex-1 so commit area stays pinned to bottom */}
       <div ref={fileListRef} className="min-h-0 flex-1 overflow-auto">
-        <FileListContent {...props} virtualizer={virtualizer} dropdownCloseRef={dropdownCloseRef} />
+        <FileListContent
+          {...props}
+          virtualItems={virtualizer.getVirtualItems()}
+          totalSize={virtualizer.getTotalSize()}
+          dropdownCloseRef={dropdownCloseRef}
+        />
       </div>
     </>
   );
@@ -263,7 +275,8 @@ function FileListContent(props: FileListProps) {
 }
 
 function VirtualizedRows({
-  virtualizer,
+  virtualItems,
+  totalSize,
   dropdownCloseRef,
   treeRows,
   loading,
@@ -310,12 +323,12 @@ function VirtualizedRows({
     <div className={cn(loading && 'pointer-events-none')}>
       <div
         style={{
-          height: `${virtualizer.getTotalSize()}px`,
+          height: `${totalSize}px`,
           width: '100%',
           position: 'relative',
         }}
       >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const row = treeRows[virtualRow.index];
           if (row.kind === 'submodule-status') {
             return (

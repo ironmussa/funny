@@ -421,6 +421,7 @@ export function busyPathsOf(
     issueNumber: number | null;
     state: string;
     triage: FactoryTriage | null;
+    stackedOn?: { runId: string } | null;
   }>,
   exceptRunId: string,
   /**
@@ -430,7 +431,9 @@ export function busyPathsOf(
   stackedOnRunId: string | null = null,
 ): Array<{ issue: number; paths: string[] }> {
   return runs.flatMap((run) => {
-    if (run.id === stackedOnRunId) return [];
+    // Neither way round: a blocker is not held by the runs stacked on it
+    // either, since they wait for it to merge (holding it would deadlock).
+    if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
     const paths = run.triage?.decision === 'ready' ? (run.triage.contract?.likelyPaths ?? []) : [];
     // A run without an issue has no triage contract, so no likely paths.
     return run.issueNumber !== null &&

@@ -1377,6 +1377,44 @@ export function createFactoryRunsRepository(
       ).map((rows) => rows.length > 0);
     },
 
+    /**
+     * Move the run's merge approval of `from` to `to`, a merge of `from` with
+     * the base branch that settled nothing (the caller verified that). Nothing
+     * happens unless the stored approval is of `from`: a compare-and-set on the
+     * stored value, so a new approval written meanwhile is kept. Resolves
+     * whether it moved.
+     */
+    carryMergeApproval(
+      runId: string,
+      from: string,
+      to: string,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ mergeApproval: factoryRuns.mergeApproval })
+          .from(factoryRuns)
+          .where(eq(factoryRuns.id, runId)),
+        storage,
+      ).andThen((rows) => {
+        const stored = rows[0]?.mergeApproval ?? null;
+        const approval = parseMergeApproval(stored);
+        if (!stored || approval?.sha !== from) return okAsync(false);
+        const carried: FactoryMergeApproval = {
+          ...approval,
+          sha: to,
+          carriedFrom: approval.carriedFrom ?? from,
+        };
+        return ResultAsync.fromPromise(
+          db
+            .update(factoryRuns)
+            .set({ mergeApproval: JSON.stringify(carried) })
+            .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.mergeApproval, stored)))
+            .returning({ id: factoryRuns.id }),
+          storage,
+        ).map((updated) => updated.length > 0);
+      });
+    },
+
     /** The parked or failed runs a thread belongs to (a member following up on it). */
     reopenableByThread(threadId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
       return ResultAsync.fromPromise(

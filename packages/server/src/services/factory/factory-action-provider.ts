@@ -224,8 +224,15 @@ export interface FactoryActionProviderDeps {
    * when the merge gate runs (the approval is written while the run waits).
    */
   mergeApproved?: (sha: string) => Promise<boolean>;
+  /**
+   * Move a member's merge approval of `from` to `to`, a merge of `from` with
+   * the base branch that settled nothing (as the review and the proof move).
+   */
+  carryMergeApproval?: (from: string, to: string) => Promise<void>;
   /** The review verdicts the run already has (a resumed run). */
   reviews?: readonly FactoryReviewVerdict[];
+  /** The regression proof the run already has (a resumed run). */
+  storedProof?: RegressionProofRecord | null;
   /** What the run already stores of its triage (a resumed run, or one back from a path hold). */
   triage?: FactoryTriage | null;
   /** The newest triage thread of this run by its title prefix, since `since`. */
@@ -818,9 +825,32 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const threadId = threadIds[0];
     if (!threadId) return proofUnavailable('no implementing thread.');
     const testRequired = regressionTestRequired(opts, deps.issueLabels ?? []);
+    const reused = await reusedProof(testRequired);
+    if (reused) return reused;
     const run = await proveOnRunner(deps.proof, threadId, opts, deps.signal);
     if (run.kind === 'unavailable') return proofUnavailable(run.why);
     return proofVerdict(run.result, testRequired);
+  }
+
+  /**
+   * The passing proof the run already has of the pull request's head, held
+   * again instead of proving the same commit twice: a commit's tests give the
+   * same verdict, and a retry or a merge approval reruns the step on a head
+   * that did not change. Null when there is none, so the proof runs.
+   */
+  async function reusedProof(testRequired: boolean): Promise<ActionResult | null> {
+    const record = lastProof?.record ?? deps.storedProof ?? null;
+    if (!record?.headSha || !proofAllowsMerge(record, testRequired)) return null;
+    const pr = pullRequest();
+    if (!pr) return null;
+    const head = await deps.github.pullRequests.pullHead(pr);
+    if (head.isErr() || head.value.sha !== record.headSha) return null;
+    const checkPublished = record.checkPublished ?? false;
+    lastProof = { record, testRequired, ok: true, checkPublished };
+    // The check may not have reached GitHub the first time: auto-merge needs it.
+    await checkOnGithub(lastProof);
+    await count(metrics, { event: 'regression_proof_reused' });
+    return { ok: true, output: record.verdict, metadata: { ...lastProof.record, reused: true } };
   }
 
   /**
@@ -1101,10 +1131,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     signal: deps.signal,
     metrics: () => metrics,
     count: (next, attributes) => count(next, attributes),
-    carry: async (from, to) => {
-      await reviewer.carry(from, to);
-      await carryProof(from, to);
-    },
+    carry: (from, to) => carryChecks(from, to),
     toImplementer: () => mergeRoundToImplementer(),
   });
 
@@ -1212,6 +1239,18 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     lastProof = { ...lastProof, record, checkPublished: false };
     await deps.record({ regressionProof: record });
     await count(metrics, { event: 'regression_proof_carried' });
+  }
+
+  /**
+   * `to` merges only the base branch into `from` and settled nothing: what was
+   * judged of `from` holds for `to`, its review, its proof, and a member's
+   * approval to merge it although it is high risk. Without the approval, every
+   * base merge of an approved commit would wait for a person again.
+   */
+  async function carryChecks(from: string, to: string): Promise<void> {
+    await reviewer.carry(from, to);
+    await carryProof(from, to);
+    await deps.carryMergeApproval?.(from, to);
   }
 
   /** Whether the proof's check is on GitHub, publishing it now when an earlier try failed. */
@@ -1362,10 +1401,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const current = await lane.bringUpToDate();
     if (current.kind === 'failed') return { ok: false, error: current.error };
     if (current.kind === 'sent-back') return sentBack(current.why, current.feedback);
-    for (const step of current.carried) {
-      await reviewer.carry(step.from, step.to);
-      await carryProof(step.from, step.to);
-    }
+    for (const step of current.carried) await carryChecks(step.from, step.to);
     if (current.sha === sha) return sha;
     return (await mergeHeld(opts, current.sha)) ?? current.sha;
   }

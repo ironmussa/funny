@@ -376,6 +376,15 @@ reads the role's prose as a decision:
   keeps nothing (replaying its thread would only reach `no change` again): a new agent starts.
   The threads the retry does not keep are archived (unless one is still running), so the list does
   not show the old failed thread next to the new one under the same title.
+  The later steps run again but do not redo what holds for an unchanged head: the review step
+  keeps a stored verdict of the head commit, and the proof step keeps the run's stored passing
+  proof of it (`reusedProof`, event `regression_proof_reused`).
+- **Merge approval** of a high-risk change (`factory.approveMerge`): recorded for the held head
+  commit only. When the base is merged into that commit and the merge settled nothing (the
+  `integrate` step, or the merge lane updating the branch), the approval moves to the merge commit
+  with its review and proof (`carryChecks` in `factory-action-provider.ts`,
+  `carryMergeApproval` in `factory-runs.ts`, `carriedFrom` names the approved commit). Any other
+  new commit needs a new approval.
 - **Take over**: when the thread's **owner** follows up on a parked run's last thread after it
   parked (noted by `POST /api/threads/:id/message`), the run resumes from that step when the thread
   completes (when the factory is full, the run stays parked; a later completion of the follow-up,

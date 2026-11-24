@@ -20,8 +20,10 @@
  *   show the old failed thread next to the new one with the same title.
  * - **Approve the merge** of a run held because its change is high risk: the
  *   member's approval of that head commit is recorded, and the run is retried.
- *   The merge gate lets only the approved commit through, so a later push
- *   needs a new approval; every other gate (review, proof, CI) still applies.
+ *   The merge gate lets only the approved commit through, or a merge of it
+ *   with the base that settled nothing (the approval is carried with the
+ *   review and the proof); any other push needs a new approval. Every other
+ *   gate (review, proof, CI) still applies.
  * - **Take over** a run: a member follows up on the run's last agent thread;
  *   when that thread completes again, a failed or parked run goes back in
  *   flight with all its steps replayed, so the flow continues from that step

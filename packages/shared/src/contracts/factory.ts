@@ -101,6 +101,11 @@ export const factoryMergeApprovalSchema = z.object({
   /** Who approved it. */
   userId: z.string(),
   at: z.string(),
+  /**
+   * The commit actually approved, when `sha` is a merge of it with the base
+   * branch that settled nothing: the change the member approved is the same.
+   */
+  carriedFrom: z.string().optional(),
 });
 export type FactoryMergeApproval = z.infer<typeof factoryMergeApprovalSchema>;
 

@@ -2460,6 +2460,33 @@ describe('factory operator controls', () => {
     expect(after.mergeApproval).toMatchObject({ sha: 'c2b585c51b2e', userId: 'alice' });
   });
 
+  test('an approval moves to a base merge of the approved commit, and only from that commit', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'waiting_human', []);
+    const runs = createFactoryRunsRepository();
+    await runs.update(run.id, { failureReason: 'high risk' });
+    await runs.approveMerge(run.id, { sha: 'a'.repeat(40), userId: 'alice', at: 'now' });
+
+    // From another commit: nothing moves.
+    expect(
+      (await runs.carryMergeApproval(run.id, 'c'.repeat(40), 'm'.repeat(40)))._unsafeUnwrap(),
+    ).toBe(false);
+    expect(
+      (await runs.carryMergeApproval(run.id, 'a'.repeat(40), 'm'.repeat(40)))._unsafeUnwrap(),
+    ).toBe(true);
+    // Carried again, it still names the commit the member approved.
+    expect(
+      (await runs.carryMergeApproval(run.id, 'm'.repeat(40), 'n'.repeat(40)))._unsafeUnwrap(),
+    ).toBe(true);
+    const after = (await runs.get(run.id))._unsafeUnwrap();
+    expect(after?.mergeApproval).toEqual({
+      sha: 'n'.repeat(40),
+      userId: 'alice',
+      at: 'now',
+      carriedFrom: 'a'.repeat(40),
+    });
+  });
+
   test('only a run held for its high risk can be approved', async () => {
     const factoryId = await enableFactory();
     const failed = await seedRun(factoryId, 'failed', []);

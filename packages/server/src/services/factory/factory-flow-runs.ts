@@ -931,6 +931,19 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         const run = await deps.runs.get(job.run.id);
         return run.isOk() && run.value?.mergeApproval?.sha === sha;
       },
+      carryMergeApproval: async (from, to) => {
+        const carried = await deps.runs.carryMergeApproval(job.run.id, from, to);
+        if (carried.isErr()) {
+          log.warn('Issue factory could not carry the merge approval to the merged base', {
+            namespace: 'factory',
+            runId: job.run.id,
+            from,
+            to,
+            error: carried.error.message,
+          });
+        }
+      },
+      storedProof: job.run.regressionProof,
       triage: job.run.triage,
       findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
       busyPaths: async () => {

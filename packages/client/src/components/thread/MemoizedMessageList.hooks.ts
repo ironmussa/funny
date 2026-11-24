@@ -1,4 +1,5 @@
 import type { ThreadEvent } from '@funny/shared';
+import type { Virtualizer } from '@tanstack/react-virtual';
 import {
   useCallback,
   useEffect,
@@ -253,7 +254,7 @@ export function useSyncRenderOnScrollCorrection(
   const rendersThisFrameRef = useRef(0);
 
   return useCallback(
-    (_instance: unknown, isScrollNotification: boolean) => {
+    (_instance: Virtualizer<HTMLElement, Element>, isScrollNotification: boolean) => {
       // Scroll notifications keep React's schedule, so mounting rows never
       // blocks the scroll handler.
       if (isScrollNotification || scheduledRef.current) return;

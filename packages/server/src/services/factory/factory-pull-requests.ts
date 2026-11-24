@@ -276,40 +276,49 @@ const callError = (error: GithubCallError): FactoryPullRequestError =>
     ? { kind: error.kind, message: error.message }
     : { kind: 'github-error', message: error.message };
 
+/**
+ * A merge the factory made for its enabler (track-funny-actions): the merged
+ * pull request, and the remote branch when it was deleted. A branch left
+ * behind fails the activity, not the merge step.
+ */
+function recordFactoryMerge(
+  activities: Pick<ServerActivities, 'recordServerActivity'>,
+  pr: FactoryPullRequestRef,
+  branchError: string | null,
+  deleted: boolean,
+) {
+  return activities.recordServerActivity(
+    {
+      kind: 'factory.merge',
+      userId: pr.userId,
+      projectId: pr.projectId,
+      title: `Merged ${pr.repo}#${pr.number}`,
+      input: { prNumber: pr.number },
+      origin: 'system',
+    },
+    branchError
+      ? {
+          ok: false,
+          error: `Merged, but the branch ${pr.branch} could not be deleted: ${branchError}`,
+          effects: [{ effect: 'pr-merged', target: `${pr.repo}#${pr.number}` }],
+        }
+      : {
+          ok: true,
+          effects: [
+            { effect: 'pr-merged', target: `${pr.repo}#${pr.number}` },
+            ...(deleted && pr.branch
+              ? [{ effect: 'remote-branch-deleted' as const, target: pr.branch }]
+              : []),
+          ],
+        },
+  );
+}
+
 export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): FactoryPullRequests {
   const activities = deps.activities ?? serverActivities;
 
-  /**
-   * A merge the factory made for its enabler (track-funny-actions): the merged
-   * pull request, and the remote branch when it was deleted. A branch left
-   * behind fails the activity, not the merge step.
-   */
   const recordMerge = (pr: FactoryPullRequestRef, branchError: string | null, deleted: boolean) =>
-    activities.recordServerActivity(
-      {
-        kind: 'factory.merge',
-        userId: pr.userId,
-        projectId: pr.projectId,
-        title: `Merged ${pr.repo}#${pr.number}`,
-        input: { prNumber: pr.number },
-        origin: 'system',
-      },
-      branchError
-        ? {
-            ok: false,
-            error: `Merged, but the branch ${pr.branch} could not be deleted: ${branchError}`,
-            effects: [{ effect: 'pr-merged', target: `${pr.repo}#${pr.number}` }],
-          }
-        : {
-            ok: true,
-            effects: [
-              { effect: 'pr-merged', target: `${pr.repo}#${pr.number}` },
-              ...(deleted && pr.branch
-                ? [{ effect: 'remote-branch-deleted' as const, target: pr.branch }]
-                : []),
-            ],
-          },
-    );
+    recordFactoryMerge(activities, pr, branchError, deleted);
 
   /** A token for the run's repository, refused when the enabler's level is below `needs`. */
   const tokenFor =

@@ -1,30 +1,31 @@
 import type { GitSyncState, ThreadStatus } from '@funny/shared';
-import { ChevronLeft, Columns3, Search } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AllThreadsContent } from '@/components/all-threads/AllThreadsContent';
+import { AllThreadsHeader } from '@/components/all-threads/AllThreadsHeader';
 import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
-import { normalize } from '@/components/ui/highlight-text';
-import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import {
+  buildAllThreadsSearchParams,
+  type SearchParamOverrides,
+} from '@/components/all-threads/search-params';
+import {
+  filterAndSortThreads,
+  useThreadFilterCounts,
+} from '@/components/all-threads/thread-filters';
+import { useAllThreadsBack } from '@/components/all-threads/use-all-threads-back';
+import { useAllThreadsFilters } from '@/components/all-threads/use-all-threads-filters';
+import { useEscapeToLastThread } from '@/components/all-threads/use-escape-to-last-thread';
+import { useLoadMoreServerThreads } from '@/components/all-threads/use-load-more-server-threads';
 import { useGitStatusMaps } from '@/data/git-status/hooks';
-import { statusBranchKeyForThread } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
 import { useLoadedThreads, useProjectListTotals } from '@/data/threads/hooks';
-import { readThreadRow } from '@/data/threads/read';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsByProject } from '@/lib/thread-selectors';
-import { isScratch } from '@/lib/thread-variant';
-import { buildPath } from '@/lib/url';
-import { whilePending } from '@/lib/while-pending';
-import { buildThreadPath } from '@/navigation/thread-paths';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
-
-type SortField = 'updated' | 'created';
-type SortDir = 'desc' | 'asc';
 
 const THREAD_STATUSES: ThreadStatus[] = [
   'running',
@@ -58,100 +59,33 @@ export function AllThreadsView() {
     : location.pathname === '/kanban'
       ? 'board'
       : 'list';
+  const {
+    projectFilter,
+    setProjectFilter,
+    projectFilterOpen,
+    setProjectFilterOpen,
+    search,
+    setSearch,
+    caseSensitive,
+    setCaseSensitive,
+    statusFilter,
+    setStatusFilter,
+    gitFilter,
+    setGitFilter,
+    modeFilter,
+    setModeFilter,
+    typeFilter,
+    setTypeFilter,
+    showArchived,
+    setShowArchived,
+    sortField,
+    setSortField,
+    sortDir,
+    setSortDir,
+  } = useAllThreadsFilters(searchParams);
 
-  // Project filter from URL query param ?project=<id>
-  const [projectFilter, setProjectFilter] = useState<string | null>(() => {
-    return searchParams.get('project') || null;
-  });
-  const [projectFilterOpen, setProjectFilterOpen] = useState(false);
-
-  const [search, setSearch] = useState(() => searchParams.get('search') || '');
-  const [caseSensitive, setCaseSensitive] = useState(() => searchParams.get('cs') === '1');
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
-    const paramStatus = searchParams.get('status');
-    if (paramStatus) return new Set(paramStatus.split(',').filter(Boolean));
-    return new Set();
-  });
-  const [gitFilter, setGitFilter] = useState<Set<string>>(new Set());
-  const [modeFilter, setModeFilter] = useState<Set<string>>(new Set());
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(() =>
-    searchParams.get('scratch') === '1' ? new Set(['scratch']) : new Set(),
-  );
-  const [showArchived, setShowArchived] = useState(false);
-  const [sortField, setSortField] = useState<SortField>(() => {
-    const paramSort = searchParams.get('sort');
-    if (paramSort === 'created' || paramSort === 'updated') return paramSort;
-    return 'updated';
-  });
-  const [sortDir, setSortDir] = useState<SortDir>(() => {
-    const paramDir = searchParams.get('dir');
-    if (paramDir === 'asc' || paramDir === 'desc') return paramDir;
-    return 'desc';
-  });
-
-  // Build search params from current filter state (preserves status/sort params if present)
-  const buildSearchParams = (overrides?: {
-    project?: string | null;
-    search?: string;
-    cs?: boolean;
-  }) => {
-    const params: Record<string, string> = {};
-    const proj = overrides?.project !== undefined ? overrides.project : projectFilter;
-    if (proj) params.project = proj;
-    // Text search lives in the URL so back-navigation from a thread (and
-    // browser back/forward) restores the query.
-    const q = overrides?.search !== undefined ? overrides.search : search;
-    if (q.trim()) params.search = q;
-    const cs = overrides?.cs !== undefined ? overrides.cs : caseSensitive;
-    if (cs) params.cs = '1';
-    const statusParam = searchParams.get('status');
-    if (statusParam) params.status = statusParam;
-    const sortParam = searchParams.get('sort');
-    if (sortParam) params.sort = sortParam;
-    const dirParam = searchParams.get('dir');
-    if (dirParam) params.dir = dirParam;
-    const scratchParam = searchParams.get('scratch');
-    if (scratchParam) params.scratch = scratchParam;
-    const returnThreadParam = searchParams.get('returnThread');
-    if (returnThreadParam && proj === projectFilter) params.returnThread = returnThreadParam;
-    return params;
-  };
-
-  // Sync URL query params → local state when URL changes (e.g. browser back/forward)
-  useEffect(() => {
-    const paramProject = searchParams.get('project') || null;
-    const paramStatus = searchParams.get('status');
-
-    // Setting the value a state already holds is a no-op, so no comparison is needed.
-    setProjectFilter(paramProject);
-
-    // Restore the text search from the URL (back button from a thread,
-    // browser back/forward, deep links).
-    const paramSearch = searchParams.get('search') ?? '';
-    setSearch(paramSearch);
-    const paramCs = searchParams.get('cs') === '1';
-    setCaseSensitive(paramCs);
-
-    // When ?status= param is present, force list view and pre-set status filter
-    if (paramStatus) {
-      const statuses = paramStatus.split(',').filter(Boolean);
-      setStatusFilter(new Set(statuses));
-    }
-
-    // Sync ?scratch=1 → typeFilter
-    const paramScratch = searchParams.get('scratch') === '1';
-    setTypeFilter((prev) => syncScratchFilter(prev, paramScratch));
-
-    // Sync sort params from URL
-    const paramSort = searchParams.get('sort');
-    if (paramSort === 'created' || paramSort === 'updated') {
-      setSortField(paramSort);
-    }
-    const paramDir = searchParams.get('dir');
-    if (paramDir === 'asc' || paramDir === 'desc') {
-      setSortDir(paramDir);
-    }
-  }, [searchParams]);
+  const buildSearchParams = (overrides?: SearchParamOverrides) =>
+    buildAllThreadsSearchParams(searchParams, { projectFilter, search, caseSensitive }, overrides);
 
   const filteredProject = projectFilter ? projects.find((p) => p.id === projectFilter) : null;
 
@@ -175,7 +109,7 @@ export function AllThreadsView() {
         return next;
       });
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams, setTypeFilter],
   );
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -185,34 +119,7 @@ export function AllThreadsView() {
     searchInputRef.current?.focus();
   }, []);
 
-  // ESC with empty search: jump back to the last thread the user was viewing,
-  // or fall back to the filtered project / root. When the query has text,
-  // SearchBar handles ESC by clearing it first.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (search.trim()) return;
-      const threadStore = useThreadStore.getState();
-      const last = threadStore.activeThread;
-      e.preventDefault();
-      if (last) {
-        navigate(buildPath(`/projects/${last.projectId}/threads/${last.id}`));
-        return;
-      }
-      const lastId = threadStore.selectedThreadId;
-      if (lastId && projectFilter) {
-        navigate(buildPath(`/projects/${projectFilter}/threads/${lastId}`));
-        return;
-      }
-      if (projectFilter) {
-        navigate(buildPath(`/projects/${projectFilter}`));
-        return;
-      }
-      navigate(buildPath('/'));
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [search, navigate, projectFilter]);
+  useEscapeToLastThread(search, navigate, projectFilter);
 
   // Fetch threads including archived when either the archived toggle is on OR
   // we're in board view (the Kanban "Archived" column needs them loaded to be
@@ -246,36 +153,15 @@ export function AllThreadsView() {
 
   // Check if any relevant project has more threads on the server than loaded
   const scratchOnlyFilter = typeFilter.size === 1 && typeFilter.has('scratch');
-  const hasMoreServerThreads = useMemo(() => {
-    if (scratchOnlyFilter) return false;
-    const relevantProjects = projectFilter ? [projectFilter] : projects.map((p) => p.id);
-    return relevantProjects.some((pid) => {
-      const loaded = (threadsByProject[pid] ?? []).length;
-      const total = threadTotalByProject[pid] ?? 0;
-      return loaded < total;
-    });
-  }, [threadsByProject, threadTotalByProject, projectFilter, projects, scratchOnlyFilter]);
-
-  const [loadingMore, setLoadingMore] = useState(false);
-  const handleLoadMore = useCallback(async () => {
-    await whilePending(setLoadingMore, async () => {
-      const relevantProjects = projectFilter ? [projectFilter] : projects.map((p) => p.id);
-      await Promise.all(
-        relevantProjects.flatMap((projectId) =>
-          (threadsByProject[projectId] ?? []).length < (threadTotalByProject[projectId] ?? 0)
-            ? [loadMoreThreads(projectId, showArchived)]
-            : [],
-        ),
-      );
-    });
-  }, [
+  const { hasMoreServerThreads, loadingMore, handleLoadMore } = useLoadMoreServerThreads({
+    scratchOnlyFilter,
     projectFilter,
     projects,
     threadsByProject,
-    threadTotalByProject,
+    totalsByProject: threadTotalByProject,
     loadMoreThreads,
     showArchived,
-  ]);
+  });
 
   const allThreads = useMemo(() => {
     // Board view always includes archived (they appear in the archived column)
@@ -285,76 +171,41 @@ export function AllThreadsView() {
     return storeThreads.filter((t) => !t.archived);
   }, [storeThreads, showArchived, viewMode]);
 
-  const filtered = useMemo(() => {
-    let result = allThreads;
-
-    // Text search — matches title, branch, status, project name, OR message content.
-    // Case-insensitive by default (also strips accents); case-sensitive uses raw substring match.
-    if (search.trim()) {
-      const matches = caseSensitive
-        ? (text: string | undefined | null) => !!text && text.includes(search)
-        : (
-            (q) => (text: string | undefined | null) =>
-              !!text && normalize(text).includes(q)
-          )(normalize(search));
-      result = result.filter(
-        (t) =>
-          matches(t.title) ||
-          matches(t.branch) ||
-          matches(t.status) ||
-          (!projectFilter && matches(projectNameById[t.projectId])) ||
-          contentMatches.has(t.id),
-      );
-    }
-
-    // Status filter (multi-select)
-    if (statusFilter.size > 0) {
-      result = result.filter((t) => statusFilter.has(t.status));
-    }
-
-    // Git status filter (multi-select)
-    if (gitFilter.size > 0) {
-      result = result.filter((t) => {
-        const gs = statusByBranch[statusBranchKeyForThread(t, threadToBranchKey)];
-        return gs ? gitFilter.has(gs.state) : false;
-      });
-    }
-
-    // Mode filter (multi-select)
-    if (modeFilter.size > 0) {
-      result = result.filter((t) => modeFilter.has(t.mode));
-    }
-
-    // Type filter (scratch vs normal)
-    if (typeFilter.size > 0) {
-      result = result.filter((t) => typeFilter.has(isScratch(t) ? 'scratch' : 'normal'));
-    }
-
-    // Sort by selected field and direction
-    result = result.toSorted((a, b) => {
-      const dateA = sortField === 'updated' ? (a.completedAt ?? a.createdAt) : a.createdAt;
-      const dateB = sortField === 'updated' ? (b.completedAt ?? b.createdAt) : b.createdAt;
-      const diff = new Date(dateA).getTime() - new Date(dateB).getTime();
-      return sortDir === 'desc' ? -diff : diff;
-    });
-
-    return result;
-  }, [
-    allThreads,
-    search,
-    caseSensitive,
-    statusFilter,
-    gitFilter,
-    modeFilter,
-    typeFilter,
-    statusByBranch,
-    threadToBranchKey,
-    projectFilter,
-    projectNameById,
-    sortField,
-    sortDir,
-    contentMatches,
-  ]);
+  const filtered = useMemo(
+    () =>
+      filterAndSortThreads({
+        allThreads,
+        search,
+        caseSensitive,
+        statusFilter,
+        gitFilter,
+        modeFilter,
+        typeFilter,
+        statusByBranch,
+        threadToBranchKey,
+        projectFilter,
+        projectNameById,
+        sortField,
+        sortDir,
+        contentMatches,
+      }),
+    [
+      allThreads,
+      search,
+      caseSensitive,
+      statusFilter,
+      gitFilter,
+      modeFilter,
+      typeFilter,
+      statusByBranch,
+      threadToBranchKey,
+      projectFilter,
+      projectNameById,
+      sortField,
+      sortDir,
+      contentMatches,
+    ],
+  );
 
   const resetFilters = () => {
     setSearch('');
@@ -383,23 +234,7 @@ export function AllThreadsView() {
     setSearchParams(buildSearchParams({ cs: value }), { replace: true });
   };
 
-  const handleBack = useCallback(() => {
-    const returnThreadId = searchParams.get('returnThread');
-    if (returnThreadId) {
-      const returnThread = readThreadRow(returnThreadId);
-      if (returnThread) {
-        navigate(buildThreadPath(returnThread));
-        return;
-      }
-      if (projectFilter) {
-        navigate(buildPath(`/projects/${projectFilter}/threads/${returnThreadId}`));
-        return;
-      }
-    }
-    if (projectFilter) {
-      navigate(buildPath(`/projects/${projectFilter}`));
-    }
-  }, [navigate, projectFilter, searchParams]);
+  const handleBack = useAllThreadsBack(navigate, projectFilter, searchParams);
 
   const hasActiveFilters =
     statusFilter.size > 0 ||
@@ -409,75 +244,25 @@ export function AllThreadsView() {
     showArchived ||
     !!projectFilter;
 
-  // Counts for type filter (scratch vs normal)
-  const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = { scratch: 0, normal: 0 };
-    for (const t of allThreads) {
-      counts[isScratch(t) ? 'scratch' : 'normal']++;
-    }
-    return counts;
-  }, [allThreads]);
-
-  // Compute counts for status filters
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const t of allThreads) {
-      counts[t.status] = (counts[t.status] || 0) + 1;
-    }
-    return counts;
-  }, [allThreads]);
-
-  // Compute counts for git status filters
-  const gitCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const t of allThreads) {
-      const gs = statusByBranch[statusBranchKeyForThread(t, threadToBranchKey)];
-      if (gs) {
-        counts[gs.state] = (counts[gs.state] || 0) + 1;
-      }
-    }
-    return counts;
-  }, [allThreads, statusByBranch, threadToBranchKey]);
+  const { typeCounts, statusCounts, gitCounts } = useThreadFilterCounts(
+    allThreads,
+    statusByBranch,
+    threadToBranchKey,
+  );
 
   if (!allThreadsProjectId) return null;
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
-      {/* Header */}
-      <div className="border-border flex items-center gap-3 border-b px-4 py-3">
-        {projectFilter && (
-          <TooltipIconButton
-            variant="muted"
-            data-testid="all-threads-back"
-            onClick={handleBack}
-
-            tooltip={t('common.back')}
-          >
-            <ChevronLeft className="icon-base" />
-          </TooltipIconButton>
-        )}
-        <div className="min-w-0 flex-1">
-          <h2 className="flex items-center gap-2 text-sm font-medium">
-            {viewMode === 'board' ? (
-              <Columns3 className="icon-sm text-muted-foreground" />
-            ) : (
-              <Search className="icon-sm text-muted-foreground" />
-            )}
-            {scratchOnlyFilter
-              ? t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' })
-              : projectFilter && filteredProject
-                ? t('allThreads.title')
-                : t('allThreads.globalTitle')}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            {scratchOnlyFilter
-              ? `${allThreads.length} ${t('allThreads.threads')}`
-              : projectFilter && filteredProject
-                ? `${filteredProject.name} · ${allThreads.length} ${t('allThreads.threads')}`
-                : `${projects.length} ${t('allThreads.projects')} · ${allThreads.length} ${t('allThreads.threads')}`}
-          </p>
-        </div>
-      </div>
+      <AllThreadsHeader
+        projectFilter={projectFilter}
+        filteredProject={filteredProject}
+        viewMode={viewMode}
+        scratchOnlyFilter={scratchOnlyFilter}
+        threadCount={allThreads.length}
+        projectCount={projects.length}
+        onBack={handleBack}
+      />
 
       <AllThreadsToolbar
         searchInputRef={searchInputRef}
@@ -540,11 +325,4 @@ export function AllThreadsView() {
       </div>
     </div>
   );
-}
-
-function syncScratchFilter(previous: Set<string>, scratch: boolean): Set<string> {
-  const hasScratch = previous.has('scratch');
-  if (scratch && !hasScratch) return new Set(['scratch']);
-  if (!scratch && previous.size === 1 && hasScratch) return new Set();
-  return previous;
 }

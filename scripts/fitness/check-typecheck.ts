@@ -146,7 +146,7 @@ function readWorkspace(root: string): Workspace {
   for (const entry of existsSync(packagesDir) ? readdirSync(packagesDir) : []) {
     const manifest = join(packagesDir, entry, 'package.json');
     if (!existsSync(manifest)) continue;
-    const pkg = JSON.parse(readFileSync(manifest, 'utf-8')) as Record<string, any>;
+    const pkg: Record<string, any> = JSON.parse(readFileSync(manifest, 'utf-8'));
     const dir = `packages/${entry}`;
     if (typeof pkg.name === 'string') nameToDir.set(pkg.name, dir);
     rawDeps.set(

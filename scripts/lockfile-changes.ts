@@ -49,10 +49,15 @@ function entryName(key: string, entry: LockEntry): string {
   return at > 0 ? spec.slice(0, at) : key;
 }
 
+/** The metadata object of a lock entry: its dependency maps (`name → range`) by field. */
+type EntryMeta = { [Field in (typeof DEPENDENCY_FIELDS)[number]]?: Record<string, string> };
+
+function isEntryMeta(part: unknown): part is EntryMeta {
+  return Boolean(part) && typeof part === 'object' && !Array.isArray(part);
+}
+
 function entryDeps(entry: LockEntry): string[] {
-  const meta = entry.find((part) => part && typeof part === 'object' && !Array.isArray(part)) as
-    | Record<string, Record<string, string> | undefined>
-    | undefined;
+  const meta = entry.find(isEntryMeta);
   if (!meta) return [];
   return DEPENDENCY_FIELDS.flatMap((field) => Object.keys(meta[field] ?? {}));
 }

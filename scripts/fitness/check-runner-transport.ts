@@ -162,9 +162,10 @@ for (const file of ['.env.example', 'packages/runtime/package.json']) {
   violations.push(...classify(source, file));
 }
 
-const runtimePackage = JSON.parse(
-  readFileSync(join(ROOT, 'packages/runtime/package.json'), 'utf8'),
-) as { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> };
+const runtimePackage: {
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+} = JSON.parse(readFileSync(join(ROOT, 'packages/runtime/package.json'), 'utf8'));
 if (
   runtimePackage.dependencies?.['socket.io-client'] ||
   runtimePackage.optionalDependencies?.['socket.io-client']

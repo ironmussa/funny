@@ -142,15 +142,18 @@ export function getClaudeBinaryPath(): string {
   return cachedBinaryPath;
 }
 
+/** Whether the Claude CLI was found, with its path or the reason it was not. */
+export interface ClaudeBinaryAvailability {
+  available: boolean;
+  error?: string;
+  path?: string;
+}
+
 /**
  * Check if Claude CLI is installed and available.
  * Returns an object with status and error message if not available.
  */
-export function checkClaudeBinaryAvailability(): {
-  available: boolean;
-  error?: string;
-  path?: string;
-} {
+export function checkClaudeBinaryAvailability(): ClaudeBinaryAvailability {
   try {
     const binaryPath = getClaudeBinaryPath();
     return { available: true, path: binaryPath };

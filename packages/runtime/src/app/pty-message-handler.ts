@@ -221,12 +221,14 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
 }
 
 function handlePtySignal(data: any): void {
-  const VALID_SIGNALS: Record<string, number> = {
-    SIGINT: 2,
-    SIGTERM: 15,
-    SIGKILL: 9,
-  };
-  const sigNum = VALID_SIGNALS[data.signal];
+  const VALID_SIGNALS = new Map(
+    Object.entries({
+      SIGINT: 2,
+      SIGTERM: 15,
+      SIGKILL: 9,
+    }),
+  );
+  const sigNum = VALID_SIGNALS.get(data.signal);
   if (sigNum !== undefined) {
     ptyManager.signalPty(data.id, sigNum);
   } else {

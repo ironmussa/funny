@@ -1,3 +1,5 @@
+import { isJsonObject, type JsonObject, type JsonValue } from '@funny/shared/json';
+
 import type { EndpointPolicy } from './endpoint-policy';
 import type { ClientCancellation, TransportService } from './platform';
 
@@ -83,15 +85,16 @@ function isGitDiffReadRequest(method: string, path: string): boolean {
   return /^\/git\/(?:project\/[^/]+|[^/]+)\/diff(?:\/|$)/.test(pathname);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** Any non-null object can be read for `.name` (a thrown abort is a DOMException or a plain object). */
+function hasName(value: unknown): value is { name?: unknown } {
   return typeof value === 'object' && value !== null;
 }
 
-function parseBody(text: string): Record<string, unknown> {
+function parseBody(text: string): JsonObject {
   if (!text) return {};
   try {
-    const value: unknown = JSON.parse(text);
-    return isRecord(value) ? value : {};
+    const value: JsonValue = JSON.parse(text);
+    return isJsonObject(value) ? value : {};
   } catch {
     return {};
   }
@@ -101,17 +104,17 @@ function parseBody(text: string): Record<string, unknown> {
  * A tRPC procedure answers `{ error: { message, friendlyMessage?, data: { httpStatus } } }`
  * where a REST route answers `{ error: string, friendlyMessage? }`; read both the same way.
  */
-function flattenTrpcError(body: Record<string, unknown>): Record<string, unknown> {
+function flattenTrpcError(body: JsonObject): JsonObject {
   const error = body.error;
-  if (!isRecord(error) || typeof error.message !== 'string') return body;
+  if (!isJsonObject(error) || typeof error.message !== 'string') return body;
   const { data } = error;
-  if (!isRecord(data) || typeof data.httpStatus !== 'number') return body;
+  if (!isJsonObject(data) || typeof data.httpStatus !== 'number') return body;
   return typeof error.friendlyMessage === 'string'
     ? { error: error.message, friendlyMessage: error.friendlyMessage }
     : { error: error.message };
 }
 
-function httpErrorMessage(body: Record<string, unknown>, status: number): string {
+function httpErrorMessage(body: JsonObject, status: number): string {
   const rawError = body.error;
   if (typeof rawError === 'string' && rawError.length > 0) return rawError;
   return rawError ? JSON.stringify(rawError) : `HTTP ${status}`;
@@ -124,7 +127,7 @@ const HTTP_STATUS_TYPES: Record<number, ApiErrorType> = {
 };
 
 /** The error thrown for a non-OK HTTP response. */
-function httpError(body: Record<string, unknown>, status: number, message: string): ApiClientError {
+function httpError(body: JsonObject, status: number, message: string): ApiClientError {
   if (body.stderr || body.exitCode != null) {
     return {
       type: 'PROCESS_ERROR',
@@ -213,7 +216,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
         });
       } catch (error) {
         span.end('ERROR');
-        if (init.cancellation?.aborted || (isRecord(error) && error.name === 'AbortError')) {
+        if (init.cancellation?.aborted || (hasName(error) && error.name === 'AbortError')) {
           throw { type: 'INTERNAL', message: 'Request aborted' } satisfies ApiClientError;
         }
         recordFailure(startedAt);

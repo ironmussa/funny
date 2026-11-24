@@ -7,6 +7,7 @@ import type {
 import type { InteractiveEnvelope } from '@funny/shared/browser-v1/interactive';
 import type { NegotiationOutcome, NegotiationRequest } from '@funny/shared/browser-v1/negotiation';
 import type { OperationOutcome, OperationRequest } from '@funny/shared/browser-v1/operations';
+import type { JsonObject } from '@funny/shared/json';
 
 import type { LifecycleService, NavigationService, Unsubscribe } from './platform';
 
@@ -84,8 +85,8 @@ function selectActionPort(type: string): keyof RealtimeActionPorts {
   return 'infrastructure';
 }
 
-/** A realtime event's payload fields, read before they are checked. */
-type EventPayload = Record<string, unknown>;
+/** A realtime event's payload fields (it arrived as JSON), read before they are checked. */
+type EventPayload = JsonObject;
 
 function isRecord(value: unknown): value is EventPayload {
   return typeof value === 'object' && value !== null;

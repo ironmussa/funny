@@ -4,7 +4,10 @@ import { EventEmitter } from 'node:events';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { resolveRunnerGrpcConfig } from '../../services/grpc/config.js';
-import { createOperationsHandler } from '../../services/grpc/operations-handler.js';
+import {
+  createOperationsHandler,
+  type OperationOutcome,
+} from '../../services/grpc/operations-handler.js';
 import type {
   RunnerGrpcCall,
   RunnerGrpcCallContext,
@@ -356,7 +359,7 @@ describe('operations handler legacy request mapping', () => {
   });
 });
 
-async function respondVia(result: unknown): Promise<any> {
+async function respondVia(result: OperationOutcome): Promise<any> {
   const call = new FakeCall();
   const written = new Promise<any>((resolve) => {
     call.write = resolve;

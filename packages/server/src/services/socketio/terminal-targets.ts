@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { RunnerTarget } from '../runner-access/index.js';
 
 /**
@@ -28,9 +30,15 @@ export interface TerminalRoute {
   dispatched(): void;
 }
 
-function text(value: unknown): string | null {
-  return typeof value === 'string' && value ? value : null;
-}
+/** A non-empty string field of an op; anything else reads as absent. */
+const opText = z.string().min(1).optional().catch(undefined);
+
+/** The routing fields of a terminal op, parsed from what the browser sent. */
+const terminalOpRoutingSchema = z.object({
+  id: opText,
+  projectId: opText,
+  sandboxThreadId: opText,
+});
 
 /** Target of a spawn: the sandbox thread's runner, the project's checkout, or projectless. */
 function spawnTarget(projectId: string | null, sandboxThreadId: string | null): RunnerTarget {
@@ -47,11 +55,12 @@ function spawnTarget(projectId: string | null, sandboxThreadId: string | null): 
 }
 
 export function terminalRoute(userId: string, op: TerminalOp): TerminalRoute {
-  const terminalId = text(op.id);
+  const fields = terminalOpRoutingSchema.parse(op);
+  const terminalId = fields.id ?? null;
   const terminalKey = terminalId ? key(userId, terminalId) : null;
-  const projectId = text(op.projectId);
+  const projectId = fields.projectId ?? null;
   if (op.type === 'pty:spawn') {
-    const target = spawnTarget(projectId, text(op.sandboxThreadId));
+    const target = spawnTarget(projectId, fields.sandboxThreadId ?? null);
     const remember = () => {
       if (terminalKey) targets.set(terminalKey, target);
     };

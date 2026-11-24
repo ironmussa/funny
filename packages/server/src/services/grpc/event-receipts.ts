@@ -211,7 +211,7 @@ export class SqlEventReceiptStore implements EventReceiptStore {
     }
   }
 
-  private persist(runnerId: string, scope: EventScopeIdentity, sequence: bigint): Promise<unknown> {
+  private persist(runnerId: string, scope: EventScopeIdentity, sequence: bigint): Promise<void> {
     const updatedAt = this.now().toISOString();
     return dbRun(
       this.database

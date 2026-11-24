@@ -35,9 +35,13 @@ interface ActiveTerminalStream {
   call: RunnerGrpcCall;
 }
 
-function unsigned(value: unknown): bigint | null {
+/** A wire uint64: the protobuf codec gives a bigint or string, the JSON codec a string or number. */
+type WireUnsigned = string | number | bigint;
+
+function unsigned(value: WireUnsigned | undefined): bigint | null {
+  if (value === undefined) return null;
   try {
-    const parsed = BigInt(value as string | number | bigint);
+    const parsed = BigInt(value);
     return parsed >= 0n ? parsed : null;
   } catch {
     return null;

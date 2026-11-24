@@ -18,6 +18,7 @@ import type {
   IdempotencyExecution,
   OperationIdempotencyStore,
 } from '../../services/grpc/operation-idempotency.js';
+import type { OperationOutcome } from '../../services/grpc/operations-handler.js';
 import { type RunnerGrpcEndpoint } from '../../services/grpc/runner-grpc-server.js';
 import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import {
@@ -151,7 +152,7 @@ export interface ProductionGrpcFixtureOptions {
   config?: Partial<RunnerGrpcConfig>;
   outbox?: GrpcOperationOutbox;
   idempotency?: MemoryOperationIdempotency;
-  executeOperation?: (request: Record<string, unknown>) => Promise<unknown>;
+  executeOperation?: (request: Record<string, unknown>) => Promise<OperationOutcome>;
   handleTunnel?: (request: Request, signal: AbortSignal) => Promise<Response>;
   handleTerminal?: (command: GrpcTerminalCommand, respond: (event: WSEvent) => void) => void;
   browserEvents?: BrowserEventSink;

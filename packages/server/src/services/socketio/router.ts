@@ -11,11 +11,12 @@ export interface SocketHandlerContext {
   eventName: string;
 }
 
-/** Return false to drop the event (after optional side effects in the middleware). */
-export type SocketEventMiddleware = (
-  ctx: SocketHandlerContext,
-  data: unknown,
-) => boolean | Promise<boolean>;
+/**
+ * Return false to drop the event (after optional side effects in the middleware).
+ * A middleware sees only the event's context: the payload is parsed after it, by
+ * the event's schema.
+ */
+export type SocketEventMiddleware = (ctx: SocketHandlerContext) => boolean | Promise<boolean>;
 
 export function registerSocketHandlers(
   socket: Socket,
@@ -45,7 +46,7 @@ export function registerSocketHandlersWithSchema<TSchema extends ZodTypeAny>(
     socket.on(eventName, async (data: unknown) => {
       const ctx: SocketHandlerContext = { socket, eventName };
       for (const mw of middleware) {
-        if (!(await mw(ctx, data))) return;
+        if (!(await mw(ctx))) return;
       }
       const payload = parseSocketPayload(spec.payloadSchema, data);
       if (payload === null) return;
@@ -92,7 +93,7 @@ export function registerSocketRpc<
     if (!respond) return;
     const ctx: SocketHandlerContext = { socket, eventName };
     for (const mw of spec.middleware ?? []) {
-      if (!(await mw(ctx, data))) return;
+      if (!(await mw(ctx))) return;
     }
     if (payload === null) {
       if (spec.invalidPayloadResponse !== undefined) respond(spec.invalidPayloadResponse);

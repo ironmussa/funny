@@ -16,7 +16,9 @@ import type {
 import type { RunnerGrpcSessionRegistry } from './session-registry.js';
 import { observeRunnerGrpc } from './transport-observability.js';
 
-type WireValue = null | boolean | number | string | WireValue[] | { [key: string]: WireValue };
+type WireValue = null | boolean | number | string | WireValue[] | WireStruct;
+/** A JSON object sent as a protobuf `Struct`. */
+type WireStruct = { [key: string]: WireValue };
 type WireRequest = Record<string, any> & {
   operation?: string;
   session?: { sessionEpoch?: string | number | bigint };
@@ -32,8 +34,17 @@ export interface OperationExecution {
   signal: AbortSignal;
 }
 
+/**
+ * What a data operation answers: a `data:*` response record (`{ success: false,
+ * error }` on failure), or nothing for a plain ack.
+ */
+export type OperationOutcome = object | null | undefined;
+
 export interface OperationsHandlerOptions {
-  execute?: (context: RunnerGrpcCallContext, operation: OperationExecution) => Promise<unknown>;
+  execute?: (
+    context: RunnerGrpcCallContext,
+    operation: OperationExecution,
+  ) => Promise<OperationOutcome>;
   idempotency?: OperationIdempotencyStore;
   now?: () => number;
 }
@@ -178,7 +189,7 @@ function decodeStruct(value: any): Record<string, WireValue> {
   );
 }
 
-function encodeValue(value: unknown): Record<string, unknown> {
+function encodeValue(value: WireValue | undefined): Record<string, unknown> {
   if (value === null || value === undefined) return { nullValue: 0 };
   if (typeof value === 'number') return { numberValue: value };
   if (typeof value === 'string') return { stringValue: value };
@@ -187,8 +198,8 @@ function encodeValue(value: unknown): Record<string, unknown> {
   return { structValue: encodeStruct(value) };
 }
 
-function encodeStruct(value: unknown): Record<string, unknown> {
-  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+function encodeStruct(value: WireStruct | null | undefined): Record<string, unknown> {
+  const record = value && typeof value === 'object' ? value : {};
   return {
     fields: Object.fromEntries(
       Object.entries(record).map(([key, field]) => [key, encodeValue(field)]),
@@ -255,7 +266,10 @@ function legacyInsertMessage(value: any): Record<string, unknown> {
   };
 }
 
-function legacyMessagePageDirection(direction: unknown): 'after' | 'before' {
+/** `MessagePageDirection` as the protobuf codec (number) or the JSON codec (name) gives it. */
+type WireMessagePageDirection = number | string | undefined;
+
+function legacyMessagePageDirection(direction: WireMessagePageDirection): 'after' | 'before' {
   return direction === 2 || direction === 'MESSAGE_PAGE_DIRECTION_AFTER' ? 'after' : 'before';
 }
 

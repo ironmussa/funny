@@ -72,21 +72,25 @@ interface TunnelState {
   chunks: Uint8Array[];
   readers: Array<{
     resolve(value: IteratorResult<Uint8Array>): void;
-    reject(error: unknown): void;
+    reject(error: TunnelDispatchError): void;
   }>;
   responseResolve(value: TunnelResponseHead): void;
-  responseReject(error: unknown): void;
+  responseReject(error: TunnelDispatchError): void;
   completedResolve(): void;
-  completedReject(error: unknown): void;
+  completedReject(error: TunnelDispatchError): void;
   settled: boolean;
   error?: TunnelDispatchError;
   timer: ReturnType<typeof setTimeout>;
   removeAbortListener?: () => void;
 }
 
-function parseUnsigned(value: unknown): bigint | null {
+/** A wire uint64: the protobuf codec gives a bigint or string, the JSON codec a string or number. */
+type WireUnsigned = string | number | bigint;
+
+function parseUnsigned(value: WireUnsigned | undefined): bigint | null {
+  if (value === undefined) return null;
   try {
-    const parsed = BigInt(value as string | number | bigint);
+    const parsed = BigInt(value);
     return parsed >= 0n ? parsed : null;
   } catch {
     return null;
@@ -111,9 +115,9 @@ function waitUntilWritable(call: RunnerGrpcCall): Promise<void> {
       cleanup();
       resolve();
     };
-    const onError = (error: unknown) => {
+    const onError = (cause: unknown) => {
       cleanup();
-      reject(error);
+      reject(cause);
     };
     const onClose = () => {
       cleanup();

@@ -87,7 +87,16 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
   relayToThreadStream(event.scope.threadId, browserEvent);
 }
 
-function decodeValue(value: any): unknown {
+/** A `google.protobuf.Value` decoded to plain JSON. */
+type DecodedValue =
+  | null
+  | number
+  | string
+  | boolean
+  | DecodedValue[]
+  | { [key: string]: DecodedValue };
+
+function decodeValue(value: any): DecodedValue {
   if (!value || typeof value !== 'object' || typeof value.kind !== 'string') return value;
   switch (value.kind) {
     case 'nullValue':
@@ -107,7 +116,7 @@ function decodeValue(value: any): unknown {
   }
 }
 
-function decodeStruct(value: any): Record<string, unknown> {
+function decodeStruct(value: any): Record<string, DecodedValue> {
   if (!value || typeof value !== 'object') return {};
   if (!value.fields || typeof value.fields !== 'object') return value;
   return Object.fromEntries(
@@ -115,9 +124,13 @@ function decodeStruct(value: any): Record<string, unknown> {
   );
 }
 
-function parseUnsigned(value: unknown): bigint | null {
+/** A wire uint64: protobuf-es and the JSON codec give a string, number or bigint. */
+type WireUnsigned = string | number | bigint;
+
+function parseUnsigned(value: WireUnsigned | undefined): bigint | null {
+  if (value === undefined) return null;
   try {
-    const parsed = BigInt(value as string | number | bigint);
+    const parsed = BigInt(value);
     return parsed >= 0n && parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? parsed : null;
   } catch {
     return null;

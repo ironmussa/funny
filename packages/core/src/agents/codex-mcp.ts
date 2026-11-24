@@ -83,6 +83,12 @@ export function toCodexMcpConfig(
   return config;
 }
 
+/** The `mcp_servers` config entry of a Codex spawn and the env carrying its tokens. */
+export interface CodexMcpSettings {
+  config: { mcp_servers?: CodexMcpConfig['mcpServers'] };
+  env: Record<string, string>;
+}
+
 /**
  * Codex settings for a spawn: the `mcp_servers` config entry (omitted when
  * there are none) and the env carrying the tokens. Tools are pre-approved
@@ -91,7 +97,7 @@ export function toCodexMcpConfig(
 export function codexMcpSettings(
   mcpServers: Record<string, any> | undefined,
   permissionMode: string | undefined,
-): { config: { mcp_servers?: CodexMcpConfig['mcpServers'] }; env: Record<string, string> } {
+): CodexMcpSettings {
   const mcp = toCodexMcpConfig(mcpServers, { approveTools: permissionMode !== 'plan' });
   const hasServers = Object.keys(mcp.mcpServers).length > 0;
   return { config: hasServers ? { mcp_servers: mcp.mcpServers } : {}, env: mcp.env };

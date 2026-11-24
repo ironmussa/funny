@@ -19,6 +19,11 @@ export interface ACPToolCallData {
   content?: unknown[]; // ACP ToolCallContent blocks (resource / resource_link can carry a file path)
 }
 
+/** A canonical tool input as the client's tool card reads it: field name → value. */
+export interface ToolInput {
+  [field: string]: unknown;
+}
+
 /**
  * Map ACP kind + title to a canonical tool name for the client UI.
  *
@@ -106,16 +111,13 @@ export function inferACPToolName(
  *   Task            → description
  *   Think           → content
  */
-export function buildACPToolInput(
-  toolName: string,
-  data: ACPToolCallData,
-): Record<string, unknown> {
+export function buildACPToolInput(toolName: string, data: ACPToolCallData): ToolInput {
   const raw: Record<string, unknown> =
     data.rawInput != null && isObject(data.rawInput)
       ? { ...(data.rawInput as Record<string, unknown>) }
       : {};
 
-  const input: Record<string, unknown> = { ...raw };
+  const input = { ...raw };
 
   const replacement = TOOL_INPUT_FILLERS.get(toolName)?.(input, data, toolName);
   if (replacement) return replacement;
@@ -322,9 +324,12 @@ function parseTodoItemsFromArray(entries: unknown[] | undefined): ACPTodoItem[] 
   return todos;
 }
 
-export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefined): {
+/** A `TodoWrite` tool input: the checklist the client's TodoList card renders. */
+export interface TodoWriteInput {
   todos: ACPTodoItem[];
-} {
+}
+
+export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefined): TodoWriteInput {
   return { todos: parseTodoItemsFromArray(entries) };
 }
 
@@ -332,9 +337,7 @@ export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefine
  * Normalize Cursor `cursor/update_todos`, plan entries, or tool-result payloads
  * into the `{ todos: [{ content, status }] }` shape the client TodoList expects.
  */
-export function buildTodoWriteInputFromRaw(
-  raw: Record<string, unknown>,
-): { todos: ACPTodoItem[] } | null {
+export function buildTodoWriteInputFromRaw(raw: Record<string, unknown>): TodoWriteInput | null {
   for (const key of ['todos', 'entries', 'items'] as const) {
     const arr = raw[key];
     if (Array.isArray(arr)) {
@@ -357,7 +360,7 @@ export function buildTodoWriteInputFromRaw(
 export function enrichTodoWriteInputFromOutput(
   input: Record<string, unknown>,
   rawOutput: unknown,
-): Record<string, unknown> {
+): ToolInput {
   if (hasRenderableTodoInput(input)) return input;
   if (rawOutput != null && isObject(rawOutput)) {
     const built = buildTodoWriteInputFromRaw(rawOutput as Record<string, unknown>);

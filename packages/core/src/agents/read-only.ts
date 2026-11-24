@@ -210,7 +210,12 @@ function isObject(value: unknown): value is object {
  * into a command that prints nothing in the sandbox. funny's own pre-tool hook
  * is an SDK callback, not a settings hook, and keeps running.
  */
-export function withSettingsHooksOff(settings: unknown): Record<string, unknown> {
+export interface HooksOffSettings {
+  [setting: string]: unknown;
+  disableAllHooks: true;
+}
+
+export function withSettingsHooksOff(settings: unknown): HooksOffSettings {
   const current = isObject(settings) ? settings : {};
   return { ...current, disableAllHooks: true };
 }
@@ -231,12 +236,12 @@ function patternRoot(pattern: string | null): string[] {
 }
 
 /** The pattern field of each searching tool. */
-const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
+const PATTERN_FIELD = new Map(Object.entries({ Glob: 'pattern', Grep: 'glob' }));
 
 /** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
 function targetsOf(toolName: string, input: Record<string, unknown>, cwd: string): string[] {
   if (toolName === 'Read') return [text(input.file_path) ?? ''];
-  const field = PATTERN_FIELD[toolName];
+  const field = PATTERN_FIELD.get(toolName);
   if (!field) return [];
   return [text(input.path) ?? cwd, ...patternRoot(text(input[field]))];
 }

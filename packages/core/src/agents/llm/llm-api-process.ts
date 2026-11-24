@@ -42,6 +42,12 @@ function bridgedToolDefs(bridge: McpToolBridge, signal: AbortSignal): Record<str
   );
 }
 
+/** The role and context a prompt carries (or the defaults for a plain-text prompt). */
+interface PromptPayload {
+  role: AgentRole;
+  context: AgentContext;
+}
+
 export class LLMApiProcess extends BaseAgentProcess {
   private modelFactory: ModelFactory;
 
@@ -128,7 +134,7 @@ export class LLMApiProcess extends BaseAgentProcess {
 
   // ── Prompt parsing ──────────────────────────────────────────
 
-  private parsePromptPayload(): { role: AgentRole; context: AgentContext } {
+  private parsePromptPayload(): PromptPayload {
     try {
       const parsed = JSON.parse(this.options.prompt);
       if (parsed.role && parsed.context) {

@@ -31,18 +31,20 @@ const PI_DEFAULT_TOOL_ALLOWLIST = [
   'subagent',
   'mcp',
 ];
-const FUNNY_TOOL_TO_PI_TOOLS: Record<string, string[]> = {
-  Bash: ['bash', 'shell', 'shell_command', 'exec_command', 'write_stdin'],
-  Read: ['read', 'view_image'],
-  Edit: ['edit', 'apply_patch'],
-  Write: ['write', 'apply_patch'],
-  Glob: ['find', 'ls'],
-  Grep: ['grep'],
-  WebSearch: ['web_search'],
-  WebFetch: ['web_fetch'],
-  Task: ['subagent'],
-  TodoWrite: ['update_plan'],
-};
+const FUNNY_TOOL_TO_PI_TOOLS = new Map(
+  Object.entries({
+    Bash: ['bash', 'shell', 'shell_command', 'exec_command', 'write_stdin'],
+    Read: ['read', 'view_image'],
+    Edit: ['edit', 'apply_patch'],
+    Write: ['write', 'apply_patch'],
+    Glob: ['find', 'ls'],
+    Grep: ['grep'],
+    WebSearch: ['web_search'],
+    WebFetch: ['web_fetch'],
+    Task: ['subagent'],
+    TodoWrite: ['update_plan'],
+  }),
+);
 const THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh']);
 const PI_GPT_56_MODELS = [
   { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', inputCost: 5, outputCost: 30 },
@@ -374,7 +376,13 @@ function normalizePiToolNames(names: string[]): string[] {
   return [...normalized];
 }
 
-function normalizePiToolCall(toolName: unknown, input: unknown): { name: string; input: unknown } {
+/** A pi tool call under its funny tool name, with the input fields funny's cards read. */
+interface PiToolCall {
+  name: string;
+  input: unknown;
+}
+
+function normalizePiToolCall(toolName: unknown, input: unknown): PiToolCall {
   const name = normalizePiToolName(toolName);
   switch (name) {
     case 'Bash':
@@ -442,7 +450,7 @@ function normalizePiToolName(toolName: unknown): string {
   }
 }
 
-function normalizeCommandInput(input: unknown): unknown {
+function normalizeCommandInput(input: unknown) {
   if (isString(input)) return { command: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
@@ -454,7 +462,7 @@ function normalizeCommandInput(input: unknown): unknown {
   return record;
 }
 
-function normalizeFileInput(input: unknown): unknown {
+function normalizeFileInput(input: unknown) {
   if (isString(input)) return { file_path: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
@@ -671,7 +679,7 @@ export function resolvePiTools(allowed?: string[], disallowed?: string[]): strin
 function normalizePiToolAliases(tools?: string[]): Set<string> {
   const normalized = new Set<string>();
   for (const tool of tools ?? []) {
-    const aliases = FUNNY_TOOL_TO_PI_TOOLS[tool];
+    const aliases = FUNNY_TOOL_TO_PI_TOOLS.get(tool);
     if (aliases) {
       for (const alias of aliases) normalized.add(alias);
     } else {
@@ -707,7 +715,7 @@ function resolvePiExtensionPath(path: string, cwd: string): string[] {
   if (!safeStat(resolved)?.isDirectory()) return [resolved];
 
   const manifestPath = join(resolved, 'package.json');
-  const manifest = readJson(manifestPath) as { pi?: { extensions?: unknown } } | null;
+  const manifest = readJson(manifestPath);
   const extensions = manifest?.pi?.extensions;
   if (Array.isArray(extensions)) {
     const entries = extensions.filter((entry): entry is string => typeof entry === 'string');
@@ -742,7 +750,7 @@ function safeStat(path: string) {
   }
 }
 
-function readJson(path: string): unknown {
+function readJson(path: string) {
   try {
     const parsed = parseStoredJson(PI_EXTENSION_PACKAGE_SCHEMA, readFileSync(path, 'utf8'), path);
     return parsed.ok ? parsed.value : null;

@@ -8,7 +8,15 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
  * Drop-in replacement for the former ClaudeProcess (CLI subprocess).
  * AgentRunner and AgentMessageHandler work unchanged.
  */
-import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  EffortLevel,
+  HookCallback,
+  Options,
+  PermissionMode,
+  Query,
+  SDKMessage,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import { consumeAsync } from '@funny/shared/async';
 import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 
@@ -189,6 +197,19 @@ function continuesSession(msg: any): boolean {
   );
 }
 
+/** The effort levels the Claude SDK accepts. */
+const SDK_EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const satisfies readonly EffortLevel[];
+
+function isSdkEffort(value: string): value is EffortLevel {
+  return SDK_EFFORT_LEVELS.some((level) => level === value);
+}
+
 export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
   private stderrBuffer: string[] = [];
@@ -206,7 +227,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   //  - everything else: one-shot, but closed only once the session is truly
   //    over — a `result` with no background tasks still running, or the CLI's
   //    `session_state_changed: idle` signal (see trackInputLifetime).
-  private inputQueue: Array<Record<string, unknown>> = [];
+  private inputQueue: SDKUserMessage[] = [];
   private inputWaiters: Array<() => void> = [];
   private inputClosed = false;
   private backgroundTaskIds = new Set<string>();
@@ -288,7 +309,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     for (const wake of waiters) wake();
   }
 
-  private makeUserMessage(prompt: string, images?: unknown[]): Record<string, unknown> {
+  private makeUserMessage(prompt: string, images?: unknown[]): SDKUserMessage {
     const content: any[] = [{ type: 'text', text: prompt }];
     if (images?.length) content.push(...images);
     return {
@@ -299,7 +320,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     };
   }
 
-  private async *consumeInput(): AsyncGenerator<Record<string, unknown>, void, unknown> {
+  private async *consumeInput(): AsyncGenerator<SDKUserMessage, void, unknown> {
     while (true) {
       const next = this.inputQueue.shift();
       if (next) {
@@ -351,7 +372,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     });
 
     const cli = resolveSDKCli();
-    const sdkOptions: Record<string, any> = {
+    const sdkOptions: Options = {
       pathToClaudeCodeExecutable: cli.path,
       model: this.options.model,
       cwd: this.options.cwd,
@@ -403,7 +424,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     }
 
     if (this.options.permissionMode) {
-      sdkOptions.permissionMode = this.options.permissionMode;
+      // SAFETY: callers pass the SDK permission mode already mapped from funny's
+      // mode; the CLI refuses an unknown one when it starts, as before.
+      sdkOptions.permissionMode = this.options.permissionMode as PermissionMode;
       if (this.options.permissionMode === 'bypassPermissions') {
         sdkOptions.allowDangerouslySkipPermissions = true;
       }
@@ -497,8 +520,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // rejects unsupported levels per model at runtime; coerce unknown values
     // to 'high' defensively for un-validated callers.
     if (this.options.effort) {
-      const validEfforts = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
-      sdkOptions.effort = validEfforts.has(this.options.effort) ? this.options.effort : 'high';
+      const effort = this.options.effort;
+      sdkOptions.effort = isSdkEffort(effort) ? effort : 'high';
     }
 
     // Fast mode (speed): enabled via the inline `settings` layer, which sits

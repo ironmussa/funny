@@ -42,15 +42,24 @@ function tryParse(text: string | null): { ok: true; value: any } | { ok: false }
   }
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** A non-null, non-array object: the metadata part of a lock entry. */
+function isPlainObject(part: unknown): part is object {
+  return Boolean(part) && typeof part === 'object' && !Array.isArray(part);
+}
+
 /** `name` from a lock entry's `name@version` (scoped names keep their `@`). */
 function entryName(key: string, entry: LockEntry): string {
-  const spec = typeof entry[0] === 'string' ? entry[0] : '';
+  const spec = isString(entry[0]) ? entry[0] : '';
   const at = spec.lastIndexOf('@');
   return at > 0 ? spec.slice(0, at) : key;
 }
 
 function entryDeps(entry: LockEntry): string[] {
-  const meta = entry.find((part) => part && typeof part === 'object' && !Array.isArray(part)) as
+  const meta = entry.find(isPlainObject) as
     | Record<string, Record<string, string> | undefined>
     | undefined;
   if (!meta) return [];

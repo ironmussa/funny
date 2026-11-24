@@ -59,6 +59,10 @@ const repositoryRoot = resolve(import.meta.dir, '..');
 const resultsRoot = resolve(repositoryRoot, 'benchmark-results');
 const browserBuildDirectory = resolve(resultsRoot, '.build', 'client');
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 function optionValue(name: string): string | null {
   const prefix = `--${name}=`;
   return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length) ?? null;
@@ -474,14 +478,12 @@ async function buildResult(
       featureInventory: ready?.featureInventory ?? fixtures.a.featureInventory,
       messageCount: Number(lastDiagnostics.messageCount ?? 500),
       toolCallCount: fixtures.a.counts.toolCalls,
-      retainedItemCount:
-        typeof lastDiagnostics.retainedItemCount === 'number'
-          ? lastDiagnostics.retainedItemCount
-          : null,
-      visibleItemCount:
-        typeof lastDiagnostics.visibleItemCount === 'number'
-          ? lastDiagnostics.visibleItemCount
-          : null,
+      retainedItemCount: isNumber(lastDiagnostics.retainedItemCount)
+        ? lastDiagnostics.retainedItemCount
+        : null,
+      visibleItemCount: isNumber(lastDiagnostics.visibleItemCount)
+        ? lastDiagnostics.visibleItemCount
+        : null,
     },
     environment: {
       gitRevision: (await commandOutput(['git', 'rev-parse', 'HEAD'])) ?? 'unknown',

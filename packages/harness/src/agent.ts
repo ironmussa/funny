@@ -4,8 +4,12 @@ import { sandbox } from './sandbox.js';
 
 export type { HarnessAgentDefinition, HarnessAgentOptions } from './contracts.js';
 
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object';
+}
+
 export function createAgent(options: HarnessAgentOptions): HarnessAgentDefinition {
-  if (!options || typeof options !== 'object') {
+  if (!options || !isObject(options)) {
     throw new HarnessError('invalid_agent_definition', 'Agent options are required');
   }
   if (!options.instructions?.trim()) {

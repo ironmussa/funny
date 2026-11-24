@@ -87,10 +87,14 @@ function globProblem(glob: string): string | null {
   return null;
 }
 
+function isNumber(value: PropertyKey): value is number {
+  return typeof value === 'number';
+}
+
 function pathOf(path: PropertyKey[]): string {
   let text = '';
   for (const key of path) {
-    if (typeof key === 'number') text += `[${key}]`;
+    if (isNumber(key)) text += `[${key}]`;
     else text += text ? `.${String(key)}` : String(key);
   }
   return text;

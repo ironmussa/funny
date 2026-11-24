@@ -110,10 +110,7 @@ export async function connectMcpTools(
 ): Promise<McpToolBridge> {
   const entries = Object.entries(mcpServers ?? {}).filter(
     ([, cfg]) =>
-      cfg &&
-      typeof cfg === 'object' &&
-      String(cfg.type ?? '').toLowerCase() === 'http' &&
-      typeof cfg.url === 'string',
+      cfg && isObject(cfg) && String(cfg.type ?? '').toLowerCase() === 'http' && isString(cfg.url),
   );
   const connected = await Promise.all(
     entries.map(([server, cfg]) =>
@@ -144,4 +141,13 @@ export function mcpInstructionsBlock(instructions: McpToolBridge['instructions']
     '## Tool server instructions',
     ...instructions.map((i) => `### ${i.server}\n${i.text}`),
   ].join('\n\n');
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
+/** `typeof value === 'object'` without null; keeps `any` as `any`. */
+function isObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null;
 }

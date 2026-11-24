@@ -21,6 +21,15 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+/**
+ * A push payload field when it is a string, else `fallback`. This is a service
+ * worker script (plain JS, no type guards), so it compares with `String(value)`:
+ * only a primitive string equals its own string form.
+ */
+function readText(value, fallback) {
+  return String(value) === value ? value : fallback;
+}
+
 self.addEventListener('push', (event) => {
   let payload;
   try {
@@ -28,13 +37,13 @@ self.addEventListener('push', (event) => {
   } catch {
     /* Use a visible fallback. */
   }
-  const title = typeof payload?.title === 'string' ? payload.title : 'funny';
+  const title = readText(payload?.title, 'funny');
   event.waitUntil(
     self.registration.showNotification(title, {
-      body: typeof payload?.body === 'string' ? payload.body : 'Agent update',
+      body: readText(payload?.body, 'Agent update'),
       icon: '/notification-icon.png',
-      tag: typeof payload?.tag === 'string' ? payload.tag : 'agent-update',
-      data: { url: typeof payload?.url === 'string' ? payload.url : '/' },
+      tag: readText(payload?.tag, 'agent-update'),
+      data: { url: readText(payload?.url, '/') },
     }),
   );
 });

@@ -249,6 +249,13 @@ export const createThreadSchema = z
      */
     baseFromRemote: z.boolean().optional(),
     /**
+     * The worktree must be on `branch`: when another worktree has it checked
+     * out, the thread is refused (409) instead of put on a branch named from
+     * its title. The issue factory sends it: each later step is refused on any
+     * other branch, so a thread on another one could never go on.
+     */
+    requireBranch: z.boolean().optional(),
+    /**
      * The agent may only read, at this start and every later one (stored on
      * the thread, `threads.read_only`): the issue factory's reviewer, triage
      * and sentinel. Claude or Codex only; see `readOnly` in `@funny/core`.

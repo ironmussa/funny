@@ -387,6 +387,8 @@ export type FactoryLaunchBody = {
   baseFromRemote?: boolean;
   /** The worktree's branch: the run's, so the thread and its pull request share it. */
   branch?: string;
+  /** Refuse the launch (409) when another worktree holds `branch`, never use another one. */
+  requireBranch?: boolean;
   /** The agent may only read (`threads.read_only`). */
   readOnly?: boolean;
   /** What a read-only agent reads besides its checkout (the issue's text). */

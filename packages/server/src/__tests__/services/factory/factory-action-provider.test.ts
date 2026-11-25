@@ -109,7 +109,12 @@ describe('factory action provider', () => {
     });
     await provider.spawnAgent({ prompt: 'implement', cwd: '' });
     expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toMatchObject({ branch: 'factory/issue-7-r1', source: 'factory' });
+    // Required (#457, #483, #488): a thread put on another branch is refused on every later step.
+    expect(bodies[0]).toMatchObject({
+      branch: 'factory/issue-7-r1',
+      requireBranch: true,
+      source: 'factory',
+    });
   });
 
   // Runs #227-#230 started from the branch the enabler's checkout was on:

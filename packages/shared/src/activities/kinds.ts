@@ -52,6 +52,8 @@ export const WORKSPACE_CLEANUP_REASONS = [
   'factory-merged',
   // A factory run that ended without a commit; removed only when nothing is lost.
   'factory-no-change',
+  // A retried factory run: the old worktree held the run's branch; removed only when nothing is lost.
+  'factory-retried',
   'review-finished',
   'manual',
   'setup-undone',

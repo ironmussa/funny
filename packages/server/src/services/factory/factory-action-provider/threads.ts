@@ -181,7 +181,9 @@ export function createStepThreads(core: ActionCore, links: StepThreadLinks) {
     // A worktree thread is created on the run's branch, so the thread, its
     // worktree and the pull request share one branch. A step on its own
     // thread is read-only and reads the branch from the remote instead.
-    if (!own) body.branch = scope.branch;
+    // Required: every later step is refused on another branch (`expectedBranch`),
+    // so a thread put on one named from its title could never go on.
+    if (!own) Object.assign(body, { branch: scope.branch, requireBranch: true });
     // A step on its own thread may only read: the runner holds it to that
     // (its OS sandbox), whatever the agent tries; `plan` alone is a prompt.
     if (own) body.readOnly = true;

@@ -52,6 +52,7 @@ import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
 import type { FactoryCloseOutcome, FactoryPullRequestRef } from './factory-pull-requests.js';
 import { replacedPullRequest, type ReplacedPullRequest } from './factory-replaced-pr.js';
+import { factoryRunBranch, RETRYABLE_STATES } from './factory-runs-model.js';
 import {
   createFactoryRunsRepository,
   HIGH_RISK_HOLD,
@@ -59,7 +60,12 @@ import {
   type FactoryRunView,
 } from './factory-runs.js';
 import { getWatchedFactory } from './factory-settings.js';
-import { archiveReplacedFactoryThreads, stopFactoryThreads } from './factory-thread-requests.js';
+import {
+  archiveReplacedFactoryThreads,
+  freeRunBranchForRetry,
+  stopFactoryThreads,
+  type KeptWorktree,
+} from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
 import {
   checkFactoryTarget,
@@ -178,11 +184,54 @@ async function keptOnRetry(run: FactoryRunView): Promise<string[]> {
   const first = run.threadIds[0];
   if (!first) return [];
   const [row] = await db
-    .select({ id: threads.id })
+    .select({ id: threads.id, worktreePath: threads.worktreePath, branch: threads.branch })
     .from(threads)
     .where(and(eq(threads.id, first), inArray(threads.status, ['completed'])));
-  return row ? [first] : [];
+  if (!row) return [];
+  // A thread put on another branch (the run's was held by an older worktree)
+  // is refused on every step: the retry starts a new agent on the run's branch.
+  return !row.worktreePath || row.branch === factoryRunBranch(run) ? [first] : [];
 }
+
+/** Why a retry cannot start: worktrees it could not free hold the run's branch. */
+function keptWorktreesConflict(kept: KeptWorktree[]): FactoryRunControlError {
+  const where = kept
+    .map((k) =>
+      k.dirtyFileCount > 0 || k.unpushedCommitCount > 0
+        ? `${k.worktreePath} (${k.dirtyFileCount} uncommitted file(s), ${k.unpushedCommitCount} unpushed commit(s))`
+        : `${k.worktreePath} (its runner did not answer)`,
+    )
+    .join(', ');
+  return {
+    kind: 'conflict',
+    message: `Not retried: the run's earlier worktree could not be removed without losing work: ${where}. Save or remove it, then retry.`,
+  };
+}
+
+/**
+ * Remove the worktrees that would keep the retried run off its branch (see
+ * `freeRunBranchForRetry`). With no runner ports (tests, a server without
+ * runners) there is nothing to ask.
+ */
+const freedForRetry = (
+  run: FactoryRunView,
+  kept: string[],
+): ResultAsync<undefined, FactoryRunControlError> => {
+  const ports = factoryRunnerPorts();
+  // A run in flight goes on with its worktree: only a stopped attempt's are removed.
+  const retryable: ReadonlySet<string> = new Set(RETRYABLE_STATES);
+  if (!ports || !retryable.has(run.state)) return okAsync(undefined);
+  return ResultAsync.fromSafePromise(
+    freeRunBranchForRetry(
+      ports,
+      { runBranch: factoryRunBranch(run), threadIds: run.threadIds },
+      kept,
+      factoryBrowserEvents(),
+    ),
+  ).andThen((left) =>
+    left.length === 0 ? okAsync(undefined) : errAsync(keptWorktreesConflict(left)),
+  );
+};
 
 export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
   /** The run, when it belongs to `factoryId`. */
@@ -216,9 +265,8 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
   /** Put a failed or parked run back in flight, as a retry does. */
   const reopened = (run: FactoryRunView): ResultAsync<undefined, FactoryRunControlError> =>
     ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
-      runs
-        .reopen(run, kept)
-        .mapErr(reopenRefused)
+      freedForRetry(run, kept)
+        .andThen(() => runs.reopen(run, kept).mapErr(reopenRefused))
         .andThen((outcome) => {
           // Queued: every slot is taken, and the run is first in line for the next one.
           if (outcome === 'reopened' || outcome === 'queued') {

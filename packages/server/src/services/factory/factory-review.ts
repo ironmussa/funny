@@ -407,6 +407,8 @@ export interface FactoryReviewerDeps {
   publish?(verdict: FactoryReviewVerdict): Promise<{ comment: boolean; status: boolean }>;
   /** Set only the `funny/review` status of a carried verdict; whether it was set. */
   publishStatus?(verdict: FactoryReviewVerdict): Promise<boolean>;
+  /** Note the reviewer's thread on the run as soon as it runs, before its verdict. */
+  noteThread?(threadId: string): Promise<void>;
   record(input: UpdateRunInput): Promise<void>;
   /** Move the run into its review step (a compare-and-set on the stored state). */
   enterReview(): Promise<void>;
@@ -582,6 +584,7 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
     const adopted = await deps.findLaunched(titlePrefixOf(sha), deps.since);
     if (adopted) {
       state.threadId = adopted;
+      await deps.noteThread?.(adopted);
       const end = await conclude(sha, state, adopted);
       if (end.kind === 'verdict' || state.discarded || deps.signal.aborted) return end;
       // It ended without a verdict (stopped with an earlier attempt): review afresh.
@@ -596,6 +599,7 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
       await deps.abandon?.(launched.value);
       return { kind: 'none', error: 'The run was stopped.' };
     }
+    await deps.noteThread?.(launched.value);
     return conclude(sha, state, launched.value);
   }
 

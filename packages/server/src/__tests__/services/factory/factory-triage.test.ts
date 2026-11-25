@@ -78,6 +78,9 @@ function triaging(script: Script) {
   const released: boolean[] = [];
   /** What happened, in order: the re-emit requests (`ask`) and the worktree releases (`free:<id>`). */
   const events: string[] = [];
+  /** The role threads noted on the run, and which of them were noted when the agent was first awaited. */
+  const roleThreads: Array<{ role: string; threadId: string }> = [];
+  let notedAtWait: string[] | null = null;
   let turn = 0;
   const split = script.split;
   const deps: ProviderDeps = {
@@ -97,7 +100,13 @@ function triaging(script: Script) {
       return ok({ thread: { id: 'tri-1' }, threadId: 'tri-1', runnerId: 'r' });
     },
     defaultBranch: async () => ok('main'),
-    waitThread: async () => ({ status: 'completed' as const, output: '' }),
+    waitThread: async () => {
+      notedAtWait ??= roleThreads.map((entry) => entry.threadId);
+      return { status: 'completed' as const, output: '' };
+    },
+    recordRoleThread: async (role, threadId) => {
+      roleThreads.push({ role, threadId });
+    },
     lastThreadMessage: async () => script.says[turn] ?? null,
     continuation: {
       followUp: async () => ok(undefined),
@@ -159,7 +168,21 @@ function triaging(script: Script) {
   };
   const provider = createFactoryActionProvider(deps);
   const stored = () => recorded.flatMap((input) => (input.triage ? [input.triage] : [])).at(-1);
-  return { provider, bodies, recorded, comments, held, stored, opened, queued, released, events };
+  const notedBeforeAnswer = () => notedAtWait;
+  return {
+    provider,
+    bodies,
+    recorded,
+    comments,
+    held,
+    stored,
+    opened,
+    queued,
+    released,
+    events,
+    roleThreads,
+    notedBeforeAnswer,
+  };
 }
 
 describe('paths that overlap', () => {
@@ -299,6 +322,22 @@ describe('the triage step', () => {
     expect(issue).toContain('Negative numbers break sum()');
     expect(issue).toContain('## Comment by carol');
     expect(recorded).toContainEqual({ state: 'triaging' });
+  });
+
+  // The run named its triage thread only in its answer, so the board could not
+  // link a triage still working to its thread.
+  test('the triage thread is noted on the run before the agent answers', async () => {
+    const { provider, roleThreads, notedBeforeAnswer } = triaging({ says: [READY] });
+    await provider.triage!({});
+    expect(notedBeforeAnswer()).toEqual(['tri-1']);
+    expect(roleThreads).toEqual([{ role: 'triage', threadId: 'tri-1' }]);
+  });
+
+  test('an adopted triage thread is noted too', async () => {
+    const { provider, roleThreads, bodies } = triaging({ says: [READY], found: 'tri-old' });
+    await provider.triage!({});
+    expect(bodies).toHaveLength(0);
+    expect(roleThreads).toEqual([{ role: 'triage', threadId: 'tri-old' }]);
   });
 
   test('an issue GitHub does not answer for: no role input, and the agent is told so', async () => {

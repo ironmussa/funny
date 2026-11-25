@@ -119,6 +119,7 @@ describe('factoryRunThreadLinks', () => {
         step('review', 't-rev-2', 'new'),
       ],
       reviews: [review('a', false, 't-rev-1'), review('b', true, 't-rev-2')],
+      roleThreads: [],
     });
     expect(links).toEqual([
       { threadId: 't-triage', role: 'triage', steps: ['triage'] },
@@ -126,6 +127,32 @@ describe('factoryRunThreadLinks', () => {
       { threadId: 't-rev-1', role: 'reviewer', steps: ['review'] },
       { threadId: 't-rev-2', role: 'reviewer', steps: ['review'] },
     ]);
+  });
+
+  test('a triage and a reviewer still working are linked before they answer', () => {
+    const links = factoryRunThreadLinks({
+      triage: null,
+      stepOptions: [],
+      reviews: [],
+      roleThreads: [
+        { role: 'triage', threadId: 't-triage', startedAt: hoursAgo(2) },
+        { role: 'review', threadId: 't-rev', startedAt: hoursAgo(1) },
+      ],
+    });
+    expect(links).toEqual([
+      { threadId: 't-triage', role: 'triage', steps: ['triage'] },
+      { threadId: 't-rev', role: 'reviewer', steps: ['review'] },
+    ]);
+  });
+
+  test('a role thread that answered is listed once', () => {
+    const links = factoryRunThreadLinks({
+      triage: { decision: 'ready', at: hoursAgo(9), threadId: 't-triage' },
+      stepOptions: [],
+      reviews: [],
+      roleThreads: [{ role: 'triage', threadId: 't-triage', startedAt: hoursAgo(10) }],
+    });
+    expect(links).toEqual([{ threadId: 't-triage', role: 'triage', steps: ['triage'] }]);
   });
 });
 
@@ -141,6 +168,7 @@ describe('factoryRunCardThreadLinks', () => {
         step('review', 't-rev-2', 'new'),
       ],
       reviews: [review('a', false, 't-rev-1'), review('b', true, 't-rev-2')],
+      roleThreads: [],
     });
     expect(links.map((link) => link.threadId)).toEqual(['t-triage', 't-impl-retry', 't-rev-2']);
   });

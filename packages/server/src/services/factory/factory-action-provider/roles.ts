@@ -74,6 +74,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     hold: deps.holdForPaths,
     split: deps.split,
     exclusive: deps.exclusive,
+    noteThread: async (threadId) => deps.recordRoleThread?.('triage', threadId),
     record: deps.record,
     count: (event) => count(state.metrics, { event }),
   });
@@ -107,6 +108,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     acquireSlot: deps.reviewSlot,
     publish: publishVerdict,
     publishStatus: publishCarriedStatus,
+    noteThread: async (threadId) => deps.recordRoleThread?.('review', threadId),
     record: deps.record,
     enterReview: () => enterStage('review'),
     count: (event) => count(reviewCounted(state.metrics, event), { event }),

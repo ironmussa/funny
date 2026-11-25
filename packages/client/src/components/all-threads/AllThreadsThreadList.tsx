@@ -11,6 +11,7 @@ import {
   type MutableRefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 
 import { SidebarDialogs } from '@/components/sidebar/SidebarDialogs';
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
@@ -71,6 +72,7 @@ export function AllThreadsThreadList({
   className,
 }: Props) {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const now = useMinuteTick();
   const activeThreadId = useActiveThreadId();
   const { statusByBranch, threadToBranchKey } = useGitStatusMaps();
@@ -125,6 +127,7 @@ export function AllThreadsThreadList({
         caseSensitive,
         threadId: thread.id,
         viewMode: 'list',
+        listQuery: searchParams.toString(),
       });
 
       await handleSelectThread(thread.projectId, thread.id);
@@ -136,7 +139,7 @@ export function AllThreadsThreadList({
         el?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
       });
     },
-    [caseSensitive, handleSelectThread, projectFilter, search],
+    [caseSensitive, handleSelectThread, projectFilter, search, searchParams],
   );
 
   const handleSearchKeyDown = useCallback(

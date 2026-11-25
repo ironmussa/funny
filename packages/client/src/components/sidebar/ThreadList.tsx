@@ -12,12 +12,13 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { timeAgo } from '@/lib/thread-utils';
-import { isScratch } from '@/lib/thread-variant';
+import { isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
+import { useSidebarFilterStore } from '@/stores/sidebar-filter-store';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
@@ -49,12 +50,15 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   // Highlight follows the URL (route-driven), not the async selectedThreadId.
   const activeThreadId = useActiveThreadId();
   const projects = useProjects();
+  const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
 
   const { threads, totalCount } = useMemo(() => {
     const projectMap = new Map(
       projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
     );
-    const activity = selectActivityThreads(loadedThreads);
+    const activity = selectActivityThreads(
+      hideFactoryThreads ? loadedThreads.filter((th) => !isFactoryThread(th)) : loadedThreads,
+    );
     const enriched: EnrichedThread[] = activity.threads.map((thread) => {
       if (isScratch(thread)) {
         return {
@@ -72,7 +76,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       };
     });
     return { threads: enriched, totalCount: activity.totalCount };
-  }, [loadedThreads, projects, _t]);
+  }, [loadedThreads, projects, _t, hideFactoryThreads]);
 
   const gitStatusByThread = useSidebarGitStatuses(threads);
 
@@ -157,7 +161,15 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
           />
         ))}
         {totalCount > 5 && (
-          <ViewAllButton onClick={() => navigate(buildPath('/list?sort=updated'))} />
+          <ViewAllButton
+            onClick={() =>
+              navigate(
+                buildPath(
+                  hideFactoryThreads ? '/list?sort=updated&origin=user' : '/list?sort=updated',
+                ),
+              )
+            }
+          />
         )}
       </div>
     </>

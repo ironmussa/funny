@@ -7,6 +7,7 @@ import type {
 } from '@funny/shared/contracts/factory';
 
 import { summarizeFactoryHealth } from '@/components/factory-board/factory-health';
+import { factoryRunCardThreadLinks } from '@/components/factory-board/FactoryRunThreadLinks';
 import { factoryRunThreadLinks } from '@/components/factory-board/run-detail/thread-links';
 import { buildFactoryRun } from '@/data/factory/testing';
 
@@ -125,5 +126,22 @@ describe('factoryRunThreadLinks', () => {
       { threadId: 't-rev-1', role: 'reviewer', steps: ['review'] },
       { threadId: 't-rev-2', role: 'reviewer', steps: ['review'] },
     ]);
+  });
+});
+
+describe('factoryRunCardThreadLinks', () => {
+  test('a card links the latest thread of each role', () => {
+    const links = factoryRunCardThreadLinks({
+      triage: { decision: 'ready', at: hoursAgo(9), threadId: 't-triage' },
+      stepOptions: [
+        step('triage', 't-triage', 'new'),
+        step('implement', 't-impl'),
+        step('review', 't-rev-1', 'new'),
+        step('implement', 't-impl-retry'),
+        step('review', 't-rev-2', 'new'),
+      ],
+      reviews: [review('a', false, 't-rev-1'), review('b', true, 't-rev-2')],
+    });
+    expect(links.map((link) => link.threadId)).toEqual(['t-triage', 't-impl-retry', 't-rev-2']);
   });
 });

@@ -8,6 +8,7 @@
  * commit shown) or a decline. Once answered it stays as a record and says what
  * the run is doing now, since an approved run may still wait its turn.
  */
+import { displayRiskReason } from '@funny/shared/contracts/factory';
 import type { FactoryApprovalRequest } from '@funny/shared/contracts/factory';
 import { CircleCheck, CircleSlash, Clock, ShieldAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -201,7 +202,7 @@ function PendingBody({
   const { t } = useTranslation();
   const { actions, dialog } = useFactoryRunActions(projectId, run);
   const approve = actions.find((action) => action.id === 'approve-merge');
-  const reasons = run.risk?.reasons ?? [];
+  const reasons = (run.risk?.reasons ?? []).map(displayRiskReason);
   const decline = () =>
     void declineFactoryApprovalRequest(projectId, request.id).orTee((error) =>
       toastError(error, 'factory'),

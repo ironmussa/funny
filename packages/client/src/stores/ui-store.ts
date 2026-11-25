@@ -93,6 +93,8 @@ interface UIState {
     caseSensitive?: boolean;
     threadId?: string;
     viewMode?: 'board' | 'list';
+    /** The list's query string (every filter), restored by the thread's back button. */
+    listQuery?: string;
   } | null;
   /**
    * Search handoff from a list/board view into the thread view: when the user
@@ -176,6 +178,7 @@ interface UIState {
       caseSensitive?: boolean;
       threadId?: string;
       viewMode?: 'board' | 'list';
+      listQuery?: string;
     } | null,
   ) => void;
   setPendingThreadSearch: (

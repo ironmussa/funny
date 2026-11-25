@@ -1,7 +1,7 @@
 /**
  * The status glyph of a factory board card: a dot in the run's state color
  * (the thread's own pin while its agent or the factory is still working on
- * it), which turns into a checkbox on hover, or on every card once one is
+ * it), none once the run is finished. It turns into a checkbox on hover, or on every card once one is
  * selected, so several runs can be picked for a bulk action.
  */
 import type { Thread } from '@funny/shared';
@@ -16,6 +16,7 @@ import type { FactoryQueueRun } from '@/lib/api/factory';
 import { ENDED_FACTORY_STATES } from '@/lib/factory-run-labels';
 import { cn } from '@/lib/utils';
 
+import { factoryBoardColumn } from './board-columns';
 import { factoryRunStateChip } from './run-state-chip';
 
 const DOT_CLASS: Record<LabelBadgeTone, string> = {
@@ -77,7 +78,9 @@ export function FactoryRunStatus({
   onToggleSelected,
 }: { run: FactoryQueueRun; thread: Thread | undefined } & FactoryRunSelectionProps) {
   const { t } = useTranslation();
-  const glyph: ReactNode = showsThreadPin(run, thread) ? (
+  // A finished run needs no dot: its chip (Merged, Stopped) already says how it ended.
+  const finished = factoryBoardColumn(run.state) === 'done';
+  const glyph: ReactNode = finished ? null : showsThreadPin(run, thread) ? (
     <ThreadStatusPin thread={thread} hoverGroup="card" />
   ) : (
     <FactoryRunStateDot run={run} />
@@ -85,7 +88,11 @@ export function FactoryRunStatus({
   if (!onToggleSelected) return glyph;
   const showBox = selected || selecting;
   return (
-    <span className="relative inline-flex size-3.5 shrink-0">
+    <span
+      className="relative inline-flex size-3.5 shrink-0"
+      // Nothing to show but the hover checkbox: the card keeps no blank slot.
+      data-collapsed={finished && !showBox ? '' : undefined}
+    >
       <span
         className={cn(
           'absolute inset-0 flex items-center justify-center',

@@ -92,7 +92,10 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
     // Navigate back to the originating view (list or kanban).
     // kanbanContext is cleared by useRouteSync when it detects the route,
     // ensuring both allThreadsProjectId and kanbanContext update in the same render.
-    const params = new URLSearchParams();
+    // The list's own query keeps every filter the user had set.
+    const params = new URLSearchParams(kanbanContext.listQuery ?? '');
+    params.delete('highlight');
+    params.delete('returnThread');
     if (targetProjectId !== '__all__') params.set('project', targetProjectId);
     if (kanbanContext.search) params.set('search', kanbanContext.search);
     if (kanbanContext.caseSensitive) params.set('cs', '1');

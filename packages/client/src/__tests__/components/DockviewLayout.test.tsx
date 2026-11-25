@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { render } from '@testing-library/react';
 import type { DockviewReadyEvent } from 'dockview-react';
 
-import { DockviewLayout, type BottomTabSpec } from '@/components/DockviewLayout';
+import type { BottomTabSpec } from '@/components/dockview/types';
+import { DockviewLayout } from '@/components/DockviewLayout';
 
 interface DockviewMockState {
   api: MockDockviewApi | undefined;

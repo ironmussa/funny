@@ -1,15 +1,4 @@
 import type { OnMount } from '@monaco-editor/react';
-import {
-  Maximize2,
-  Minimize2,
-  Eye,
-  EyeOff,
-  Check,
-  Copy,
-  FileCode,
-  GitBranch,
-  History,
-} from 'lucide-react';
 import type { editor as monacoEditor } from 'monaco-editor';
 import { useTheme } from 'next-themes';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,39 +9,28 @@ import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
 import { HtmlPreview } from '@/components/HtmlPreview';
-import { PreviewModeToggle } from '@/components/PreviewModeToggle';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
-import type { BlameHunk, BlameResponse, FileHistoryEntry } from '@/lib/api/system';
-import { createClientLogger } from '@/lib/client-logger';
-import {
-  buildFileHistoryEntries,
-  formatBlameLineRanges,
-  type BlameHistoryEntry,
-} from '@/lib/editor-blame-history';
+import type { BlameHistoryEntry } from '@/lib/editor-blame-history';
 import { isHtmlFile } from '@/lib/html-preview';
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { monacoThemeFor } from '@/lib/monaco-theme';
 import { toRawFileSrc } from '@/lib/raw-file-src';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
-import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
+
+import { getFileExtension, getMonacoLanguage } from './monaco-editor-dialog/editor-language';
+import { EditorDialogHeader } from './monaco-editor-dialog/EditorDialogHeader';
+import { FileHistorySidebar } from './monaco-editor-dialog/FileHistorySidebar';
+import { useEditorBlame } from './monaco-editor-dialog/use-editor-blame';
+import { useEditorSearch } from './monaco-editor-dialog/use-editor-search';
 
 interface MonacoEditorDialogProps {
   open: boolean;
@@ -60,33 +38,6 @@ interface MonacoEditorDialogProps {
   filePath: string;
   initialContent: string | null;
 }
-
-const MONACO_WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/? \t\n';
-
-const blameLog = createClientLogger('blame');
-
-/** The search bar's matches in a Monaco model; an invalid regex matches nothing. */
-function findModelMatches(
-  model: monacoEditor.ITextModel,
-  query: string,
-  regex: boolean,
-  caseSensitive: boolean,
-  wholeWord: boolean,
-): monacoEditor.FindMatch[] {
-  try {
-    return model.findMatches(
-      query,
-      false,
-      regex,
-      caseSensitive,
-      wholeWord ? MONACO_WORD_SEPARATORS : null,
-      false,
-    );
-  } catch {
-    return [];
-  }
-}
-const EMPTY_FILE_HISTORY: FileHistoryEntry[] = [];
 
 const MonacoCodeView = lazy(() =>
   import('@/components/MonacoCodeView').then((m) => ({ default: m.MonacoCodeView })),
@@ -99,7 +50,6 @@ export function MonacoEditorDialog({
   initialContent,
 }: MonacoEditorDialogProps) {
   const { t } = useTranslation();
-  const now = useMinuteTick();
   const { resolvedTheme } = useTheme();
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
   const [content, setContent] = useState<string>('');
@@ -130,60 +80,45 @@ export function MonacoEditorDialog({
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
-  // Unified search state — used by both markdown preview and Monaco code view.
-  const previewContainerRef = useRef<HTMLDivElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const matchElementsRef = useRef<HTMLElement[]>([]);
-  const monacoMatchesRef = useRef<monacoEditor.FindMatch[]>([]);
-  const monacoDecorationsRef = useRef<monacoEditor.IEditorDecorationsCollection | null>(null);
-
-  // ── Git blame (gutter + hover) ──────────────────────────────────────────────
-  // Per-line commit attribution from `GET /files/blame`, rendered as injected
-  // text in the left gutter. A single declarative effect (below) reconciles the
-  // decorations from `blame` / `showBlame` / `inCodeView`; `editorNonce` bumps on
-  // every editor (re)mount so that effect re-runs against the fresh instance.
-  const [blame, setBlame] = useState<BlameResponse | null>(null);
-  const [fileHistoryState, setFileHistoryState] = useState<{
-    filePath: string;
-    entries: FileHistoryEntry[];
-  } | null>(null);
-  // Shown by default once blame loads; the toolbar toggle hides it per file.
-  const [showBlame, setShowBlame] = useState(true);
-  const [hiddenHistoryFile, setHiddenHistoryFile] = useState<string | null>(null);
-  const [editorNonce, setEditorNonce] = useState(0);
-  // GitLens-style current-line blame: a single end-of-line `after` annotation on
-  // the line the cursor is on. `currentLine` tracks the cursor; the collection is
-  // owned by the editor (ownerId = editor id), which the view's injected-text
-  // recompute requires. `editorNonce` rebuilds it on every editor (re)mount.
-  const [currentLine, setCurrentLine] = useState(1);
-  const blameDecorationsRef = useRef<monacoEditor.IEditorDecorationsCollection | null>(null);
-
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [matchCount, setMatchCount] = useState(0);
-  // 0-based index of the currently focused match. `-1` means no active match.
-  const [currentMatch, setCurrentMatch] = useState(-1);
-  const [caseSensitive, setCaseSensitive] = useState(false);
-  const [wholeWord, setWholeWord] = useState(false);
-  const [regex, setRegex] = useState(false);
-
-  // Debounce typing so the (expensive) DOM walk / findMatches runs after a short pause.
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedQuery(searchQuery), 200);
-    return () => clearTimeout(id);
-  }, [searchQuery]);
-
   const isDirty = content !== originalContent;
   const inCodeView = !(showPreview && canPreview);
-  const fileHistory =
-    fileHistoryState?.filePath === filePath ? fileHistoryState.entries : EMPTY_FILE_HISTORY;
-  const historyEntries = useMemo(
-    () => buildFileHistoryEntries({ blame, fileHistory, content }),
-    [blame, fileHistory, content],
-  );
-  const canShowHistory = historyEntries.length > 0;
-  const showHistory = hiddenHistoryFile !== filePath;
+  const {
+    previewContainerRef,
+    searchInputRef,
+    searchOpen,
+    setSearchOpen,
+    searchQuery,
+    setSearchQuery,
+    debouncedQuery,
+    matchCount,
+    currentMatch,
+    caseSensitive,
+    setCaseSensitive,
+    wholeWord,
+    setWholeWord,
+    regex,
+    setRegex,
+    goToNextMatch,
+    goToPrevMatch,
+    closeSearch,
+    detachEditor,
+  } = useEditorSearch({
+    open,
+    content,
+    inCodeView,
+    htmlPreviewShown: showPreview && isHtml,
+    editorRef,
+  });
+  const {
+    blame,
+    showBlame,
+    setShowBlame,
+    historyEntries,
+    canShowHistory,
+    showHistory,
+    setHiddenHistoryFile,
+    bindEditor,
+  } = useEditorBlame({ open, filePath, content, inCodeView, editorRef, t });
 
   // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
   const monacoTheme = monacoThemeFor(resolvedTheme);
@@ -233,42 +168,37 @@ export function MonacoEditorDialog({
     onOpenChange(false);
   };
 
-  const handleEditorMount: OnMount = useCallback((editor) => {
-    editorRef.current = editor;
-    // The decorations collections are bound to the previous editor instance —
-    // drop them so the next effect creates fresh ones on this model.
-    monacoDecorationsRef.current = null;
-    blameDecorationsRef.current = null;
-    // Track the cursor line so the blame annotation follows it (GitLens-style).
-    setCurrentLine(editor.getPosition()?.lineNumber ?? 1);
-    editor.onDidChangeCursorPosition((e) => setCurrentLine(e.position.lineNumber));
-    // Bump the nonce so the declarative blame effect re-runs against this
-    // fresh editor instance (and repaints if blame is already loaded).
-    setEditorNonce((n) => n + 1);
+  const handleEditorMount: OnMount = useCallback(
+    (editor) => {
+      editorRef.current = editor;
+      detachEditor();
+      bindEditor(editor);
 
-    // Synchronously tokenize the initial viewport before the browser paints.
-    // Monaco 0.55 tokenizes lazily in the background, so the first painted frame
-    // would otherwise show uncolored (single-foreground) text and "pop in" the
-    // syntax colors a frame later. `onMount` runs in the same task as
-    // `editor.create`, before the browser's first paint, so forcing tokenization
-    // here means that first frame is already highlighted. `forceTokenization` is
-    // the same internal model API that `monaco.editor.colorize` relies on — it's
-    // stable but absent from the public d.ts, hence the narrow cast. Capped so
-    // huge files don't block on whole-document tokenization; the rest streams in
-    // lazily as the user scrolls.
-    // SAFETY: Monaco 0.55 text models carry the internal `tokenization.forceTokenization`;
-    // both members are typed optional and called with `?.`, so a missing one is a no-op.
-    const model = editor.getModel() as
-      | (monacoEditor.ITextModel & {
-          tokenization?: { forceTokenization?: (lineNumber: number) => void };
-        })
-      | null;
-    if (model) {
-      const lastVisible = editor.getVisibleRanges().at(-1)?.endLineNumber ?? 0;
-      const target = Math.min(model.getLineCount(), Math.max(lastVisible, 100));
-      model.tokenization?.forceTokenization?.(target);
-    }
-  }, []);
+      // Synchronously tokenize the initial viewport before the browser paints.
+      // Monaco 0.55 tokenizes lazily in the background, so the first painted frame
+      // would otherwise show uncolored (single-foreground) text and "pop in" the
+      // syntax colors a frame later. `onMount` runs in the same task as
+      // `editor.create`, before the browser's first paint, so forcing tokenization
+      // here means that first frame is already highlighted. `forceTokenization` is
+      // the same internal model API that `monaco.editor.colorize` relies on — it's
+      // stable but absent from the public d.ts, hence the narrow cast. Capped so
+      // huge files don't block on whole-document tokenization; the rest streams in
+      // lazily as the user scrolls.
+      // SAFETY: Monaco 0.55 text models carry the internal `tokenization.forceTokenization`;
+      // both members are typed optional and called with `?.`, so a missing one is a no-op.
+      const model = editor.getModel() as
+        | (monacoEditor.ITextModel & {
+            tokenization?: { forceTokenization?: (lineNumber: number) => void };
+          })
+        | null;
+      if (model) {
+        const lastVisible = editor.getVisibleRanges().at(-1)?.endLineNumber ?? 0;
+        const target = Math.min(model.getLineCount(), Math.max(lastVisible, 100));
+        model.tokenization?.forceTokenization?.(target);
+      }
+    },
+    [bindEditor, detachEditor],
+  );
 
   const revealHistoryEntry = useCallback(
     (entry: BlameHistoryEntry) => {
@@ -286,199 +216,6 @@ export function MonacoEditorDialog({
     },
     [canPreview, lockPreview, setShowPreview, showPreview],
   );
-
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setSearchQuery('');
-  }, []);
-
-  // Each fetch starts from an empty history, cleared in the render that opens
-  // the file (or reopens it) rather than in the fetch effect.
-  const historyFetchKey = open && filePath ? filePath : null;
-  const [prevHistoryFetchKey, setPrevHistoryFetchKey] = useState(historyFetchKey);
-  if (prevHistoryFetchKey !== historyFetchKey) {
-    setPrevHistoryFetchKey(historyFetchKey);
-    if (historyFetchKey) setFileHistoryState({ filePath: historyFetchKey, entries: [] });
-  }
-
-  // Fetch blame + file history whenever the open file changes. Failures
-  // (untracked file, no repo, native module unavailable) are non-fatal.
-  useEffect(() => {
-    // LATCH: never null blame here. The dialog's `open`/`filePath` flip to
-    // falsy transiently (Radix fires onOpenChange(false) during the active
-    // thread's re-renders, then it reopens), and nulling on every such flip
-    // wiped the gutter. We keep the last blame and only replace it once a new
-    // fetch resolves; closing for real unmounts the editor so it doesn't matter.
-    if (!open || !filePath) {
-      blameLog.info('blame fetch effect: skip (latched)', { open, filePath });
-      return;
-    }
-    blameLog.info('blame fetch effect', { open, filePath });
-    let cancelled = false;
-    void api.getFileBlame(filePath).then((res) => {
-      if (cancelled) return;
-      if (res.isOk()) {
-        blameLog.info('blame loaded', {
-          filePath,
-          hunks: res.value.hunks.length,
-          blamedLineCount: res.value.blamedLineCount,
-        });
-        setBlame(res.value);
-      } else {
-        blameLog.warn('blame fetch failed', { filePath, error: res.error.message });
-        setBlame(null);
-      }
-    });
-    void api.getFileHistory(filePath).then((res) => {
-      if (cancelled) return;
-      if (res.isOk()) {
-        setFileHistoryState({ filePath, entries: res.value });
-      } else {
-        blameLog.warn('file history fetch failed', { filePath, error: res.error.message });
-        setFileHistoryState({ filePath, entries: [] });
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, filePath]);
-
-  // GitLens-style current-line blame: reconcile a single end-of-line annotation
-  // on the cursor's line. Re-runs on cursor move (`currentLine`), data/visibility
-  // changes, and editor (re)mount (`editorNonce`). The collection is owned by the
-  // editor (ownerId = editor id), which the view's injected-text recompute needs.
-  useEffect(() => {
-    const editor = editorRef.current;
-    const model = editor?.getModel();
-    if (!editor || !model) return;
-    if (!inCodeView || !showBlame || !blame) {
-      blameDecorationsRef.current?.clear();
-      return;
-    }
-    const lineCount = model.getLineCount();
-    const line = Math.min(Math.max(currentLine, 1), lineCount);
-    const endColumn = model.getLineMaxColumn(line);
-    const decorations = buildCurrentLineBlameDecoration(line, endColumn, blame, t, now);
-    if (blameDecorationsRef.current) {
-      blameDecorationsRef.current.set(decorations);
-    } else {
-      blameDecorationsRef.current = editor.createDecorationsCollection(decorations);
-    }
-    blameLog.info('blame render', { line: currentLine, count: decorations.length });
-  }, [blame, showBlame, inCodeView, currentLine, content, editorNonce, t, now]);
-
-  // Ctrl+F → open the unified search bar (both code and markdown views).
-  // Capture phase + preventDefault prevents Monaco's built-in find widget from opening.
-  useEffect(() => {
-    if (!open || (showPreview && isHtml)) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        e.stopPropagation();
-        setSearchOpen(true);
-        requestAnimationFrame(() => {
-          searchInputRef.current?.focus();
-          searchInputRef.current?.select();
-        });
-      }
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [open, showPreview, isHtml]);
-
-  // ── Markdown preview search ─────────────────────────────────────────────────
-  // Collect <mark> elements produced by the rehype plugin so we can navigate.
-  useEffect(() => {
-    if (inCodeView) return;
-    const container = previewContainerRef.current;
-    const query = searchOpen ? debouncedQuery.trim() : '';
-    // No preview or no query: no matches.
-    const marks =
-      container && query
-        ? Array.from(container.querySelectorAll<HTMLElement>('mark.md-search-match'))
-        : [];
-    matchElementsRef.current = marks;
-    setMatchCount(marks.length);
-    setCurrentMatch(marks.length > 0 ? 0 : -1);
-  }, [debouncedQuery, searchOpen, content, inCodeView]);
-
-  // Style + scroll the active markdown match.
-  useEffect(() => {
-    if (inCodeView) return;
-    const marks = matchElementsRef.current;
-    marks.forEach((m, i) => {
-      if (i === currentMatch) m.dataset.active = 'true';
-      else delete m.dataset.active;
-    });
-    const active = marks[currentMatch];
-    if (active) active.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [currentMatch, matchCount, inCodeView]);
-
-  // ── Monaco code view search ─────────────────────────────────────────────────
-  // Run findMatches when the query / options / open state change.
-  useEffect(() => {
-    if (!inCodeView) return;
-    const editor = editorRef.current;
-    const model = editor?.getModel();
-    if (!editor || !model) return;
-
-    const query = searchOpen ? debouncedQuery : '';
-    let matches: monacoEditor.FindMatch[] = [];
-    if (!query) {
-      monacoDecorationsRef.current?.clear();
-    } else {
-      matches = findModelMatches(model, query, regex, caseSensitive, wholeWord);
-    }
-    monacoMatchesRef.current = matches;
-    setMatchCount(matches.length);
-    setCurrentMatch(matches.length > 0 ? 0 : -1);
-  }, [debouncedQuery, regex, caseSensitive, wholeWord, searchOpen, content, inCodeView]);
-
-  // Apply / update Monaco decorations and scroll to the active match.
-  useEffect(() => {
-    if (!inCodeView) return;
-    const editor = editorRef.current;
-    if (!editor) return;
-    const matches = monacoMatchesRef.current;
-
-    const decorations: monacoEditor.IModelDeltaDecoration[] = matches.map((m, i) => ({
-      range: m.range,
-      options: {
-        inlineClassName: i === currentMatch ? 'monaco-search-match-active' : 'monaco-search-match',
-      },
-    }));
-
-    if (!monacoDecorationsRef.current) {
-      monacoDecorationsRef.current = editor.createDecorationsCollection(decorations);
-    } else {
-      monacoDecorationsRef.current.set(decorations);
-    }
-
-    const active = matches[currentMatch];
-    if (active) {
-      editor.revealRangeInCenterIfOutsideViewport(active.range);
-    }
-  }, [currentMatch, matchCount, inCodeView]);
-
-  // Switching between preview / code: clear the other view's decorations.
-  useEffect(() => {
-    if (inCodeView) {
-      matchElementsRef.current.forEach((m) => delete m.dataset.active);
-      matchElementsRef.current = [];
-    } else {
-      monacoDecorationsRef.current?.clear();
-      monacoMatchesRef.current = [];
-    }
-    // Intentionally only react to view changes.
-  }, [inCodeView]);
-
-  const goToNextMatch = useCallback(() => {
-    setCurrentMatch((prev) => (matchCount === 0 ? -1 : (prev + 1) % matchCount));
-  }, [matchCount]);
-
-  const goToPrevMatch = useCallback(() => {
-    setCurrentMatch((prev) => (matchCount === 0 ? -1 : (prev - 1 + matchCount) % matchCount));
-  }, [matchCount]);
 
   // Memoize the rendered markdown. Re-renders only when content or the (debounced)
   // search query changes — the rehype plugin bakes <mark> elements into the AST.
@@ -516,125 +253,30 @@ export function MonacoEditorDialog({
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader bordered className="overflow-hidden">
-          <DialogTitle size="sm" withIcon mono>
-            <FileCode className="icon-base shrink-0" />
-            <span className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap [direction:rtl]">
-              {filePath}
-            </span>
-          </DialogTitle>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                onClick={() => copy(content)}
-                disabled={!content}
-                className="shrink-0"
-                data-testid="editor-copy-content"
-                aria-label={t('editor.copy', 'Copy')}
-              >
-                {copied ? (
-                  <Check className="icon-base copy-feedback-icon text-status-success" />
-                ) : (
-                  <Copy className="icon-base copy-feedback-icon" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('editor.copy', 'Copy')}</TooltipContent>
-          </Tooltip>
-          {canPreview && !lockPreview && (
-            <PreviewModeToggle
-              previewing={showPreview}
-              onToggle={() => setShowPreview((value) => !value)}
-              testId="editor-toggle-preview"
-            />
-          )}
-          {inCodeView && blame && blame.hunks.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showBlame ? 'active' : 'muted'}
-                  size="icon-sm"
-                  onClick={() => setShowBlame((prev) => !prev)}
-                  className="shrink-0"
-                  data-testid="editor-toggle-blame"
-                >
-                  <GitBranch className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {showBlame
-                  ? t('editor.hideBlame', 'Hide blame')
-                  : t('editor.showBlame', 'Show blame')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {canShowHistory && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showHistory ? 'active' : 'muted'}
-                  size="icon-sm"
-                  onClick={() =>
-                    setHiddenHistoryFile((prev) => (prev === filePath ? null : filePath))
-                  }
-                  className="shrink-0"
-                  data-testid="editor-toggle-history"
-                  aria-label={t('editor.toggleHistory', 'Toggle history')}
-                >
-                  <History className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {showHistory
-                  ? t('editor.hideHistory', 'Hide history')
-                  : t('editor.showHistory', 'Show history')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {inCodeView && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="muted"
-                  size="icon-sm"
-                  onClick={() => setShowMinimap((prev) => !prev)}
-                  className="shrink-0"
-                  data-testid="editor-toggle-minimap"
-                >
-                  {showMinimap ? <EyeOff className="icon-base" /> : <Eye className="icon-base" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {showMinimap ? t('editor.hideMinimap') : t('editor.showMinimap')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                onClick={() => setIsFullscreen((prev) => !prev)}
-                className="shrink-0"
-                data-testid="editor-toggle-fullscreen"
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="icon-base" />
-                ) : (
-                  <Maximize2 className="icon-base" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {isFullscreen ? t('editor.exitFullscreen') : t('editor.fullscreen')}
-            </TooltipContent>
-          </Tooltip>
-          <DialogDescription className="sr-only">
-            {t('editor.dialogDescription', `Editor for ${getFileName(filePath)}`)}
-          </DialogDescription>
-        </DialogHeader>
+        <EditorDialogHeader
+          filePath={filePath}
+          content={content}
+          copied={copied}
+          onCopy={() => copy(content)}
+          toggles={{
+            canPreview,
+            lockPreview,
+            showPreview,
+            onTogglePreview: () => setShowPreview((value) => !value),
+            inCodeView,
+            hasBlame: !!blame && blame.hunks.length > 0,
+            showBlame,
+            onToggleBlame: () => setShowBlame((prev) => !prev),
+            canShowHistory,
+            showHistory,
+            onToggleHistory: () =>
+              setHiddenHistoryFile((prev) => (prev === filePath ? null : filePath)),
+            showMinimap,
+            onToggleMinimap: () => setShowMinimap((prev) => !prev),
+          }}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={() => setIsFullscreen((prev) => !prev)}
+        />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="relative min-w-0 flex-1 overflow-hidden">
@@ -696,89 +338,6 @@ export function MonacoEditorDialog({
   );
 }
 
-function FileHistorySidebar({
-  entries,
-  onSelect,
-}: {
-  entries: BlameHistoryEntry[];
-  onSelect: (entry: BlameHistoryEntry) => void;
-}) {
-  const { t } = useTranslation();
-  const now = useMinuteTick();
-  return (
-    <aside
-      className="border-border bg-sidebar/70 hidden w-[290px] shrink-0 border-l lg:flex lg:flex-col"
-      data-testid="editor-history-sidebar"
-    >
-      <div className="border-border shrink-0 border-b px-3 py-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <History className="icon-sm text-muted-foreground" />
-          <span>{t('editor.historyTitle', 'File history')}</span>
-        </div>
-        <div className="text-muted-foreground mt-1 text-xs">
-          {t('editor.historyDescription', 'Commits touching the current file')}
-        </div>
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-1 p-2">
-          {entries.map((entry) => (
-            <button
-              key={entry.commitHash}
-              type="button"
-              className={cn(
-                'hover:bg-accent focus-visible:ring-ring w-full rounded-md px-2.5 py-2 text-left',
-                'focus-visible:ring-2 focus-visible:outline-none',
-              )}
-              onClick={() => onSelect(entry)}
-              data-testid={`editor-history-entry-${entry.shortHash}`}
-            >
-              <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-medium">{entry.author}</span>
-                <span className="text-muted-foreground text-compact shrink-0 font-mono">
-                  {entry.shortHash}
-                </span>
-              </div>
-              <div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-1 text-xs">
-                <span className="truncate">
-                  {entry.authoredAt === null
-                    ? t('editor.uncommitted', 'Uncommitted')
-                    : timeAgo(entry.authoredAt, t, now)}
-                </span>
-                <span aria-hidden="true">-</span>
-                <span className="shrink-0">{formatHistoryMeta(entry, t)}</span>
-              </div>
-              <div className="mt-1 line-clamp-2 text-xs">{entry.summary}</div>
-              {entry.ranges.length > 0 ? (
-                <div className="text-muted-foreground text-compact mt-1 truncate font-mono">
-                  {formatBlameLineRanges(entry.ranges)}
-                </div>
-              ) : (
-                <div className="text-muted-foreground text-compact mt-1 truncate">
-                  {formatHistoryPath(entry)}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </ScrollArea>
-    </aside>
-  );
-}
-
-function formatHistoryMeta(entry: BlameHistoryEntry, t: ReturnType<typeof useTranslation>['t']) {
-  if (entry.lineCount > 0) {
-    return t('editor.historyLineCount', '{{count}} lines', { count: entry.lineCount });
-  }
-  return t('editor.historyFileEvent', 'file event');
-}
-
-function formatHistoryPath(entry: BlameHistoryEntry): string {
-  if (entry.status === 'renamed' && entry.previousPath) {
-    return `${entry.previousPath} -> ${entry.path ?? ''}`;
-  }
-  return entry.path ?? '';
-}
-
 const markdownPreviewComponents: Components = {
   code({ className, children, ...props }) {
     const match = /language-(\w+)/.exec(className || '');
@@ -808,125 +367,3 @@ const markdownPreviewComponents: Components = {
     return <pre className="bg-muted/50 overflow-auto rounded-md p-3 text-sm">{children}</pre>;
   },
 };
-
-/** Neutralize the few markdown chars that would break a hover tooltip. */
-function escapeMarkdown(value: string): string {
-  return value.replace(/[\\`*_[\]]/g, '\\$&');
-}
-
-/** Find the hunk (commit) that introduced a given 1-based line, if any. */
-function hunkForLine(blame: BlameResponse, line: number): BlameHunk | undefined {
-  for (const hunk of blame.hunks) {
-    if (line >= hunk.startLine && line < hunk.startLine + hunk.lineCount) return hunk;
-  }
-  return undefined;
-}
-
-/**
- * Build the single GitLens-style blame annotation for the cursor's line: an
- * end-of-line `after` injection (gray, padded off the code) attributing the line
- * to the commit that introduced it. Lines past the blamed (HEAD) range — added
- * in the working copy — show "Uncommitted".
- *
- * Note: blame is computed against HEAD, so on a heavily-modified file the
- * line→commit mapping can drift (gix blames committed history, not the worktree).
- */
-function buildCurrentLineBlameDecoration(
-  line: number,
-  endColumn: number,
-  blame: BlameResponse,
-  t: ReturnType<typeof useTranslation>['t'],
-  now: number,
-): monacoEditor.IModelDeltaDecoration[] {
-  const hunk = hunkForLine(blame, line);
-  const relativeLabel = hunk ? timeAgo(hunk.authoredAt, t, now) : t('time.now', 'now');
-  const label = hunk
-    ? `${hunk.author}, ${relativeLabel} • ${hunk.summary}`
-    : 'You • Uncommitted changes';
-  const hoverMessage = hunk
-    ? {
-        value: `**${escapeMarkdown(hunk.summary)}**\n\n${escapeMarkdown(hunk.author)} • ${relativeLabel}\n\n\`${hunk.shortHash}\``,
-      }
-    : { value: '_Not committed yet_' };
-  return [
-    {
-      // Collapsed range at end-of-line; `after` injects the annotation there.
-      // `showIfCollapsed` is REQUIRED — Monaco filters injected text on empty
-      // ranges otherwise (getAllInjectedText drops `range.isEmpty()` decorations).
-      range: { startLineNumber: line, startColumn: endColumn, endLineNumber: line, endColumn },
-      options: {
-        after: {
-          content: `        ${label}`,
-          inlineClassName: 'monaco-blame-inline',
-        },
-        hoverMessage,
-        showIfCollapsed: true,
-      },
-    },
-  ];
-}
-
-function getFileName(filePath: string): string {
-  return filePath.split(/[/\\]/).pop() || filePath;
-}
-
-function getFileExtension(filePath: string): string {
-  const lastDot = filePath.lastIndexOf('.');
-  const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
-  if (lastDot > lastSlash) {
-    return filePath.substring(lastDot + 1);
-  }
-  return '';
-}
-
-function getMonacoLanguage(ext: string, filePath?: string): string {
-  if (filePath) {
-    const name = getFileName(filePath);
-    if (/^\.env(\..+)?$/.test(name) || name === '.env') return 'dotenv';
-  }
-  const langMap = new Map(
-    Object.entries({
-      env: 'dotenv',
-      ts: 'typescript',
-      tsx: 'typescript',
-      js: 'javascript',
-      jsx: 'javascript',
-      mjs: 'javascript',
-      cjs: 'javascript',
-      py: 'python',
-      rb: 'ruby',
-      rs: 'rust',
-      go: 'go',
-      java: 'java',
-      kt: 'kotlin',
-      swift: 'swift',
-      c: 'c',
-      cpp: 'cpp',
-      h: 'c',
-      hpp: 'cpp',
-      cs: 'csharp',
-      md: 'markdown',
-      mdx: 'markdown',
-      markdown: 'markdown',
-      json: 'json',
-      yaml: 'yaml',
-      yml: 'yaml',
-      toml: 'toml',
-      xml: 'xml',
-      html: 'html',
-      htm: 'html',
-      css: 'css',
-      scss: 'scss',
-      less: 'less',
-      sql: 'sql',
-      sh: 'shell',
-      bash: 'shell',
-      ps1: 'powershell',
-      dockerfile: 'dockerfile',
-      php: 'php',
-      vue: 'vue',
-      graphql: 'graphql',
-    }),
-  );
-  return langMap.get(ext.toLowerCase()) || 'plaintext';
-}

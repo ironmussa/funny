@@ -1,6 +1,6 @@
 import type { SafeUser } from '@funny/shared';
 import { errorMessage as caughtMessage } from '@funny/shared/errors';
-import { CheckCircle2, Loader2, XCircle, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,9 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { withCleanup } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
+
+import { InviteModeSwitch } from './accept-invite/InviteModeSwitch';
+import { InviteOutcome } from './accept-invite/InviteOutcome';
 
 interface Props {
   token: string;
@@ -63,10 +66,6 @@ function storeSignedInUser(u: SignedInUser | undefined): void {
 /** The first non-empty name, else the last argument. */
 function firstName(...names: Array<string | undefined>): string {
   return names.find(Boolean) ?? '';
-}
-
-function continueToApp() {
-  window.location.href = '/';
 }
 
 export function AcceptInvitePage({ token }: Props) {
@@ -194,6 +193,13 @@ export function AcceptInvitePage({ token }: Props) {
     );
   };
 
+  const switchMode = (toLoginMode: boolean) => {
+    submissionIdRef.current++;
+    setIsLoginMode(toLoginMode);
+    setFormLoading(false);
+    setFormError('');
+  };
+
   return (
     <div className="bg-background flex min-h-screen items-center justify-center">
       <div className="border-border bg-card w-full max-w-sm space-y-6 rounded-lg border p-8 text-center shadow-lg">
@@ -286,43 +292,7 @@ export function AcceptInvitePage({ token }: Props) {
               </Button>
             </form>
 
-            <p className="text-muted-foreground text-sm">
-              {isLoginMode ? (
-                <>
-                  Don't have an account?{' '}
-                  <button
-                    type="button"
-                    className="text-primary hover:underline"
-                    onClick={() => {
-                      submissionIdRef.current++;
-                      setIsLoginMode(false);
-                      setFormLoading(false);
-                      setFormError('');
-                    }}
-                    data-testid="invite-switch-register"
-                  >
-                    Register
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already have an account?{' '}
-                  <button
-                    type="button"
-                    className="text-primary hover:underline"
-                    onClick={() => {
-                      submissionIdRef.current++;
-                      setIsLoginMode(true);
-                      setFormLoading(false);
-                      setFormError('');
-                    }}
-                    data-testid="invite-switch-login"
-                  >
-                    Sign in
-                  </button>
-                </>
-              )}
-            </p>
+            <InviteModeSwitch isLoginMode={isLoginMode} onSwitch={switchMode} />
           </>
         )}
 
@@ -335,49 +305,8 @@ export function AcceptInvitePage({ token }: Props) {
           />
         )}
 
-        {/* Success */}
-        {step === 'success' && (
-          <>
-            <CheckCircle2 className="text-status-success mx-auto size-8" />
-            <h2 className="text-foreground text-lg font-semibold">You're in!</h2>
-            <p className="text-muted-foreground text-sm">
-              You've successfully joined <span className="font-medium">{orgName}</span>.
-            </p>
-            <Button onClick={continueToApp} className="w-full" data-testid="invite-continue">
-              Continue to App
-            </Button>
-          </>
-        )}
-
-        {/* Already a member */}
-        {step === 'already' && (
-          <>
-            <CheckCircle2 className="text-status-info mx-auto size-8" />
-            <h2 className="text-foreground text-lg font-semibold">Already a member</h2>
-            <p className="text-muted-foreground text-sm">
-              You're already a member of <span className="font-medium">{orgName}</span>.
-            </p>
-            <Button onClick={continueToApp} className="w-full" data-testid="invite-continue">
-              Continue to App
-            </Button>
-          </>
-        )}
-
-        {/* Error */}
-        {step === 'error' && (
-          <>
-            <XCircle className="text-destructive mx-auto size-8" />
-            <h2 className="text-foreground text-lg font-semibold">Invitation failed</h2>
-            <p className="text-muted-foreground text-sm">{errorMessage}</p>
-            <Button
-              variant="outline"
-              onClick={continueToApp}
-              className="w-full"
-              data-testid="invite-continue"
-            >
-              Go to App
-            </Button>
-          </>
+        {(step === 'success' || step === 'already' || step === 'error') && (
+          <InviteOutcome kind={step} orgName={orgName} errorMessage={errorMessage} />
         )}
       </div>
     </div>

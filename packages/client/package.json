@@ -135,6 +135,7 @@
     "bun-types": "^1.4.0",
     "jsdom": "^29.1.1",
     "monaco-editor": "^0.57.0",
+    "oxc-parser": "0.148.0",
     "oxc-transform-react": "^0.158.0",
     "playwright": "^1.58.2",
     "postcss": "^8.5.23",

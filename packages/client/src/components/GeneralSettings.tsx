@@ -1,12 +1,8 @@
-import type { AgentProvider, ToolPermission } from '@funny/shared';
-import { DEFAULT_FOLLOW_UP_MODE, DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
-import { RotateCcw } from 'lucide-react';
+import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useShallow } from 'zustand/react/shallow';
 
-import { ModelCombobox } from '@/components/general-settings-project/ModelCombobox';
 import {
   DefaultTemplateSetting,
   LauncherUrlSetting,
@@ -15,6 +11,7 @@ import {
   WeaveStatusSetting,
 } from '@/components/general-settings-project/project-section-rows';
 import { ProjectColorPicker } from '@/components/general-settings-project/ProjectColorPicker';
+import { ProjectDefaultModelSetting } from '@/components/general-settings-project/ProjectDefaultModelSetting';
 import { ProjectPathSetting } from '@/components/general-settings-project/ProjectPathSetting';
 import { ProjectRedirectChecksSetting } from '@/components/general-settings-project/ProjectRedirectChecksSetting';
 import { ProjectSandboxSetting } from '@/components/general-settings-project/ProjectSandboxSetting';
@@ -23,25 +20,15 @@ import {
   SegmentedControl,
   ProjectSettingRow,
 } from '@/components/general-settings-project/setting-primitives';
-import { SettingAnchor, SettingsSection } from '@/components/settings/SettingRow';
+import { ToolPermissionsSection } from '@/components/general-settings/ToolPermissionsSection';
 import { useProjects } from '@/data/projects/hooks';
-import { useAcpModels } from '@/data/runner/hooks';
 import { projectsApi } from '@/lib/api/projects';
-import { getEffortLevels, getModelOptions, normalizeEffort, PROVIDERS } from '@/lib/providers';
 import { useProjectStore } from '@/stores/project-store';
-import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';
 
 import { BranchPicker } from './SearchablePicker';
 
 /* ── General settings content ── */
 export function GeneralSettings() {
-  const { toolPermissions, setToolPermission, resetToolPermissions } = useSettingsStore(
-    useShallow((s) => ({
-      toolPermissions: s.toolPermissions,
-      setToolPermission: s.setToolPermission,
-      resetToolPermissions: s.resetToolPermissions,
-    })),
-  );
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjects();
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -60,19 +47,6 @@ export function GeneralSettings() {
     [updateProject, t],
   );
 
-  const saveToolPermission = useCallback(
-    (toolName: string, permission: ToolPermission) => {
-      setToolPermission(toolName, permission);
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [setToolPermission, t],
-  );
-
-  const saveResetToolPermissions = useCallback(() => {
-    resetToolPermissions();
-    toast.success(t('settings.saved'), { id: 'settings-saved' });
-  }, [resetToolPermissions, t]);
-
   // Branch selector state for project default branch
   const [settingsBranches, setSettingsBranches] = useState<string[]>([]);
 
@@ -87,36 +61,6 @@ export function GeneralSettings() {
       });
     }
   }, [branchProjectId]);
-
-  // Dynamic catalogs (pi / cursor / opencode) are discovered at runtime so
-  // the Settings combobox lists what each agent actually advertises (e.g.
-  // zai/glm-5.1) instead of just the `default` sentinel from the static
-  // registry. One query per provider; the dynamic set comes from the
-  // manifest registry.
-  const acpByProvider = useAcpModels();
-
-  const projectDefaultProvider = selectedProject?.defaultProvider || DEFAULT_PROVIDER;
-  const projectDefaultModel =
-    selectedProject?.defaultModel || getDefaultModel(projectDefaultProvider);
-  const projectEffortOptions = getEffortLevels(projectDefaultModel, projectDefaultProvider);
-  const projectDefaultEffort = normalizeEffort(
-    projectDefaultModel,
-    projectDefaultProvider,
-    selectedProject?.defaultEffort,
-  );
-  const projectModelOptions = (() => {
-    const base = getModelOptions(projectDefaultProvider, t);
-    const dynamic = acpByProvider[projectDefaultProvider];
-    if (dynamic?.status === 'ready') {
-      const seen = new Set(base.map((o) => o.value));
-      for (const m of dynamic.models) {
-        if (seen.has(m.modelId)) continue;
-        base.push({ value: m.modelId, label: m.name || m.modelId });
-        seen.add(m.modelId);
-      }
-    }
-    return base;
-  })();
 
   return (
     <>
@@ -183,65 +127,7 @@ export function GeneralSettings() {
               />
             </ProjectSettingRow>
             <ProjectRedirectChecksSetting project={selectedProject} onSave={saveProject} />
-            <ProjectSettingRow
-              settingId="project-general.default-model"
-              title={t('settings.projectDefaultModel', 'Default Model')}
-              description={t(
-                'settings.projectDefaultModelDesc',
-                'Provider and model for new threads in this project',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <ModelCombobox
-                  value={selectedProject.defaultProvider || DEFAULT_PROVIDER}
-                  onChange={(v) => {
-                    // SAFETY: the combobox only offers PROVIDERS, whose values are AgentProviders.
-                    const p = v as AgentProvider;
-                    const model = getDefaultModel(p);
-                    saveProject(selectedProject.id, {
-                      defaultProvider: p,
-                      defaultModel: model,
-                      defaultEffort:
-                        normalizeEffort(model, p, selectedProject.defaultEffort) || null,
-                    });
-                  }}
-                  options={PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
-                  placeholder={t('settings.selectProvider')}
-                  searchPlaceholder={t('settings.searchProvider')}
-                />
-                <ModelCombobox
-                  value={projectDefaultModel}
-                  onChange={(v) =>
-                    saveProject(selectedProject.id, {
-                      defaultModel: v,
-                      defaultEffort:
-                        normalizeEffort(v, projectDefaultProvider, selectedProject.defaultEffort) ||
-                        null,
-                    })
-                  }
-                  options={projectModelOptions}
-                  placeholder={t('settings.selectModel')}
-                  searchPlaceholder={t('settings.searchModel')}
-                />
-              </div>
-            </ProjectSettingRow>
-            {projectEffortOptions.length > 0 && (
-              <ProjectSettingRow
-                settingId="project-general.default-effort"
-                title={t('settings.projectDefaultEffort')}
-                description={t('settings.projectDefaultEffortDesc')}
-              >
-                <SegmentedControl<string>
-                  value={projectDefaultEffort}
-                  onChange={(v) => saveProject(selectedProject.id, { defaultEffort: v })}
-                  options={projectEffortOptions.map((level) => ({
-                    value: level.value,
-                    label: t(`settings.effort.${level.value}`, level.label),
-                    testId: `settings-default-effort-${level.value}`,
-                  }))}
-                />
-              </ProjectSettingRow>
-            )}
+            <ProjectDefaultModelSetting project={selectedProject} onSave={saveProject} />
             <ProjectThreadModeSetting projectId={selectedProject.id} />
             <ProjectSettingRow
               settingId="project-general.permission-mode"
@@ -320,51 +206,7 @@ export function GeneralSettings() {
       )}
 
       {/* Permissions */}
-      <SettingsSection settingId="project-general.permissions" className="mt-6">
-        {t('settings.permissions')}
-      </SettingsSection>
-      <div className="border-border/50 overflow-hidden rounded-lg border">
-        <SettingAnchor settingId="project-general.tool-permissions" className="px-4 py-3.5">
-          <p className="text-foreground text-sm font-medium">{t('settings.toolPermissions')}</p>
-          <p className="text-muted-foreground mt-0.5 mb-3 text-xs">
-            {t('settings.toolPermissionsDesc')}
-          </p>
-          <div className="space-y-1">
-            {ALL_STANDARD_TOOLS.map((tool) => (
-              <div
-                key={tool}
-                className="hover:bg-muted/50 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="text-foreground font-mono text-sm">{tool}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {t(TOOL_LABELS[tool] ?? tool)}
-                  </span>
-                </div>
-                <SegmentedControl<ToolPermission>
-                  value={toolPermissions[tool] ?? 'allow'}
-                  onChange={(v) => saveToolPermission(tool, v)}
-                  options={[
-                    { value: 'allow', label: t('settings.allow') },
-                    { value: 'ask', label: t('settings.ask') },
-                    { value: 'deny', label: t('settings.deny') },
-                  ]}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex justify-end">
-            <button
-              onClick={() => saveResetToolPermissions()}
-              data-testid="settings-reset-defaults"
-              className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors"
-            >
-              <RotateCcw className="icon-xs" />
-              {t('settings.resetDefaults')}
-            </button>
-          </div>
-        </SettingAnchor>
-      </div>
+      <ToolPermissionsSection />
     </>
   );
 }

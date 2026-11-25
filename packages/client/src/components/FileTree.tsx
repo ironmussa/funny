@@ -1,87 +1,23 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import {
-  Check,
-  ChevronRight,
-  ClipboardCopy,
-  Copy,
-  ExternalLink,
-  EyeOff,
-  FileCode,
-  FolderIcon,
-  FolderOpen,
-  FolderOpenDot,
-  FolderX,
-  GitBranch,
-  MoreHorizontal,
-  Undo2,
-} from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { HostDropdownMenuItem } from '@/components/HostOnly';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { FileName } from '@/components/ui/file-name';
-import { HighlightText } from '@/components/ui/highlight-text';
 import { browseApi as api } from '@/lib/api/browse';
 import { createClientLogger } from '@/lib/client-logger';
-import {
-  openFileInExternalEditor,
-  openFileInInternalEditor,
-  getEditorLabel,
-} from '@/lib/editor-utils';
-import { FileExtensionIcon } from '@/lib/file-icons';
-import { setFileMentionDragData } from '@/lib/file-mention-dnd';
-import { buildTreeRows, getFileExtension, getParentFolders, type TreeRow } from '@/lib/file-tree';
-import { cn } from '@/lib/utils';
+import { buildTreeRows, type TreeRow } from '@/lib/file-tree';
+
+import { FileTreeFileRow } from './file-tree/FileTreeFileRow';
+import { FileTreeFolderRow } from './file-tree/FileTreeFolderRow';
+import { FileTreeSubmoduleStatusRow } from './file-tree/FileTreeSubmoduleStatusRow';
+import type { FileTreeRowCommon } from './file-tree/row-props';
 
 const log = createClientLogger('file-tree');
 
-import { DiffStats } from './DiffStats';
-import { SubmoduleBadge } from './SubmoduleBadge';
-
 export type { TreeRow } from '@/lib/file-tree';
 
-const INDENT_PX = 12;
 const ROW_HEIGHT = 24; // h-6 = 1.5rem = 24px
-
-/* ── Helpers ── */
-
-function statusColorClass(status: string): string {
-  switch (status) {
-    case 'added':
-      return 'text-file-status-added';
-    case 'modified':
-      return 'text-file-status-modified';
-    case 'deleted':
-      return 'text-file-status-deleted';
-    default:
-      return 'text-file-status-other';
-  }
-}
-
-function statusLetter(status: string): string {
-  switch (status) {
-    case 'added':
-      return 'A';
-    case 'modified':
-      return 'M';
-    case 'deleted':
-      return 'D';
-    default:
-      return 'R';
-  }
-}
 
 /* ── Props ── */
 
@@ -252,436 +188,57 @@ export function FileTree({
     [basePath, t],
   );
 
+  const common: FileTreeRowCommon = {
+    fontSize,
+    hoverClass,
+    testIdPrefix,
+    searchQuery,
+    hideStatus,
+    hideDiffStats,
+    diffStatsSize,
+    basePath,
+    dropdownCloseRef,
+    onCopyPath: handleCopyPath,
+    onOpenDirectory: handleOpenDirectory,
+  };
+
   const renderRow = (row: TreeRow) => {
     if (row.kind === 'submodule-status') {
-      const label =
-        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-        row.state === 'loading'
-          ? t('review.submoduleLoading', { defaultValue: 'Loading submodule files…' })
-          : row.state === 'error'
-            ? (row.message ??
-              t('review.submoduleError', { defaultValue: 'Failed to load submodule' }))
-            : t('review.submoduleEmpty', { defaultValue: 'No changes inside submodule' });
       return (
-        <div
+        <FileTreeSubmoduleStatusRow
           key={`submodule-status-${row.submodulePath}-${row.state}`}
-          className={cn(
-            'flex h-[24px] select-none items-center gap-1.5 overflow-hidden pr-1 pl-[var(--file-tree-indent)] italic',
-            fontSize,
-            'text-muted-foreground/80',
-          )}
-          style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
-          data-testid={`${testIdPrefix}-submodule-status-${row.submodulePath}`}
-        >
-          <span className="truncate">{label}</span>
-        </div>
+          row={row}
+          common={common}
+        />
       );
     }
-
     if (row.kind === 'folder') {
-      const isCollapsed = collapsedFolders.has(row.path);
       return (
-        <div
+        <FileTreeFolderRow
           key={`folder-${row.path}`}
-          className={cn(
-            'group flex h-[24px] cursor-pointer select-none items-center gap-1.5 overflow-hidden pr-1 pl-[var(--file-tree-indent)]',
-            fontSize,
-            'text-muted-foreground transition-colors',
-            hoverClass,
-          )}
-          style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
-          draggable
-          onDragStart={(e) => {
-            setFileMentionDragData(e.dataTransfer, {
-              path: row.path,
-              fileType: 'folder',
-            });
-          }}
-          data-testid={`${testIdPrefix}-folder-${row.path}`}
-        >
-          <button
-            type="button"
-            onClick={() => toggleFolder(row.path)}
-            aria-expanded={!isCollapsed}
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-          >
-            <ChevronRight
-              className={cn('icon-sm shrink-0 transition-transform', !isCollapsed && 'rotate-90')}
-            />
-            {isCollapsed ? (
-              <FolderIcon className="icon-base text-muted-foreground/70 shrink-0" />
-            ) : (
-              <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
-            )}
-            {searchQuery ? (
-              <HighlightText
-                text={row.label}
-                query={searchQuery}
-                className={cn(
-                  'min-w-0 flex-1 truncate font-mono-explorer',
-                  // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
-                  fontSize,
-                )}
-              />
-            ) : (
-              <span className={cn('min-w-0 flex-1 truncate font-mono-explorer', fontSize)}>
-                {row.label}
-              </span>
-            )}
-            {!hideDiffStats && (
-              <DiffStats
-                linesAdded={row.additions}
-                linesDeleted={row.deletions}
-                size={diffStatsSize}
-              />
-            )}
-            {!hideStatus && (
-              <span className={cn('invisible shrink-0 font-medium', fontSize)}>M</span>
-            )}
-          </button>
-          {basePath ? (
-            <DropdownMenu
-              onOpenChange={(open) => {
-                if (!open) dropdownCloseRef.current = Date.now();
-              }}
-            >
-              <DropdownMenuTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  aria-label={t('review.moreActions', 'More actions')}
-                  className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
-                  data-testid={`${testIdPrefix}-folder-menu-${row.path}`}
-                >
-                  <MoreHorizontal className="icon-sm" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="min-w-[220px]"
-                onCloseAutoFocus={(e) => e.preventDefault()}
-              >
-                <HostDropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleOpenDirectory(row.path, false);
-                  }}
-                  data-testid={`${testIdPrefix}-folder-open-directory-${row.path}`}
-                >
-                  <FolderOpenDot />
-                  {t('sidebar.openDirectory')}
-                </HostDropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCopyPath(row.path, false);
-                  }}
-                >
-                  <Copy />
-                  {t('review.copyFilePath')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCopyPath(row.path, true);
-                  }}
-                >
-                  <ClipboardCopy />
-                  {t('review.copyRelativePath')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <span className="size-6 shrink-0" />
-          )}
-        </div>
+          row={row}
+          common={common}
+          isCollapsed={collapsedFolders.has(row.path)}
+          onToggleFolder={toggleFolder}
+        />
       );
     }
-
-    const f = row.file;
-    const isActive = f.path === selectedFile;
-    const isChecked = checkedFiles?.has(f.path) ?? false;
-    const fileName = f.path.split('/').pop() || f.path;
-    const isSubmodule = f.kind === 'submodule';
-    const canExpandSubmodule = isSubmodule && !!onToggleSubmodule;
-    const isSubmoduleExpanded = canExpandSubmodule && !!expandedSubmodules?.has(f.path);
-    const nested = f.nestedDirty;
-
     return (
-      <div
-        key={f.path}
-        className={cn(
-          'group flex h-[24px] items-center gap-1.5 cursor-pointer transition-colors overflow-hidden pr-1 pl-[var(--file-tree-indent)]',
-          fontSize,
-          isActive ? activeClass : hoverClass,
-        )}
-        style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
-        draggable
-        onDragStart={(e) => {
-          setFileMentionDragData(e.dataTransfer, {
-            path: f.path,
-            fileType: 'file',
-          });
-        }}
-        data-testid={`${testIdPrefix}-file-${f.path}`}
-      >
-        {checkedFiles && onToggleFile && (
-          <button
-            role="checkbox"
-            aria-checked={isChecked}
-            aria-label={t('review.selectFile', {
-              file: f.path,
-              defaultValue: `Select ${f.path}`,
-            })}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFile(f.path);
-            }}
-            className={cn(
-              'flex items-center justify-center size-3.5 rounded border transition-colors shrink-0',
-              isChecked
-                ? 'bg-primary border-primary text-primary-foreground'
-                : 'border-muted-foreground/40',
-            )}
-            data-testid={`${testIdPrefix}-check-${f.path}`}
-          >
-            {isChecked && <Check className="icon-2xs" />}
-          </button>
-        )}
-        {canExpandSubmodule && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSubmodule?.(f.path);
-            }}
-            aria-label={
-              isSubmoduleExpanded
-                ? t('review.collapseSubmodule', { defaultValue: 'Collapse submodule' })
-                : t('review.expandSubmodule', { defaultValue: 'Expand submodule' })
-            }
-            className="text-muted-foreground hover:text-foreground flex size-4 shrink-0 items-center justify-center rounded"
-            data-testid={`${testIdPrefix}-submodule-toggle-${f.path}`}
-          >
-            <ChevronRight
-              className={cn('icon-sm transition-transform', isSubmoduleExpanded && 'rotate-90')}
-            />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            if (Date.now() - dropdownCloseRef.current < 400) return;
-            onFileClick(f.path);
-          }}
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-        >
-          {isSubmodule ? (
-            <GitBranch
-              className="text-status-violet size-4 shrink-0"
-              data-testid={`${testIdPrefix}-submodule-icon-${f.path}`}
-            />
-          ) : (
-            <FileExtensionIcon
-              filePath={f.path}
-              className="text-muted-foreground/80 size-4 shrink-0"
-            />
-          )}
-          <FileName
-            name={fileName}
-            query={searchQuery}
-            preserveExtension={!isSubmodule}
-            font="explorer"
-            className={cn(
-              // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
-              fontSize,
-            )}
-          />
-          {isSubmodule && (
-            <SubmoduleBadge
-              nested={nested}
-              testId={`${testIdPrefix}-submodule-badge-${f.path}`}
-              showExpandHint={canExpandSubmodule}
-            />
-          )}
-          {!hideDiffStats &&
-            (() => {
-              const effAdded = isSubmodule && nested ? nested.linesAdded : (f.additions ?? 0);
-              const effDeleted = isSubmodule && nested ? nested.linesDeleted : (f.deletions ?? 0);
-              return (
-                <DiffStats linesAdded={effAdded} linesDeleted={effDeleted} size={diffStatsSize} />
-              );
-            })()}
-          {!hideStatus && (
-            <span className={cn('shrink-0 font-medium', fontSize, statusColorClass(f.status))}>
-              {statusLetter(f.status)}
-            </span>
-          )}
-        </button>
-        <DropdownMenu
-          onOpenChange={(open) => {
-            if (!open) dropdownCloseRef.current = Date.now();
-          }}
-        >
-          <DropdownMenuTrigger asChild>
-            <button
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              aria-label={t('review.moreActions', 'More actions')}
-              className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
-              data-testid={`${testIdPrefix}-menu-${f.path}`}
-            >
-              <MoreHorizontal className="icon-sm" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="min-w-[220px]"
-            onCloseAutoFocus={(e) => e.preventDefault()}
-          >
-            <HostDropdownMenuItem
-              onClick={(e) => {
-                e.stopPropagation();
-                const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
-                openFileInExternalEditor(fullPath);
-              }}
-            >
-              <ExternalLink />
-              {t('review.openInEditor', { editor: getEditorLabel() })}
-            </HostDropdownMenuItem>
-            <DropdownMenuItem
-              onClick={(e) => {
-                e.stopPropagation();
-                const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
-                openFileInInternalEditor(fullPath);
-              }}
-              data-testid={`file-tree-open-internal-editor-${f.path}`}
-            >
-              <FileCode />
-              {t('review.openInInternalEditor')}
-            </DropdownMenuItem>
-            {basePath && (
-              <HostDropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleOpenDirectory(f.path, true);
-                }}
-                data-testid={`${testIdPrefix}-file-open-directory-${f.path}`}
-              >
-                <FolderOpenDot />
-                {t('sidebar.openDirectory')}
-              </HostDropdownMenuItem>
-            )}
-            {onRevertFile && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRevertFile(f.path);
-                  }}
-                >
-                  <Undo2 />
-                  {revertLabel ?? t('review.discardChanges')}
-                </DropdownMenuItem>
-              </>
-            )}
-            {onIgnore && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onIgnore(f.path);
-                  }}
-                >
-                  <EyeOff />
-                  {t('review.ignoreFile')}
-                </DropdownMenuItem>
-                {(() => {
-                  const folders = getParentFolders(f.path);
-                  if (folders.length === 0) return null;
-                  if (folders.length === 1) {
-                    return (
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onIgnore(folders[0]);
-                        }}
-                      >
-                        <FolderX />
-                        {t('review.ignoreFolder')}
-                      </DropdownMenuItem>
-                    );
-                  }
-                  return (
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      >
-                        <FolderX />
-                        {t('review.ignoreFolder')}
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      >
-                        {folders.map((folder) => (
-                          <DropdownMenuItem
-                            key={folder}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onIgnore(folder);
-                            }}
-                          >
-                            {folder}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                  );
-                })()}
-                {(() => {
-                  const ext = getFileExtension(f.path);
-                  if (!ext) return null;
-                  return (
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onIgnore(`*${ext}`);
-                      }}
-                    >
-                      <EyeOff />
-                      {t('review.ignoreExtension', { ext })}
-                    </DropdownMenuItem>
-                  );
-                })()}
-              </>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCopyPath(f.path, false);
-              }}
-            >
-              <Copy />
-              {t('review.copyFilePath')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCopyPath(f.path, true);
-              }}
-            >
-              <ClipboardCopy />
-              {t('review.copyRelativePath')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <FileTreeFileRow
+        key={row.file.path}
+        row={row}
+        common={common}
+        isActive={row.file.path === selectedFile}
+        activeClass={activeClass}
+        onFileClick={onFileClick}
+        checkedFiles={checkedFiles}
+        onToggleFile={onToggleFile}
+        onRevertFile={onRevertFile}
+        revertLabel={revertLabel}
+        onIgnore={onIgnore}
+        onToggleSubmodule={onToggleSubmodule}
+        expandedSubmodules={expandedSubmodules}
+      />
     );
   };
 

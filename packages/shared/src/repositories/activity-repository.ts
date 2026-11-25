@@ -53,7 +53,7 @@ export type ActivityInsert = Omit<
 
 type StoredRow = RepoDeps['schema']['activities']['$inferSelect'];
 
-const inputSchema = z.record(z.string(), z.unknown());
+const inputSchema = z.record(z.string(), z.json());
 const resultRefSchema = z.object({
   projectId: z.string().optional(),
   prUrl: z.string().optional(),

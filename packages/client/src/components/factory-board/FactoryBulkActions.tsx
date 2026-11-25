@@ -20,7 +20,7 @@ import { toastError } from '@/lib/toast-error';
 type BulkAction = 'retry' | 'stop';
 
 /** The selected runs a bulk action applies to. */
-export function runsForBulkAction(
+function runsForBulkAction(
   runs: readonly FactoryQueueRun[],
   action: BulkAction,
 ): FactoryQueueRun[] {

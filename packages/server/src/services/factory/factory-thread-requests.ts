@@ -349,7 +349,28 @@ export async function freeRunBranchForRetry(
   keep: string[],
   browserEvents?: BrowserEventsPort,
 ): Promise<KeptWorktree[]> {
-  const rows = await db
+  const kept: KeptWorktree[] = [];
+  for (const thread of await worktreesHoldingRun(run, keep)) {
+    const left = await freeRunWorktree(ports, thread, run.runBranch, browserEvents);
+    if (left) kept.push(left);
+  }
+  return kept;
+}
+
+type RunWorktreeRow = {
+  id: string;
+  userId: string;
+  projectId: string | null;
+  worktreePath: string | null;
+  branch: string | null;
+};
+
+/** The idle local worktrees on the run's branch or of its threads, except `keep`. */
+const worktreesHoldingRun = (
+  run: { runBranch: string; threadIds: string[] },
+  keep: string[],
+): Promise<RunWorktreeRow[]> =>
+  db
     .select({
       id: threads.id,
       userId: threads.userId,
@@ -371,48 +392,52 @@ export async function freeRunBranchForRetry(
         notInArray(threads.status, ACTIVE_STATUSES),
       ),
     );
-  const kept: KeptWorktree[] = [];
-  for (const thread of rows) {
-    if (!thread.projectId || !thread.worktreePath) continue;
-    const workspace = {
-      id: thread.id,
-      projectId: thread.projectId,
-      worktreePath: thread.worktreePath,
-      branch: thread.branch,
-    };
-    const removed = await removeUnchangedWorktree(ports, thread.userId, workspace, {
-      deleteBranch: thread.branch !== run.runBranch,
-      reason: 'factory-retried',
-    });
-    if (removed.isErr() || removed.value) {
-      const unsaved = removed.isOk() && removed.value ? removed.value : null;
-      kept.push({
-        threadId: thread.id,
-        worktreePath: thread.worktreePath,
-        dirtyFileCount: unsaved?.dirtyFileCount ?? 0,
-        unpushedCommitCount: unsaved?.unpushedCommitCount ?? 0,
-      });
-      log.warn('A retry could not free a factory run worktree', {
-        namespace: 'factory',
-        threadId: thread.id,
-        worktreePath: thread.worktreePath,
-        error: removed.isErr() ? removed.error : 'unsaved work',
-      });
-      continue;
-    }
-    await clearThreadWorkspace(thread.id);
-    browserEvents?.toUser(thread.userId, {
-      type: 'thread:updated',
-      threadId: thread.id,
-      data: { worktreePath: null, branch: null },
-    });
-    log.info('Freed a factory run worktree for a retry', {
+
+/**
+ * Remove one worktree for a retry, keeping the run's branch; the worktree it
+ * left in place (unsaved work, runner did not answer), or null.
+ */
+async function freeRunWorktree(
+  ports: RunnerPorts,
+  thread: RunWorktreeRow,
+  runBranch: string,
+  browserEvents?: BrowserEventsPort,
+): Promise<KeptWorktree | null> {
+  if (!thread.projectId || !thread.worktreePath) return null;
+  const { id, projectId, worktreePath, branch } = thread;
+  const removed = await removeUnchangedWorktree(
+    ports,
+    thread.userId,
+    { id, projectId, worktreePath, branch },
+    { deleteBranch: branch !== runBranch, reason: 'factory-retried' },
+  );
+  if (removed.isErr() || removed.value) {
+    const unsaved = removed.isOk() ? removed.value : null;
+    log.warn('A retry could not free a factory run worktree', {
       namespace: 'factory',
-      threadId: thread.id,
-      branch: thread.branch,
+      threadId: id,
+      worktreePath,
+      error: removed.isErr() ? removed.error : 'unsaved work',
     });
+    return {
+      threadId: id,
+      worktreePath,
+      dirtyFileCount: unsaved?.dirtyFileCount ?? 0,
+      unpushedCommitCount: unsaved?.unpushedCommitCount ?? 0,
+    };
   }
-  return kept;
+  await clearThreadWorkspace(id);
+  browserEvents?.toUser(thread.userId, {
+    type: 'thread:updated',
+    threadId: id,
+    data: { worktreePath: null, branch: null },
+  });
+  log.info('Freed a factory run worktree for a retry', {
+    namespace: 'factory',
+    threadId: id,
+    branch,
+  });
+  return null;
 }
 
 /**

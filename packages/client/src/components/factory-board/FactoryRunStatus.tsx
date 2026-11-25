@@ -39,16 +39,16 @@ function showsThreadPin(run: FactoryQueueRun, thread: Thread | undefined): threa
 }
 
 /** A dot in the run's state color, its state on hover. */
-export function FactoryRunStateDot({ run }: { run: FactoryQueueRun }) {
+function FactoryRunStateDot({ run }: { run: FactoryQueueRun }) {
   const { t } = useTranslation();
   const state = factoryRunStateChip(t, run);
+  const color = DOT_CLASS[state.tone];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="flex size-3.5 items-center justify-center">
           <span
-            // oxlint-disable-next-line shadcn/require-static-classes -- the color comes from DOT_CLASS (one entry per tone)
-            className={cn('block size-2 rounded-full', DOT_CLASS[state.tone])}
+            className={cn('block size-2 rounded-full', color)}
             data-testid={`factory-board-dot-${run.id}`}
             data-state={run.state}
           />

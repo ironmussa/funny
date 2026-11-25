@@ -17,14 +17,14 @@ import { ResultAsync } from 'neverthrow';
 import { log } from '../../lib/logger.js';
 
 /** The wait before each new attempt: three of them, about a minute and a half in all. */
-export const TRANSIENT_RETRY_DELAYS_MS: readonly number[] = [5_000, 20_000, 60_000];
+const TRANSIENT_RETRY_DELAYS_MS: readonly number[] = [5_000, 20_000, 60_000];
 
 /**
  * Whether GitHub failed rather than refused: a 5xx, or no usable answer (the
  * network, or a body that could not be read). An error with a `kind` came
  * from the token source, before GitHub was called.
  */
-export function isTransientGithubError(error: GithubCallError): boolean {
+function isTransientGithubError(error: GithubCallError): boolean {
   if (error.kind !== undefined) return false;
   return error.status === undefined || error.status >= 500;
 }

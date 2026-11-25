@@ -241,7 +241,7 @@ export async function cleanupFactoryWorktrees(
   userId: string,
   threadIds: string[],
   browserEvents?: BrowserEventsPort,
-  options: { keepUnsaved?: boolean } = {},
+  options: { keepUnsaved?: boolean; reason?: WorkspaceCleanupReason } = {},
 ): Promise<KeptWorktree[]> {
   const kept: KeptWorktree[] = [];
   if (threadIds.length === 0) return kept;
@@ -274,7 +274,7 @@ export async function cleanupFactoryWorktrees(
       branch: thread.branch,
     };
     const removed = options.keepUnsaved
-      ? await removeUnchangedWorktree(ports, userId, workspace)
+      ? await removeUnchangedWorktree(ports, userId, workspace, { reason: options.reason })
       : (
           await requestThreadWorkspaceCleanup(ports, {
             userId,
@@ -507,11 +507,9 @@ async function removeUnchangedWorktree(
   ports: RunnerPorts,
   userId: string,
   thread: { id: string; projectId: string; worktreePath: string; branch: string | null },
-  options: { deleteBranch: boolean; reason: WorkspaceCleanupReason } = {
-    deleteBranch: !!thread.branch,
-    reason: 'factory-no-change',
-  },
+  options: { deleteBranch?: boolean; reason?: WorkspaceCleanupReason } = {},
 ): Promise<Result<UnsavedWork | null, string>> {
+  const { deleteBranch = true, reason = 'factory-no-change' } = options;
   const sent = await sendToThreadRunner(ports, userId, {
     method: 'POST',
     path: '/api/worktrees/remove-unchanged',
@@ -520,8 +518,8 @@ async function removeUnchangedWorktree(
       projectId: thread.projectId,
       worktreePath: thread.worktreePath,
       branchName: thread.branch ?? undefined,
-      deleteBranch: options.deleteBranch && !!thread.branch,
-      reason: options.reason,
+      deleteBranch: deleteBranch && !!thread.branch,
+      reason,
       threadId: thread.id,
     },
   });

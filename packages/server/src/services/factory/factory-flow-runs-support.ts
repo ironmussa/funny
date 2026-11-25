@@ -130,6 +130,8 @@ export interface FactoryFlowRunsDeps {
    * returning) the worktrees with uncommitted files or unpushed commits.
    */
   cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
+  /** Remove a triage or review thread's worktree once its answer is stored, only when unchanged. */
+  cleanupRoleThread?: (userId: string, threadId: string) => Promise<void>;
   loadFlow?: (
     job: FactoryRunJob,
     context: FactoryFlowContext,

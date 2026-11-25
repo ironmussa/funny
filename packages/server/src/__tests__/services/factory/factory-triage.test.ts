@@ -64,6 +64,8 @@ interface Script {
   issue?: { title: string; body: string; comments: Array<{ author: string; body: string }> } | null;
   /** The factory's `split` setting: the part issues open from this number; `failAt` (from 0) fails. */
   split?: { firstNumber: number; failAt?: number };
+  /** Freeing the triage thread's worktree fails. */
+  releaseFails?: boolean;
 }
 
 function triaging(script: Script) {
@@ -74,6 +76,8 @@ function triaging(script: Script) {
   const opened: Array<{ title: string; body: string }> = [];
   const queued: number[][] = [];
   const released: boolean[] = [];
+  /** What happened, in order: the re-emit requests (`ask`) and the worktree releases (`free:<id>`). */
+  const events: string[] = [];
   let turn = 0;
   const split = script.split;
   const deps: ProviderDeps = {
@@ -101,8 +105,13 @@ function triaging(script: Script) {
       followedUpSince: async () => false,
       followUpOffBranch: async () => {
         turn += 1;
+        events.push('ask');
         return ok(undefined);
       },
+    },
+    releaseRoleWorkspace: async (threadId) => {
+      if (script.releaseFails) throw new Error('runner offline');
+      events.push(`free:${threadId}`);
     },
     busyPaths: async () => script.busy ?? [],
     holdForPaths: async (blockers) => {
@@ -150,7 +159,7 @@ function triaging(script: Script) {
   };
   const provider = createFactoryActionProvider(deps);
   const stored = () => recorded.flatMap((input) => (input.triage ? [input.triage] : [])).at(-1);
-  return { provider, bodies, recorded, comments, held, stored, opened, queued, released };
+  return { provider, bodies, recorded, comments, held, stored, opened, queued, released, events };
 }
 
 describe('paths that overlap', () => {
@@ -307,6 +316,34 @@ describe('the triage step', () => {
     expect(String(result.metadata?.contract)).toContain('- src/sum.ts');
     expect(stored()).toMatchObject({ decision: 'ready', threadId: 'tri-1', contract: CONTRACT });
     expect(comments).toEqual([]);
+  });
+
+  // The triage thread's checkout is not read once its answer is stored; left
+  // in place, its worktree and branch stayed until the whole run ended.
+  describe("the triage thread's worktree", () => {
+    test('is freed once the answer is stored', async () => {
+      const { provider, stored, events } = triaging({ says: [READY] });
+      await provider.triage!({});
+      expect(stored()).toMatchObject({ decision: 'ready', threadId: 'tri-1' });
+      expect(events).toEqual(['free:tri-1']);
+    });
+
+    test('is kept while the agent is asked again, and freed after its answer', async () => {
+      const { provider, events } = triaging({ says: ['prose', READY] });
+      await provider.triage!({});
+      expect(events).toEqual(['ask', 'free:tri-1']);
+    });
+
+    test('is kept when there is no valid answer: the run cleans it up at its end', async () => {
+      const { provider, events } = triaging({ says: ['prose', 'more prose'] });
+      await provider.triage!({});
+      expect(events).toEqual(['ask']);
+    });
+
+    test('a release that fails does not fail the step', async () => {
+      const { provider } = triaging({ says: [READY], releaseFails: true });
+      expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+    });
   });
 
   test('needs_info: one comment with the questions, and the run waits on its issue', async () => {

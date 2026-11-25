@@ -513,6 +513,10 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
     },
     lastThreadMessage: deps.lastThreadMessage ?? lastThreadMessage,
     lastAgentError,
+    // Only an unchanged worktree (a read-only role's always is), with its branch.
+    releaseRoleWorkspace: async (threadId) => {
+      await deps.cleanupRoleThread?.(scope.userId, threadId);
+    },
     removeUnchangedWorktrees: async () => {
       const run = await deps.runs.get(job.run.id);
       const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;

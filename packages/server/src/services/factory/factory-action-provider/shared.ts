@@ -257,6 +257,8 @@ export interface FactoryActionProviderDeps {
   flowIntegrates?: boolean;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
+  /** Remove a triage or review thread's worktree once its answer is stored (only when unchanged). */
+  releaseRoleWorkspace?: (threadId: string) => Promise<void>;
   /** The last error the thread's agent reported since `since` (a failed turn's cause). */
   lastAgentError?: (threadId: string, since: string) => Promise<string | null>;
   /**

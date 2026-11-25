@@ -252,6 +252,29 @@ describe('factory thread requests', () => {
       expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
     });
 
+    test('a triage or review thread is removed with its branch, recorded as a finished review', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t1');
+      requests.response = {
+        status: 200,
+        headers: {},
+        body: JSON.stringify({ removed: true }),
+        bodyEncoding: 'utf8',
+      };
+
+      await cleanupFactoryWorktrees(ports(), 'alice', ['t1'], undefined, {
+        keepUnsaved: true,
+        reason: 'review-finished',
+      });
+
+      expect(JSON.parse(String(requests.requests[0]!.request.body))).toMatchObject({
+        branchName: 'factory/issue-7-t1',
+        deleteBranch: true,
+        reason: 'review-finished',
+      });
+      expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
+    });
+
     test('keepUnsaved leaves the worktree when the runner does not know the route', async () => {
       runner('r-alice', 'alice');
       worktreeThread('t1');

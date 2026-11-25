@@ -41,14 +41,16 @@ export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
 
   const pins = annotations
     .map((a, i) => ({ a, index: i + 1 }))
-    .filter(({ a }) => a.kind === 'pin') as Array<{
-    a: Extract<(typeof annotations)[number], { kind: 'pin' }>;
-    index: number;
-  }>;
+    .filter(
+      (
+        entry,
+      ): entry is { a: Extract<(typeof annotations)[number], { kind: 'pin' }>; index: number } =>
+        entry.a.kind === 'pin',
+    );
 
   const handleAddPin = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isActive) return;
-    if ((e.target as HTMLElement).dataset.pinMarker === 'true') return;
+    if (e.target instanceof HTMLElement && e.target.dataset.pinMarker === 'true') return;
     const overlayRect = overlayRef.current?.getBoundingClientRect();
     const canvasRect = canvasRef.current?.getBoundingClientRect();
     if (!overlayRect || !canvasRect || canvasRect.width === 0 || canvasRect.height === 0) return;

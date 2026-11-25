@@ -144,6 +144,15 @@ export function resolveThreadScope(projectId: string): string[] | null {
   return registered && ids.size > 0 ? [...ids].sort() : null;
 }
 
+/** The projects some mounted view registered threads (or 'all') of. */
+export function scopedProjectIds(): string[] {
+  const projects = new Set<string>();
+  for (const scope of scopeByConsumer.values()) {
+    for (const projectId of Object.keys(scope)) projects.add(projectId);
+  }
+  return [...projects].sort();
+}
+
 /** True when `next` asks for threads the previous fetch (`prev`) did not cover. */
 export function scopeWidened(prev: string | undefined, next: string): boolean {
   if (prev === undefined) return true;

@@ -65,7 +65,9 @@ export interface ProjectSecretsDeps {
 
 type Row = typeof projectSecrets.$inferSelect;
 
-const storage = (error: unknown): { kind: 'storage'; message: string } => ({
+type StorageFailure = Extract<ProjectSecretError, { kind: 'storage' }>;
+
+const storage = (error: unknown): StorageFailure => ({
   kind: 'storage',
   message: error instanceof Error ? error.message : String(error),
 });

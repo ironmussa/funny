@@ -123,13 +123,8 @@ export function FactoryRunIndicator({
           <span className="max-w-32 truncate">{label}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side="top"
-        className="w-72 text-xs"
-        data-testid="factory-run-popover"
-      >
-        <div className="flex flex-col gap-2">
+      <PopoverContent align="start" side="top" className="w-72" data-testid="factory-run-popover">
+        <div className="flex flex-col gap-2 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-medium">{factoryRunBanner(t, run)}</span>
             <Badge size="xs" variant={factoryRunStateVariant(run.state)} className="ml-auto">

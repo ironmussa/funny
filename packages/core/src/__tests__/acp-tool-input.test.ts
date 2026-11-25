@@ -10,33 +10,34 @@ import {
 
 describe('extractACPToolOutput', () => {
   test('unwraps Cursor read_file `{ content: string }` rawOutput', () => {
-    const out = extractACPToolOutput({ content: 'hello world' }, undefined, 'Read File');
+    const out = extractACPToolOutput({ rawOutput: { content: 'hello world' } }, 'Read File');
     expect(out).toBe('hello world');
   });
 
   test('unwraps `{ text }` and `{ output }` and `{ stdout }` rawOutput shapes', () => {
-    expect(extractACPToolOutput({ text: 'a' }, undefined, '')).toBe('a');
-    expect(extractACPToolOutput({ output: 'b' }, undefined, '')).toBe('b');
-    expect(extractACPToolOutput({ stdout: 'c' }, undefined, '')).toBe('c');
+    expect(extractACPToolOutput({ rawOutput: { text: 'a' } }, '')).toBe('a');
+    expect(extractACPToolOutput({ rawOutput: { output: 'b' } }, '')).toBe('b');
+    expect(extractACPToolOutput({ rawOutput: { stdout: 'c' } }, '')).toBe('c');
   });
 
   test('falls back to JSON.stringify for non-text-bearing objects', () => {
-    const out = extractACPToolOutput({ exitCode: 0, files: 3 }, undefined, '');
+    const out = extractACPToolOutput({ rawOutput: { exitCode: 0, files: 3 } }, '');
     expect(out).toBe(JSON.stringify({ exitCode: 0, files: 3 }));
   });
 
   test('extracts text from embedded resource content blocks', () => {
     const out = extractACPToolOutput(
-      undefined,
-      [
-        {
-          type: 'content',
-          content: {
-            type: 'resource',
-            resource: { uri: 'file:///repo/foo.ts', text: 'export const x = 1;' },
+      {
+        content: [
+          {
+            type: 'content',
+            content: {
+              type: 'resource',
+              resource: { uri: 'file:///repo/foo.ts', text: 'export const x = 1;' },
+            },
           },
-        },
-      ],
+        ],
+      },
       '',
     );
     expect(out).toBe('export const x = 1;');
@@ -98,8 +99,7 @@ describe('Cursor updateTodos → TodoWrite', () => {
   test('inferACPToolName maps raw `_toolName: updateTodos` to TodoWrite', () => {
     expect(
       inferACPToolName(undefined, 'Update TODOs', undefined, {
-        _toolName: 'updateTodos',
-        description: 'Update TODOs',
+        rawInput: { _toolName: 'updateTodos', description: 'Update TODOs' },
       }),
     ).toBe('TodoWrite');
   });

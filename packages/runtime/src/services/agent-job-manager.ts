@@ -276,7 +276,7 @@ function emitTool(
           toolCallId: string;
           messageId: string;
           name: string;
-          input: Record<string, unknown>;
+          input: CompletionToolInput;
           author: string;
         };
       }
@@ -333,7 +333,12 @@ function renderCompletion(job: Job): string {
   );
 }
 
-function renderCompletionToolInput(job: Job): Record<string, unknown> {
+/** The input shown on a finished job's `Background` tool card. */
+type CompletionToolInput = Pick<Job, 'label' | 'command' | 'cwd' | 'status' | 'exitCode'> & {
+  jobId: Job['id'];
+};
+
+function renderCompletionToolInput(job: Job): CompletionToolInput {
   return {
     jobId: job.id,
     label: job.label,

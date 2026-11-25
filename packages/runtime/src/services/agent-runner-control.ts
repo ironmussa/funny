@@ -4,6 +4,8 @@ import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import type { ResultAsync } from 'neverthrow';
 
+import type { AgentMcpServers } from './agent-startup/load-mcp-servers.js';
+
 type StartAgent = (
   threadId: string,
   prompt: string,
@@ -14,7 +16,7 @@ type StartAgent = (
   disallowedTools?: string[],
   allowedTools?: string[],
   provider?: AgentProvider,
-  mcpServers?: Record<string, unknown>,
+  mcpServers?: AgentMcpServers,
   skipMessageInsert?: boolean,
   effort?: string,
   steer?: boolean,

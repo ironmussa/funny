@@ -31,12 +31,29 @@ export function resetThreadScrollPositionForTests(): void {
   }
 }
 
+function isObject(value: unknown): value is object {
+  return typeof value === 'object';
+}
+
+/** The parsed storage map: any object; its values are checked on read. */
+function isStoredThreadScroll(value: unknown): value is StoredThreadScroll {
+  return typeof value === 'object';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 function readAll(): StoredThreadScroll {
   if (cached) return cached;
   if (typeof window === 'undefined') return {};
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}');
-    cached = parsed && typeof parsed === 'object' ? parsed : {};
+    cached = parsed && isStoredThreadScroll(parsed) ? parsed : {};
   } catch {
     cached = {};
   }
@@ -68,23 +85,22 @@ function scheduleFlush(): void {
 
 export function loadThreadScrollPosition(threadId: string): StoredThreadScrollPosition | undefined {
   const value = readAll()[threadId];
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (isFiniteNumber(value)) {
     return { progress: Math.min(1, Math.max(0, value)), anchor: null };
   }
-  if (!value || typeof value !== 'object') return undefined;
+  if (!value || !isObject(value)) return undefined;
 
   const progress = value.progress;
-  if (typeof progress !== 'number' || !Number.isFinite(progress)) return undefined;
+  if (!isFiniteNumber(progress)) return undefined;
 
   const anchor = value.anchor;
   return {
     progress: Math.min(1, Math.max(0, progress)),
     anchor:
       anchor &&
-      typeof anchor.key === 'string' &&
+      isString(anchor.key) &&
       anchor.key.length > 0 &&
-      typeof anchor.offsetFromViewportTop === 'number' &&
-      Number.isFinite(anchor.offsetFromViewportTop)
+      isFiniteNumber(anchor.offsetFromViewportTop)
         ? {
             key: anchor.key,
             offsetFromViewportTop: anchor.offsetFromViewportTop,

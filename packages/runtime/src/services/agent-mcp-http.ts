@@ -22,6 +22,9 @@ import { randomBytes } from 'crypto';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
+import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
@@ -36,10 +39,11 @@ export interface AgentToolContext {
   assetsDir?: string;
   /** The adapter supports native background execution and completion delivery. */
   nativeBackgroundJobs?: boolean;
+  /** False for a thread that may not schedule a deferred wake: `funny_watch` is not listed. */
+  scheduledWakes?: boolean;
 }
 
 export interface AgentToolResult {
-  [key: string]: unknown;
   content: Array<
     { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
   >;
@@ -47,12 +51,18 @@ export interface AgentToolResult {
 }
 
 /** One tool, independent of the MCP server hosting it. */
+/**
+ * What a tool reads from the MCP SDK's per-call context: the call's abort
+ * signal. Absent when a tool is called outside an MCP request (tests).
+ */
+export type AgentToolExtra = Pick<RequestHandlerExtra<ServerRequest, ServerNotification>, 'signal'>;
+
 export interface AgentToolDefinition {
   name: string;
   description: string;
-  /** Zod raw shape of the tool's arguments (`{}` for none). */
-  schema: Record<string, any>;
-  run: (args: any, extra: unknown) => Promise<AgentToolResult>;
+  /** A zod schema per argument of the tool (`{}` for none). */
+  schema: Record<string, z.ZodType>;
+  run: (args: any, extra: AgentToolExtra | undefined) => Promise<AgentToolResult>;
 }
 
 /** A funny MCP server: its tools are built per request for the token's thread. */
@@ -95,7 +105,7 @@ async function handle(req: Request): Promise<Response> {
     server.registerTool(
       def.name,
       { description: def.description, inputSchema: def.schema },
-      (args: unknown, extra: unknown) => def.run(args ?? {}, extra) as any,
+      (args, extra) => def.run(args ?? {}, extra) as any,
     );
   }
   const transport = new WebStandardStreamableHTTPServerTransport({

@@ -19,7 +19,7 @@ import {
 
 import type { BrowserSessionAgentAction, BrowserSessionPointerKind } from '@funny/shared';
 import { ResultAsync } from 'neverthrow';
-import type { Locator, Page } from 'playwright';
+import type { Frame, Locator, Page } from 'playwright';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
@@ -78,10 +78,10 @@ class ToolFailure extends Error {
   }
 }
 
-function toToolError(err: unknown): BrowserToolError {
-  if (err instanceof ToolFailure) return { code: err.code, message: err.message };
-  const message = err instanceof Error ? err.message : String(err);
-  if (err instanceof Error && err.name === 'TimeoutError') {
+function toToolError(cause: unknown): BrowserToolError {
+  if (cause instanceof ToolFailure) return { code: cause.code, message: cause.message };
+  const message = cause instanceof Error ? cause.message : String(cause);
+  if (cause instanceof Error && cause.name === 'TimeoutError') {
     return { code: 'action-timeout', message: firstLine(message) };
   }
   if (message.startsWith('too-many-sessions')) {
@@ -216,7 +216,7 @@ function nextDialog(s: BrowserSession): { promise: Promise<'dialog'>; cancel: ()
 /** Run an action and report whether the main frame navigated while it ran. */
 async function trackNavigation(page: Page, fn: () => Promise<void>): Promise<boolean> {
   let navigated = false;
-  const onNav = (frame: { parentFrame(): unknown }) => {
+  const onNav = (frame: Frame) => {
     if (!frame.parentFrame()) navigated = true;
   };
   page.on('framenavigated', onNav);

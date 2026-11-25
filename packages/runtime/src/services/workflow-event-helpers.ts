@@ -10,6 +10,7 @@
 
 import type { ThreadEventType, WSEvent } from '@funny/shared';
 
+import type { ThreadEventData } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -20,7 +21,7 @@ function broadcastThreadEvent(
   userId: string,
   threadId: string,
   type: WorkflowEventType,
-  data: Record<string, unknown>,
+  data: ThreadEventData,
 ) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
@@ -38,7 +39,7 @@ export async function emitWorkflowEvent(
   userId: string,
   threadId: string,
   type: WorkflowEventType,
-  data: Record<string, unknown>,
+  data: ThreadEventData,
 ) {
   await getServices().threadEvents.saveThreadEvent(threadId, type, data);
   broadcastThreadEvent(userId, threadId, type, data);

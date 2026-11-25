@@ -26,6 +26,16 @@ const JSON_FENCE_OPEN = /^[ \t]*(`{3,})[ \t]*json[ \t]*$/i;
 const MAX_RESULT_CHARS = 100_000;
 
 /**
+ * The shell rule every read-only role's prompt carries. Its Bash runs in the
+ * SDK's sandbox, whose wrapper keeps two proxies as background jobs of the
+ * same shell: a bare `wait` waits for them forever, and the Claude CLI does
+ * not end a turn while a shell job it put in the background still runs.
+ * Seen in a real review: the verdict was written, the thread stayed running.
+ */
+export const READ_ONLY_SHELL_RULE =
+  'Your shell runs in a sandbox that keeps helper processes of its own in the background, so a bare `wait` never returns and your turn would never end. To wait for a command you put in the background, wait for its pid (`cmd & pid=$!; ...; wait $pid`), or run the commands one after another.';
+
+/**
  * The text of the last fenced `json` block of a message, or null when it has
  * none. A block ends at the next line holding only a fence at least as long as
  * its opening one; an unclosed block runs to the end of the message.

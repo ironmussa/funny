@@ -73,16 +73,27 @@ export function hostPermissionFor(serverUrl: string): string | null {
   return `${origin}/*`;
 }
 
+/** HTTP request header name → value. */
+interface RequestHeaders {
+  [name: string]: string;
+}
+
+/** A v1 call, ready for `fetch(url, init)`. */
+export interface ApiRequest {
+  url: string;
+  init: RequestInit;
+}
+
 /** The URL and request init for a v1 call. Throws `ApiError('no-token')` without a token. */
 export function buildApiRequest(
   connection: ApiConnection,
   path: string,
   init: { method?: string; body?: unknown } = {},
-): { url: string; init: RequestInit } {
+): ApiRequest {
   const token = connection.apiToken.trim();
   if (!token) throw new ApiError(MISSING_TOKEN_MESSAGE, 'no-token');
 
-  const headers: Record<string, string> = {
+  const headers: RequestHeaders = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
   };
@@ -147,10 +158,14 @@ function base64DecodedBytes(data: string): number {
   return (data.length / 4) * 3 - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0);
 }
 
+/** An image as the public API takes it. */
+export interface PublicImage {
+  mediaType: ImageMediaType;
+  data: string;
+}
+
 /** A `data:image/…;base64,…` URL as the public API's image, or null when it is not one. */
-export function dataUrlToImage(
-  dataUrl: string | undefined | null,
-): { mediaType: ImageMediaType; data: string } | null {
+export function dataUrlToImage(dataUrl: string | undefined | null): PublicImage | null {
   if (!dataUrl) return null;
   const match = /^data:(image\/[a-z]+);base64,(.+)$/.exec(dataUrl);
   if (!match) return null;
@@ -185,17 +200,30 @@ function buildThreadTitle(data: AnnotationData): string {
     : `UI Review: ${pageTitle}`.slice(0, 100);
 }
 
+/** The body of `POST /api/v1/threads` (`createThreadInput` in `@funny/shared/contracts/public-v1`). */
+export interface CreateThreadBody {
+  projectId: string;
+  prompt: string;
+  title: string;
+  client: 'chrome_extension';
+  mode?: 'local' | 'worktree';
+  provider?: string;
+  model?: string;
+  permissionMode?: PublicPermissionMode;
+  images?: PublicImage[];
+}
+
 /** The body of `POST /api/v1/threads`. `screenshot` is the (possibly re-encoded) data URL. */
 export function buildCreateThreadBody(
   config: ThreadConfig,
   data: AnnotationData,
   screenshot: string | undefined = data.screenshot,
-): Record<string, unknown> {
+): CreateThreadBody {
   if (!config.projectId) {
     throw new Error('No project selected. Open settings in the toolbar and select a project.');
   }
   const image = dataUrlToImage(screenshot);
-  const body: Record<string, unknown> = {
+  const body: CreateThreadBody = {
     projectId: config.projectId,
     prompt: data.markdown,
     title: buildThreadTitle(data),
@@ -241,11 +269,14 @@ function hasMessage(err: unknown): err is { message?: unknown } {
 }
 
 /** A failed call as the message the settings UI receives. */
-export function connectionFailure(err: unknown): {
+export interface ConnectionFailure {
   success: false;
   reason: ApiError['reason'];
   error: string;
-} {
+}
+
+/** A failed call as the message the settings UI receives. */
+export function connectionFailure(err: unknown): ConnectionFailure {
   if (err instanceof ApiError) return { success: false, reason: err.reason, error: err.message };
   return {
     success: false,
@@ -294,9 +325,7 @@ export interface ProviderInfo {
  * The v1 model list as the provider map the settings UI reads, with the
  * server's default provider first (the UI falls back to the first one).
  */
-export function toProviderMap(
-  list: PublicModelList | null | undefined,
-): Record<string, ProviderInfo> {
+export function toProviderMap(list: PublicModelList | null | undefined) {
   const providers = [...(list?.providers ?? [])].sort(
     (a, b) => Number(b.id === list?.defaultProvider) - Number(a.id === list?.defaultProvider),
   );

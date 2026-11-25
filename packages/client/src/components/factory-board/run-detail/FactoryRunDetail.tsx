@@ -16,11 +16,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import type { FactoryQueueRun } from '@/lib/api/factory';
-import {
-  factoryRunStateLabel,
-  factoryRunFallbackTitle,
-  factoryRunRef,
-} from '@/lib/factory-run-labels';
+import { factoryRunStateLabel, factoryRunTitle, factoryRunRef } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { cn } from '@/lib/utils';
 
@@ -57,7 +53,7 @@ function RunHeader({
   return (
     <SheetHeader className="pr-8">
       <SheetTitle data-testid="factory-run-detail-title">
-        {thread?.title || factoryRunFallbackTitle(t, run)}
+        {factoryRunTitle(t, run, thread?.title)}
       </SheetTitle>
       <SheetDescription asChild>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">

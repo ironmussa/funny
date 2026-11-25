@@ -245,7 +245,8 @@ function ActivityRow({
             <Badge
               size="xs"
               variant="outline"
-              className="shrink-0 font-normal"
+              weight="normal"
+              className="shrink-0"
               data-testid={`activity-item-automatic-${activity.id}`}
             >
               {t('activity.automatic')}
@@ -302,7 +303,7 @@ export function ActivityList({
     return (
       <EmptyState
         fill={false}
-        className="px-2"
+        inset="sm"
         title={t('activity.empty')}
         testId="activity-panel-empty"
       />
@@ -327,8 +328,8 @@ export function ActivityList({
       ))}
       {hasFinished ? (
         <Button
-          variant="ghost"
-          className="mt-1 w-full border-t"
+          variant="ghost-divided"
+          className="mt-1 w-full"
           data-testid="activity-panel-clear-finished"
           onClick={onClearFinished}
         >

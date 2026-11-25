@@ -52,125 +52,49 @@ interface UseReviewStateArgs {
   setConfirmDialog: Dispatch<SetStateAction<ConfirmDialogState | null>>;
 }
 
-/**
- * Facade that orchestrates the 8 review-pane hooks plus the local file-selection
- * state and the three context-lifecycle effects. ReviewPane.tsx imports this one
- * hook instead of wiring each piece by hand.
- */
-export function useReviewState(args: UseReviewStateArgs) {
-  const {
-    effectiveThreadId,
-    projectModeId,
-    hasGitContext,
-    gitContextKey,
-    threadProjectId,
-    selectedProjectId,
-    baseBranch,
-    threadBranch,
-    currentBranch,
-    basePath,
-    isAgentRunning,
-    gitStatus,
-    unpushedCommitCount,
-    remoteCheckProjectId,
-    reviewPaneOpen,
-    reviewSubTab,
-    setReviewPaneOpen,
-    setConfirmDialog,
-  } = args;
+type DiffData = ReturnType<typeof useDiffData>;
+type CommitWorkflow = ReturnType<typeof useCommitWorkflow>;
 
-  // ── File-selection state (consumed by every hook + the orchestrator) ──
+/** File-selection state consumed by every review hook and the orchestrator. */
+function useFileSelectionState() {
   const [summaries, setSummaries] = useState<FileDiffSummary[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [fileSearch, setFileSearch] = useState('');
   const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
   const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set());
-
-  const draftId = effectiveThreadId || projectModeId;
-
-  const { commitTitle, commitBody, setCommitTitle, setCommitBody, commitTitleRef, commitBodyRef } =
-    useCommitDraft(draftId);
-
-  const { generatingMsg, handleGenerateCommitMsg, abortGenerate } = useGenerateCommitMsg({
-    hasGitContext,
-    draftId,
-    effectiveThreadId,
-    projectModeId,
-    setCommitTitle,
-    setCommitBody,
-  });
-
-  const { remoteUrl, publishDialogOpen, setPublishDialogOpen, handlePublishSuccess } =
-    usePublishState({
-      remoteCheckProjectId,
-      hasRemoteBranch: gitStatus?.hasRemoteBranch,
-    });
-
-  const isOnDifferentBranch =
-    !!effectiveThreadId && !!baseBranch && !!threadBranch && threadBranch !== baseBranch;
-
-  const tree = useFileTreeState({
-    summaries,
-    fileSearch,
-    fileSearchCaseSensitive,
-    effectiveThreadId,
-    projectModeId,
-  });
-  const {
-    filteredDiffs,
-    collapsedFolders,
-    toggleFolder,
-    handleCollapseAllFolders,
-    handleExpandAllFolders,
-    hasFolders,
-    allFoldersCollapsed,
-    expandedSubmodules,
-    submoduleExpansions,
-    toggleSubmodule,
-    resolveSubmoduleEntry,
-    treeRows,
-    visibleFiles,
-    visiblePaths,
-  } = tree;
-
-  const diffData = useDiffData({
-    hasGitContext,
-    effectiveThreadId,
-    projectModeId,
-    selectedFile,
-    expandedFile,
-    reviewPaneOpen,
-    currentBranch,
+  return {
     summaries,
     setSummaries,
-    submoduleExpansions,
+    selectedFile,
     setSelectedFile,
+    expandedFile,
+    setExpandedFile,
+    fileSearch,
+    setFileSearch,
+    fileSearchCaseSensitive,
+    setFileSearchCaseSensitive,
+    checkedFiles,
     setCheckedFiles,
-    dirtyFileCount: gitStatus?.dirtyFileCount,
-    linesAdded: gitStatus?.linesAdded,
-    linesDeleted: gitStatus?.linesDeleted,
-  });
-  const {
-    diffCache,
-    loadingDiff,
-    loading,
-    loadError,
-    loadErrorMessage,
-    truncatedInfo,
-    setDiffCache,
-    setLoadError,
-    setLoadErrorMessage,
-    abortRef,
-    needsRefreshRef,
-    refresh,
-    loadDiffForFile,
-    requestFullDiff,
-  } = diffData;
+  };
+}
 
-  // The Changes tab stays mounted while the user visits History/Stash/PRs, so
-  // returning to it does not naturally remount or reload its diff summary. Treat
-  // tab activation as a visibility event and refresh the working-tree snapshot.
+// The Changes tab stays mounted while the user visits History/Stash/PRs, so
+// returning to it does not naturally remount or reload its diff summary. Treat
+// tab activation as a visibility event and refresh the working-tree snapshot.
+function useRefreshOnChangesTabReturn({
+  reviewSubTab,
+  hasGitContext,
+  reviewPaneOpen,
+  refresh,
+  needsRefreshRef,
+}: {
+  reviewSubTab: ReviewSubTab;
+  hasGitContext: boolean;
+  reviewPaneOpen: boolean;
+  refresh: DiffData['refresh'];
+  needsRefreshRef: DiffData['needsRefreshRef'];
+}) {
   const prevReviewSubTabRef = useRef<ReviewSubTab | undefined>(undefined);
   useEffect(() => {
     const previousTab = prevReviewSubTabRef.current;
@@ -188,127 +112,32 @@ export function useReviewState(args: UseReviewStateArgs) {
       needsRefreshRef.current = true;
     }
   }, [reviewSubTab, hasGitContext, reviewPaneOpen, refresh, needsRefreshRef]);
+}
 
-  const stash = useStashState({
-    hasGitContext,
-    effectiveThreadId,
-    projectModeId,
-    currentBranch,
-    abortRef,
-    reviewPaneOpen,
-    reviewSubTab,
-    refresh,
-    gitContextKey: gitContextKey ?? '',
-  });
-
-  const wf = useCommitWorkflow({
-    hasGitContext,
-    effectiveThreadId,
-    projectModeId,
-    threadProjectId,
-    selectedProjectId,
-    summaries,
-    checkedFiles,
-    commitTitle,
-    commitBody,
-    draftId,
-    setCommitTitle,
-    setCommitBody,
-    baseBranch,
-    threadBranch,
-    currentBranch,
-    refresh,
-  });
-  const {
-    selectedAction,
-    setSelectedAction,
-    actionInProgress,
-    setActionInProgress,
-    pushInProgress,
-    mergeInProgress,
-    prInProgress,
-    prDialog,
-    setPrDialog,
-    mergeDialog,
-    setMergeDialog,
-    hasRebaseConflict,
-    setHasRebaseConflict,
-    justCompletedWorkflowRef,
-    commitInProgress,
-    commitEntry,
-    commitProgressId,
-    handleCommitAction,
-    handlePushOnly,
-    openMergeDialog,
-    handleMergeWithTarget,
-    handleCreatePROnly,
-  } = wf;
-
-  const actions = useReviewActions({
-    hasGitContext,
-    effectiveThreadId,
-    projectModeId,
-    summaries,
-    checkedFiles,
-    expandedFile,
-    selectedFile,
-    baseBranch,
-    basePath,
-    refresh,
-    loadDiffForFile,
-    setDiffCache,
-    setHasRebaseConflict,
-    setConfirmDialog,
-    refreshStashList: stash.refreshStashList,
-  });
-  const {
-    pullInProgress,
-    fetchInProgress,
-    stashInProgress,
-    resetInProgress,
-    patchStagingInProgress,
-    pullStrategyDialog,
-    setPullStrategyDialog,
-    fileSelectionState,
-    setFileSelectionState,
-    selectAllSignal,
-    setSelectAllSignal,
-    deselectAllSignal,
-    setDeselectAllSignal,
-    handleRevertFile,
-    executeRevert,
-    handleDiscardAll,
-    handleDiscardFolder,
-    executeDiscardAll,
-    handleIgnoreFiles,
-    executeIgnoreFiles,
-    handleIgnore,
-    executeResetSoft,
-    handleStageFile,
-    handleUnstageFile,
-    handleStageSelected,
-    handleUnstageAll,
-    handleStagePatch,
-    handleSelectionStateChange,
-    handleResolveConflict,
-    handleAskAgentResolve,
-    handleOpenInEditorConflict,
-    handlePull,
-    handlePullStrategyChosen,
-    handleFetchOrigin,
-    handleStash,
-    handleStashSelected,
-    handleCopyPath,
-    handleOpenDirectory,
-  } = actions;
-
-  // ── Auto-close pane when branch goes fully clean after a workflow ──
+/** Auto-close the pane when the branch goes fully clean after a workflow. */
+function useAutoCloseAfterWorkflow({
+  justCompletedWorkflowRef,
+  loading,
+  summaryCount,
+  stashCount,
+  unpushedCommitCount,
+  hasRebaseConflict,
+  setReviewPaneOpen,
+}: {
+  justCompletedWorkflowRef: CommitWorkflow['justCompletedWorkflowRef'];
+  loading: boolean;
+  summaryCount: number;
+  stashCount: number;
+  unpushedCommitCount: number;
+  hasRebaseConflict: boolean;
+  setReviewPaneOpen: (open: boolean) => void;
+}) {
   useEffect(() => {
     if (
       justCompletedWorkflowRef.current &&
       !loading &&
-      summaries.length === 0 &&
-      stash.stashEntries.length === 0 &&
+      summaryCount === 0 &&
+      stashCount === 0 &&
       unpushedCommitCount === 0 &&
       !hasRebaseConflict
     ) {
@@ -317,13 +146,44 @@ export function useReviewState(args: UseReviewStateArgs) {
     }
   }, [
     loading,
-    summaries.length,
-    stash.stashEntries.length,
+    summaryCount,
+    stashCount,
     unpushedCommitCount,
     hasRebaseConflict,
     setReviewPaneOpen,
     justCompletedWorkflowRef,
   ]);
+}
+
+interface ResetOnContextChangeArgs {
+  gitContextKey: string | null;
+  currentBranch: string | undefined;
+  reviewPaneOpen: boolean;
+  effectiveThreadId: string | undefined;
+  projectModeId: string | null;
+  selection: ReturnType<typeof useFileSelectionState>;
+  diffData: DiffData;
+  abortGenerate: () => void;
+  setHasRebaseConflict: CommitWorkflow['setHasRebaseConflict'];
+  setSelectedAction: CommitWorkflow['setSelectedAction'];
+}
+
+/** Reset on context change (thread/project switch or branch checkout). */
+function useResetOnContextChange({
+  gitContextKey,
+  currentBranch,
+  reviewPaneOpen,
+  effectiveThreadId,
+  projectModeId,
+  selection,
+  diffData,
+  abortGenerate,
+  setHasRebaseConflict,
+  setSelectedAction,
+}: ResetOnContextChangeArgs) {
+  const { setSummaries, setSelectedFile, setCheckedFiles, setFileSearch } = selection;
+  const { abortRef, setDiffCache, setLoadError, setLoadErrorMessage, refresh, needsRefreshRef } =
+    diffData;
 
   // Track the last-seen context + branch so the reset effect can tell a real
   // branch SWITCH (checkout) apart from the initial async hydration of the
@@ -331,7 +191,6 @@ export function useReviewState(args: UseReviewStateArgs) {
   const prevGitContextKeyRef = useRef<string | null | undefined>(undefined);
   const prevCurrentBranchRef = useRef<string | undefined>(undefined);
 
-  // ── Reset on context change (thread/project switch or branch checkout) ──
   const resetOnContextChange = useStableCallback(() => {
     const contextChanged = gitContextKey !== prevGitContextKeyRef.current;
     const branchChanged = currentBranch !== prevCurrentBranchRef.current;
@@ -391,26 +250,29 @@ export function useReviewState(args: UseReviewStateArgs) {
   useEffect(() => {
     resetOnContextChange();
   }, [gitContextKey, currentBranch, resetOnContextChange]);
+}
 
-  // ── Reset selectedAction if "commit-pr" picked but PR already exists ──
-  useEffect(() => {
-    if (selectedAction === 'commit-pr' && gitStatus?.prNumber) {
-      setSelectedAction('commit');
-    }
-  }, [selectedAction, gitStatus?.prNumber, setSelectedAction]);
-
-  // ── Derived selection counters ──
+/** Selection counters and the check/uncheck callbacks of the file list. */
+function useFileChecks(
+  checkedFiles: Set<string>,
+  setCheckedFiles: Dispatch<SetStateAction<Set<string>>>,
+  visiblePaths: Set<string>,
+  visibleCount: number,
+) {
   const checkedCount = [...checkedFiles].filter((p) => visiblePaths.has(p)).length;
-  const totalCount = visibleFiles.length;
+  const totalCount = visibleCount;
 
-  const toggleFile = useCallback((path: string) => {
-    setCheckedFiles((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  }, []);
+  const toggleFile = useCallback(
+    (path: string) => {
+      setCheckedFiles((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) next.delete(path);
+        else next.add(path);
+        return next;
+      });
+    },
+    [setCheckedFiles],
+  );
 
   const toggleAll = useCallback(() => {
     const targetPaths = visiblePaths;
@@ -424,7 +286,232 @@ export function useReviewState(args: UseReviewStateArgs) {
     } else {
       setCheckedFiles((prev) => new Set([...prev, ...targetPaths]));
     }
-  }, [visiblePaths, checkedFiles]);
+  }, [visiblePaths, checkedFiles, setCheckedFiles]);
+
+  return { checkedCount, totalCount, toggleFile, toggleAll };
+}
+
+function pickDiffData(d: DiffData) {
+  return {
+    diffCache: d.diffCache,
+    loadingDiff: d.loadingDiff,
+    loading: d.loading,
+    loadError: d.loadError,
+    loadErrorMessage: d.loadErrorMessage,
+    truncatedInfo: d.truncatedInfo,
+    setDiffCache: d.setDiffCache,
+    setLoadError: d.setLoadError,
+    setLoadErrorMessage: d.setLoadErrorMessage,
+    abortRef: d.abortRef,
+    needsRefreshRef: d.needsRefreshRef,
+    refresh: d.refresh,
+    loadDiffForFile: d.loadDiffForFile,
+    requestFullDiff: d.requestFullDiff,
+  };
+}
+
+function pickWorkflow(wf: CommitWorkflow) {
+  return {
+    selectedAction: wf.selectedAction,
+    setSelectedAction: wf.setSelectedAction,
+    actionInProgress: wf.actionInProgress,
+    setActionInProgress: wf.setActionInProgress,
+    pushInProgress: wf.pushInProgress,
+    mergeInProgress: wf.mergeInProgress,
+    prInProgress: wf.prInProgress,
+    prDialog: wf.prDialog,
+    setPrDialog: wf.setPrDialog,
+    mergeDialog: wf.mergeDialog,
+    setMergeDialog: wf.setMergeDialog,
+    hasRebaseConflict: wf.hasRebaseConflict,
+    setHasRebaseConflict: wf.setHasRebaseConflict,
+    commitInProgress: wf.commitInProgress,
+    commitEntry: wf.commitEntry,
+    commitProgressId: wf.commitProgressId,
+    handleCommitAction: wf.handleCommitAction,
+    handlePushOnly: wf.handlePushOnly,
+    openMergeDialog: wf.openMergeDialog,
+    handleMergeWithTarget: wf.handleMergeWithTarget,
+    handleCreatePROnly: wf.handleCreatePROnly,
+  };
+}
+
+/**
+ * Facade that orchestrates the 8 review-pane hooks plus the local file-selection
+ * state and the three context-lifecycle effects. ReviewPane.tsx imports this one
+ * hook instead of wiring each piece by hand.
+ */
+export function useReviewState(args: UseReviewStateArgs) {
+  const {
+    effectiveThreadId,
+    projectModeId,
+    hasGitContext,
+    gitContextKey,
+    threadProjectId,
+    selectedProjectId,
+    baseBranch,
+    threadBranch,
+    currentBranch,
+    basePath,
+    isAgentRunning,
+    gitStatus,
+    unpushedCommitCount,
+    remoteCheckProjectId,
+    reviewPaneOpen,
+    reviewSubTab,
+    setReviewPaneOpen,
+    setConfirmDialog,
+  } = args;
+
+  const selection = useFileSelectionState();
+  const { summaries, setSummaries, selectedFile, setSelectedFile, expandedFile } = selection;
+  const { fileSearch, fileSearchCaseSensitive, checkedFiles, setCheckedFiles } = selection;
+
+  const draftId = effectiveThreadId || projectModeId;
+
+  const { commitTitle, commitBody, setCommitTitle, setCommitBody, commitTitleRef, commitBodyRef } =
+    useCommitDraft(draftId);
+
+  const { generatingMsg, handleGenerateCommitMsg, abortGenerate } = useGenerateCommitMsg({
+    hasGitContext,
+    draftId,
+    effectiveThreadId,
+    projectModeId,
+    setCommitTitle,
+    setCommitBody,
+  });
+
+  const { remoteUrl, publishDialogOpen, setPublishDialogOpen, handlePublishSuccess } =
+    usePublishState({
+      remoteCheckProjectId,
+      hasRemoteBranch: gitStatus?.hasRemoteBranch,
+    });
+
+  const isOnDifferentBranch =
+    !!effectiveThreadId && !!baseBranch && !!threadBranch && threadBranch !== baseBranch;
+
+  const tree = useFileTreeState({
+    summaries,
+    fileSearch,
+    fileSearchCaseSensitive,
+    effectiveThreadId,
+    projectModeId,
+  });
+
+  const diffData = useDiffData({
+    hasGitContext,
+    effectiveThreadId,
+    projectModeId,
+    selectedFile,
+    expandedFile,
+    reviewPaneOpen,
+    currentBranch,
+    summaries,
+    setSummaries,
+    submoduleExpansions: tree.submoduleExpansions,
+    setSelectedFile,
+    setCheckedFiles,
+    dirtyFileCount: gitStatus?.dirtyFileCount,
+    linesAdded: gitStatus?.linesAdded,
+    linesDeleted: gitStatus?.linesDeleted,
+  });
+  const { abortRef, needsRefreshRef, refresh, loadDiffForFile, setDiffCache, loading } = diffData;
+
+  useRefreshOnChangesTabReturn({
+    reviewSubTab,
+    hasGitContext,
+    reviewPaneOpen,
+    refresh,
+    needsRefreshRef,
+  });
+
+  const stash = useStashState({
+    hasGitContext,
+    effectiveThreadId,
+    projectModeId,
+    currentBranch,
+    abortRef,
+    reviewPaneOpen,
+    reviewSubTab,
+    refresh,
+    gitContextKey: gitContextKey ?? '',
+  });
+
+  const wf = useCommitWorkflow({
+    hasGitContext,
+    effectiveThreadId,
+    projectModeId,
+    threadProjectId,
+    selectedProjectId,
+    summaries,
+    checkedFiles,
+    commitTitle,
+    commitBody,
+    draftId,
+    setCommitTitle,
+    setCommitBody,
+    baseBranch,
+    threadBranch,
+    currentBranch,
+    refresh,
+  });
+  const { selectedAction, setSelectedAction, actionInProgress } = wf;
+  const { hasRebaseConflict, setHasRebaseConflict } = wf;
+
+  const actions = useReviewActions({
+    hasGitContext,
+    effectiveThreadId,
+    projectModeId,
+    summaries,
+    checkedFiles,
+    expandedFile,
+    selectedFile,
+    baseBranch,
+    basePath,
+    refresh,
+    loadDiffForFile,
+    setDiffCache,
+    setHasRebaseConflict,
+    setConfirmDialog,
+    refreshStashList: stash.refreshStashList,
+  });
+
+  useAutoCloseAfterWorkflow({
+    justCompletedWorkflowRef: wf.justCompletedWorkflowRef,
+    loading,
+    summaryCount: summaries.length,
+    stashCount: stash.stashEntries.length,
+    unpushedCommitCount,
+    hasRebaseConflict,
+    setReviewPaneOpen,
+  });
+
+  useResetOnContextChange({
+    gitContextKey,
+    currentBranch,
+    reviewPaneOpen,
+    effectiveThreadId,
+    projectModeId,
+    selection,
+    diffData,
+    abortGenerate,
+    setHasRebaseConflict,
+    setSelectedAction,
+  });
+
+  // ── Reset selectedAction if "commit-pr" picked but PR already exists ──
+  useEffect(() => {
+    if (selectedAction === 'commit-pr' && gitStatus?.prNumber) {
+      setSelectedAction('commit');
+    }
+  }, [selectedAction, gitStatus?.prNumber, setSelectedAction]);
+
+  const checks = useFileChecks(
+    checkedFiles,
+    setCheckedFiles,
+    tree.visiblePaths,
+    tree.visibleFiles.length,
+  );
 
   const canCommit =
     checkedFiles.size > 0 &&
@@ -434,22 +521,8 @@ export function useReviewState(args: UseReviewStateArgs) {
 
   return {
     // Selection state
-    summaries,
-    setSummaries,
-    selectedFile,
-    setSelectedFile,
-    expandedFile,
-    setExpandedFile,
-    fileSearch,
-    setFileSearch,
-    fileSearchCaseSensitive,
-    setFileSearchCaseSensitive,
-    checkedFiles,
-    setCheckedFiles,
-    checkedCount,
-    totalCount,
-    toggleFile,
-    toggleAll,
+    ...selection,
+    ...checks,
     canCommit,
     isOnDifferentBranch,
 
@@ -473,101 +546,18 @@ export function useReviewState(args: UseReviewStateArgs) {
     handlePublishSuccess,
 
     // File tree
-    filteredDiffs,
-    collapsedFolders,
-    toggleFolder,
-    handleCollapseAllFolders,
-    handleExpandAllFolders,
-    hasFolders,
-    allFoldersCollapsed,
-    expandedSubmodules,
-    submoduleExpansions,
-    toggleSubmodule,
-    resolveSubmoduleEntry,
-    treeRows,
-    visibleFiles,
-    visiblePaths,
+    ...tree,
 
     // Diff data
-    diffCache,
-    loadingDiff,
-    loading,
-    loadError,
-    loadErrorMessage,
-    truncatedInfo,
-    setDiffCache,
-    setLoadError,
-    setLoadErrorMessage,
-    abortRef,
-    needsRefreshRef,
-    refresh,
-    loadDiffForFile,
-    requestFullDiff,
+    ...pickDiffData(diffData),
 
     // Stash (kept as bundle to preserve `stash.foo` usage in ReviewPane)
     stash,
 
     // Workflow
-    selectedAction,
-    setSelectedAction,
-    actionInProgress,
-    setActionInProgress,
-    pushInProgress,
-    mergeInProgress,
-    prInProgress,
-    prDialog,
-    setPrDialog,
-    mergeDialog,
-    setMergeDialog,
-    hasRebaseConflict,
-    setHasRebaseConflict,
-    commitInProgress,
-    commitEntry,
-    commitProgressId,
-    handleCommitAction,
-    handlePushOnly,
-    openMergeDialog,
-    handleMergeWithTarget,
-    handleCreatePROnly,
+    ...pickWorkflow(wf),
 
     // Actions
-    pullInProgress,
-    fetchInProgress,
-    stashInProgress,
-    resetInProgress,
-    patchStagingInProgress,
-    pullStrategyDialog,
-    setPullStrategyDialog,
-    fileSelectionState,
-    setFileSelectionState,
-    selectAllSignal,
-    setSelectAllSignal,
-    deselectAllSignal,
-    setDeselectAllSignal,
-    handleRevertFile,
-    executeRevert,
-    handleDiscardAll,
-    handleDiscardFolder,
-    executeDiscardAll,
-    handleIgnoreFiles,
-    executeIgnoreFiles,
-    handleIgnore,
-    executeResetSoft,
-    handleStageFile,
-    handleUnstageFile,
-    handleStageSelected,
-    handleUnstageAll,
-    handleStagePatch,
-    handleSelectionStateChange,
-    handleResolveConflict,
-    handleAskAgentResolve,
-    handleOpenInEditorConflict,
-    handlePull,
-    handlePullStrategyChosen,
-    handleFetchOrigin,
-    handleStash,
-    handleStashSelected,
-    handleCopyPath,
-    handleOpenDirectory,
+    ...actions,
   };
 }

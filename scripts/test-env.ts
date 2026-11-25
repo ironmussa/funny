@@ -27,7 +27,7 @@ const GIT_LOCAL_ENV_VARS = [
 ] as const;
 
 /** A copy of `env` without the variables that pin git to a repository. */
-export function testSuiteEnv(env: Record<string, string | undefined>): Record<string, string> {
+export function testSuiteEnv(env: Record<string, string | undefined>) {
   const result: Record<string, string> = {};
   const drop = new Set<string>(GIT_LOCAL_ENV_VARS);
   for (const [key, value] of Object.entries(env)) {

@@ -42,12 +42,12 @@ export interface CommitStatusInput {
 }
 
 /** The body of GitHub's create-commit-status request. */
-interface CommitStatusBody {
+type CommitStatusBody = {
   state: CommitStatusInput['state'];
   context: string;
   description: string;
   target_url?: string;
-}
+};
 
 /** Set a commit status on `sha`. Needs `statuses: write`. */
 export function setCommitStatus(

@@ -7,22 +7,24 @@ import { cn } from '@/lib/utils';
 type Category = ContextBreakdown['categories'][number];
 
 /** Swatch per stable category id; unknown ids fall back by kind. */
-const CATEGORY_COLOR: Record<string, string> = {
-  messages: 'bg-blue-500',
-  mcp_tools: 'bg-orange-500',
-  system_tools: 'bg-teal-500',
-  memory_files: 'bg-amber-500',
-  skills: 'bg-violet-500',
-  custom_agents: 'bg-pink-500',
-  system_prompt: 'bg-muted-foreground',
-  mcp_instructions: 'bg-muted-foreground',
-};
+const CATEGORY_COLOR = new Map(
+  Object.entries({
+    messages: 'bg-blue-500',
+    mcp_tools: 'bg-orange-500',
+    system_tools: 'bg-teal-500',
+    memory_files: 'bg-amber-500',
+    skills: 'bg-violet-500',
+    custom_agents: 'bg-pink-500',
+    system_prompt: 'bg-muted-foreground',
+    mcp_instructions: 'bg-muted-foreground',
+  }),
+);
 
 function swatchClass(c: Category): string {
   if (c.kind === 'free') return 'bg-muted';
   if (c.kind === 'deferred') return 'bg-muted-foreground/40';
   if (c.kind === 'buffer') return 'bg-muted-foreground/60';
-  return (c.id && CATEGORY_COLOR[c.id]) || 'bg-muted-foreground';
+  return (c.id && CATEGORY_COLOR.get(c.id)) || 'bg-muted-foreground';
 }
 
 export const formatTokens = (n: number): string => {
@@ -47,13 +49,16 @@ function DetailList({ testId, label, count, rows }: DetailListProps) {
   if (rows.length === 0) return null;
   return (
     <Collapsible>
-      <CollapsibleTrigger
-        data-testid={testId}
-        className="group hover:text-foreground flex w-full items-center gap-1 py-0.5 text-left"
-      >
-        <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
-        <span className="flex-1">{label}</span>
-        <span className="tabular-nums">{count}</span>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          data-testid={testId}
+          className="group hover:text-foreground flex w-full items-center gap-1 py-0.5 text-left"
+        >
+          <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+          <span className="flex-1">{label}</span>
+          <span className="tabular-nums">{count}</span>
+        </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul className="max-h-32 overflow-y-auto pl-4">

@@ -164,18 +164,19 @@ describe('factory over tRPC', () => {
 
     // A viewer may not approve; the owner does, once.
     seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
-    expect((await mutate('vic', 'approveMerge', { projectId: 'p1', runId: held.id })).status).toBe(
-      403,
-    );
-    const approved = await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id });
+    const approval = { projectId: 'p1', runId: held.id, expectedSha: 'c2b585c51b2e' };
+    expect((await mutate('vic', 'approveMerge', approval)).status).toBe(403);
+    // An approval that names no commit is not a valid request.
+    expect(
+      (await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id })).status,
+    ).toBe(400);
+    const approved = await mutate('alice', 'approveMerge', approval);
     expect(approved).toMatchObject({
       status: 200,
       body: { state: 'queued', mergeApproval: { sha: 'c2b585c51b2e', userId: 'alice' } },
     });
     // The run moved on: approving again is refused, and that is recorded too.
-    expect(
-      (await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id })).status,
-    ).toBe(409);
+    expect((await mutate('alice', 'approveMerge', approval)).status).toBe(409);
     await mutate('alice', 'stopRun', { projectId: 'p1', runId: held.id });
 
     // Recording does not hold up the answer: wait for the rows.
@@ -193,6 +194,250 @@ describe('factory over tRPC', () => {
       ['factory.stop', 'succeeded', 'Stopped the factory run for #7'],
     ]);
     expect(rows.every((row) => row.userId === 'alice' && row.origin === 'user')).toBe(true);
+  });
+
+  async function heldRun() {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const held = await seededRun('waiting_human');
+    await createFactoryRunsRepository().update(held.id, {
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c51b2e',
+        level: 'high',
+        reasons: ['touches a sensitive path'],
+        changedLines: 10,
+        paths: ['packages/server/src/db/migrate.ts'],
+      },
+    });
+    return held;
+  }
+
+  // A member's statement, like an approval: it needs steer and their session.
+  test('vetoing the lint class of a held run, and taking it back, records who did and retries it; a viewer may not', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const held = await heldRun();
+    await createFactoryRunsRepository().update(held.id, {
+      triage: {
+        decision: 'ready',
+        at: '2026-11-25T00:00:00.000Z',
+        contract: {
+          acceptanceCriteria: ['no warnings'],
+          likelyPaths: [],
+          riskHints: [],
+          lintCleanup: true,
+          lintRules: ['eslint/max-lines'],
+        },
+      },
+    });
+    const veto = { projectId: 'p1', runId: held.id, lintCleanup: false };
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'setLintCleanup', veto)).status).toBe(403);
+    expect(
+      (await mutate('alice', 'setLintCleanup', { projectId: 'p1', runId: held.id })).status,
+    ).toBe(400);
+
+    // The veto is stored; the run stays held, nothing to retry.
+    expect(await mutate('alice', 'setLintCleanup', veto)).toMatchObject({
+      status: 200,
+      body: { state: 'waiting_human', riskWaiver: { kind: 'not-lint-cleanup', userId: 'alice' } },
+    });
+    // Taken back: back in flight, so the next classification reads triage's class.
+    expect(await mutate('alice', 'setLintCleanup', { ...veto, lintCleanup: true })).toMatchObject({
+      status: 200,
+      body: { state: 'queued', riskWaiver: null },
+    });
+  });
+
+  // The agent found nothing to change; the member agrees and clears the run.
+  test('a run that ended with no change is marked as done by a member with steer, and only that run', async () => {
+    const idle = await seededRun('no_change');
+    const input = { projectId: 'p1', runId: idle.id };
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'markRunDone', input)).status).toBe(403);
+
+    expect(await mutate('alice', 'markRunDone', input)).toMatchObject({
+      status: 200,
+      body: { state: 'done' },
+    });
+    // It is done now: marking it again changes nothing and says so.
+    expect((await mutate('alice', 'markRunDone', input)).status).toBe(409);
+
+    // A run that failed, or that waits with unsaved work, is not "nothing to change".
+    const failed = await seededRun('failed');
+    expect(
+      (await mutate('alice', 'markRunDone', { projectId: 'p1', runId: failed.id })).status,
+    ).toBe(409);
+  });
+
+  test('triage classing a lint cleanup of neutral rules counts until a member says it is not one', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const { lintCleanupSource } = await import('@funny/shared/contracts/factory');
+    const run = await seededRun('working');
+    const runs = createFactoryRunsRepository();
+    await runs.update(run.id, {
+      triage: {
+        decision: 'ready',
+        at: '2026-11-25T00:00:00.000Z',
+        contract: {
+          acceptanceCriteria: ['no warnings'],
+          likelyPaths: [],
+          riskHints: [],
+          lintCleanup: true,
+          lintRules: ['eslint/max-lines-per-function', 'max-lines'],
+        },
+      },
+    });
+    const proposed = (await runs.get(run.id))._unsafeUnwrap()!;
+    expect(proposed.riskWaiver).toBeNull();
+    expect(lintCleanupSource(proposed)).toBe('triage');
+
+    // The member overrules triage: stored, so the proposal stops counting.
+    const off = await mutate('alice', 'setLintCleanup', {
+      projectId: 'p1',
+      runId: run.id,
+      lintCleanup: false,
+    });
+    expect(off).toMatchObject({
+      status: 200,
+      body: { riskWaiver: { kind: 'not-lint-cleanup', userId: 'alice' } },
+    });
+    expect(lintCleanupSource((await runs.get(run.id))._unsafeUnwrap()!)).toBeNull();
+
+    // Taken back: the veto is gone and triage's class counts again.
+    const back = await mutate('alice', 'setLintCleanup', {
+      projectId: 'p1',
+      runId: run.id,
+      lintCleanup: true,
+    });
+    expect(back).toMatchObject({ status: 200, body: { riskWaiver: null } });
+    expect(lintCleanupSource((await runs.get(run.id))._unsafeUnwrap()!)).toBe('triage');
+  });
+
+  test('a member cannot class a run as a lint cleanup that triage did not', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const { lintCleanupSource } = await import('@funny/shared/contracts/factory');
+    const run = await seededRun('working');
+    const runs = createFactoryRunsRepository();
+    // Triage proposed it, but for a rule whose fix can change behavior.
+    await runs.update(run.id, {
+      triage: {
+        decision: 'ready',
+        at: '2026-11-25T00:00:00.000Z',
+        contract: {
+          acceptanceCriteria: ['no warnings'],
+          likelyPaths: [],
+          riskHints: [],
+          lintCleanup: true,
+          lintRules: ['anti-slop/no-unknown-parameters'],
+        },
+      },
+    });
+    expect(lintCleanupSource((await runs.get(run.id))._unsafeUnwrap()!)).toBeNull();
+    const on = await mutate('alice', 'setLintCleanup', {
+      projectId: 'p1',
+      runId: run.id,
+      lintCleanup: true,
+    });
+    expect(on).toMatchObject({ status: 200, body: { riskWaiver: null } });
+    expect(lintCleanupSource((await runs.get(run.id))._unsafeUnwrap()!)).toBeNull();
+  });
+
+  test('a run that ended cannot be marked', async () => {
+    const ended = await seededRun('merged');
+    const marked = await mutate('alice', 'setLintCleanup', {
+      projectId: 'p1',
+      runId: ended.id,
+      lintCleanup: true,
+    });
+    expect(marked.status).toBe(409);
+  });
+
+  const fromThread = { threadId: 't-ask', runnerId: 'laptop', runnerOwnerId: 'alice' };
+
+  test("an agent's approval request is listed, declined by the owner only, and leaves the run held", async () => {
+    const { factoryAgentTools } = await import('../../trpc/ports/factory.js');
+    const { seedThread } = await import('../helpers/test-db.js');
+    const held = await heldRun();
+    seedThread(t.db, { id: 't-ask', projectId: 'p1', userId: 'alice' });
+
+    const asked = (await factoryAgentTools.requestApproval(fromThread, held.id))._unsafeUnwrap();
+    const listed = await query('alice', 'approvalRequests', { projectId: 'p1' });
+    expect(listed.body).toEqual([
+      expect.objectContaining({
+        id: asked.requestId,
+        runId: held.id,
+        threadId: 't-ask',
+        sha: 'c2b585c51b2e',
+        state: 'pending',
+      }),
+    ]);
+    // What a member sees carries no server bookkeeping.
+    expect(listed.body[0]).not.toHaveProperty('factoryId');
+
+    // An outsider sees no project; a viewer may not decline; another member has no such request.
+    const decline = { projectId: 'p1', requestId: asked.requestId };
+    expect((await query('carol', 'approvalRequests', { projectId: 'p1' })).status).toBe(404);
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'declineApprovalRequest', decline)).status).toBe(403);
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
+    await save('bob', { projectId: 'p1', enabled: false });
+    expect((await mutate('bob', 'declineApprovalRequest', decline)).status).toBe(404);
+    expect((await query('bob', 'approvalRequests', { projectId: 'p1' })).body).toEqual([]);
+
+    const declined = await mutate('alice', 'declineApprovalRequest', decline);
+    expect(declined).toMatchObject({ status: 200, body: { state: 'declined' } });
+    expect((await mutate('alice', 'declineApprovalRequest', decline)).status).toBe(409);
+    const runs = (await query('alice', 'runs', { projectId: 'p1' })).body;
+    expect(runs[0]).toMatchObject({ state: 'waiting_human', mergeApproval: null });
+  });
+
+  test('approving the run closes its pending request, and a request never approves', async () => {
+    const { factoryAgentTools } = await import('../../trpc/ports/factory.js');
+    const { seedThread } = await import('../helpers/test-db.js');
+    const held = await heldRun();
+    seedThread(t.db, { id: 't-ask', projectId: 'p1', userId: 'alice' });
+    const asked = (await factoryAgentTools.requestApproval(fromThread, held.id))._unsafeUnwrap();
+
+    // Asking changed nothing on the run.
+    const before = (await query('alice', 'runs', { projectId: 'p1' })).body[0];
+    expect(before).toMatchObject({ state: 'waiting_human', mergeApproval: null });
+
+    const approved = await mutate('alice', 'approveMerge', {
+      projectId: 'p1',
+      runId: held.id,
+      expectedSha: 'c2b585c51b2e',
+    });
+    expect(approved.status).toBe(200);
+    const after = (await query('alice', 'approvalRequests', { projectId: 'p1' })).body;
+    expect(after).toEqual([expect.objectContaining({ id: asked.requestId, state: 'approved' })]);
+  });
+
+  test("an agent's stop goes through the board's control and names the thread in the activity", async () => {
+    const { factoryAgentTools } = await import('../../trpc/ports/factory.js');
+    const { seedThread } = await import('../helpers/test-db.js');
+    const { activities } = await import('../../db/schema.js');
+    const since = new Date().toISOString();
+    const running = await seededRun('working');
+    seedThread(t.db, { id: 't-ask', projectId: 'p1', userId: 'alice' });
+
+    const stopped = await factoryAgentTools.controlRun(fromThread, 'stop', running.id);
+    expect(stopped._unsafeUnwrap()).toMatchObject({ id: running.id, state: 'stopped' });
+    // The same refusal as the board for a run that has ended.
+    const again = await factoryAgentTools.controlRun(fromThread, 'retry', running.id);
+    expect(again._unsafeUnwrapErr().kind).toBe('conflict');
+
+    let rows: Array<typeof activities.$inferSelect> = [];
+    for (let i = 0; i < 50 && rows.length < 2; i++) {
+      rows = (await t.db.select().from(activities)).filter((row) => row.startedAt >= since);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const stop = rows.find((row) => row.kind === 'factory.stop');
+    expect(stop).toMatchObject({
+      userId: 'alice',
+      threadId: 't-ask',
+      origin: 'implicit',
+      title: 'Stopped the factory run for #7 (asked by an agent)',
+    });
   });
 
   test("another user's run is not found, and a viewer cannot control runs", async () => {
@@ -414,6 +659,52 @@ describe('factory over tRPC', () => {
     }
   });
 
+  // openspec factory-approval-survives-integration, 4.2.
+  test('the adjustment a merge approval follows is off by default, saved within its range, and needs steer', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      approvalAdjustMaxLines: 0,
+    });
+    const saved = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      approvalAdjustMaxLines: 50,
+    });
+    expect(saved.body).toMatchObject({ approvalAdjustMaxLines: 50 });
+    // Omitted, it keeps its value; 0 turns it off again.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      approvalAdjustMaxLines: 50,
+    });
+    for (const approvalAdjustMaxLines of [-1, 201, 12.5]) {
+      expect(
+        (await save('alice', { projectId: 'p1', enabled: true, approvalAdjustMaxLines })).status,
+      ).toBe(400);
+    }
+    // A viewer of the project may not set it.
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect(
+      (await save('vic', { projectId: 'p1', enabled: true, approvalAdjustMaxLines: 10 })).status,
+    ).toBe(403);
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: true, approvalAdjustMaxLines: 0 })).body,
+    ).toMatchObject({ approvalAdjustMaxLines: 0 });
+  });
+
+  // openspec factory-merge-fewer-bounces, D6.
+  test('keeping the paths of a run that waits for an approval is off by default and saved', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      holdPathsAwaitingApproval: false,
+    });
+    const on = { projectId: 'p1', enabled: true, holdPathsAwaitingApproval: true };
+    expect((await save('alice', on)).body).toMatchObject({ holdPathsAwaitingApproval: true });
+    // Omitted, it keeps its value; false turns it off again.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      holdPathsAwaitingApproval: true,
+    });
+    expect((await save('alice', { ...on, holdPathsAwaitingApproval: false })).body).toMatchObject({
+      holdPathsAwaitingApproval: false,
+    });
+  });
+
   // openspec factory-flow-step-options, 4.1.
   test('step overrides are saved and read back; a permission mode or a bad pair is refused', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
@@ -568,7 +859,7 @@ describe('factory over tRPC', () => {
       threadId: 'th-triage',
       items: ['Which endpoint is slow?'],
     };
-    await runs.update(run.id, { state: 'needs_info', triage });
+    await runs.updateInFlight(run.id, { state: 'needs_info', triage });
     expect((await query('alice', 'runs', { projectId: 'p1' })).body).toMatchObject([
       { state: 'needs_info', triage },
     ]);
@@ -583,11 +874,11 @@ describe('factory over tRPC', () => {
   test('a needs_info run goes back in line to be triaged again, only from needs_info', async () => {
     const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
     const runs = createFactoryRunsRepository();
-    const run = await seededRun('working');
+    const run = await seededRun('triaging');
     expect((await runs.retriage(run))._unsafeUnwrap()).toBe(false);
 
     const asked = { decision: 'needs_info' as const, at: '2026-11-22T10:00:00.000Z', items: ['?'] };
-    await runs.update(run.id, { state: 'needs_info', triage: asked });
+    await runs.updateInFlight(run.id, { state: 'needs_info', triage: asked });
     const parked = (await runs.get(run.id))._unsafeUnwrap()!;
     expect((await runs.retriage(parked))._unsafeUnwrap()).toBe(true);
     const again = (await runs.get(run.id))._unsafeUnwrap()!;
@@ -603,7 +894,7 @@ describe('factory over tRPC', () => {
   test('a run whose paths overlap leaves its slot from triaging only, keeping its contract', async () => {
     const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
     const runs = createFactoryRunsRepository();
-    const run = await seededRun('working');
+    const run = await seededRun('queued');
     expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(false);
 
     const triage = {
@@ -615,7 +906,7 @@ describe('factory over tRPC', () => {
         riskHints: [],
       },
     };
-    await runs.update(run.id, { state: 'triaging', triage });
+    await runs.updateInFlight(run.id, { state: 'triaging', triage });
     expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(true);
     expect((await runs.get(run.id))._unsafeUnwrap()).toMatchObject({
       state: 'requested',

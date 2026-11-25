@@ -13,9 +13,13 @@ export interface PortableStore<T> extends StoreApi<T> {
   dispose(): void;
 }
 
+function isPlainObject(value: unknown): value is object {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 function decodeReadAt(raw: string): Record<string, string> {
   const parsed: unknown = JSON.parse(raw);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  if (!isPlainObject(parsed)) {
     throw new Error('Thread read markers must be an object');
   }
   return Object.fromEntries(

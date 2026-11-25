@@ -21,6 +21,8 @@ type Brand<T, B extends string> = T & { readonly [brand]: B };
 export type RunnerId = Brand<string, 'RunnerId'>;
 
 /** Wrap a runner id that `runner-for.ts` selected. Not for use outside this module. */
+// SAFETY: the brand's minting point; its only callers (runner-for.ts) pass a runner id
+// they have just certified (withRunnerFor) or re-verified for the state's owner (OAuth callback).
 export const resolvedRunnerId = (value: string): RunnerId => value as RunnerId;
 
 /** The identity signed into a runner request (`signForwardedIdentity` fields). */

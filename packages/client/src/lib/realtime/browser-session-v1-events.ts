@@ -11,6 +11,10 @@ export interface BrowserSessionRealtimeEvent {
   data: Record<string, unknown>;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function controllerName(value: BrowserSessionController): 'agent' | 'user' | undefined {
   if (value === BrowserSessionController.AGENT) return 'agent';
   if (value === BrowserSessionController.USER) return 'user';
@@ -116,9 +120,10 @@ function agentActionEvent(
     deltaY: value.deltaY,
     detail: value.detail,
   };
-  const data: Record<string, unknown> = { sessionId, kind };
-  for (const [key, field] of Object.entries(fields)) if (field !== undefined) data[key] = field;
-  return { type: 'browser-session:agent-action', data };
+  const defined = Object.fromEntries(
+    Object.entries(fields).filter(([, field]) => field !== undefined),
+  );
+  return { type: 'browser-session:agent-action', data: { sessionId, kind, ...defined } };
 }
 
 function resultEvent(
@@ -134,7 +139,7 @@ function resultEvent(
       requestId,
       ok: result.ok === true,
       value: result.value,
-      error: typeof result.error === 'string' ? result.error : undefined,
+      error: isString(result.error) ? result.error : undefined,
     },
   };
 }

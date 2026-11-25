@@ -15,6 +15,13 @@ interface QueueState {
   messages: QueuedMessage[];
 }
 
+/** One traffic class's queue: messages in flight, and messages and bytes waiting. */
+interface BrowserV1QueueStats {
+  active: number;
+  messages: number;
+  bytes: number;
+}
+
 export type BrowserV1QueueResult = 'accepted' | 'coalesced' | 'dropped' | 'exhausted';
 
 export class BrowserV1OutboundQueue {
@@ -73,7 +80,7 @@ export class BrowserV1OutboundQueue {
     return 'accepted';
   }
 
-  stats(trafficClass: BrowserV1QueueClass): { active: number; messages: number; bytes: number } {
+  stats(trafficClass: BrowserV1QueueClass): BrowserV1QueueStats {
     const state = this.state(trafficClass);
     return { active: state.active, messages: state.messages.length, bytes: state.bytes };
   }

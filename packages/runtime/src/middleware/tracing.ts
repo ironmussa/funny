@@ -11,7 +11,13 @@
 import type { Context, Next } from 'hono';
 import { matchedRoutes } from 'hono/route';
 
-import { metric, recordHistogram, startSpan, type SpanHandle } from '../lib/telemetry.js';
+import {
+  metric,
+  recordHistogram,
+  startSpan,
+  type SpanHandle,
+  type TelemetryAttributes,
+} from '../lib/telemetry.js';
 
 // ── W3C Trace Context parsing ────────────────────────────────────
 // https://www.w3.org/TR/trace-context/#traceparent-header-field-values
@@ -114,7 +120,7 @@ export async function tracingMiddleware(c: Context, next: Next) {
 export function requestSpan(
   c: Context,
   name: string,
-  attributes?: Record<string, unknown>,
+  attributes?: TelemetryAttributes,
 ): SpanHandle {
   return startSpan(name, {
     traceId: c.get('traceId'),

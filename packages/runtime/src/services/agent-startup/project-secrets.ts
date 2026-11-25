@@ -91,9 +91,8 @@ export function redactDeep<T>(value: T, redact: ((text: string) => string) | und
   if (typeof value === 'string') return redact(value) as T;
   if (Array.isArray(value)) return value.map((item) => redactDeep(item, redact)) as T;
   if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) out[key] = redactDeep(item, redact);
-    return out as T;
+    const entries = Object.entries(value).map(([key, item]) => [key, redactDeep(item, redact)]);
+    return Object.fromEntries(entries) as T;
   }
   return value;
 }

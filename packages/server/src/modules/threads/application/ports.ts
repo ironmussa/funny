@@ -20,7 +20,7 @@
 
 import type { Named } from '@gdp-ts/core';
 
-import type { CreationTarget } from '../domain/creation-target.js';
+import type { CreationPayload, CreationTarget } from '../domain/creation-target.js';
 import type { ActorContext, OwnershipForkSource } from '../domain/fork-input.js';
 import type { RunnerId, ThreadId, UserId } from '../domain/ids.js';
 import type { ThreadOwnedBy } from '../domain/proofs/thread-owned-by.js';
@@ -34,7 +34,7 @@ export interface CreateThreadCommand {
   readonly actor: ActorContext;
   readonly intent: CreationIntent;
   /** Legacy permissive creation envelope (already parsed as a JSON object). */
-  readonly payload: Readonly<Record<string, unknown>>;
+  readonly payload: CreationPayload;
 }
 
 /** Why no runner of the actor could serve the target (mirrors the resolver's reasons). */
@@ -66,7 +66,7 @@ export interface RemoteThreadCreationPort {
     runnerId: RunnerId,
     actor: ActorContext,
     intent: CreationIntent,
-    payload: Readonly<Record<string, unknown>>,
+    payload: CreationPayload,
   ): Promise<RemoteCreationResponse>;
 }
 

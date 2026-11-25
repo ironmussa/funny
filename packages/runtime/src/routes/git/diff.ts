@@ -19,6 +19,7 @@ import { badRequest, type DomainError } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 
+import type { TelemetryAttributes } from '../../lib/telemetry.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import * as tm from '../../services/thread-manager.js';
 import { wsBroker } from '../../services/ws-broker.js';
@@ -54,7 +55,7 @@ function requireContainedPath(cwd: string, rawPath: string): Result<string, Doma
 /** Resolves the request's working directory plus the span attributes naming it. */
 type DiffScope = (
   c: Context<HonoEnv>,
-) => Promise<{ cwd: Result<string, DomainError>; attrs: Record<string, unknown> }>;
+) => Promise<{ cwd: Result<string, DomainError>; attrs: TelemetryAttributes }>;
 
 const projectScope: DiffScope = async (c) => ({
   cwd: await requireProjectCwdFromContext(c),
@@ -88,7 +89,7 @@ async function respondFileDiff(
   cwd: string,
   rawPath: string,
   spanName: string,
-  spanAttrs: Record<string, unknown>,
+  spanAttrs: TelemetryAttributes,
 ) {
   const safePath = requireContainedPath(cwd, rawPath);
   if (safePath.isErr()) return resultToResponse(c, safePath);
@@ -116,7 +117,7 @@ async function rejectNonWorkTree(c: Context<HonoEnv>, cwd: string) {
 async function respondSummary(
   c: Context<HonoEnv>,
   spanName: string,
-  spanAttrs: Record<string, unknown>,
+  spanAttrs: TelemetryAttributes,
   run: () => ReturnType<typeof getDiffSummary>,
 ) {
   const span = requestSpan(c, spanName, spanAttrs);
@@ -130,7 +131,7 @@ async function respondSummary(
 async function respondDiffSummary(
   c: Context<HonoEnv>,
   cwd: string,
-  spanAttrs: Record<string, unknown>,
+  spanAttrs: TelemetryAttributes,
   onChanged: () => void,
 ) {
   const notWorkTree = await rejectNonWorkTree(c, cwd);

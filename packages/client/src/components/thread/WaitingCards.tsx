@@ -185,6 +185,11 @@ export function PermissionContinuationLostCard() {
   );
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function PermissionApprovalCard({
   toolName,
   toolInput,
@@ -207,7 +212,7 @@ export function PermissionApprovalCard({
     if (toolName !== 'Bash' || !toolInput) return null;
     try {
       const parsed = JSON.parse(toolInput) as { command?: unknown };
-      return typeof parsed.command === 'string' ? parsed.command : null;
+      return isString(parsed.command) ? parsed.command : null;
     } catch {
       return null;
     }
@@ -276,7 +281,7 @@ export function PermissionApprovalCard({
       {displayedInput && (
         <div className="space-y-1">
           {bashCommand && highlightedBash ? (
-            <ScrollArea className="bg-muted max-h-32 rounded">
+            <ScrollArea variant="muted" className="max-h-32">
               <pre
                 data-testid="permission-card-tool-input"
                 style={{
@@ -288,7 +293,7 @@ export function PermissionApprovalCard({
               />
             </ScrollArea>
           ) : (
-            <ScrollArea className="bg-muted max-h-32 rounded">
+            <ScrollArea variant="muted" className="max-h-32">
               <pre
                 data-testid="permission-card-tool-input"
                 style={{

@@ -1,4 +1,5 @@
 import type {
+  FactoryApprovalRequest,
   FactoryFlowDefinition,
   FactoryFlowValidation,
   FactoryFlowOption,
@@ -12,11 +13,14 @@ import type {
   FactoryTrigger,
 } from '@funny/shared/contracts/factory';
 
-import { hasLaterRunOfIssue } from '@/lib/thread-activity';
+import { hasLaterRunOfIssue, latestLaterRunOfIssue } from '@/lib/thread-activity';
 
 import { useDataQuery } from '../hooks';
 import {
   activeFactoryRunsQuery,
+  factoryApprovalRequestsQuery,
+  NO_FACTORY_APPROVAL_REQUESTS,
+  NO_FACTORY_SETTINGS,
   NO_ACTIVE_FACTORY_RUNS,
   NO_PROJECT_FACTORY_RUNS,
   factoryBlockersQuery,
@@ -65,6 +69,15 @@ export function useFactoryRunForThread(
 }
 
 /**
+ * The newest run of `run`'s issue started after it in the same project, or
+ * null (also while the project's run list loads): the issue was sent again.
+ */
+export function useLaterRunOfIssue(projectId: string, run: FactoryRun | null | undefined) {
+  const runs = useFactoryRuns(projectId);
+  return runs && run ? latestLaterRunOfIssue(runs, run) : null;
+}
+
+/**
  * The run a factory thread belongs to, from its project's run list (polled
  * while shown), or null; `undefined` while loading. Any other thread answers
  * null without a request.
@@ -108,13 +121,27 @@ export function useFactoryFlows(projectId: string): FactoryFlowOption[] | undefi
   return useDataQuery(factoryFlowsQuery(projectId)).data;
 }
 
+/** What `useFactoryFlowDefinition` returns. */
+interface FactoryFlowDefinitionRead {
+  definition: FactoryFlowDefinition | undefined;
+  error: Error | null;
+}
+
 /** One flow's YAML while `flowName` is set; `undefined` while loading or none is chosen. */
 export function useFactoryFlowDefinition(
   projectId: string,
   flowName: string | null,
-): { definition: FactoryFlowDefinition | undefined; error: Error | null } {
+): FactoryFlowDefinitionRead {
   const { data, error } = useDataQuery(factoryFlowDefinitionQuery(projectId, flowName));
   return { definition: data, error: error ?? null };
+}
+
+/** What `useFactoryFlowValidation` returns. */
+interface FactoryFlowValidationRead {
+  validation: FactoryFlowValidation | undefined;
+  error: Error | null;
+  loading: boolean;
+  refresh: () => void;
 }
 
 /**
@@ -126,12 +153,7 @@ export function useFactoryFlowValidation(
   flowName: string,
   requested: boolean,
   overrides: FactoryStepOverrides,
-): {
-  validation: FactoryFlowValidation | undefined;
-  error: Error | null;
-  loading: boolean;
-  refresh: () => void;
-} {
+): FactoryFlowValidationRead {
   const { data, error, isFetching, refetch } = useDataQuery(
     factoryFlowValidationQuery(projectId, flowName, requested, overrides),
   );
@@ -161,11 +183,53 @@ export function useFactoryTriggers(projectId: string): FactoryTrigger[] | undefi
   return useDataQuery(factoryTriggersQuery(projectId)).data;
 }
 
+/** What `useFactoryIssuelessFlow` returns. */
+interface FactoryIssuelessFlowRead {
+  flow: FactoryIssuelessFlow | undefined;
+  error: Error | null;
+  loading: boolean;
+}
+
 /** Whether `flowName` can run without an issue and its inputs; `undefined` while loading. */
 export function useFactoryIssuelessFlow(
   projectId: string,
   flowName: string,
-): { flow: FactoryIssuelessFlow | undefined; error: Error | null; loading: boolean } {
+): FactoryIssuelessFlowRead {
   const { data, error, isFetching } = useDataQuery(factoryIssuelessFlowQuery(projectId, flowName));
   return { flow: data, error: error ?? null, loading: isFetching };
+}
+
+/**
+ * What agents asked the caller to approve in a project, newest first;
+ * `undefined` while loading. With `enabled` false nothing is requested: a
+ * reader with no factory, or no run waiting for an approval, never polls.
+ */
+export function useFactoryApprovalRequests(
+  projectId: string | undefined,
+  enabled = true,
+): FactoryApprovalRequest[] | undefined {
+  const ask = enabled && !!projectId;
+  return useDataQuery(
+    ask && projectId ? factoryApprovalRequestsQuery(projectId) : NO_FACTORY_APPROVAL_REQUESTS,
+  ).data;
+}
+
+/**
+ * Whether the caller has a factory in the project, without asking for a
+ * project that is not there (a scratch thread).
+ */
+export function useHasFactory(projectId: string | undefined): boolean {
+  return !!useDataQuery(projectId ? factorySettingsQuery(projectId) : NO_FACTORY_SETTINGS).data;
+}
+
+/** The pending request an agent made for `runId`, or null. */
+export function usePendingApprovalRequestOfRun(
+  projectId: string | undefined,
+  runId: string,
+  enabled = true,
+): FactoryApprovalRequest | null {
+  const requests = useFactoryApprovalRequests(projectId, enabled);
+  return (
+    requests?.find((request) => request.runId === runId && request.state === 'pending') ?? null
+  );
 }

@@ -1,7 +1,12 @@
 import type { BenchmarkMetrics } from '../types.js';
 
+interface ComparisonTarget {
+  accuracy: number;
+  source: string;
+}
+
 /** Published comparison targets from other systems */
-const COMPARISON_TARGETS: Record<string, Record<string, { accuracy: number; source: string }>> = {
+const COMPARISON_TARGETS = {
   LOCOMO: {
     Mem0: { accuracy: 0.6713, source: 'ArXiv 2504.19413' },
     'Zep (Mem0 paper)': { accuracy: 0.6599, source: 'ArXiv 2504.19413' },
@@ -12,7 +17,7 @@ const COMPARISON_TARGETS: Record<string, Record<string, { accuracy: number; sour
     Hindsight: { accuracy: 0.914, source: 'Hindsight paper' },
     'Full-context GPT-4o': { accuracy: 0.7, source: 'LongMemEval paper' },
   },
-};
+} satisfies Record<string, Record<string, ComparisonTarget>>;
 
 export function printReport(metrics: BenchmarkMetrics): void {
   const line = '─'.repeat(60);

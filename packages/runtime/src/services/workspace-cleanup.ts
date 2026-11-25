@@ -77,11 +77,11 @@ export interface WorkspaceCleanupDeps {
   recordActivity: typeof defaultRecordActivity;
 }
 
-function messageOf(error: unknown): string {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message: unknown }).message);
+function messageOf(cause: unknown): string {
+  if (cause && typeof cause === 'object' && 'message' in cause) {
+    return String((cause as { message: unknown }).message);
   }
-  return String(error);
+  return String(cause);
 }
 
 const defaultDeps: WorkspaceCleanupDeps = {

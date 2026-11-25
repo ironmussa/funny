@@ -114,10 +114,15 @@ function AvatarImage({
 function AvatarFallback({
   className,
   name,
+  textSize = 'default',
   style,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & { name?: string } & {
+}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & {
+  name?: string;
+  /** Initials size: `xs` for the small avatars in lists and menus. Defaults to the inherited size. */
+  textSize?: 'default' | 'xs';
+} & {
   ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Fallback>>;
 }) {
   return (
@@ -126,6 +131,7 @@ function AvatarFallback({
       className={cn(
         'flex h-full w-full items-center justify-center rounded-full',
         !name && 'bg-muted',
+        textSize === 'xs' && 'text-xs',
         className,
       )}
       style={

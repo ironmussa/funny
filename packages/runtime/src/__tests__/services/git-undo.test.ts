@@ -147,7 +147,7 @@ describe('runDestructive', () => {
     userId: 'u1',
     projectId: 'p1',
     title: 'Discard changes to 1 file',
-    input: { action: 'discard', paths: ['tracked.txt'] },
+    input: { action: 'discard' as const, paths: ['tracked.txt'] },
   };
 
   test('snapshot, command, one finished activity naming the snapshot', async () => {

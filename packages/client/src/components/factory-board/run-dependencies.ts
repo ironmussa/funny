@@ -23,6 +23,7 @@ const HELD_BY_RUNS: ReadonlySet<NonNullable<FactoryQueueRun['waitReason']>['kind
   'blocker-waiting-merge',
   'blocker-failed',
   'paths-overlap',
+  'paths-awaiting-approval',
 ]);
 
 export interface FactoryRunBlocker {

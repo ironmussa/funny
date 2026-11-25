@@ -26,8 +26,14 @@ export function hashLlmProxyToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** A minted token, and the hash stored in its place. */
+interface MintedLlmProxyToken {
+  token: string;
+  hash: string;
+}
+
 /** A fresh token (URL-safe, fits the sandbox env file) and its stored hash. */
-export function mintLlmProxyToken(): { token: string; hash: string } {
+export function mintLlmProxyToken(): MintedLlmProxyToken {
   const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
   return { token, hash: hashLlmProxyToken(token) };
 }

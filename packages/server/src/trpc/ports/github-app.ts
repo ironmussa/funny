@@ -101,15 +101,23 @@ const githubPermissionsSchema = z.record(z.string(), z.string().catch('')).catch
 /** `GET /app`: the App's own permissions. */
 const githubAppSchema = z.object({ permissions: githubPermissionsSchema });
 
+/**
+ * One installation of `GET /app/installations`. Each field falls back on its
+ * own, so a malformed entry never drops the others: an account without a text
+ * login is an unknown account, and missing permissions hold nothing.
+ */
+const githubAppInstallationSchema = z
+  .object({
+    account: z
+      .object({ login: z.string().optional().catch(undefined) })
+      .nullish()
+      .catch(null),
+    permissions: githubPermissionsSchema,
+  })
+  .catch({ account: null, permissions: {} });
+
 /** `GET /app/installations`; an answer that is not a list holds no installation. */
-const githubAppInstallationsSchema = z
-  .array(
-    z.object({
-      account: z.object({ login: z.string().optional() }).nullish(),
-      permissions: githubPermissionsSchema,
-    }),
-  )
-  .catch([]);
+const githubAppInstallationsSchema = z.array(githubAppInstallationSchema).catch([]);
 
 /**
  * What the App and its installations lack of `APP_PERMISSIONS` (`GET /app` and

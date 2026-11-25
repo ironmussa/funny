@@ -56,7 +56,7 @@ export function sandboxThreadLauncherFor(env: {
     },
     prepare: (req) => prepareSandboxLaunch(req, { connections, ...ports }),
     insertThread: (row) => threadRepo.createThread(row),
-    loadThread: async (threadId) => (await threadRepo.getThread(threadId)) ?? null,
+    loadThread: (threadId) => threadRepo.getThread(threadId),
     findOwnedThread: async (userId, threadId) => {
       const thread = await threadRepo.getThread(threadId);
       return thread && thread.userId === userId ? thread : null;

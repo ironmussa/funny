@@ -165,8 +165,8 @@ export interface SandboxThreadDeps {
   ): Promise<{ connectionId: string; sizeId: string } | null>;
   prepare(req: SandboxLaunchRequest): Promise<Result<PreparedSandboxLaunch, SandboxLaunchRefusal>>;
   insertThread(row: NewSandboxThreadRow): Promise<void>;
-  /** The thread as stored, sent back to the caller as the created thread (null when absent). */
-  loadThread(threadId: string): Promise<RunnerJson>;
+  /** The thread as stored, sent back to the caller as the created thread (undefined when absent). */
+  loadThread(threadId: string): Promise<RunnerJson | undefined>;
   /** The caller's own thread, or null (another user's thread is not found). */
   findOwnedThread(userId: string, threadId: string): Promise<RetryableSandboxThread | null>;
   /** The machine the thread's last sandbox used, so a retry provisions the same. */
@@ -203,7 +203,7 @@ export type SandboxRetryPayload = z.input<typeof retrySandboxThreadSchema>;
 
 /** A started sandbox thread: the stored row, and when its agent was started. */
 export interface StartedSandboxThread {
-  thread: RunnerJson;
+  thread: RunnerJson | undefined;
   started: Promise<void>;
 }
 

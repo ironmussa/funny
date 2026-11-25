@@ -243,6 +243,38 @@ describe('GrpcOperationsAdapter mapping', () => {
     });
   });
 
+  test('normalizes every JS value kind to protobuf JSON', () => {
+    const date = new Date('2026-01-02T03:04:05.000Z');
+    expect(
+      normalizeRunnerOperationValue('updateThread', {
+        missing: undefined,
+        nil: null,
+        yes: true,
+        no: false,
+        text: `lone\uD800`,
+        count: 42,
+        infinite: Number.POSITIVE_INFINITY,
+        notANumber: Number.NaN,
+        big: 12345678901234567890n,
+        at: date,
+        list: [1, undefined, Number.NEGATIVE_INFINITY, 'x', [2n]],
+        nested: { inner: { when: date, dropped: undefined }, fn: () => 1, sym: Symbol('s') },
+      }),
+    ).toEqual({
+      nil: null,
+      yes: true,
+      no: false,
+      text: 'lone�',
+      count: 42,
+      infinite: null,
+      notANumber: null,
+      big: '12345678901234567890',
+      at: '2026-01-02T03:04:05.000Z',
+      list: [1, null, null, 'x', ['2']],
+      nested: { inner: { when: '2026-01-02T03:04:05.000Z' } },
+    });
+  });
+
   test('maps all supported outcome envelopes back to facade results', () => {
     expect(
       mapRunnerOperationOutcome('getThread', {

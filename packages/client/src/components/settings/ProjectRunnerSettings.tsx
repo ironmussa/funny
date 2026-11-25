@@ -35,7 +35,6 @@ export function ProjectRunnerSettings() {
   const projectId = useProjectStore((s) => s.selectedProjectId);
   const [settings, setSettings] = useState<ProjectRunnerSettingsResponse | null>(null);
   const [saving, setSaving] = useState(false);
-  const [tokenDraft, setTokenDraft] = useState('');
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -122,7 +121,7 @@ export function ProjectRunnerSettings() {
       token
         ? t('projectRunner.tokenSaved', 'Project GitHub token saved')
         : t('projectRunner.tokenCleared', 'Project GitHub token removed'),
-    ).then(() => setTokenDraft(''));
+    );
 
   return (
     <div className="space-y-6">
@@ -242,74 +241,90 @@ export function ProjectRunnerSettings() {
         </div>
       </section>
 
-      <section className="space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold">
-            {t('projectRunner.gitTitle', 'Git credentials')}
-          </h3>
-          <p className="text-muted-foreground text-xs">
-            {settings.hasGithubToken
-              ? t('projectRunner.tokenSet', 'This project uses its own GitHub token.')
-              : t(
-                  'projectRunner.tokenInherited',
-                  'This project uses your personal GitHub token from your profile.',
-                )}
-          </p>
-        </div>
-        {settings.dedicatedRunnerId && !settings.hasGithubToken && (
-          <Alert data-testid="project-runner-personal-token-warning">
-            <KeyRound className="icon-sm" />
-            <AlertDescription>
-              {t(
-                'projectRunner.personalTokenWarning',
-                'The dedicated runner uses your personal GitHub token, which can reach all your repositories. Consider a fine-grained token limited to this repository.',
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
-        <form
-          className="border-border/50 flex flex-wrap items-center gap-2 rounded-lg border p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!saving && tokenDraft.trim()) saveToken(tokenDraft.trim());
-          }}
-          data-testid="project-runner-github-token-form"
-        >
-          <Input
-            mono
-            type="password"
-            value={tokenDraft}
-            onChange={(e) => setTokenDraft(e.target.value)}
-            placeholder={t('projectRunner.tokenPlaceholder', 'github_pat_…')}
-            className={cn('max-w-md flex-1')}
-            autoComplete="off"
-            data-testid="project-runner-github-token"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            disabled={saving || !tokenDraft.trim()}
-            data-testid="project-runner-github-token-save"
-          >
-            <Save className="icon-sm mr-1.5" />
-            {t('common.save', 'Save')}
-          </Button>
-          {settings.hasGithubToken && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => saveToken(null)}
-              disabled={saving}
-              data-testid="project-runner-github-token-clear"
-            >
-              <Trash2 className="icon-sm mr-1.5" />
-              {t('projectRunner.useProfileToken', 'Use my personal token')}
-            </Button>
-          )}
-        </form>
-      </section>
+      <GitCredentialsSection settings={settings} saving={saving} onSaveToken={saveToken} />
     </div>
+  );
+}
+
+function GitCredentialsSection({
+  settings,
+  saving,
+  onSaveToken,
+}: {
+  settings: ProjectRunnerSettingsResponse;
+  saving: boolean;
+  onSaveToken: (token: string | null) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [tokenDraft, setTokenDraft] = useState('');
+  const saveToken = (token: string | null) => onSaveToken(token).then(() => setTokenDraft(''));
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold">{t('projectRunner.gitTitle', 'Git credentials')}</h3>
+        <p className="text-muted-foreground text-xs">
+          {settings.hasGithubToken
+            ? t('projectRunner.tokenSet', 'This project uses its own GitHub token.')
+            : t(
+                'projectRunner.tokenInherited',
+                'This project uses your personal GitHub token from your profile.',
+              )}
+        </p>
+      </div>
+      {settings.dedicatedRunnerId && !settings.hasGithubToken && (
+        <Alert data-testid="project-runner-personal-token-warning">
+          <KeyRound className="icon-sm" />
+          <AlertDescription>
+            {t(
+              'projectRunner.personalTokenWarning',
+              'The dedicated runner uses your personal GitHub token, which can reach all your repositories. Consider a fine-grained token limited to this repository.',
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      <form
+        className="border-border/50 flex flex-wrap items-center gap-2 rounded-lg border p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!saving && tokenDraft.trim()) saveToken(tokenDraft.trim());
+        }}
+        data-testid="project-runner-github-token-form"
+      >
+        <Input
+          mono
+          type="password"
+          value={tokenDraft}
+          onChange={(e) => setTokenDraft(e.target.value)}
+          placeholder={t('projectRunner.tokenPlaceholder', 'github_pat_…')}
+          className={cn('max-w-md flex-1')}
+          autoComplete="off"
+          data-testid="project-runner-github-token"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          disabled={saving || !tokenDraft.trim()}
+          data-testid="project-runner-github-token-save"
+        >
+          <Save className="icon-sm mr-1.5" />
+          {t('common.save', 'Save')}
+        </Button>
+        {settings.hasGithubToken && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => saveToken(null)}
+            disabled={saving}
+            data-testid="project-runner-github-token-clear"
+          >
+            <Trash2 className="icon-sm mr-1.5" />
+            {t('projectRunner.useProfileToken', 'Use my personal token')}
+          </Button>
+        )}
+      </form>
+    </section>
   );
 }
 

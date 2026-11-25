@@ -217,7 +217,8 @@ export function useThreadHandlers(refs: Refs) {
   };
 }
 
-function applyQueuedCount(threadId: string, responseQueuedCount: unknown) {
+/** The response is JSON from the runner: apply the count only when it is a number. */
+function applyQueuedCount(threadId: string, responseQueuedCount: number | undefined) {
   if (!isNumber(responseQueuedCount)) return;
   applyQueueCount(threadId, responseQueuedCount);
 }
@@ -252,7 +253,7 @@ export function reportSendFailure(
   if (undoOptimisticRun) useThreadStore.getState().revertOptimisticRun(threadId);
 }
 
-function handleSendResult(
+export function handleSendResult(
   result: Awaited<ReturnType<typeof api.sendMessage>>,
   threadId: string,
   options: { rollbackOnQueue: boolean },
@@ -262,14 +263,11 @@ function handleSendResult(
     reportSendFailure(result.error, threadId, t, options.rollbackOnQueue);
     return;
   }
-  if (result.value && 'queued' in result.value && result.value.queued) {
+  if (result.value?.queued) {
     if (options.rollbackOnQueue) {
       useThreadStore.getState().rollbackOptimisticMessage(threadId);
     }
-    applyQueuedCount(
-      threadId,
-      'queuedCount' in result.value ? result.value.queuedCount : undefined,
-    );
+    applyQueuedCount(threadId, result.value.queuedCount);
     toast.success(t('thread.messageQueued'));
     return;
   }

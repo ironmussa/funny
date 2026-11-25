@@ -4,6 +4,7 @@
  * listener, and the periodic pass as an Effect fiber that `stop` interrupts.
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { Effect, Fiber, Schedule } from 'effect';
 import { ResultAsync } from 'neverthrow';
@@ -28,7 +29,7 @@ export interface ReverseLinks {
   stop(): Promise<void>;
 }
 
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const message = errorMessage;
 
 function listLinked(): ResultAsync<ReverseLinkedSandbox[], string> {
   return ResultAsync.fromPromise(

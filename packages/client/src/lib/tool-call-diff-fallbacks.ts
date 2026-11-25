@@ -1,4 +1,5 @@
 import type { FileDiffSummary } from '@funny/shared';
+import type { JsonObject } from '@funny/shared/json';
 
 type ToolCallLike = {
   name?: string;
@@ -14,13 +15,13 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-/** Any non-null object (arrays included), read as a record of unknown fields. */
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** Any non-null object (arrays included), read as a bag of JSON fields. */
+function isRecord(value: unknown): value is JsonObject {
   return !!value && typeof value === 'object';
 }
 
 /** The tool call's input as an object: parsed when it arrived as JSON text. */
-function inputRecord(toolCall: ToolCallLike): Record<string, unknown> | null {
+function inputRecord(toolCall: ToolCallLike): JsonObject | null {
   const input = toolCall.input;
   if (isString(input)) {
     try {

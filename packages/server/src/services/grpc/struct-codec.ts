@@ -71,8 +71,26 @@ export function decodeStruct(value: JsonValue | undefined): JsonObject {
   );
 }
 
+/**
+ * A field of a data handler's response: JSON, `undefined`, or a nested record
+ * (a row) whose own fields are encoded in turn.
+ */
+type ResponseValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ResponseValue[]
+  | ResponseRecord;
+
+/** A data handler's response record, encoded field by field as a `Struct`. */
+interface ResponseRecord {
+  readonly [field: string]: ResponseValue;
+}
+
 /** Encode a value from a data handler's response as a `google.protobuf.Value`. */
-function encodeValue(value: unknown): WireStructValue {
+function encodeValue(value: ResponseValue): WireStructValue {
   if (value === null || value === undefined) return { nullValue: 0 };
   if (typeof value === 'number') return { numberValue: value };
   if (typeof value === 'string') return { stringValue: value };
@@ -82,8 +100,8 @@ function encodeValue(value: unknown): WireStructValue {
 }
 
 /** Encode an object's own enumerable fields as a `google.protobuf.Struct` (`{}` for a non-object). */
-export function encodeStruct(value: unknown): WireStruct {
-  const record: object = value && typeof value === 'object' ? value : {};
+export function encodeStruct(value: ResponseRecord | null | undefined): WireStruct {
+  const record: ResponseRecord = value && typeof value === 'object' ? value : {};
   return {
     fields: Object.fromEntries(
       Object.entries(record).map(([key, field]) => [key, encodeValue(field)]),

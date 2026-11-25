@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties } from 'react';
 
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { ConflictActionBar } from '@/components/virtual-diff/ConflictActionBar';
@@ -634,12 +633,10 @@ export const VirtualDiff = memo(function VirtualDiff({
     >
       <div
         className="relative min-h-0 flex-1 overflow-hidden"
-        style={
-          // SAFETY: the only key is the CSS custom property --diff-scrollbar-gutter with a string value, which CSSProperties cannot list.
-          {
-            '--diff-scrollbar-gutter': '12px',
-          } as CSSProperties
-        }
+        style={{
+          '--diff-scrollbar-gutter': '12px',
+          '--vdiff-row-height': `${rowHeight}px`,
+        }}
         data-testid="diff-scroll-frame"
       >
         {/* Vertical scroll area */}
@@ -651,8 +648,8 @@ export const VirtualDiff = memo(function VirtualDiff({
           className={cn(
             'scroll-fade-none scrollbar-visible h-full min-h-0 relative',
             needsHScroll ? 'overflow-y-auto overflow-x-hidden' : 'overflow-auto',
+            '[scrollbar-gutter:stable]',
           )}
-          style={{ scrollbarGutter: 'stable' }}
           data-testid="diff-scroll-area"
           onMouseDown={selectable ? handleDragMouseDown : undefined}
           onMouseMove={selectable ? handleDragMouseMove : undefined}
@@ -673,8 +670,8 @@ export const VirtualDiff = memo(function VirtualDiff({
             <div
               className={cn(
                 'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-(length:--diff-font-size) text-muted-foreground backdrop-blur-xs border-b border-border/50 px-1',
+                'h-[var(--vdiff-row-height)] -mb-[var(--vdiff-row-height)]',
               )}
-              style={{ height: rowHeight, marginBottom: -rowHeight }}
               data-testid="diff-sticky-hunk"
             >
               {selectable && stickyHunk.hunkStartIdx != null ? (
@@ -703,15 +700,17 @@ export const VirtualDiff = memo(function VirtualDiff({
             </div>
           )}
           <div
-            style={{
-              height: totalSize,
-              minWidth: '100%',
+            className={cn(
+              'relative h-[var(--vdiff-total-size)] min-w-full',
               // In split/three-pane mode, horizontal scroll is handled via CSS
               // translateX on each pane's text — the container must stay at 100%
               // so flex-1 columns divide the *visible* width equally.
               // Only unified mode needs to expand the container for native h-scroll.
-              width: maxContentWidth > 0 && !needsHScroll ? maxContentWidth : '100%',
-              position: 'relative',
+              maxContentWidth > 0 && !needsHScroll ? 'w-[var(--vdiff-content-width)]' : 'w-full',
+            )}
+            style={{
+              '--vdiff-total-size': `${totalSize}px`,
+              '--vdiff-content-width': `${maxContentWidth}px`,
             }}
           >
             {virtualizer.getVirtualItems().map((vItem) => {
@@ -724,13 +723,13 @@ export const VirtualDiff = memo(function VirtualDiff({
                     ? { ref: virtualizer.measureElement, 'data-index': vItem.index }
                     : {})}
                   key={vItem.index}
+                  className={cn(
+                    'absolute top-0 left-0 w-full [transform:translateY(var(--vdiff-item-top))]',
+                    wordWrap ? 'min-h-[var(--vdiff-item-height)]' : 'h-[var(--vdiff-item-height)]',
+                  )}
                   style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    ...(wordWrap ? { minHeight: rowH } : { height: rowH }),
-                    transform: `translateY(${vItem.start}px)`,
+                    '--vdiff-item-top': `${vItem.start}px`,
+                    '--vdiff-item-height': `${rowH}px`,
                   }}
                 >
                   {
@@ -741,8 +740,8 @@ export const VirtualDiff = memo(function VirtualDiff({
                       <div
                         className={cn(
                           'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
+                          'h-[var(--vdiff-row-height)]',
                         )}
-                        style={{ height: rowHeight }}
                       >
                         {selectable && row.hunkStartIdx != null ? (
                           (() => {
@@ -779,8 +778,8 @@ export const VirtualDiff = memo(function VirtualDiff({
                         type="button"
                         className={cn(
                           'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
+                          'h-[var(--vdiff-row-height)]',
                         )}
-                        style={{ height: rowHeight }}
                         onClick={() => toggleFold(row.sectionIdx)}
                         data-testid="diff-fold-toggle"
                       >
@@ -840,11 +839,13 @@ export const VirtualDiff = memo(function VirtualDiff({
       {needsHScroll && (
         <div
           ref={hScrollBarRef}
-          className="scroll-fade-none scrollbar-visible shrink-0 overflow-x-auto overflow-y-hidden"
-          style={{ height: 10 }}
+          className="scroll-fade-none scrollbar-visible h-2.5 shrink-0 overflow-x-auto overflow-y-hidden"
           data-testid="diff-h-scrollbar"
         >
-          <div style={{ width: hSpacerWidth, height: 1 }} />
+          <div
+            className="h-px w-[var(--vdiff-h-spacer-width)]"
+            style={{ '--vdiff-h-spacer-width': `${hSpacerWidth}px` }}
+          />
         </div>
       )}
     </div>

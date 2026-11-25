@@ -111,11 +111,13 @@ export function CreateDesignDialog({
         else onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-md p-0" data-testid="create-design-dialog">
-        <DialogHeader className="px-6 pt-5 pb-2">
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="icon-base" />
-            {t('createDesign.title', { name: projectName, defaultValue: 'Create design' })}
+      <DialogContent flush className="max-w-md" data-testid="create-design-dialog">
+        <DialogHeader className="mx-6 mt-5 mb-2">
+          <DialogTitle>
+            <span className="flex items-center gap-2">
+              <Sparkles className="icon-base" />
+              {t('createDesign.title', { name: projectName, defaultValue: 'Create design' })}
+            </span>
           </DialogTitle>
         </DialogHeader>
 
@@ -124,128 +126,116 @@ export function CreateDesignDialog({
           onValueChange={(v) => {
             if (v === 'prototype' || v === 'slides' || v === 'template' || v === 'other') setTab(v);
           }}
-          className="px-6"
+          className="mx-6 mt-4"
         >
-          <TabsList className="bg-sidebar-accent/50 h-7 p-0.5">
-            <TabsTrigger
-              value="prototype"
-              data-testid="create-design-tab-prototype"
-              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+          <TabsList variant="pane" size="sm">
+            <TabsTrigger value="prototype" data-testid="create-design-tab-prototype" size="sm">
               {t('createDesign.tabs.prototype', 'Prototype')}
             </TabsTrigger>
-            <TabsTrigger
-              value="slides"
-              data-testid="create-design-tab-slides"
-              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+            <TabsTrigger value="slides" data-testid="create-design-tab-slides" size="sm">
               {t('createDesign.tabs.slides', 'Slide deck')}
             </TabsTrigger>
-            <TabsTrigger
-              value="template"
-              data-testid="create-design-tab-template"
-              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+            <TabsTrigger value="template" data-testid="create-design-tab-template" size="sm">
               {t('createDesign.tabs.template', 'From template')}
             </TabsTrigger>
-            <TabsTrigger
-              value="other"
-              data-testid="create-design-tab-other"
-              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
-            >
+            <TabsTrigger value="other" data-testid="create-design-tab-other" size="sm">
               {t('createDesign.tabs.other', 'Other')}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="prototype" className="mt-4 min-h-[360px] space-y-4">
-            <h3 className="text-sm font-semibold">
-              {t('createDesign.prototype.heading', 'New prototype')}
-            </h3>
+          <TabsContent value="prototype" asChild>
+            <div className="mt-4 min-h-[360px] space-y-4">
+              <h3 className="text-sm font-semibold">
+                {t('createDesign.prototype.heading', 'New prototype')}
+              </h3>
 
-            <Input
-              data-testid="create-design-prototype-name"
-              placeholder={t('createDesign.projectName', 'Project name')}
-              value={prototypeName}
-              onChange={(e) => setPrototypeName(e.target.value)}
-            />
+              <Input
+                data-testid="create-design-prototype-name"
+                placeholder={t('createDesign.projectName', 'Project name')}
+                value={prototypeName}
+                onChange={(e) => setPrototypeName(e.target.value)}
+              />
 
-            <div className="grid grid-cols-2 gap-3">
-              <FidelityCard
-                testId="create-design-fidelity-wireframe"
-                selected={fidelity === 'wireframe'}
-                onClick={() => setFidelity('wireframe')}
-                label={t('createDesign.prototype.wireframe', 'Wireframe')}
-                preview={<WireframePreview />}
-              />
-              <FidelityCard
-                testId="create-design-fidelity-high"
-                selected={fidelity === 'high'}
-                onClick={() => setFidelity('high')}
-                label={t('createDesign.prototype.highFidelity', 'High fidelity')}
-                preview={<HighFidelityPreview />}
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <FidelityCard
+                  testId="create-design-fidelity-wireframe"
+                  selected={fidelity === 'wireframe'}
+                  onClick={() => setFidelity('wireframe')}
+                  label={t('createDesign.prototype.wireframe', 'Wireframe')}
+                  preview={<WireframePreview />}
+                />
+                <FidelityCard
+                  testId="create-design-fidelity-high"
+                  selected={fidelity === 'high'}
+                  onClick={() => setFidelity('high')}
+                  label={t('createDesign.prototype.highFidelity', 'High fidelity')}
+                  preview={<HighFidelityPreview />}
+                />
+              </div>
+
+              <Button
+                data-testid="create-design-prototype-submit"
+                className="w-full"
+                onClick={handleCreatePrototype}
+                disabled={!prototypeName.trim() || submitting}
+              >
+                {submitting ? (
+                  <Loader2 className="icon-sm animate-spin" />
+                ) : (
+                  <Plus className="icon-sm" />
+                )}
+                {t('createDesign.create', 'Create')}
+              </Button>
             </div>
-
-            <Button
-              data-testid="create-design-prototype-submit"
-              className="w-full"
-              onClick={handleCreatePrototype}
-              disabled={!prototypeName.trim() || submitting}
-            >
-              {submitting ? (
-                <Loader2 className="icon-sm animate-spin" />
-              ) : (
-                <Plus className="icon-sm" />
-              )}
-              {t('createDesign.create', 'Create')}
-            </Button>
           </TabsContent>
 
-          <TabsContent value="slides" className="mt-4 min-h-[360px] space-y-4">
-            <h3 className="text-sm font-semibold">
-              {t('createDesign.slides.heading', 'New slide deck')}
-            </h3>
+          <TabsContent value="slides" asChild>
+            <div className="mt-4 min-h-[360px] space-y-4">
+              <h3 className="text-sm font-semibold">
+                {t('createDesign.slides.heading', 'New slide deck')}
+              </h3>
 
-            <Input
-              data-testid="create-design-slides-name"
-              placeholder={t('createDesign.projectName', 'Project name')}
-              value={slidesName}
-              onChange={(e) => setSlidesName(e.target.value)}
-            />
-
-            <label
-              htmlFor="create-design-speaker-notes"
-              className="border-border flex cursor-pointer items-center justify-between rounded-md border p-3"
-            >
-              <span className="flex flex-col">
-                <span className="text-sm font-medium">
-                  {t('createDesign.slides.speakerNotes', 'Use speaker notes')}
-                </span>
-                <span className="text-muted-foreground text-xs">
-                  {t('createDesign.slides.speakerNotesHint', 'Less text on slides')}
-                </span>
-              </span>
-              <Switch
-                id="create-design-speaker-notes"
-                data-testid="create-design-speaker-notes"
-                checked={speakerNotes}
-                onCheckedChange={setSpeakerNotes}
+              <Input
+                data-testid="create-design-slides-name"
+                placeholder={t('createDesign.projectName', 'Project name')}
+                value={slidesName}
+                onChange={(e) => setSlidesName(e.target.value)}
               />
-            </label>
 
-            <Button
-              data-testid="create-design-slides-submit"
-              className="w-full"
-              onClick={handleCreateSlides}
-              disabled={!slidesName.trim() || submitting}
-            >
-              {submitting ? (
-                <Loader2 className="icon-sm animate-spin" />
-              ) : (
-                <Plus className="icon-sm" />
-              )}
-              {t('createDesign.create', 'Create')}
-            </Button>
+              <label
+                htmlFor="create-design-speaker-notes"
+                className="border-border flex cursor-pointer items-center justify-between rounded-md border p-3"
+              >
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium">
+                    {t('createDesign.slides.speakerNotes', 'Use speaker notes')}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {t('createDesign.slides.speakerNotesHint', 'Less text on slides')}
+                  </span>
+                </span>
+                <Switch
+                  id="create-design-speaker-notes"
+                  data-testid="create-design-speaker-notes"
+                  checked={speakerNotes}
+                  onCheckedChange={setSpeakerNotes}
+                />
+              </label>
+
+              <Button
+                data-testid="create-design-slides-submit"
+                className="w-full"
+                onClick={handleCreateSlides}
+                disabled={!slidesName.trim() || submitting}
+              >
+                {submitting ? (
+                  <Loader2 className="icon-sm animate-spin" />
+                ) : (
+                  <Plus className="icon-sm" />
+                )}
+                {t('createDesign.create', 'Create')}
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="template" className="mt-4 min-h-[360px]">
@@ -268,13 +258,13 @@ export function CreateDesignDialog({
         {error && (
           <p
             data-testid="create-design-error"
-            className="border-status-error/40 bg-status-error/10 text-status-error mx-6 mt-2 rounded border px-3 py-2 text-xs"
+            className="border-status-error/40 bg-status-error/10 text-status-error mx-6 mt-6 rounded border px-3 py-2 text-xs"
           >
             {error}
           </p>
         )}
 
-        <p className="text-muted-foreground px-6 pt-3 pb-5 text-center text-xs">
+        <p className="text-muted-foreground mt-4 px-6 pt-3 pb-5 text-center text-xs">
           {t('createDesign.privacy', 'Only you can see your project by default.')}
         </p>
       </DialogContent>

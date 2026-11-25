@@ -55,16 +55,25 @@ export interface StoredExecution {
 
 type Row = typeof workflowNodeExecutions.$inferSelect;
 
+const STORED_JSON_SCHEMA = z.json();
+/** A decoded JSON column of the journal. */
+export type StoredJson = z.infer<typeof STORED_JSON_SCHEMA>;
+
+/** An execution as read back: its output is the decoded JSON column. */
+export interface LoadedExecution extends Omit<StoredExecution, 'output'> {
+  output?: StoredJson;
+}
+
 /** A stored JSON column, or undefined when empty; a corrupt value throws (the load fails). */
-function readJson(raw: string | null, label: string): unknown {
+function readJson(raw: string | null, label: string): StoredJson | undefined {
   if (raw === null) return undefined;
-  const parsed = parseStoredJson(z.unknown(), raw, label);
+  const parsed = parseStoredJson(STORED_JSON_SCHEMA, raw, label);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.value;
 }
 
-function fromRow(row: Row): StoredExecution {
-  const stored: StoredExecution = {
+function fromRow(row: Row): LoadedExecution {
+  const stored: LoadedExecution = {
     runId: row.runId,
     nodeId: row.nodeId,
     visit: row.visit,
@@ -99,7 +108,7 @@ function toRow(e: StoredExecution): Row {
 export function createWorkflowJournalRepository() {
   return {
     /** Every recorded execution of `runId`. */
-    load(runId: string): ResultAsync<StoredExecution[], JournalStorageError> {
+    load(runId: string): ResultAsync<LoadedExecution[], JournalStorageError> {
       return ResultAsync.fromPromise(
         db.select().from(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, runId)),
         storage,
@@ -139,10 +148,13 @@ export function createWorkflowJournalRepository() {
 
 export type WorkflowJournalRepository = ReturnType<typeof createWorkflowJournalRepository>;
 
-/** What of the engine's context a journal stores, and how a stored value becomes one again. */
-export interface JournalCodec<T> {
-  encode(ctx: T): unknown;
-  decode(stored: unknown): T;
+/**
+ * What of the engine's context a journal stores (`E`, written as JSON), and how
+ * the stored JSON becomes a context again.
+ */
+export interface JournalCodec<T, E> {
+  encode(ctx: T): E;
+  decode(stored: StoredJson): T;
 }
 
 /**
@@ -150,9 +162,9 @@ export interface JournalCodec<T> {
  * Promise-based: a storage failure rejects, which the engine turns into a
  * failed run (load) or a failed node (record).
  */
-export function databaseJournal<T>(
+export function databaseJournal<T, E>(
   repository: WorkflowJournalRepository,
-  codec: JournalCodec<T>,
+  codec: JournalCodec<T, E>,
 ): Journal<T> {
   const orThrow = <V>(result: ResultAsync<V, JournalStorageError>) =>
     result.match(

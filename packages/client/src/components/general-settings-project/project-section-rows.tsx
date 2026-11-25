@@ -82,7 +82,8 @@ export function ProjectUrlPatterns({
                 if (e.key === 'Enter') save(urlRows);
               }}
               placeholder="https://example.com"
-              className="flex-1 text-xs"
+              textSize="xs"
+              className="flex-1"
             />
             <TooltipIconButton
               size="icon-sm"
@@ -159,7 +160,9 @@ export function ProjectSystemPrompt({
           'settings.systemPromptPlaceholder',
           "e.g. Always use TypeScript strict mode. Follow the repository's existing patterns...",
         )}
-        className="min-h-[120px] resize-y font-mono text-xs"
+        mono
+        textSize="xs"
+        className="min-h-[120px] resize-y"
         data-testid="settings-system-prompt"
       />
     </SettingAnchor>
@@ -219,7 +222,7 @@ export function DefaultTemplateSetting({
 }: {
   projectId: string;
   currentTemplateId?: string;
-  onSave: (id: string, data: Record<string, unknown>) => void;
+  onSave: (id: string, data: { defaultAgentTemplateId: string | null }) => void;
 }) {
   const templates = useAgentTemplates();
 

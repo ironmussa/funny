@@ -48,9 +48,11 @@ export function SwitchBranchDialog({
     >
       <DialogContent className="max-w-md" data-testid="switch-branch-dialog">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <GitBranch className="icon-base" />
-            {t('switchBranch.title', 'Switch branch')}
+          <DialogTitle>
+            <span className="flex items-center gap-2">
+              <GitBranch className="icon-base" />
+              {t('switchBranch.title', 'Switch branch')}
+            </span>
           </DialogTitle>
           <DialogDescription>
             {t('switchBranch.description', {

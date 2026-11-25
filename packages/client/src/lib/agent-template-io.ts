@@ -28,8 +28,7 @@ export function exportTemplate(template: AgentTemplate): void {
     },
   };
 
-  // JSON.stringify leaves out the fields whose value is undefined.
-
+  // JSON.stringify leaves out the fields the template does not set (undefined values).
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

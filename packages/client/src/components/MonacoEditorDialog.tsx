@@ -501,24 +501,19 @@ export function MonacoEditorDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
+        flush
         className={cn(
           isFullscreen
-            ? 'max-w-[100vw] max-h-screen w-screen h-screen flex flex-col gap-0 p-0'
-            : 'flex h-[85vh] w-[90vw] max-w-[1120px] flex-col gap-0 p-0',
+            ? 'max-w-[100vw] max-h-screen w-screen h-screen flex flex-col'
+            : 'flex h-[85vh] w-[90vw] max-w-[1120px] flex-col',
           'overflow-hidden',
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader bordered className="overflow-hidden">
-          <DialogTitle
-            size="sm"
-            className="flex min-w-0 items-center gap-2 overflow-hidden font-mono"
-          >
+          <DialogTitle size="sm" withIcon mono>
             <FileCode className="icon-base shrink-0" />
-            <span
-              className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-              style={{ direction: 'rtl', textAlign: 'left' }}
-            >
+            <span className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap [direction:rtl]">
               {filePath}
             </span>
           </DialogTitle>
@@ -553,13 +548,10 @@ export function MonacoEditorDialog({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant={showBlame ? 'active' : 'muted'}
                   size="icon-sm"
                   onClick={() => setShowBlame((prev) => !prev)}
-                  className={cn(
-                    'shrink-0',
-                    showBlame ? 'text-foreground' : 'text-muted-foreground',
-                  )}
+                  className="shrink-0"
                   data-testid="editor-toggle-blame"
                 >
                   <GitBranch className="icon-base" />
@@ -576,15 +568,12 @@ export function MonacoEditorDialog({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant={showHistory ? 'active' : 'muted'}
                   size="icon-sm"
                   onClick={() =>
                     setHiddenHistoryFile((prev) => (prev === filePath ? null : filePath))
                   }
-                  className={cn(
-                    'shrink-0',
-                    showHistory ? 'text-foreground' : 'text-muted-foreground',
-                  )}
+                  className="shrink-0"
                   data-testid="editor-toggle-history"
                   aria-label={t('editor.toggleHistory', 'Toggle history')}
                 >
@@ -663,7 +652,8 @@ export function MonacoEditorDialog({
                 regex={showAdvancedToggles ? regex : undefined}
                 onRegexChange={showAdvancedToggles ? setRegex : undefined}
                 testIdPrefix="editor-search"
-                className="border-border bg-popover absolute top-3 right-4 z-10 rounded-md border px-2 py-1 shadow-md"
+                variant="overlay"
+                className="absolute top-3 right-4 z-10"
               />
             )}
             {showPreview && isHtml ? (

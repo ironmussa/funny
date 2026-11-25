@@ -73,6 +73,8 @@ export interface CreateAndStartThreadParams {
   baseBranch?: string;
   /** Start a new worktree from `origin/<baseBranch>` (fetched first), not the local branch. */
   baseFromRemote?: boolean;
+  /** Refuse (409) instead of falling back to a generated branch when `branch` is held elsewhere. */
+  requireBranch?: boolean;
   /** The agent may only read, at every start (`threads.read_only`). */
   readOnly?: boolean;
   /** What a read-only agent reads besides its checkout (`agent-startup/role-inputs.ts`). */

@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { MessageCircleQuestion } from 'lucide-react';
 import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useState, useRef, useEffect, useMemo, useCallback, useReducer, memo } from 'react';
@@ -8,6 +9,7 @@ import { reduceQuestionTab } from '@/components/tool-cards/question-tab-state';
 import { useEditorDictation } from '@/hooks/use-editor-dictation';
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { createClientLogger } from '@/lib/client-logger';
+import { cn } from '@/lib/utils';
 
 import {
   OtherAnswerEditor,
@@ -192,7 +194,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   onRespond?: (answer: string) => void;
   output?: string;
   hideLabel?: boolean;
@@ -407,12 +409,13 @@ export const AskQuestionCard = memo(function AskQuestionCard({
 
                 {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
                 <div
-                  className="space-y-1"
-                  style={
-                    !submitted && maxContentHeight > 0
-                      ? { minHeight: `${maxContentHeight}px` }
-                      : undefined
-                  }
+                  className={cn(
+                    'space-y-1',
+                    !submitted &&
+                      maxContentHeight > 0 &&
+                      'min-h-[var(--ask-question-options-min-height)]',
+                  )}
+                  style={{ '--ask-question-options-min-height': `${maxContentHeight}px` }}
                 >
                   {activeQ.options.map((opt, oi) => {
                     const isSelected = activeSelections.has(oi);

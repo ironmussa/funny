@@ -11,11 +11,16 @@ export function FileName({
   query = '',
   className,
   preserveExtension = true,
+  font = 'default',
+  textSize = 'default',
 }: {
   name: string;
   query?: string;
   className?: string;
   preserveExtension?: boolean;
+  /** `explorer`: the file explorer's monospace font. */
+  font?: 'default' | 'explorer';
+  textSize?: 'default' | 'xs';
 }) {
   const lastDot = name.lastIndexOf('.');
   const split =
@@ -31,7 +36,14 @@ export function FileName({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={cn('flex min-w-0 flex-1 items-baseline', className)}>
+        <span
+          className={cn(
+            'flex min-w-0 flex-1 items-baseline',
+            font === 'explorer' && 'font-mono-explorer',
+            textSize === 'xs' && 'text-xs',
+            className,
+          )}
+        >
           <HighlightText
             text={name.slice(0, split)}
             ranges={stemRanges}

@@ -16,6 +16,7 @@
  */
 
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { db, dbGet } from '../db/index.js';
 import * as schema from '../db/schema.js';
@@ -39,10 +40,8 @@ type ThreadRefRow = { threadId: string };
 const OK: OwnershipResult = { ok: true };
 const deny = (reason: string): Denial => ({ ok: false, reason });
 
-/** `value` when it is a non-empty string, otherwise undefined. */
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value ? value : undefined;
-}
+/** A non-empty string from a runner's message; any other value reads as absent. */
+const nonEmptyString = z.string().min(1).optional().catch(undefined);
 
 // ── Row lookups ─────────────────────────────────────────────────
 //
@@ -137,7 +136,7 @@ const isOwnedBy = (row: UserRow | undefined, userId: string): boolean =>
 /** Explicit userId on the request (or on create_thread's payload). */
 function checkExplicitUserId({ userId, data, payload }: OwnershipContext): Denial | null {
   const candidate =
-    nonEmptyString(data?.userId) ??
+    nonEmptyString.parse(data?.userId) ??
     (data?.type === 'data:create_thread' && typeof payload?.userId === 'string'
       ? payload.userId
       : undefined);
@@ -184,7 +183,7 @@ function checkRowRefs({ data, payload }: OwnershipContext): Denial | null {
 async function checkThread({ userId, data, payload }: OwnershipContext): Promise<Denial | null> {
   const threadIds = new Set(
     [data?.threadId, payload?.threadId, payload?.row?.threadId].flatMap((v) => {
-      const s = nonEmptyString(v);
+      const s = nonEmptyString.parse(v);
       return s !== undefined ? [s] : [];
     }),
   );
@@ -212,7 +211,8 @@ async function isProjectMember(projectId: string, userId: string): Promise<boole
 }
 
 async function checkProject({ userId, data, payload }: OwnershipContext): Promise<Denial | null> {
-  const projectId = nonEmptyString(data?.projectId) ?? nonEmptyString(payload?.projectId);
+  const projectId =
+    nonEmptyString.parse(data?.projectId) ?? nonEmptyString.parse(payload?.projectId);
   if (!projectId) return null;
   const p = await projectRepo.getProject(projectId);
   if (!p) return deny(`project ${projectId} not found`);
@@ -259,7 +259,7 @@ async function checkToolCallParentMessage({
   userId,
   payload,
 }: OwnershipContext): Promise<Denial | null> {
-  const messageId = nonEmptyString(payload?.messageId);
+  const messageId = nonEmptyString.parse(payload?.messageId);
   if (!messageId) return null;
   const m = await findMessage(messageId);
   if (!m) return null;
@@ -294,8 +294,8 @@ async function checkToolCallId(
     : deny(`tool call ${toolCallId} cross-tenant`);
 }
 
-const stringOrUndefined = (value: unknown): string | undefined =>
-  typeof value === 'string' ? value : undefined;
+/** A string from a runner's message (empty included); any other value reads as absent. */
+const stringOrUndefined = z.string().optional().catch(undefined);
 
 /** Queued message ownership (queue row → thread → user). */
 async function checkQueuedMessage({ userId, data }: OwnershipContext): Promise<Denial | null> {
@@ -383,11 +383,11 @@ const POST_PROJECT_TYPE_CHECKS = new Map<string, OwnershipStep>([
   ['data:update_message', checkUpdateMessage],
   [
     'data:get_tool_call',
-    (ctx) => checkToolCallId(stringOrUndefined(ctx.data?.toolCallId), ctx.userId),
+    (ctx) => checkToolCallId(stringOrUndefined.parse(ctx.data?.toolCallId), ctx.userId),
   ],
   [
     'data:update_tool_call_output',
-    (ctx) => checkToolCallId(stringOrUndefined(ctx.payload?.toolCallId), ctx.userId),
+    (ctx) => checkToolCallId(stringOrUndefined.parse(ctx.payload?.toolCallId), ctx.userId),
   ],
   ['data:cancel_queued_message', checkQueuedMessage],
   ['data:update_queued_message', checkQueuedMessage],

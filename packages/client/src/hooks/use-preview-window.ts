@@ -1,3 +1,4 @@
+import type { InvokeArgs } from '@tauri-apps/api/core';
 import { useCallback } from 'react';
 
 import { usePreviewStore, type PreviewTab } from '@/stores/preview-store';
@@ -5,7 +6,7 @@ import { usePreviewStore, type PreviewTab } from '@/stores/preview-store';
 const isTauri = !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__);
 const isPreviewWindow = !!('__PREVIEW_MODE__' in window && window.__PREVIEW_MODE__);
 
-async function tauriInvoke(cmd: string, args?: Record<string, unknown>) {
+async function tauriInvoke(cmd: string, args?: InvokeArgs) {
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke(cmd, args);
 }

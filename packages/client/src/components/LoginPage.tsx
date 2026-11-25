@@ -63,7 +63,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t('auth.passwordPlaceholder')}
-                className="pr-10"
+                inset="icon-end"
                 required
               />
               <button

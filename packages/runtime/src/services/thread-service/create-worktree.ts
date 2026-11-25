@@ -28,6 +28,7 @@ import {
 import {
   emitThreadUpdated,
   slugifyTitle,
+  ThreadServiceError,
   stripReferencedFilesBlock,
   withStagedUploads,
 } from './helpers.js';
@@ -71,6 +72,14 @@ export async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
     params.branch,
     `${projectSlug}/${slug}-${threadId.slice(0, 6)}`,
   );
+  if (params.requireBranch && params.branch && worktreeBranch.name !== params.branch.trim()) {
+    throw new ThreadServiceError(
+      worktreeBranch.heldBy
+        ? `The branch "${params.branch}" is checked out in another worktree (${worktreeBranch.heldBy}): remove that worktree, then try again.`
+        : `The branch "${params.branch}" could not be checked out: try again.`,
+      409,
+    );
+  }
   const branchName = worktreeBranch.name;
 
   const thread = {

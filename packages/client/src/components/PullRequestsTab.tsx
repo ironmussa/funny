@@ -230,7 +230,7 @@ function PullRequestsContent({
             variant="outline"
             size="sm"
             onClick={onRefresh}
-            className="gap-1.5"
+            gap="snug"
             data-testid="prs-retry"
           >
             <RefreshCw className="icon-xs" />

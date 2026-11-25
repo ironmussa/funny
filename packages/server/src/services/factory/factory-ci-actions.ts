@@ -233,6 +233,7 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
       requiredChecks: required,
       sha: options.sha,
       autoMergeWhenHeld: options.autoMergeWhenHeld,
+      signal: deps.signal,
     });
     if (merged.isErr()) {
       return { ok: false, error: merged.error.message, metadata: { kind: merged.error.kind } };

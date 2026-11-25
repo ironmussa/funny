@@ -159,7 +159,7 @@ export function ProjectConfigSettings() {
   };
 
   if (!selectedProjectId) {
-    return <EmptyState fill={false} className="py-6" title={t('projectConfig.noProject')} />;
+    return <EmptyState fill={false} padding="md" title={t('projectConfig.noProject')} />;
   }
 
   if (loading) {
@@ -195,7 +195,7 @@ export function ProjectConfigSettings() {
               <TooltipIconButton
                 variant="muted-destructive"
                 onClick={() => removeEnvFile(i)}
-                className="opacity-0 group-hover:opacity-100"
+                reveal="hover"
                 data-testid={`env-file-remove-${i}`}
                 tooltip={t('common.delete')}
               >
@@ -250,7 +250,9 @@ export function ProjectConfigSettings() {
                 <div className="flex items-center gap-2">
                   <Input
                     size="xs"
-                    className="w-32 text-sm font-medium"
+                    textSize="sm"
+                    weight="medium"
+                    className="w-32"
                     defaultValue={group.name}
                     onBlur={(e) => updatePortGroup(gi, 'name', e.target.value)}
                     onKeyDown={(e) => {
@@ -275,7 +277,7 @@ export function ProjectConfigSettings() {
                 <TooltipIconButton
                   variant="muted-destructive"
                   onClick={() => removePortGroup(gi)}
-                  className="opacity-0 group-hover:opacity-100"
+                  reveal="hover"
                   data-testid={`port-group-remove-${gi}`}
                   tooltip={t('common.delete')}
                 >
@@ -289,7 +291,8 @@ export function ProjectConfigSettings() {
                     size="xs"
                     key={vi}
                     variant="outline"
-                    className="hover:bg-destructive/10 hover:text-status-error cursor-pointer font-mono"
+                    mono
+                    removable
                     onClick={() => removeEnvVarFromGroup(gi, vi)}
                     data-testid={`port-group-${gi}-var-${vi}`}
                   >
@@ -327,7 +330,7 @@ export function ProjectConfigSettings() {
         {addingGroup ? (
           <div className="mt-3 flex items-center gap-2">
             <Input
-              className="h-8 flex-1 text-sm"
+              className="flex-1"
               placeholder={t('projectConfig.groupNamePlaceholder')}
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
@@ -371,7 +374,8 @@ export function ProjectConfigSettings() {
           <Button
             variant="outline"
             size="sm"
-            className="mt-3 gap-1.5"
+            gap="snug"
+            className="mt-3"
             onClick={() => setAddingGroup(true)}
             data-testid="port-group-add"
           >
@@ -415,7 +419,7 @@ export function ProjectConfigSettings() {
                 variant="muted-destructive"
                 size="icon-xs"
                 onClick={() => removePostCreate(i)}
-                className="opacity-0 group-hover:opacity-100"
+                reveal="hover"
                 data-testid={`post-create-remove-${i}`}
               >
                 <Trash2 className="icon-xs" />

@@ -9,9 +9,9 @@ import type {
 import i18next from 'i18next';
 
 import {
-  DONE_WINDOW_MS,
   type FactoryBoardColumnId,
   factoryBoardColumn,
+  factoryRunReplacements,
   layoutFactoryBoard,
 } from '@/components/factory-board/board-columns';
 import { factoryRunGateChips, isFactoryRunHeldForRisk } from '@/components/factory-board/run-gates';
@@ -21,6 +21,7 @@ import {
   factoryRunStateChip,
 } from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
+import { canCloseReplacedPr } from '@/components/thread/FactoryRunControls';
 import { buildFactoryRun } from '@/data/factory/testing';
 import {
   factoryRunFallbackTitle,
@@ -66,28 +67,23 @@ describe('factoryBoardColumn', () => {
 });
 
 describe('layoutFactoryBoard', () => {
-  test('keeps only the last day of finished runs and counts the rest', () => {
+  test('keeps every finished run in Done, newest first', () => {
     const recent = buildFactoryRun({ id: 'recent', state: 'merged', completedAt: hoursAgo(2) });
     const old = buildFactoryRun({ id: 'old', state: 'merged', completedAt: hoursAgo(72) });
-    const { columns, hiddenDone } = layoutFactoryBoard([recent, old], NOW);
-    expect(columns.done.map((run) => run.id)).toEqual(['recent']);
-    expect(hiddenDone).toBe(1);
-    expect(DONE_WINDOW_MS).toBe(24 * 3600_000);
+    const columns = layoutFactoryBoard([old, recent]);
+    expect(columns.done.map((run) => run.id)).toEqual(['recent', 'old']);
   });
 
   test('orders the queue by its order, admitted runs first; other columns newest first', () => {
     const run = (id: string, overrides: Partial<FactoryRun>) =>
       buildFactoryRun({ id, completedAt: null, ...overrides });
-    const { columns } = layoutFactoryBoard(
-      [
-        run('second', { state: 'requested', queueOrder: 2, startedAt: hoursAgo(1) }),
-        run('first', { state: 'requested', queueOrder: 1, startedAt: hoursAgo(5) }),
-        run('admitted', { state: 'queued', admittedAt: hoursAgo(9) }),
-        run('older', { state: 'working', admittedAt: hoursAgo(4) }),
-        run('newer', { state: 'fixing', admittedAt: hoursAgo(1) }),
-      ],
-      NOW,
-    );
+    const columns = layoutFactoryBoard([
+      run('second', { state: 'requested', queueOrder: 2, startedAt: hoursAgo(1) }),
+      run('first', { state: 'requested', queueOrder: 1, startedAt: hoursAgo(5) }),
+      run('admitted', { state: 'queued', admittedAt: hoursAgo(9) }),
+      run('older', { state: 'working', admittedAt: hoursAgo(4) }),
+      run('newer', { state: 'fixing', admittedAt: hoursAgo(1) }),
+    ]);
     expect(columns.queue.map((r) => r.id)).toEqual(['admitted', 'first', 'second']);
     expect(columns.implementing.map((r) => r.id)).toEqual(['newer', 'older']);
   });
@@ -95,61 +91,100 @@ describe('layoutFactoryBoard', () => {
   // Issue #434: its run failed the regression proof, was stopped, and showed in
   // Done although nothing had fixed it.
   test('a run stopped after a failure waits for a person; a plain stop is done', () => {
-    const { columns } = layoutFactoryBoard(
-      [
-        buildFactoryRun({
-          id: 'failed-then-stopped',
-          issueNumber: 434,
-          state: 'stopped',
-          failureReason: 'regression_proof[regression-proof] failed',
-          completedAt: hoursAgo(1),
-        }),
-        buildFactoryRun({
-          id: 'stopped',
-          issueNumber: 435,
-          state: 'stopped',
-          failureReason: null,
-          completedAt: hoursAgo(1),
-        }),
-      ],
-      NOW,
-    );
+    const columns = layoutFactoryBoard([
+      buildFactoryRun({
+        id: 'failed-then-stopped',
+        issueNumber: 434,
+        state: 'stopped',
+        failureReason: 'regression_proof[regression-proof] failed',
+        completedAt: hoursAgo(1),
+      }),
+      buildFactoryRun({
+        id: 'stopped',
+        issueNumber: 435,
+        state: 'stopped',
+        failureReason: null,
+        completedAt: hoursAgo(1),
+      }),
+    ]);
     expect(columns.needs_person.map((run) => run.id)).toEqual(['failed-then-stopped']);
     expect(columns.done.map((run) => run.id)).toEqual(['stopped']);
   });
 
   test('an ended run a newer run of its issue replaced is done', () => {
-    const { columns } = layoutFactoryBoard(
-      [
-        buildFactoryRun({
-          id: 'first',
-          issueNumber: 434,
-          state: 'stopped',
-          failureReason: 'regression_proof[regression-proof] failed',
-          startedAt: hoursAgo(8),
-          completedAt: hoursAgo(7),
-        }),
-        buildFactoryRun({
-          id: 'earlier-failure',
-          issueNumber: 434,
-          state: 'failed',
-          failureReason: 'ci failed',
-          startedAt: hoursAgo(10),
-          completedAt: hoursAgo(9),
-        }),
-        buildFactoryRun({
-          id: 'resent',
-          issueNumber: 434,
-          state: 'working',
-          startedAt: hoursAgo(6),
-          completedAt: null,
-        }),
-      ],
-      NOW,
-    );
+    const columns = layoutFactoryBoard([
+      buildFactoryRun({
+        id: 'first',
+        issueNumber: 434,
+        state: 'stopped',
+        failureReason: 'regression_proof[regression-proof] failed',
+        startedAt: hoursAgo(8),
+        completedAt: hoursAgo(7),
+      }),
+      buildFactoryRun({
+        id: 'earlier-failure',
+        issueNumber: 434,
+        state: 'failed',
+        failureReason: 'ci failed',
+        startedAt: hoursAgo(10),
+        completedAt: hoursAgo(9),
+      }),
+      buildFactoryRun({
+        id: 'resent',
+        issueNumber: 434,
+        state: 'working',
+        startedAt: hoursAgo(6),
+        completedAt: null,
+      }),
+    ]);
     expect(columns.needs_person).toEqual([]);
     expect(columns.done.map((run) => run.id)).toEqual(['first', 'earlier-failure']);
     expect(columns.implementing.map((run) => run.id)).toEqual(['resent']);
+  });
+});
+
+describe('factoryRunReplacements', () => {
+  const pr = (n: number) => `https://github.com/o/r/pull/${n}`;
+  const old = buildFactoryRun({
+    id: 'old',
+    issueNumber: 463,
+    state: 'failed',
+    prUrl: pr(513),
+    startedAt: hoursAgo(3),
+  });
+  const resent = buildFactoryRun({
+    id: 'resent',
+    issueNumber: 463,
+    state: 'waiting_human',
+    prUrl: pr(514),
+    startedAt: hoursAgo(2),
+  });
+
+  test('maps each replaced run to the newest run of its issue', () => {
+    const middle = buildFactoryRun({ id: 'middle', issueNumber: 463, startedAt: hoursAgo(2.5) });
+    const other = buildFactoryRun({ id: 'other', issueNumber: 7, startedAt: hoursAgo(5) });
+    const replaced = factoryRunReplacements([old, middle, resent, other]);
+    expect(replaced.get('old')?.id).toBe('resent');
+    expect(replaced.get('middle')?.id).toBe('resent');
+    expect(replaced.has('resent')).toBe(false);
+    expect(replaced.has('other')).toBe(false);
+  });
+
+  test('a run of the same issue in another factory replaces nothing', () => {
+    const elsewhere = { ...resent, factoryId: 'another-factory' };
+    expect(factoryRunReplacements([old, elsewhere]).size).toBe(0);
+  });
+
+  // A failed run a re-send replaced sits in Done with its PR still open: the
+  // card offers to close it (the PR #513 left open by run 98a4408a).
+  test('the replaced run offers to close its own open PR', () => {
+    const by = factoryRunReplacements([old, resent]).get('old');
+    expect(canCloseReplacedPr(old, by, 'OPEN')).toBe(true);
+    expect(canCloseReplacedPr(old, by, 'CLOSED')).toBe(false);
+    expect(canCloseReplacedPr(old, undefined, 'OPEN')).toBe(false);
+    expect(canCloseReplacedPr({ ...old, state: 'working' }, by, 'OPEN')).toBe(false);
+    expect(canCloseReplacedPr(old, { ...resent, prUrl: pr(513) }, 'OPEN')).toBe(false);
+    expect(canCloseReplacedPr({ ...old, prUrl: null }, by, 'OPEN')).toBe(false);
   });
 });
 
@@ -321,9 +356,14 @@ describe('factoryRunGateChips', () => {
     });
     expect(factoryRunGateChips(t, failed)[0]).toMatchObject({
       id: 'problem',
-      label: 'implement failed',
+      label: 'Implement failed',
       detail: 'tests timed out',
     });
+    const proof = buildFactoryRun({
+      state: 'waiting_human',
+      failureReason: 'regression-proof[regression_proof] failed: no test',
+    });
+    expect(factoryRunGateChips(t, proof)[0]).toMatchObject({ label: 'Regression proof failed' });
     const noReview = buildFactoryRun({ state: 'waiting_human', failureReason: 'no review' });
     expect(factoryRunGateChips(t, noReview)[0]).toMatchObject({ label: 'No review' });
   });

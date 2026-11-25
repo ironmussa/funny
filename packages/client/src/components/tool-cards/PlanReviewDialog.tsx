@@ -242,15 +242,8 @@ export function PlanReviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         ref={dialogRef}
-        className="max-w-none overflow-hidden"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          width: '60vw',
-          height: '80vh',
-          padding: 0,
-          gap: 0,
-        }}
+        flush
+        className="flex h-[80vh] w-[60vw] max-w-none flex-col overflow-hidden"
         data-testid="plan-review-dialog"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >

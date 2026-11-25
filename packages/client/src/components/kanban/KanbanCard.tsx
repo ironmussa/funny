@@ -66,6 +66,8 @@ interface Props {
   time?: ReactNode;
   /** Replaces the thread's title (the factory board: the run's issue title). */
   title?: string;
+  /** Replaces the thread's status pin (the factory board: the run's state, selectable). */
+  status?: ReactNode;
 }
 
 /** Scrolls a highlighted card into view and makes the card draggable between columns. */
@@ -257,6 +259,7 @@ export const KanbanCard = memo(function KanbanCard({
   menuItems,
   time,
   title: titleProp,
+  status,
 }: Props) {
   const title = titleProp ?? thread.title;
   const { t } = useTranslation();
@@ -297,11 +300,13 @@ export const KanbanCard = memo(function KanbanCard({
         highlighted && 'ring-2 ring-ring shadow-md',
       )}
       status={
-        <ThreadStatusPin
-          thread={thread}
-          onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
-          hoverGroup="card"
-        />
+        status ?? (
+          <ThreadStatusPin
+            thread={thread}
+            onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
+            hoverGroup="card"
+          />
+        )
       }
       title={
         <ThreadTitle

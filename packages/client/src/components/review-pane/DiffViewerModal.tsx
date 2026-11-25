@@ -93,8 +93,8 @@ export function DiffViewerModal({
     >
       <DialogContent
         flush
-        className="flex h-[85vh] max-w-[90vw] flex-col duration-0 data-[state=closed]:animate-none data-[state=open]:animate-none"
-        overlayClassName="data-[state=closed]:animate-none data-[state=open]:animate-none"
+        instant
+        className="flex h-[85vh] max-w-[90vw] flex-col"
         data-testid="expanded-diff-overlay"
       >
         <DialogTitle className="sr-only">

@@ -73,8 +73,11 @@ export interface RiskInput {
   findings: readonly TestWeakeningFinding[];
   /** The factory's own sensitive globs, added to the default list. */
   sensitivePaths?: readonly string[];
-  /** The factory's size limit (default `MAX_LOW_RISK_LINES`). */
-  maxLowRiskLines?: number;
+  /**
+   * The factory's size limit (default `MAX_LOW_RISK_LINES`); null: the size
+   * gate is off and a change's size never makes it high risk.
+   */
+  maxLowRiskLines?: number | null;
   /** The factory's globs left out of the size, besides the default list. */
   sizeIgnoredPaths?: readonly string[];
   /** Risks the run's contract named (triage); absent for a run without a contract. */
@@ -228,6 +231,7 @@ function sensitiveReasons(input: RiskInput): RiskReason[] {
 }
 
 function sizeReasons(input: RiskInput): RiskReason[] {
+  if (input.maxLowRiskLines === null) return [];
   const limit = input.maxLowRiskLines ?? MAX_LOW_RISK_LINES;
   const lines = input.change.files
     .filter((file) => countsTowardSize(file.path, input.sizeIgnoredPaths))

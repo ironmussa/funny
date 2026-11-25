@@ -22,7 +22,7 @@ import {
   type CiState,
   type RevertPullRequest,
 } from '@funny/core/github-app';
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import type { FactoryIssueText } from './factory-issue-text.js';
 
@@ -48,6 +48,8 @@ export type PullRequestLookup = 'open' | 'all';
 export interface FactoryPullRequestFound {
   number: number;
   url: string;
+  /** The branch it merges into, when GitHub said. */
+  baseRef?: string;
 }
 
 /** Label names from GitHub's issue payload, which lists labels as objects or strings. */
@@ -57,7 +59,28 @@ export function labelNames(labels: Array<string | { name?: string }> | undefined
     .filter((name) => name.length > 0);
 }
 
-export function createFactoryRepoReads(repo: string, github: RepoGithub) {
+/**
+ * `targetBranch`: the branch the factory merges into when its enabler chose
+ * one (null: the repository's default branch). It moves where runs start, what
+ * "ahead" is measured against and where pull requests merge; flows and their
+ * prompts are still read from the default branch.
+ */
+export function createFactoryRepoReads(
+  repo: string,
+  github: RepoGithub,
+  targetBranch: () => Promise<string | null> = async () => null,
+) {
+  const repoDefaultBranch = (): ResultAsync<string, GithubCallError> =>
+    github
+      .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
+      .map((meta) => meta.default_branch);
+
+  /** The branch the factory merges into: the configured one, else the repository's default. */
+  const mergeTarget = (): ResultAsync<string, GithubCallError> =>
+    ResultAsync.fromSafePromise(targetBranch().catch(() => null)).andThen((configured) =>
+      configured ? okAsync<string, GithubCallError>(configured) : repoDefaultBranch(),
+    );
+
   /** `path` as of `ref` (a commit of the default branch), or null when absent there. */
   const readFileAt = (path: string, ref: string): ResultAsync<string | null, GithubCallError> =>
     github
@@ -126,23 +149,21 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
     },
 
     /**
-     * Whether `branch` has commits that the repository's DEFAULT branch does
-     * not; a branch that does not exist on GitHub has none.
+     * Whether `branch` has commits that the branch the factory merges into
+     * does not; a branch that does not exist on GitHub has none.
      */
     branchAhead(branch: string): ResultAsync<boolean, GithubCallError> {
-      return github
-        .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
-        .andThen((meta) =>
-          createRepoCheckOps(github).isBranchAhead(repo, meta.default_branch, branch),
-        )
+      return mergeTarget()
+        .andThen((base) => createRepoCheckOps(github).isBranchAhead(repo, base, branch))
         .map((compare) => compare.ahead);
     },
 
-    /** The name of the repository's DEFAULT branch. */
+    /**
+     * The branch the factory merges into (and starts runs from): the one its
+     * enabler configured, else the repository's DEFAULT branch.
+     */
     defaultBranch(): ResultAsync<string, GithubCallError> {
-      return github
-        .json<{ default_branch: string }>(repo, 'GET', `/repos/${repo}`)
-        .map((meta) => meta.default_branch);
+      return mergeTarget();
     },
 
     /** The commit a branch is at, and the verdict of its checks. */
@@ -291,12 +312,20 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
       const owner = repo.split('/')[0];
       const query = new URLSearchParams({ head: `${owner}:${branch}`, state });
       return github
-        .json<Array<{ number: number; html_url: string }>>(
+        .json<Array<{ number: number; html_url: string; base?: { ref?: string } }>>(
           repo,
           'GET',
           `/repos/${repo}/pulls?${query.toString()}`,
         )
-        .map((pulls) => (pulls[0] ? { number: pulls[0].number, url: pulls[0].html_url } : null));
+        .map((pulls) =>
+          pulls[0]
+            ? {
+                number: pulls[0].number,
+                url: pulls[0].html_url,
+                ...(pulls[0].base?.ref && { baseRef: pulls[0].base.ref }),
+              }
+            : null,
+        );
     },
   };
 }

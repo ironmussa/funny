@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import {
   isErrorDiagnostic,
   type WorkflowDefinitionResponse,
@@ -203,10 +204,10 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
 
   const runWorkflow = useCallback(async () => {
     if (!selectedName || hasErrors || !selectedThreadId) return;
-    let inputs: Record<string, unknown>;
+    let inputs: JsonObject;
     try {
       // SAFETY: not checked here on purpose; POST /workflows/:name/run validates inputs with z.record and refuses any other JSON value.
-      inputs = JSON.parse(inputsSource) as Record<string, unknown>;
+      inputs = JSON.parse(inputsSource) as JsonObject;
     } catch {
       toast.error('Inputs must be valid JSON');
       return;
@@ -322,7 +323,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
                 placeholder="Filter workflows"
-                className="pl-8"
+                inset="icon"
               />
             </div>
           </div>
@@ -442,7 +443,8 @@ function RunPanel({
         value={inputsSource}
         onChange={(event) => onInputsChange(event.target.value)}
         spellCheck={false}
-        className="font-mono text-xs"
+        mono
+        textSize="xs"
         rows={4}
       />
     </section>
@@ -578,7 +580,9 @@ function Inspector({
           onChange={(event) => setActionSource(event.target.value)}
           onBlur={applyAction}
           spellCheck={false}
-          className="min-h-28 font-mono text-xs"
+          mono
+          textSize="xs"
+          className="min-h-28"
         />
         <Textarea
           value={retrySource}
@@ -586,7 +590,9 @@ function Inspector({
           onBlur={() => applyJsonField('retry', retrySource)}
           placeholder='{"max_attempts":2}'
           spellCheck={false}
-          className="min-h-20 font-mono text-xs"
+          mono
+          textSize="xs"
+          className="min-h-20"
         />
         <Textarea
           value={loopSource}
@@ -594,7 +600,9 @@ function Inspector({
           onBlur={() => applyJsonField('loop', loopSource)}
           placeholder='{"until":"done = true","back_to":"review"}'
           spellCheck={false}
-          className="min-h-20 font-mono text-xs"
+          mono
+          textSize="xs"
+          className="min-h-20"
         />
       </div>
     </section>
@@ -622,7 +630,10 @@ function SourcePanel({
         value={source}
         onChange={(event) => onSourceChange(event.target.value)}
         spellCheck={false}
-        className="min-h-64 flex-1 resize-none rounded-none border-0 font-mono text-xs focus-visible:ring-0"
+        mono
+        variant="bare"
+        textSize="xs"
+        className="min-h-64 flex-1 resize-none"
       />
       {diagnostics.length > 0 ? (
         <div className="border-border max-h-28 overflow-auto border-t p-2">
@@ -724,7 +735,7 @@ function actionOf(node: ParsedNode): NodeAction {
 }
 
 /** The starting value of each action when the editor switches a node to it. */
-const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string, unknown>> = {
+const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], JsonObject> = {
   spawn_agent: { prompt: '' },
   run_command: { command: '' },
   bash: { command: '' },
@@ -744,6 +755,6 @@ const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string,
   integrate: {},
 };
 
-function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]) {
+function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]): JsonObject {
   return { ...DEFAULT_ACTION_VALUES[actionType] };
 }

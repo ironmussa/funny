@@ -399,7 +399,7 @@ export function ProjectHooksSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          gap="snug"
           data-testid="hooks-add"
           onClick={() => {
             cancelEdit();
@@ -418,7 +418,7 @@ export function ProjectHooksSettings() {
           fill={false}
           title={t('hooks.noHooks')}
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
+            <Button variant="outline" size="sm" gap="snug" onClick={() => setAdding(true)}>
               <Plus className="icon-sm" />
               {t('hooks.addFirst')}
             </Button>
@@ -448,14 +448,13 @@ export function ProjectHooksSettings() {
                     >
                       <SelectTrigger
                         aria-labelledby="hooks-edit-type-label"
-                        className="text-sm"
                         data-testid="hooks-type-select"
                       >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {HOOK_TYPES.map((ht) => (
-                          <SelectItem key={ht} value={ht} className="text-sm">
+                          <SelectItem key={ht} value={ht}>
                             {hookTypeLabelFn(ht)}
                           </SelectItem>
                         ))}
@@ -468,7 +467,6 @@ export function ProjectHooksSettings() {
                     </label>
                     <Input
                       id="hooks-edit-label"
-                      className="settings-form-input"
                       placeholder={t('hooks.label')}
                       value={label}
                       onChange={(e) => setLabel(e.target.value)}
@@ -525,16 +523,12 @@ export function ProjectHooksSettings() {
               // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
               onValueChange={(v) => setHookType(v as HookType)}
             >
-              <SelectTrigger
-                aria-labelledby="hooks-add-type-label"
-                className="text-sm"
-                data-testid="hooks-type-select"
-              >
+              <SelectTrigger aria-labelledby="hooks-add-type-label" data-testid="hooks-type-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {HOOK_TYPES.map((ht) => (
-                  <SelectItem key={ht} value={ht} className="text-sm">
+                  <SelectItem key={ht} value={ht}>
                     {hookTypeLabelFn(ht)}
                   </SelectItem>
                 ))}
@@ -547,7 +541,6 @@ export function ProjectHooksSettings() {
             </label>
             <Input
               id="hooks-add-label"
-              className="settings-form-input"
               placeholder={t('hooks.label')}
               value={label}
               onChange={(e) => setLabel(e.target.value)}

@@ -58,8 +58,8 @@ export function PreferencesPanelBody() {
 
   return (
     <>
-      <SidebarHeader className="px-4 py-3">
-        <div className="flex items-center gap-2">
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-2 py-1">
           <TooltipIconButton
             variant="muted"
             onClick={leave}
@@ -73,7 +73,7 @@ export function PreferencesPanelBody() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 pb-2">
+      <SidebarContent inset="list">
         <SettingsNavFilter
           scope="preferences"
           pages={pages}

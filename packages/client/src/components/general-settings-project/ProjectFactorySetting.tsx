@@ -17,6 +17,7 @@ import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryMode, FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
+import { ProjectFactoryBaseBranch } from './ProjectFactoryBaseBranch';
 import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
 import { ProjectFactoryStepOptions } from './ProjectFactoryStepOptions';
@@ -35,6 +36,7 @@ type FactoryForm = Pick<
   | 'maxConcurrent'
   | 'autoMerge'
   | 'sensitivePaths'
+  | 'sizeGateEnabled'
   | 'maxLowRiskLines'
   | 'approvalAdjustMaxLines'
   | 'sizeIgnoredPaths'
@@ -44,6 +46,7 @@ type FactoryForm = Pick<
   | 'dependencies'
   | 'tooBig'
   | 'holdPathsAwaitingApproval'
+  | 'baseBranch'
 >;
 
 /** The server's defaults: what the form shows before the first save. */
@@ -55,6 +58,7 @@ const DEFAULT_FORM: FactoryForm = {
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  sizeGateEnabled: false,
   maxLowRiskLines: 400,
   approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
@@ -64,6 +68,7 @@ const DEFAULT_FORM: FactoryForm = {
   dependencies: 'wait',
   tooBig: 'ask',
   holdPathsAwaitingApproval: false,
+  baseBranch: '',
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
@@ -72,7 +77,7 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
   const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch, dependencies } = settings;
   const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
-  const { holdPathsAwaitingApproval } = settings;
+  const { holdPathsAwaitingApproval, baseBranch, sizeGateEnabled } = settings;
   return {
     enabled,
     mode,
@@ -81,6 +86,7 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
     maxConcurrent,
     autoMerge,
     sensitivePaths,
+    sizeGateEnabled,
     maxLowRiskLines,
     approvalAdjustMaxLines,
     sizeIgnoredPaths,
@@ -90,6 +96,7 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
     dependencies,
     tooBig,
     holdPathsAwaitingApproval,
+    baseBranch,
   };
 }
 
@@ -281,6 +288,12 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
               onBlur={(e) => setConcurrency(e.target.value)}
             />
           </ProjectSettingRow>
+
+          <ProjectFactoryBaseBranch
+            projectId={projectId}
+            baseBranch={form.baseBranch}
+            onSave={(baseBranch) => void save({ enabled, baseBranch })}
+          />
 
           <ProjectFactoryMergeRows
             projectId={projectId}

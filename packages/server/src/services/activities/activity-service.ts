@@ -1,5 +1,5 @@
 import type { JsonObject } from '@bufbuild/protobuf';
-import type { Activity, ActivityResultRef, ActivityStatus } from '@funny/shared';
+import type { Activity, ActivityResultRef } from '@funny/shared';
 /**
  * @domain subdomain: Activities
  * @domain subdomain-type: supporting
@@ -22,24 +22,59 @@ import {
 } from '@funny/shared/activities';
 import { isFinalActivityStatus } from '@funny/shared/activity-machine';
 import type { ActivityInsert, ActivityPatch } from '@funny/shared/repositories';
+import { z } from 'zod';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
 import { relayToUser } from '../browser-events.js';
 
+/**
+ * @domain subdomain: Activities
+ * @domain subdomain-type: supporting
+ * @domain type: app-service
+ * @domain layer: application
+ * @domain depends: ActivityRepository, BrowserEvents
+ *
+ * Background activities (track-background-activities): the runner reports the
+ * operations it runs through the data channel (`data:activity_*`), this module
+ * records them and tells the owner's browsers. The user and runner of a row
+ * always come from the authenticated runner session, never from the payload.
+ */
+
 const SNAPSHOT_REF = /^refs\/funny\/undo\/[A-Za-z0-9_-]{1,128}$/;
 const ID_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,127}$/;
-const REPORTED_STATUSES = new Set<ActivityStatus>(['running', 'succeeded', 'failed']);
 
-function text(value: unknown, max: number): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, max) : null;
+/** A runner-reported text field, trimmed and clipped to `max`; blank or not a string → null. */
+function textField(max: number) {
+  return z
+    .string()
+    .transform((value) => value.trim().slice(0, max) || null)
+    .nullable()
+    .catch(null);
 }
+const titleText = textField(ACTIVITY_TITLE_MAX);
+const stepText = textField(ACTIVITY_STEP_MAX);
+const errorText = textField(ACTIVITY_ERROR_MAX);
 
-function optionalId(value: unknown): string | null {
-  return typeof value === 'string' && ID_PATTERN.test(value) ? value : null;
-}
+/** A runner-reported id; anything that is not a well-formed id → null. */
+const optionalId = z.string().regex(ID_PATTERN).nullable().catch(null);
+
+/** The fields of a runner's activity object; any other value carries none. */
+const runnerFieldsSchema = z.record(z.string(), z.unknown()).catch({});
+type RunnerFields = z.output<typeof runnerFieldsSchema>;
+
+/** A reported result: absent stays absent, an object is checked field by field, anything else → null. */
+const resultRefInput = z.record(z.string(), z.unknown()).nullable().optional().catch(null);
+type ResultRefInput = z.output<typeof resultRefInput>;
+
+/** The statuses a runner may report on its own activity. */
+const reportedStatus = z.enum(['running', 'succeeded', 'failed']).optional().catch(undefined);
+
+/** The live activity ids of a reconnecting runner; malformed entries are dropped. */
+export const liveActivityIdsSchema = z
+  .array(z.unknown())
+  .catch([])
+  .transform((ids) => ids.filter((v): v is string => typeof v === 'string' && ID_PATTERN.test(v)));
 
 /** Each field a reported result may carry, and how it is checked. */
 const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string | null]> = [
@@ -49,25 +84,12 @@ const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string |
   ['snapshot', (v) => (SNAPSHOT_REF.test(v) ? v : null)],
 ];
 
-/**
- * A result reference as a runner reported it: its fields not yet checked. It
- * names every `ActivityResultRef` field (the loop below indexes it by them).
- */
-interface ReportedResultRef {
-  projectId?: unknown;
-  prUrl?: unknown;
-  snapshot?: unknown;
-}
-
-function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== 'object') return null;
-  // SAFETY: `value` is a non-null object; each result field is read as
-  // `unknown` and checked below before it is kept.
-  const reported = value as ReportedResultRef;
+function resultRefOf(raw: ResultRefInput): ActivityResultRef | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
   const ref: ActivityResultRef = {};
   for (const [field, check] of RESULT_REF_FIELDS) {
-    const given = reported[field];
+    const given = raw[field];
     const kept = typeof given === 'string' ? check(given) : null;
     if (kept) ref[field] = kept;
   }
@@ -97,9 +119,9 @@ export async function startActivityFromRunner(args: {
   payload: JsonObject;
 }): Promise<ActivityWriteResult> {
   const { runnerId, ownerId, payload } = args;
-  const id = optionalId(payload.id);
+  const id = optionalId.parse(payload.id);
   const kind = typeof payload.kind === 'string' ? payload.kind : '';
-  const title = text(payload.title, ACTIVITY_TITLE_MAX);
+  const title = titleText.parse(payload.title);
   if (!id) return { ok: false, error: 'activity id is invalid' };
   if (!title) return { ok: false, error: 'activity title is required' };
   const input = parseActivityInput({ kind, input: payload.input });
@@ -112,19 +134,19 @@ export async function startActivityFromRunner(args: {
     userId: ownerId,
     runnerId,
     kind,
-    projectId: optionalId(payload.projectId),
-    threadId: optionalId(payload.threadId),
+    projectId: optionalId.parse(payload.projectId),
+    threadId: optionalId.parse(payload.threadId),
     title,
     input,
-    step: text(payload.step, ACTIVITY_STEP_MAX),
+    step: stepText.parse(payload.step),
     origin: isActivityOrigin(payload.origin) ? payload.origin : 'user',
     effects: parseActivityEffects(payload),
     startedAt: new Date().toISOString(),
   };
   if (finalStatus) {
     row.status = finalStatus;
-    row.error = finalStatus === 'failed' ? text(payload.error, ACTIVITY_ERROR_MAX) : null;
-    row.resultRef = resultRefOf(payload.resultRef) ?? null;
+    row.error = finalStatus === 'failed' ? errorText.parse(payload.error) : null;
+    row.resultRef = resultRefOf(resultRefInput.parse(payload.resultRef)) ?? null;
   }
   const { inserted, capped } = await repos.activities().insert(row);
   if (inserted) {
@@ -135,24 +157,16 @@ export async function startActivityFromRunner(args: {
   return { ok: true, applied: inserted };
 }
 
-function reportedStatus(value: unknown): ActivityStatus | undefined {
-  // SAFETY: has() only compares the string; it is returned as ActivityStatus only when the set holds it.
-  return typeof value === 'string' && REPORTED_STATUSES.has(value as ActivityStatus)
-    ? (value as ActivityStatus)
-    : undefined;
-}
-
 /** The fields a runner may change on its own activity; never `origin`. */
-function pickActivityPatch(raw: unknown): ActivityPatch {
-  if (!raw || typeof raw !== 'object') return {};
+function pickActivityPatch(value: RunnerFields): ActivityPatch {
   const patch: ActivityPatch = {};
-  const status = reportedStatus('status' in raw ? raw.status : undefined);
+  const status = reportedStatus.parse(value.status);
   if (status) patch.status = status;
-  if ('step' in raw) patch.step = text(raw.step, ACTIVITY_STEP_MAX);
-  if ('error' in raw) patch.error = text(raw.error, ACTIVITY_ERROR_MAX);
-  const resultRef = resultRefOf('resultRef' in raw ? raw.resultRef : undefined);
+  if ('step' in value) patch.step = stepText.parse(value.step);
+  if ('error' in value) patch.error = errorText.parse(value.error);
+  const resultRef = resultRefOf(resultRefInput.parse(value.resultRef));
   if (resultRef !== undefined) patch.resultRef = resultRef;
-  if ('effects' in raw) patch.effects = parseActivityEffects(raw);
+  if ('effects' in value) patch.effects = parseActivityEffects(value);
   if (status && isFinalActivityStatus(status)) patch.endedAt = new Date().toISOString();
   return patch;
 }
@@ -166,9 +180,9 @@ export async function updateActivityFromRunner(args: {
   id: unknown;
   patch: unknown;
 }): Promise<ActivityWriteResult> {
-  const id = optionalId(args.id);
+  const id = optionalId.parse(args.id);
   if (!id) return { ok: false, error: 'activity id is invalid' };
-  const patch = pickActivityPatch(args.patch);
+  const patch = pickActivityPatch(runnerFieldsSchema.parse(args.patch));
   if (Object.keys(patch).length === 0) return { ok: true, applied: false };
   const applied = await repos.activities().update(id, patch, args.runnerId);
   if (applied) {
@@ -181,12 +195,9 @@ export async function updateActivityFromRunner(args: {
 /** `data:activity_reconcile`: the runner's unlisted running rows become `interrupted`. */
 export async function reconcileRunnerActivities(
   runnerId: string,
-  liveIds: unknown,
+  liveIds: string[],
 ): Promise<Activity[]> {
-  const ids = Array.isArray(liveIds)
-    ? liveIds.filter((v): v is string => typeof v === 'string' && ID_PATTERN.test(v))
-    : [];
-  const changed = await repos.activities().reconcile(runnerId, ids);
+  const changed = await repos.activities().reconcile(runnerId, liveIds);
   for (const row of changed) broadcastActivity(row);
   if (changed.length > 0) {
     log.info('Marked activities interrupted on runner reconnect', {

@@ -111,7 +111,10 @@ function FrozenMessageInstance({ content }: { content: string }) {
         ref={wrapperRef}
         data-testid="frozen-message"
         data-frozen="true"
-        style={frozenHeight !== null ? { height: frozenHeight } : undefined}
+        className={frozenHeight !== null ? 'h-[var(--frozen-message-height)]' : undefined}
+        style={
+          frozenHeight !== null ? { '--frozen-message-height': `${frozenHeight}px` } : undefined
+        }
         // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- sanitized Sätteri output, re-inserted verbatim
         dangerouslySetInnerHTML={{ __html: capturedHtml }}
       />

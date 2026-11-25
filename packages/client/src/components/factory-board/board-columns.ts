@@ -62,21 +62,32 @@ type PlacedRun = Pick<
   'id' | 'factoryId' | 'issueNumber' | 'state' | 'failureReason' | 'startedAt'
 >;
 
-/** The runs a later-sent run of the same issue, in the same factory, replaced. */
-function supersededRuns(runs: readonly PlacedRun[]): ReadonlySet<string> {
-  const keyOf = (run: PlacedRun) => `${run.factoryId}#${run.issueNumber}`;
-  const latestStart = new Map<string, number>();
+type ReplaceableRun = Pick<FactoryRun, 'id' | 'factoryId' | 'issueNumber' | 'startedAt'>;
+
+/**
+ * Each run a later-sent run of the same issue, in the same factory, replaced,
+ * with the newest run of that issue (the server's `replacementOf` decides the
+ * same from its own rows before it closes the replaced run's pull request).
+ */
+export function factoryRunReplacements<R extends ReplaceableRun>(
+  runs: readonly R[],
+): ReadonlyMap<string, R> {
+  const keyOf = (run: R) => `${run.factoryId}#${run.issueNumber}`;
+  const newest = new Map<string, R>();
   for (const run of runs) {
     if (run.issueNumber === null) continue;
-    const key = keyOf(run);
-    latestStart.set(key, Math.max(latestStart.get(key) ?? -Infinity, Date.parse(run.startedAt)));
+    const current = newest.get(keyOf(run));
+    if (!current || Date.parse(run.startedAt) > Date.parse(current.startedAt)) {
+      newest.set(keyOf(run), run);
+    }
   }
-  const superseded = new Set<string>();
+  const replaced = new Map<string, R>();
   for (const run of runs) {
     if (run.issueNumber === null) continue;
-    if (Date.parse(run.startedAt) < latestStart.get(keyOf(run))!) superseded.add(run.id);
+    const latest = newest.get(keyOf(run))!;
+    if (Date.parse(run.startedAt) < Date.parse(latest.startedAt)) replaced.set(run.id, latest);
   }
-  return superseded;
+  return replaced;
 }
 
 /**
@@ -88,7 +99,7 @@ function supersededRuns(runs: readonly PlacedRun[]): ReadonlySet<string> {
 export function placeFactoryRuns<R extends PlacedRun>(
   runs: readonly R[],
 ): Map<string, FactoryBoardColumnId> {
-  const superseded = supersededRuns(runs);
+  const superseded = factoryRunReplacements(runs);
   const placed = new Map<string, FactoryBoardColumnId>();
   for (const run of runs) {
     const column = isFactoryRunStoppedAfterFailure(run)
@@ -100,9 +111,6 @@ export function placeFactoryRuns<R extends PlacedRun>(
   return placed;
 }
 
-/** How long a finished run stays in the Done column. */
-export const DONE_WINDOW_MS = 24 * 60 * 60 * 1000;
-
 /** The run's most recent activity: when it ended, was admitted, or was sent. */
 export function factoryRunActivityAt(
   run: Pick<FactoryRun, 'completedAt' | 'admittedAt' | 'startedAt'>,
@@ -110,17 +118,14 @@ export function factoryRunActivityAt(
   return Date.parse(run.completedAt ?? run.admittedAt ?? run.startedAt);
 }
 
-export interface FactoryBoardLayout<R> {
-  columns: Record<FactoryBoardColumnId, R[]>;
-  /** Finished runs older than the Done window, left to the list. */
-  hiddenDone: number;
-}
-
-/** The runs of each column, in the column's order: the queue's own, newest activity elsewhere. */
+/**
+ * The runs of each column, in the column's order: the queue's own, newest
+ * activity elsewhere. Done holds every finished run; the column pages them in
+ * as it scrolls.
+ */
 export function layoutFactoryBoard<R extends FactoryRun>(
   runs: readonly R[],
-  now: number,
-): FactoryBoardLayout<R> {
+): Record<FactoryBoardColumnId, R[]> {
   const columns: Record<FactoryBoardColumnId, R[]> = {
     queue: [],
     triage: [],
@@ -131,16 +136,8 @@ export function layoutFactoryBoard<R extends FactoryRun>(
     needs_person: [],
     done: [],
   };
-  let hiddenDone = 0;
   const placed = placeFactoryRuns(runs);
-  for (const run of runs) {
-    const column = placed.get(run.id)!;
-    if (column === 'done' && now - factoryRunActivityAt(run) > DONE_WINDOW_MS) {
-      hiddenDone += 1;
-      continue;
-    }
-    columns[column].push(run);
-  }
+  for (const run of runs) columns[placed.get(run.id)!].push(run);
   for (const id of FACTORY_BOARD_COLUMNS) {
     columns[id].sort((a, b) => factoryRunActivityAt(b) - factoryRunActivityAt(a));
   }
@@ -150,5 +147,5 @@ export function layoutFactoryBoard<R extends FactoryRun>(
       Number(a.state === 'requested') - Number(b.state === 'requested') ||
       (a.queueOrder ?? 0) - (b.queueOrder ?? 0),
   );
-  return { columns, hiddenDone };
+  return columns;
 }

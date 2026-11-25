@@ -57,12 +57,24 @@ export function safeDirName(raw: string): string {
     .toLowerCase();
 }
 
+/**
+ * The `package.json` fields the extension loaders read. Nothing is validated on
+ * read, so every value is `unknown` and each reader checks the one it uses.
+ */
+export type ExtensionPackageJson = {
+  name?: unknown;
+  version?: unknown;
+  description?: unknown;
+  /** funny's own section: `client` (a client extension) or `provider` (a provider extension). */
+  funny?: { client?: unknown; provider?: unknown } | null;
+};
+
 /** Read + JSON-parse a `package.json` from an extension dir. Null if missing/invalid. */
-export function readPackageJson(pkgDir: string): Record<string, any> | null {
+export function readPackageJson(pkgDir: string): ExtensionPackageJson | null {
   try {
     const pkgPath = join(pkgDir, 'package.json');
     if (!existsSync(pkgPath)) return null;
-    return JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<string, any>;
+    return JSON.parse(readFileSync(pkgPath, 'utf8'));
   } catch {
     return null;
   }
@@ -160,7 +172,7 @@ export type RemoveResult = { ok: true } | { ok: false; error: string };
 /** Callbacks a kind handler supplies to the generic install/scan. */
 export interface KindHandler<T> {
   /** Validate the SOURCE package before copying. Returns an error, or null if ok. */
-  validateSource: (pkg: Record<string, any>, srcDir: string) => string | null;
+  validateSource: (pkg: ExtensionPackageJson, srcDir: string) => string | null;
   /** Parse an installed extension dir into the kind's record, or null if invalid. */
   read: (dir: string, dirName: string) => T | null;
 }

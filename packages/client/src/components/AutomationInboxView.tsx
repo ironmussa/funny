@@ -104,7 +104,7 @@ export function AutomationInboxView() {
           <Inbox className="icon-base text-muted-foreground" />
           <h2 className="text-sm font-medium">Automation Inbox</h2>
           {inboxCount > 0 && (
-            <Badge variant="secondary" className="h-5 min-w-5 px-1 leading-none">
+            <Badge variant="secondary" size="count" className="h-5 min-w-5">
               {inboxCount}
             </Badge>
           )}
@@ -112,7 +112,7 @@ export function AutomationInboxView() {
         <Button
           variant="muted"
           size="xs"
-          className="gap-1.5"
+          gap="snug"
           data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >
@@ -186,7 +186,8 @@ export function AutomationInboxView() {
                 aria-expanded={filterOpen}
                 aria-controls={filterListId}
                 data-testid="inbox-project-filter"
-                className="w-[200px] justify-between font-normal"
+                weight="normal"
+                className="w-[200px] justify-between"
               >
                 {filterProjectId
                   ? projectsWithItems.find((p) => p.id === filterProjectId)?.name
@@ -194,11 +195,11 @@ export function AutomationInboxView() {
                 <ChevronsUpDown className="icon-xs ml-2 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0" align="start">
+            <PopoverContent padding="none" className="w-[200px]" align="start">
               <Command>
-                <CommandInput placeholder="Search project..." className="h-8 text-xs" />
+                <CommandInput placeholder="Search project..." textSize="xs" className="h-8" />
                 <CommandList id={filterListId}>
-                  <CommandEmpty className="py-3 text-xs">No project found.</CommandEmpty>
+                  <CommandEmpty textSize="xs">No project found.</CommandEmpty>
                   <CommandGroup>
                     <CommandItem
                       value="all"
@@ -206,7 +207,7 @@ export function AutomationInboxView() {
                         setFilterProjectId(null);
                         setFilterOpen(false);
                       }}
-                      className="text-xs"
+                      textSize="xs"
                     >
                       <Check
                         className={cn(
@@ -224,7 +225,7 @@ export function AutomationInboxView() {
                           setFilterProjectId(p.id);
                           setFilterOpen(false);
                         }}
-                        className="text-xs"
+                        textSize="xs"
                       >
                         <Check
                           className={cn(

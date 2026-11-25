@@ -1,17 +1,3 @@
-/**
- * @domain subdomain: Issue Factory
- * @domain subdomain-type: core
- * @domain type: application-service
- * @domain layer: application
- *
- * Each user's issue factory for a project (change issue-factory): the on/off
- * (running / paused) toggle, the mode (manual: only the issues sent to it;
- * automatic: also the watched label, change factory-manual-queue), the flow to
- * run and the concurrency. Keyed per
- * `(project, user)` and scoped to project access: anyone who may start threads
- * on the project (`steer`) runs their own factory; a viewer may only read
- * theirs. Runs are stored separately (`factory-runs`).
- */
 import {
   DEFAULT_FACTORY_BATCH,
   DEFAULT_MAX_LOW_RISK_LINES,
@@ -27,8 +13,24 @@ import {
   type FactoryMode,
   type FactorySettings,
   type FactoryStepOverrides,
+  factoryBaseBranchSchema,
   type FactoryTooBig,
 } from '@funny/shared/contracts/factory';
+/**
+ * @domain subdomain: Issue Factory
+ * @domain subdomain-type: core
+ * @domain type: application-service
+ * @domain layer: application
+ *
+ * Each user's issue factory for a project (change issue-factory): the on/off
+ * (running / paused) toggle, the mode (manual: only the issues sent to it;
+ * automatic: also the watched label, change factory-manual-queue), the flow to
+ * run and the concurrency. Keyed per
+ * `(project, user)` and scoped to project access: anyone who may start threads
+ * on the project (`steer`) runs their own factory; a viewer may only read
+ * theirs. Runs are stored separately (`factory-runs`).
+ */
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { KNOWN_PROVIDER_IDS, providerModelProblem } from '@funny/shared/models';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
@@ -80,9 +82,9 @@ function batchOf(row: Row): FactoryBatchSettings {
   };
 }
 
-const storage = (error: unknown): FactorySettingsError => ({
+const storage = (cause: unknown): FactorySettingsError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const accessErrors = {
@@ -151,6 +153,7 @@ const configOf = (row: Row): FactoryConfig => ({
   maxConcurrent: row.maxConcurrent,
   autoMerge: autoMergeOf(row),
   sensitivePaths: sensitivePathsOf(row),
+  sizeGateEnabled: row.sizeGateEnabled === 1,
   maxLowRiskLines: maxLowRiskLinesOf(row),
   approvalAdjustMaxLines: row.approvalAdjustMaxLines ?? 0,
   sizeIgnoredPaths: sizeIgnoredPathsOf(row),
@@ -160,6 +163,7 @@ const configOf = (row: Row): FactoryConfig => ({
   dependencies: dependenciesOf(row),
   tooBig: tooBigOf(row),
   holdPathsAwaitingApproval: row.holdPathsAwaitingApproval === 1,
+  baseBranch: row.baseBranch ?? '',
 });
 
 const toView = (row: Row): FactorySettingsView => ({
@@ -179,6 +183,10 @@ const outside = (value: number, min: number, max: number): boolean => value < mi
 type SaveRule = (input: SaveFactorySettingsInput) => string | null;
 
 const SAVE_RULES: readonly SaveRule[] = [
+  ({ baseBranch }) =>
+    baseBranch !== undefined && !factoryBaseBranchSchema.safeParse(baseBranch).success
+      ? 'baseBranch is not a valid branch name'
+      : null,
   ({ label }) => (label !== undefined && label.trim() === '' ? 'Label must not be empty' : null),
   ({ mode }) =>
     mode !== undefined && mode !== 'manual' && mode !== 'automatic'
@@ -263,6 +271,7 @@ const DEFAULTS: FactoryConfig = {
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  sizeGateEnabled: false,
   maxLowRiskLines: DEFAULT_MAX_LOW_RISK_LINES,
   approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
@@ -272,6 +281,7 @@ const DEFAULTS: FactoryConfig = {
   dependencies: 'wait',
   tooBig: 'ask',
   holdPathsAwaitingApproval: false,
+  baseBranch: '',
 };
 
 /** The configured fields a save stores: the ones it carries, else `base`'s. */
@@ -285,6 +295,7 @@ function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): Fact
     maxConcurrent: pick('maxConcurrent'),
     autoMerge: pick('autoMerge'),
     sensitivePaths: pick('sensitivePaths'),
+    sizeGateEnabled: pick('sizeGateEnabled'),
     maxLowRiskLines: pick('maxLowRiskLines'),
     approvalAdjustMaxLines: pick('approvalAdjustMaxLines'),
     sizeIgnoredPaths: pick('sizeIgnoredPaths'),
@@ -294,6 +305,7 @@ function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): Fact
     dependencies: pick('dependencies'),
     tooBig: pick('tooBig'),
     holdPathsAwaitingApproval: pick('holdPathsAwaitingApproval'),
+    baseBranch: pick('baseBranch').trim(),
   };
 }
 
@@ -318,6 +330,7 @@ function buildRow(
     maxConcurrent: config.maxConcurrent,
     autoMerge: config.autoMerge,
     sensitivePaths: JSON.stringify(config.sensitivePaths),
+    sizeGateEnabled: config.sizeGateEnabled ? 1 : 0,
     maxLowRiskLines: config.maxLowRiskLines,
     approvalAdjustMaxLines: config.approvalAdjustMaxLines,
     sizeIgnoredPaths: JSON.stringify(config.sizeIgnoredPaths),
@@ -328,6 +341,7 @@ function buildRow(
     dependencies: config.dependencies,
     tooBig: config.tooBig,
     holdPathsAwaitingApproval: config.holdPathsAwaitingApproval ? 1 : 0,
+    baseBranch: config.baseBranch || null,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -428,6 +442,7 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
   maxConcurrent: ['maxConcurrent'],
   autoMerge: ['autoMerge'],
   sensitivePaths: ['sensitivePaths'],
+  sizeGateEnabled: ['sizeGateEnabled'],
   maxLowRiskLines: ['maxLowRiskLines'],
   approvalAdjustMaxLines: ['approvalAdjustMaxLines'],
   sizeIgnoredPaths: ['sizeIgnoredPaths'],
@@ -437,6 +452,7 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
   dependencies: ['dependencies'],
   tooBig: ['tooBig'],
   holdPathsAwaitingApproval: ['holdPathsAwaitingApproval'],
+  baseBranch: ['baseBranch'],
 };
 
 /** What a save writes over a stored row: the toggle, the bookkeeping and the fields it carries. */
@@ -532,6 +548,22 @@ export function createFactorySettingsService(
         );
     },
   };
+}
+
+/**
+ * The branch a factory merges into, as its enabler configured it, or null for
+ * the repository's default branch (or no factory). Server-internal: the
+ * factory's GitHub side reads it for the enabler it acts as.
+ */
+export async function factoryBaseBranchOf(
+  userId: string,
+  projectId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ baseBranch: factorySettings.baseBranch })
+    .from(factorySettings)
+    .where(byOwner(userId, projectId));
+  return row?.baseBranch || null;
 }
 
 /**

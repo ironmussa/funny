@@ -330,8 +330,8 @@ export class AgentExecutor {
     // Security HI-5: block cloud-metadata / link-local destinations
     // before connecting; baseURL is user-config'd via model overrides.
     await assertNotImds(url);
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    if (this.apiKey) headers.set('Authorization', `Bearer ${this.apiKey}`);
     const response = await fetch(url, {
       method: 'POST',
       headers,

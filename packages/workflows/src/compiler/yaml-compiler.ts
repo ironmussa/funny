@@ -35,6 +35,7 @@ import {
   type TemplateScope,
 } from '@funny/pipelines';
 import type { AgentDefinition, PermissionMode } from '@funny/shared';
+import type { JsonObject } from '@funny/shared/json';
 
 import type { ParsedNode, ParsedWorkflow } from '../schema.js';
 import type {
@@ -478,7 +479,7 @@ async function dispatch(
     });
     if (!result.ok) throw new Error(`spawn_agent[${yamlNode.id}] failed: ${result.error}`);
 
-    let json: Record<string, unknown> | undefined;
+    let json: JsonObject | undefined;
     if (yamlNode.spawn_agent.output_format && result.output) {
       json = tryParseJson(result.output);
       // Schema enforcement is intentionally not done here — the runtime
@@ -683,7 +684,7 @@ function makePredicate(
 }
 
 /** Pull JSON out of an agent response, ignoring surrounding prose. */
-function tryParseJson(text: string): Record<string, unknown> | undefined {
+function tryParseJson(text: string): JsonObject | undefined {
   // Try fenced ```json``` first.
   const fenced = text.match(/```json\s*([\s\S]*?)```/i);
   if (fenced) {

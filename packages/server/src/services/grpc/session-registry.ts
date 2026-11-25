@@ -18,7 +18,7 @@ export interface RunnerGrpcSessionRegistryOptions {
     reason: RunnerGrpcSessionEndReason,
     userId: string | null,
   ) => void | Promise<void>;
-  onTransitionError?: (error: unknown, runnerId: string) => void | Promise<void>;
+  onTransitionError?: (cause: unknown, runnerId: string) => void | Promise<void>;
 }
 
 interface ActiveSession {

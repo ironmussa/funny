@@ -10,6 +10,7 @@
  */
 
 import type { SandboxIngress } from '@funny/sandbox';
+import { errorMessage } from '@funny/shared/errors';
 import { ByteWriteQueue, frameBytes, type ByteWebSocket } from '@funny/shared/lib/byte-write-queue';
 import {
   REVERSE_LINK_MAX_BUFFERED_BYTES,
@@ -156,11 +157,11 @@ export function startReverseLinkDialer(options: ReverseLinkDialerOptions): Rever
           shut(link, 'server error');
         },
       },
-    }).catch((error: unknown) => {
+    }).catch((cause: unknown) => {
       log.error('Reverse link could not reach the server listener', {
         namespace: 'reverse-link',
         label,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       });
       shut(link, 'server unavailable');
     });

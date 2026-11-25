@@ -563,7 +563,6 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
         <LoadingState
           fill={false}
           layout="inline"
-          className="text-sm"
           testId="clone-repo-waiting-auth"
           label={t('github.deviceFlow.waitingAuth')}
         />
@@ -622,7 +621,8 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
             onInputKeyDown={handleSearchKeyDown}
             autoFocus={false}
             testIdPrefix="clone-repo-search"
-            className="border-input bg-background h-8 rounded-md border px-3 [&_input]:h-full [&_input]:px-0 [&_input]:text-sm"
+            variant="field"
+            className="h-8 [&_input]:h-full"
           />
         </div>
 
@@ -667,7 +667,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
           ))}
 
           {loadingRepos && (
-            <LoadingState fill={false} className="py-4" testId="clone-repo-loading-repos" />
+            <LoadingState fill={false} className="my-4" testId="clone-repo-loading-repos" />
           )}
 
           {!loadingRepos && repos.length === 0 && (
@@ -798,10 +798,10 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
               <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
                 <div
                   className={cn(
-                    'h-full rounded-full bg-primary',
+                    'h-full w-[var(--clone-progress-width)] rounded-full bg-primary',
                     phaseChanged ? '' : 'transition-all duration-300',
                   )}
-                  style={{ width: `${clonePercent}%` }}
+                  style={{ '--clone-progress-width': `${clonePercent}%` }}
                 />
               </div>
               <p className="text-muted-foreground mt-1 text-right text-xs">{clonePercent}%</p>

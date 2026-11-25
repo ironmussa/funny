@@ -29,6 +29,9 @@ interface PendingRequest {
 
 const pending = new Map<string, PendingRequest>();
 
+/** A message's own fields: JSON values, with unset optional ones left undefined. */
+type MessageFields = { [field: string]: JsonValue | undefined };
+
 const REQUEST_TIMEOUT_MS = 5000;
 
 let nextId = 0;
@@ -57,7 +60,7 @@ export function resolveBrowserSessionRequest(
 function sendRequest(
   type: string,
   sessionId: string,
-  extra: Record<string, unknown>,
+  extra: MessageFields,
 ): Promise<BrowserSessionResult> {
   const requestId = newRequestId();
   return waitFor(
@@ -115,7 +118,7 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: Record<string, unknown>) => RealtimeFrame>(
+const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: MessageFields) => RealtimeFrame>(
   Object.entries({
     'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
     'browser-session:navigate': (extra) => ({
@@ -131,14 +134,10 @@ const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: Record<string, unknown>) 
       reason: String(extra.reason ?? 'user'),
       closeId: isString(extra.closeId) ? extra.closeId : undefined,
     }),
-  } satisfies Record<string, (extra: Record<string, unknown>) => RealtimeFrame>),
+  } satisfies Record<string, (extra: MessageFields) => RealtimeFrame>),
 );
 
-function sendFireAndForget(
-  type: string,
-  sessionId: string,
-  extra: Record<string, unknown> = {},
-): void {
+function sendFireAndForget(type: string, sessionId: string, extra: MessageFields = {}): void {
   const frame = FIRE_AND_FORGET_FRAMES.get(type)?.(extra) ?? null;
   if (!frame) return;
   const sent = sendBrowserSessionRealtime(sessionId, frame);
@@ -161,7 +160,7 @@ export const browserSessionClient = {
   },
 
   /** Mouse / wheel / keyboard input — fire-and-forget. */
-  input(sessionId: string, input: Record<string, unknown>): void {
+  input(sessionId: string, input: MessageFields): void {
     sendFireAndForget('browser-session:input', sessionId, input);
   },
 

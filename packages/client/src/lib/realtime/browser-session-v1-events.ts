@@ -4,11 +4,15 @@ import {
   BrowserSessionPointerKind,
   type BrowserSessionMessage,
 } from '@funny/shared/browser-v1/interactive';
+import type { JsonPrimitive } from '@funny/shared/json';
+
+/** A JSON-like event value whose unset optional fields stay undefined. */
+type EventValue = JsonPrimitive | undefined | EventValue[] | { [field: string]: EventValue };
 
 /** A browser-session event as the panel handlers expect it (`dispatchBrowserSessionEvent`). */
 export interface BrowserSessionRealtimeEvent {
   type: `browser-session:${string}`;
-  data: Record<string, unknown>;
+  data: { [field: string]: EventValue };
 }
 
 function isString(value: unknown): value is string {

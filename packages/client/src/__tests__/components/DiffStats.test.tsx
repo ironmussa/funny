@@ -5,12 +5,12 @@ import { DiffStats } from '@/components/DiffStats';
 import { renderWithProviders } from '../helpers/render';
 
 describe('DiffStats', () => {
-  test('uses a 15px chip for xs diff stats', () => {
+  test('uses a 16px chip for xs diff stats', () => {
     const { container } = renderWithProviders(
       <DiffStats linesAdded={21} linesDeleted={7} dirtyFileCount={4} size="xs" />,
     );
 
-    expect(container.firstElementChild).toHaveClass('h-[15px]', 'leading-[15px]');
+    expect(container.firstElementChild).toHaveClass('h-4', 'leading-4');
   });
 
   test('uses the same file icon size as compact branch chips for xs diff stats', () => {

@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { browserSessionClient } from '@/lib/browser-session-client';
+import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 import { AgentActionEffects } from './AgentActionEffects';
@@ -77,12 +78,8 @@ function ActiveBrowserViewport() {
 
   return (
     <div
-      className="relative max-h-full max-w-full"
-      style={{
-        aspectRatio: `${viewport.width} / ${viewport.height}`,
-        width: '100%',
-        maxWidth: `calc((100% - 1rem) * 1)`,
-      }}
+      className="relative aspect-[var(--browser-viewport-aspect)] max-h-full w-full max-w-[calc((100%_-_1rem)_*_1)]"
+      style={{ '--browser-viewport-aspect': `${viewport.width} / ${viewport.height}` }}
     >
       <div className="absolute inset-0">
         <BrowserSessionCanvas canvasRef={canvasRef} />
@@ -96,12 +93,10 @@ function ActiveBrowserViewport() {
         // Capture-phase shortcuts (Ctrl+F) skip targets inside this.
         data-keyboard-passthrough
         tabIndex={userControls ? 0 : -1}
-        className="absolute inset-0 select-none focus:outline-hidden"
-        style={{
-          pointerEvents: userControls ? 'auto' : 'none',
-          WebkitUserSelect: 'none',
-          userSelect: 'none',
-        }}
+        className={cn(
+          'absolute inset-0 select-none focus:outline-hidden',
+          userControls ? 'pointer-events-auto' : 'pointer-events-none',
+        )}
         onMouseDown={inputHandlers.onBrowseMouseDownWithFocus}
         onMouseUp={inputHandlers.onBrowseMouseUp}
         onMouseMove={inputHandlers.onBrowseMouseMove}
@@ -174,11 +169,10 @@ function BrowserAnnotations({
 }) {
   return (
     <div
-      className="absolute inset-0"
-      style={{
-        visibility: showAnnotations ? 'visible' : 'hidden',
-        pointerEvents: showAnnotations ? 'auto' : 'none',
-      }}
+      className={cn(
+        'absolute inset-0',
+        showAnnotations ? 'pointer-events-auto visible' : 'pointer-events-none invisible',
+      )}
       aria-hidden={!showAnnotations}
     >
       <PinTool
@@ -349,7 +343,8 @@ function BrowserSessionStatus() {
       {showCdpSpinner && (
         <LoadingState
           testId="browser-panel-spawning"
-          className="bg-background/80 absolute inset-0"
+          surface="scrim"
+          className="absolute inset-0"
           label="Spawning Chrome…"
         />
       )}

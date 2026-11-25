@@ -1,3 +1,5 @@
+import { isJsonObject, type JsonObject, type JsonValue } from '@funny/shared/json';
+
 import { mcpToolTitle, parseMcpToolName } from './mcp-tool';
 
 export interface TodoItem {
@@ -6,17 +8,19 @@ export interface TodoItem {
   activeForm?: string;
 }
 
-export interface QuestionOption {
+// Type aliases, not interfaces: they come from a tool call's JSON input, and an
+// alias stays comparable with `JsonValue` (an interface has no index signature).
+export type QuestionOption = {
   label: string;
   description: string;
-}
+};
 
-export interface Question {
+export type Question = {
   question: string;
   header: string;
   options: QuestionOption[];
   multiSelect: boolean;
-}
+};
 
 /** Cursor ACP `updateTodos` / `todo_write` and Claude `TodoWrite` share the checklist card. */
 export function isTodoToolName(name: string): boolean {
@@ -28,16 +32,10 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-/** Any non-null object (arrays included), read as a bag of fields. */
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object';
-}
-
-function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
+function normalizeTodoItems(arr: JsonValue[]): TodoItem[] | null {
   const todos: TodoItem[] = [];
-  for (const raw of arr) {
-    if (!isObjectRecord(raw)) continue;
-    const e = raw;
+  for (const e of arr) {
+    if (!isJsonObject(e)) continue;
     const content =
       (isString(e.content) && e.content) ||
       // Codex SDK todo_list items use `{ text, completed }`, unlike the
@@ -65,7 +63,7 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
 }
 
 /** Tool input arrives either as JSON text or already parsed. */
-function isInputText(input: string | Record<string, unknown>): input is string {
+function isInputText(input: string | JsonObject): input is string {
   return typeof input === 'string';
 }
 
@@ -76,9 +74,7 @@ function unparsedToolInput(text: string): UnparsedToolInput {
   return { value: text };
 }
 
-export function formatInput(
-  input: string | Record<string, unknown> | null | undefined,
-): Record<string, unknown> {
+export function formatInput(input: string | JsonObject | null | undefined): JsonObject {
   if (!input) return {};
   if (isInputText(input)) {
     try {
@@ -90,7 +86,7 @@ export function formatInput(
   return input;
 }
 
-export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
+export function getTodos(parsed: JsonObject): TodoItem[] | null {
   for (const key of ['todos', 'entries', 'items'] as const) {
     const arr = parsed[key];
     if (Array.isArray(arr)) {
@@ -99,7 +95,7 @@ export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
     }
   }
   const outcome = parsed.outcome;
-  if (isObjectRecord(outcome)) {
+  if (isJsonObject(outcome)) {
     const o = outcome;
     if (Array.isArray(o.todos)) {
       const normalized = normalizeTodoItems(o.todos);
@@ -109,7 +105,7 @@ export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
   return null;
 }
 
-export function getFilePath(name: string, parsed: Record<string, unknown>): string | null {
+export function getFilePath(name: string, parsed: JsonObject): string | null {
   if (name === 'Read' || name === 'Write' || name === 'Edit') {
     // SAFETY: Read, Write and Edit declare file_path as a string in their input schema.
     return (parsed.file_path as string) ?? null;
@@ -117,7 +113,7 @@ export function getFilePath(name: string, parsed: Record<string, unknown>): stri
   return null;
 }
 
-export function getQuestions(parsed: Record<string, unknown>): Question[] | null {
+export function getQuestions(parsed: JsonObject): Question[] | null {
   const questions = parsed.questions;
   if (!Array.isArray(questions)) return null;
   // SAFETY: AskUserQuestion's input schema declares questions as an array of
@@ -125,7 +121,7 @@ export function getQuestions(parsed: Record<string, unknown>): Question[] | null
   return questions as Question[];
 }
 
-type SummaryFn = (parsed: Record<string, unknown>, t: (key: string) => string) => string | null;
+type SummaryFn = (parsed: JsonObject, t: (key: string) => string) => string | null;
 
 /** Summary that is just one input field (or null). */
 // SAFETY: every key passed to field() below is declared as a string in that
@@ -135,23 +131,20 @@ const field =
   (parsed) =>
     (parsed[key] as string) ?? null;
 
-function todoSummary(parsed: Record<string, unknown>, t: (key: string) => string): string | null {
+function todoSummary(parsed: JsonObject, t: (key: string) => string): string | null {
   const todos = getTodos(parsed);
   if (!todos) return null;
   const done = todos.filter((tc) => tc.status === 'completed').length;
   return `${done}/${todos.length} ${t('tools.done')}`;
 }
 
-function questionSummary(
-  parsed: Record<string, unknown>,
-  t: (key: string) => string,
-): string | null {
+function questionSummary(parsed: JsonObject, t: (key: string) => string): string | null {
   const questions = getQuestions(parsed);
   if (!questions) return null;
   return `${questions.length} ${questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}`;
 }
 
-function thinkSummary(parsed: Record<string, unknown>): string | null {
+function thinkSummary(parsed: JsonObject): string | null {
   // SAFETY: Think inputs carry their text in content or description, both strings.
   const thought = (parsed.content as string) ?? (parsed.description as string) ?? '';
   const firstLine = thought
@@ -162,13 +155,13 @@ function thinkSummary(parsed: Record<string, unknown>): string | null {
   return firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine;
 }
 
-function taskUpdateSummary(parsed: Record<string, unknown>): string | null {
+function taskUpdateSummary(parsed: JsonObject): string | null {
   if (!parsed.taskId) return null;
   const status = parsed.status ? ` → ${String(parsed.status)}` : '';
   return `#${String(parsed.taskId)}${status}`;
 }
 
-function backgroundSummary(parsed: Record<string, unknown>): string | null {
+function backgroundSummary(parsed: JsonObject): string | null {
   // SAFETY: Background tool inputs declare label and command as strings.
   return (
     (parsed.label as string) ??
@@ -184,12 +177,8 @@ const SUMMARIES = new Map<string, SummaryFn>(
     Read: filePathSummary,
     Write: filePathSummary,
     Edit: filePathSummary,
-    // SAFETY: Bash declares command as a string, so the second branch only sees it
-    // missing (undefined), which `??` turns into null.
-    Bash: (parsed) =>
-      isString(parsed.command)
-        ? unwrapShellCommand(parsed.command)
-        : ((parsed.command as string) ?? null),
+    Bash: (parsed, t) =>
+      isString(parsed.command) ? unwrapShellCommand(parsed.command) : field('command')(parsed, t),
     Glob: field('pattern'),
     Grep: field('pattern'),
     Task: field('description'),
@@ -237,7 +226,7 @@ const defaultSummary = field('description');
 
 export function getSummary(
   name: string,
-  parsed: Record<string, unknown>,
+  parsed: JsonObject,
   t: (key: string) => string,
 ): string | null {
   const summarize = SUMMARIES.get(name) ?? defaultSummary;
@@ -258,7 +247,7 @@ export function unwrapShellCommand(command: string): string {
 }
 
 /** The file(s) a patch touches: the first path, plus how many more. */
-function patchSummary(parsed: Record<string, unknown>): string | null {
+function patchSummary(parsed: JsonObject): string | null {
   const paths: string[] = [];
   if (isString(parsed.input)) {
     for (const m of parsed.input.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)) {
@@ -267,7 +256,7 @@ function patchSummary(parsed: Record<string, unknown>): string | null {
   }
   if (Array.isArray(parsed.changes)) {
     for (const change of parsed.changes) {
-      if (change && isString(change.path)) paths.push(change.path);
+      if (isJsonObject(change) && isString(change.path)) paths.push(change.path);
     }
   }
   if (paths.length === 0) return null;

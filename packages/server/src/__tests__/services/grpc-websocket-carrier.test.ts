@@ -169,10 +169,13 @@ describe('runner gRPC WebSocket carrier', () => {
   });
 
   test('only claims the carrier path, and 404s it when the transport is disabled', () => {
+    const noUpgrade = { upgrade: () => false };
     const other = new Request('http://x/api/projects');
-    expect(routeRunnerCarrier(other, {}, null, '')).toBeNull();
+    expect(routeRunnerCarrier(other, noUpgrade, null, '')).toBeNull();
     const carrierReq = new Request('http://x/api/runner-grpc/ws');
-    expect(expectInstance(routeRunnerCarrier(carrierReq, {}, null, ''), Response).status).toBe(404);
+    expect(
+      expectInstance(routeRunnerCarrier(carrierReq, noUpgrade, null, ''), Response).status,
+    ).toBe(404);
   });
 });
 

@@ -9,7 +9,6 @@ import { PromptInputUI } from '@/components/PromptInputUI';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { buildThread } from '@/data/threads/testing';
-import { cn } from '@/lib/utils';
 
 const defaultModes = [
   { value: 'ask', label: 'Ask' },
@@ -333,11 +332,10 @@ function MinimalStory() {
               <Button
                 data-testid="minimal-send"
                 onClick={handleSubmit}
-                variant="muted"
+                variant={hasContent ? 'ghost-primary' : 'muted'}
                 size="icon-sm"
                 tabIndex={-1}
                 disabled={!hasContent}
-                className={cn(hasContent && 'text-primary hover:text-primary')}
               >
                 <Send className="icon-xs" />
               </Button>

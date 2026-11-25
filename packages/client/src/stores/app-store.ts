@@ -113,19 +113,13 @@ const THREAD_KEYS = new Set([
 
 // setState support for tests
 useAppStore.setState = (partial: Partial<CombinedState>) => {
-  const projectPartial: Record<string, any> = {};
-  const threadPartial: Record<string, any> = {};
-  const uiPartial: Record<string, any> = {};
-
-  for (const [key, value] of Object.entries(partial)) {
-    if (PROJECT_KEYS.has(key)) {
-      projectPartial[key] = value;
-    } else if (THREAD_KEYS.has(key)) {
-      threadPartial[key] = value;
-    } else {
-      uiPartial[key] = value;
-    }
-  }
+  const entries = Object.entries(partial);
+  const isThreadKey = (key: string) => !PROJECT_KEYS.has(key) && THREAD_KEYS.has(key);
+  const projectPartial = Object.fromEntries(entries.filter(([key]) => PROJECT_KEYS.has(key)));
+  const threadPartial = Object.fromEntries(entries.filter(([key]) => isThreadKey(key)));
+  const uiPartial = Object.fromEntries(
+    entries.filter(([key]) => !PROJECT_KEYS.has(key) && !THREAD_KEYS.has(key)),
+  );
 
   // Every value comes from `partial`, a Partial<CombinedState>, and zustand's setState only
   // shallow-merges it; this helper exists only for tests and stories.

@@ -77,7 +77,10 @@ function SidebarPlaceholder() {
     if (s) w = Number(s);
   } catch {}
   return (
-    <div style={{ width: w }} className="border-sidebar-border bg-sidebar shrink-0 border-r" />
+    <div
+      style={{ '--sidebar-placeholder-width': `${w}px` }}
+      className="border-sidebar-border bg-sidebar w-[var(--sidebar-placeholder-width)] shrink-0 border-r"
+    />
   );
 }
 

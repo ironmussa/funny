@@ -96,7 +96,7 @@ interface SuggestionKeyDownDeps {
   suggestionTypeRef: React.RefObject<SuggestionMenuType | null>;
   suggestionItemsRef: React.RefObject<SuggestionItem[]>;
   suggestionIndexRef: React.RefObject<number>;
-  suggestionCommandRef: React.RefObject<((props: SuggestionItem) => void) | null>;
+  suggestionCommandRef: React.RefObject<((item: SuggestionItem) => void) | null>;
   setSuggestionIndex: React.Dispatch<React.SetStateAction<number>>;
   setSuggestionType: React.Dispatch<React.SetStateAction<SuggestionMenuType | null>>;
 }
@@ -128,7 +128,7 @@ function useSuggestionMenuState() {
   const [suggestionTruncated, setSuggestionTruncated] = useState(false);
   const [suggestionQuery, setSuggestionQuery] = useState('');
   const [suggestionRect, setSuggestionRect] = useState<(() => DOMRect | null) | null>(null);
-  const suggestionCommandRef = useRef<((props: SuggestionItem) => void) | null>(null);
+  const suggestionCommandRef = useRef<((item: SuggestionItem) => void) | null>(null);
   return {
     suggestionType,
     setSuggestionType,

@@ -256,7 +256,7 @@ function FileListContent(props: FileListProps) {
               variant="outline"
               size="sm"
               onClick={props.refresh}
-              className="gap-1.5"
+              gap="snug"
               data-testid="review-retry"
             >
               <RotateCcw className="icon-xs" />
@@ -322,11 +322,8 @@ function VirtualizedRows({
   return (
     <div className={cn(loading && 'pointer-events-none')}>
       <div
-        style={{
-          height: `${totalSize}px`,
-          width: '100%',
-          position: 'relative',
-        }}
+        className="relative h-[var(--changes-list-total-size)] w-full"
+        style={{ '--changes-list-total-size': `${totalSize}px` }}
       >
         {virtualItems.map((virtualRow) => {
           const row = treeRows[virtualRow.index];

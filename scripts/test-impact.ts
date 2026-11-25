@@ -144,10 +144,19 @@ function testsBySource(map: ImpactMap): Map<string, string[]> {
   return bySource;
 }
 
+/** The `ImpactMap` fields `isImpactMap` reads, before they are checked. */
+interface UncheckedImpactMap {
+  package?: unknown;
+  commit?: unknown;
+  tests?: unknown;
+  alwaysRun?: unknown;
+  durationsMs?: unknown;
+}
+
 /** Whether `value` has the shape of an `ImpactMap`. */
 export function isImpactMap(value: unknown): value is ImpactMap {
   if (typeof value !== 'object' || value === null) return false;
-  const map: Partial<Record<keyof ImpactMap, unknown>> = value;
+  const map: UncheckedImpactMap = value;
   const isRecord = (v: unknown): v is object =>
     typeof v === 'object' && v !== null && !Array.isArray(v);
   const isString = (v: unknown): v is string => typeof v === 'string';

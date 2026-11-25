@@ -57,9 +57,15 @@ export interface NewWaiter {
   input?: unknown;
 }
 
-function storedJson(raw: string | null, label: string): unknown {
+const STORED_JSON_SCHEMA = z.json();
+
+/** A stored JSON column, or undefined when empty; a corrupt value throws. */
+function storedJson(
+  raw: string | null,
+  label: string,
+): z.infer<typeof STORED_JSON_SCHEMA> | undefined {
   if (raw === null) return undefined;
-  const parsed = parseStoredJson(z.unknown(), raw, label);
+  const parsed = parseStoredJson(STORED_JSON_SCHEMA, raw, label);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.value;
 }

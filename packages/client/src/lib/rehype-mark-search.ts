@@ -1,11 +1,14 @@
 type TextNode = { type: 'text'; value: string };
+/** An element property's value, as hast types it. */
+type PropertyValue = string | number | boolean | null | undefined | Array<string | number>;
 type ElementNode = {
   type: 'element';
   tagName: string;
-  properties?: Record<string, unknown>;
+  properties?: { [name: string]: PropertyValue };
   children: NodeContent[];
 };
-type NodeContent = TextNode | ElementNode | { type: string; [key: string]: unknown };
+/** Any other node (comment, doctype, raw) is passed through untouched. */
+type NodeContent = TextNode | ElementNode | { type: string };
 type RootNode = { type: 'root'; children: NodeContent[] };
 
 export interface RehypeMarkSearchOptions {

@@ -128,7 +128,7 @@ function McpServerToggle({
           {switchControl}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="left" className="max-w-xs p-3 text-left">
+      <TooltipContent side="left" variant="padded" className="max-w-xs text-left">
         <p className="leading-snug">{t(tooltipKey)}</p>
       </TooltipContent>
     </Tooltip>
@@ -146,8 +146,9 @@ function McpProtocolBadge({ type }: { type: McpServerType }) {
     <Badge
       variant={PROTOCOL_BADGE_VARIANT[type]}
       size="xs"
+      corners="square"
+      caps
       data-testid={`mcp-protocol-badge-${type}`}
-      className="rounded-md tracking-wider uppercase"
     >
       {type === 'stdio' ? <Terminal className="icon-2xs" /> : <Globe className="icon-2xs" />}
       {type}
@@ -157,20 +158,22 @@ function McpProtocolBadge({ type }: { type: McpServerType }) {
 
 function McpStatusBadge({
   children,
-  className,
+  tone,
   testId,
 }: {
   children: ReactNode;
-  className?: string;
+  tone: 'error' | 'muted';
   testId?: string;
 }) {
+  if (tone === 'error') {
+    return (
+      <Badge variant="error" size="xs" corners="square" data-testid={testId}>
+        {children}
+      </Badge>
+    );
+  }
   return (
-    <Badge
-      variant="outline"
-      size="xs"
-      data-testid={testId}
-      className={cn('rounded-md border-transparent font-medium', className)}
-    >
+    <Badge variant="subtle" size="xs" corners="square" data-testid={testId}>
       {children}
     </Badge>
   );
@@ -208,56 +211,43 @@ function InstalledServerCard({
   return (
     <Card
       data-testid={`mcp-installed-card-${server.name}`}
-      className={cn(
-        'flex flex-col shadow-none',
+      flat
+      tone={
         isDisabled
-          ? 'border-border/30 opacity-60'
+          ? 'disabled'
           : server.status === 'needs_auth'
-            ? 'border-status-warning/50'
+            ? 'warning'
             : server.status === 'error'
-              ? 'border-status-error/50'
-              : undefined,
-      )}
+              ? 'error'
+              : 'default'
+      }
+      className="flex flex-col"
     >
-      <CardHeader className="flex flex-row items-start gap-3 space-y-0 p-4 pb-2">
+      <CardHeader size="sm" layout="row">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle
-              className={cn(
-                'truncate text-sm font-medium leading-snug',
-                isDisabled && 'text-muted-foreground',
-              )}
-            >
+            <CardTitle size="sm" truncate muted={isDisabled}>
               {server.name}
             </CardTitle>
             <McpProtocolBadge type={server.type} />
             {!isDisabled && server.status === 'error' && (
-              <McpStatusBadge
-                testId={`mcp-status-error-${server.name}`}
-                className="bg-status-error/15 text-status-error"
-              >
+              <McpStatusBadge testId={`mcp-status-error-${server.name}`} tone="error">
                 <XCircle className="icon-2xs" />
                 {t('mcp.failed')}
               </McpStatusBadge>
             )}
             {isDisabled && (
-              <McpStatusBadge
-                testId={`mcp-status-disabled-${server.name}`}
-                className="bg-muted text-muted-foreground"
-              >
+              <McpStatusBadge testId={`mcp-status-disabled-${server.name}`} tone="muted">
                 {t('mcp.disabled')}
               </McpStatusBadge>
             )}
             {server.toggleable === false && (
-              <McpStatusBadge
-                testId={`mcp-status-managed-${server.name}`}
-                className="bg-muted text-muted-foreground"
-              >
+              <McpStatusBadge testId={`mcp-status-managed-${server.name}`} tone="muted">
                 {t('mcp.managedExternally')}
               </McpStatusBadge>
             )}
           </div>
-          <CardDescription className="mt-1 truncate text-xs">
+          <CardDescription size="sm" truncate className="mt-1">
             {server.url || [server.command, ...(server.args || [])].join(' ')}
           </CardDescription>
         </div>
@@ -285,14 +275,14 @@ function InstalledServerCard({
         </div>
       </CardHeader>
       {needsAuthActions && (
-        <CardFooter className="flex-col items-stretch gap-2 p-4 pt-0">
+        <CardFooter size="sm" layout="stack">
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outline"
+              variant="outline-warning"
               size="xs"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
-              className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 h-6"
+              className="h-6"
               data-testid={`mcp-oauth-${server.name}`}
             >
               {authenticating ? (
@@ -367,20 +357,17 @@ function RecommendedServerCard({
   const { t } = useTranslation();
 
   return (
-    <Card
-      data-testid={`mcp-recommended-card-${server.name}`}
-      className="flex h-full flex-col shadow-none"
-    >
-      <CardHeader className="flex-1 space-y-2 p-4 pb-2">
+    <Card data-testid={`mcp-recommended-card-${server.name}`} flat className="flex h-full flex-col">
+      <CardHeader size="sm" spacing="loose" className="flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-sm leading-snug font-medium">{server.name}</CardTitle>
+          <CardTitle size="sm">{server.name}</CardTitle>
           <McpProtocolBadge type={server.type} />
         </div>
-        <CardDescription className="line-clamp-3 text-xs leading-relaxed">
+        <CardDescription size="sm" clamp>
           {server.description}
         </CardDescription>
       </CardHeader>
-      <CardFooter className="p-4 pt-0">
+      <CardFooter size="sm">
         <Button
           variant={installed ? 'ghost' : 'outline'}
           size="sm"
@@ -692,12 +679,7 @@ export function McpServerSettings() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="px-2"
-            >
+            <Button variant="ghost" size="sm-tight" onClick={() => setShowAddForm(!showAddForm)}>
               {showAddForm ? (
                 <ChevronUp className="icon-xs mr-1" />
               ) : (
@@ -722,7 +704,7 @@ export function McpServerSettings() {
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
                   placeholder="my-server"
-                  className="h-8 px-2"
+                  size="sm-tight"
                 />
               </div>
               <div>
@@ -758,7 +740,7 @@ export function McpServerSettings() {
                   value={addUrl}
                   onChange={(e) => setAddUrl(e.target.value)}
                   placeholder="https://api.example.com/mcp"
-                  className="h-8 px-2"
+                  size="sm-tight"
                 />
               </div>
             ) : (
@@ -773,7 +755,7 @@ export function McpServerSettings() {
                     value={addCommand}
                     onChange={(e) => setAddCommand(e.target.value)}
                     placeholder="npx"
-                    className="h-8 px-2"
+                    size="sm-tight"
                   />
                 </div>
                 <div>
@@ -786,7 +768,7 @@ export function McpServerSettings() {
                     value={addArgs}
                     onChange={(e) => setAddArgs(e.target.value)}
                     placeholder="-y @package/name"
-                    className="h-8 px-2"
+                    size="sm-tight"
                   />
                 </div>
               </div>
@@ -872,7 +854,7 @@ export function McpServerSettings() {
             <AlertDialogAction
               data-testid="mcp-remove-confirm"
               onClick={confirmRemove}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
             >
               {t('common.delete')}
             </AlertDialogAction>

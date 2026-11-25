@@ -1,11 +1,12 @@
 import type { WSToolCallData } from '@funny/shared';
+import type { JsonObject } from '@funny/shared/json';
 import { create } from 'zustand';
 
 import { omitThread } from './by-thread';
 
 export interface ActiveTool {
   name: string;
-  input: Record<string, unknown>;
+  input: JsonObject;
 }
 
 interface ThreadActiveToolState {
@@ -40,13 +41,13 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-/** True for a non-null object. */
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** A decoded JSON object (or array, which has none of the fields read), as Socket.IO or `JSON.parse` hands it over. */
+function isRecord(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null;
 }
 
 /** A tool call's input as an object: it arrives as an object or as its JSON string. */
-export function parseToolInput(toolCall: Pick<WSToolCallData, 'input'>): Record<string, unknown> {
+export function parseToolInput(toolCall: Pick<WSToolCallData, 'input'>): JsonObject {
   const input = toolCall.input;
   if (isString(input)) {
     try {

@@ -69,7 +69,8 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-auto min-w-[160px] p-1"
+        padding="xs"
+        className="w-auto min-w-[160px]"
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

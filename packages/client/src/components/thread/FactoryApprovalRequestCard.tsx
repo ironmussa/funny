@@ -13,6 +13,7 @@ import { CircleCheck, CircleSlash, Clock, ShieldAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ApprovalGapNote } from '@/components/factory-board/ApprovalGapNote';
 import { factoryRunStateChip } from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
 import { PRBadge } from '@/components/PRBadge';
@@ -207,6 +208,12 @@ function PendingBody({
     );
   return (
     <>
+      <ApprovalGapNote
+        approval={run.mergeApproval}
+        heldSha={request.sha}
+        prUrl={run.prUrl}
+        testId={`factory-approval-gap-${request.id}`}
+      />
       {reasons.length > 0 && (
         <div className="space-y-1">
           <p className="text-muted-foreground font-medium">

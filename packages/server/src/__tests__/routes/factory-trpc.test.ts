@@ -549,6 +549,22 @@ describe('factory over tRPC', () => {
     ).toMatchObject({ approvalAdjustMaxLines: 0 });
   });
 
+  // openspec factory-merge-fewer-bounces, D6.
+  test('keeping the paths of a run that waits for an approval is off by default and saved', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      holdPathsAwaitingApproval: false,
+    });
+    const on = { projectId: 'p1', enabled: true, holdPathsAwaitingApproval: true };
+    expect((await save('alice', on)).body).toMatchObject({ holdPathsAwaitingApproval: true });
+    // Omitted, it keeps its value; false turns it off again.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      holdPathsAwaitingApproval: true,
+    });
+    expect((await save('alice', { ...on, holdPathsAwaitingApproval: false })).body).toMatchObject({
+      holdPathsAwaitingApproval: false,
+    });
+  });
+
   // openspec factory-flow-step-options, 4.1.
   test('step overrides are saved and read back; a permission mode or a bad pair is refused', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({

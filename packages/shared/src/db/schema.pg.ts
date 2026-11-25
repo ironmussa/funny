@@ -327,6 +327,8 @@ export const factorySettings = pgTable(
     dependencies: text('dependencies'),
     /** `split` (open a too-large issue's parts as issues) or `ask` (null): comment the split. */
     tooBig: text('too_big'),
+    /** 1: a run parked for a member's approval keeps its likely paths (null / 0: it holds none). */
+    holdPathsAwaitingApproval: integer('hold_paths_awaiting_approval'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),

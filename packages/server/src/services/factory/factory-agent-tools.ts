@@ -15,10 +15,11 @@
  * `approveMerge`. The actor is always the thread's owner as stored, and the
  * project is the thread's; the agent supplies a run id and nothing else.
  */
-import type {
-  FactoryApprovalRequestState,
-  FactoryRunState,
-  FactoryWaitReason,
+import {
+  approvalGapFor,
+  type FactoryApprovalRequestState,
+  type FactoryRunState,
+  type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
 import { and, eq } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -103,6 +104,18 @@ export interface AgentRunSummary {
   risk: { level: string; headSha: string; reasons: string[]; changedLines: number | null } | null;
   /** The commit a member approved merging, or null. */
   approvedSha: string | null;
+  /**
+   * What changed since the commit a member approved, when the run is held
+   * again on another one (openspec factory-merge-fewer-bounces, D2); else null.
+   */
+  sinceApproval: {
+    approvedSha: string;
+    lines: number | null;
+    files: string[];
+    moreFiles: number;
+    newFiles: string[];
+    newRiskKeys: string[];
+  } | null;
   /** Whether it waits for a member's approval of a high-risk change. */
   awaitsApproval: boolean;
   /** Its newest approval request, or null. */
@@ -116,6 +129,14 @@ const MAX_REASON = 200;
 
 const oneLine = (text: string | null): string | null =>
   text === null ? null : text.replace(/\s+/g, ' ').trim().slice(0, MAX_REASON);
+
+/** The held run's difference from the commit a member approved, without the free-text reason. */
+function sinceApprovalOf(run: FactoryRunView): AgentRunSummary['sinceApproval'] {
+  const gap = approvalGapFor(run.mergeApproval, heldCommit(run));
+  if (!gap) return null;
+  const { approvedSha, lines, files, moreFiles, newFiles, newRiskKeys } = gap;
+  return { approvedSha, lines, files, moreFiles, newFiles, newRiskKeys };
+}
 
 function summarize(
   run: FactoryRunView,
@@ -138,6 +159,7 @@ function summarize(
         }
       : null,
     approvedSha: run.mergeApproval?.sha ?? null,
+    sinceApproval: sinceApprovalOf(run),
     awaitsApproval: heldCommit(run) !== null,
     approvalRequest: request ? { id: request.id, state: request.state, sha: request.sha } : null,
   };

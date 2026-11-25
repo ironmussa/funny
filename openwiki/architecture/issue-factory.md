@@ -407,6 +407,29 @@ reads the role's prose as a decision:
   approval's `riskKeys`, and an approval without them follows only the same change. With the
   setting on the factory merges lines no person read: the review of the new commit is the
   remaining guard.
+  When the approval does **not** follow, the hold keeps what differs instead of only a sentence
+  (openspec `factory-merge-fewer-bounces`): `approvalGapOf` turns the same delta into the
+  approval's `gap` (the held commit, the lines that differ, at most 20 files, the ones the
+  approved change did not touch, the risk keys that are new, the reason), written by
+  `noteApprovalGap` with a compare-and-set on the stored approval. `approvalGapFor(approval,
+  heldSha)` (`@funny/shared/contracts/factory`) reads it only for the commit it is about. The
+  approval card in the thread, the run panel, the board card ("Asks again after N lines
+  changed") and `funny_factory_runs` show it (`ApprovalGapNote`), so a second approval costs the
+  reading of the difference. The approval is still given for the whole held commit; a new
+  approval replaces the record, so later adjustments are measured from the commit just approved.
+  **A merge GitHub refuses** is told apart by which branch moved (`movedSince` in
+  `factory-merge-lane.ts`): the head, the base (the head is behind it), or neither. With a branch
+  moved the run goes back through `upToDate` (base in, checks, proof, the approval re-decided)
+  and merges again, without parking; `MAX_STALE_MERGES` (3) such refusals in one visit to
+  `merge` park it as `base keeps moving`. With neither moved it parks with GitHub's own message,
+  which `pinnedMerge` now keeps next to the status. Seen on #450 (2026-11-25): a push to the base
+  two seconds before the merge got a 405 and a run waiting for a person.
+  **Paths.** A run that already has a pull request waits for no paths (`pathsHeld` in
+  `factory-watcher.ts`, triage's `busyPaths`): it has no implementer to start, and queueing it
+  behind later runs let them merge first. With the factory's `holdPathsAwaitingApproval` setting
+  (off by default) a run parked for a member's approval keeps its likely paths for
+  `APPROVAL_PATH_HOLD_MS` (12 hours); a run that waits only for such runs has the wait reason
+  `paths-awaiting-approval`.
   Every move is announced (`announceApprovalMove`): a comment on the pull request that says it is
   automated and that no person approved the new commit, the activity `factory.approval-moved` of
   the member who approved, and the run detail's "Merge approved at … moved to …". A comment that

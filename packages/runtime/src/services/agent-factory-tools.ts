@@ -44,6 +44,15 @@ interface RunSummary {
   failureReason: string | null;
   risk: { level: string; headSha: string; reasons: string[]; changedLines: number | null } | null;
   approvedSha: string | null;
+  /** Absent from a server that does not send it. */
+  sinceApproval?: {
+    approvedSha: string;
+    lines: number | null;
+    files: string[];
+    moreFiles: number;
+    newFiles: string[];
+    newRiskKeys: string[];
+  } | null;
   awaitsApproval: boolean;
   approvalRequest: { id: string; state: string; sha: string } | null;
 }
@@ -54,6 +63,22 @@ const text = (value: string, isError = false): AgentToolResult => ({
 });
 
 const short = (sha: string) => sha.slice(0, 7);
+
+/** What changed since the commit a member approved, for a run held again on another one. */
+function describeSinceApproval(since: NonNullable<RunSummary['sinceApproval']>): string[] {
+  const size =
+    since.lines === null
+      ? 'the difference could not be computed'
+      : `${since.lines} line${since.lines === 1 ? '' : 's'} of the change differ`;
+  const lines = [`    since the approval of ${short(since.approvedSha)}: ${size}`];
+  const fresh = new Set(since.newFiles);
+  for (const file of since.files) {
+    lines.push(`      - ${file}${fresh.has(file) ? ' (not in the approved change)' : ''}`);
+  }
+  if (since.moreFiles > 0) lines.push(`      - … and ${since.moreFiles} more`);
+  for (const key of since.newRiskKeys) lines.push(`      - new risk reason: ${key}`);
+  return lines;
+}
 
 /** One run, on a few lines an agent can quote. */
 export function describeRun(run: RunSummary): string {
@@ -73,6 +98,7 @@ export function describeRun(run: RunSummary): string {
     for (const reason of run.risk.reasons) lines.push(`      - ${reason}`);
   }
   if (run.approvedSha) lines.push(`    merge approved by a member at ${short(run.approvedSha)}`);
+  if (run.sinceApproval) lines.push(...describeSinceApproval(run.sinceApproval));
   if (run.awaitsApproval) lines.push('    waits for a member to approve merging it');
   if (run.approvalRequest) {
     lines.push(

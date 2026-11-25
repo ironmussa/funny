@@ -25,6 +25,7 @@ import {
   factoryTriageSchema,
   MAX_STORED_REVIEWS,
   type FactoryFlowSource,
+  type FactoryApprovalGap,
   type FactoryApprovalMove,
   type FactoryMergeApproval,
   type FactoryRegressionProof,
@@ -99,6 +100,7 @@ const WAIT_REASON_SCHEMA = z.object({
     'blockers-unreadable',
     'proof-not-configured',
     'paths-overlap',
+    'paths-awaiting-approval',
     'no-free-slot',
   ]),
   blockers: z.array(z.number().int()),
@@ -1354,6 +1356,24 @@ export function createFactoryRunsRepository(
       ).map((rows) => rows.map(({ run, userId }) => ({ ...toView(run), userId })));
     },
 
+    /** The runs parked for a member's approval of a high-risk pull request. */
+    awaitingApproval(factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryRuns)
+          .where(
+            and(
+              eq(factoryRuns.factoryId, factoryId),
+              eq(factoryRuns.state, 'waiting_human'),
+              eq(factoryRuns.failureReason, HIGH_RISK_HOLD),
+              isNotNull(factoryRuns.prUrl),
+            ),
+          ),
+        storage,
+      ).map((rows) => rows.map(toView));
+    },
+
     /** One run by its id, or null. */
     get(runId: string): ResultAsync<FactoryRunView | null, FactoryRunsError> {
       return ResultAsync.fromPromise(
@@ -1412,8 +1432,10 @@ export function createFactoryRunsRepository(
         const stored = rows[0]?.mergeApproval ?? null;
         const approval = parseMergeApproval(stored);
         if (!stored || approval?.sha !== from) return okAsync(false);
+        // The gap was about a commit the approval did not cover: it covers this one.
+        const { gap: _covered, ...kept } = approval;
         const carried: FactoryMergeApproval = {
-          ...approval,
+          ...kept,
           sha: to,
           carriedFrom: approval.carriedFrom ?? from,
           moves: [
@@ -1431,6 +1453,38 @@ export function createFactoryRunsRepository(
           db
             .update(factoryRuns)
             .set({ mergeApproval: JSON.stringify(carried) })
+            .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.mergeApproval, stored)))
+            .returning({ id: factoryRuns.id }),
+          storage,
+        ).map((updated) => updated.length > 0);
+      });
+    },
+
+    /**
+     * Record on the run's merge approval of `approved` why it does not cover a
+     * later commit and what differs (openspec factory-merge-fewer-bounces,
+     * D2). A compare-and-set on the stored value: an approval written or moved
+     * meanwhile is kept as it is. Resolves whether it was written.
+     */
+    noteApprovalGap(
+      runId: string,
+      approved: string,
+      gap: FactoryApprovalGap,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ mergeApproval: factoryRuns.mergeApproval })
+          .from(factoryRuns)
+          .where(eq(factoryRuns.id, runId)),
+        storage,
+      ).andThen((rows) => {
+        const stored = rows[0]?.mergeApproval ?? null;
+        const approval = parseMergeApproval(stored);
+        if (!stored || approval?.sha !== approved) return okAsync(false);
+        return ResultAsync.fromPromise(
+          db
+            .update(factoryRuns)
+            .set({ mergeApproval: JSON.stringify({ ...approval, gap }) })
             .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.mergeApproval, stored)))
             .returning({ id: factoryRuns.id }),
           storage,

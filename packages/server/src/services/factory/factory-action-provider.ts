@@ -45,6 +45,7 @@ import {
   contractOf,
   EMPTY_FACTORY_RUN_METRICS,
   reviewAllowsMerge,
+  type FactoryApprovalGap,
   type FactoryApprovalMove,
   type FactoryAutoMerge,
   type FactoryMergeApproval,
@@ -72,6 +73,7 @@ import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import {
   approvalCovers,
+  approvalGapOf,
   approvalMoveComment,
   type ApprovalCoverage,
   type ApprovalMove,
@@ -123,7 +125,7 @@ import {
 import { checkTestWeakening, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
-import { createFactoryTriage, type FactorySplitDeps } from './factory-triage.js';
+import { createFactoryTriage, type BusyPaths, type FactorySplitDeps } from './factory-triage.js';
 
 /**
  * A proof the agent can fix (its test): the flows retry it with the agent.
@@ -169,7 +171,16 @@ export const MERGE_HOLD_REASONS = {
   stacked: 'stacked',
   /** The merge queue found it may not merge the commit its batch tested, or could not test it. */
   queue: 'merge queue',
+  /** GitHub refused the merge each time because a branch had just moved. */
+  baseMoving: 'base keeps moving',
 } as const;
+
+/**
+ * Merges GitHub may refuse in one visit to `merge` because the base or the
+ * head moved, before the run waits for a person (openspec
+ * factory-merge-fewer-bounces, D1). Each one costs a round of checks.
+ */
+export const MAX_STALE_MERGES = 3;
 
 /** Merge rounds that may reach the implementing agent before the run waits for a person. */
 export const MAX_MERGE_ROUNDS_TO_AGENT = 2;
@@ -250,6 +261,11 @@ export interface FactoryActionProviderDeps {
     to: string,
     move?: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'>,
   ) => Promise<boolean>;
+  /**
+   * Record on the merge approval of `approved` why it does not cover a later
+   * commit and what differs (openspec factory-merge-fewer-bounces, D2).
+   */
+  noteApprovalGap?: (approved: string, gap: FactoryApprovalGap) => Promise<void>;
   /** The largest adjustment an approval follows, in lines (default 0: only the same change). */
   approvalAdjustMaxLines?: number;
   /** An approval moved to another commit: record it for the member who approved. */
@@ -263,7 +279,7 @@ export interface FactoryActionProviderDeps {
   /** The newest triage thread of this run by its title prefix, since `since`. */
   findTriageThread?(titlePrefix: string, since: string): Promise<string | null>;
   /** The likely paths of the factory's other runs in progress, by issue. */
-  busyPaths?(): Promise<Array<{ issue: number; paths: string[] }>>;
+  busyPaths?(): Promise<BusyPaths[]>;
   /** When the run's issue last changed, by GitHub's clock; null when unreadable. */
   issueUpdatedAt?(): Promise<string | null>;
   /** The run's issue as text, for the read-only roles (they have no network); null when unreadable. */
@@ -1092,7 +1108,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       const posted = await deps.github.commentOnIssue(reader, roleScope.issueNumber, body);
       return posted.isOk() ? ok(undefined) : err(posted.error.message);
     },
-    busyPaths: deps.busyPaths,
+    // A run with a pull request has no implementer to start: it waits for no
+    // paths, or the runs started after it would merge first (openspec
+    // factory-merge-fewer-bounces, D5).
+    busyPaths: deps.busyPaths && (async () => (pullRequest() ? [] : deps.busyPaths!())),
     issueUpdatedAt: deps.issueUpdatedAt,
     issueText: deps.issueText,
     hold: deps.holdForPaths,
@@ -1466,14 +1485,22 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const asked = `${approved}..${sha}`;
     const known = approvalRefusals.get(asked);
     if (known !== undefined) return known;
-    const coverage = approvalCovers({
+    const input = {
       delta: await changeSince(approved, sha),
       maxAdjustLines: deps.approvalAdjustMaxLines ?? 0,
       approvedRiskKeys: approval.riskKeys,
       riskKeys,
-    });
+    };
+    const coverage = approvalCovers(input);
     const reason = coverage.covers ? await moveApproval(approval, sha, coverage) : coverage.reason;
     if (reason !== null) approvalRefusals.set(asked, reason);
+    // The member is asked again: keep what differs from the commit they read (D2).
+    if (!coverage.covers) {
+      await deps.noteApprovalGap?.(
+        approval.sha,
+        approvalGapOf(input, sha, coverage.reason, new Date().toISOString()),
+      );
+    }
     return reason;
   }
 
@@ -1755,9 +1782,45 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     if (queue.isErr()) {
       return { ok: false, error: queue.error.message, metadata: { kind: queue.error.kind } };
     }
-    const sha = queue.value ? head.value.sha : await upToDate(opts, head.value.sha);
-    if (typeof sha !== 'string') return sha;
-    if (queue.value) return throughQueue(opts, sha);
+    if (queue.value) return throughQueue(opts, head.value.sha);
+    return mergeOnCurrentBase(opts, head.value.sha);
+  }
+
+  /**
+   * Merge the pull request once it is up to date, and again when GitHub
+   * refused because a branch moved between the lane's look and its answer
+   * (D1): that needs the base brought in and the checks, not a person. Any
+   * other refusal ends the step as before.
+   */
+  async function mergeOnCurrentBase(opts: MergeOpts, head: string): Promise<ActionResult> {
+    let from = head;
+    for (let refusals = 1; ; refusals++) {
+      const sha = await upToDate(opts, from);
+      if (typeof sha !== 'string') return sha;
+      const merged = await mergeCommit(opts, sha);
+      if (merged.ok || merged.metadata?.outcome !== 'not-mergeable') return merged;
+      const moved = await lane.movedSince(sha);
+      if (moved !== 'head' && moved !== 'base') return merged;
+      await count(metrics, { event: `merge_refused_${moved}_moved` });
+      if (refusals >= MAX_STALE_MERGES) {
+        return holdMerge(
+          MERGE_HOLD_REASONS.baseMoving,
+          `Not merged: GitHub refused the merge ${MAX_STALE_MERGES} times, and each time the ${moved === 'base' ? 'base branch' : "pull request's head"} had moved. Retry the run when the branch is quiet.`,
+        );
+      }
+      log.info('Issue factory merge refused while a branch moved: trying again', {
+        namespace: 'factory',
+        runId: scope.runId,
+        sha,
+        moved,
+        refusals,
+      });
+      from = sha;
+    }
+  }
+
+  /** Merge `sha`, which is up to date and green, behind the gates the flow asks for. */
+  async function mergeCommit(opts: MergeOpts, sha: string): Promise<ActionResult> {
     if (opts.requireRegressionProof === false) {
       // A reviewed commit is merged as that commit; without the review gate, as before.
       return opts.requireReview === false ? ci.merge(opts) : ci.merge({ ...opts, sha });

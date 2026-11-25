@@ -405,6 +405,20 @@ export function createMergeLane(deps: MergeLaneDeps) {
     },
 
     /**
+     * Which branch moved since `sha` was the head to merge: the pull request's
+     * head, the base (the head is behind it), or neither. What tells a merge
+     * GitHub refused in the moment a branch moved from one a rule refuses
+     * (openspec factory-merge-fewer-bounces, D1). Null when it cannot say.
+     */
+    async movedSince(sha: string): Promise<'head' | 'base' | 'neither' | null> {
+      const pr = deps.pullRequest();
+      const position = pr ? await positionOf(pr) : null;
+      if (!position || 'error' in position) return null;
+      if (position.sha !== sha) return 'head';
+      return position.behindBy > 0 ? 'base' : 'neither';
+    },
+
+    /**
      * Bring the pull request up to date with its base and make sure its checks
      * are green there. Resolves with the head that is current, or why not.
      */

@@ -1,13 +1,14 @@
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+
+import type { CiState } from '@funny/core/github-app';
+import type { IssueBlocker } from '@funny/core/github-app';
 /**
  * Issue factory watcher: scheduling, admission (dedup + concurrency), running
  * the factory's flow as the enabler (agent step → pull request → CI → merge),
  * and resuming a run after a restart — fake GitHub + fake launcher + fake
  * poll + scripted thread outcomes, real test DB.
  */
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-
-import type { CiState } from '@funny/core/github-app';
-import type { IssueBlocker } from '@funny/core/github-app';
+import { approvalGapFor } from '@funny/shared/contracts/factory';
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../../lib/logger.js';
@@ -2506,6 +2507,50 @@ describe('factory operator controls', () => {
         { to: 'n'.repeat(40), kind: 'same', lines: 0, files: [] },
       ],
     });
+  });
+
+  // openspec factory-merge-fewer-bounces, D2 and D3.
+  test('a gap is kept on the approval it is about, and neither a move nor a new approval carries it', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'waiting_human', []);
+    const runs = createFactoryRunsRepository();
+    await runs.update(run.id, { failureReason: 'high risk' });
+    await runs.approveMerge(run.id, { sha: 'a'.repeat(40), userId: 'alice', at: 'now' });
+    const gap = {
+      to: 'b'.repeat(40),
+      at: 'later',
+      lines: 8,
+      files: ['src/new.ts'],
+      moreFiles: 0,
+      newFiles: ['src/new.ts'],
+      newRiskKeys: [],
+      reason: 'the change now touches src/new.ts, which the approved commit did not',
+    };
+
+    // About another approval: nothing is written.
+    expect((await runs.noteApprovalGap(run.id, 'c'.repeat(40), gap))._unsafeUnwrap()).toBe(false);
+    expect((await runs.noteApprovalGap(run.id, 'a'.repeat(40), gap))._unsafeUnwrap()).toBe(true);
+    const held = (await runs.get(run.id))._unsafeUnwrap();
+    expect(held?.mergeApproval).toMatchObject({ sha: 'a'.repeat(40), gap });
+    expect(approvalGapFor(held?.mergeApproval, 'b'.repeat(40))).toMatchObject({
+      approvedSha: 'a'.repeat(40),
+      approvedBy: 'alice',
+      lines: 8,
+    });
+    // A gap of a head the run has left says nothing about another one.
+    expect(approvalGapFor(held?.mergeApproval, 'd'.repeat(40))).toBeNull();
+
+    // The member approves the held commit: that is the commit later changes are compared with.
+    await runs.approveMerge(run.id, { sha: 'b'.repeat(40), userId: 'alice', at: 'now' });
+    const approved = (await runs.get(run.id))._unsafeUnwrap();
+    expect(approved?.mergeApproval).toEqual({ sha: 'b'.repeat(40), userId: 'alice', at: 'now' });
+
+    // An approval that then moves covers the commit it moved to: no gap goes with it.
+    await runs.noteApprovalGap(run.id, 'b'.repeat(40), { ...gap, to: 'e'.repeat(40) });
+    await runs.carryMergeApproval(run.id, 'b'.repeat(40), 'f'.repeat(40));
+    const moved = (await runs.get(run.id))._unsafeUnwrap();
+    expect(moved?.mergeApproval?.sha).toBe('f'.repeat(40));
+    expect(moved?.mergeApproval?.gap).toBeUndefined();
   });
 
   // openspec factory-approval-survives-integration, D5.

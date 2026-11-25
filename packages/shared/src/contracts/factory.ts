@@ -140,9 +140,52 @@ export const factoryMergeApprovalSchema = z.object({
       }),
     )
     .optional(),
+  /**
+   * Why this approval does not cover a later commit the run was held on, and
+   * what differs (openspec factory-merge-fewer-bounces, D2). Computed by the
+   * factory from the runner's comparison, never by an agent. A new approval
+   * replaces the whole record, so it has none.
+   */
+  gap: z
+    .object({
+      /** The held commit the approval does not cover. */
+      to: z.string(),
+      at: z.string(),
+      /** Lines of the pull request's change that differ; null when it could not be compared. */
+      lines: z.number().int().min(0).nullable(),
+      /** The files in which it differs, at most `MAX_APPROVAL_GAP_FILES`. */
+      files: z.array(z.string()),
+      /** How many more files differ than `files` lists. */
+      moreFiles: z.number().int().min(0),
+      /** The ones of `files` the approved change did not touch. */
+      newFiles: z.array(z.string()),
+      /** The risk reasons (stable keys) the approved commit did not have. */
+      newRiskKeys: z.array(z.string()),
+      /** Why the approval did not follow, as the hold says it. */
+      reason: z.string(),
+    })
+    .optional(),
 });
 export type FactoryMergeApproval = z.infer<typeof factoryMergeApprovalSchema>;
 export type FactoryApprovalMove = NonNullable<FactoryMergeApproval['moves']>[number];
+export type FactoryApprovalGap = NonNullable<FactoryMergeApproval['gap']>;
+
+/** The files a gap lists; the rest is a count. */
+export const MAX_APPROVAL_GAP_FILES = 20;
+
+/**
+ * What changed since the commit a member approved, for a run held on
+ * `heldSha`: the approval's gap when it is about that commit, else null (no
+ * earlier approval, or a gap of a head the run has left).
+ */
+export function approvalGapFor(
+  approval: FactoryMergeApproval | null | undefined,
+  heldSha: string | null | undefined,
+): (FactoryApprovalGap & { approvedSha: string; approvedBy: string }) | null {
+  const gap = approval?.gap;
+  if (!approval || !gap || !heldSha || gap.to !== heldSha) return null;
+  return { ...gap, approvedSha: approval.carriedFrom ?? approval.sha, approvedBy: approval.userId };
+}
 
 /** What the factory does with an issue triage finds too large for one change. */
 export type FactoryTooBig = 'ask' | 'split';
@@ -187,6 +230,8 @@ export const saveFactorySettingsInput = z
     dependencies: z.enum(['wait', 'stack']).optional(),
     /** An issue triage finds too large: propose the split on it, or open its parts as issues. */
     tooBig: z.enum(['ask', 'split']).optional(),
+    /** Whether a run parked for a member's approval keeps its likely paths (at most 12 hours). */
+    holdPathsAwaitingApproval: z.boolean().optional(),
   })
   .strict();
 
@@ -224,6 +269,8 @@ export interface FactorySettings {
    * waits for a person; `split` opens each part as an issue the factory admits.
    */
   tooBig: FactoryTooBig;
+  /** Whether a run parked for a member's approval of a high-risk change keeps its likely paths. */
+  holdPathsAwaitingApproval: boolean;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**
@@ -534,6 +581,8 @@ export interface FactoryWaitReason {
     | 'proof-not-configured'
     /** Its likely paths overlap those of a run in progress (`blockers`: that run's issue). */
     | 'paths-overlap'
+    /** As `paths-overlap`, and every such run is parked for a member's approval. */
+    | 'paths-awaiting-approval'
     /** Retried or approved while every slot was taken: first in line for the next one. */
     | 'no-free-slot';
   blockers: number[];

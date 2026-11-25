@@ -736,6 +736,8 @@
     "projectFactoryMaxLowRiskLinesDesc": "Un cambio con más líneas cambiadas que esto es de riesgo alto. No cuentan pruebas, Markdown, traducciones, stories, snapshots ni lockfiles",
     "projectFactoryApprovalAdjust": "Ajuste que sigue una aprobación",
     "projectFactoryApprovalAdjustDesc": "Después de aprobar un cambio de riesgo alto, la fábrica puede fusionar un commit posterior que difiera de él como mucho en estas líneas, solo en archivos que aprobaste y sin motivos de riesgo nuevos. Fusiona entonces líneas que ninguna persona leyó; la revisión debe pasar igualmente. 0: solo el mismo cambio",
+    "projectFactoryHoldPaths": "Reservar archivos mientras espera una aprobación",
+    "projectFactoryHoldPathsDesc": "Mientras un cambio de alto riesgo espera tu aprobación, ninguna otra ejecución empieza sobre los archivos que se espera que toque, por un máximo de 12 horas. Las ejecuciones posteriores esperan más; los cambios aprobados encuentran menos conflictos",
     "projectFactorySizeIgnoredPaths": "No cuentan en el tamaño",
     "projectFactorySizeIgnoredPathsDesc": "Globs separados por comas. Sus líneas no cuentan para el tamaño de un cambio. Las rutas sensibles siguen aplicándose a ellos",
     "projectFactoryStageLimits": "Corridas por paso",
@@ -1820,6 +1822,7 @@
       "tooBig": "Muy grande"
     },
     "wait": {
+      "pathsAwaitingApproval": "Esperando a {{blockers}}: reserva los mismos archivos mientras espera una aprobación",
       "notSent": "Bloqueada por {{blockers}}, que no está en el factory",
       "inProgress": "Esperando a que termine {{blockers}}",
       "waitingMerge": "Esperando el pull request de {{blockers}}",
@@ -1907,11 +1910,27 @@
       "noReview": "El commit que se fusionaría no tiene veredicto del paso de review del flujo, así que nadie lo revisó. Revisa el pull request y haz el merge tú.",
       "reviewFailed": "La review del commit que se fusionaría no pasó. Lee sus hallazgos en el pull request y luego pide en este hilo que los arregle, o haz el merge tú.",
       "rewritten": "La rama ya no contiene el commit que se revisó (un rebase o un force push), así que lo que se fusionaría no se revisó. Mira el nuevo head en el pull request antes de hacer el merge tú.",
-      "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú."
+      "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú.",
+      "baseMoving": "GitHub rechazó el merge varias veces porque la rama base o el pull request no dejaban de cambiar. Reintenta la ejecución cuando la rama esté quieta."
     },
     "approveMerge": "Aprobar y hacer merge",
     "approveMergeTitle": "¿Hacer merge de este cambio de riesgo alto?",
     "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación.",
+    "approvalGap": {
+      "title": "Aprobaste",
+      "unknown": "No se pudo calcular qué cambió desde entonces: lee el cambio completo.",
+      "lines_one": "Desde entonces difiere {{count}} línea del cambio:",
+      "lines_other": "Desde entonces difieren {{count}} líneas del cambio:",
+      "newFile": "no estaba en el cambio aprobado",
+      "moreFiles_one": "y {{count}} archivo más",
+      "moreFiles_other": "y {{count}} archivos más",
+      "newRisks": "Razones de riesgo nuevas:",
+      "why": "La aprobación no siguió al commit nuevo. Razón de la fábrica: {{reason}}.",
+      "compare": "Commits desde la aprobación",
+      "board_one": "Pide de nuevo: cambió {{count}} línea",
+      "board_other": "Pide de nuevo: cambiaron {{count}} líneas",
+      "boardUnknown": "Pide de nuevo: el cambio difiere de lo que aprobaste"
+    },
     "approvalRequest": {
       "title": "Se necesita tu aprobación para fusionar #{{issue}}",
       "titleNoIssue": "Se necesita tu aprobación para fusionar esta ejecución",

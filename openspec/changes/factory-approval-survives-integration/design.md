@@ -173,15 +173,8 @@ the factory then merges lines no person read.
 
 ### D8. Paths of a run waiting for approval
 
-`busyPathsOf` takes two more inputs per run: whether it is parked for a high-risk approval
-(`state === 'waiting_human'` with the high-risk hold reason and a pull request) and when it
-parked (`completedAt`). With the factory's setting on, such a run holds its paths while
-`now - completedAt < 12h`. The 12 hours are a constant, `APPROVAL_PATH_HOLD_MS`.
-
-This is the least valuable part and the only one that costs throughput: it stops _new_ runs
-from starting on the same files, and does nothing about runs already in flight or about pushes
-by people, which caused most of 2026-11-24's base movement. Hence off by default and last in
-the task order, so it can be dropped without touching the rest.
+Moved to the change `factory-merge-fewer-bounces` (D6), where it was built with the rule that a
+run with a pull request waits for no paths.
 
 ## Risks / Trade-offs
 

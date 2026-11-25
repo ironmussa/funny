@@ -15,11 +15,12 @@ import { Button } from '@/components/ui/button';
 import { LabelBadge } from '@/components/ui/label-badge';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun } from '@/lib/api/factory';
-import { factoryReviewPassed } from '@/lib/factory-run-labels';
+import { factoryReviewPassed, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 
+import { ApprovalGapNote } from '../ApprovalGapNote';
 import { type FactoryRunThreadRole, factoryRunThreadLinks } from './thread-links';
 
 const short = (sha: string) => sha.slice(0, 7);
@@ -269,6 +270,14 @@ export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
   if (!run.risk && !run.mergeApproval && ciRounds === 0) return null;
   return (
     <DetailSection id="risk-ci" title={t('factoryRunDetail.riskCi', 'Risk and CI')}>
+      {isFactoryRunAwaitingMergeApproval(run) && (
+        <ApprovalGapNote
+          approval={run.mergeApproval}
+          heldSha={run.risk?.headSha}
+          prUrl={run.prUrl}
+          testId="factory-run-detail-approval-gap"
+        />
+      )}
       {run.risk && (
         <p data-testid="factory-run-detail-risk">
           {run.risk.level === 'high'

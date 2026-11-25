@@ -6,7 +6,7 @@
  * server moves a run.
  */
 import type { GitStatusInfo } from '@funny/shared';
-import { implementingThreadOf } from '@funny/shared/contracts/factory';
+import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
 import { Check, Clock, MoreVertical, RotateCcw, Square } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -117,6 +117,29 @@ function AgentAskedMarker({ run }: { run: FactoryQueueRun }) {
   );
 }
 
+/**
+ * Says that a held run asks again after the member approved another commit,
+ * and how much changed since (openspec factory-merge-fewer-bounces, D2).
+ */
+function AsksAgainMarker({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
+  if (!isFactoryRunAwaitingMergeApproval(run)) return null;
+  const gap = approvalGapFor(run.mergeApproval, run.risk?.headSha);
+  if (!gap) return null;
+  return (
+    <LabelBadge tone="warning" data-testid={`factory-board-asks-again-${run.id}`}>
+      {gap.lines === null
+        ? t(
+            'factory.approvalGap.boardUnknown',
+            'Asks again: the change differs from what you approved',
+          )
+        : t('factory.approvalGap.board', 'Asks again after {{count}} lines changed', {
+            count: gap.lines,
+          })}
+    </LabelBadge>
+  );
+}
+
 /** What the factory adds under a card's title: gate chips, why it waits, what it blocks. */
 function FactoryRunCardBody({
   run,
@@ -144,6 +167,7 @@ function FactoryRunCardBody({
         </LabelBadge>
         <FactoryRunGateChips run={run} />
         <AgentAskedMarker run={run} />
+        <AsksAgainMarker run={run} />
       </div>
       {waiting && (
         <p

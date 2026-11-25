@@ -10,6 +10,7 @@ import { err, ok } from 'neverthrow';
 
 import {
   approvalCovers,
+  approvalGapOf,
   approvalMoveComment,
   approvalMoveTitle,
   type ApprovalCoverageInput,
@@ -252,5 +253,67 @@ describe('asking the runner for the delta', () => {
     };
     const asked = await changeDeltaOnRunner(answering(other), 't1', commits, signal);
     expect(asked.isErr()).toBe(true);
+  });
+});
+
+// openspec factory-merge-fewer-bounces, D2: what the member is shown when asked again.
+describe('approvalGapOf', () => {
+  const at = '2026-11-25T00:00:00.000Z';
+
+  // #480: 8 lines in a file the approved change did not touch.
+  test('a file the approval did not cover is listed as new', () => {
+    const input = {
+      delta: delta({
+        lines: 8,
+        files: [{ path: 'src/ports/factory.ts', lines: 8 }],
+        outsideFrom: ['src/ports/factory.ts'],
+      }),
+      maxAdjustLines: 30,
+      ...keys,
+    };
+    expect(approvalGapOf(input, 'b'.repeat(40), 'the change now touches it', at)).toEqual({
+      to: 'b'.repeat(40),
+      at,
+      lines: 8,
+      files: ['src/ports/factory.ts'],
+      moreFiles: 0,
+      newFiles: ['src/ports/factory.ts'],
+      newRiskKeys: [],
+      reason: 'the change now touches it',
+    });
+  });
+
+  test('the risk reasons the approved commit did not have are named', () => {
+    const gap = approvalGapOf(
+      { delta: seven, maxAdjustLines: 30, approvedRiskKeys: ['size'], riskKeys: ['size', 'ci'] },
+      'b'.repeat(40),
+      'a new risk reason',
+      at,
+    );
+    expect(gap).toMatchObject({ lines: 7, newFiles: [], newRiskKeys: ['ci'] });
+  });
+
+  test('more than 20 files are counted, not listed', () => {
+    const files = Array.from({ length: 23 }, (_, i) => ({ path: `src/f${i}.ts`, lines: 1 }));
+    const gap = approvalGapOf(
+      { delta: delta({ lines: 23, files }), maxAdjustLines: 30 },
+      'b'.repeat(40),
+      'too many',
+      at,
+    );
+    expect(gap.files).toHaveLength(20);
+    expect(gap.moreFiles).toBe(3);
+  });
+
+  test('a change that could not be compared has no line count', () => {
+    const unavailable = approvalGapOf({ delta: null, maxAdjustLines: 30 }, 'b'.repeat(40), 'x', at);
+    expect(unavailable).toMatchObject({ lines: null, files: [], newFiles: [] });
+    const rewritten = approvalGapOf(
+      { delta: delta({ ancestor: false }), maxAdjustLines: 30 },
+      'b'.repeat(40),
+      'x',
+      at,
+    );
+    expect(rewritten.lines).toBeNull();
   });
 });

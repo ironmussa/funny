@@ -159,6 +159,7 @@ const configOf = (row: Row): FactoryConfig => ({
   batch: batchOf(row),
   dependencies: dependenciesOf(row),
   tooBig: tooBigOf(row),
+  holdPathsAwaitingApproval: row.holdPathsAwaitingApproval === 1,
 });
 
 const toView = (row: Row): FactorySettingsView => ({
@@ -270,6 +271,7 @@ const DEFAULTS: FactoryConfig = {
   batch: DEFAULT_FACTORY_BATCH,
   dependencies: 'wait',
   tooBig: 'ask',
+  holdPathsAwaitingApproval: false,
 };
 
 /** The configured fields a save stores: the ones it carries, else `base`'s. */
@@ -291,6 +293,7 @@ function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): Fact
     batch: pick('batch'),
     dependencies: pick('dependencies'),
     tooBig: pick('tooBig'),
+    holdPathsAwaitingApproval: pick('holdPathsAwaitingApproval'),
   };
 }
 
@@ -324,6 +327,7 @@ function buildRow(
     batchWaitMs: config.batch.waitSeconds * 1000,
     dependencies: config.dependencies,
     tooBig: config.tooBig,
+    holdPathsAwaitingApproval: config.holdPathsAwaitingApproval ? 1 : 0,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -432,6 +436,7 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
   batch: ['batchSize', 'batchWaitMs'],
   dependencies: ['dependencies'],
   tooBig: ['tooBig'],
+  holdPathsAwaitingApproval: ['holdPathsAwaitingApproval'],
 };
 
 /** What a save writes over a stored row: the toggle, the bookkeeping and the fields it carries. */

@@ -122,6 +122,68 @@ describe('FactoryApprovalRequestCard', () => {
       '680 changed lines (more than 400)',
     ]);
     expect(card).toHaveTextContent('Nothing is approved until you approve it');
+    // A first approval: there is no earlier commit to compare with.
+    expect(screen.queryByTestId('factory-approval-gap-q1')).toBeNull();
+  });
+
+  // openspec factory-merge-fewer-bounces, D2 (#480: 8 lines in a file the approval did not cover).
+  describe('asked again after the member approved another commit', () => {
+    const approvedAt = (gap: Partial<NonNullable<FactoryRun['mergeApproval']>['gap']>) => ({
+      ...heldRun(),
+      mergeApproval: {
+        sha: B,
+        userId: 'u1',
+        at: '2026-11-24T20:00:00.000Z',
+        gap: {
+          to: A,
+          at: '2026-11-24T22:00:00.000Z',
+          lines: 8,
+          files: ['src/ports/factory.ts', 'src/a.ts'],
+          moreFiles: 0,
+          newFiles: ['src/ports/factory.ts'],
+          newRiskKeys: [],
+          reason: 'the change now touches src/ports/factory.ts, which the approved commit did not',
+          ...gap,
+        },
+      },
+    });
+
+    test('the card says what changed since the approved commit, above the reasons', () => {
+      mocks.runs = [approvedAt({})];
+      renderCard();
+      const gap = screen.getByTestId('factory-approval-gap-q1');
+      expect(gap).toHaveTextContent('You approved ddddddd');
+      expect(gap).toHaveTextContent('8 lines of the change differ');
+      const files = within(screen.getByTestId('factory-approval-gap-q1-files')).getAllByRole(
+        'listitem',
+      );
+      expect(files.map((item) => item.textContent)).toEqual([
+        'src/ports/factory.tsnot in the approved change',
+        'src/a.ts',
+      ]);
+      expect(gap).toHaveTextContent('which the approved commit did not');
+      expect(screen.getByTestId('factory-approval-gap-q1-compare')).toHaveAttribute(
+        'href',
+        `https://github.com/o/r/compare/${B}...${A}`,
+      );
+      // Above the reasons: it is what the member has left to read.
+      const reasons = screen.getByTestId('factory-approval-reasons-q1');
+      expect(gap.compareDocumentPosition(reasons) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    test('a difference that could not be computed says to read the whole change', () => {
+      mocks.runs = [approvedAt({ lines: null, files: [], newFiles: [] })];
+      renderCard();
+      expect(screen.getByTestId('factory-approval-gap-q1')).toHaveTextContent(
+        'could not be computed',
+      );
+    });
+
+    test('a gap about another commit than the held one is not shown', () => {
+      mocks.runs = [approvedAt({ to: 'e'.repeat(40) })];
+      renderCard();
+      expect(screen.queryByTestId('factory-approval-gap-q1')).toBeNull();
+    });
   });
 
   test('approving confirms first, then approves the commit the card shows', async () => {

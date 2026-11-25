@@ -977,6 +977,17 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         return run.isOk() ? (run.value?.mergeApproval ?? null) : null;
       },
       onApprovalMoved: (move) => recordApprovalMove(move, scope.projectId, job.run.issueNumber),
+      noteApprovalGap: async (approved, gap) => {
+        const noted = await deps.runs.noteApprovalGap(job.run.id, approved, gap);
+        if (noted.isErr()) {
+          log.warn('Issue factory could not record what changed since the approved commit', {
+            namespace: 'factory',
+            runId: job.run.id,
+            approved,
+            error: noted.error.message,
+          });
+        }
+      },
       carryMergeApproval: async (from, to, move) => {
         const carried = await deps.runs.carryMergeApproval(job.run.id, from, to, move);
         if (carried.isErr()) {
@@ -996,9 +1007,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
       busyPaths: async () => {
         const others = await deps.runs.inFlight(job.factory.id);
-        return others.isOk()
-          ? busyPathsOf(others.value, job.run.id, job.run.stackedOn?.runId ?? null)
-          : [];
+        if (others.isErr()) return [];
+        // A run parked for a member's approval holds no slot, so it is read apart (D6).
+        const hold = job.factory.holdPathsAwaitingApproval ? { now: Date.now() } : null;
+        const parked = hold ? await deps.runs.awaitingApproval(job.factory.id) : null;
+        return busyPathsOf(
+          [...others.value, ...(parked?.isOk() ? parked.value : [])],
+          job.run.id,
+          job.run.stackedOn?.runId ?? null,
+          hold,
+        );
       },
       holdForPaths: async (blockers) => {
         const held = await deps.runs.holdForPaths(job.run.id, blockers);

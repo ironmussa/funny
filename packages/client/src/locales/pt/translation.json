@@ -726,6 +726,8 @@
     "projectFactoryMaxLowRiskLinesDesc": "Uma mudança com mais linhas alteradas que isto é de risco alto. Testes, Markdown, traduções, stories, snapshots e lockfiles não contam",
     "projectFactoryApprovalAdjust": "Ajuste que uma aprovação acompanha",
     "projectFactoryApprovalAdjustDesc": "Depois de aprovar uma alteração de alto risco, a fábrica pode fazer merge de um commit posterior que difira dela em no máximo este número de linhas, apenas em arquivos que você aprovou e sem novos motivos de risco. Ela então faz merge de linhas que nenhuma pessoa leu; a revisão ainda precisa passar. 0: apenas a mesma alteração",
+    "projectFactoryHoldPaths": "Reservar arquivos enquanto aguarda uma aprovação",
+    "projectFactoryHoldPathsDesc": "Enquanto uma mudança de alto risco aguarda a sua aprovação, nenhuma outra execução começa nos arquivos que ela deve tocar, por no máximo 12 horas. As execuções seguintes esperam mais; as mudanças aprovadas encontram menos conflitos",
     "projectFactorySizeIgnoredPaths": "Não contam no tamanho",
     "projectFactorySizeIgnoredPathsDesc": "Globs separados por vírgulas. Suas linhas não contam para o tamanho de uma mudança. Os caminhos sensíveis continuam valendo para eles",
     "projectFactoryStageLimits": "Execuções por etapa",
@@ -1786,6 +1788,7 @@
       "tooBig": "Grande demais"
     },
     "wait": {
+      "pathsAwaitingApproval": "Aguardando {{blockers}}: reserva os mesmos arquivos enquanto aguarda uma aprovação",
       "notSent": "Bloqueada por {{blockers}}, que não está no factory",
       "inProgress": "Aguardando {{blockers}} terminar",
       "waitingMerge": "Aguardando o pull request de {{blockers}}",
@@ -1873,11 +1876,27 @@
       "noReview": "O commit que seria mesclado não tem veredito do passo de review do fluxo, então ninguém o verificou. Revise o pull request e faça o merge você.",
       "reviewFailed": "O review do commit que seria mesclado não passou. Leia os achados no pull request e depois peça neste thread para corrigi-los, ou faça o merge você.",
       "rewritten": "A branch não contém mais o commit que foi revisado (um rebase ou um force push), então o que seria mesclado não foi verificado. Veja o novo head no pull request antes de fazer o merge você.",
-      "mergeRounds": "As rodadas de correções do agente não conseguiram mesclar a mudança com a branch base. Veja o pull request e resolva você."
+      "mergeRounds": "As rodadas de correções do agente não conseguiram mesclar a mudança com a branch base. Veja o pull request e resolva você.",
+      "baseMoving": "O GitHub recusou o merge várias vezes porque a branch base ou o pull request continuavam mudando. Tente a execução de novo quando a branch estiver parada."
     },
     "approveMerge": "Aprovar e fazer merge",
     "approveMergeTitle": "Fazer merge desta mudança de risco alto?",
     "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação.",
+    "approvalGap": {
+      "title": "Você aprovou",
+      "unknown": "Não foi possível calcular o que mudou desde então: leia a mudança inteira.",
+      "lines_one": "Desde então, {{count}} linha da mudança difere:",
+      "lines_other": "Desde então, {{count}} linhas da mudança diferem:",
+      "newFile": "não estava na mudança aprovada",
+      "moreFiles_one": "e mais {{count}} arquivo",
+      "moreFiles_other": "e mais {{count}} arquivos",
+      "newRisks": "Novas razões de risco:",
+      "why": "A aprovação não acompanhou o novo commit. Razão da fábrica: {{reason}}.",
+      "compare": "Commits desde a aprovação",
+      "board_one": "Pede de novo: {{count}} linha mudou",
+      "board_other": "Pede de novo: {{count}} linhas mudaram",
+      "boardUnknown": "Pede de novo: a mudança difere do que você aprovou"
+    },
     "approvalRequest": {
       "title": "É preciso sua aprovação para fazer o merge de #{{issue}}",
       "titleNoIssue": "É preciso sua aprovação para fazer o merge desta execução",

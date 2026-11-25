@@ -22,6 +22,7 @@ function fakeGithub(routes: Record<string, unknown>) {
     if (!(key in routes)) return new Response('not found', { status: 404 });
     const val = routes[key];
     if (typeof val === 'number') return new Response('error', { status: val });
+    if (val instanceof Response) return val;
     return new Response(JSON.stringify(val), { status: 200 });
   });
   return { calls, fetchImpl };
@@ -59,6 +60,21 @@ describe('pinnedMerge', () => {
     });
     const result = (await ops.pinnedMerge('o/r', 7, 'abc123', 'squash'))._unsafeUnwrap();
     expect(result).toMatchObject({ kind: 'not-mergeable', headMoved: false });
+  });
+
+  test("a refusal's reason keeps GitHub's own message", async () => {
+    const { ops } = opsFor({
+      'PUT /repos/o/r/pulls/7/merge': new Response(
+        JSON.stringify({ message: 'Base branch was modified. Review and try the merge again.' }),
+        { status: 405 },
+      ),
+    });
+    const result = (await ops.pinnedMerge('o/r', 7, 'abc123', 'squash'))._unsafeUnwrap();
+    expect(result).toMatchObject({
+      kind: 'not-mergeable',
+      reason:
+        'GitHub answered 405 to PUT /repos/o/r/pulls/7/merge (Base branch was modified. Review and try the merge again.)',
+    });
   });
 });
 

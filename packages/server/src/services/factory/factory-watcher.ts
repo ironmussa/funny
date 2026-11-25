@@ -128,7 +128,12 @@ import {
   type ThreadOutcome,
   type WaitAfter,
 } from './factory-thread-waits.js';
-import { busyPathsOf, issueChangedSince, overlappingIssues } from './factory-triage.js';
+import {
+  allAwaitApproval,
+  busyPathsOf,
+  issueChangedSince,
+  overlappingIssues,
+} from './factory-triage.js';
 import {
   createFactoryTriggersRepository,
   MISSED_OCCURRENCE_MS,
@@ -797,6 +802,8 @@ interface AdmissionContext {
   proofReady: Map<string, Promise<boolean>>;
   /** Every run of the factory, as read for this pass (their likely paths). */
   runs: FactoryRunView[];
+  /** Set when the factory keeps the paths of a run parked for a member's approval. */
+  approvalHold: { now: number } | null;
 }
 
 function admissionContext(
@@ -821,6 +828,7 @@ function admissionContext(
     proofReady: new Map(),
     blockers: new Map(),
     runs: all,
+    approvalHold: factory.holdPathsAwaitingApproval ? { now: Date.now() } : null,
   };
 }
 
@@ -1053,15 +1061,21 @@ const STACKABLE_STATES: ReadonlySet<FactoryRunState> = new Set([
  * that contract, once the other run is no longer working on those files.
  */
 export function pathsHeld(
-  ctx: { runs: Parameters<typeof busyPathsOf>[0] },
-  run: Pick<FactoryRunView, 'id' | 'triage'>,
+  ctx: { runs: Parameters<typeof busyPathsOf>[0]; approvalHold?: { now: number } | null },
+  run: Pick<FactoryRunView, 'id' | 'triage'> & Partial<Pick<FactoryRunView, 'prUrl'>>,
   stackedOn: Pick<FactoryStackedOn, 'runId'> | null,
 ): FactoryWaitReason | null {
+  // A run with a pull request has no implementer to start: making it wait only
+  // lets later runs merge first (openspec factory-merge-fewer-bounces, D5).
+  if (run.prUrl) return null;
   const paths = contractOf(run)?.likelyPaths ?? [];
   if (paths.length === 0) return null;
-  const busy = busyPathsOf(ctx.runs, run.id, stackedOn?.runId ?? null);
+  const busy = busyPathsOf(ctx.runs, run.id, stackedOn?.runId ?? null, ctx.approvalHold ?? null);
   const blockers = overlappingIssues(paths, busy);
-  return blockers.length > 0 ? { kind: 'paths-overlap', blockers } : null;
+  if (blockers.length === 0) return null;
+  // Every run it waits for is parked for a member: say whom to ask (D6).
+  const kind = allAwaitApproval(blockers, busy) ? 'paths-awaiting-approval' : 'paths-overlap';
+  return { kind, blockers };
 }
 
 /** Store why a queued run waits (or that it no longer does), when that changed. */

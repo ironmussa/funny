@@ -2505,6 +2505,14 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Whether a run parked for a member's approval of a high-risk change keeps
+    // its likely paths (openspec factory-merge-fewer-bounces, D6); null: no.
+    name: '128_factory_settings_hold_paths_awaiting_approval',
+    async up() {
+      await ctx().addColumn('factory_settings', 'hold_paths_awaiting_approval', 'INTEGER');
+    },
+  },
 ];
 
 /**

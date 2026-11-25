@@ -188,6 +188,43 @@ describe('factory agent tools', () => {
     });
   });
 
+  // openspec factory-merge-fewer-bounces, D2: asked again after the member approved another commit.
+  test('a run held again says what changed since the approved commit', async () => {
+    const approved = 'e'.repeat(40);
+    const run = await seedRun(F.alice, 7, 'waiting_human', A);
+    await runs.approveMerge(run.id, { sha: approved, userId: 'alice', at: 'now' });
+    await runs.noteApprovalGap(run.id, approved, {
+      to: A,
+      at: 'later',
+      lines: 8,
+      files: ['src/new.ts'],
+      moreFiles: 0,
+      newFiles: ['src/new.ts'],
+      newRiskKeys: [],
+      reason: 'the change now touches src/new.ts, which the approved commit did not',
+    });
+
+    const listed = (await tools().listRuns(from()))._unsafeUnwrap();
+    expect(listed.runs[0]).toMatchObject({
+      awaitsApproval: true,
+      approvedSha: approved,
+      sinceApproval: {
+        approvedSha: approved,
+        lines: 8,
+        files: ['src/new.ts'],
+        moreFiles: 0,
+        newFiles: ['src/new.ts'],
+        newRiskKeys: [],
+      },
+    });
+  });
+
+  test('a first hold has no difference to show', async () => {
+    await seedRun(F.alice, 7, 'waiting_human', A);
+    const listed = (await tools().listRuns(from()))._unsafeUnwrap();
+    expect(listed.runs[0]?.sinceApproval).toBeNull();
+  });
+
   test('answers that there is no factory instead of failing', async () => {
     world.factories = {};
     expect((await tools().listRuns(from()))._unsafeUnwrap()).toEqual({ factory: false, runs: [] });

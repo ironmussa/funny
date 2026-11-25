@@ -175,6 +175,55 @@ describe('the panel content', () => {
     expect(screen.getByTestId('factory-run-detail-ref').textContent).toBe('#1');
   });
 
+  // openspec factory-merge-fewer-bounces: "The run panel shows what changed since an approval".
+  test('a run held again shows what changed since the approved commit, above its risk', () => {
+    const held = {
+      state: 'waiting_human' as const,
+      failureReason: 'high risk',
+      prUrl: 'https://github.com/o/r/pull/9',
+      risk: { headSha: 'b'.repeat(40), level: 'high' as const, reasons: ['size'], paths: [] },
+    };
+    renderBody(
+      queueRun({
+        ...held,
+        mergeApproval: {
+          sha: 'a'.repeat(40),
+          userId: 'u1',
+          at: '2026-11-24T10:00:00.000Z',
+          gap: {
+            to: 'b'.repeat(40),
+            at: '2026-11-24T11:00:00.000Z',
+            lines: 8,
+            files: ['src/new.ts'],
+            moreFiles: 0,
+            newFiles: ['src/new.ts'],
+            newRiskKeys: ['ci'],
+            reason: 'the change now touches src/new.ts, which the approved commit did not',
+          },
+        },
+      }),
+    );
+    const gap = screen.getByTestId('factory-run-detail-approval-gap');
+    expect(gap.textContent).toContain('You approved aaaaaaa');
+    expect(gap.textContent).toContain('8 lines of the change differ');
+    expect(gap.textContent).toContain('src/new.tsnot in the approved change');
+    expect(screen.getByTestId('factory-run-detail-approval-gap-risks').textContent).toContain('ci');
+    const risk = screen.getByTestId('factory-run-detail-risk');
+    expect(gap.compareDocumentPosition(risk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('a first hold shows its risk and no difference', () => {
+    renderBody(
+      queueRun({
+        state: 'waiting_human',
+        failureReason: 'high risk',
+        risk: { headSha: 'b'.repeat(40), level: 'high', reasons: ['size'], paths: [] },
+      }),
+    );
+    expect(screen.getByTestId('factory-run-detail-risk')).toBeTruthy();
+    expect(screen.queryByTestId('factory-run-detail-approval-gap')).toBeNull();
+  });
+
   // openspec factory-approval-survives-integration, 5.2.
   test('a merge approval shows the commit a member approved and where it moved', () => {
     renderBody(

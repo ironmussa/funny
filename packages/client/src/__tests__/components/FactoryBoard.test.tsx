@@ -198,6 +198,13 @@ describe('FactoryBoard', () => {
     expect(screen.getByTestId('factory-board-deps-r434-blocks').textContent).toBe(
       'Blocks #435 · then #436',
     );
+    // What a run holds up reads last on its card: under the project line, as a
+    // row of the card itself, so the card's own gap spaces it like every other row.
+    const card = screen.getByTestId('factory-board-card-r434');
+    const note = screen.getByTestId('factory-board-deps-r434');
+    expect(note.parentElement).toBe(card);
+    expect(card.lastElementChild).toBe(note);
+    expect(note.previousElementSibling).toBe(screen.getByTestId('factory-board-card-r434-footer'));
     // The parked blocker's reason is its red problem chip, not a line of its own.
     expect(screen.queryByTestId('factory-board-waiting-r434')).toBeNull();
     const problem = screen.getByTestId('factory-board-gate-r434-problem');

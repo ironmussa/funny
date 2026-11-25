@@ -1,10 +1,24 @@
+import type { Message } from '@bufbuild/protobuf';
 import { errorMessage } from '@funny/shared/errors';
 import type { DataInsertMessage, DataInsertToolCall } from '@funny/shared/runner-protocol';
+import type { SearchThreads } from '@funny/shared/runner-v2/operations';
 
 import { log } from '../lib/logger.js';
 import { sendRemoteData } from './remote-data-channel.js';
+import type {
+  EnqueueMessageInput,
+  RuntimeThreadInsert,
+  RuntimeThreadUpdate,
+  ThreadEventData,
+} from './server-interfaces.js';
 
-export type RemoteDataRequest = (eventType: string, payload: Record<string, any>) => Promise<any>;
+export type RemoteDataRequest = <Body extends object>(
+  eventType: string,
+  payload: Body,
+) => Promise<any>;
+
+/** Filters of a message search (`runner.v2.SearchThreads`). */
+type RemoteThreadSearch = Omit<SearchThreads, keyof Message>;
 
 interface RemoteThreadMessageMatch {
   threadId: string;
@@ -38,7 +52,7 @@ class RemoteThreadDataClient {
     return (await this.request('data:insert_tool_call', { payload: data })).toolCallId;
   }
 
-  async updateThread(threadId: string, updates: Record<string, any>): Promise<void> {
+  async updateThread(threadId: string, updates: RuntimeThreadUpdate): Promise<void> {
     this.invalidateThread(threadId);
     await this.request('data:update_thread', { payload: { threadId, updates } });
   }
@@ -74,11 +88,7 @@ class RemoteThreadDataClient {
     return response.deletedCount ?? 0;
   }
 
-  async saveThreadEvent(
-    threadId: string,
-    type: string,
-    data: Record<string, unknown>,
-  ): Promise<void> {
+  async saveThreadEvent(threadId: string, type: string, data: ThreadEventData): Promise<void> {
     await this.request('data:save_thread_event', {
       payload: { threadId, eventType: type, data },
     });
@@ -156,7 +166,7 @@ class RemoteThreadDataClient {
     };
   }
 
-  async searchThreads(opts: Record<string, unknown>): Promise<RemoteThreadMessageMatch[]> {
+  async searchThreads(opts: RemoteThreadSearch): Promise<RemoteThreadMessageMatch[]> {
     const response = await this.request('data:search_threads', { ...opts });
     return Array.isArray(response?.results) ? response.results : [];
   }
@@ -179,13 +189,13 @@ class RemoteThreadDataClient {
         ?.toolCall ?? undefined
     );
   }
-  async createThread(data: Record<string, any>): Promise<void> {
+  async createThread(data: RuntimeThreadInsert): Promise<void> {
     await this.request('data:create_thread', { payload: data });
   }
   async deleteThread(threadId: string): Promise<void> {
     await this.request('data:delete_thread', { threadId });
   }
-  enqueueMessage(threadId: string, data: Record<string, any>) {
+  enqueueMessage(threadId: string, data: EnqueueMessageInput) {
     return this.request('data:enqueue_message', { threadId, payload: data });
   }
   async dequeueMessage(threadId: string) {

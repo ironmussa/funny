@@ -85,8 +85,14 @@ function readExtension(dir: string, dirName: string): InstalledExtension | null 
   }
 }
 
+/** The part of a source `package.json` a `client` extension is checked on. */
+interface ClientExtensionPackageJson {
+  /** Parsed JSON: present or not, of any shape; only a string `client` passes. */
+  funny?: { client?: unknown } | null;
+}
+
 /** Validate a SOURCE package is a `client` extension before install. */
-function validateClientSource(pkg: Record<string, any>, src: string): string | null {
+function validateClientSource(pkg: ClientExtensionPackageJson, src: string): string | null {
   const clientEntry = pkg?.funny?.client;
   if (typeof clientEntry !== 'string' || !clientEntry) {
     return 'package.json is missing the funny.client field';

@@ -14,6 +14,7 @@ import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 import { io as createClient, type Socket as ClientSocket } from 'socket.io-client';
 
 import { relayToUser, setBrowserEventSink } from '../../services/browser-events.js';
+import type { BrowserEvent } from '../../services/runner-ports.js';
 import { createSocketIOServer } from '../../services/socketio.js';
 import { setupBrowserNamespace } from '../../services/socketio/browser-namespace.js';
 import {
@@ -186,7 +187,7 @@ describe('browser.v1 carrier transport compatibility', () => {
           empty: '',
           missing: null,
         };
-        const events = [
+        const events: BrowserEvent[] = [
           { type: 'pty:data', threadId: '', data: { ptyId: 'pty-1', data: '', sequence: 0n } },
           {
             type: 'pty:data',

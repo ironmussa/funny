@@ -6,11 +6,32 @@ import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 import { GrpcTerminalReplayStore } from './grpc-terminal-replay-store.js';
 import { binary, unsigned } from './grpc-wire-values.js';
 
+/**
+ * The `pty:*` message data built from a runner.v2 terminal frame. Proto3 JSON
+ * omits fields left at their default, so any of them may be absent.
+ */
+export interface GrpcTerminalCommandData {
+  /** The terminal id. */
+  id: string;
+  /** `pty:spawn` (`TerminalOpen`). */
+  cwd?: string;
+  cols?: number;
+  rows?: number;
+  shell?: string;
+  projectId?: string;
+  label?: string;
+  scratchThreadId?: string;
+  /** `pty:write`: the decoded input. */
+  data?: string;
+  /** `pty:signal`. */
+  signal?: string;
+}
+
 export interface GrpcTerminalCommand {
   terminalId: string;
   userId?: string;
   type: 'pty:spawn' | 'pty:write' | 'pty:resize' | 'pty:kill' | 'pty:signal' | 'pty:restore';
-  data: Record<string, any>;
+  data: GrpcTerminalCommandData;
 }
 
 export interface RunnerTerminalSender {
@@ -142,10 +163,13 @@ export class RunnerTerminalAdapter {
   }
 
   publish(event: WSEvent): void {
-    const data = event.data as Record<string, any>;
-    const terminalId = String(data?.ptyId ?? '');
+    if (event.type !== 'pty:data' && event.type !== 'pty:exit' && event.type !== 'pty:error') {
+      return;
+    }
+    const terminalId = String(event.data?.ptyId ?? '');
     if (!terminalId) return;
     if (event.type === 'pty:data') {
+      const { data } = event;
       const bytes =
         data.data instanceof Uint8Array ? data.data : Buffer.from(String(data.data ?? ''), 'utf8');
       for (let offset = 0; offset < bytes.byteLength; offset += this.maxFrameBytes) {
@@ -160,7 +184,7 @@ export class RunnerTerminalAdapter {
     if (event.type === 'pty:exit') {
       this.sender.send('terminal', {
         terminalId,
-        close: { exitCode: data.exitCode ?? 0, reason: 'terminal exited' },
+        close: { exitCode: event.data.exitCode ?? 0, reason: 'terminal exited' },
       });
       this.forget(terminalId);
       return;
@@ -170,7 +194,7 @@ export class RunnerTerminalAdapter {
         terminalId,
         failure: {
           code: FailureCode.INTERNAL,
-          message: String(data.error ?? 'terminal failed'),
+          message: String(event.data.error ?? 'terminal failed'),
           retryable: false,
         },
       });

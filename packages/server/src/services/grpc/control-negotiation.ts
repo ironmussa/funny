@@ -253,12 +253,8 @@ export function createControlNegotiationHandler(
     call.once('error', deactivate);
     call.once('finish', deactivate);
 
-    const handleRequest = async (raw: Record<string, unknown>): Promise<void> => {
+    const handleRequest = async (request: ControlRequestWire): Promise<void> => {
       if (state === 'closed') return;
-      // SAFETY: raw is a ControlRequest frame decoded by proto-loader (oneofs, longs as String);
-      // ControlRequestWire keeps each oneof member optional, and the hello path checks runner and
-      // defaults the repeated fields that defaults: false leaves absent.
-      const request = raw as ControlRequestWire;
       const kind = requestKind(request);
 
       if (state === 'awaiting-hello') {
@@ -413,7 +409,7 @@ export function createControlNegotiationHandler(
       );
     };
 
-    call.on('data', (request: Record<string, unknown>) => {
+    call.on('data', (request: ControlRequestWire) => {
       call.pause();
       void handleRequest(request)
         .catch(() => {

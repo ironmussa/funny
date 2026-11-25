@@ -14,7 +14,7 @@ import { gitRead } from '@funny/core/git';
 import type { DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
-import { recordActivity } from './activity-tracker.js';
+import { recordActivity, type ActivitySpec } from './activity-tracker.js';
 import {
   restoreUndoSnapshot,
   runDestructive,
@@ -166,15 +166,15 @@ export function restoreTracked(
   },
 ): ResultAsync<RestoreOutcome, DomainError> {
   const id = deps.newId();
-  const spec = {
+  const spec: ActivitySpec = {
     id,
-    kind: 'git.destructive' as const,
+    kind: 'git.destructive',
     userId: target.userId,
     projectId: target.projectId ?? null,
     threadId: target.threadId ?? null,
     title: 'Restore an undo snapshot',
     input: { action: 'restore' },
-    origin: 'user' as const,
+    origin: 'user',
   };
   return restoreUndoSnapshot({ cwd: target.cwd, activityId, restoreActivityId: id })
     .map((outcome) => {

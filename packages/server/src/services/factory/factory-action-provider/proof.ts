@@ -24,13 +24,7 @@ import {
 } from '../factory-proof-runner.js';
 import type { RegressionProofRecord } from '../factory-runs.js';
 import type { ActionCore } from './core.js';
-import {
-  heldProofRecord,
-  proofFailed,
-  proofUnavailable,
-  type HeldProof,
-  type StepMetadata,
-} from './shared.js';
+import { heldProofRecord, proofFailed, proofUnavailable, type HeldProof } from './shared.js';
 
 /** What the proof gate reads of the rest of the provider. */
 interface ProofGateLinks {
@@ -122,7 +116,7 @@ export function createProofGate(core: ActionCore, links: ProofGateLinks) {
     const checkPublished = await publishCheck(proved, testRequired);
     const proofRecord = { ...proved, checkPublished };
     await deps.record({ regressionProof: proofRecord });
-    const meta: StepMetadata = { ...proofRecord };
+    const meta = { ...proofRecord };
     // What the merge gate holds: only a proof that names its commit.
     if (proofRecord.headSha) {
       state.lastProof = {

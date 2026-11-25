@@ -30,7 +30,7 @@ import {
   type FactoryContinuation,
   type StepCheckpoint,
   type StepThread,
-  type StepThreadBody,
+  type FactoryLaunchBody,
 } from './shared.js';
 
 /** Where a worktree run's branch starts, or why the step cannot start. */
@@ -169,7 +169,7 @@ export function createStepThreads(core: ActionCore, links: StepThreadLinks) {
     await checkpoint({ phase: 'launching', since });
     await deps.record({ launchStartedAt: since });
     const own = options.thread === 'new';
-    const body: StepThreadBody = {
+    const body: FactoryLaunchBody = {
       projectId: scope.projectId,
       title: titleOf(options),
       mode: scope.mode,

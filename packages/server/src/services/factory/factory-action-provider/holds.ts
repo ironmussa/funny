@@ -14,7 +14,7 @@ import type { ActionResult, MergeOpts } from '@funny/workflows/compiler';
 import type { createMergeLane } from '../factory-merge-lane.js';
 import type { createFactoryReviewer } from '../factory-review.js';
 import type { ActionCore } from './core.js';
-import { MAX_MERGE_ROUNDS_TO_AGENT, MERGE_HOLD_REASONS, type StepMetadata } from './shared.js';
+import { MAX_MERGE_ROUNDS_TO_AGENT, MERGE_HOLD_REASONS, type SentBackMetadata } from './shared.js';
 
 /** What the merge holds read of the rest of the provider. */
 interface MergeHoldLinks {
@@ -175,7 +175,7 @@ export function createMergeHolds(core: ActionCore, links: MergeHoldLinks) {
       { ...state.metrics, mergeSentBack: state.metrics.mergeSentBack + 1 },
       { event: `merge_sent_back_${why}` },
     );
-    const metadata: StepMetadata = { outcome: 'sent_back', why, feedback };
+    const metadata: SentBackMetadata = { outcome: 'sent_back', why, feedback };
     if (regenerate) metadata.regenerate = regenerate;
     return { ok: true, output: 'sent_back', metadata };
   }

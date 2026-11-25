@@ -11,7 +11,8 @@ import type {
 import type { RunnerGrpcSessionRegistry } from './session-registry.js';
 
 type Header = { name: string; value: string };
-type WireFrame = Record<string, any> & {
+/** A `TunnelRequest` as proto-loader decodes it. */
+interface WireFrame {
   session?: { sessionEpoch?: string | number | bigint };
   tunnelId?: string;
   responseStart?: { statusCode?: number; headers?: Header[] };
@@ -19,7 +20,7 @@ type WireFrame = Record<string, any> & {
   end?: { finalSequence?: string | number | bigint };
   failure?: { code?: FailureCode; message?: string; retryable?: boolean };
   ready?: Record<string, never>;
-};
+}
 
 export interface TunnelDispatchRequest {
   method: string;
@@ -94,10 +95,16 @@ function parseUnsigned(value: unknown): bigint | null {
   }
 }
 
-/** A protobuf `Timestamp` as JSON: whole seconds (int64 as a string) and nanoseconds. */
+/** `google.protobuf.Timestamp` as proto-loader serializes it (`longs: String`). */
 interface WireTimestamp {
   seconds: string;
   nanos: number;
+}
+
+/** `RequestMetadata` sent on every frame of one tunnel. */
+interface WireRequestMetadata {
+  correlationId: string;
+  deadline: WireTimestamp;
 }
 
 function timestamp(epochMs: number): WireTimestamp {
@@ -253,7 +260,7 @@ export class RunnerGrpcTunnelDispatcher {
       if (request.signal.aborted) onAbort();
     }
 
-    const metadata = {
+    const metadata: WireRequestMetadata = {
       correlationId: request.correlationId || tunnelId,
       deadline: timestamp(request.deadlineAt),
     };
@@ -369,7 +376,7 @@ export class RunnerGrpcTunnelDispatcher {
   private async sendBody(
     state: TunnelState,
     body: TunnelDispatchRequest['body'],
-    metadata: Record<string, unknown>,
+    metadata: WireRequestMetadata,
     startBackpressure?: Promise<void>,
   ): Promise<void> {
     let sequence = 0n;

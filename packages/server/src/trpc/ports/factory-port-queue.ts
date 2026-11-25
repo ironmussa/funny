@@ -6,7 +6,7 @@
 import { type FactoryPort } from '@funny/api';
 import { okAsync } from 'neverthrow';
 
-import { audit } from '../../lib/audit.js';
+import { audit, type AuditMeta } from '../../lib/audit.js';
 import { BUILT_IN_FACTORY_FLOWS } from '../../services/factory/factory-flow.js';
 import {
   queueFailure,
@@ -27,7 +27,7 @@ function audited<T>(
     | 'factory.flow_started',
   userId: string,
   detail: (result: T) => string,
-  meta: (result: T) => Record<string, unknown>,
+  meta: (result: T) => AuditMeta,
 ) {
   return (result: T): T => {
     audit({ action, actorId: userId, detail: detail(result), meta: meta(result) });

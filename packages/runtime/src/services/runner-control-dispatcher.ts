@@ -1,12 +1,19 @@
+import type { JsonValue } from '@bufbuild/protobuf';
 import { errorMessage } from '@funny/shared/errors';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 
+/**
+ * A command's result, sent as the `CommandOutcome.success` Struct. Fields left
+ * `undefined` are dropped when it is sent.
+ */
+export type RunnerControlCommandResult = { readonly [field: string]: JsonValue | undefined };
+
 export type RunnerControlCommandHandler = (
   command: RunnerGrpcWireMessage,
   signal: AbortSignal,
-) => Promise<Record<string, unknown> | void>;
+) => Promise<RunnerControlCommandResult | void>;
 
 export interface RunnerControlSender {
   isActive(): boolean;

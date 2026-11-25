@@ -123,10 +123,16 @@ export function revokePersonalAccessToken(
 
 type Rejection = 'malformed' | 'unknown' | 'revoked' | 'expired';
 
-function reject(reason: Rejection, meta: { tokenId?: string; userId?: string } = {}): null {
+/** The stored token a rejected presentation matched, when it matched one. */
+interface RejectedToken {
+  tokenId: string;
+  userId: string;
+}
+
+function reject(reason: Rejection, meta?: RejectedToken): null {
   audit({
     action: 'pat.rejected',
-    actorId: meta.userId ?? null,
+    actorId: meta?.userId ?? null,
     detail: `Personal API token rejected: ${reason}`,
     meta: { reason, ...meta },
   });
@@ -151,7 +157,7 @@ export async function verifyPersonalAccessToken(
     .from(personalAccessTokens)
     .where(eq(personalAccessTokens.tokenHash, hashToken(token)));
   if (!row) return reject('unknown');
-  const meta = { tokenId: row.id, userId: row.userId };
+  const meta: RejectedToken = { tokenId: row.id, userId: row.userId };
   if (row.revokedAt) return reject('revoked', meta);
   if (Date.parse(row.expiresAt) <= now.getTime()) return reject('expired', meta);
 

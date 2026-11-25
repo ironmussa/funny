@@ -1,3 +1,4 @@
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { Activity, ActivityResultRef, ActivityStatus } from '@funny/shared';
 /**
  * @domain subdomain: Activities
@@ -48,14 +49,25 @@ const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string |
   ['snapshot', (v) => (SNAPSHOT_REF.test(v) ? v : null)],
 ];
 
+/**
+ * A result reference as a runner reported it: its fields not yet checked. It
+ * names every `ActivityResultRef` field (the loop below indexes it by them).
+ */
+interface ReportedResultRef {
+  projectId?: unknown;
+  prUrl?: unknown;
+  snapshot?: unknown;
+}
+
 function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object') return null;
-  // SAFETY: the check above made value a non-null object; its fields are only read as unknown.
-  const raw = value as Record<string, unknown>;
+  // SAFETY: `value` is a non-null object; each result field is read as
+  // `unknown` and checked below before it is kept.
+  const reported = value as ReportedResultRef;
   const ref: ActivityResultRef = {};
   for (const [field, check] of RESULT_REF_FIELDS) {
-    const given = raw[field];
+    const given = reported[field];
     const kept = typeof given === 'string' ? check(given) : null;
     if (kept) ref[field] = kept;
   }
@@ -81,7 +93,8 @@ export type ActivityWriteResult = { ok: true; applied: boolean } | { ok: false; 
 export async function startActivityFromRunner(args: {
   runnerId: string;
   ownerId: string;
-  payload: Record<string, unknown>;
+  /** The runner's `ActivityStart.activity` Struct, decoded; checked field by field here. */
+  payload: JsonObject;
 }): Promise<ActivityWriteResult> {
   const { runnerId, ownerId, payload } = args;
   const id = optionalId(payload.id);
@@ -132,16 +145,14 @@ function reportedStatus(value: unknown): ActivityStatus | undefined {
 /** The fields a runner may change on its own activity; never `origin`. */
 function pickActivityPatch(raw: unknown): ActivityPatch {
   if (!raw || typeof raw !== 'object') return {};
-  // SAFETY: the check above made raw a non-null object; its fields are only read as unknown.
-  const value = raw as Record<string, unknown>;
   const patch: ActivityPatch = {};
-  const status = reportedStatus(value.status);
+  const status = reportedStatus('status' in raw ? raw.status : undefined);
   if (status) patch.status = status;
-  if ('step' in value) patch.step = text(value.step, ACTIVITY_STEP_MAX);
-  if ('error' in value) patch.error = text(value.error, ACTIVITY_ERROR_MAX);
-  const resultRef = resultRefOf(value.resultRef);
+  if ('step' in raw) patch.step = text(raw.step, ACTIVITY_STEP_MAX);
+  if ('error' in raw) patch.error = text(raw.error, ACTIVITY_ERROR_MAX);
+  const resultRef = resultRefOf('resultRef' in raw ? raw.resultRef : undefined);
   if (resultRef !== undefined) patch.resultRef = resultRef;
-  if ('effects' in value) patch.effects = parseActivityEffects(value);
+  if ('effects' in raw) patch.effects = parseActivityEffects(raw);
   if (status && isFinalActivityStatus(status)) patch.endedAt = new Date().toISOString();
   return patch;
 }

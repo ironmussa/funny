@@ -77,6 +77,7 @@ export {
   NO_CHANGE_TRIAGE_LABEL,
   type FactoryActionProviderDeps,
   type FactoryContinuation,
+  type FactoryLaunchBody,
   type FactoryRunScope,
   type FactoryThreadMode,
   type IssueRunScope,

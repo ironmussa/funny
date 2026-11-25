@@ -19,6 +19,7 @@ import type {
   PermissionMode,
   ThreadMode,
 } from '@funny/shared';
+import type { UpdateAutomationRequest } from '@funny/shared/contracts/automations';
 import { DEFAULT_MODEL, DEFAULT_THREAD_MODE, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
 import { eq, and, or, desc, type SQL } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -27,12 +28,14 @@ import { err, ok } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { automations, automationRuns, threads } from '../../db/schema.js';
 import { authorizer } from '../../lib/server-authorizer.js';
+import type { AutomationRowUpdate } from '../../services/automation-repository.js';
 import {
   parseAutomationSchedule,
   rescheduleAutomation,
   runAutomation,
   unscheduleAutomation,
 } from '../../services/automation-scheduler.js';
+import { definedFields } from './defined-fields.js';
 import { requireVisibleProject } from './project-gate.js';
 
 // ── Rows → contract types ────────────────────────────────────────
@@ -125,12 +128,10 @@ async function canMoveToProject(
 }
 
 function buildAutomationUpdates(
-  fields: Record<string, unknown>,
+  fields: Omit<UpdateAutomationRequest, 'enabled'>,
   enabled: boolean | undefined,
-): Record<string, unknown> {
-  const updates: Record<string, unknown> = Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value !== undefined),
-  );
+): AutomationRowUpdate {
+  const updates: AutomationRowUpdate = definedFields(fields);
   if (enabled !== undefined) updates.enabled = enabled ? 1 : 0;
   return updates;
 }

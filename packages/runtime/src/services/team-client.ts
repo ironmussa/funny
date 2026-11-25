@@ -47,6 +47,7 @@ import {
   RunnerConnectionSupervisor,
   requireRunnerGrpcEndpoint,
 } from './runner-connection-supervisor.js';
+import type { RunnerControlCommandResult } from './runner-control-dispatcher.js';
 import { RunnerEnrollmentClient } from './runner-enrollment-client.js';
 import { getServices } from './service-registry.js';
 
@@ -266,7 +267,7 @@ async function startAgentForControl(
 async function handleGrpcControl(
   command: RunnerGrpcWireMessage,
   signal: AbortSignal,
-): Promise<Record<string, unknown>> {
+): Promise<RunnerControlCommandResult> {
   if (signal.aborted) throw new Error('runner command cancelled');
 
   if (command.startAgent) {
@@ -296,8 +297,7 @@ async function handleGrpcControl(
       images: input.images,
     });
     if (result.isErr()) throw new Error(result.error.message);
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    return result.value as unknown as Record<string, unknown>;
+    return { ...result.value };
   }
 
   if (command.assignProject) {

@@ -43,7 +43,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
-import type { IssueRunScope } from './factory-action-provider.js';
+import type { FactoryLaunchBody, IssueRunScope } from './factory-action-provider.js';
 import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
 import { readRoleResult } from './factory-role-results.js';
@@ -282,7 +282,7 @@ export interface FactoryTriageDeps {
   /** Triage threads started before this are not this attempt's. */
   since: string;
   signal: AbortSignal;
-  launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
+  launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** The newest triage thread of this run whose title starts with `titlePrefix`, since `since`. */
   findLaunched(titlePrefix: string, since: string): Promise<string | null>;
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;

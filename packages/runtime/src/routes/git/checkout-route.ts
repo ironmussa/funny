@@ -15,6 +15,7 @@ import type { Context, Hono } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 import type { z } from 'zod';
 
+import type { TelemetryAttributes } from '../../lib/telemetry.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { validateFilePaths } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -164,7 +165,7 @@ export async function threadGitMutation<Body = undefined, Value = unknown>(
 export async function answerPathDiff(
   c: Context<HonoEnv>,
   spanName: string,
-  attributes: Record<string, unknown>,
+  attributes: TelemetryAttributes,
   op: (filePath: string) => PromiseLike<Result<string, DomainError>>,
 ): Promise<Response> {
   const filePath = requirePathQuery(c);
@@ -179,7 +180,7 @@ export async function answerPathDiff(
 export async function traced<Value>(
   c: Context<HonoEnv>,
   name: string,
-  attributes: Record<string, unknown>,
+  attributes: TelemetryAttributes,
   op: () => PromiseLike<Result<Value, DomainError>>,
 ): Promise<Result<Value, DomainError>> {
   const span = requestSpan(c, name, attributes);

@@ -32,16 +32,19 @@ const prMergeBodySchema = z
 
 // ── Sorting + search helpers ────────────────────────────────
 
+/** The sort and direction params of a GitHub list or search request. */
+interface PRSortParams {
+  sort: string;
+  direction: string;
+}
+
 /**
  * Translate a unified `PRSortKey` into the params each GitHub endpoint
  * expects. `/pulls` takes `sort` + `direction`; `/search/issues` takes `sort` +
  * `order`. "most-commented" maps to `popularity` on the list endpoint and
  * `comments` on search — the closest equivalent each one offers.
  */
-export function resolveSort(
-  key: string | undefined,
-  kind: 'pulls' | 'search',
-): { sort: string; direction: string } {
+export function resolveSort(key: string | undefined, kind: 'pulls' | 'search'): PRSortParams {
   const commentSort = kind === 'pulls' ? 'popularity' : 'comments';
   switch (key) {
     case 'oldest':

@@ -150,11 +150,16 @@ function formatIpForUrlHost(ip: string): string {
   return isIP(ip) === 6 ? `[${ip}]` : ip;
 }
 
+interface PinnedDestination {
+  url: string;
+  init?: RequestInit;
+}
+
 function withPinnedHttpDestination(
   rawUrl: string,
   init: RequestInit | undefined,
   policy: OutboundPolicy,
-): { url: string; init?: RequestInit } {
+): PinnedDestination {
   const parsed = new URL(rawUrl);
   if (parsed.protocol !== 'http:') return { url: rawUrl, init };
 

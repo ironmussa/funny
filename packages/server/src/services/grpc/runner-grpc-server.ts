@@ -36,7 +36,12 @@ import {
   type TunnelHandlerOptions,
 } from './tunnel-handler.js';
 
-type StreamMessage = Record<string, unknown>;
+/**
+ * A message of one of the runner.v2 streams, as proto-loader decodes it or
+ * serializes it from a plain object. The interceptor is shared by every
+ * stream, so each handler declares the shape of its own messages.
+ */
+type StreamMessage = object;
 export type RunnerGrpcCall = grpc.ServerDuplexStream<StreamMessage, StreamMessage>;
 
 export interface RunnerGrpcPrincipal {
@@ -175,6 +180,8 @@ function createRunnerGrpcInterceptor(
     try {
       runnerId = await withTimeout(dependencies.authenticateRunner(token), config.authTimeoutMs);
     } catch (error) {
+      // SAFETY: withTimeout rejects with serviceError (an Error carrying .code); authenticateRunner
+      // rejections are Errors without one, which fall back to INTERNAL.
       const status = (error as Partial<grpc.ServiceError>).code ?? grpc.status.INTERNAL;
       log.warn('Runner gRPC authentication failed', {
         namespace: 'runner-grpc',
@@ -233,6 +240,9 @@ function createRunnerGrpcInterceptor(
         method,
         principal: { runnerId, userId, tenantId: userId },
       };
+      // SAFETY: method is a key of RunnerGrpcHandlers (addService maps Object.entries(handlers)),
+      // and RunnerGrpcObservationStream lists exactly those keys.
+      const streamClass = method as RunnerGrpcObservationStream;
       log.info('Accepted runner gRPC stream', {
         namespace: 'runner-grpc',
         correlationId,
@@ -241,7 +251,7 @@ function createRunnerGrpcInterceptor(
       });
       observeRunnerGrpc({
         event: 'stream-opened',
-        streamClass: method as RunnerGrpcObservationStream,
+        streamClass,
         status: 'ok',
         runnerId,
         correlationId,
@@ -252,7 +262,7 @@ function createRunnerGrpcInterceptor(
         observedClose = true;
         observeRunnerGrpc({
           event: 'stream-closed',
-          streamClass: method as RunnerGrpcObservationStream,
+          streamClass,
           status: 'ok',
           runnerId,
           correlationId,
@@ -298,9 +308,13 @@ function loadRunnerService(): grpc.ServiceDefinition {
     oneofs: true,
     includeDirs: [protocolRoot],
   });
-  const root = grpc.loadPackageDefinition(definition) as grpc.GrpcObject;
+  const root = grpc.loadPackageDefinition(definition);
+  // SAFETY: control.proto declares `package runner.v2;` (two namespace objects) and
+  // `service RunnerTransportService`, which loadPackageDefinition turns into a client constructor.
   const runner = root.runner as grpc.GrpcObject;
+  // SAFETY: see above; `v2` is the namespace under `runner`.
   const v2 = runner.v2 as grpc.GrpcObject;
+  // SAFETY: see above; RunnerTransportService is a service in control.proto.
   return (v2.RunnerTransportService as grpc.ServiceClientConstructor).service;
 }
 

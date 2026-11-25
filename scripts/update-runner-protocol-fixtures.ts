@@ -9,7 +9,12 @@ import { TerminalRequestSchema } from '../packages/shared/src/generated/runner-v
 import { TunnelRequestSchema } from '../packages/shared/src/generated/runner-v2/runner/v2/tunnel_pb.ts';
 
 const fixturePath = new URL('../protocol/runner/v2/fixtures/golden.json', import.meta.url);
-const schemas: Record<string, GenMessage<Message>> = {
+/** Fully qualified message type name → its generated schema. */
+interface MessageSchemas {
+  readonly [messageType: string]: GenMessage<Message>;
+}
+
+const schemas: MessageSchemas = {
   'runner.v2.RunnerHello': RunnerHelloSchema,
   'runner.v2.Failure': FailureSchema,
   'runner.v2.TunnelRequest': TunnelRequestSchema,

@@ -8,13 +8,18 @@ import { unmountAfterNativeShutdown } from './native-shutdown';
 import type { NativeClientComposition } from './platform/composition';
 import { NativeRendererErrorBoundary } from './renderer-error-boundary';
 
+/** A running native client. */
+export interface NativeClientHandle {
+  stop(): void;
+}
+
 export function startNativeClient(
   composition: NativeClientComposition,
   application: NativeApplicationServices,
   diagnostics = false,
   /** Called once the user has closed the native host and cleanup has run. */
   onClosed?: () => void,
-): { stop(): void } {
+): NativeClientHandle {
   const renderer = createRenderer();
   renderer.init(NATIVE_CLIENT_WINDOW_OPTIONS);
   configureNativeFrameDiagnostics(renderer, diagnostics);

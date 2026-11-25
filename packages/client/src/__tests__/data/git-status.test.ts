@@ -23,6 +23,7 @@ import {
   fetchForThread,
   fetchProjectStatus,
   markGitStatusStale,
+  refreshScopedProjects,
 } from '@/data/git-status/actions';
 import { branchKey } from '@/data/git-status/keys';
 import { readGitStatusMaps, readProjectGitStatus } from '@/data/git-status/read';
@@ -670,6 +671,17 @@ describe('git status data', () => {
         't2',
         't3',
       ]);
+    });
+
+    test('the periodic refresh asks every project a view shows, and no other', async () => {
+      setGitStatusScope('sidebar', { p1: ['t1'] });
+      setGitStatusScope('kanban', { p2: 'all' });
+
+      refreshScopedProjects();
+
+      await waitFor(() => expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(2));
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal), ['t1']);
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p2', expect.any(AbortSignal));
     });
 
     test("an 'all' registration requests the whole project", async () => {

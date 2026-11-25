@@ -350,7 +350,14 @@ async function renderChartForExport(chart: string): Promise<string> {
   return renderThreadDiagram(chart, 'export');
 }
 
-function prepareExportSvg(svgHtml: string): { svgEl: SVGSVGElement; w: number; h: number } {
+/** The export copy of a diagram's SVG, with its pixel size. */
+interface ExportSvg {
+  svgEl: SVGSVGElement;
+  w: number;
+  h: number;
+}
+
+function prepareExportSvg(svgHtml: string): ExportSvg {
   // Parse as HTML (matches the sanitizer's input) so we work with the same DOM
   // shape mermaid produced, then re-serialize with XMLSerializer below. The
   // HTML outerHTML serializer drops the xmlns="http://www.w3.org/2000/svg"
@@ -428,8 +435,8 @@ async function svgToPngBlob(svgHtml: string): Promise<Blob> {
   });
 }
 
-function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function errorText(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 function downloadBlob(blob: Blob, filename: string): void {

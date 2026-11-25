@@ -105,7 +105,13 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
  * If `.env` sets BETTER_AUTH_BASE_URL to https://… (e.g. production) but you still open the UI on
  * http://localhost, browsers drop Secure cookies — login looks OK (JSON user) then /api/* returns 401.
  */
-function resolveSessionCookieSecure(): { secure: boolean; useSecureCookies?: boolean } {
+/** The session cookie's Secure flag, and whether Better Auth adds the `__Secure-` prefix. */
+interface SessionCookieSecurity {
+  secure: boolean;
+  useSecureCookies?: boolean;
+}
+
+function resolveSessionCookieSecure(): SessionCookieSecurity {
   const o = process.env.BETTER_AUTH_COOKIE_SECURE;
   const forceInsecure = o === 'false' || o === '0';
   const forceSecure = o === 'true' || o === '1';
@@ -142,11 +148,15 @@ function buildDatabaseConfig() {
 // Lazy init — auth is created on first call to initBetterAuth()
 let authSingleton: ReturnType<typeof betterAuth> | null = null;
 
+// SAFETY: the empty target is never read; `get` forwards every property to
+// authSingleton (or throws before initBetterAuth), so the proxy is the instance.
 export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
   get(_target, prop) {
     if (!authSingleton) {
       throw new Error('Auth not initialized. Call initBetterAuth() at startup.');
     }
+    // SAFETY: indexing the initialized Better Auth instance by the same property the caller
+    // read on the proxy; the proxy only forwards, it never reads properties of its own.
     return (authSingleton as any)[prop];
   },
 });
@@ -156,6 +166,8 @@ export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
  */
 export async function initBetterAuth(): Promise<void> {
   const cookieOpts = resolveSessionCookieSecure();
+  // SAFETY: this is betterAuth()'s own return value; only the plugin overloads
+  // make its inferred type wider than the singleton's declared base type.
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Better Auth plugin overloads widen the return type beyond the base signature
   authSingleton = betterAuth({
     database: buildDatabaseConfig(),

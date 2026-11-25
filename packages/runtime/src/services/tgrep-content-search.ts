@@ -59,9 +59,9 @@ export class TgrepContentSearch implements TgrepSearch {
 
   async search(options: ProjectTextSearchOptions): Promise<ProjectTextSearchResult> {
     this.controller.signal.throwIfAborted();
-    this.ready ??= this.start().catch((error: unknown) => {
+    this.ready ??= this.start().catch((cause: unknown) => {
       this.dispose();
-      throw error;
+      throw cause;
     });
     const port = await this.ready;
     const limit = Math.max(1, Math.min(10_000, options.maxResults ?? 1_000));

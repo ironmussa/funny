@@ -103,7 +103,7 @@ export function useThreadFilterCounts(
 ) {
   // Counts for type filter (scratch vs normal)
   const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = { scratch: 0, normal: 0 };
+    const counts = { scratch: 0, normal: 0 };
     for (const t of allThreads) {
       counts[isScratch(t) ? 'scratch' : 'normal']++;
     }

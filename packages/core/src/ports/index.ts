@@ -1,4 +1,12 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+} from 'fs';
 import { dirname, resolve } from 'path';
 
 import { internal, type DomainError } from '@funny/shared/errors';
@@ -104,7 +112,24 @@ export function syncClaudeProjectAssets(projectPath: string, worktreePath: strin
       force: true,
       errorOnExist: false,
       dereference: false,
+      filter: (src, dest) => !isSameLink(src, dest),
     });
+  }
+}
+
+/**
+ * Whether `dest` is already a link to where the link `src` points. A worktree
+ * is synced again on every agent start, and `cpSync` refuses to copy a link
+ * over a link that resolves to the same directory (EINVAL, "subdirectory of
+ * self"), which stopped the rest of the sync.
+ */
+function isSameLink(src: string, dest: string): boolean {
+  try {
+    if (!lstatSync(src).isSymbolicLink() || !lstatSync(dest).isSymbolicLink()) return false;
+    return realpathSync(src) === realpathSync(dest);
+  } catch {
+    // A missing destination or a dangling link: let cpSync copy it.
+    return false;
   }
 }
 

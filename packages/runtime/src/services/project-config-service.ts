@@ -13,7 +13,10 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { FunnyProjectConfig } from '@funny/shared';
-import { funnyProjectConfigSchema } from '@funny/shared/funny-config-schema';
+import {
+  funnyProjectConfigSchema,
+  type ValidatedFunnyProjectConfig,
+} from '@funny/shared/funny-config-schema';
 import { parseStoredJson } from '@funny/shared/json-validation';
 
 const CONFIG_FILENAME = '.funny.json';
@@ -34,8 +37,8 @@ export function getConfig(projectPath: string): FunnyProjectConfig {
 export function updateConfig(projectPath: string, config: FunnyProjectConfig): void {
   const filePath = join(projectPath, CONFIG_FILENAME);
 
-  // Read existing file to preserve unknown fields
-  let existing: Record<string, unknown> = {};
+  // Read existing file to preserve unknown fields (the schema passes them through)
+  let existing: ValidatedFunnyProjectConfig = {};
   if (existsSync(filePath)) {
     const parsed = parseStoredJson(
       funnyProjectConfigSchema,

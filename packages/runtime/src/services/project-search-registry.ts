@@ -329,8 +329,8 @@ async function canonicalPathIfPresent(cwd: string): Promise<string | null> {
   }
 }
 
-function safeReason(value: unknown): string {
-  return String(value instanceof Error ? value.message : value)
+function safeReason(cause: unknown): string {
+  return String(cause instanceof Error ? cause.message : cause)
     .replace(/[\r\n]+/g, ' ')
     .slice(0, 300);
 }

@@ -11,7 +11,7 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { retargetPullRequestsOn } from './pull-request-base.js';
-import type { GithubCallError, RepoGithub } from './repo-github.js';
+import type { GithubCallError, GithubRequestBody, RepoGithub } from './repo-github.js';
 
 /** A failed check and the end of its log (or its summary). */
 export interface FailingCheck {
@@ -117,6 +117,8 @@ export interface PullRequestCi {
   findOpen(repo: string, branch: string): ResultAsync<string | null, GithubCallError>;
   /** Comment on the pull request. */
   comment(repo: string, number: number, body: string): ResultAsync<void, GithubCallError>;
+  /** Close the pull request without merging it; one already closed stays closed. */
+  close(repo: string, number: number): ResultAsync<void, GithubCallError>;
   /**
    * Delete a branch on GitHub; a branch already gone is not an error. With
    * `retargetTo`, the open pull requests based on it move there first (the
@@ -480,6 +482,12 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
         .map(() => undefined);
     },
 
+    close(repo, number) {
+      return github
+        .json(repo, 'PATCH', `/repos/${repo}/pulls/${number}`, { state: 'closed' })
+        .map(() => undefined);
+    },
+
     deleteBranch(repo, branch, retargetTo) {
       const ref = `/repos/${repo}/git/refs/heads/${branch.split('/').map(encodeURIComponent).join('/')}`;
       const moved = retargetTo
@@ -495,7 +503,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     },
   };
 
-  function graphql(repo: string, query: string, variables: Record<string, unknown>) {
+  function graphql(repo: string, query: string, variables: GithubRequestBody) {
     return github.json<GraphqlAnswer>(repo, 'POST', '/graphql', { query, variables });
   }
 

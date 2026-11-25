@@ -684,8 +684,8 @@ export function addSkill(identifier: string): ResultAsync<void, DomainError> {
       cwd: homedir(),
       timeout: 60_000,
     }).then(() => {}),
-    (err: unknown) => {
-      const e = err as any;
+    (cause: unknown) => {
+      const e = cause as any;
       const raw = stripAnsi(e?.stderr || e?.stdout || e?.message || String(e)).trim();
       const lines = raw.split('\n').filter((l: string) => l.trim());
       const errorLine = lines.find((l: string) =>

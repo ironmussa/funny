@@ -2,7 +2,12 @@
  * The sections of a run's detail panel (openspec factory-run-detail, D3), in
  * pipeline order. Each one shows only what the run has reached.
  */
-import type { FactoryReviewVerdict, FactoryTriage } from '@funny/shared/contracts/factory';
+import {
+  lintCleanupSource,
+  type FactoryMergeApproval,
+  type FactoryReviewVerdict,
+  type FactoryTriage,
+} from '@funny/shared/contracts/factory';
 import { ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,11 +16,12 @@ import { Button } from '@/components/ui/button';
 import { LabelBadge } from '@/components/ui/label-badge';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun } from '@/lib/api/factory';
-import { factoryReviewPassed } from '@/lib/factory-run-labels';
+import { factoryReviewPassed, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 
+import { ApprovalGapNote } from '../ApprovalGapNote';
 import { type FactoryRunThreadRole, factoryRunThreadLinks } from './thread-links';
 
 const short = (sha: string) => sha.slice(0, 7);
@@ -222,12 +228,57 @@ export function RunReviews({ run }: { run: FactoryQueueRun }) {
   );
 }
 
+/**
+ * A member's approval to merge the high-risk change: the commit they approved
+ * and each commit the factory moved it to (openspec
+ * factory-approval-survives-integration), so what merged on a moved approval
+ * can be read afterwards.
+ */
+function RunMergeApproval({ approval }: { approval: FactoryMergeApproval }) {
+  const { t } = useTranslation();
+  const moves = approval.moves ?? [];
+  return (
+    <div className="flex flex-col gap-0.5" data-testid="factory-run-detail-approval">
+      <p>
+        {t('factoryRunDetail.approvedAt', 'Merge approved at')}{' '}
+        <span className="font-mono">{short(approval.carriedFrom ?? approval.sha)}</span>
+      </p>
+      {moves.length > 0 && (
+        <ul className="flex flex-col gap-0.5 border-l pl-2">
+          {moves.map((move, index) => (
+            <li key={move.to} data-testid={`factory-run-detail-approval-move-${index}`}>
+              {t('factoryRunDetail.approvalMovedTo', 'moved to')}{' '}
+              <span className="font-mono">{short(move.to)}</span>
+              {' · '}
+              {move.kind === 'same'
+                ? t('factoryRunDetail.approvalSameChange', 'same change')
+                : t(
+                    'factoryRunDetail.approvalAdjustment',
+                    '{{lines}} lines differ in {{files}} files',
+                    { lines: move.lines, files: move.files.length },
+                  )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
   const { t } = useTranslation();
   const { ciRounds, ciRed, conflicts, agentFixes } = run.metrics;
-  if (!run.risk && ciRounds === 0) return null;
+  if (!run.risk && !run.mergeApproval && ciRounds === 0) return null;
   return (
     <DetailSection id="risk-ci" title={t('factoryRunDetail.riskCi', 'Risk and CI')}>
+      {isFactoryRunAwaitingMergeApproval(run) && (
+        <ApprovalGapNote
+          approval={run.mergeApproval}
+          heldSha={run.risk?.headSha}
+          prUrl={run.prUrl}
+          testId="factory-run-detail-approval-gap"
+        />
+      )}
       {run.risk && (
         <p data-testid="factory-run-detail-risk">
           {run.risk.level === 'high'
@@ -237,6 +288,24 @@ export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
             : t('factoryRunDetail.riskLow', 'Low risk')}
         </p>
       )}
+      {lintCleanupSource(run) !== null && (
+        <div className="flex flex-col gap-0.5" data-testid="factory-run-detail-lint-cleanup">
+          <p>
+            {t(
+              'factoryRunDetail.lintCleanupTriage',
+              'Triage classed it as a lint cleanup of rules that cannot change behavior: its size and its contract risks do not hold it. You can say it is not one.',
+            )}
+          </p>
+          {(run.risk?.waived ?? []).length > 0 && (
+            <ul className="text-muted-foreground flex flex-col gap-0.5 border-l pl-2">
+              {(run.risk?.waived ?? []).map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {run.mergeApproval && <RunMergeApproval approval={run.mergeApproval} />}
       {ciRounds > 0 && (
         <p data-testid="factory-run-detail-ci">
           {t(

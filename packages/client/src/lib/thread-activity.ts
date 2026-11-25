@@ -77,3 +77,29 @@ export function hasLaterRunOfIssue(
       other.startedAt > run.startedAt,
   );
 }
+
+/**
+ * The newest run of `run`'s issue in the same factory started after it, or null.
+ * A run without an issue has no later run.
+ */
+export function latestLaterRunOfIssue<
+  R extends Pick<FactoryRun, 'id' | 'factoryId' | 'issueNumber' | 'startedAt'>,
+>(
+  runs: ReadonlyArray<R>,
+  run: Pick<FactoryRun, 'id' | 'factoryId' | 'issueNumber' | 'startedAt'>,
+): R | null {
+  if (run.issueNumber === null) return null;
+  let latest: R | null = null;
+  for (const other of runs) {
+    if (
+      other.id !== run.id &&
+      other.factoryId === run.factoryId &&
+      other.issueNumber === run.issueNumber &&
+      other.startedAt > run.startedAt &&
+      (!latest || other.startedAt > latest.startedAt)
+    ) {
+      latest = other;
+    }
+  }
+  return latest;
+}

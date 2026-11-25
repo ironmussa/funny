@@ -130,9 +130,11 @@ export function initDatabase(options?: {
 // ── Lazy Proxies ─────────────────────────────────────────────────
 
 /** The Drizzle database instance. `initDatabase()` must be called first. */
+// SAFETY: the empty target is never read; `get` forwards every property to the
+// active transaction or provider db, so the proxy behaves as an AppDatabase.
 export const db: AppDatabase = new Proxy({} as AppDatabase, {
   get(_target, prop) {
-    return (transactionContext.getStore() ?? (activeProvider().db as any))[prop];
+    return (transactionContext.getStore() ?? activeProvider().db)[prop];
   },
 });
 

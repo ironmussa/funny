@@ -81,12 +81,11 @@ function HeaderActionButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant={active ? 'active' : 'muted'}
           size="icon-sm"
           onClick={onClick}
           data-testid={testId}
           disabled={disabled}
-          className={active ? 'text-foreground' : 'text-muted-foreground'}
         >
           {children}
         </Button>
@@ -110,7 +109,7 @@ function PreviewButton({
       <TooltipTrigger asChild>
         <Button
           data-testid="header-preview"
-          variant="ghost"
+          variant="ghost-info"
           size="icon-sm"
           onClick={() => {
             openPreview({
@@ -120,7 +119,6 @@ function PreviewButton({
               commandLabel: command.label,
             });
           }}
-          className="text-status-info hover:text-status-info/80"
         >
           <Globe className="icon-base" />
         </Button>

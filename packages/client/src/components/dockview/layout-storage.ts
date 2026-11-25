@@ -26,14 +26,18 @@ export function writeStoredSize(key: string, size: number) {
   }
 }
 
+/** Minimum-shape check of a stored layout; anything richer is for fromJSON to reject. */
+function isSerializedDockview(value: unknown): value is SerializedDockview {
+  return typeof value === 'object' && value !== null && 'grid' in value && 'panels' in value;
+}
+
 function readStoredLayout(key: string): SerializedDockview | null {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Minimum-shape check — anything richer is for fromJSON to reject.
-    if (typeof parsed === 'object' && parsed !== null && 'grid' in parsed && 'panels' in parsed) {
-      return parsed as SerializedDockview;
+    if (isSerializedDockview(parsed)) {
+      return parsed;
     }
     return null;
   } catch {

@@ -162,6 +162,54 @@ describe('path reservation of a stacked run', () => {
     });
   });
 
+  // #450 (2026-11-25): approved, retried, and queued 50 minutes behind #480 with its pull request open.
+  test('a run that already has a pull request waits for no paths', () => {
+    const retried = { ...stacked, prUrl: 'https://github.com/o/r/pull/466' };
+    expect(pathsHeld(runsOf([blocker]), retried, null)).toBeNull();
+    expect(pathsHeld(runsOf([blocker]), { ...stacked, prUrl: null }, null)).toEqual({
+      kind: 'paths-overlap',
+      blockers: [80],
+    });
+  });
+
+  // openspec factory-merge-fewer-bounces, D6: with the factory's setting on, a
+  // run parked for a member's approval keeps its paths for 12 hours.
+  describe('a run parked for an approval', () => {
+    const now = Date.parse('2026-11-25T12:00:00Z');
+    const parked = (hoursAgo: number, failureReason = 'high risk') => ({
+      ...blocker,
+      state: 'waiting_human' as const,
+      failureReason,
+      prUrl: 'https://github.com/o/r/pull/80',
+      completedAt: new Date(now - hoursAgo * 60 * 60 * 1000).toISOString(),
+    });
+    const held = (runs: Array<ReturnType<typeof parked>>, setting: boolean) =>
+      pathsHeld({ runs, approvalHold: setting ? { now } : null }, stacked, null);
+
+    test('keeps its paths, and the run waiting for it is told it waits for an approval', () => {
+      expect(held([parked(1)], true)).toEqual({ kind: 'paths-awaiting-approval', blockers: [80] });
+    });
+
+    test('holds none once 12 hours passed', () => {
+      expect(held([parked(13)], true)).toBeNull();
+    });
+
+    test('holds none when it parked for another reason', () => {
+      expect(held([parked(1, 'review failed')], true)).toBeNull();
+    });
+
+    test('holds none with the setting off', () => {
+      expect(held([parked(1)], false)).toBeNull();
+    });
+
+    test('a run that is working on the same files still names the plain overlap', () => {
+      const working = { ...parked(1), id: 'other-run-id', issueNumber: 90, state: 'working' };
+      expect(
+        pathsHeld({ runs: [parked(1), working], approvalHold: { now } }, stacked, null),
+      ).toEqual({ kind: 'paths-overlap', blockers: [80, 90] });
+    });
+  });
+
   // Found in the E2E: triage itself held #87, stacked on #86, for #86's paths.
   test('the paths triage holds a stacked run for leave out the run it stacks on', () => {
     expect(busyPathsOf([blocker, other], stacked.id, 'blocker-run-id')).toEqual([

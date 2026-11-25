@@ -2,7 +2,7 @@ import type { AgentProvider } from '@funny/shared';
 
 import type { RuntimeThreadRecord } from '../server-interfaces.js';
 import { withBrowserMcpServer, withWatchMcpServer } from './agent-profile.js';
-import { loadProjectMcpServers } from './load-mcp-servers.js';
+import { loadProjectMcpServers, type AgentMcpServers } from './load-mcp-servers.js';
 import { resolveAgentTemplate, type AgentTemplateResolution } from './resolve-agent-template.js';
 
 /**
@@ -17,7 +17,7 @@ export async function resolveAgentTooling(input: {
   /** Undefined for scratch threads — there is no project MCP context. */
   projectPath: string | undefined;
   provider: AgentProvider;
-  mcpServers?: Record<string, any>;
+  mcpServers?: AgentMcpServers;
   disallowedTools?: string[];
   claudeConfigDir?: string;
   /** Thread working directory (browser `upload` sandbox; project MCP servers are only injected when it is not the project directory). */
@@ -44,6 +44,7 @@ export async function resolveAgentTooling(input: {
     thread?.userId,
     template.mcpServers,
     provider,
+    thread,
   );
   return {
     ...template,

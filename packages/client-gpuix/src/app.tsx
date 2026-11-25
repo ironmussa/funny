@@ -759,14 +759,22 @@ export function areMessageRowsEqual(previous: MessageRowProps, next: MessageRowP
   );
 }
 
+type RowMessage = MessageRowProps['message'];
+
+function hasTextContent(
+  message: RowMessage,
+): message is NonNullable<RowMessage> & { content: string } {
+  return typeof message?.content === 'string';
+}
+
 const MessageRow = memo(function MessageRow({ message, messageId, richContent }: MessageRowProps) {
   const colors = useNativeColors();
-  const content = typeof message?.content === 'string' ? message.content : '';
+  const content = hasTextContent(message) ? message.content : '';
   const [requestedCharacters, setRequestedCharacters] = useState(
     MESSAGE_CONTENT_COLLAPSED_CHARACTERS,
   );
   const preview = createMessageContentPreview(content, requestedCharacters);
-  if (!message || typeof message.content !== 'string') {
+  if (!hasTextContent(message)) {
     return (
       <ConversationRow>
         <StatusCard title="Unsupported message" detail={messageId} tone="danger" />

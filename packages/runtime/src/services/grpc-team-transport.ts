@@ -140,7 +140,7 @@ export class GrpcTeamTransport {
     this.events.shutdown();
   }
 
-  request(eventType: string, input: Record<string, any>): Promise<any> {
+  request<Body extends object>(eventType: string, input: Body): Promise<any> {
     return this.operations.request(eventType, input);
   }
 

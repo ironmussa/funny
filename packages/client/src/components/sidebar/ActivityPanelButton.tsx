@@ -46,8 +46,8 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { ActivityList } from './ActivityList';
 
-/** Compact pill used for status chips in the background-activity panel. */
-const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-3xs leading-none font-medium';
+/** Placement of the compact status chips (Badge size `3xs`) in the background-activity panel. */
+const CHIP_CLASS = 'h-4 shrink-0';
 
 function statusLabel(w: Watcher): string {
   switch (w.status) {
@@ -108,7 +108,7 @@ function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="truncate text-sm font-medium">{watcher.label}</span>
-              <Badge variant={statusVariant(watcher.status)} className={CHIP_CLASS}>
+              <Badge variant={statusVariant(watcher.status)} size="3xs" className={CHIP_CLASS}>
                 {statusLabel(watcher)}
               </Badge>
             </div>
@@ -209,7 +209,7 @@ function JobRow({
             >
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-sm font-medium">{job.label || job.command}</span>
-                <Badge variant={jobStatusVariant(job.status)} className={CHIP_CLASS}>
+                <Badge variant={jobStatusVariant(job.status)} size="3xs" className={CHIP_CLASS}>
                   {jobStatusLabel(job)}
                 </Badge>
               </div>
@@ -370,9 +370,11 @@ function WatchersDialog({
         className="flex h-[85dvh] max-w-4xl flex-col overflow-hidden"
         data-testid="watchers-view"
       >
-        <DialogHeader className="border-border border-b px-5 py-4">
-          <DialogTitle>Watchers</DialogTitle>
-        </DialogHeader>
+        <div className="border-border border-b px-5 py-4">
+          <DialogHeader>
+            <DialogTitle>Watchers</DialogTitle>
+          </DialogHeader>
+        </div>
         <div className="border-border space-y-3 border-b px-5 py-3">
           <SearchBar
             query={search}
@@ -402,7 +404,7 @@ function WatchersDialog({
             ))}
           </div>
         </div>
-        <ScrollArea className="min-h-0 flex-1 px-3 py-2">
+        <ScrollArea className="min-h-0 flex-1" viewportProps={{ className: 'px-3 py-2' }}>
           {filtered.length === 0 ? (
             <EmptyState padding="lg" fill={false} title="No matching background activity." />
           ) : (
@@ -449,7 +451,7 @@ function BackgroundEntriesTab({
         {activeCount} active · {items.length - activeCount} in history
       </p>
       {items.length === 0 ? (
-        <EmptyState fill={false} className="px-2" title="No background activity yet." />
+        <EmptyState fill={false} inset="sm" title="No background activity yet." />
       ) : (
         <>
           <ScrollArea className={cn('max-h-96', items.length > 6 && 'h-96')}>
@@ -461,8 +463,8 @@ function BackgroundEntriesTab({
             />
           </ScrollArea>
           <Button
-            variant="ghost"
-            className="mt-1 w-full border-t"
+            variant="ghost-divided"
+            className="mt-1 w-full"
             data-testid={`${kind === 'job' ? 'jobs' : 'watcher'}-panel-view-all`}
             onClick={onViewAll}
           >
@@ -665,7 +667,13 @@ export function ActivityPanelButton() {
             trailing={<FailedBadge count={counts.failed} alone={runningCount === 0} />}
           />
         </PopoverTrigger>
-        <PopoverContent side="top" align="start" className="w-96 p-1" data-testid="activity-panel">
+        <PopoverContent
+          side="top"
+          align="start"
+          padding="xs"
+          className="w-96"
+          data-testid="activity-panel"
+        >
           <Tabs value={tab} onValueChange={(value) => setTab(value as ActivityPanelTab)}>
             <PanelTabs />
             <TabsContent value="activity" className="mt-1">

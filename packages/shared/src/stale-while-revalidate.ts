@@ -31,7 +31,7 @@ export interface StaleWhileRevalidateOptions<A> {
   /** Equality used to decide whether a refresh changed the value. Defaults to JSON equality. */
   isEqual?: (a: A, b: A) => boolean;
   /** Reports a background refresh that failed; the previous value stays in place. */
-  onRefreshError?: (key: string, error: unknown) => void;
+  onRefreshError?: (key: string, cause: unknown) => void;
   now?: () => number;
 }
 
@@ -57,7 +57,7 @@ class LookupFailure<E> {
   constructor(readonly error: E) {}
 }
 
-const jsonEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const jsonEqual = <A>(a: A, b: A) => JSON.stringify(a) === JSON.stringify(b);
 
 export function createStaleWhileRevalidate<A, E = unknown>(
   options: StaleWhileRevalidateOptions<A>,

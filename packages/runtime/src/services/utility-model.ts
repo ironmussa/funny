@@ -70,13 +70,13 @@ class UtilityFailure extends Error {
   }
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
-function toUtilityError(error: unknown): UtilityModelError {
-  if (error instanceof UtilityFailure) return error.detail;
-  return { kind: 'provider-error', message: messageOf(error) };
+function toUtilityError(cause: unknown): UtilityModelError {
+  if (cause instanceof UtilityFailure) return cause.detail;
+  return { kind: 'provider-error', message: messageOf(cause) };
 }
 
 /** A Claude alias such as `haiku` as its full model id; a full id passes through. */

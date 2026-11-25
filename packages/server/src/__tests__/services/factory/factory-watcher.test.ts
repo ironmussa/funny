@@ -1,13 +1,14 @@
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+
+import type { CiState } from '@funny/core/github-app';
+import type { IssueBlocker } from '@funny/core/github-app';
 /**
  * Issue factory watcher: scheduling, admission (dedup + concurrency), running
  * the factory's flow as the enabler (agent step → pull request → CI → merge),
  * and resuming a run after a restart — fake GitHub + fake launcher + fake
  * poll + scripted thread outcomes, real test DB.
  */
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-
-import type { CiState } from '@funny/core/github-app';
-import type { IssueBlocker } from '@funny/core/github-app';
+import { approvalGapFor } from '@funny/shared/contracts/factory';
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../../lib/logger.js';
@@ -17,6 +18,7 @@ import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/
 import type {
   FactoryMergeOutcome,
   FactoryProofCheck,
+  FactoryReplacedBy,
 } from '../../../services/factory/factory-pull-requests.js';
 import {
   createFactoryRunControl,
@@ -124,6 +126,8 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
 }
 
 interface GithubScript {
+  /** Issues opened from this many on fail (a split whose later parts cannot be opened). */
+  createIssueFailsFrom?: number;
   /** The default branch's `.funny/workflows/*` files, by path. */
   files?: Record<string, string>;
   /** No repository copy of `issue-to-merge`: the built-in flow, which has no proof rules. */
@@ -169,6 +173,10 @@ type FakeGithub = FactoryGithubPort & {
   relabels: Array<{ issue: number; remove?: string; add?: string }>;
   checks: FactoryProofCheck[];
   prLookups: Array<{ branch: string; state: string }>;
+  /** Issues opened (a split's parts), numbered from 100. */
+  created: Array<{ number: number; title: string; body: string }>;
+  /** Pull requests closed as replaced, with what replaced them and who closed them. */
+  closedReplaced: Array<{ number: number; by: FactoryReplacedBy; origin?: string }>;
 };
 
 function fakeGithub(
@@ -186,7 +194,20 @@ function fakeGithub(
     relabels: [],
     checks: [],
     prLookups: [],
+    created: [],
+    closedReplaced: [],
     resolveRepo: async () => repo,
+    createIssue: (_reader: unknown, issue: { title: string; body: string }) => {
+      if (
+        script.createIssueFailsFrom !== undefined &&
+        port.created.length >= script.createIssueFailsFrom
+      ) {
+        return errAsync({ message: 'GitHub answered 502', status: 502 });
+      }
+      const number = 100 + port.created.length;
+      port.created.push({ number, ...issue });
+      return okAsync({ number, url: `u/${number}` });
+    },
     // An issue whose label was taken off is no longer listed, as on GitHub.
     listReadyIssues: () =>
       okAsync(issues.filter((i) => !port.relabels.some((r) => r.issue === i.number && r.remove))),
@@ -247,6 +268,14 @@ function fakeGithub(
     },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
+      closeReplaced: (
+        pr: { number: number },
+        by: FactoryReplacedBy,
+        origin?: 'user' | 'system',
+      ) => {
+        port.closedReplaced.push({ number: pr.number, by, origin });
+        return okAsync({ kind: 'closed' as const, branchDeleted: true });
+      },
       changedFiles: () => okAsync({ files: [], truncated: false }),
       publishReview: () => okAsync({ status: true }),
       baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
@@ -396,7 +425,12 @@ describe('factory watcher', () => {
     const runsResult = await createFactoryRunsRepository().list(factoryId);
     const runs = runsResult._unsafeUnwrap();
     expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ issueNumber: 7, state: 'working', currentStep: 'implement' });
+    expect(runs[0]).toMatchObject({
+      issueNumber: 7,
+      issueTitle: 'Fix it',
+      state: 'working',
+      currentStep: 'implement',
+    });
     expect(runs[0]!.threadIds).toEqual(['t-1']);
   });
 
@@ -520,7 +554,7 @@ describe('factory watcher', () => {
       threadIds: ['old'],
       currentStep: 'implement',
     });
-    await runs.update(first._unsafeUnwrap().id, { state: 'working' });
+    await runs.updateInFlight(first._unsafeUnwrap().id, { state: 'working' });
 
     const poll = fakePoll();
     const launcher = fakeLauncher();
@@ -643,7 +677,7 @@ describe('factory watcher', () => {
     const runs = createFactoryRunsRepository();
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
       const run = (await runs.start({ factoryId, issueNumber: 7 }))._unsafeUnwrap();
-      await runs.update(run.id, { state: 'failed' });
+      await runs.updateInFlight(run.id, { state: 'failed' });
     }
     const poll = fakePoll();
     const launcher = fakeLauncher();
@@ -697,7 +731,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory({ maxConcurrent: 1 });
     const runs = createFactoryRunsRepository();
     const parked = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
-    await runs.update(parked.id, { state: 'waiting_human' });
+    await runs.updateInFlight(parked.id, { state: 'waiting_human' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
     await startWatcherWithProof({
@@ -840,7 +874,7 @@ describe('factory watcher', () => {
 
       // The first leaves those states: the second starts, with the contract it already has.
       const first = await runOf(factoryId, 1);
-      await createFactoryRunsRepository().update(first.id, { state: 'waiting_human' });
+      await createFactoryRunsRepository().updateInFlight(first.id, { state: 'waiting_human' });
       await poll.ticks[0]!();
       // Admitted from the queue, the second run's thread is named from the issue as it is now.
       expect(implementing(launcher)).toEqual(['[Factory] #1 a', '[Factory] #2 b']);
@@ -870,7 +904,7 @@ describe('factory watcher', () => {
       const factoryId = await enableFactory();
       const runs = createFactoryRunsRepository();
       const merged = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
-      await runs.update(merged.id, {
+      await runs.updateInFlight(merged.id, {
         state: 'merged',
         prUrl: 'https://github.com/acme/repo/pull/9',
       });
@@ -986,7 +1020,7 @@ describe('factory watcher', () => {
     const runs = createFactoryRunsRepository();
     for (const issueNumber of [1, 2]) {
       const run = (await runs.start({ factoryId, issueNumber }))._unsafeUnwrap();
-      await runs.update(run.id, { state: 'merging' });
+      await runs.updateInFlight(run.id, { state: 'merging' });
     }
     const issues = [
       { number: 1, title: 'a', url: 'u/1' },
@@ -1013,7 +1047,7 @@ describe('factory watcher', () => {
     // One of them parks for a person: its slot is free and the next issue comes in.
     stopFactoryWatcher();
     const [first] = (await runs.inFlight(factoryId))._unsafeUnwrap();
-    await runs.update(first!.id, { state: 'waiting_human' });
+    await runs.updateInFlight(first!.id, { state: 'waiting_human' });
     expect(await start()).toContain('[Factory] #3 c');
   });
 
@@ -1949,7 +1983,7 @@ describe('factory operator controls', () => {
   /** A run that parked a minute ago (its `completedAt` is when it parked). */
   async function seedParkedRun(factoryId: string, threadIds: string[]) {
     const run = await seedRun(factoryId, 'working', threadIds);
-    await createFactoryRunsRepository().update(run.id, { state: 'waiting_human' });
+    await createFactoryRunsRepository().updateInFlight(run.id, { state: 'waiting_human' });
     const parked = new Date(Date.now() - 60_000).toISOString();
     testDb.sqlite
       .query('UPDATE factory_runs SET completed_at = ? WHERE id = ?')
@@ -2207,6 +2241,35 @@ describe('factory operator controls', () => {
     expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
   });
 
+  // Issues #489-#492 (2026-11-25): each issue's later run merged, and the
+  // stopped run's pull request stayed open until a person closed it.
+  test("a merged run closes its issue's stopped runs' pull requests, unless pushed to", async () => {
+    const factoryId = await enableFactory();
+    const repo = createFactoryRunsRepository();
+    const stopped = await seedRun(factoryId, 'stopped', ['t-0']);
+    await repo.update(stopped.id, {
+      prUrl: 'https://github.com/o/r/pull/5',
+      regressionProof: { headSha: 'sha-head', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+    });
+    // Its head is not a commit the factory recorded: somebody pushed to it.
+    const pushedTo = await seedRun(factoryId, 'failed', ['t-2']);
+    await repo.update(pushedTo.id, {
+      prUrl: 'https://github.com/o/r/pull/6',
+      regressionProof: { headSha: 'sha-old', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+    });
+    const run = await seedParkedWithPr(factoryId);
+    const { poll, github } = await watch({ issues: [], github: { prStates: { 9: 'merged' } } });
+
+    await poll.ticks[0]!();
+
+    expect((await runById(run.id)).state).toBe('merged');
+    expect(github.closedReplaced).toEqual([
+      { number: 5, by: { issueNumber: 7, prNumber: 9 }, origin: 'system' },
+    ]);
+    // The superseded run itself does not change.
+    expect((await runById(stopped.id)).state).toBe('stopped');
+  });
+
   test('a parked run whose pull request was closed without a merge is stopped, saying so', async () => {
     const factoryId = await enableFactory();
     const run = await seedParkedWithPr(factoryId);
@@ -2452,7 +2515,23 @@ describe('factory operator controls', () => {
       },
     });
 
-    const approved = await createFactoryRunControl().approveMerge('alice', factoryId, run.id);
+    // Naming another commit than the held one approves nothing.
+    const stale = await createFactoryRunControl().approveMerge(
+      'alice',
+      factoryId,
+      run.id,
+      'd'.repeat(12),
+    );
+    expect(stale.isErr() && stale.error.kind).toBe('conflict');
+    const untouched = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
+    expect(untouched).toMatchObject({ state: 'waiting_human', mergeApproval: null });
+
+    const approved = await createFactoryRunControl().approveMerge(
+      'alice',
+      factoryId,
+      run.id,
+      'c2b585c51b2e',
+    );
 
     const { run: after, sha } = approved._unsafeUnwrap();
     expect(sha).toBe('c2b585c51b2e');
@@ -2479,11 +2558,196 @@ describe('factory operator controls', () => {
       (await runs.carryMergeApproval(run.id, 'm'.repeat(40), 'n'.repeat(40)))._unsafeUnwrap(),
     ).toBe(true);
     const after = (await runs.get(run.id))._unsafeUnwrap();
-    expect(after?.mergeApproval).toEqual({
+    expect(after?.mergeApproval).toMatchObject({
       sha: 'n'.repeat(40),
       userId: 'alice',
       at: 'now',
       carriedFrom: 'a'.repeat(40),
+      // Each move is kept, so a person can read what merged on a moved approval.
+      moves: [
+        { to: 'm'.repeat(40), kind: 'same', lines: 0, files: [] },
+        { to: 'n'.repeat(40), kind: 'same', lines: 0, files: [] },
+      ],
+    });
+  });
+
+  // openspec factory-merge-fewer-bounces, D2 and D3.
+  test('a gap is kept on the approval it is about, and neither a move nor a new approval carries it', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'waiting_human', []);
+    const runs = createFactoryRunsRepository();
+    await runs.update(run.id, { failureReason: 'high risk' });
+    await runs.approveMerge(run.id, { sha: 'a'.repeat(40), userId: 'alice', at: 'now' });
+    const gap = {
+      to: 'b'.repeat(40),
+      at: 'later',
+      lines: 8,
+      files: ['src/new.ts'],
+      moreFiles: 0,
+      newFiles: ['src/new.ts'],
+      newRiskKeys: [],
+      reason: 'the change now touches src/new.ts, which the approved commit did not',
+    };
+
+    // About another approval: nothing is written.
+    expect((await runs.noteApprovalGap(run.id, 'c'.repeat(40), gap))._unsafeUnwrap()).toBe(false);
+    expect((await runs.noteApprovalGap(run.id, 'a'.repeat(40), gap))._unsafeUnwrap()).toBe(true);
+    const held = (await runs.get(run.id))._unsafeUnwrap();
+    expect(held?.mergeApproval).toMatchObject({ sha: 'a'.repeat(40), gap });
+    expect(approvalGapFor(held?.mergeApproval, 'b'.repeat(40))).toMatchObject({
+      approvedSha: 'a'.repeat(40),
+      approvedBy: 'alice',
+      lines: 8,
+    });
+    // A gap of a head the run has left says nothing about another one.
+    expect(approvalGapFor(held?.mergeApproval, 'd'.repeat(40))).toBeNull();
+
+    // The member approves the held commit: that is the commit later changes are compared with.
+    await runs.approveMerge(run.id, { sha: 'b'.repeat(40), userId: 'alice', at: 'now' });
+    const approved = (await runs.get(run.id))._unsafeUnwrap();
+    expect(approved?.mergeApproval).toEqual({ sha: 'b'.repeat(40), userId: 'alice', at: 'now' });
+
+    // An approval that then moves covers the commit it moved to: no gap goes with it.
+    await runs.noteApprovalGap(run.id, 'b'.repeat(40), { ...gap, to: 'e'.repeat(40) });
+    await runs.carryMergeApproval(run.id, 'b'.repeat(40), 'f'.repeat(40));
+    const moved = (await runs.get(run.id))._unsafeUnwrap();
+    expect(moved?.mergeApproval?.sha).toBe('f'.repeat(40));
+    expect(moved?.mergeApproval?.gap).toBeUndefined();
+  });
+
+  // openspec factory-approval-survives-integration, D5.
+  test('a move for an adjustment records its size and files, and a newer approval is not overwritten', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'waiting_human', []);
+    const runs = createFactoryRunsRepository();
+    await runs.update(run.id, { failureReason: 'high risk' });
+    await runs.approveMerge(run.id, { sha: 'a'.repeat(40), userId: 'alice', at: 'now' });
+    const files = Array.from({ length: 30 }, (_, i) => `src/f${i}.ts`);
+
+    expect(
+      (
+        await runs.carryMergeApproval(run.id, 'a'.repeat(40), 'b'.repeat(40), {
+          kind: 'adjustment',
+          lines: 7,
+          files,
+        })
+      )._unsafeUnwrap(),
+    ).toBe(true);
+    const moved = (await runs.get(run.id))._unsafeUnwrap()?.mergeApproval;
+    expect(moved).toMatchObject({ sha: 'b'.repeat(40), carriedFrom: 'a'.repeat(40) });
+    expect(moved?.moves).toMatchObject([{ to: 'b'.repeat(40), kind: 'adjustment', lines: 7 }]);
+    expect(moved?.moves?.[0]?.files).toHaveLength(20);
+
+    // The member approves another commit; a move still asked from `b` changes nothing.
+    await runs.approveMerge(run.id, { sha: 'c'.repeat(40), userId: 'alice', at: 'later' });
+    expect(
+      (await runs.carryMergeApproval(run.id, 'b'.repeat(40), 'd'.repeat(40)))._unsafeUnwrap(),
+    ).toBe(false);
+    expect((await runs.get(run.id))._unsafeUnwrap()?.mergeApproval).toEqual({
+      sha: 'c'.repeat(40),
+      userId: 'alice',
+      at: 'later',
+    });
+  });
+
+  describe('splitting a run parked as too large', () => {
+    const PARTS = [
+      'Clear the client warnings',
+      'Clear the server warnings',
+      'Clear the core warnings',
+    ];
+
+    async function seedTooBig(factoryId: string, splitInto?: number[]) {
+      const run = await seedRun(factoryId, 'needs_info', []);
+      await createFactoryRunsRepository().update(run.id, {
+        failureReason: 'needs info',
+        triage: {
+          decision: 'too_big',
+          at: '2026-11-24T08:41:15Z',
+          threadId: 'triage-1',
+          items: PARTS,
+          ...(splitInto && { splitInto }),
+        },
+      });
+      return run;
+    }
+
+    test('opens the parts triage proposed, queues them, and ends the run done', async () => {
+      const { github } = await watch();
+      const factoryId = await enableFactory({ label: 'factory' });
+      const run = await seedTooBig(factoryId);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      const after = split._unsafeUnwrap();
+      expect(after.state).toBe('done');
+      expect(after.triage).toMatchObject({ decision: 'too_big', splitInto: [100, 101, 102] });
+      expect(github.created.map((issue) => issue.title)).toEqual([
+        'Clear the client warnings (part 1/3 of #7)',
+        'Clear the server warnings (part 2/3 of #7)',
+        'Clear the core warnings (part 3/3 of #7)',
+      ]);
+      // The parts wait in this factory's queue; no agent ran for the split.
+      const queued = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      expect(
+        queued
+          .filter((r) => r.state === 'requested')
+          .map((r) => r.issueNumber)
+          .sort(),
+      ).toEqual([100, 101, 102]);
+      // The parent lists them and is no longer the factory's.
+      expect(github.comments.at(-1)).toMatchObject({ issue: 7 });
+      expect(github.comments.at(-1)?.body).toContain('#100');
+      expect(github.relabels).toContainEqual({ issue: 7, remove: 'factory', add: undefined });
+    });
+
+    test('a run that is not parked as too large is refused and opens nothing', async () => {
+      const { github } = await watch();
+      const factoryId = await enableFactory();
+      const run = await seedRun(factoryId, 'failed', []);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split.isErr() && split.error.kind).toBe('conflict');
+      expect(github.created).toEqual([]);
+    });
+
+    test('parts an earlier attempt opened are not opened again', async () => {
+      const { github } = await watch();
+      const factoryId = await enableFactory();
+      const run = await seedTooBig(factoryId, [55]);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split._unsafeUnwrap().triage).toMatchObject({ splitInto: [55, 100, 101] });
+      expect(github.created).toHaveLength(2);
+      expect(github.created[0]?.title).toContain('part 2/3');
+    });
+
+    test('a part GitHub refuses leaves the run done with the ones opened, for a person to finish', async () => {
+      const { github } = await watch({ github: { createIssueFailsFrom: 1 } });
+      const factoryId = await enableFactory({ label: 'factory' });
+      const run = await seedTooBig(factoryId);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split._unsafeUnwrap().triage).toMatchObject({ splitInto: [100] });
+      expect(github.comments.at(-1)?.body).toContain('could not be opened');
+      // Incomplete: the parent goes to a person instead of just losing the label.
+      expect(github.relabels.at(-1)).toMatchObject({ issue: 7, remove: 'factory' });
+      expect(github.relabels.at(-1)?.add).toBeDefined();
+    });
+
+    test('nothing opened: the run stays parked and the member is told why', async () => {
+      await watch({ github: { createIssueFailsFrom: 0 } });
+      const factoryId = await enableFactory();
+      const run = await seedTooBig(factoryId);
+
+      const split = await createFactoryRunControl().split(factoryId, run.id);
+
+      expect(split.isErr() && split.error.message).toContain('could be opened');
+      const after = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
+      expect(after?.state).toBe('needs_info');
     });
   });
 
@@ -2502,7 +2766,7 @@ describe('factory operator controls', () => {
     const control = createFactoryRunControl();
 
     for (const run of [failed, parked]) {
-      const approved = await control.approveMerge('alice', factoryId, run.id);
+      const approved = await control.approveMerge('alice', factoryId, run.id, 'a'.repeat(12));
       expect(approved.isErr() && approved.error.kind).toBe('conflict');
     }
     const rows = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
@@ -2666,7 +2930,7 @@ describe('factory capacity between admission and run controls (#328)', () => {
     const run = (
       await runsRepo().start({ factoryId, issueNumber, threadIds: [threadId], state: 'working' })
     )._unsafeUnwrap();
-    await runsRepo().update(run.id, { state: 'waiting_human' });
+    await runsRepo().updateInFlight(run.id, { state: 'waiting_human' });
     return (await runsRepo().get(run.id))._unsafeUnwrap()!;
   }
 
@@ -2786,7 +3050,7 @@ describe('factory capacity between admission and run controls (#328)', () => {
     expect(await inFlightCount(factoryId)).toBe(1);
 
     // The working run ends: the queue admits it with its threads to replay.
-    await runsRepo().update(working.id, { state: 'merged' });
+    await runsRepo().updateInFlight(working.id, { state: 'merged' });
     expect((await runsRepo().admit(factoryId, parked.id))._unsafeUnwrap()).toBe('admitted');
     expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.currentStep).toBe(REOPENED_STEP);
   });

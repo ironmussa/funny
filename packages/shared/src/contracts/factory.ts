@@ -37,6 +37,48 @@ export const factoryProjectInput = z.object({ projectId }).strict();
 export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) }).strict();
 
 /**
+ * What closing a replaced run's pull request did. `merged`: it had been
+ * merged, so nothing was closed and its branch was left alone.
+ */
+export interface FactoryReplacedPrClose {
+  outcome: 'closed' | 'already-closed' | 'merged';
+  /** Whether its branch is gone from GitHub. */
+  branchDeleted: boolean;
+}
+
+/**
+ * A member's approval of a held high-risk merge. `expectedSha` is the commit
+ * the member was shown: the approval is refused when the run is held on
+ * another one (openspec factory-agent-tools).
+ */
+/**
+ * A member saying a run triage classed as a lint cleanup is not one
+ * (`lintCleanup: false`), or taking that back (`true`). Like an approval, only
+ * a member's own session sends it: never an agent.
+ */
+export const factoryLintCleanupInput = z
+  .object({ projectId, runId: z.string().min(1), lintCleanup: z.boolean() })
+  .strict();
+
+/**
+ * A member's word about what a run is, which changes how its risk is classed.
+ * `not-lint-cleanup`: the member overrules triage, which classed the run as a
+ * lint cleanup (`lintCleanupSource`). Only a veto: a member never marks a run
+ * as one, the category comes from triage and the rules it names.
+ */
+export const factoryRiskWaiverSchema = z.object({
+  kind: z.enum(['not-lint-cleanup']),
+  /** Who marked it. */
+  userId: z.string(),
+  at: z.string(),
+});
+export type FactoryRiskWaiver = z.infer<typeof factoryRiskWaiverSchema>;
+
+export const factoryApproveMergeInput = z
+  .object({ projectId, runId: z.string().min(1), expectedSha: z.string().min(7) })
+  .strict();
+
+/**
  * What a factory admits (change factory-manual-queue): `manual`, only the
  * issues sent to it; `automatic`, also the open issues carrying its label.
  */
@@ -58,6 +100,13 @@ export const MAX_SENSITIVE_PATHS = 50;
  */
 export const DEFAULT_MAX_LOW_RISK_LINES = 400;
 export const LOW_RISK_LINES_RANGE = { min: 10, max: 100_000 } as const;
+
+/**
+ * The largest adjustment a merge approval follows, in lines of the pull
+ * request's change that differ from the approved commit (openspec
+ * factory-approval-survives-integration). 0 (the default): only the same change.
+ */
+export const APPROVAL_ADJUST_LINES_RANGE = { min: 0, max: 200 } as const;
 
 /** At most this many globs a factory leaves out of a change's size. */
 export const MAX_SIZE_IGNORED_PATHS = 50;
@@ -106,8 +155,74 @@ export const factoryMergeApprovalSchema = z.object({
    * branch that settled nothing: the change the member approved is the same.
    */
   carriedFrom: z.string().optional(),
+  /** The stable keys of the risk reasons the approved commit had (`factory-risk`). */
+  riskKeys: z.array(z.string()).optional(),
+  /**
+   * Each time the approval moved to another commit (openspec
+   * factory-approval-survives-integration): `same`, the pull request's change
+   * did not differ; `adjustment`, it differed by `lines` in `files`.
+   */
+  moves: z
+    .array(
+      z.object({
+        to: z.string(),
+        at: z.string(),
+        kind: z.enum(['same', 'adjustment']),
+        lines: z.number().int().min(0),
+        files: z.array(z.string()),
+        /** Of `files`, those the approved change did not touch and the base brought (factory-approval-follows-base-code). */
+        baseFiles: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
+  /**
+   * Why this approval does not cover a later commit the run was held on, and
+   * what differs (openspec factory-merge-fewer-bounces, D2). Computed by the
+   * factory from the runner's comparison, never by an agent. A new approval
+   * replaces the whole record, so it has none.
+   */
+  gap: z
+    .object({
+      /** The held commit the approval does not cover. */
+      to: z.string(),
+      at: z.string(),
+      /** Lines of the pull request's change that differ; null when it could not be compared. */
+      lines: z.number().int().min(0).nullable(),
+      /** The files in which it differs, at most `MAX_APPROVAL_GAP_FILES`. */
+      files: z.array(z.string()),
+      /** How many more files differ than `files` lists. */
+      moreFiles: z.number().int().min(0),
+      /** The ones of `files` the approved change did not touch. */
+      newFiles: z.array(z.string()),
+      /** Of `newFiles`, those the base brought, which an adjustment may touch (factory-approval-follows-base-code). */
+      baseFiles: z.array(z.string()).optional(),
+      /** The risk reasons (stable keys) the approved commit did not have. */
+      newRiskKeys: z.array(z.string()),
+      /** Why the approval did not follow, as the hold says it. */
+      reason: z.string(),
+    })
+    .optional(),
 });
 export type FactoryMergeApproval = z.infer<typeof factoryMergeApprovalSchema>;
+export type FactoryApprovalMove = NonNullable<FactoryMergeApproval['moves']>[number];
+export type FactoryApprovalGap = NonNullable<FactoryMergeApproval['gap']>;
+
+/** The files a gap lists; the rest is a count. */
+export const MAX_APPROVAL_GAP_FILES = 20;
+
+/**
+ * What changed since the commit a member approved, for a run held on
+ * `heldSha`: the approval's gap when it is about that commit, else null (no
+ * earlier approval, or a gap of a head the run has left).
+ */
+export function approvalGapFor(
+  approval: FactoryMergeApproval | null | undefined,
+  heldSha: string | null | undefined,
+): (FactoryApprovalGap & { approvedSha: string; approvedBy: string }) | null {
+  const gap = approval?.gap;
+  if (!approval || !gap || !heldSha || gap.to !== heldSha) return null;
+  return { ...gap, approvedSha: approval.carriedFrom ?? approval.sha, approvedBy: approval.userId };
+}
 
 /** What the factory does with an issue triage finds too large for one change. */
 export type FactoryTooBig = 'ask' | 'split';
@@ -132,6 +247,12 @@ export const saveFactorySettingsInput = z
       .array(z.string().trim().min(1).max(200))
       .max(MAX_SIZE_IGNORED_PATHS)
       .optional(),
+    approvalAdjustMaxLines: z
+      .number()
+      .int()
+      .min(APPROVAL_ADJUST_LINES_RANGE.min)
+      .max(APPROVAL_ADJUST_LINES_RANGE.max)
+      .optional(),
     stageLimits: z
       .record(z.string().min(1).max(64), z.number().int().min(1).max(20))
       .refine(
@@ -146,6 +267,8 @@ export const saveFactorySettingsInput = z
     dependencies: z.enum(['wait', 'stack']).optional(),
     /** An issue triage finds too large: propose the split on it, or open its parts as issues. */
     tooBig: z.enum(['ask', 'split']).optional(),
+    /** Whether a run parked for a member's approval keeps its likely paths (at most 12 hours). */
+    holdPathsAwaitingApproval: z.boolean().optional(),
   })
   .strict();
 
@@ -168,6 +291,8 @@ export interface FactorySettings {
   maxLowRiskLines: number;
   /** Globs whose lines do not count toward a change's size, besides tests, Markdown and the like. */
   sizeIgnoredPaths: string[];
+  /** The largest adjustment a merge approval follows, in lines; 0: only the same change. */
+  approvalAdjustMaxLines: number;
   /** Runs inside a flow node at once, per node id; replaces the flow's own limit. */
   stageLimits: Record<string, number>;
   /** Provider / model / effort per agent step id, over the flow's own (openspec factory-flow-step-options). */
@@ -181,6 +306,8 @@ export interface FactorySettings {
    * waits for a person; `split` opens each part as an issue the factory admits.
    */
   tooBig: FactoryTooBig;
+  /** Whether a run parked for a member's approval of a high-risk change keeps its likely paths. */
+  holdPathsAwaitingApproval: boolean;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**
@@ -229,6 +356,8 @@ export interface FactoryRun {
   factoryId: string;
   /** The run's issue; null for a run a schedule or a member started without one. */
   issueNumber: number | null;
+  /** The issue's title as the run last read it; null before it did (and for a run without an issue). */
+  issueTitle: string | null;
   /** The name of the schedule trigger that started it, as it was then; null otherwise. */
   triggerName: string | null;
   /** The input values its trigger supplied; empty for an issue run. */
@@ -272,6 +401,8 @@ export interface FactoryRun {
   stepOptions: FactoryStepOptionsRecord[];
   /** A member's approval to merge its high-risk head commit, or null. */
   mergeApproval: FactoryMergeApproval | null;
+  /** A member's statement that the run is a lint cleanup, or null. */
+  riskWaiver: FactoryRiskWaiver | null;
   /**
    * Each execution of a node of the run's flow, in the order they started
    * (openspec factory-step-timings), from the workflow engine's journal.
@@ -491,6 +622,8 @@ export interface FactoryWaitReason {
     | 'proof-not-configured'
     /** Its likely paths overlap those of a run in progress (`blockers`: that run's issue). */
     | 'paths-overlap'
+    /** As `paths-overlap`, and every such run is parked for a member's approval. */
+    | 'paths-awaiting-approval'
     /** Retried or approved while every slot was taken: first in line for the next one. */
     | 'no-free-slot';
   blockers: number[];
@@ -819,6 +952,18 @@ export const factoryRiskSchema = z.object({
   changedLines: z.number().int().nonnegative().optional(),
   /** The paths it changes, at most 300 (batches prefer members with disjoint paths, D11). */
   paths: z.array(z.string()).max(300).optional(),
+  /**
+   * What each reason is about, without its numbers (`size`, `sensitive:<path>`,
+   * `finding:<kind>:<path>`, `contract:<hash>`): a merge approval follows an
+   * adjustment only to a commit with no key the approved one lacked. Absent on
+   * a classification stored before the keys existed.
+   */
+  keys: z.array(z.string()).optional(),
+  /**
+   * The reasons a member's waiver set aside for this commit (a verified lint
+   * cleanup): they would have made it high risk. Absent when nothing was waived.
+   */
+  waived: z.array(z.string()).optional(),
 });
 export type FactoryRisk = z.infer<typeof factoryRiskSchema>;
 
@@ -837,6 +982,16 @@ export const factoryContractSchema = z.object({
   likelyPaths: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
   /** Why the change may be risky; any hint makes it high risk. */
   riskHints: z.array(contractLine).max(10).default([]),
+  /**
+   * Triage read the issue as asking only to clear lint or type-check warnings,
+   * with no change in behavior. A proposal: it counts only when every rule in
+   * `lintRules` is one whose fix cannot change behavior
+   * (`BEHAVIOR_NEUTRAL_LINT_RULES`), the factory still checks the diff
+   * (`lintCleanupRefusals`), and a member can say otherwise.
+   */
+  lintCleanup: z.boolean().optional(),
+  /** The lint rules the issue asks to clear, as the linter names them (`eslint/max-lines`). */
+  lintRules: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
 });
 export type FactoryContract = z.infer<typeof factoryContractSchema>;
 
@@ -885,6 +1040,71 @@ export const contractOf = (run: { triage: FactoryTriage | null }): FactoryContra
   run.triage?.decision === 'ready' ? (run.triage.contract ?? null) : null;
 
 /**
+ * The lint rules whose fix moves or reorders code without changing what it
+ * does: splitting a long function or file, flattening nesting, sorting
+ * imports. A cleanup of any other rule (types, validation, React effects,
+ * styles) can change behavior, so it is classed like any change: the reviewer
+ * of #484 found a validation boundary that a type rule's fix had narrowed.
+ * Names are the linter's, `plugin/rule`; a bare name is an `eslint/` rule.
+ */
+export const BEHAVIOR_NEUTRAL_LINT_RULES: readonly string[] = [
+  'eslint/max-lines',
+  'eslint/max-lines-per-function',
+  'eslint/max-statements',
+  'eslint/max-depth',
+  'eslint/max-nested-callbacks',
+  'eslint/sort-imports',
+];
+
+/** A rule as the linter may print it (`max-lines`, `eslint(max-lines)`), as `plugin/rule`. */
+export function normalizeLintRule(rule: string): string {
+  const name = rule.trim().toLowerCase();
+  const call = /^([\w@.-]+)\(([\w-]+)\)$/.exec(name);
+  if (call) return `${call[1]}/${call[2]}`;
+  return name.includes('/') ? name : `eslint/${name}`;
+}
+
+/**
+ * Triage's proposal holds: it classed the run as a lint cleanup and named
+ * only rules whose fix cannot change behavior. Naming none, or any other
+ * rule, is not a lint cleanup for the factory.
+ */
+export function isBehaviorNeutralLintCleanup(contract: FactoryContract | null): boolean {
+  if (contract?.lintCleanup !== true) return false;
+  const rules = contract.lintRules ?? [];
+  return (
+    rules.length > 0 &&
+    rules.every((rule) => BEHAVIOR_NEUTRAL_LINT_RULES.includes(normalizeLintRule(rule)))
+  );
+}
+
+/**
+ * Who classes a run as a lint cleanup: triage, when its proposal holds
+ * (`isBehaviorNeutralLintCleanup`) and no member said otherwise. Null when
+ * the run is not one.
+ */
+export function lintCleanupSource(run: {
+  triage: FactoryTriage | null;
+  riskWaiver: FactoryRiskWaiver | null;
+}): 'triage' | null {
+  if (run.riskWaiver?.kind === 'not-lint-cleanup') return null;
+  return isBehaviorNeutralLintCleanup(contractOf(run)) ? 'triage' : null;
+}
+
+/**
+ * Triage classed the run as a lint cleanup and a member said it is not one:
+ * the member can take that back.
+ */
+export function lintCleanupVetoed(run: {
+  triage: FactoryTriage | null;
+  riskWaiver: FactoryRiskWaiver | null;
+}): boolean {
+  return (
+    run.riskWaiver?.kind === 'not-lint-cleanup' && isBehaviorNeutralLintCleanup(contractOf(run))
+  );
+}
+
+/**
  * The sentinel (change factory-agent-roles, D10): a read-only agent that looks
  * at a base branch gone red after factory merges and names the merge that
  * broke it, or says it cannot.
@@ -909,6 +1129,31 @@ export const factorySentinelResultSchema = z.discriminatedUnion('decision', [
 export type FactorySentinelResult = z.infer<typeof factorySentinelResultSchema>;
 
 /** A factory merge the sentinel may name. */
+export type FactoryApprovalRequestState = 'pending' | 'approved' | 'declined' | 'expired';
+
+/**
+ * An agent's request that the member approve merging a held high-risk change
+ * (openspec factory-agent-tools). It carries no text: what the member is shown
+ * comes from the run. `sha` is the commit the run was held on when the agent
+ * asked; the request expires when the run is held on another one.
+ */
+export interface FactoryApprovalRequest {
+  id: string;
+  runId: string;
+  projectId: string;
+  /** The thread whose agent asked. */
+  threadId: string;
+  sha: string;
+  state: FactoryApprovalRequestState;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** Declining one request of the caller's factory. */
+export const factoryApprovalRequestInput = z
+  .object({ projectId, requestId: z.string().min(1) })
+  .strict();
+
 export const factoryIncidentCandidateSchema = z.object({
   issueNumber: z.number().int(),
   prUrl: z.string(),

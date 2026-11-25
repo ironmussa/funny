@@ -208,7 +208,7 @@ async function readWorkingTree(
 
 /** Run a read-only git command when `cond` holds; resolves to null otherwise. */
 function gitReadIf(
-  cond: unknown,
+  cond: string | boolean | null | undefined,
   args: string[],
   cwd: string | undefined,
 ): Promise<GitResult | null> {

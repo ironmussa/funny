@@ -28,7 +28,10 @@ export function useSettingsTranslators(): { t: Translate; tEn: Translate } {
     // Created on first use: every indexed row calls this hook, and with an
     // empty filter nothing needs the English text. Held in an object rather
     // than a reassigned variable, which React Compiler cannot compile.
-    const english: { t?: ReturnType<typeof i18n.getFixedT> } = {};
+    interface EnglishTranslator {
+      t?: ReturnType<typeof i18n.getFixedT>;
+    }
+    const english: EnglishTranslator = {};
     return {
       t: (key, defaultValue) => String(t(key, { defaultValue })),
       tEn: (key, defaultValue) => {
@@ -55,14 +58,17 @@ export function usePreferencesNavPages(): SettingsNavPage[] {
   );
 }
 
+/** The selected project and the settings pages this user can open for it. */
+interface ProjectSettingsNavPages {
+  selectedProjectId: string | null;
+  pages: SettingsNavPage[];
+}
+
 /**
  * The project settings pages this user can open for the selected project.
  * The role rules are the ones `buildSettingsItems` applies.
  */
-export function useProjectSettingsNavPages(): {
-  selectedProjectId: string | null;
-  pages: SettingsNavPage[];
-} {
+export function useProjectSettingsNavPages(): ProjectSettingsNavPages {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const selectedProject = useProjectById(selectedProjectId);
   const authUserId = useAuthStore((s) => s.user?.id);

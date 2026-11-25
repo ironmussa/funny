@@ -48,6 +48,8 @@ export const profilePort: ProfilePort = {
       const body = await res.text();
       return err(failure(502, `Token request failed: ${res.status} ${body}`));
     }
+    // SAFETY: AssemblyAI's /v3/token answers `{ token }` on a 2xx (checked above); the
+    // value is passed on as received.
     const data = (await res.json()) as { token: string };
     return ok({ token: data.token });
   },

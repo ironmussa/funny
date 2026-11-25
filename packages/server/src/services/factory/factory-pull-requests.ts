@@ -20,6 +20,7 @@ import {
   commitParents,
   createGithubIntegration,
   createPullRequestCi,
+  type PullRequestCi,
   createRepoCheckOps,
   createRepoGithub,
   enqueuePullRequest,
@@ -130,6 +131,28 @@ export type FactoryMergeOutcome =
   /** Not merged: the repository allows no merge method, or it stopped being mergeable. */
   | { kind: 'not-mergeable'; reason: string };
 
+/** What a newer run of the same issue replaced: the issue, and the newer run's pull request. */
+export interface FactoryReplacedBy {
+  issueNumber: number | null;
+  /** The newer run's pull request number, or null while it has none. */
+  prNumber: number | null;
+}
+
+export type FactoryCloseOutcome =
+  /** Closed now; `branchDeleted` is false when its branch could not be deleted. */
+  | { kind: 'closed'; branchDeleted: boolean }
+  /** Someone had closed it: only its branch was left to delete. */
+  | { kind: 'already-closed'; branchDeleted: boolean }
+  /** It was merged: nothing is closed and its branch is left alone. */
+  | { kind: 'merged' };
+
+/** The comment left on a pull request closed because a newer run replaced its run. */
+function replacedComment(by: FactoryReplacedBy): string {
+  const issue = by.issueNumber === null ? 'this change' : `#${by.issueNumber}`;
+  const where = by.prNumber === null ? '' : ` Its pull request is #${by.prNumber}.`;
+  return `Closed from funny's issue factory: a newer run of ${issue} replaced the run that opened this pull request.${where}`;
+}
+
 const PR_NUMBER = /\/pull\/(\d+)(?:$|[/?#])/;
 
 /** The number of a pull request from its URL, or null. */
@@ -156,6 +179,19 @@ export interface FactoryPullRequests {
   prState(
     pr: FactoryPullRequestRef,
   ): ResultAsync<'open' | 'merged' | 'closed', FactoryPullRequestError>;
+  /**
+   * Close, without merging, the pull request of a run that a newer run of its
+   * issue replaced: a comment saying so, the close, then its branch (the pull
+   * requests stacked on it move to its base first). A merged pull request is
+   * left as it is. The caller has checked that the run was replaced.
+   * Absent (tests): the close is refused.
+   */
+  closeReplaced?(
+    pr: FactoryPullRequestRef,
+    by: FactoryReplacedBy,
+    /** Who closed it, for its activity: a member (default), or the factory itself after a merge. */
+    origin?: 'user' | 'system',
+  ): ResultAsync<FactoryCloseOutcome, FactoryPullRequestError>;
   /** The pull request's head commit now, its base branch, and whether auto-merge is on. */
   pullHead(pr: FactoryPullRequestRef): ResultAsync<FactoryPullHead, FactoryPullRequestError>;
   /** The files the pull request changes, with their patches (the server's own checks read them). */
@@ -276,40 +312,148 @@ const callError = (error: GithubCallError): FactoryPullRequestError =>
     ? { kind: error.kind, message: error.message }
     : { kind: 'github-error', message: error.message };
 
+/**
+ * A merge the factory made for its enabler (track-funny-actions): the merged
+ * pull request, and the remote branch when it was deleted. A branch left
+ * behind fails the activity, not the merge step.
+ */
+function recordFactoryMerge(
+  activities: NonNullable<FactoryPullRequestsDeps['activities']>,
+  pr: FactoryPullRequestRef,
+  branchError: string | null,
+  deleted: boolean,
+) {
+  return activities.recordServerActivity(
+    {
+      kind: 'factory.merge',
+      userId: pr.userId,
+      projectId: pr.projectId,
+      title: `Merged ${pr.repo}#${pr.number}`,
+      input: { prNumber: pr.number },
+      origin: 'system',
+    },
+    branchError
+      ? {
+          ok: false,
+          error: `Merged, but the branch ${pr.branch} could not be deleted: ${branchError}`,
+          effects: [{ effect: 'pr-merged', target: `${pr.repo}#${pr.number}` }],
+        }
+      : {
+          ok: true,
+          effects: [
+            { effect: 'pr-merged', target: `${pr.repo}#${pr.number}` },
+            ...(deleted && pr.branch
+              ? [{ effect: 'remote-branch-deleted' as const, target: pr.branch }]
+              : []),
+          ],
+        },
+  );
+}
+
+/** The input of a `factory.close-pr` activity (`ACTIVITY_KINDS`). */
+type ClosePrActivityInput = {
+  prNumber: number;
+  issueNumber?: number;
+  replacedBy?: number;
+};
+
+/**
+ * A replaced run's pull request a member closed (track-funny-actions). A
+ * branch left behind fails the activity, not the close.
+ */
+function recordFactoryClose(
+  activities: NonNullable<FactoryPullRequestsDeps['activities']>,
+  pr: FactoryPullRequestRef,
+  by: FactoryReplacedBy,
+  result: { closed: boolean; branchError: string | null; deleted: boolean },
+  origin: 'user' | 'system',
+) {
+  const closed = result.closed
+    ? [{ effect: 'pr-closed' as const, target: `${pr.repo}#${pr.number}` }]
+    : [];
+  const input: ClosePrActivityInput = { prNumber: pr.number };
+  if (by.issueNumber !== null) input.issueNumber = by.issueNumber;
+  if (by.prNumber !== null) input.replacedBy = by.prNumber;
+  return activities.recordServerActivity(
+    {
+      kind: 'factory.close-pr',
+      userId: pr.userId,
+      projectId: pr.projectId,
+      title: `Closed ${pr.repo}#${pr.number}`,
+      input,
+      origin,
+    },
+    result.branchError
+      ? {
+          ok: false,
+          error: `Closed, but the branch ${pr.branch} could not be deleted: ${result.branchError}`,
+          effects: closed,
+        }
+      : {
+          ok: true,
+          effects: [
+            ...closed,
+            ...(result.deleted && pr.branch
+              ? [{ effect: 'remote-branch-deleted' as const, target: pr.branch }]
+              : []),
+          ],
+        },
+  );
+}
+
+/** `FactoryPullRequests.closeReplaced`, over the enabler's write-capped GitHub calls. */
+function closeReplacedPullRequest(
+  github: PullRequestCi,
+  activities: NonNullable<FactoryPullRequestsDeps['activities']>,
+  pr: FactoryPullRequestRef,
+  by: FactoryReplacedBy,
+  origin: 'user' | 'system' = 'user',
+): ResultAsync<FactoryCloseOutcome, FactoryPullRequestError> {
+  return github
+    .mergeState(pr.repo, pr.number)
+    .mapErr(callError)
+    .andThen((merge): ResultAsync<FactoryCloseOutcome, FactoryPullRequestError> => {
+      if (merge.state === 'merged') return okAsync({ kind: 'merged' });
+      const wasOpen = merge.state === 'open';
+      const closed = wasOpen
+        ? github
+            .comment(pr.repo, pr.number, replacedComment(by))
+            .andThen(() => github.close(pr.repo, pr.number))
+        : okAsync<void, GithubCallError>(undefined);
+      return closed.mapErr(callError).andThen(() => {
+        const branch = pr.branch;
+        // A branch that stays is reported on the activity; the pull request is closed either way.
+        const deletion: ResultAsync<string | null, never> = branch
+          ? github
+              .deleteBranch(pr.repo, branch, merge.baseRef || undefined)
+              .map((): string | null => null)
+              .orElse((error) => okAsync(error.message))
+          : okAsync(null);
+        return deletion.andThen((branchError) => {
+          const deleted = !!branch && branchError === null;
+          const outcome: FactoryCloseOutcome = {
+            kind: wasOpen ? 'closed' : 'already-closed',
+            branchDeleted: deleted,
+          };
+          return ResultAsync.fromSafePromise(
+            recordFactoryClose(
+              activities,
+              pr,
+              by,
+              { closed: wasOpen, branchError, deleted },
+              origin,
+            ),
+          ).map(() => outcome);
+        });
+      });
+    });
+}
+
 export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): FactoryPullRequests {
   const activities = deps.activities ?? serverActivities;
 
-  /**
-   * A merge the factory made for its enabler (track-funny-actions): the merged
-   * pull request, and the remote branch when it was deleted. A branch left
-   * behind fails the activity, not the merge step.
-   */
   const recordMerge = (pr: FactoryPullRequestRef, branchError: string | null, deleted: boolean) =>
-    activities.recordServerActivity(
-      {
-        kind: 'factory.merge',
-        userId: pr.userId,
-        projectId: pr.projectId,
-        title: `Merged ${pr.repo}#${pr.number}`,
-        input: { prNumber: pr.number },
-        origin: 'system',
-      },
-      branchError
-        ? {
-            ok: false,
-            error: `Merged, but the branch ${pr.branch} could not be deleted: ${branchError}`,
-            effects: [{ effect: 'pr-merged', target: `${pr.repo}#${pr.number}` }],
-          }
-        : {
-            ok: true,
-            effects: [
-              { effect: 'pr-merged', target: `${pr.repo}#${pr.number}` },
-              ...(deleted && pr.branch
-                ? [{ effect: 'remote-branch-deleted' as const, target: pr.branch }]
-                : []),
-            ],
-          },
-    );
+    recordFactoryMerge(activities, pr, branchError, deleted);
 
   /** A token for the run's repository, refused when the enabler's level is below `needs`. */
   const tokenFor =
@@ -432,6 +576,10 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
         .mergeState(pr.repo, pr.number)
         .map((merge) => merge.state)
         .mapErr(callError);
+    },
+
+    closeReplaced(pr, by, origin) {
+      return closeReplacedPullRequest(pullRequestsFor(pr, 'write'), activities, pr, by, origin);
     },
 
     pullHead(pr) {

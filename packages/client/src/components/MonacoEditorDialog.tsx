@@ -513,10 +513,7 @@ export function MonacoEditorDialog({
             className="flex min-w-0 items-center gap-2 overflow-hidden font-mono"
           >
             <FileCode className="icon-base shrink-0" />
-            <span
-              className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-              style={{ direction: 'rtl', textAlign: 'left' }}
-            >
+            <span className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap [direction:rtl]">
               {filePath}
             </span>
           </DialogTitle>

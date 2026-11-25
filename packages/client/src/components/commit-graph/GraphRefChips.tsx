@@ -151,8 +151,8 @@ function ThreadBranchMarker({ branch, color }: { branch: string; color: string }
         <span
           role="img"
           aria-label={label}
-          className="inline-flex shrink-0 items-center"
-          style={{ color }}
+          className="inline-flex shrink-0 items-center text-[color:var(--graph-thread-marker-color)]"
+          style={{ '--graph-thread-marker-color': color }}
           data-testid="graph-thread-branch-marker"
         >
           <svg
@@ -527,15 +527,18 @@ function GraphRefChip({
     <div
       // A merged PR is told by its badge and tooltip, not by fading the chip:
       // opacity would also fade the name and let the row show through.
-      className="inline-flex max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
-      style={{
-        height: GRAPH_REF_CHIP_HEIGHT_PX,
-        backgroundColor: color,
-        color: textColor,
+      className={cn(
+        'inline-flex h-[var(--graph-ref-chip-height)] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full bg-[color:var(--graph-ref-chip-bg)] px-1 py-px text-[color:var(--graph-ref-chip-fg)] transition-[filter] hover:brightness-90',
         // The thread's chip is outlined in a darker shade of its own color. The
         // ring is inset: the refs line clips at the chip's exact height, so an
         // outer ring would be cut at the top and bottom.
-        boxShadow: isThreadBranch ? `inset 0 0 0 1.5px ${darkenHex(color, 0.35)}` : undefined,
+        isThreadBranch && '[box-shadow:inset_0_0_0_1.5px_var(--graph-ref-chip-outline)]',
+      )}
+      style={{
+        '--graph-ref-chip-height': `${GRAPH_REF_CHIP_HEIGHT_PX}px`,
+        '--graph-ref-chip-bg': color,
+        '--graph-ref-chip-fg': textColor,
+        '--graph-ref-chip-outline': isThreadBranch ? darkenHex(color, 0.35) : undefined,
       }}
       data-testid={`graph-ref-chip-${gitRef.kind}:${gitRef.name}`}
       data-merged={isMergedRef(gitRef) || undefined}
@@ -616,8 +619,8 @@ export function GraphRefChips({
 
   return (
     <div
-      className="inline-flex min-w-0 shrink flex-col items-start"
-      style={{ gap: GRAPH_REF_CHIP_GAP_PX }}
+      className="inline-flex min-w-0 shrink flex-col items-start gap-[var(--graph-ref-chips-gap)]"
+      style={{ '--graph-ref-chips-gap': `${GRAPH_REF_CHIP_GAP_PX}px` }}
       data-testid="graph-ref-chips"
     >
       {refs.map((gitRef) => {
@@ -650,8 +653,8 @@ export function GraphRefChips({
             className="relative flex max-w-full min-w-0 items-center"
           >
             <span
-              className="absolute top-1/2 right-full inline-flex -translate-y-1/2"
-              style={{ marginRight: THREAD_BRANCH_MARKER_GAP_PX }}
+              className="absolute top-1/2 right-full mr-[var(--thread-branch-marker-gap)] inline-flex -translate-y-1/2"
+              style={{ '--thread-branch-marker-gap': `${THREAD_BRANCH_MARKER_GAP_PX}px` }}
             >
               <ThreadBranchMarker branch={gitRef.name} color={color} />
             </span>

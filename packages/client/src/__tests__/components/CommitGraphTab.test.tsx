@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, mock } from 'bun:test';
+import { describe, expect, test, vi, mock, setDefaultTimeout } from 'bun:test';
 
 import { fireEvent, screen } from '@testing-library/react';
 
@@ -28,6 +28,10 @@ import {
 } from '@/lib/rebase-events';
 
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 mock.module('react-i18next', () => ({
   useTranslation: () => ({
@@ -126,7 +130,8 @@ describe('GraphGutterHorizontalScroller', () => {
     const scrollbar = screen.getByTestId('graph-gutter-horizontal-scrollbar');
     expect(frame).toHaveClass('border-t');
     expect(scrollbar).toHaveClass('scrollbar-visible', 'overflow-x-auto');
-    expect(scrollbar).toHaveStyle({ width: '120px', height: '10px' });
+    expect(scrollbar.style.getPropertyValue('--graph-hscroll-viewport-width')).toBe('120px');
+    expect(scrollbar).toHaveClass('w-[var(--graph-hscroll-viewport-width)]', 'h-2.5');
 
     Object.defineProperty(scrollbar, 'scrollLeft', { configurable: true, value: 64 });
     fireEvent.scroll(scrollbar);

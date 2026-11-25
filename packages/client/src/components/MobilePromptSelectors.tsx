@@ -114,8 +114,8 @@ export function MobileTemplateSelect({
                   <span className="flex items-center gap-2">
                     {tpl.color && (
                       <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: tpl.color }}
+                        className="size-2 shrink-0 rounded-full bg-[color:var(--agent-template-color)]"
+                        style={{ '--agent-template-color': tpl.color }}
                       />
                     )}
                     {tpl.name}

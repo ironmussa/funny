@@ -795,10 +795,10 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
               <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
                 <div
                   className={cn(
-                    'h-full rounded-full bg-primary',
+                    'h-full w-[var(--clone-progress-width)] rounded-full bg-primary',
                     phaseChanged ? '' : 'transition-all duration-300',
                   )}
-                  style={{ width: `${clonePercent}%` }}
+                  style={{ '--clone-progress-width': `${clonePercent}%` }}
                 />
               </div>
               <p className="text-muted-foreground mt-1 text-right text-xs">{clonePercent}%</p>

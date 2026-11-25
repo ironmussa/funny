@@ -782,13 +782,8 @@ export const MemoizedMessageList = memo(
     return (
       <div
         ref={itemContainerRef}
-        style={{
-          height: `${virtualContentHeight}px`,
-          position: 'relative',
-          width: '100%',
-          overflowAnchor: 'none',
-          isolation: 'isolate',
-        }}
+        className="relative isolate h-[var(--message-list-height)] w-full [overflow-anchor:none]"
+        style={{ '--message-list-height': `${virtualContentHeight}px` }}
       >
         {candidateHiddenSectionUserItem ? (
           <div
@@ -845,16 +840,16 @@ export const MemoizedMessageList = memo(
               data-turn-section={getRowSectionId(row)}
               key={virtualItem.key}
               className={cn(
-                'absolute top-0 left-0 z-0 w-full',
+                'absolute top-0 left-0 z-0 w-full [overflow-anchor:none]',
+                '[transform:translateY(var(--message-row-offset))]',
                 // A user card's hover footer hangs below its row; lift the row so
                 // the next one (e.g. a stop card pulled up by -mt-3) can't cover it.
                 isUserRow(row) && 'hover:z-10 focus-within:z-10 has-[[data-state=open]]:z-10',
               )}
               style={{
-                transform: `translateY(${
+                '--message-row-offset': `${
                   virtualItem.start - listScrollMargin + leadingStickySpacerHeight
-                }px)`,
-                overflowAnchor: 'none',
+                }px`,
               }}
             >
               {/* Cover the virtualizer gap without changing the measured row height. */}
@@ -864,8 +859,8 @@ export const MemoizedMessageList = memo(
                 <div
                   aria-hidden="true"
                   data-turn-hover-gap=""
-                  className="absolute top-full left-0 w-full"
-                  style={{ height: VIRTUAL_ROW_GAP_PX }}
+                  // h-4 = VIRTUAL_ROW_GAP_PX (16px).
+                  className="absolute top-full left-0 h-4 w-full"
                 />
               ) : null}
               <VirtualRowContent

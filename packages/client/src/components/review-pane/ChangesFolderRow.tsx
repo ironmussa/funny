@@ -13,7 +13,7 @@ import {
   IgnoreFolderMenuItems,
   RowActionsMenu,
   stopThen,
-  virtualRowStyle,
+  rowIndentPx,
   type RowPosition,
 } from './ChangesRowParts';
 
@@ -54,8 +54,15 @@ export function ChangesFolderRow({
   const FolderIcon = isCollapsed ? Folder : FolderOpen;
   return (
     <div
-      className="group text-muted-foreground hover:bg-sidebar-accent/50 flex items-center gap-1.5 text-xs select-none"
-      style={virtualRowStyle(position, row.depth)}
+      className={cn(
+        'absolute top-0 left-0 w-full h-[var(--changes-row-height)] [transform:translateY(var(--changes-row-top))] pl-[var(--changes-row-indent)]',
+        'group text-muted-foreground hover:bg-sidebar-accent/50 flex items-center gap-1.5 text-xs select-none',
+      )}
+      style={{
+        '--changes-row-top': `${position.start}px`,
+        '--changes-row-height': `${position.size}px`,
+        '--changes-row-indent': `${rowIndentPx(row.depth)}px`,
+      }}
       draggable
       onDragStart={(e) => {
         setFileMentionDragData(e.dataTransfer, {

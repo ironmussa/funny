@@ -35,7 +35,7 @@ import {
   IgnoreFolderMenuItems,
   RowActionsMenu,
   stopThen,
-  virtualRowStyle,
+  rowIndentPx,
   type RowPosition,
 } from './ChangesRowParts';
 
@@ -151,8 +151,13 @@ export function ChangesFileRow({
   const isSubmodule = f.kind === 'submodule';
   return (
     <div
-      style={virtualRowStyle(position, depth)}
+      style={{
+        '--changes-row-top': `${position.start}px`,
+        '--changes-row-height': `${position.size}px`,
+        '--changes-row-indent': `${rowIndentPx(depth)}px`,
+      }}
       className={cn(
+        'absolute top-0 left-0 w-full h-[var(--changes-row-height)] [transform:translateY(var(--changes-row-top))] pl-[var(--changes-row-indent)]',
         'group flex items-center gap-1.5 text-xs',
         isSelected
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
@@ -262,7 +267,10 @@ function FileRowSummary({ file: f, fileSearch }: { file: FileDiffSummary; fileSe
         />
       )}
       <DiffStats linesAdded={stats.added} linesDeleted={stats.deleted} size="xs" />
-      <span className="shrink-0 text-xs font-medium" style={{ color: status.color }}>
+      <span
+        className="shrink-0 text-xs font-medium text-[color:var(--changes-file-status-color)]"
+        style={{ '--changes-file-status-color': status.color }}
+      >
         {status.letter}
       </span>
     </>

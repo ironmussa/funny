@@ -43,11 +43,6 @@ export function AnnotationList() {
   const removeAnnotation = useBrowserPanelStore((s) => s.removeAnnotation);
   const fontSize = useSettingsStore((s) => s.fontSize);
 
-  const fontStyle = {
-    fontSize: PROSE_FONT_SIZE_PX[fontSize],
-    lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
-  };
-
   if (annotations.length === 0) {
     return (
       <EmptyState
@@ -61,8 +56,11 @@ export function AnnotationList() {
     <ScrollArea className="h-full">
       <ul
         data-testid="browser-panel-annotation-list"
-        className="divide-border flex flex-col divide-y"
-        style={fontStyle}
+        className="divide-border flex flex-col divide-y text-[length:var(--annotation-list-font-size)] leading-[var(--annotation-list-line-height)]"
+        style={{
+          '--annotation-list-font-size': `${PROSE_FONT_SIZE_PX[fontSize]}px`,
+          '--annotation-list-line-height': `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
+        }}
       >
         {annotations.map((a, i) => {
           const Icon = kindIcon(a.kind);

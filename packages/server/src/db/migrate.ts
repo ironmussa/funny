@@ -2522,6 +2522,14 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'risk_waiver', 'TEXT');
     },
   },
+  {
+    // The issue's title, so a run with no thread (still queued, or stopped
+    // before its flow started) is named by its issue on the factory board.
+    name: '130_factory_runs_issue_title',
+    async up() {
+      await ctx().addColumn('factory_runs', 'issue_title', 'TEXT');
+    },
+  },
 ];
 
 /**

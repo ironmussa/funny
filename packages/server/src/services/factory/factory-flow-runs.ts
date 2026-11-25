@@ -131,6 +131,23 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         context,
       ));
 
+  /**
+   * Keep the issue's title on the run as the flow read it, so the board names
+   * a run with no thread by its issue. A failed write only costs that name.
+   */
+  async function recordIssueTitle(job: FactoryRunJob): Promise<void> {
+    const title = job.issue?.title;
+    if (!title || title === job.run.issueTitle) return;
+    const written = await deps.runs.update(job.run.id, { issueTitle: title });
+    if (written.isErr()) {
+      log.warn('Issue factory could not record the issue title of a run', {
+        namespace: 'factory',
+        runId: job.run.id,
+        error: written.error.message,
+      });
+    }
+  }
+
   const settlement = createRunSettlement(deps);
   const { updateInFlight, flowUnavailable, cleanUpMerged, settle, refusedWithoutIssue } =
     settlement;
@@ -149,6 +166,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     controller: AbortController,
     agentStarted: () => void,
   ): Promise<FactoryRunStart> {
+    await recordIssueTitle(job);
     const projectDefaults = await projectAgentDefaults(job.factory.projectId);
     const flow = await loadFlow(job, {
       project: projectDefaults,

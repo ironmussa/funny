@@ -28,11 +28,18 @@ export function factoryRunRef(
   return run.triggerName ?? t('factory.runNow', 'Run now');
 }
 
-/** A run's title while it has no thread to take one from. */
+/** A run's title while it has no thread to take one from: its issue's title when the run read it. */
 export function factoryRunFallbackTitle(
   t: TFunction,
-  run: Pick<FactoryRun, 'issueNumber' | 'triggerName' | 'flowName'>,
+  run: Pick<FactoryRun, 'issueNumber' | 'issueTitle' | 'triggerName' | 'flowName'>,
 ): string {
+  if (run.issueNumber !== null && run.issueTitle) {
+    return t('factoryView.issueTitleNamed', '#{{number}} {{title}}', {
+      number: run.issueNumber,
+      title: run.issueTitle,
+      interpolation: { escapeValue: false },
+    });
+  }
   if (run.issueNumber !== null) {
     return t('factoryView.issueTitle', 'Issue #{{number}}', { number: run.issueNumber });
   }

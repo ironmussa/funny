@@ -1826,6 +1826,9 @@
       "failed": "Failed",
       "stopped": "Stopped",
       "split": "Split",
+      "notStarted": "Not started",
+      "notStartedQueued": "Taken out of the queue before it started: no agent ran, no branch or pull request",
+      "notStartedStopped": "Stopped before its first step: no agent ran, no branch or pull request",
       "tooBig": "Too big"
     },
     "wait": {
@@ -2072,6 +2075,7 @@
     "empty": "Nothing in the factory",
     "emptyDescription": "Issues sent to a project factory show here while they wait and run.",
     "issueTitle": "Issue #{{number}}",
+    "issueTitleNamed": "#{{number}} {{title}}",
     "showAll": "All",
     "showActive": "Active",
     "layoutList": "List",

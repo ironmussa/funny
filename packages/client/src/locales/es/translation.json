@@ -1819,6 +1819,9 @@
       "failed": "Falló",
       "stopped": "Detenida",
       "split": "Dividido",
+      "notStarted": "Sin empezar",
+      "notStartedQueued": "Sacada de la cola antes de empezar: ningún agente se ejecutó, sin rama ni pull request",
+      "notStartedStopped": "Detenida antes de su primer paso: ningún agente se ejecutó, sin rama ni pull request",
       "tooBig": "Muy grande"
     },
     "wait": {
@@ -2065,6 +2068,7 @@
     "empty": "No hay nada en el factory",
     "emptyDescription": "Los issues enviados al factory de un proyecto aparecen aquí mientras esperan y se ejecutan.",
     "issueTitle": "Issue #{{number}}",
+    "issueTitleNamed": "#{{number}} {{title}}",
     "showAll": "Todos",
     "showActive": "Activos",
     "layoutList": "Lista",

@@ -356,6 +356,8 @@ export interface FactoryRun {
   factoryId: string;
   /** The run's issue; null for a run a schedule or a member started without one. */
   issueNumber: number | null;
+  /** The issue's title as the run last read it; null before it did (and for a run without an issue). */
+  issueTitle: string | null;
   /** The name of the schedule trigger that started it, as it was then; null otherwise. */
   triggerName: string | null;
   /** The input values its trigger supplied; empty for an issue run. */

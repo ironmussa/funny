@@ -311,6 +311,8 @@ export interface FactoryRunView {
   factoryId: string;
   /** The run's issue; null for a run a schedule or a member started without one. */
   issueNumber: number | null;
+  /** The issue's title as the run last read it; null before (and on runs without an issue). */
+  issueTitle: string | null;
   /** The schedule trigger that started it, or null. */
   triggerId: string | null;
   /** That trigger's name when the run started, or null. */
@@ -403,6 +405,7 @@ const plainFieldsOf = (row: Row) => ({
   id: row.id,
   factoryId: row.factoryId,
   issueNumber: row.issueNumber === NO_ISSUE ? null : row.issueNumber,
+  issueTitle: row.issueTitle ?? null,
   triggerId: row.triggerId ?? null,
   triggerName: row.triggerName ?? null,
   inputs: parseStoredInputs(row.inputs ?? null, 'factory_runs.inputs'),
@@ -560,6 +563,8 @@ export interface StartRunInput {
   factoryId: string;
   /** The run's issue, or null for a run without one. */
   issueNumber: number | null;
+  /** The issue's title, when the caller has read it. */
+  issueTitle?: string;
   /** The schedule trigger that starts it, with its name as of now. */
   trigger?: { id: string; name: string };
   /** The input values the trigger supplies. */
@@ -576,6 +581,8 @@ export interface StartRunInput {
 export type RegressionProofRecord = FactoryRegressionProof;
 
 export interface UpdateRunInput {
+  /** The issue's title, as the flow read it. */
+  issueTitle?: string;
   /** Written only along `FLOW_TRANSITIONS`. */
   state?: FactoryFlowState;
   currentStep?: string | null;
@@ -603,6 +610,7 @@ export interface UpdateRunInput {
 
 /** Update fields stored as they are, and the ones stored as JSON. */
 const PLAIN_FIELDS = [
+  'issueTitle',
   'currentStep',
   'prUrl',
   'launchStartedAt',
@@ -672,6 +680,7 @@ export function newRunRow(
     stackedOn: null,
     mergeApproval: null,
     riskWaiver: null,
+    issueTitle: null,
     triggerId: null,
     triggerName: null,
     inputs: null,

@@ -262,6 +262,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     const queued = await runs.enqueue({
       factoryId,
       issueNumbers: ordered,
+      issueTitles: new Map(open.map((issue) => [issue.number, issue.title])),
       flowName: input.flowName,
     });
     if (queued.isErr()) return err({ kind: 'storage', message: queued.error.message });

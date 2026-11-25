@@ -27,7 +27,12 @@ self.addEventListener('notificationclick', (event) => {
  * only a primitive string equals its own string form.
  */
 function readText(value, fallback) {
-  return String(value) === value ? value : fallback;
+  try {
+    return String(value) === value ? value : fallback;
+  } catch {
+    // String() throws on some objects (no prototype, a throwing toString): not text.
+    return fallback;
+  }
 }
 
 self.addEventListener('push', (event) => {

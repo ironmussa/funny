@@ -58,6 +58,8 @@ export function removeFromSources(meta: ThreadListMetaStore, threadId: string): 
   const { members, totals } = meta.getState();
   const memberPatch: Partial<Record<ThreadSourceKey, string[]>> = {};
   const totalPatch: Partial<Record<ThreadSourceKey, number>> = {};
+  // SAFETY: members is keyed by ThreadSourceKey, and this module writes it only
+  // with ThreadSourceKey keys.
   for (const source of Object.keys(members) as ThreadSourceKey[]) {
     const ids = members[source]!;
     if (!ids.includes(threadId)) continue;

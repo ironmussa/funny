@@ -18,7 +18,8 @@ async function probeReason(url: string): Promise<string> {
     if (res.ok) return 'The file loaded but could not be displayed.';
     let detail = '';
     try {
-      const body = (await res.json()) as { error?: string };
+      // The runner's deny/404 body is `{ error }` (see `routes/files.ts`).
+      const body: { error?: string } | null = await res.json();
       detail = body?.error ?? '';
     } catch {
       /* non-JSON error body — keep the status default */

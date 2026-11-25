@@ -35,6 +35,8 @@ function newWSMessage(threadId: string, data: WSMessageData) {
   return {
     id: data.messageId || crypto.randomUUID(),
     threadId,
+    // SAFETY: WSMessageData types `role` as string, but every agent:message emitter (runtime
+    // ingest-mapper / agent-message-handler, server sandbox wiring) sends 'user', 'assistant' or 'system'.
     role: data.role as MessageRole,
     content: data.content,
     timestamp: data.timestamp ?? new Date().toISOString(),
@@ -236,7 +238,7 @@ export function handleWSToolCall(
           {
             id: data.messageId || crypto.randomUUID(),
             threadId,
-            role: 'assistant' as MessageRole,
+            role: 'assistant',
             content: '',
             timestamp: new Date().toISOString(),
             toolCalls: [tcEntry],

@@ -44,7 +44,7 @@ function makeMenuRender(
     },
     onUpdate: (props: any) => {
       // Only reset the selected index when items actually change
-      actions.applySuggestionItems(props.items as SuggestionItem[]);
+      actions.applySuggestionItems(props.items);
       actions.setSuggestionQuery(actions.getFullQuery(props.query ?? ''));
       actions.setSuggestionRect(() => props.clientRect);
       actions.suggestionCommandRef.current = props.command;
@@ -110,7 +110,7 @@ export function useFileSuggestion(
       command: ({ editor, range, props }: any) => {
         insertInlineNodeWithTrailingSpace(editor, range, 'fileMention', {
           id: props.path ?? props.id,
-          label: (props.label as string).split('/').pop() ?? props.label,
+          label: props.label.split('/').pop() ?? props.label,
           path: props.path ?? props.id,
           fileType: props.fileType ?? 'file',
         });
@@ -291,7 +291,7 @@ export function useWorkflowSuggestion(
           const fullQuery = actions.getFullQuery(updateProps.query ?? '');
           if (dismissIfNotWorkflow(fullQuery)) return;
           actions.setSuggestionType('workflow');
-          actions.applySuggestionItems(updateProps.items as SuggestionItem[]);
+          actions.applySuggestionItems(updateProps.items);
           actions.setSuggestionQuery(normalizeWorkflowQuery(fullQuery));
           actions.setSuggestionRect(() => updateProps.clientRect);
           actions.suggestionCommandRef.current = updateProps.command;

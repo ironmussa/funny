@@ -16,6 +16,6 @@ export function usePendingApprovals(): PendingApproval[] {
   });
   return useMemo(() => {
     if (!rows || rows.length === 0) return NONE;
-    return rows.map((row) => data.fromRow(row as PendingApproval)).sort(compareApprovals);
+    return rows.map((row) => data.fromRow(row)).sort(compareApprovals);
   }, [rows, data]);
 }

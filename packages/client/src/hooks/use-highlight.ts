@@ -1,3 +1,4 @@
+import type { LanguageFn } from 'highlight.js';
 import hljs from 'highlight.js/lib/core';
 
 import { getGpuHighlight, prepareGpuHighlight } from '@/lib/gpu-highlight';
@@ -81,7 +82,7 @@ const EXT_TO_HLJS_LANG = new Map<string, string>(
  * We only import what we need, avoiding the full 2MB+ hljs bundle.
  */
 /** Lazy highlight.js language modules, keyed by language name. */
-const LANG_IMPORTS = new Map<string, () => Promise<{ default: unknown }>>(
+const LANG_IMPORTS = new Map<string, () => Promise<{ default: LanguageFn }>>(
   Object.entries({
     typescript: () => import('highlight.js/lib/languages/typescript'),
     javascript: () => import('highlight.js/lib/languages/javascript'),
@@ -150,9 +151,9 @@ export async function ensureLanguage(lang: string): Promise<boolean> {
 
   const promise = importFn()
     .then((mod) => {
-      const langDef = (mod as { default: unknown }).default;
+      const langDef = mod.default;
       if (langDef) {
-        hljs.registerLanguage(resolved, langDef as Parameters<typeof hljs.registerLanguage>[1]);
+        hljs.registerLanguage(resolved, langDef);
         registeredLangs.add(resolved);
       }
     })

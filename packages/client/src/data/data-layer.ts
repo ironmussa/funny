@@ -75,7 +75,11 @@ export function createDataLayer({
     own<T>(key: string, create: () => OwnedResource<T>): T {
       if (disposed) throw new Error(`DataLayer disposed; cannot create "${key}"`);
       const existing = owned.get(key);
-      if (existing) return existing.value as T;
+      if (existing) {
+        // SAFETY: each key is owned by one entity module, which always calls own()
+        // with the same create() and so the same T; the first call stored that value.
+        return existing.value as T;
+      }
       const resource = create();
       owned.set(key, resource);
       return resource.value;

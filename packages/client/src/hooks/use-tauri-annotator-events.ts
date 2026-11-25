@@ -7,8 +7,8 @@ import { useUIStore } from '@/stores/ui-store';
 // Module-level loader: React Compiler cannot compile `import()` inside a hook.
 const loadTauriEvents = () => import('@tauri-apps/api/event');
 
-const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
-const isPreviewWindow = !!(window as { __PREVIEW_MODE__?: unknown }).__PREVIEW_MODE__;
+const isTauri = !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__);
+const isPreviewWindow = !!('__PREVIEW_MODE__' in window && window.__PREVIEW_MODE__);
 
 interface AnnotatorCapturePayload {
   markdown: string;

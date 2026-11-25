@@ -184,6 +184,8 @@ function SidebarProvider({
       <TooltipProvider delayDuration={0} disableHoverableContent>
         <div
           style={
+            // SAFETY: the extra keys are the CSS custom properties --sidebar-width and --sidebar-width-icon
+            // with string values, which CSSProperties cannot list; the rest is the caller's CSSProperties.
             {
               '--sidebar-width': `${sidebarWidth}px`,
               '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
@@ -241,6 +243,7 @@ function Sidebar({
           data-mobile="true"
           className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
           style={
+            // SAFETY: the only key is the CSS custom property --sidebar-width with a string value, which CSSProperties cannot list.
             {
               '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
@@ -774,6 +777,7 @@ function SidebarMenuSkeleton({
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
         style={
+          // SAFETY: the only key is the CSS custom property --skeleton-width with a string value, which CSSProperties cannot list.
           {
             '--skeleton-width': width,
           } as React.CSSProperties

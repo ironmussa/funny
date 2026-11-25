@@ -163,7 +163,9 @@ export function usePromptBranches({
     activeThreadBaseBranch,
   });
 
-  const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
+  const { ensureBranch, branchSwitchDialog: switchDialogElement } = useBranchSwitch();
+  // Expose the dialog as the plain ReactElement | null type callers already use.
+  const branchSwitchDialog: ReactElement | null = switchDialogElement;
 
   const handleCheckoutPreflight = useCallback(
     async (branch: string): Promise<boolean> => {
@@ -192,6 +194,6 @@ export function usePromptBranches({
     ...followUp,
     handleFollowUpBranchChange,
     handleCheckoutPreflight,
-    branchSwitchDialog: branchSwitchDialog as ReactElement | null,
+    branchSwitchDialog,
   };
 }

@@ -478,7 +478,10 @@ export function App() {
           right={singleRightPanel}
           rightTabs={rightTabs}
           activeRightTab={reviewSubTab}
-          onActiveRightTabChange={(id) => setReviewSubTabStore(id as typeof reviewSubTab)}
+          onActiveRightTabChange={(id) =>
+            // SAFETY: the ids come from rightTabs, built from REVIEW_TABS, whose ids are all ReviewSubTab names.
+            setReviewSubTabStore(id as typeof reviewSubTab)
+          }
           rightPaneOpen={rightPaneVisible}
           initialRightWidth={Math.round(window.innerWidth * (reviewPaneWidth / 100))}
         />

@@ -174,15 +174,17 @@ export function KanbanView({
       if (!targets.length) return;
       if (source.data.type !== 'kanban-card') return;
 
-      const threadId = source.data.threadId as string;
-      const sourceStage = source.data.sourceStage as ThreadStage;
-      const threadProjectId = source.data.projectId as string;
+      // The drag data is KanbanCard's getInitialData payload.
+      const threadId: string = source.data.threadId;
+      const sourceStage: ThreadStage = source.data.sourceStage;
+      const threadProjectId: string = source.data.projectId;
 
       // Find the column target
       const columnTarget = targets.find((t: any) => t.data.type === 'kanban-column');
       if (!columnTarget) return;
 
-      const newStage = columnTarget.data.stage as ThreadStage;
+      // The column target data is KanbanColumn's getData payload.
+      const newStage: ThreadStage = columnTarget.data.stage;
       if (newStage === sourceStage) return;
 
       const targetProjectId = projectId || threadProjectId;

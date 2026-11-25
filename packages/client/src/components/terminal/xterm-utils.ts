@@ -5,7 +5,7 @@ import { metric } from '@/lib/telemetry';
 
 const log = createClientLogger('terminal/webgl');
 
-export const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+export const isTauri = !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__);
 
 let xtermModulesPromise: Promise<{
   Terminal: typeof import('@xterm/xterm').Terminal;
@@ -102,6 +102,8 @@ export function attachWebglRenderer(
  * before calling — forcing a paint on a hidden terminal wastes work and is wrong.
  */
 export function flushPausedRender(terminal: import('@xterm/xterm').Terminal): void {
+  // SAFETY: xterm's public Terminal type hides its `_core` internals; this view only declares
+  // optional fields, and every hop is optional-chained, so a missing field reads as undefined.
   const renderService = (
     terminal as {
       _core?: {

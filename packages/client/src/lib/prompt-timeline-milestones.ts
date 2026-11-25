@@ -87,6 +87,8 @@ function getToolCallSummary(name: string, parsed: MilestoneToolInput): string | 
   if (name === 'AskUserQuestion') {
     const questions = parsed.questions;
     if (!Array.isArray(questions) || questions.length === 0) return null;
+    // SAFETY: AskUserQuestion's input gives each entry a string `question`; a
+    // missing one reads undefined and falls back to 'Question'.
     return (questions[0].question as string) ?? 'Question';
   }
 

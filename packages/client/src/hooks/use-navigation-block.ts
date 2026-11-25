@@ -58,7 +58,9 @@ export function useNavigationBlock(
 
     // Intercept clicks on links / elements that trigger navigation
     const handleClick = (e: MouseEvent) => {
-      const anchor = (e.target as HTMLElement).closest('a');
+      // Click targets are elements (an <svg> icon inside a link too), so test Element, not HTMLElement.
+      if (!(e.target instanceof Element)) return;
+      const anchor = e.target.closest('a');
       if (!anchor) return;
       const href = anchor.getAttribute('href');
       if (!href || href.startsWith('http') || href.startsWith('//')) return;

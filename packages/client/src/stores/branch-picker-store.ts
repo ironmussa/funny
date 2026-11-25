@@ -26,14 +26,23 @@ interface BranchPickerState {
   reset: () => void;
 }
 
-const initialState = {
-  branches: [] as string[],
-  remoteBranches: [] as string[],
-  defaultBranch: null as string | null,
+const initialState: Pick<
+  BranchPickerState,
+  | 'branches'
+  | 'remoteBranches'
+  | 'defaultBranch'
+  | 'loading'
+  | 'selectedBranch'
+  | 'currentBranch'
+  | 'projectId'
+> = {
+  branches: [],
+  remoteBranches: [],
+  defaultBranch: null,
   loading: false,
   selectedBranch: '',
-  currentBranch: null as string | null,
-  projectId: null as string | null,
+  currentBranch: null,
+  projectId: null,
 };
 
 function normalizeBranchName(branch: string): string {

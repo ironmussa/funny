@@ -21,6 +21,8 @@ export function SettingsDetailView() {
   const activeSettingsPage = useUIStore((s) => s.activeSettingsPage);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjects();
+  // SAFETY: only use-view-route-sync sets activeSettingsPage, and only to an id in
+  // routableSettingsIds, which is built from the settings item ids.
   const page = activeSettingsPage as SettingsItemId | null;
   const label = page ? t(settingsLabelKeys[page] ?? page) : null;
   const selectedProject = projects.find((p) => p.id === selectedProjectId);

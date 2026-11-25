@@ -22,7 +22,7 @@ export function useAgentTemplates(): AgentTemplate[] {
   });
   return useMemo(() => {
     if (!rows || rows.length === 0) return NO_TEMPLATES;
-    return rows.map((row) => data.fromRow(row as AgentTemplate)).sort(compareTemplates(data));
+    return rows.map((row) => data.fromRow(row)).sort(compareTemplates(data));
   }, [rows, data]);
 }
 
@@ -34,7 +34,7 @@ export function useAgentTemplate(templateId: string | null | undefined): AgentTe
     query: (q) =>
       q.from({ template: data.collection }).where(({ template }) => eq(template.id, id)),
   });
-  const row = rows?.[0] as AgentTemplate | undefined;
+  const row = rows?.[0];
   return useMemo(() => (row ? data.fromRow(row) : undefined), [row, data]);
 }
 

@@ -1,3 +1,4 @@
+import type { WSThreadDeletedData } from '@funny/shared';
 import { startTransition } from 'react';
 
 import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
@@ -147,7 +148,10 @@ export function handleShareRevoked(threadId: string): void {
   useThreadStore.getState().handleShareRevoked(threadId);
 }
 
-export function handleThreadDeleted(threadId: string, data: any): void {
+export function handleThreadDeleted(
+  threadId: string,
+  data: Partial<WSThreadDeletedData> | undefined,
+): void {
   // Deleted here, in another tab, or by another client (spec: thread deleted
   // elsewhere): drop it from every list and leave its detail view if open.
   const wasOpen = clientComposition.platform.navigation.current().pathname.includes(threadId);
@@ -155,7 +159,7 @@ export function handleThreadDeleted(threadId: string, data: any): void {
   useThreadStore.getState().handleThreadDeleted(threadId);
   if (!wasOpen) return;
   const navigate = getNavigate();
-  const projectId = data?.projectId as string | undefined;
+  const projectId = data?.projectId;
   navigate?.(buildPath(projectId ? `/projects/${projectId}` : '/'));
 }
 

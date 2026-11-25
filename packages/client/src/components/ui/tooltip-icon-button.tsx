@@ -42,7 +42,14 @@ function TooltipIconButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        {disabled ? <span ref={ref as React.Ref<HTMLSpanElement>}>{button}</span> : button}
+        {disabled ? (
+          // SAFETY: while disabled the span stands in for the button. No caller passes a ref
+          // directly; the Radix triggers that pass one through asChild only use the element as an
+          // HTMLElement (focus, positioning), which the span is.
+          <span ref={ref as React.Ref<HTMLSpanElement>}>{button}</span>
+        ) : (
+          button
+        )}
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>

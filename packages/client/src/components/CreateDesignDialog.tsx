@@ -121,7 +121,13 @@ export function CreateDesignDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mx-6 mt-4">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            if (v === 'prototype' || v === 'slides' || v === 'template' || v === 'other') setTab(v);
+          }}
+          className="mx-6 mt-4"
+        >
           <TabsList variant="pane" size="sm">
             <TabsTrigger value="prototype" data-testid="create-design-tab-prototype" size="sm">
               {t('createDesign.tabs.prototype', 'Prototype')}

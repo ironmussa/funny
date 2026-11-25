@@ -175,7 +175,12 @@ export function ReviewPane() {
         deselectAllSignal={deselectAllSignal}
       />
       {/* Normal ReviewPane content */}
-      <Tabs value={reviewSubTab} onValueChange={(v) => setReviewSubTab(v as ReviewSubTab)} asChild>
+      <Tabs
+        value={reviewSubTab}
+        // SAFETY: the triggers come from TABS in ReviewPaneTabs, whose values are typed ReviewSubTab.
+        onValueChange={(v) => setReviewSubTab(v as ReviewSubTab)}
+        asChild
+      >
         <div className="flex h-full flex-col text-xs [contain:strict]">
           {/* Header with tabs */}
           <ReviewPaneTabsHeader onClose={() => setReviewPaneOpen(false)} />

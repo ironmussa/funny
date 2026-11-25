@@ -180,6 +180,8 @@ export function decorateGraph(
   }
 
   const normalized = filter.trim().toLowerCase();
+  // SAFETY: both graph sources are built by workflowToGraph, whose nodes have type 'workflowNode'
+  // and WorkflowGraphNodeData data; the extra WorkflowNodeData fields are optional.
   const nodes = (graph.nodes as WorkflowNode[]).map((node) => ({
     ...node,
     data: {

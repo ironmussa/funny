@@ -58,6 +58,8 @@ function snapshotProjectLists(data: ThreadsData) {
   const { members, totals } = data.meta.getState();
   const threadIdsByProject: Record<string, string[]> = {};
   const threadTotalByProject: Record<string, number> = {};
+  // SAFETY: members is keyed by ThreadSourceKey, and list-meta.ts writes it
+  // only with ThreadSourceKey keys.
   for (const source of Object.keys(members) as ThreadSourceKey[]) {
     if (!source.startsWith(PROJECT_PREFIX)) continue;
     const ids = members[source] ?? [];

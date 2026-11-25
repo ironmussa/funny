@@ -60,7 +60,7 @@ export class ByteLruCache {
     this.retainedBytes += bytes;
 
     while (this.retainedBytes > this.maxBytes) {
-      const oldestKey = this.entries.keys().next().value as string | undefined;
+      const oldestKey: string | undefined = this.entries.keys().next().value;
       if (!oldestKey) break;
       const oldest = this.entries.get(oldestKey);
       this.entries.delete(oldestKey);

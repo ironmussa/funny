@@ -8,7 +8,7 @@ import { liveQueryKey } from '../live-query-key';
 import { readThreadRow } from '../threads/read';
 import { branchKey, type GitStatusMaps, type ProjectGitStatus } from './keys';
 import { withoutId } from './read';
-import { getGitStatusData, type StatusRow, type ThreadKeyRow } from './store';
+import { getGitStatusData } from './store';
 
 /** React reads of git status (live queries over the git-status collections). */
 
@@ -26,15 +26,14 @@ export function useGitStatusMaps(): GitStatusMaps {
   const statusByBranch = useMemo(() => {
     const out: Record<string, GitStatusInfo> = {};
     for (const row of statusRows ?? []) {
-      const plain = data.statuses.fromRow(row as StatusRow);
-      out[plain.id] = withoutId(plain) as GitStatusInfo;
+      const plain = data.statuses.fromRow(row);
+      out[plain.id] = withoutId(plain);
     }
     return out;
   }, [statusRows, data]);
   const threadToBranchKey = useMemo(() => {
     const out: Record<string, string> = {};
-    for (const row of keyRows ?? [])
-      out[(row as ThreadKeyRow).id] = (row as ThreadKeyRow).branchKey;
+    for (const row of keyRows ?? []) out[row.id] = row.branchKey;
     return out;
   }, [keyRows]);
   return useMemo(
@@ -56,16 +55,16 @@ export function useGitStatusForThread(threadId: string | undefined): GitStatusIn
     queryKey: liveQueryKey('git-status:useGitStatusForThread', data.threadKeys.collection, tid),
     query: (q) => q.from({ k: data.threadKeys.collection }).where(({ k }) => eq(k.id, tid)),
   });
-  const mapped = (keyRows?.[0] as ThreadKeyRow | undefined)?.branchKey;
+  const mapped = keyRows?.[0]?.branchKey;
   const row = threadId ? readThreadRow(threadId, layer) : undefined;
   const bk = mapped ?? (row ? branchKey(row) : '');
   const { data: statusRows } = useLiveQuery({
     queryKey: liveQueryKey('git-status:useGitStatusForThread', data.statuses.collection, bk),
     query: (q) => q.from({ s: data.statuses.collection }).where(({ s }) => eq(s.id, bk)),
   });
-  const status = statusRows?.[0] as StatusRow | undefined;
+  const status = statusRows?.[0];
   return useMemo(
-    () => (status ? (withoutId(data.statuses.fromRow(status)) as GitStatusInfo) : undefined),
+    () => (status ? withoutId(data.statuses.fromRow(status)) : undefined),
     [status, data],
   );
 }

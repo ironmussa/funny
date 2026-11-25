@@ -83,8 +83,9 @@ export function useSidebarDragDrop({
         const targetData = targets[0].data;
         if (targetData.type !== 'sidebar-project') return;
 
-        const sourceId = source.data.projectId as string;
-        const targetId = targetData.projectId as string;
+        // Only compared against project ids below, so no string narrowing is needed.
+        const sourceId = source.data.projectId;
+        const targetId = targetData.projectId;
         if (sourceId === targetId) return;
 
         const oldIndex = projects.findIndex((p) => p.id === sourceId);

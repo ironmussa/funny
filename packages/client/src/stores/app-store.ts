@@ -47,7 +47,7 @@ function getCombinedState(): CombinedState {
     ...useProjectStore.getState(),
     ...useThreadStore.getState(),
     ...useUIStore.getState(),
-  } as CombinedState;
+  };
   cachedVersion = storeVersion;
   return cachedCombined;
 }
@@ -121,7 +121,9 @@ useAppStore.setState = (partial: Partial<CombinedState>) => {
     entries.filter(([key]) => !PROJECT_KEYS.has(key) && !THREAD_KEYS.has(key)),
   );
 
-  if (Object.keys(projectPartial).length > 0) useProjectStore.setState(projectPartial as any);
-  if (Object.keys(threadPartial).length > 0) useThreadStore.setState(threadPartial as any);
-  if (Object.keys(uiPartial).length > 0) useUIStore.setState(uiPartial as any);
+  // Every value comes from `partial`, a Partial<CombinedState>, and zustand's setState only
+  // shallow-merges it; this helper exists only for tests and stories.
+  if (Object.keys(projectPartial).length > 0) useProjectStore.setState(projectPartial);
+  if (Object.keys(threadPartial).length > 0) useThreadStore.setState(threadPartial);
+  if (Object.keys(uiPartial).length > 0) useUIStore.setState(uiPartial);
 };

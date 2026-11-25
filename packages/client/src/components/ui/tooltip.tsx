@@ -7,8 +7,8 @@ const TooltipProvider = TooltipPrimitive.Provider;
 
 const Tooltip = TooltipPrimitive.Root;
 
-function canMatchSelector(target: HTMLElement | null): target is HTMLElement {
-  return !!target && typeof target.matches === 'function';
+function canMatchSelector(target: EventTarget | null): target is Element {
+  return !!target && 'matches' in target && typeof target.matches === 'function';
 }
 
 function TooltipTrigger({
@@ -24,7 +24,7 @@ function TooltipTrigger({
       onFocusCapture={(event) => {
         onFocusCapture?.(event);
         if (event.defaultPrevented || event.isPropagationStopped()) return;
-        const target = event.target as HTMLElement | null;
+        const target = event.target;
         if (canMatchSelector(target) && !target.matches(':focus-visible')) {
           event.stopPropagation();
         }

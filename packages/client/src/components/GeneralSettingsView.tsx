@@ -12,6 +12,9 @@ import { useUIStore } from '@/stores/ui-store';
 
 export function GeneralSettingsView() {
   const { t } = useTranslation();
+  // SAFETY: the page id comes from the /preferences/:page route, which links build
+  // from GeneralPage ids. An unknown id from a hand-typed URL is tolerated:
+  // preferencesPageLabel returns it as-is and PreferencesContent renders no page.
   const activePreferencesPage = useUIStore((s) => s.activePreferencesPage) as GeneralPage;
   const label = preferencesPageLabel(activePreferencesPage, t);
 

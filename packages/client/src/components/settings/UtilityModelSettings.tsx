@@ -99,7 +99,11 @@ function UtilityModelForm({ setting }: { setting: UtilityModelSetting | null }) 
         title={t('settings.utilityModelProvider')}
         description={t('settings.utilityModelProviderDesc')}
       >
-        <Select value={provider} onValueChange={(v) => setProvider(v as Provider)}>
+        <Select
+          value={provider}
+          // SAFETY: the items are rendered from UTILITY_MODEL_PROVIDERS, so each value is a Provider.
+          onValueChange={(v) => setProvider(v as Provider)}
+        >
           <SelectTrigger className="w-[180px]" data-testid="settings-utility-model-provider">
             <SelectValue />
           </SelectTrigger>

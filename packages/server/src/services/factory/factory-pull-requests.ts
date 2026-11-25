@@ -189,6 +189,8 @@ export interface FactoryPullRequests {
   closeReplaced?(
     pr: FactoryPullRequestRef,
     by: FactoryReplacedBy,
+    /** Who closed it, for its activity: a member (default), or the factory itself after a merge. */
+    origin?: 'user' | 'system',
   ): ResultAsync<FactoryCloseOutcome, FactoryPullRequestError>;
   /** The pull request's head commit now, its base branch, and whether auto-merge is on. */
   pullHead(pr: FactoryPullRequestRef): ResultAsync<FactoryPullHead, FactoryPullRequestError>;
@@ -364,6 +366,7 @@ function recordFactoryClose(
   pr: FactoryPullRequestRef,
   by: FactoryReplacedBy,
   result: { closed: boolean; branchError: string | null; deleted: boolean },
+  origin: 'user' | 'system',
 ) {
   const closed = result.closed
     ? [{ effect: 'pr-closed' as const, target: `${pr.repo}#${pr.number}` }]
@@ -378,7 +381,7 @@ function recordFactoryClose(
       projectId: pr.projectId,
       title: `Closed ${pr.repo}#${pr.number}`,
       input,
-      origin: 'user',
+      origin,
     },
     result.branchError
       ? {
@@ -404,6 +407,7 @@ function closeReplacedPullRequest(
   activities: NonNullable<FactoryPullRequestsDeps['activities']>,
   pr: FactoryPullRequestRef,
   by: FactoryReplacedBy,
+  origin: 'user' | 'system' = 'user',
 ): ResultAsync<FactoryCloseOutcome, FactoryPullRequestError> {
   return github
     .mergeState(pr.repo, pr.number)
@@ -432,7 +436,13 @@ function closeReplacedPullRequest(
             branchDeleted: deleted,
           };
           return ResultAsync.fromSafePromise(
-            recordFactoryClose(activities, pr, by, { closed: wasOpen, branchError, deleted }),
+            recordFactoryClose(
+              activities,
+              pr,
+              by,
+              { closed: wasOpen, branchError, deleted },
+              origin,
+            ),
           ).map(() => outcome);
         });
       });
@@ -568,8 +578,8 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
         .mapErr(callError);
     },
 
-    closeReplaced(pr, by) {
-      return closeReplacedPullRequest(pullRequestsFor(pr, 'write'), activities, pr, by);
+    closeReplaced(pr, by, origin) {
+      return closeReplacedPullRequest(pullRequestsFor(pr, 'write'), activities, pr, by, origin);
     },
 
     pullHead(pr) {

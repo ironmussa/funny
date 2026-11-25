@@ -126,8 +126,12 @@ export function createRunSettlement(deps: FactoryFlowRunsDeps) {
     );
   }
 
-  /** The run merged: clean its threads' worktrees up without holding the flow. */
+  /**
+   * The run merged: clean its threads' worktrees up and close the pull
+   * requests it superseded, without holding the flow.
+   */
   function cleanUpMerged(job: FactoryRunJob): void {
+    if (deps.closeSuperseded) void deps.closeSuperseded(job.run.id, job.repo);
     if (!deps.cleanupMerged) return;
     const cleanup = deps.cleanupMerged;
     void deps.runs.get(job.run.id).match(

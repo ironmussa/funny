@@ -377,6 +377,16 @@ reads the role's prose as a decision:
   A run the factory took by its label has that label taken off its issue (`releaseStoppedIssue`
   in `factory-run-control.ts`), so automatic mode does not admit it again; putting the label back
   admits it. Removing a labelled issue from the queue, or **Clear queue**, does the same.
+- **Superseded pull requests** (openspec `factory-close-superseded-prs`): stopping a run leaves
+  its pull request open, so a member can take it over by hand. Once another run of the same issue
+  is recorded `merged` (by its flow, the merge queue, or a person on GitHub), the factory closes
+  the pull requests of that issue's `stopped` / `failed` runs (`factory-superseded.ts`, called
+  from `closeSupersededFor` in `factory-watcher-state.ts`): a comment naming the merged pull
+  request, the close and the branch deletion, through the same `closeReplaced` a member's
+  `factory.closeReplacedPr` uses, recorded as a `factory.close-pr` activity with origin `system`.
+  It leaves a pull request open when it is not open any more, or when its head is not a commit the
+  factory recorded for that run (reviewed, classified, proved or approved): somebody pushed to it.
+  Runs come from the factory's rows, never from a branch search.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same
   branch and PR; a completed implement step is kept, later steps run again. While the factory
   already runs `maxConcurrent` runs it goes to the head of the queue instead (`requested`, wait

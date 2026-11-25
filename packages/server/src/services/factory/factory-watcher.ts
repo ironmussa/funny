@@ -81,6 +81,7 @@ import { reconcileParked, reproving } from './factory-watcher-parked.js';
 import {
   blockedReasons,
   cleanupMergedFor,
+  closeSupersededFor,
   deps,
   flows,
   IN_FLIGHT,
@@ -167,6 +168,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
       reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
       stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
       cleanupMerged: (userId, threadIds) => cleanupMergedFor(d, userId, threadIds),
+      closeSuperseded: (runId, repo) => closeSupersededOf(runId, repo),
       cleanupUnchanged: (userId, threadIds) =>
         d.cleanupUnchanged
           ? d.cleanupUnchanged(userId, threadIds)
@@ -667,6 +669,18 @@ async function resolveTarget(
 export async function checkFactoryTarget(factory: WatchedFactory): Promise<FactoryTarget | null> {
   if (!deps) return null;
   return targetOf(factory);
+}
+
+/** `closeSupersededFor` for a run of any factory: its factory and, unless given, its repository. */
+async function closeSupersededOf(runId: string, repo?: string): Promise<void> {
+  if (!runs) return;
+  const run = (await runs.get(runId)).unwrapOr(null);
+  const factory = run ? await getWatchedFactory(run.factoryId) : null;
+  if (!factory) return;
+  if (repo) return closeSupersededFor(factory, repo, runId);
+  const target = await targetOf(factory);
+  if ('reason' in target) return;
+  return closeSupersededFor(factory, target.repo, runId);
 }
 
 /** The GitHub side the watcher reads through, while it runs. */

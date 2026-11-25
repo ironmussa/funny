@@ -215,6 +215,12 @@ describe("factory pull requests: closing a replaced run's pull request", () => {
     });
   });
 
+  test('closed by the factory after a merge, its activity says the system did it', async () => {
+    const { prs, recorded } = portFor(open);
+    await prs.closeReplaced!(pr, by, 'system');
+    expect(recorded[0]!.spec).toMatchObject({ kind: 'factory.close-pr', origin: 'system' });
+  });
+
   test('a merged one is left as it is: no comment, no close, its branch stays', async () => {
     const { prs, calls, recorded } = portFor({
       ...open,

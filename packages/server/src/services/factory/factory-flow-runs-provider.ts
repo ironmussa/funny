@@ -142,7 +142,9 @@ function queueFor(ctx: FlowRunsContext, signal: AbortSignal): FactoryQueuePort |
     factory: getWatchedFactory,
     record: async (runId, input) => {
       const live = await ctx.updateInFlight(runId, input);
-      if (!live.isOk() || !live.value || input.state !== 'merged' || !deps.cleanupMerged) return;
+      if (!live.isOk() || !live.value || input.state !== 'merged') return;
+      if (deps.closeSuperseded) void deps.closeSuperseded(runId);
+      if (!deps.cleanupMerged) return;
       const merged = await run(runId);
       const factory = merged ? await getWatchedFactory(merged.factoryId) : null;
       if (merged && factory) await deps.cleanupMerged(factory.userId, threadsOf(merged));

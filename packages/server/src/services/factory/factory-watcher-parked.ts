@@ -30,7 +30,13 @@ import {
 } from './factory-runs.js';
 import { type WatchedFactory } from './factory-settings.js';
 import { runsPushedCommits } from './factory-thread-waits.js';
-import { cleanupMergedFor, deps, proofs, runs } from './factory-watcher-state.js';
+import {
+  cleanupMergedFor,
+  closeSupersededFor,
+  deps,
+  proofs,
+  runs,
+} from './factory-watcher-state.js';
 
 /** Parked runs whose new head is being proved now, by run id. */
 export const reproving = new Map<string, AbortController>();
@@ -295,5 +301,7 @@ async function reconcileRun(
     issue: run.issueNumber,
     pullRequest: pr.value,
   });
-  if (pr.value === 'merged') await cleanupMergedFor(deps, factory.userId, threadsOf(run));
+  if (pr.value !== 'merged') return;
+  await cleanupMergedFor(deps, factory.userId, threadsOf(run));
+  await closeSupersededFor(factory, repo, run.id);
 }

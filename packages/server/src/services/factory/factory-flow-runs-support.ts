@@ -120,6 +120,11 @@ export interface FactoryFlowRunsDeps {
   /** Remove the worktree and local branch of a merged run's threads (best effort). */
   cleanupMerged?: (userId: string, threadIds: string[]) => Promise<void>;
   /**
+   * The run merged: close the pull requests of its issue's earlier runs that
+   * ended without merging (best effort, never throws). `repo` when known.
+   */
+  closeSuperseded?: (runId: string, repo?: string) => Promise<void>;
+  /**
    * The same for a run that ended without a pull request, keeping (and
    * returning) the worktrees with uncommitted files or unpushed commits.
    */

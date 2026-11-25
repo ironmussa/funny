@@ -18,6 +18,7 @@ import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/
 import type {
   FactoryMergeOutcome,
   FactoryProofCheck,
+  FactoryReplacedBy,
 } from '../../../services/factory/factory-pull-requests.js';
 import {
   createFactoryRunControl,
@@ -174,6 +175,8 @@ type FakeGithub = FactoryGithubPort & {
   prLookups: Array<{ branch: string; state: string }>;
   /** Issues opened (a split's parts), numbered from 100. */
   created: Array<{ number: number; title: string; body: string }>;
+  /** Pull requests closed as replaced, with what replaced them and who closed them. */
+  closedReplaced: Array<{ number: number; by: FactoryReplacedBy; origin?: string }>;
 };
 
 function fakeGithub(
@@ -192,6 +195,7 @@ function fakeGithub(
     checks: [],
     prLookups: [],
     created: [],
+    closedReplaced: [],
     resolveRepo: async () => repo,
     createIssue: (_reader: unknown, issue: { title: string; body: string }) => {
       if (
@@ -264,6 +268,14 @@ function fakeGithub(
     },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
+      closeReplaced: (
+        pr: { number: number },
+        by: FactoryReplacedBy,
+        origin?: 'user' | 'system',
+      ) => {
+        port.closedReplaced.push({ number: pr.number, by, origin });
+        return okAsync({ kind: 'closed' as const, branchDeleted: true });
+      },
       changedFiles: () => okAsync({ files: [], truncated: false }),
       publishReview: () => okAsync({ status: true }),
       baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
@@ -2222,6 +2234,35 @@ describe('factory operator controls', () => {
     });
     // Merged outside the flow: its worktree is cleaned up all the same.
     expect(cleanups).toEqual([{ userId: 'alice', threadIds: ['t-1'] }]);
+  });
+
+  // Issues #489-#492 (2026-11-25): each issue's later run merged, and the
+  // stopped run's pull request stayed open until a person closed it.
+  test("a merged run closes its issue's stopped runs' pull requests, unless pushed to", async () => {
+    const factoryId = await enableFactory();
+    const repo = createFactoryRunsRepository();
+    const stopped = await seedRun(factoryId, 'stopped', ['t-0']);
+    await repo.update(stopped.id, {
+      prUrl: 'https://github.com/o/r/pull/5',
+      regressionProof: { headSha: 'sha-head', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+    });
+    // Its head is not a commit the factory recorded: somebody pushed to it.
+    const pushedTo = await seedRun(factoryId, 'failed', ['t-2']);
+    await repo.update(pushedTo.id, {
+      prUrl: 'https://github.com/o/r/pull/6',
+      regressionProof: { headSha: 'sha-old', verdict: 'pass', ranAt: '2026-11-22T10:00:00Z' },
+    });
+    const run = await seedParkedWithPr(factoryId);
+    const { poll, github } = await watch({ issues: [], github: { prStates: { 9: 'merged' } } });
+
+    await poll.ticks[0]!();
+
+    expect((await runById(run.id)).state).toBe('merged');
+    expect(github.closedReplaced).toEqual([
+      { number: 5, by: { issueNumber: 7, prNumber: 9 }, origin: 'system' },
+    ]);
+    // The superseded run itself does not change.
+    expect((await runById(stopped.id)).state).toBe('stopped');
   });
 
   test('a parked run whose pull request was closed without a merge is stopped, saying so', async () => {

@@ -33,7 +33,8 @@ import { type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import { type FactoryGithubPort } from './factory-github.js';
 import { type FactoryIncidentsRepository } from './factory-incidents.js';
 import { createFactoryRunsRepository, IN_FLIGHT_STATES } from './factory-runs.js';
-import { setFactoryBlocked } from './factory-settings.js';
+import { setFactoryBlocked, type WatchedFactory } from './factory-settings.js';
+import { closeSupersededPullRequests } from './factory-superseded.js';
 import {
   type BrowserEventsPort,
   cleanupFactoryWorktrees,
@@ -164,6 +165,49 @@ export function cleanupMergedFor(
   return d.cleanupMerged
     ? d.cleanupMerged(userId, threadIds)
     : cleanupFactoryWorktrees(d.ports, userId, threadIds, d.browserEvents).then(() => undefined);
+}
+
+/**
+ * The run `runId` merged: close the pull requests of the issue's earlier runs
+ * that ended without merging (openspec factory-close-superseded-prs), as the
+ * factory's enabler on `repo`. Best effort: it logs and never throws.
+ */
+export async function closeSupersededFor(
+  factory: WatchedFactory,
+  repo: string,
+  runId: string,
+): Promise<void> {
+  if (!deps || !runs) return;
+  const github = deps.github;
+  const repository = runs;
+  try {
+    const merged = (await repository.get(runId)).unwrapOr(null);
+    if (!merged || merged.state !== 'merged' || merged.issueNumber === null) return;
+    const all = await repository.list(merged.factoryId);
+    if (all.isErr()) return;
+    const outcomes = await closeSupersededPullRequests(
+      {
+        owner: { userId: factory.userId, projectId: factory.projectId, repo },
+        runs: all.value,
+        pullRequests: github.pullRequests,
+      },
+      merged,
+    );
+    if (outcomes.length === 0) return;
+    log.info('Issue factory closed the pull requests a merged run superseded', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      runId,
+      issue: merged.issueNumber,
+      outcomes,
+    });
+  } catch (error: unknown) {
+    log.warn('Issue factory could not close the pull requests a merged run superseded', {
+      namespace: 'factory',
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /**

@@ -6,7 +6,8 @@ import { join } from 'node:path';
 // needs a change in server or runtime callers first (listed in the pull
 // request); this budget keeps open dictionaries from creeping back until #447
 // makes the rule an error. Lower a number when you fix one of them; never raise
-// it, and do not add a file.
+// it, and do not add a file. Most of the files it guards are packages/shared's
+// own (and the types they share), which is why it lives here.
 const BUDGET: Record<string, number> = {
   'packages/shared/src/runner-protocol.ts': 10,
   'packages/core/src/debug.ts': 3,
@@ -18,7 +19,10 @@ const BUDGET: Record<string, number> = {
 
 const OUT_OF_SCOPE = ['packages/server/', 'packages/runtime/'];
 
-const ROOT = join(import.meta.dir, '..', '..');
+const ROOT = join(import.meta.dir, '..', '..', '..', '..');
+
+/** First Bun with `bun lint` (as scripts/bun-lint.ts); CI's test jobs pin an older one. */
+const HAS_BUN_LINT = Bun.semver.order(Bun.version, '1.4.6') >= 0;
 
 /** no-unsafe-dictionary-type warnings per file, outside server and runtime. */
 function countByFile(): Record<string, number> {
@@ -43,10 +47,14 @@ function countByFile(): Record<string, number> {
 }
 
 describe('anti-slop/no-unsafe-dictionary-type budget (#457)', () => {
-  test('no file outside server and runtime goes over its listed exceptions', () => {
-    const over = Object.entries(countByFile())
-      .filter(([file, count]) => count > (BUDGET[file] ?? 0))
-      .map(([file, count]) => `${file}: ${count} (budget ${BUDGET[file] ?? 0})`);
-    expect(over).toEqual([]);
-  }, 120_000);
+  test.skipIf(!HAS_BUN_LINT)(
+    'no file outside server and runtime goes over its listed exceptions',
+    () => {
+      const over = Object.entries(countByFile())
+        .filter(([file, count]) => count > (BUDGET[file] ?? 0))
+        .map(([file, count]) => `${file}: ${count} (budget ${BUDGET[file] ?? 0})`);
+      expect(over).toEqual([]);
+    },
+    120_000,
+  );
 });

@@ -13,6 +13,7 @@ import {
   nextStatusSeq,
   patchStatus,
   resolveThreadScope,
+  scopedProjectIds,
   scopeWidened,
   writeProjectStatus,
   writeStatuses,
@@ -100,6 +101,15 @@ export function fetchForProject(
       : await unwrapResult(gitApi.getGitStatuses(projectId, signal));
     writeStatuses(data, result.statuses, seq);
   });
+}
+
+/**
+ * Re-ask the bulk status of every project a mounted view shows. Nothing tells
+ * the client when a pull request is merged or closed on GitHub, so a periodic
+ * call keeps the sidebar, kanban and search PR badges from staying "open".
+ */
+export function refreshScopedProjects(layer: DataLayer = getDataLayer()): void {
+  for (const projectId of scopedProjectIds()) void fetchForProject(projectId, false, layer);
 }
 
 /** Status of one thread; threads sharing a branch share the request and its freshness. */

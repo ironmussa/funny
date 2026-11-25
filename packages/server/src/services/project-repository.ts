@@ -172,6 +172,7 @@ export async function listMemberProjects(
   return rows.map((r: any) => ({
     ...toProject(r.project),
     localPath: r.localPath ?? null,
+    // SAFETY: the select above projects project_members.role, a NOT NULL text column.
     memberRole: (r.role as string) ?? 'member',
   }));
 }
@@ -481,7 +482,7 @@ export async function getMemberLocalPath(
   projectId: string,
   userId: string,
 ): Promise<string | null> {
-  const row = await dbGet(
+  const row = await dbGet<{ localPath: string | null }>(
     db
       .select({ localPath: schema.projectMembers.localPath })
       .from(schema.projectMembers)
@@ -492,7 +493,7 @@ export async function getMemberLocalPath(
         ),
       ),
   );
-  return (row as { localPath: string | null } | undefined)?.localPath ?? null;
+  return row?.localPath ?? null;
 }
 
 export async function resolveProjectPath(

@@ -39,6 +39,7 @@ export function factorySandboxLauncher(ports: RunnerPorts, browserEvents?: Brows
         message: created.error.message,
       });
     }
+    // SAFETY: the sandbox launcher answers its loadThread(threadId), the stored threads row (which has an id) or none.
     const thread = created.value.thread as { id?: string } | null;
     return ok({ thread, threadId: thread?.id, runnerId: 'sandbox' });
   };

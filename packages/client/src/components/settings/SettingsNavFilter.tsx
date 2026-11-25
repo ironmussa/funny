@@ -294,7 +294,7 @@ export function SettingsNavFilter({
           onKeyDown={onKeyDown}
           placeholder={placeholder}
           aria-label={placeholder}
-          className="pl-8"
+          inset="icon"
           data-testid="settings-filter-input"
         />
       </div>

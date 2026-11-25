@@ -25,6 +25,7 @@ import {
   factoryTriageSchema,
   MAX_STORED_REVIEWS,
   type FactoryFlowSource,
+  type FactoryApprovalMove,
   type FactoryMergeApproval,
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
@@ -356,6 +357,7 @@ const plainFieldsOf = (row: Row) => ({
   triggerName: row.triggerName ?? null,
   inputs: parseStoredInputs(row.inputs ?? null, 'factory_runs.inputs'),
   prUrl: row.prUrl,
+  // SAFETY: factory_runs.state is written only in this module, always from a FactoryRunState value.
   state: row.state as FactoryRunState,
   currentStep: row.currentStep,
   launchStartedAt: row.launchStartedAt ?? null,
@@ -377,6 +379,14 @@ const queueAndFlowOf = (row: Row) => ({
   stackedOn: parseStackedOn(row.stackedOn ?? null),
   mergeApproval: parseMergeApproval(row.mergeApproval ?? null),
 });
+
+/** An approval that moved to a commit with the same change. */
+const SAME_CHANGE = { kind: 'same', lines: 0, files: [] } satisfies Pick<
+  FactoryApprovalMove,
+  'kind' | 'lines' | 'files'
+>;
+/** A move records at most this many of the files that differ. */
+const MAX_MOVE_FILES = 20;
 
 /** The stored merge approval, or null (none, or no longer readable: nothing is approved). */
 function parseMergeApproval(raw: string | null): FactoryMergeApproval | null {
@@ -1272,13 +1282,14 @@ export function createFactoryRunsRepository(
       runId: string,
       outcome: 'merged' | 'closed',
     ): ResultAsync<boolean, FactoryRunsError> {
+      const state: FactoryRunState = outcome === 'merged' ? 'merged' : 'stopped';
       const changes = changesFor(
         outcome === 'merged'
-          ? { state: 'merged', currentStep: null, failureReason: null }
-          : { state: 'stopped', failureReason: 'Its pull request was closed without a merge.' },
+          ? { state, currentStep: null, failureReason: null }
+          : { state, failureReason: 'Its pull request was closed without a merge.' },
       )!;
       return updateFromParked(runId, changes).andThen((closed) =>
-        afterStateWrite(runId, { state: changes.state as FactoryRunState }, closed),
+        afterStateWrite(runId, { state }, closed),
       );
     },
 
@@ -1378,8 +1389,9 @@ export function createFactoryRunsRepository(
     },
 
     /**
-     * Move the run's merge approval of `from` to `to`, a merge of `from` with
-     * the base branch that settled nothing (the caller verified that). Nothing
+     * Move the run's merge approval of `from` to `to`, which holds the same
+     * change or a small adjustment of it (the caller verified that; `move` says
+     * which, a merge of the base that settled nothing by default). Nothing
      * happens unless the stored approval is of `from`: a compare-and-set on the
      * stored value, so a new approval written meanwhile is kept. Resolves
      * whether it moved.
@@ -1388,6 +1400,7 @@ export function createFactoryRunsRepository(
       runId: string,
       from: string,
       to: string,
+      move: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'> = SAME_CHANGE,
     ): ResultAsync<boolean, FactoryRunsError> {
       return ResultAsync.fromPromise(
         db
@@ -1403,6 +1416,16 @@ export function createFactoryRunsRepository(
           ...approval,
           sha: to,
           carriedFrom: approval.carriedFrom ?? from,
+          moves: [
+            ...(approval.moves ?? []),
+            {
+              to,
+              at: new Date().toISOString(),
+              kind: move.kind,
+              lines: move.lines,
+              files: move.files.slice(0, MAX_MOVE_FILES),
+            },
+          ],
         };
         return ResultAsync.fromPromise(
           db

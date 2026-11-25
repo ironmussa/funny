@@ -58,7 +58,7 @@ export function rateLimit(opts: {
   return async (c: Context, next: Next) => {
     if (skip?.(c)) return next();
     const now = Date.now();
-    const userId = c.get('userId') as string | undefined;
+    const userId: string | undefined = c.get('userId');
     const ip = clientIp(c);
 
     // Authenticated: userId is the primary bucket so a single abusive IP

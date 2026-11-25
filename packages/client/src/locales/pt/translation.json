@@ -724,6 +724,8 @@
     "projectFactorySensitivePathsDesc": "Globs separados por vírgulas. Uma mudança que toca um deles é de risco alto, além de .github/, migrações e auth/",
     "projectFactoryMaxLowRiskLines": "Tamanho de uma mudança de risco baixo",
     "projectFactoryMaxLowRiskLinesDesc": "Uma mudança com mais linhas alteradas que isto é de risco alto. Testes, Markdown, traduções, stories, snapshots e lockfiles não contam",
+    "projectFactoryApprovalAdjust": "Ajuste que uma aprovação acompanha",
+    "projectFactoryApprovalAdjustDesc": "Depois de aprovar uma alteração de alto risco, a fábrica pode fazer merge de um commit posterior que difira dela em no máximo este número de linhas, apenas em arquivos que você aprovou e sem novos motivos de risco. Ela então faz merge de linhas que nenhuma pessoa leu; a revisão ainda precisa passar. 0: apenas a mesma alteração",
     "projectFactorySizeIgnoredPaths": "Não contam no tamanho",
     "projectFactorySizeIgnoredPathsDesc": "Globs separados por vírgulas. Suas linhas não contam para o tamanho de uma mudança. Os caminhos sensíveis continuam valendo para eles",
     "projectFactoryStageLimits": "Execuções por etapa",
@@ -1621,6 +1623,9 @@
     }
   },
   "errors": {
+    "factoryApprove": {
+      "CONFLICT": "Esta alteração foi atualizada depois de você abri-la. Nada foi aprovado: revise o novo commit."
+    },
     "generic": {
       "NOT_FOUND": "O recurso solicitado não foi encontrado.",
       "BAD_REQUEST": "A solicitação não pôde ser processada. Verifique os dados informados.",
@@ -1872,7 +1877,25 @@
     },
     "approveMerge": "Aprovar e fazer merge",
     "approveMergeTitle": "Fazer merge desta mudança de risco alto?",
-    "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação."
+    "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação.",
+    "approvalRequest": {
+      "title": "É preciso sua aprovação para fazer o merge de #{{issue}}",
+      "titleNoIssue": "É preciso sua aprovação para fazer o merge desta execução",
+      "approvedTitle": "Você aprovou o merge de #{{issue}}",
+      "declinedTitle": "Você recusou aprovar #{{issue}}",
+      "expiredTitle": "O pedido para aprovar #{{issue}} expirou",
+      "asked": "Pedido pelo agente desta conversa. Nada é aprovado até você aprovar.",
+      "highRisk": "Risco alto",
+      "commit": "commit",
+      "size": "{{count}} linhas alteradas",
+      "reasons": "Por que a fábrica o retém",
+      "decline": "Recusar",
+      "loading": "Lendo a execução…",
+      "stale": "O pull request mudou depois que o agente pediu, então este pedido não se aplica mais.",
+      "declinedNote": "Nada foi aprovado. A execução continua retida.",
+      "runNow": "A execução agora:",
+      "boardMarker": "Um agente pediu sua aprovação"
+    }
   },
   "projectSecrets": {
     "title": "Segredos",
@@ -2055,6 +2078,10 @@
     }
   },
   "factoryRunDetail": {
+    "approvalAdjustment": "{{lines}} linhas diferem em {{files}} arquivos",
+    "approvalMovedTo": "movido para",
+    "approvalSameChange": "mesma alteração",
+    "approvedAt": "Merge aprovado em",
     "carriedFrom": "de {{sha}}",
     "ci": "{{rounds}} rodadas de CI · {{red}} vermelhas · {{conflicts}} conflitos · {{fixes}} correções do agente",
     "flow": "Fluxo",

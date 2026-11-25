@@ -78,6 +78,9 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
   'data:activity_start',
   'data:activity_update',
   'data:activity_reconcile',
+  'data:factory_list_runs',
+  'data:factory_control_run',
+  'data:factory_request_approval',
 ] as const;
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
@@ -381,6 +384,15 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:create_permission_rule': ['createPermissionRule', asPayload],
   'data:find_permission_rule': ['findPermissionRule', asPayload],
   'data:list_permission_rules': ['listPermissionRules', asPayload],
+  'data:factory_list_runs': ['factoryListRuns', inputThreadId],
+  'data:factory_control_run': [
+    'factoryControlRun',
+    (input) => ({ threadId: input.threadId, runId: input.runId, action: input.action }),
+  ],
+  'data:factory_request_approval': [
+    'factoryRequestApproval',
+    (input) => ({ threadId: input.threadId, runId: input.runId }),
+  ],
   'data:activity_start': ['activityStart', (_input, payload) => ({ activity: payload })],
   'data:activity_update': [
     'activityUpdate',

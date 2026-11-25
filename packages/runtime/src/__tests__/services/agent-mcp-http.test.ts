@@ -47,6 +47,9 @@ describe('funny MCP servers over HTTP', () => {
     const watch = expectDefined(await withWatchMcpServer('native-jobs', 'u1', undefined, 'claude'));
     const all = expectDefined(await withBrowserMcpServer('native-jobs', 'u1', watch));
     expect((await listTools(expectHttpMcpEntry(all.funny))).sort()).toEqual([
+      'funny_factory_control',
+      'funny_factory_request_approval',
+      'funny_factory_runs',
       'funny_run_checks',
       'funny_search_threads',
       'funny_spawn_thread',
@@ -90,6 +93,9 @@ describe('funny MCP servers over HTTP', () => {
       alwaysLoad: true,
     });
     expect((await listTools(expectHttpMcpEntry(servers.funny))).sort()).toEqual([
+      'funny_factory_control',
+      'funny_factory_request_approval',
+      'funny_factory_runs',
       'funny_run_checks',
       'funny_search_threads',
       'funny_spawn',

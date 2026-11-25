@@ -23,9 +23,9 @@ function threadRecapKey(threadId: string, newestMessageId: string) {
 }
 
 /** Whether a failed recap request was the utility model's missing credential. */
-export function isUtilityModelUnavailable(error: unknown): boolean {
+export function isUtilityModelUnavailable(cause: unknown): boolean {
   return (
-    error instanceof DataRequestError && error.domainError.message === UTILITY_MODEL_UNAVAILABLE
+    cause instanceof DataRequestError && cause.domainError.message === UTILITY_MODEL_UNAVAILABLE
   );
 }
 

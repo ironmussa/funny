@@ -220,12 +220,12 @@ export function ProvidersSettings() {
       </div>
       {providers.length === 0 ? (
         loading ? (
-          <LoadingState padding="md" fill={false} className="settings-card" label="Loading…" />
+          <LoadingState padding="md" fill={false} surface="card" label="Loading…" />
         ) : (
           <EmptyState
             padding="md"
             fill={false}
-            className="settings-card"
+            surface="card"
             icon={Cpu}
             title="No external providers installed."
           />

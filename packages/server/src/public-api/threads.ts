@@ -141,7 +141,8 @@ export async function createPublicThread(
 
 /** Every provider and model the server's registry offers, with their defaults. */
 export function listPublicModels(): PublicModelList {
-  const providers = (Object.keys(MODEL_REGISTRY) as AgentProvider[]).map((id) => ({
+  const providerIds: AgentProvider[] = Object.keys(MODEL_REGISTRY);
+  const providers = providerIds.map((id) => ({
     id,
     name: PROVIDER_LABELS[id] ?? id,
     defaultModel: getDefaultModel(id),

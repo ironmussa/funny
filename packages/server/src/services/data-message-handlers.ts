@@ -113,6 +113,8 @@ function notifyTerminalStatusPersisted(
   threadId: unknown,
   updates: unknown,
 ): void {
+  // SAFETY: `?.status` is defined for any value (a primitive yields undefined) and status
+  // stays unknown until the typeof check below.
   const status = (updates as { status?: unknown } | null)?.status;
   if (!runnerUserId || typeof threadId !== 'string') return;
   if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
@@ -582,12 +584,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   'data:cancel_queued_message': async ({ data }) => {
     // The ownership guard already verified message → thread → runnerUserId.
     // Resolve threadId here so cancel can scope by (messageId, threadId).
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q)
       return {
         type: 'data:cancel_queued_message_response',
@@ -597,12 +599,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     return { type: 'data:cancel_queued_message_response', success };
   },
   'data:update_queued_message': async ({ data }) => {
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q) return { type: 'data:update_queued_message_response', updated: null };
     const updated = await messageQueueRepo.update(data.messageId, q.threadId, data.content);
     return { type: 'data:update_queued_message_response', updated };
@@ -679,6 +681,51 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
             secretName: resolved.error.secretName,
           }),
         };
+  },
+  // The issue factory from a thread's agent (factory-agent-tools). The service
+  // takes the actor and the project from the thread's row and decides every
+  // refusal; a refusal is an answer the agent reads, not a transport error.
+  'data:factory_list_runs': async ({ runnerId, ownerId, data }) => {
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const listed = await factoryAgentTools.listRuns({
+      threadId: String(data.threadId),
+      runnerId,
+      runnerOwnerId: ownerId,
+    });
+    return listed.isOk()
+      ? { type: 'data:factory_list_runs_response', ...listed.value }
+      : {
+          type: 'data:factory_list_runs_response',
+          error: listed.error.kind,
+          message: listed.error.message,
+        };
+  },
+  'data:factory_control_run': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_control_run_response';
+    const action = data.action === 'retry' || data.action === 'stop' ? data.action : null;
+    if (!action) {
+      return { type, error: 'refused', message: 'The action must be retry or stop.' };
+    }
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const controlled = await factoryAgentTools.controlRun(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      action,
+      String(data.runId),
+    );
+    return controlled.isOk()
+      ? { type, run: controlled.value }
+      : { type, error: controlled.error.kind, message: controlled.error.message };
+  },
+  'data:factory_request_approval': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_request_approval_response';
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const asked = await factoryAgentTools.requestApproval(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      String(data.runId),
+    );
+    return asked.isOk()
+      ? { type, ...asked.value }
+      : { type, error: asked.error.kind, message: asked.error.message };
   },
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');

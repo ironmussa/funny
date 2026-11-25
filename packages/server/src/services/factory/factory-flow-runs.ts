@@ -44,6 +44,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { messages, threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
+import { recordServerActivity } from '../activities/server-activities.js';
 import type {
   StartedThread,
   StartThreadError,
@@ -65,6 +66,7 @@ import {
   NO_CHANGE_TRIAGE_LABEL,
   type StepAgentBody,
 } from './factory-action-provider.js';
+import { approvalMoveTitle, type ApprovalMove } from './factory-approval-carry.js';
 import {
   createFactoryBatchesRepository,
   type FactoryBatchesRepository,
@@ -118,6 +120,32 @@ export interface FactoryRunJob {
   /** The run's issue as GitHub has it; null for a run without one (change flow-triggers). */
   issue: FactoryIssue | null;
   run: FactoryRunView;
+}
+
+/** A merge approval the factory moved to another commit, as a row of the approver's activities. */
+function recordApprovalMove(
+  move: ApprovalMove,
+  projectId: string,
+  issueNumber: number | null,
+): Promise<void> {
+  return recordServerActivity(
+    {
+      kind: 'factory.approval-moved',
+      userId: move.userId,
+      projectId,
+      title: approvalMoveTitle(move, issueNumber),
+      input: {
+        ...(typeof issueNumber === 'number' && { issueNumber }),
+        from: move.from,
+        to: move.to,
+        change: move.kind,
+        lines: move.lines,
+        files: move.files.slice(0, 20),
+      },
+      origin: 'system',
+    },
+    { ok: true },
+  );
 }
 
 export interface FactoryFlowRunsDeps {
@@ -339,6 +367,7 @@ const flowOf = (job: FactoryRunJob): string => job.run.flowName ?? job.factory.f
  */
 const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineContext> => ({
   encode: (ctx) => ctx.outputs,
+  // SAFETY: the journal stores only what encode() wrote, the context's outputs (NodeOutput by node id).
   decode: (stored) => ({ ...live, outputs: stored as Record<string, NodeOutput> }),
 });
 
@@ -925,6 +954,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       split: splitDepsOf(job, scope),
       sensitivePaths: job.factory.sensitivePaths,
       maxLowRiskLines: job.factory.maxLowRiskLines,
+      approvalAdjustMaxLines: job.factory.approvalAdjustMaxLines,
       sizeIgnoredPaths: job.factory.sizeIgnoredPaths,
       autoMerge: job.factory.autoMerge,
       // Read from the row: the member approves while the run waits.
@@ -932,17 +962,24 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         const run = await deps.runs.get(job.run.id);
         return run.isOk() && run.value?.mergeApproval?.sha === sha;
       },
-      carryMergeApproval: async (from, to) => {
-        const carried = await deps.runs.carryMergeApproval(job.run.id, from, to);
+      mergeApproval: async () => {
+        const run = await deps.runs.get(job.run.id);
+        return run.isOk() ? (run.value?.mergeApproval ?? null) : null;
+      },
+      onApprovalMoved: (move) => recordApprovalMove(move, scope.projectId, job.run.issueNumber),
+      carryMergeApproval: async (from, to, move) => {
+        const carried = await deps.runs.carryMergeApproval(job.run.id, from, to, move);
         if (carried.isErr()) {
-          log.warn('Issue factory could not carry the merge approval to the merged base', {
+          log.warn('Issue factory could not move the merge approval to the new commit', {
             namespace: 'factory',
             runId: job.run.id,
             from,
             to,
             error: carried.error.message,
           });
+          return false;
         }
+        return carried.value;
       },
       storedProof: job.run.regressionProof,
       triage: job.run.triage,

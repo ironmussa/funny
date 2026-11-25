@@ -186,6 +186,8 @@ function agentActionValue(data: BrowserSessionData) {
 
 function viewportOf(value: unknown): { width: number; height: number } | undefined {
   if (!value || typeof value !== 'object') return undefined;
+  // SAFETY: the guard above proves value is a non-null object; both fields stay unknown
+  // until the typeof checks below.
   const { width, height } = value as { width?: unknown; height?: unknown };
   if (typeof width !== 'number' || typeof height !== 'number') return undefined;
   return { width: Math.round(width), height: Math.round(height) };

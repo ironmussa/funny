@@ -137,6 +137,9 @@ import {
   type FactoryTriggersRepository,
 } from './factory-triggers.js';
 
+/** The in-flight states, widened so a stored state string can be looked up. */
+const IN_FLIGHT: readonly string[] = IN_FLIGHT_STATES;
+
 /** A repeating poll — a real interval in production, a fake in tests. */
 export interface FactoryPoll {
   stop(): void;
@@ -247,6 +250,7 @@ async function defaultResolveRuntime(
         eq(projectSandboxSettings.userId, userId),
       ),
     );
+  // SAFETY: project_sandbox_settings.mode is written only by project-sandbox-settings.ts, from ThreadRuntimeMode values.
   return (row?.mode as ThreadRuntimeMode) ?? 'local';
 }
 
@@ -535,7 +539,7 @@ async function watchEarlyIntegration(factory: WatchedFactory, repo: string): Pro
       if (listed.isErr()) return [];
       return listed.value.flatMap((run) => {
         const prNumber = prNumberOf(run.prUrl);
-        const inFlight = (IN_FLIGHT_STATES as readonly string[]).includes(run.state);
+        const inFlight = IN_FLIGHT.includes(run.state);
         if (prNumber === null || !inFlight) return [];
         const paths = run.risk?.paths ?? contractOf(run)?.likelyPaths ?? [];
         return [{ runId: run.id, prNumber, paths }];
@@ -552,7 +556,7 @@ async function watchEarlyIntegration(factory: WatchedFactory, repo: string): Pro
       if (listed.isErr()) return [];
       return listed.value.flatMap((run) => {
         const on = run.stackedOn;
-        const inFlight = (IN_FLIGHT_STATES as readonly string[]).includes(run.state);
+        const inFlight = IN_FLIGHT.includes(run.state);
         if (!on || on.retargeted || !inFlight) return [];
         const blocker = listed.value.find((other) => other.id === on.runId);
         const blockerPr = prNumberOf(blocker?.prUrl ?? null);
@@ -647,7 +651,10 @@ async function superviseBase(
  */
 const clearedRedCommits = new (class extends Set<string> {
   override add(key: string): this {
-    if (this.size >= 500) this.delete(this.values().next().value as string);
+    if (this.size >= 500) {
+      // SAFETY: size >= 500 just held, so the iterator's first step yields a stored key.
+      this.delete(this.values().next().value as string);
+    }
     return super.add(key);
   }
 })();

@@ -23,7 +23,7 @@ import { rateLimitMiddleware } from './middleware.js';
 import { registerSocketHandlersWithSchema } from './router.js';
 import { terminalRoute } from './terminal-targets.js';
 
-const TERMINAL_EVENTS = new Set<RunnerTerminalEvent['type']>([
+const TERMINAL_EVENTS: ReadonlyArray<RunnerTerminalEvent['type']> = [
   'pty:spawn',
   'pty:write',
   'pty:resize',
@@ -32,7 +32,7 @@ const TERMINAL_EVENTS = new Set<RunnerTerminalEvent['type']>([
   'pty:signal',
   'pty:reconnect',
   'pty:restore',
-]);
+];
 
 /**
  * Dependencies shared by the browser-socket → runner handlers. Runner
@@ -111,10 +111,8 @@ export function setupBrowserPtyHandlers(
           route.target,
           dependencies.presence,
           async (actor, runner, proof) => {
-            if (
-              !(await terminal.isAvailable(runner)) ||
-              !TERMINAL_EVENTS.has(eventName as RunnerTerminalEvent['type'])
-            ) {
+            const terminalEventType = TERMINAL_EVENTS.find((type) => type === eventName);
+            if (!(await terminal.isAvailable(runner)) || !terminalEventType) {
               log.warn('PTY request has no active compatible gRPC terminal stream', {
                 namespace: 'socketio',
                 event: eventName,
@@ -127,9 +125,9 @@ export function setupBrowserPtyHandlers(
             }
             try {
               await terminal.dispatch(actor, runner, proof, {
-                type: eventName,
+                type: terminalEventType,
                 data: payload,
-              } as RunnerTerminalEvent);
+              });
               route.dispatched();
             } catch (error) {
               log.warn('gRPC PTY forward failed', {

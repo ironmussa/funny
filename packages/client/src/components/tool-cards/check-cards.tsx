@@ -57,8 +57,12 @@ function readCheckResult(text: string): CheckResult {
   };
 }
 
-const stringList = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+/** The files or packages the call asked to run, from its `scope` list. */
+function requestedScope(parsed: { scope?: unknown }): string[] {
+  return Array.isArray(parsed.scope)
+    ? parsed.scope.filter((item): item is string => typeof item === 'string')
+    : [];
+}
 
 /**
  * What the run covers: the command it ran once the result names it (it already
@@ -76,7 +80,7 @@ function CheckRunDetails({
 }) {
   const { t } = useTranslation();
   const requested = typeof parsed.command === 'string' ? parsed.command : null;
-  const scope = stringList(parsed.scope);
+  const scope = requestedScope(parsed);
   const filter = typeof parsed.filter === 'string' ? parsed.filter : null;
   const shown = command ?? requested;
 
@@ -103,14 +107,16 @@ function CheckRunDetails({
           key={item}
           variant="outline"
           size="xs"
-          className="max-w-full truncate font-mono font-normal"
+          weight="normal"
+          mono
+          className="max-w-full"
           title={item}
         >
           {item}
         </Badge>
       ))}
       {filter && (
-        <Badge variant="secondary" size="xs" className="font-mono font-normal">
+        <Badge variant="secondary" size="xs" weight="normal" mono>
           {t('checks.filter', { filter })}
         </Badge>
       )}

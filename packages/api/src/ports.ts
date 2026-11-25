@@ -63,6 +63,7 @@ import type {
   FactoryIssuelessFlow,
   FactoryQueueClearResult,
   FactoryQueueRun,
+  FactoryApprovalRequest,
   FactoryRun,
   FactorySettings,
   FactorySubmitResult,
@@ -454,8 +455,27 @@ export interface FactoryPort {
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */
   retryRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
-  /** Approve merging a run's held high-risk commit, then retry the run. */
-  approveMerge(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
+   * Approve merging a run's held high-risk commit, then retry the run. Refused
+   * (409) unless `expectedSha`, the commit the member was shown, is the held one.
+   */
+  approveMerge(
+    userId: string,
+    projectId: string,
+    runId: string,
+    expectedSha: string,
+  ): PortResult<FactoryRun>;
+  /**
+   * The requests agents made that the caller approve a held merge, newest
+   * first, each brought in line with its run. Empty without a factory.
+   */
+  approvalRequests(userId: string, projectId: string): PortResult<FactoryApprovalRequest[]>;
+  /** Decline one pending request (404 not the caller's, 409 no longer pending); the run stays held. */
+  declineApprovalRequest(
+    userId: string,
+    projectId: string,
+    requestId: string,
+  ): PortResult<FactoryApprovalRequest>;
   /**
    * Queue chosen issues of the project's repository in the caller's own factory
    * with one flow (change factory-manual-queue). Refused as a whole (409) when

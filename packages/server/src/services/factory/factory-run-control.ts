@@ -65,6 +65,10 @@ export type FactoryRunControlError = {
   message: string;
 };
 
+/** The refusal of an approval that names another commit than the held one. */
+const HELD_COMMIT_CHANGED =
+  'The change was updated after you opened it. Reload and review the new commit.';
+
 const notFound: FactoryRunControlError = { kind: 'not-found', message: 'Run not found' };
 const storage = (error: { message: string }): FactoryRunControlError => ({
   kind: 'storage',
@@ -230,13 +234,15 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
 
     /**
      * Approve merging the run's held high-risk head commit, then retry it.
-     * Refused unless the run waits for a person because of that risk. When
+     * Refused unless the run waits for a person because of that risk, and
+     * unless `expectedSha` (the commit the member was shown) is the held one. When
      * the factory has no free slot the run waits at the head of the queue.
      */
     approveMerge(
       userId: string,
       factoryId: string,
       runId: string,
+      expectedSha: string,
     ): ResultAsync<{ run: FactoryRunView; sha: string }, FactoryRunControlError> {
       return runOf(factoryId, runId).andThen((run) => {
         const sha = run.risk?.level === 'high' ? run.risk.headSha : null;
@@ -246,8 +252,21 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             message: 'Only a run waiting for your approval of a high-risk change can be approved.',
           });
         }
+        // The member approves the commit they saw, never the one that replaced it.
+        if (sha !== expectedSha) {
+          return errAsync<{ run: FactoryRunView; sha: string }, FactoryRunControlError>({
+            kind: 'conflict',
+            message: HELD_COMMIT_CHANGED,
+          });
+        }
         return runs
-          .approveMerge(run.id, { sha, userId, at: new Date().toISOString() })
+          .approveMerge(run.id, {
+            sha,
+            userId,
+            at: new Date().toISOString(),
+            // What the member accepted: an adjustment may add no risk key to these.
+            riskKeys: run.risk?.keys,
+          })
           .mapErr(storage)
           .andThen((written) =>
             written

@@ -92,6 +92,7 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
 
 function parseUnsigned(value: unknown): bigint | null {
   try {
+    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n && parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? parsed : null;
   } catch {

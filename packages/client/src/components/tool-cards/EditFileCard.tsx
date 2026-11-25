@@ -51,7 +51,12 @@ function hasUnifiedDiffHunk(diff: string | undefined): boolean {
   return !!diff && diff.split('\n').some((line) => line.startsWith('@@'));
 }
 
-function statusForChangeType(type: unknown): FileStatus {
+/** The file status a change reports in `change[key]` (`type` in Claude edits, `kind` in Codex). */
+function statusForChangeType(
+  change: { type?: unknown; kind?: unknown },
+  key: 'type' | 'kind',
+): FileStatus {
+  const type = change[key];
   if (type === 'add' || type === 'create') return 'added';
   if (type === 'delete' || type === 'remove') return 'deleted';
   if (type === 'move' || type === 'rename') return 'renamed';
@@ -65,7 +70,7 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
     for (const [filePath, rawChange] of Object.entries(changes)) {
       if (!filePath || !isRecord(rawChange)) continue;
 
-      const status = statusForChangeType(rawChange.type);
+      const status = statusForChangeType(rawChange, 'type');
       const unifiedDiff = rawChange.unified_diff;
       if (typeof unifiedDiff === 'string' && unifiedDiff.trim()) {
         const rawDiff = normalizeUnifiedDiff(filePath, unifiedDiff);
@@ -102,7 +107,7 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
   if (Array.isArray(changes)) {
     return changes.flatMap((change) => {
       if (!isRecord(change) || typeof change.path !== 'string' || !change.path) return [];
-      return [{ filePath: change.path, status: statusForChangeType(change.kind) }];
+      return [{ filePath: change.path, status: statusForChangeType(change, 'kind') }];
     });
   }
 

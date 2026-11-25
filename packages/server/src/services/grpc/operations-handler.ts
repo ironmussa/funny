@@ -195,6 +195,9 @@ const OPERATION_KINDS = [
   'activityStart',
   'activityUpdate',
   'activityReconcile',
+  'factoryListRuns',
+  'factoryControlRun',
+  'factoryRequestApproval',
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
@@ -373,6 +376,18 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     projectId: value.projectId ?? undefined,
   }),
   getGithubAppToken: threadScoped('data:get_github_app_token'),
+  factoryListRuns: threadScoped('data:factory_list_runs'),
+  factoryControlRun: (value) => ({
+    type: 'data:factory_control_run',
+    threadId: value.threadId,
+    runId: value.runId,
+    action: value.action,
+  }),
+  factoryRequestApproval: (value) => ({
+    type: 'data:factory_request_approval',
+    threadId: value.threadId,
+    runId: value.runId,
+  }),
   getProjectSecrets: threadScoped('data:get_project_secrets'),
   getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),
   updateProfile: (value, principalUserId) => ({
@@ -638,37 +653,49 @@ export function createOperationsHandler(
         );
         timer.unref();
         try {
-          const execution = persistentMutation
-            ? idempotency.execute(
-                {
-                  runnerId: context.principal.runnerId,
-                  operationKind: kind,
-                  idempotencyKey: idempotencyKey!,
-                  request: request[kind],
-                },
-                () => execute(context, { request: legacyRequest, signal: controller.signal }),
-              )
-            : execute(context, { request: legacyRequest, signal: controller.signal });
-          const result = await runAsync(() => execution, { signal: controller.signal });
-          if (closed) return;
-          if (persistentMutation && (result as any).kind === 'conflict') {
-            sendFailure(
-              FailureCode.CONFLICT,
-              'idempotency key was reused with a different request',
+          let operationResult: unknown;
+          if (persistentMutation) {
+            const execution = idempotency.execute(
+              {
+                runnerId: context.principal.runnerId,
+                operationKind: kind,
+                idempotencyKey: idempotencyKey!,
+                request: request[kind],
+              },
+              () => execute(context, { request: legacyRequest, signal: controller.signal }),
             );
-            return;
+            const result = await runAsync(() => execution, { signal: controller.signal });
+            if (closed) return;
+            if (result.kind === 'conflict') {
+              sendFailure(
+                FailureCode.CONFLICT,
+                'idempotency key was reused with a different request',
+              );
+              return;
+            }
+            if (result.kind === 'in_progress') {
+              sendFailure(FailureCode.UNAVAILABLE, 'operation outcome is not available yet', true);
+              return;
+            }
+            operationResult = result.outcome;
+          } else {
+            const execution = execute(context, {
+              request: legacyRequest,
+              signal: controller.signal,
+            });
+            operationResult = await runAsync(() => execution, { signal: controller.signal });
+            if (closed) return;
           }
-          if (persistentMutation && (result as any).kind === 'in_progress') {
-            sendFailure(FailureCode.UNAVAILABLE, 'operation outcome is not available yet', true);
-            return;
-          }
-          const operationResult = persistentMutation ? (result as any).outcome : result;
+          // SAFETY: names only the two fields read below; optional chaining yields undefined for
+          // nullish values, primitives and objects that lack them.
+          const reported = operationResult as
+            | { success?: unknown; error?: unknown }
+            | null
+            | undefined;
           if (!sessions.isActive(context.principal.runnerId, epoch)) {
             sendFailure(FailureCode.UNAVAILABLE, 'runner session was superseded', true);
-          } else if ((operationResult as any)?.success === false) {
-            const operationError = String(
-              (operationResult as any)?.error ?? 'runner operation failed',
-            );
+          } else if (reported?.success === false) {
+            const operationError = String(reported?.error ?? 'runner operation failed');
             sendFailure(
               operationError === 'Forbidden' ? FailureCode.PERMISSION_DENIED : FailureCode.INTERNAL,
               operationError === 'Forbidden' ? 'operation is not authorized' : operationError,

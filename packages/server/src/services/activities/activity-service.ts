@@ -102,7 +102,7 @@ export async function startActivityFromRunner(args: {
   const title = text(payload.title, ACTIVITY_TITLE_MAX);
   if (!id) return { ok: false, error: 'activity id is invalid' };
   if (!title) return { ok: false, error: 'activity title is required' };
-  const input = parseActivityInput(kind, payload.input);
+  const input = parseActivityInput({ kind, input: payload.input });
   if (!input) return { ok: false, error: `activity kind ${kind} or its input is invalid` };
 
   const finalStatus =
@@ -118,7 +118,7 @@ export async function startActivityFromRunner(args: {
     input,
     step: text(payload.step, ACTIVITY_STEP_MAX),
     origin: isActivityOrigin(payload.origin) ? payload.origin : 'user',
-    effects: parseActivityEffects(payload.effects),
+    effects: parseActivityEffects(payload),
     startedAt: new Date().toISOString(),
   };
   if (finalStatus) {
@@ -136,6 +136,7 @@ export async function startActivityFromRunner(args: {
 }
 
 function reportedStatus(value: unknown): ActivityStatus | undefined {
+  // SAFETY: has() only compares the string; it is returned as ActivityStatus only when the set holds it.
   return typeof value === 'string' && REPORTED_STATUSES.has(value as ActivityStatus)
     ? (value as ActivityStatus)
     : undefined;
@@ -151,7 +152,7 @@ function pickActivityPatch(raw: unknown): ActivityPatch {
   if ('error' in raw) patch.error = text(raw.error, ACTIVITY_ERROR_MAX);
   const resultRef = resultRefOf('resultRef' in raw ? raw.resultRef : undefined);
   if (resultRef !== undefined) patch.resultRef = resultRef;
-  if ('effects' in raw) patch.effects = parseActivityEffects(raw.effects);
+  if ('effects' in raw) patch.effects = parseActivityEffects(raw);
   if (status && isFinalActivityStatus(status)) patch.endedAt = new Date().toISOString();
   return patch;
 }

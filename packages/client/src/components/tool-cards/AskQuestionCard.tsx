@@ -514,7 +514,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                               <Button
                                 data-testid="ask-question-dictate"
                                 onClick={toggleRecording}
-                                variant="ghost"
+                                variant={isRecording ? 'ghost-destructive' : 'muted'}
                                 size="icon-sm"
                                 tabIndex={-1}
                                 aria-label={
@@ -523,10 +523,6 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                                     : t('prompt.startDictation', 'Start dictation')
                                 }
                                 disabled={isTranscribing}
-                                className={cn(
-                                  'text-muted-foreground hover:text-foreground',
-                                  isRecording && 'text-destructive hover:text-destructive',
-                                )}
                               >
                                 {isTranscribing ? (
                                   <Loader2 className="icon-xs animate-spin" />

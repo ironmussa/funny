@@ -44,6 +44,8 @@ describe('GrpcOperationsAdapter mapping', () => {
       provider: 'anthropic',
       active: ['a'],
       direction: 'after',
+      runId: 'run1',
+      action: 'retry',
       payload: P,
     };
     const expected: Record<string, RunnerOperation> = {
@@ -156,6 +158,15 @@ describe('GrpcOperationsAdapter mapping', () => {
         value: { activityId: 'i1', patch: { x: 1 } },
       },
       'data:activity_reconcile': { kind: 'activityReconcile', value: { liveActivityIds: [] } },
+      'data:factory_list_runs': { kind: 'factoryListRuns', value: { threadId: 't1' } },
+      'data:factory_control_run': {
+        kind: 'factoryControlRun',
+        value: { threadId: 't1', runId: 'run1', action: 'retry' },
+      },
+      'data:factory_request_approval': {
+        kind: 'factoryRequestApproval',
+        value: { threadId: 't1', runId: 'run1' },
+      },
     };
     expect(Object.keys(expected).sort()).toEqual([...RUNNER_OPERATION_EVENT_TYPES].sort());
     for (const eventType of RUNNER_OPERATION_EVENT_TYPES) {

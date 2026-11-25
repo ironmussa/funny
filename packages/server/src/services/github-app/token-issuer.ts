@@ -141,6 +141,7 @@ export function createGithubAppTokenIssuer(deps: TokenIssuerDeps) {
         if (!res.ok)
           return errAsync(fail('github-error', `GitHub answered ${res.status} for ${repo}`));
         return ResultAsync.fromPromise(
+          // SAFETY: res.ok held; GitHub's GET /repos/{repo} answers a repository object whose `permissions` maps permission names to booleans.
           res.json() as Promise<{ permissions?: Record<string, boolean> }>,
           () => fail('github-error', 'unreadable repository response'),
         ).map((body) => {

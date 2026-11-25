@@ -1,6 +1,8 @@
 import { lt, valid } from 'semver';
 import { z } from 'zod';
 
+import { canonicalJsonWithKeyOrder } from './lib/canonical-json.js';
+
 export const REMOTE_CONNECTOR_PROTOCOL_VERSION = 1 as const;
 export const REMOTE_CONNECTOR_PROTOCOL_VERSIONS = [REMOTE_CONNECTOR_PROTOCOL_VERSION] as const;
 export const REMOTE_CONNECTOR_MAX_OUTPUT_BYTES = 256 * 1024;
@@ -630,10 +632,6 @@ export type ConnectorErrorResult = z.infer<typeof connectorErrorResultSchema>;
 export type ConnectorIpcRequest = z.infer<typeof connectorIpcRequestSchema>;
 export type ConnectorIpcResponse = z.infer<typeof connectorIpcResponseSchema>;
 
-function isNonNullObject(value: unknown): value is object {
-  return typeof value === 'object' && value !== null;
-}
-
 function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
@@ -646,20 +644,13 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
 }
 
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (isNonNullObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([key, entry]) => [key, canonicalize(entry)]),
-    );
-  }
-  return value;
+/** Code-unit key order: the connector's signed digests must not depend on locale. */
+function codeUnitOrder(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalize(value));
+export function canonicalJson<T>(value: T): string {
+  return canonicalJsonWithKeyOrder(value, codeUnitOrder);
 }
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -668,7 +659,7 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
-export async function sha256Digest(value: unknown): Promise<string> {
+export async function sha256Digest<T>(value: T): Promise<string> {
   const encoded = new TextEncoder().encode(canonicalJson(value));
   const digest = await crypto.subtle.digest('SHA-256', encoded);
   return toBase64Url(new Uint8Array(digest));

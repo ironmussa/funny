@@ -122,9 +122,13 @@ function enabledCapabilities(
       value = capability;
     } else {
       const generatedName = capability.replace(/^RUNNER_CAPABILITY_/, '');
+      // SAFETY: an unknown name indexes to undefined (or a reverse-mapped name string), which the
+      // typeof check below maps to UNSPECIFIED.
       const resolved = RunnerCapability[generatedName as keyof typeof RunnerCapability];
       value = typeof resolved === 'number' ? resolved : RunnerCapability.UNSPECIFIED;
     }
+    // SAFETY: integers that are not a supported RunnerCapability are dropped by the
+    // available.has filter below.
     return Number.isInteger(value) ? [value as RunnerCapability] : [];
   });
   return [...new Set(normalized)].filter(

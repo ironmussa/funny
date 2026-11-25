@@ -147,6 +147,7 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     defaultEditor: r.defaultEditor ?? null,
     useInternalEditor: r.useInternalEditor != null ? !!r.useInternalEditor : null,
     terminalShell: r.terminalShell ?? null,
+    // SAFETY: tool_permissions is a text column, so a truthy value here is already a string.
     toolPermissions: r.toolPermissions ? JSON.parse(r.toolPermissions as string) : null,
     theme: r.theme ?? null,
     runnerInviteToken: r.runnerInviteToken ?? null,

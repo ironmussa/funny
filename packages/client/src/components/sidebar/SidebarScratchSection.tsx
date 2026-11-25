@@ -54,19 +54,22 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
             'hover:bg-accent/50 text-muted-foreground hover:text-foreground',
           )}
         >
-          <CollapsibleTrigger
-            data-testid="sidebar-scratch-toggle"
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-0 px-2 py-1 text-left text-xs"
-          >
-            <span className="-ml-0.5 shrink-0 rounded p-0.5">
-              <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
-            </span>
-            <span className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5">
-              <NotebookPen className="icon-sm text-muted-foreground shrink-0" />
-              <span className="truncate text-sm font-medium">
-                {t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' })}
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              data-testid="sidebar-scratch-toggle"
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-0 px-2 py-1 text-left text-xs"
+            >
+              <span className="-ml-0.5 shrink-0 rounded p-0.5">
+                <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
               </span>
-            </span>
+              <span className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5">
+                <NotebookPen className="icon-sm text-muted-foreground shrink-0" />
+                <span className="truncate text-sm font-medium">
+                  {t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' })}
+                </span>
+              </span>
+            </button>
           </CollapsibleTrigger>
           <div className="mr-2 flex items-center gap-0.5">
             <Tooltip>

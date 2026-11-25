@@ -309,7 +309,7 @@ export function MarginAnnotations({
                   {a.emoji || <MessageSquare className="text-primary size-3" />}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-56 text-xs">
+              <TooltipContent side="left" className="max-w-56">
                 {a.comment && <p>{a.comment}</p>}
                 {!a.comment && a.emoji && <p>Reaction</p>}
                 <p className="text-muted-foreground/50">Click to remove</p>

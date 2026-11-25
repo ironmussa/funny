@@ -482,17 +482,29 @@ function SidebarSeparator({
     />
   );
 }
+/** Padding of the scrolling content: none, the sidebar's 8px gutters, or gutters plus room below a nav list. */
+const SIDEBAR_CONTENT_INSET = {
+  none: '',
+  x: 'px-2',
+  list: 'px-2 pb-2',
+} as const;
+
 function SidebarContent({
   className,
+  inset = 'none',
   ref,
   ...props
-}: React.ComponentProps<'div'> & { ref?: React.Ref<HTMLDivElement> }) {
+}: React.ComponentProps<'div'> & {
+  ref?: React.Ref<HTMLDivElement>;
+  inset?: keyof typeof SIDEBAR_CONTENT_INSET;
+}) {
   return (
     <div
       ref={ref}
       data-sidebar="content"
       className={cn(
         'flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:overflow-hidden',
+        SIDEBAR_CONTENT_INSET[inset],
         className,
       )}
       {...props}

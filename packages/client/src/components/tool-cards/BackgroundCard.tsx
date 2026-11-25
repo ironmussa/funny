@@ -43,7 +43,7 @@ function JobStatusBadge({ status, exitCode }: { status: string; exitCode: number
     <Badge
       variant={failed ? 'destructive' : 'secondary'}
       size="xs"
-      className="font-normal"
+      weight="normal"
       data-testid="background-card-status"
     >
       {JOB_STATUSES.has(status) ? t(`tools.jobStatus.${status}`) : status}
@@ -106,10 +106,7 @@ export function BackgroundCard({
         )}
       </button>
       {expanded && command && (
-        <ToolContentArea
-          className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-        >
+        <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           {cwd && (
             <div className="text-muted-foreground truncate px-3 pt-2 font-mono text-xs" title={cwd}>
               {cwd}

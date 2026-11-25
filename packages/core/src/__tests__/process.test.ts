@@ -1,3 +1,7 @@
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
   buildProcessEnv,
   execute,
@@ -105,6 +109,61 @@ describe('execute', () => {
   test('timeout 0 disables the deadline instead of expiring at once', async () => {
     const result = await execute('node', ['-e', 'setTimeout(() => {}, 300)'], { timeout: 0 });
     expect(result.exitCode).toBe(0);
+  });
+});
+
+/** True while `pid` is a live process (signal 0 probes without killing). */
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether `pid` is gone within `timeoutMs` (a killed orphan is reaped by init, not at once). */
+async function becomesDead(pid: number, timeoutMs = 2000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!isAlive(pid)) return true;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return !isAlive(pid);
+}
+
+describe.skipIf(process.platform === 'win32')('execute with killProcessGroup', () => {
+  test('a background child the command leaves behind dies when it exits', async () => {
+    // The child keeps stdout open too: the call must still return at once.
+    const started = Date.now();
+    const result = await execute('sh', ['-c', 'sleep 30 & echo $!'], {
+      killProcessGroup: true,
+      timeout: 10_000,
+    });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(result.exitCode).toBe(0);
+    expect(await becomesDead(Number(result.stdout.trim()))).toBe(true);
+  });
+
+  test('the whole group dies on a timeout', async () => {
+    const pidFile = join(mkdtempSync(join(tmpdir(), 'funny-pgroup-')), 'pid');
+    await expect(
+      execute('sh', ['-c', `sleep 30 >/dev/null 2>&1 & echo $! > '${pidFile}'; sleep 30`], {
+        killProcessGroup: true,
+        timeout: 500,
+      }),
+    ).rejects.toThrow('timed out');
+    expect(await becomesDead(Number(readFileSync(pidFile, 'utf8').trim()))).toBe(true);
+  });
+
+  test('without it, a detached-from-output background child is left alone (default unchanged)', async () => {
+    const result = await execute('sh', ['-c', 'sleep 30 >/dev/null 2>&1 & echo $!']);
+    const pid = Number(result.stdout.trim());
+    try {
+      expect(isAlive(pid)).toBe(true);
+    } finally {
+      process.kill(pid, 'SIGKILL');
+    }
   });
 });
 

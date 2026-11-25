@@ -5,7 +5,7 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -61,6 +61,26 @@ function repoWithFix(files: Record<string, string>): { path: string; headSha: st
   return { path, headSha: git(path, 'rev-parse', 'HEAD') };
 }
 
+function readPids(file: string): number[] {
+  if (!existsSync(file)) return [];
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
+}
+
+/** Whether `pid` is gone within `timeoutMs` (a killed orphan is reaped by init, not at once). */
+async function becomesDead(pid: number, timeoutMs = 2_000): Promise<boolean> {
+  const alive = () => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const start = Date.now();
+  while (alive() && Date.now() - start < timeoutMs) await Bun.sleep(25);
+  return !alive();
+}
+
 const ASSERTS_FIX = '[ "$(sh lib.sh)" = 2 ] || { echo "assertion failed: expected 2"; exit 1; }\n';
 
 function prove(
@@ -98,6 +118,29 @@ describe('regression proof run', () => {
     expect(result.verdict).toBe('fail');
     expect(result.finding).toContain('no {{files}} placeholder');
     expect(result.commands).toEqual([]);
+  });
+
+  test('a background process a test starts does not outlive the proof step', async () => {
+    const pidFile = join(tempDir('funny-proof-pids-'), 'pids');
+    // Like the PTY daemon a runtime test starts: backgrounded, output detached.
+    const leaves = `sleep 30 >/dev/null 2>&1 &\necho $! >> '${pidFile}'\n${ASSERTS_FIX}`;
+    const result = await prove(repoWithFix({ 'lib.test.sh': leaves }));
+    expect(result.verdict).toBe('pass');
+    const pids = readPids(pidFile);
+    // Head run (passes), then base run (fails), then the head again (flake check).
+    expect(pids.length).toBeGreaterThanOrEqual(2);
+    for (const pid of pids) expect(await becomesDead(pid)).toBe(true);
+  });
+
+  test('a background process a timed-out test starts dies with it', async () => {
+    const pidFile = join(tempDir('funny-proof-pids-'), 'pids');
+    const leaves = `sleep 30 >/dev/null 2>&1 &\necho $! >> '${pidFile}'\nsleep 30\n`;
+    const result = await prove(repoWithFix({ 'lib.test.sh': leaves }), { timeoutMs: 3_000 });
+    expect(result.verdict).toBe('fail');
+    expect(result.finding).toContain('ran out of time on the head commit');
+    const pids = readPids(pidFile);
+    expect(pids.length).toBeGreaterThanOrEqual(1);
+    for (const pid of pids) expect(await becomesDead(pid)).toBe(true);
   });
 
   test('a test that also passes on the base does not catch the bug', async () => {

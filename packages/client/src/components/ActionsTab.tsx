@@ -562,7 +562,9 @@ function ScopeToggle({
       type="single"
       size="sm"
       value={scope}
-      onValueChange={(value) => value && onScopeChange(value as Scope)}
+      onValueChange={(value) => {
+        if (value === 'branch' || value === 'all') onScopeChange(value);
+      }}
       className="h-6"
     >
       <ToggleGroupItem

@@ -1,5 +1,5 @@
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
-import { useMemo, useCallback, useRef, useLayoutEffect, memo, type MutableRefObject } from 'react';
+import { useMemo, useCallback, useRef, useLayoutEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useProjects } from '@/data/projects/hooks';
@@ -189,7 +189,7 @@ const ThreadListItem = memo(function ThreadListItem({
   const now = useMinuteTick();
   // Use a ref for the thread so callbacks stay stable even when the
   // thread object reference changes (e.g. cost/sessionId updates).
-  const threadRef = useRef(thread) as MutableRefObject<EnrichedThread>;
+  const threadRef = useRef<EnrichedThread>(thread);
   useLayoutEffect(() => {
     threadRef.current = thread;
   }, [thread]);

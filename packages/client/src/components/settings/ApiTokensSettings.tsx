@@ -116,7 +116,11 @@ export function ApiTokensSettings() {
             onChange={(e) => setName(e.target.value)}
             data-testid="settings-api-tokens-name"
           />
-          <Select value={days} onValueChange={(v) => setDays(v as ExpiryDays)}>
+          <Select
+            value={days}
+            // SAFETY: the items are rendered from EXPIRY_DAYS, so each value is an ExpiryDays.
+            onValueChange={(v) => setDays(v as ExpiryDays)}
+          >
             <SelectTrigger className="w-40" data-testid="settings-api-tokens-expiry">
               <SelectValue />
             </SelectTrigger>

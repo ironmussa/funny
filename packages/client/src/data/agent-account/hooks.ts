@@ -33,6 +33,6 @@ export function useThreadAgentAccount(
     queryKey: liveQueryKey('agent-account:row', accounts.collection, key),
     query: (q) => q.from({ a: accounts.collection }).where(({ a }) => eq(a.id, key)),
   });
-  const row = rows?.[0] as AgentAccountRow | undefined;
+  const row = rows?.[0];
   return useMemo(() => (row ? accounts.fromRow(row) : undefined), [row, accounts]);
 }

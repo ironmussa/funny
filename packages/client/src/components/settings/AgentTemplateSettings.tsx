@@ -574,7 +574,12 @@ function ModelSection({
       <span id="agent-template-model-label" className="text-muted-foreground mb-1 block text-xs">
         Default Model
       </span>
-      <Select value={template.model ?? ''} onValueChange={(v) => onSave({ model: v as any })}>
+      <Select
+        value={template.model ?? ''}
+        // SAFETY: the items are rendered from PROVIDER_MODELS.deepagent, which lists the keys of
+        // the deepagent model registry, the DeepAgentModel values.
+        onValueChange={(v) => onSave({ model: v as NonNullable<AgentTemplate['model']> })}
+      >
         <SelectTrigger
           aria-labelledby="agent-template-model-label"
           className="w-full"

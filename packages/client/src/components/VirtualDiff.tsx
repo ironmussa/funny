@@ -172,8 +172,8 @@ export const VirtualDiff = memo(function VirtualDiff({
       // Restore previous isolation
       restore();
 
-      const target = e.target as HTMLElement;
-      const pane = target.closest('[data-pane]') as HTMLElement | null;
+      if (!(e.target instanceof Element)) return;
+      const pane = e.target.closest<HTMLElement>('[data-pane]');
       if (!pane) return;
 
       // Disable all panes that don't match the clicked one
@@ -188,7 +188,7 @@ export const VirtualDiff = memo(function VirtualDiff({
 
     // Clicking outside the diff container restores all panes
     const onDocMouseDown = (e: MouseEvent) => {
-      if (!container.contains(e.target as Node)) restore();
+      if (!(e.target instanceof Node && container.contains(e.target))) restore();
     };
 
     container.addEventListener('mousedown', onMouseDown);
@@ -318,8 +318,10 @@ export const VirtualDiff = memo(function VirtualDiff({
           const lineStart = row.lineIdx;
           let lineEnd = row.lineIdx;
           let j = i + 1;
-          while (j < rows.length && rows[j].type === 'line') {
-            lineEnd = (rows[j] as { type: 'line'; lineIdx: number }).lineIdx;
+          while (j < rows.length) {
+            const next = rows[j];
+            if (next.type !== 'line') break;
+            lineEnd = next.lineIdx;
             j++;
           }
           if (viewMode === 'three-pane') {
@@ -535,7 +537,8 @@ export const VirtualDiff = memo(function VirtualDiff({
   }>({ active: false, mode: true, startLineIdx: -1 });
 
   const getLineIdxFromEvent = useCallback((e: React.MouseEvent | MouseEvent): number | null => {
-    const el = (e.target as HTMLElement).closest('[data-line-idx]');
+    if (!(e.target instanceof Element)) return null;
+    const el = e.target.closest('[data-line-idx]');
     if (!el) return null;
     const v = Number(el.getAttribute('data-line-idx'));
     return Number.isFinite(v) ? v : null;
@@ -545,8 +548,7 @@ export const VirtualDiff = memo(function VirtualDiff({
     (e: React.MouseEvent) => {
       if (!selectable || !onDragSelect || e.button !== 0) return;
       // Only start drag when clicking on the gutter area (checkbox / line numbers)
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-gutter]')) return;
+      if (!(e.target instanceof Element) || !e.target.closest('[data-gutter]')) return;
       const lineIdx = getLineIdxFromEvent(e);
       if (lineIdx == null) return;
       const willSelect = !selectedLines?.has(lineIdx);
@@ -655,8 +657,7 @@ export const VirtualDiff = memo(function VirtualDiff({
           onClickCapture={
             selectable
               ? (e) => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('[data-gutter]')) {
+                  if (e.target instanceof Element && e.target.closest('[data-gutter]')) {
                     e.stopPropagation();
                     e.preventDefault();
                   }

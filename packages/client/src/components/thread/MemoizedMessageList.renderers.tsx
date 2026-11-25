@@ -288,7 +288,7 @@ export function UserMessageRenderer({
 function StoppedOutcomeRow({ event }: { event: ThreadEvent }) {
   let completedAt: string | undefined;
   try {
-    completedAt = JSON.parse(event.data as string)?.completedAt;
+    completedAt = JSON.parse(event.data)?.completedAt;
   } catch {
     completedAt = undefined;
   }
@@ -395,7 +395,7 @@ export function VirtualRowContent({
   if (isUserMessageItem(item)) {
     return (
       <UserMessageRenderer
-        item={item as MessageItem}
+        item={item}
         onOpenLightbox={onOpenLightbox}
         onFork={onFork}
         onRewind={onRewind}

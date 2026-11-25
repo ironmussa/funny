@@ -12,6 +12,8 @@ export function deriveResultInfo(thread: Thread): AgentResultInfo | undefined {
     status: thread.status,
     cost: thread.cost,
     duration: 0,
+    // SAFETY: Thread has no `error` field and the server's toThread sets none, so a server row
+    // reads undefined here; the optional string type covers any other value a caller attaches.
     error: (thread as Thread & { error?: string }).error,
   };
 }

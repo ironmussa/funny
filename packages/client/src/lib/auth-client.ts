@@ -7,7 +7,7 @@ import { createAuthClient } from 'better-auth/react';
 // or http://tauri.localhost), where an absolute URL to the sidecar is required.
 const isPackagedTauri =
   typeof window !== 'undefined' &&
-  !!(window as any).__TAURI_INTERNALS__ &&
+  !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__) &&
   window.location.protocol !== 'http:' &&
   window.location.protocol !== 'https:';
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';

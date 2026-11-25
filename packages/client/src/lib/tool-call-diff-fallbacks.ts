@@ -156,7 +156,7 @@ export function buildToolCallDiffFallbacks(
   const diffs = new Map<string, string[]>();
   for (const item of items) {
     if (!isRecord(item)) continue;
-    const record = item as { type?: unknown };
+    const record: { type?: unknown } = item;
     if (
       record.type !== 'toolcall' &&
       record.type !== 'toolcall-group' &&
@@ -164,6 +164,9 @@ export function buildToolCallDiffFallbacks(
     ) {
       continue;
     }
+    // SAFETY: the check above kept only items tagged 'toolcall', 'toolcall-group' or
+    // 'toolcall-run'; the render-item builder gives those the tc / calls / items
+    // fields ToolItemLike describes.
     collectFromItem(item as ToolItemLike, files, diffs);
   }
   return new Map([...diffs].map(([path, chunks]) => [path, chunks.join('\n')]));

@@ -91,7 +91,7 @@ export function startSpan(
         name,
         startTimeUnixNano: String(startTime * 1_000_000),
         endTimeUnixNano: String(Date.now() * 1_000_000),
-        attributes: opts?.attributes as Record<string, string> | undefined,
+        attributes: opts?.attributes,
         status: status === 'ERROR' ? { code: 2, message: errorMsg } : { code: 1 },
       });
     },

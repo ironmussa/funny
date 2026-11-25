@@ -31,5 +31,7 @@ export function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
 
   // The callback is created once; the ref is only read when it is invoked.
   const stable = useCallback((...args: Parameters<T>) => ref.current(...args), []);
+  // SAFETY: stable takes T's parameters and returns what ref.current (the latest fn, a T)
+  // returns, so it has T's call signature (fn's own extra properties are not copied).
   return stable as T;
 }

@@ -26,30 +26,53 @@ import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
 
 type OnOff = 'on' | 'off';
 
+/** The settings the form edits. */
+type FactoryForm = Pick<
+  FactorySettings,
+  | 'enabled'
+  | 'mode'
+  | 'label'
+  | 'flowName'
+  | 'maxConcurrent'
+  | 'autoMerge'
+  | 'sensitivePaths'
+  | 'sizeGateEnabled'
+  | 'maxLowRiskLines'
+  | 'approvalAdjustMaxLines'
+  | 'sizeIgnoredPaths'
+  | 'stageLimits'
+  | 'stepOverrides'
+  | 'batch'
+  | 'dependencies'
+  | 'tooBig'
+  | 'holdPathsAwaitingApproval'
+  | 'baseBranch'
+>;
+
 /** The server's defaults: what the form shows before the first save. */
-const DEFAULT_FORM = {
+const DEFAULT_FORM: FactoryForm = {
   enabled: false,
-  mode: 'manual' as FactoryMode,
+  mode: 'manual',
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
-  autoMerge: 'low_risk' as FactorySettings['autoMerge'],
-  sensitivePaths: [] as string[],
+  autoMerge: 'low_risk',
+  sensitivePaths: [],
   sizeGateEnabled: false,
   maxLowRiskLines: 400,
   approvalAdjustMaxLines: 0,
-  sizeIgnoredPaths: [] as string[],
-  stageLimits: {} as Record<string, number>,
-  stepOverrides: {} as FactorySettings['stepOverrides'],
-  batch: { size: 5, waitSeconds: 60 } as FactorySettings['batch'],
-  dependencies: 'wait' as FactorySettings['dependencies'],
-  tooBig: 'ask' as FactorySettings['tooBig'],
+  sizeIgnoredPaths: [],
+  stageLimits: {},
+  stepOverrides: {},
+  batch: { size: 5, waitSeconds: 60 },
+  dependencies: 'wait',
+  tooBig: 'ask',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
-function formValues(settings: FactorySettings | null | undefined) {
+function formValues(settings: FactorySettings | null | undefined): FactoryForm {
   if (!settings) return DEFAULT_FORM;
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
   const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch, dependencies } = settings;

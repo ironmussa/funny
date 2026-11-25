@@ -27,10 +27,12 @@ export interface ModelConfig {
 
 // ── Providers ──────────────────────────────────────────────────
 
+// SAFETY: Object.keys of the MODEL_REGISTRY object literal returns exactly its
+// own keys, so each is a keyof typeof MODEL_REGISTRY.
 const REGISTRY_PROVIDERS = Object.keys(MODEL_REGISTRY) as (keyof typeof MODEL_REGISTRY)[];
 
 export const PROVIDERS: ProviderConfig[] = REGISTRY_PROVIDERS.map((value) => ({
-  value: value as AgentProvider,
+  value,
   label: PROVIDER_LABELS[value] ?? value,
 }));
 

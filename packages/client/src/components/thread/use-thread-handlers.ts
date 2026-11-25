@@ -1,13 +1,6 @@
-import type { PermissionDecision } from '@funny/shared';
+import type { AgentModel, EffortLevel, PermissionDecision, PermissionMode } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
-import {
-  useCallback,
-  useRef,
-  useState,
-  type Dispatch,
-  type RefObject,
-  type SetStateAction,
-} from 'react';
+import { useCallback, useRef, useState, type RefObject, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -45,7 +38,7 @@ function isUpdater(value: SetStateAction<boolean>): value is (prev: boolean) => 
 }
 
 /** True for a number value. */
-function isNumber(value: number | undefined): value is number {
+function isNumber(value: unknown): value is number {
   return typeof value === 'number';
 }
 
@@ -100,16 +93,19 @@ export function useThreadHandlers(refs: Refs) {
           toast.info(t('thread.steeringAgent'));
         }
         if (!threadIsRunning) {
+          // SAFETY: these come from PromptInput's model, permission and effort selectors,
+          // which only offer AgentModel, PermissionMode and EffortLevel values; the
+          // submit options type them as plain strings.
           useThreadStore
             .getState()
             .appendOptimisticMessage(
               thread.id,
               prompt,
               images,
-              opts.model as any,
-              opts.mode as any,
+              opts.model as AgentModel,
+              opts.mode as PermissionMode,
               opts.fileReferences,
-              opts.effort as any,
+              opts.effort as EffortLevel | undefined,
             );
         }
         requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
@@ -212,7 +208,7 @@ export function useThreadHandlers(refs: Refs) {
 
   return {
     sending,
-    setSending: setSendingSafely as Dispatch<SetStateAction<boolean>>,
+    setSending: setSendingSafely,
     handleSend,
     handleStop,
     handlePermissionApproval,
@@ -221,7 +217,7 @@ export function useThreadHandlers(refs: Refs) {
   };
 }
 
-function applyQueuedCount(threadId: string, responseQueuedCount: number | undefined) {
+function applyQueuedCount(threadId: string, responseQueuedCount: unknown) {
   if (!isNumber(responseQueuedCount)) return;
   applyQueueCount(threadId, responseQueuedCount);
 }
@@ -266,11 +262,14 @@ function handleSendResult(
     reportSendFailure(result.error, threadId, t, options.rollbackOnQueue);
     return;
   }
-  if (result.value && (result.value as any).queued) {
+  if (result.value && 'queued' in result.value && result.value.queued) {
     if (options.rollbackOnQueue) {
       useThreadStore.getState().rollbackOptimisticMessage(threadId);
     }
-    applyQueuedCount(threadId, (result.value as any).queuedCount);
+    applyQueuedCount(
+      threadId,
+      'queuedCount' in result.value ? result.value.queuedCount : undefined,
+    );
     toast.success(t('thread.messageQueued'));
     return;
   }

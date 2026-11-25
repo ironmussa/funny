@@ -69,13 +69,18 @@ const stateFromColor = (color: ColorInstance): ColorState => {
   };
 };
 
-const rgbaFromState = ({ hue, saturation, lightness, alpha }: ColorState) => {
+const rgbaFromState = ({
+  hue,
+  saturation,
+  lightness,
+  alpha,
+}: ColorState): [number, number, number, number] => {
   const rgba = createColor
     .hsl(hue, saturation, lightness)
     .alpha(alpha / 100)
     .rgb()
     .array();
-  return [rgba[0], rgba[1], rgba[2], alpha / 100] as [number, number, number, number];
+  return [rgba[0], rgba[1], rgba[2], alpha / 100];
 };
 
 const ColorPickerContext = createContext<ColorPickerContextValue | undefined>(undefined);

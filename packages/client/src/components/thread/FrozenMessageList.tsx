@@ -195,8 +195,11 @@ export const FrozenMessageList = memo(function FrozenMessageList({
   }, [virtualRows]);
 
   const renderRow = (row: (typeof virtualRows)[number]) => {
-    const isUserRow =
-      row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
+    const userItem =
+      row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user'
+        ? row.item
+        : null;
+    const isUserRow = userItem !== null;
     const estimate = Math.round(estimateVirtualRowHeight(row, containerWidth, fontConfig));
     // Sticky user rows own a paint layer (`translateZ(0)`): avoids a trailing
     // ghost of the stuck header when neighboring content-visibility rows
@@ -209,7 +212,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
         key={row.key}
         data-virtual-row-key={row.key}
         data-turn-section={getRowSectionId(row)}
-        {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
+        {...(userItem ? { 'data-section-msg-id': userItem.msg.id } : {})}
         // Opaque bg so content scrolling under the stuck header cannot bleed
         // through the transparent padding around the card.
         className={

@@ -188,7 +188,7 @@ export function ProjectConfigSettings() {
                 onBlur={(e) => updateEnvFile(i, e.target.value)}
                 onKeyDown={(e) => {
                   if (e.nativeEvent.isComposing) return;
-                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Enter') e.currentTarget.blur();
                 }}
                 data-testid={`env-file-edit-${i}`}
               />
@@ -257,7 +257,7 @@ export function ProjectConfigSettings() {
                     onBlur={(e) => updatePortGroup(gi, 'name', e.target.value)}
                     onKeyDown={(e) => {
                       if (e.nativeEvent.isComposing) return;
-                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      if (e.key === 'Enter') e.currentTarget.blur();
                     }}
                     data-testid={`port-group-${gi}-name`}
                   />
@@ -269,7 +269,7 @@ export function ProjectConfigSettings() {
                     defaultValue={group.basePort}
                     onBlur={(e) => updatePortGroup(gi, 'basePort', e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      if (e.key === 'Enter') e.currentTarget.blur();
                     }}
                     data-testid={`port-group-${gi}-port`}
                   />
@@ -411,7 +411,7 @@ export function ProjectConfigSettings() {
                 onBlur={(e) => updatePostCreate(i, e.target.value)}
                 onKeyDown={(e) => {
                   if (e.nativeEvent.isComposing) return;
-                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Enter') e.currentTarget.blur();
                 }}
                 data-testid={`post-create-edit-${i}`}
               />

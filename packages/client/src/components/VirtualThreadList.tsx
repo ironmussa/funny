@@ -144,7 +144,7 @@ export function VirtualThreadList({
               key={v.key}
               data-index={v.index}
               data-testid={`virtual-thread-item-${thread.id}`}
-              ref={virtualizer.measureElement as never}
+              ref={virtualizer.measureElement}
               {...(onThreadClick ? { onClick: () => onThreadClick(thread) } : {})}
               onMouseMove={() => setHighlightIndex(v.index)}
               className={cn(

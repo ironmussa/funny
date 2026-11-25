@@ -19,6 +19,13 @@ import { useProjectStore } from '@/stores/project-store';
 
 import { SettingAnchor, SettingRow } from './settings/SettingRow';
 
+type PromptField =
+  | 'reviewerPrompt'
+  | 'correctorPrompt'
+  | 'precommitFixerPrompt'
+  | 'commitMessagePrompt'
+  | 'testFixerPrompt';
+
 /** Model selector matching the PromptInput pattern — grouped by provider */
 const ModelSelect = memo(function ModelSelect({
   value,
@@ -95,13 +102,6 @@ type ModelField = 'reviewModel' | 'fixModel' | 'precommitFixModel' | 'testFixMod
 
 /** The pipeline as edited here: the model pickers hold any model id the picker lists. */
 type EditedPipeline = Omit<Pipeline, ModelField> & Record<ModelField, string>;
-
-type PromptField =
-  | 'reviewerPrompt'
-  | 'correctorPrompt'
-  | 'precommitFixerPrompt'
-  | 'commitMessagePrompt'
-  | 'testFixerPrompt';
 
 export function PipelineSettings() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -246,7 +246,7 @@ export function PipelineSettings() {
               description="Model for auto-fixing lint errors"
             >
               <ModelSelect
-                value={(pipeline.precommitFixModel as string) || 'sonnet'}
+                value={pipeline.precommitFixModel || 'sonnet'}
                 onChange={handlePrecommitFixModelChange}
                 testId="pipeline-precommit-model"
               />
@@ -296,7 +296,7 @@ export function PipelineSettings() {
               description="Model for analyzing code (read-only)"
             >
               <ModelSelect
-                value={(pipeline.reviewModel as string) || 'sonnet'}
+                value={pipeline.reviewModel || 'sonnet'}
                 onChange={handleReviewModelChange}
                 testId="pipeline-review-model"
               />
@@ -307,7 +307,7 @@ export function PipelineSettings() {
               description="Model for fixing issues (worktree)"
             >
               <ModelSelect
-                value={(pipeline.fixModel as string) || 'sonnet'}
+                value={pipeline.fixModel || 'sonnet'}
                 onChange={handleFixModelChange}
                 testId="pipeline-fix-model"
               />
@@ -383,7 +383,7 @@ export function PipelineSettings() {
                   description="Model for fixing test failures"
                 >
                   <ModelSelect
-                    value={(pipeline.testFixModel as string) || 'sonnet'}
+                    value={pipeline.testFixModel || 'sonnet'}
                     onChange={handleTestFixModelChange}
                     testId="pipeline-test-fix-model"
                   />

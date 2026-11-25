@@ -220,8 +220,10 @@ export const DiffMinimap = memo(function DiffMinimap({
       onClick={scrollToClick}
       onKeyDown={handleKeyDown}
       onMouseDown={(e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('[data-diff-minimap-viewport]')) handleMouseDown(e);
+        const target = e.target;
+        if (target instanceof Element && target.closest('[data-diff-minimap-viewport]')) {
+          handleMouseDown(e);
+        }
       }}
       data-testid="diff-minimap"
     >

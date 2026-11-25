@@ -142,8 +142,8 @@ export function SuggestionPopup({
   useEffect(() => {
     const container = popupRef.current;
     if (!container) return;
-    const el = container.children[selectedIndex] as HTMLElement | undefined;
-    if (!el) return;
+    const el = container.children.item(selectedIndex);
+    if (!(el instanceof HTMLElement)) return;
     const elTop = el.offsetTop;
     const elBottom = elTop + el.offsetHeight;
     if (elTop < container.scrollTop) {

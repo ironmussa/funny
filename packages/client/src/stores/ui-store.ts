@@ -216,15 +216,13 @@ function readInitialUIState() {
         return true;
       }
     })(),
-    rightPaneTab: (() => {
+    rightPaneTab: ((): RightPaneTab => {
       try {
         const stored = localStorage.getItem(RIGHT_PANE_TAB_KEY);
-        if (stored && ['review', 'activity', 'files', 'comments'].includes(stored)) {
-          return stored as RightPaneTab;
-        }
-        return 'activity' as RightPaneTab;
+        const tabs: RightPaneTab[] = ['review', 'activity', 'files', 'comments'];
+        return tabs.find((tab) => tab === stored) ?? 'activity';
       } catch {
-        return 'activity' as RightPaneTab;
+        return 'activity';
       }
     })(),
     reviewPaneWidth: (() => {
@@ -272,14 +270,13 @@ function readInitialUIState() {
         return false;
       }
     })(),
-    reviewSubTab: (() => {
+    reviewSubTab: ((): ReviewSubTab => {
       try {
         const stored = localStorage.getItem(REVIEW_SUB_TAB_KEY);
-        if (stored && VALID_REVIEW_SUB_TABS.includes(stored as ReviewSubTab)) {
-          return stored as ReviewSubTab;
-        }
+        const match = VALID_REVIEW_SUB_TABS.find((tab) => tab === stored);
+        if (match) return match;
       } catch {}
-      return 'changes' as ReviewSubTab;
+      return 'changes';
     })(),
     kanbanContext: null,
     pendingThreadSearch: null,
@@ -410,11 +407,7 @@ function rightPaneActions(set: SetUIState) {
     },
     setReviewPaneOpen: (open) => {
       persistRightPane(open, open ? 'review' : undefined);
-      set(
-        open
-          ? { reviewPaneOpen: true, rightPaneTab: 'review' as RightPaneTab }
-          : { reviewPaneOpen: false },
-      );
+      set(open ? { reviewPaneOpen: true, rightPaneTab: 'review' } : { reviewPaneOpen: false });
     },
     setTestRunnerOpen: (open) => {
       if (open) {
@@ -440,27 +433,15 @@ function rightPaneActions(set: SetUIState) {
     },
     setActivityPaneOpen: (open) => {
       persistRightPane(open, open ? 'activity' : undefined);
-      set(
-        open
-          ? { reviewPaneOpen: true, rightPaneTab: 'activity' as RightPaneTab }
-          : { reviewPaneOpen: false },
-      );
+      set(open ? { reviewPaneOpen: true, rightPaneTab: 'activity' } : { reviewPaneOpen: false });
     },
     setFilesPaneOpen: (open) => {
       persistRightPane(open, open ? 'files' : undefined);
-      set(
-        open
-          ? { reviewPaneOpen: true, rightPaneTab: 'files' as RightPaneTab }
-          : { reviewPaneOpen: false },
-      );
+      set(open ? { reviewPaneOpen: true, rightPaneTab: 'files' } : { reviewPaneOpen: false });
     },
     setCommentsPaneOpen: (open) => {
       persistRightPane(open, open ? 'comments' : undefined);
-      set(
-        open
-          ? { reviewPaneOpen: true, rightPaneTab: 'comments' as RightPaneTab }
-          : { reviewPaneOpen: false },
-      );
+      set(open ? { reviewPaneOpen: true, rightPaneTab: 'comments' } : { reviewPaneOpen: false });
     },
     setRightPaneTab: (tab) => {
       persistRightPane(true, tab);

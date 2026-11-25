@@ -30,8 +30,8 @@ function routeForHistoryEntry(entry: ThreadHistoryEntry): string {
 const log = createClientLogger('hooks:global-shortcuts');
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
+  if (!(target instanceof HTMLElement)) return false;
+  const el = target;
   if (el.isContentEditable) return true;
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
@@ -93,7 +93,7 @@ function activeProjectId(): string | null {
 
 function openCommandPalette(e: KeyboardEvent, ctx: ShortcutContext): void {
   consume(e);
-  (window as { __paletteOpenTs?: number }).__paletteOpenTs = performance.now();
+  Reflect.set(window, '__paletteOpenTs', performance.now());
   log.info('shortcut.command_palette');
   ctx.toggleCommandPalette();
 }
@@ -135,7 +135,7 @@ function visibleSidebarThreads(ids: string[]): SidebarThread[] {
   return ids
     .flatMap((id) => {
       const th = threadsById[id];
-      return th && !th.archived ? [th as SidebarThread] : [];
+      return th && !th.archived ? [th] : [];
     })
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
@@ -430,7 +430,7 @@ export function useGlobalShortcuts(
   const navigate = useNavigate();
 
   useEffect(() => {
-    const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    const isTauri = !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__);
     const focusTimeouts = new Set<ReturnType<typeof setTimeout>>();
     const scheduleFocus = (callback: () => void) => {
       const timeout = setTimeout(() => {

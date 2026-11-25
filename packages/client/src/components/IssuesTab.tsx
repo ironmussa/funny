@@ -193,13 +193,18 @@ function IssuesToolbar({
         />
       )}
 
-      <Select value={state} onValueChange={(v) => onStateChange(v as IssueState)}>
+      <Select
+        value={state}
+        onValueChange={(v) => {
+          if (v === 'open' || v === 'closed') onStateChange(v);
+        }}
+      >
         <SelectTrigger size="xs" className="w-auto" data-testid="issues-state-trigger">
           <CircleDot className="icon-xs opacity-70" />
           <span>{stateLabel(state)}</span>
         </SelectTrigger>
         <SelectContent>
-          {(['open', 'closed'] as IssueState[]).map((s) => (
+          {(['open', 'closed'] satisfies IssueState[]).map((s) => (
             <SelectItem key={s} value={s} textSize="xs" data-testid={`issues-filter-${s}`}>
               {stateLabel(s)}
             </SelectItem>

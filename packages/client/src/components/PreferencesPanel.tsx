@@ -37,7 +37,7 @@ export function preferencesPageLabel(page: GeneralPage, t: (key: string) => stri
 export function PreferencesPanelBody() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const activePreferencesPage = useUIStore((s) => s.activePreferencesPage) as GeneralPage;
+  const activePreferencesPage = useUIStore((s) => s.activePreferencesPage);
   const leave = useLeaveSettings('/');
   const pages = usePreferencesNavPages();
   const project = useProjectSettingsNavPages();

@@ -301,6 +301,7 @@ export function createMergeLane(deps: MergeLaneDeps) {
     pr: FactoryPullRequestRef,
     carried: Array<{ from: string; to: string }>,
     last: boolean,
+    awaitChecks: boolean,
   ): Promise<UpToDate | 'again' | 'stop'> {
     if (deps.signal.aborted) return { kind: 'failed', error: 'The run was stopped.' };
     const position = await positionOf(pr);
@@ -312,8 +313,25 @@ export function createMergeLane(deps: MergeLaneDeps) {
     if ('kind' in step) return step;
     if ('retry' in step) return 'again';
     carried.push({ from: sha, to: step.updated });
+    if (!awaitChecks) return 'again';
     // The checks that were green ran on the old base: wait for them on the new head.
     return (await checksOnNewHead(pr, baseRef, step.updated)) ?? 'again';
+  }
+
+  /** The update rounds, each waiting for the new head's checks or not. */
+  async function update(awaitChecks: boolean): Promise<UpToDate> {
+    const pr = deps.pullRequest();
+    if (!pr) return { kind: 'failed', error: 'The run has no pull request yet.' };
+    const carried: Array<{ from: string; to: string }> = [];
+    for (let round = 0; round <= MAX_BASE_UPDATES; round++) {
+      const step = await updateOnce(pr, carried, round === MAX_BASE_UPDATES, awaitChecks);
+      if (step === 'stop') break;
+      if (step !== 'again') return step;
+    }
+    return {
+      kind: 'failed',
+      error: `The base branch kept moving: the pull request was brought up to date ${MAX_BASE_UPDATES} times and is still behind.`,
+    };
   }
 
   /** The pull request's head, its base and how far behind the base it is. */
@@ -390,19 +408,18 @@ export function createMergeLane(deps: MergeLaneDeps) {
      * Bring the pull request up to date with its base and make sure its checks
      * are green there. Resolves with the head that is current, or why not.
      */
-    async bringUpToDate(): Promise<UpToDate> {
-      const pr = deps.pullRequest();
-      if (!pr) return { kind: 'failed', error: 'The run has no pull request yet.' };
-      const carried: Array<{ from: string; to: string }> = [];
-      for (let update = 0; update <= MAX_BASE_UPDATES; update++) {
-        const step = await updateOnce(pr, carried, update === MAX_BASE_UPDATES);
-        if (step === 'stop') break;
-        if (step !== 'again') return step;
-      }
-      return {
-        kind: 'failed',
-        error: `The base branch kept moving: the pull request was brought up to date ${MAX_BASE_UPDATES} times and is still behind.`,
-      };
+    bringUpToDate(): Promise<UpToDate> {
+      return update(true);
+    },
+
+    /**
+     * Bring the pull request up to date with its base without waiting for the
+     * new head's checks: what `merge` does before it parks a high-risk change
+     * for a person, so the commit they approve already has the base. The
+     * checks run while they decide, and the approved merge waits for them.
+     */
+    updateBase(): Promise<UpToDate> {
+      return update(false);
     },
   };
 }

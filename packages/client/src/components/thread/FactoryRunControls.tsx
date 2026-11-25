@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PRBadge } from '@/components/PRBadge';
 import { Button } from '@/components/ui/button';
-import { controlFactoryRun } from '@/data/factory/actions';
+import { approveFactoryMerge, controlFactoryRun } from '@/data/factory/actions';
 import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
 import { ENDED_FACTORY_STATES, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
@@ -51,9 +51,15 @@ export function useFactoryRunActions(
   const { t } = useTranslation();
   const canSteer = useCanSteerProject(projectId);
   const [confirmingMerge, setConfirmingMerge] = useState(false);
-  const control = (action: FactoryRunActionId) =>
+  const control = (action: 'retry' | 'stop') =>
     void controlFactoryRun(action, projectId, run.id).orTee((error) =>
       toastError(error, 'factory'),
+    );
+  // The commit the dialog names is the one approved: the server refuses another.
+  const approve = () =>
+    void approveFactoryMerge(projectId, run.id, run.risk?.headSha ?? '').orTee((error) =>
+      // Its conflict has its own message: the run is held on another commit now.
+      toastError(error, 'factoryApprove'),
     );
   if (!canSteer) return { actions: [], dialog: null };
   // A high-risk change waits for the member's approval, which a retry would not give.
@@ -98,7 +104,7 @@ export function useFactoryRunActions(
       onCancel={() => setConfirmingMerge(false)}
       onConfirm={() => {
         setConfirmingMerge(false);
-        control('approve-merge');
+        approve();
       }}
     />
   ) : null;

@@ -74,6 +74,7 @@ export const WithIncident: Story = {
       autoMerge: 'low_risk',
       sensitivePaths: [],
       maxLowRiskLines: 400,
+      approvalAdjustMaxLines: 0,
       sizeIgnoredPaths: [],
       stageLimits: {},
       stepOverrides: {},

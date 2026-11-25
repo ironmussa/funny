@@ -8,7 +8,7 @@
 export function createLatestFrameFetcher(options: {
   fetch: (url: string) => Promise<string>;
   deliver: (sessionId: string, data: string) => void;
-  onError: (error: unknown) => void;
+  onError: (cause: unknown) => void;
 }) {
   const sessions = new Map<string, { pending: string | null }>();
 

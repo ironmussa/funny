@@ -1,4 +1,5 @@
 import type {
+  FactoryApprovalRequest,
   FactoryFlowDefinition,
   FactoryFlowValidation,
   FactoryFlowOption,
@@ -43,12 +44,12 @@ export function factorySettingsQuery(projectId: string) {
   return {
     queryKey: factorySettingsKey(projectId),
     queryFn: (): Promise<FactorySettings | null> =>
-      unwrapResult(factoryApi.getSettings(projectId)).catch((error: unknown) => {
+      unwrapResult(factoryApi.getSettings(projectId)).catch((cause: unknown) => {
         log.warn('failed to load factory settings', {
           projectId,
-          error: error instanceof Error ? error.message : String(error),
+          error: cause instanceof Error ? cause.message : String(cause),
         });
-        throw error;
+        throw cause;
       }),
     staleTime: 30_000,
     refetchInterval: (query: QueryStatusView) =>
@@ -111,6 +112,53 @@ export function factoryQueueRunsQuery() {
     staleTime: 10_000,
     refetchInterval: 15_000,
   };
+}
+
+const approvalRequestsKey = (projectId: string) =>
+  ['factory', 'approval-requests', projectId] as const;
+
+/**
+ * What agents asked the caller to approve in a project (openspec
+ * factory-agent-tools), newest first. An agent makes a request with no
+ * realtime event, so a reader polls while it is shown, like the run list.
+ */
+export function factoryApprovalRequestsQuery(projectId: string) {
+  return {
+    queryKey: approvalRequestsKey(projectId),
+    queryFn: (): Promise<FactoryApprovalRequest[]> =>
+      unwrapResult(factoryApi.listApprovalRequests(projectId)),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  };
+}
+
+/** What a reader with no factory to ask reads instead: never fetched. */
+export const NO_FACTORY_APPROVAL_REQUESTS = {
+  queryKey: ['factory', 'approval-requests', 'none'] as const,
+  queryFn: (): Promise<FactoryApprovalRequest[]> => Promise.resolve([]),
+  enabled: false,
+};
+
+/** Re-read the requests now (an approval or a decline closed one). */
+export function refreshFactoryApprovalRequests(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): void {
+  if (layer.disposed) return;
+  void layer.queryClient.invalidateQueries({ queryKey: approvalRequestsKey(projectId) });
+}
+
+/** Record the server's answer for one request (a decline). */
+export function writeFactoryApprovalRequest(
+  projectId: string,
+  request: FactoryApprovalRequest,
+  layer: DataLayer = getDataLayer(),
+): void {
+  if (layer.disposed) return;
+  layer.queryClient.setQueryData<FactoryApprovalRequest[]>(
+    approvalRequestsKey(projectId),
+    (requests) => requests?.map((r) => (r.id === request.id ? request : r)),
+  );
 }
 
 /** What a thread that is not a factory thread reads instead of a project's runs: never fetched. */

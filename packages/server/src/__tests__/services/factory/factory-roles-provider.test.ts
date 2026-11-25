@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { PullRequestFile } from '@funny/core/github-app';
 import type { CiState } from '@funny/core/github-app';
-import type { FactoryRisk } from '@funny/shared/contracts/factory';
+import type { FactoryMergeApproval, FactoryRisk } from '@funny/shared/contracts/factory';
 import { err, errAsync, ok, okAsync } from 'neverthrow';
 
 import { createFactoryActionProvider } from '../../../services/factory/factory-action-provider.js';
@@ -43,6 +43,11 @@ const changed = (path: string, lines: string[]): PullRequestFile => ({
   patch: ['@@ -1 +1 @@', ...lines].join('\n'),
 });
 
+/** What the provider commented on an issue or a pull request; a test that reads it empties it first. */
+const posted: Array<{ number: number; body: string }> = [];
+/** When set, commenting fails with this message. */
+let commentError: string | null = null;
+
 function providerWith(pullRequests: Partial<PullRequestsPort>, over: Partial<ProviderDeps> = {}) {
   const risks: FactoryRisk[] = [];
   const provider = createFactoryActionProvider({
@@ -55,7 +60,13 @@ function providerWith(pullRequests: Partial<PullRequestsPort>, over: Partial<Pro
     waitThread: async () => ({ status: 'completed' as const, output: 'done' }),
     github: {
       branchAhead: () => okAsync(true),
-      commentOnIssue: () => okAsync(undefined),
+      commentOnIssue: (_reader, number, body) => {
+        if (commentError) {
+          return errAsync({ kind: 'github-error' as const, message: commentError });
+        }
+        posted.push({ number, body });
+        return okAsync(undefined);
+      },
       findPullRequest: () => okAsync(null),
       pullRequests: {
         prState: () => okAsync('open' as const),
@@ -94,7 +105,14 @@ describe('risk class of the pull request head', () => {
     await provider.waitCi({});
     // With its size and paths, which order the merge queue (openspec factory-integration D11).
     expect(risks).toEqual([
-      { headSha: 'sha-1', level: 'low', reasons: [], changedLines: 1, paths: ['src/sum.ts'] },
+      {
+        headSha: 'sha-1',
+        level: 'low',
+        reasons: [],
+        keys: [],
+        changedLines: 1,
+        paths: ['src/sum.ts'],
+      },
     ]);
   });
 
@@ -112,6 +130,7 @@ describe('risk class of the pull request head', () => {
         headSha: 'sha-1',
         level: 'high',
         reasons: ["skip-marker in src/sum.test.ts: test.skip('adds', () => {});"],
+        keys: ['finding:skip-marker:src/sum.test.ts'],
         changedLines: 1,
         paths: ['src/sum.test.ts'],
       },
@@ -160,6 +179,7 @@ describe('risk class of the pull request head', () => {
         headSha: 'sha-1',
         level: 'high',
         reasons: ['the change could not be read: GitHub answered 502'],
+        keys: ['unreadable'],
       },
     ]);
   });
@@ -993,13 +1013,71 @@ describe('merge brings the branch up to date with its base first', () => {
       deps: {
         mergeApproved: async (sha) => sha === approved,
         carryMergeApproval: async (from, to) => {
-          if (approved === from) approved = to;
+          if (approved !== from) return false;
+          approved = to;
+          return true;
         },
       },
     });
     expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
     expect(merges).toMatchObject([{ sha: SHA_M }]);
     expect(approved).toBe(SHA_M);
+  });
+
+  // #485: the base merge carried the approval of A to M, the run merged M, and
+  // neither the pull request nor the approver was told the approval had moved.
+  test('an approval carried by a base merge is commented on the pull request and recorded', async () => {
+    let approval: FactoryMergeApproval = { sha: SHA_A, userId: 'alice', at };
+    const announced: unknown[] = [];
+    posted.length = 0;
+    commentError = null;
+    const { merge } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      files: [changed('.github/workflows/ci.yml', ['+x'])],
+      deps: {
+        mergeApproved: async (sha) => sha === approval.sha,
+        mergeApproval: async () => approval,
+        onApprovalMoved: async (move) => {
+          announced.push(move);
+        },
+        carryMergeApproval: async (from, to) => {
+          if (approval.sha !== from) return false;
+          approval = { ...approval, sha: to, carriedFrom: approval.carriedFrom ?? from };
+          return true;
+        },
+      },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(announced).toEqual([
+      { userId: 'alice', from: SHA_A, to: SHA_M, kind: 'same', lines: 0, files: [] },
+    ]);
+    expect(posted).toHaveLength(1);
+    expect(posted[0]!.body).toContain(SHA_A.slice(0, 7));
+    expect(posted[0]!.body).toContain(SHA_M.slice(0, 7));
+    expect(posted[0]!.body).toContain('no person approved the new commit');
+  });
+
+  test('a base merge of an unapproved commit announces no approval move', async () => {
+    const announced: unknown[] = [];
+    posted.length = 0;
+    const { merge } = lane({
+      behind: { [SHA_A]: 1 },
+      updates: { [SHA_A]: SHA_M },
+      parents: { [SHA_M]: [SHA_A, BASE_1] },
+      deps: {
+        mergeApproved: async () => false,
+        mergeApproval: async () => null,
+        onApprovalMoved: async (move) => {
+          announced.push(move);
+        },
+        carryMergeApproval: async () => false,
+      },
+    });
+    expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+    expect(announced).toEqual([]);
+    expect(posted).toEqual([]);
   });
 
   test('without an approval of A, the merge commit of a high-risk change still waits for a person', async () => {
@@ -1010,7 +1088,7 @@ describe('merge brings the branch up to date with its base first', () => {
       files: [changed('.github/workflows/ci.yml', ['+x'])],
       deps: {
         mergeApproved: async () => false,
-        carryMergeApproval: async () => {},
+        carryMergeApproval: async () => false,
       },
     });
     expect(await merge()).toMatchObject({
@@ -1018,6 +1096,298 @@ describe('merge brings the branch up to date with its base first', () => {
       metadata: { reason: MERGE_HOLD_REASONS.highRisk },
     });
     expect(merges).toEqual([]);
+  });
+
+  // openspec factory-approval-survives-integration, D1: a member approved a
+  // head that was behind its base, so the approval made a new commit and the
+  // run waited for a person again. The base comes in before the hold.
+  describe('a high-risk change is held on a head that includes its base', () => {
+    const highRisk = [changed('.github/workflows/ci.yml', ['+x'])];
+    const unapproved = { mergeApproved: async () => false, carryMergeApproval: async () => false };
+
+    test('a head behind its base is updated first, and held without waiting for its checks', async () => {
+      const { merge, merges, updates, reviews } = lane({
+        behind: { [SHA_A]: 3 },
+        updates: { [SHA_A]: SHA_M },
+        parents: { [SHA_M]: [SHA_A, BASE_1] },
+        // The checks of the updated head never turn green: the hold does not wait for them.
+        checks: { [SHA_M]: { kind: 'pending' } as CiState },
+        files: highRisk,
+        deps: unapproved,
+      });
+      expect(await merge()).toMatchObject({
+        ok: false,
+        metadata: { reason: MERGE_HOLD_REASONS.highRisk },
+      });
+      expect(updates).toEqual([SHA_A]);
+      expect(merges).toEqual([]);
+      // The commit the member is asked about is the updated one, with A's review.
+      expect(reviews()).toMatchObject([
+        { sha: SHA_A, verdict: 'pass' },
+        { sha: SHA_M, verdict: 'pass', carriedFrom: SHA_A },
+      ]);
+    });
+
+    test('a head that has its base is held as it is: nothing is pushed', async () => {
+      const { merge, updates } = lane({ files: highRisk, deps: unapproved });
+      expect(await merge()).toMatchObject({
+        ok: false,
+        metadata: { reason: MERGE_HOLD_REASONS.highRisk },
+      });
+      expect(updates).toEqual([]);
+    });
+
+    test('a base that conflicts goes back as a conflict, and no person is asked yet', async () => {
+      const { merge, recorded } = lane({
+        behind: { [SHA_A]: 1 },
+        updates: { [SHA_A]: { kind: 'conflict', reason: 'merge conflict' } },
+        files: highRisk,
+        deps: unapproved,
+      });
+      expect(await merge()).toMatchObject({
+        ok: true,
+        output: 'sent_back',
+        metadata: { why: 'conflict' },
+      });
+      expect(recorded.some((input) => input.state === 'waiting_human')).toBe(false);
+    });
+
+    test("where GitHub's merge queue is required, the head is held as it is", async () => {
+      const { merge, updates } = lane({
+        behind: { [SHA_A]: 2 },
+        queue: { state: 'merged' },
+        files: highRisk,
+        deps: unapproved,
+      });
+      expect(await merge()).toMatchObject({
+        ok: false,
+        metadata: { reason: MERGE_HOLD_REASONS.highRisk },
+      });
+      expect(updates).toEqual([]);
+    });
+  });
+
+  // openspec factory-approval-survives-integration, D2-D3: a member approved
+  // commit A, and the head is now another commit of the same pull request.
+  // Whether the approval covers it is asked of the run's runner.
+  describe('a merge approval follows the same change to a new commit', () => {
+    const SHA_NEW = '9'.repeat(40);
+    const highRisk = [changed('.github/workflows/ci.yml', ['+x'])];
+    const reviewedNew = { sha: SHA_NEW, verdict: 'pass' as const, findings: [], reviewedAt: at };
+
+    /** A run approved at A whose head is SHA_NEW; the runner answers `answer` for the delta. */
+    function approvedAtA(
+      answer: Record<string, unknown> | 'offline',
+      over: { approval?: Partial<FactoryMergeApproval>; maxLines?: number } = {},
+    ) {
+      let approval: FactoryMergeApproval = { sha: SHA_A, userId: 'alice', at, ...over.approval };
+      const asked: Array<Record<string, unknown>> = [];
+      const moves: unknown[] = [];
+      const announced: unknown[] = [];
+      posted.length = 0;
+      commentError = null;
+      const run = lane({
+        head: SHA_NEW,
+        reviews: [reviewedA, reviewedNew],
+        files: highRisk,
+        deps: {
+          mergeApproved: async (sha) => approval.sha === sha,
+          mergeApproval: async () => approval,
+          onApprovalMoved: async (move) => {
+            announced.push(move);
+          },
+          approvalAdjustMaxLines: over.maxLines,
+          carryMergeApproval: async (from, to, move) => {
+            if (approval.sha !== from) return false;
+            approval = { ...approval, sha: to, carriedFrom: approval.carriedFrom ?? from };
+            moves.push(move);
+            return true;
+          },
+          steps: {
+            startStep: async (_threadId, body) => {
+              asked.push(body);
+              return answer === 'offline'
+                ? err('runner unavailable: the runner is offline')
+                : ok({ stepId: 's1', state: 'running' });
+            },
+            pollStep: async () => ok({ state: 'done', result: answer }),
+            pollMs: 1,
+          },
+        },
+      });
+      return { ...run, asked, moves, announced, approval: () => approval };
+    }
+
+    const compared = (over: Record<string, unknown>) => ({
+      kind: 'change-delta',
+      outcome: 'compared',
+      ancestor: true,
+      lines: 0,
+      files: [],
+      filesTruncated: false,
+      outsideFrom: [],
+      message: '',
+      ...over,
+    });
+
+    // #451, #453, #455, #459: weave settled a conflict of the base merge, the
+    // review passed again, and the run waited for the same person again.
+    test('the same change at the new head merges without a second approval', async () => {
+      const { merge, merges, asked, moves, approval } = approvedAtA(compared({}));
+      expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+      expect(merges).toMatchObject([{ sha: SHA_NEW }]);
+      expect(asked).toMatchObject([{ kind: 'change-delta', from: SHA_A, to: SHA_NEW }]);
+      expect(moves).toEqual([{ kind: 'same', lines: 0, files: [] }]);
+      expect(approval()).toMatchObject({ sha: SHA_NEW, carriedFrom: SHA_A });
+    });
+
+    // D6: the pull request and the approver are told where the approval went.
+    test('a moved approval is commented on the pull request and recorded for the approver', async () => {
+      const { merge, announced } = approvedAtA(compared({}));
+      expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+      expect(announced).toEqual([
+        { userId: 'alice', from: SHA_A, to: SHA_NEW, kind: 'same', lines: 0, files: [] },
+      ]);
+      expect(posted).toHaveLength(1);
+      expect(posted[0]).toMatchObject({ number: 12 });
+      expect(posted[0]!.body).toContain(SHA_A.slice(0, 7));
+      expect(posted[0]!.body).toContain(SHA_NEW.slice(0, 7));
+      expect(posted[0]!.body).toContain('no person approved the new commit');
+    });
+
+    test('a comment that cannot be posted does not stop the merge', async () => {
+      const { merge, merges, announced } = approvedAtA(compared({}));
+      commentError = 'GitHub answered 502';
+      expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+      commentError = null;
+      expect(merges).toMatchObject([{ sha: SHA_NEW }]);
+      expect(announced).toHaveLength(1);
+      expect(posted).toEqual([]);
+    });
+
+    test('an approval that does not move is not announced', async () => {
+      const { merge, announced } = approvedAtA(compared({ ancestor: false }));
+      await merge();
+      expect(announced).toEqual([]);
+      expect(posted).toEqual([]);
+    });
+
+    test('a change that differs waits for a person, who is told why', async () => {
+      const { merge, merges, approval } = approvedAtA(
+        compared({ lines: 852, files: [{ path: 'src/a.ts', lines: 852 }] }),
+      );
+      const held = await merge();
+      expect(held).toMatchObject({ ok: false, metadata: { reason: MERGE_HOLD_REASONS.highRisk } });
+      expect(held.error).toContain('differs from the approved commit by 852 lines');
+      expect(merges).toEqual([]);
+      expect(approval().sha).toBe(SHA_A);
+    });
+
+    test('a head that does not descend from the approved commit waits for a person', async () => {
+      const { merge, merges } = approvedAtA(compared({ ancestor: false }));
+      const held = await merge();
+      expect(held).toMatchObject({ ok: false, metadata: { reason: MERGE_HOLD_REASONS.highRisk } });
+      expect(held.error).toContain('no longer contains the approved commit');
+      expect(merges).toEqual([]);
+    });
+
+    test('a runner that cannot answer leaves the run waiting for a person', async () => {
+      const { merge, merges, asked } = approvedAtA('offline');
+      const held = await merge();
+      expect(held).toMatchObject({ ok: false, metadata: { reason: MERGE_HOLD_REASONS.highRisk } });
+      expect(held.error).toContain('could not be compared');
+      expect(merges).toEqual([]);
+      // Asked once, although the gate looks at the head more than once.
+      expect(asked).toHaveLength(1);
+    });
+
+    // openspec factory-approval-survives-integration, group 4. The workflow file
+    // change is the finding `ci-workflow-edit`: its key is what the member approved.
+    describe('and a small adjustment, where the factory allows one', () => {
+      const sevenLines = compared({ lines: 7, files: [{ path: 'src/a.ts', lines: 7 }] });
+      const riskKeysOfHead = async () => {
+        const { provider, risks } = providerWith({
+          changedFiles: () => okAsync({ files: highRisk, truncated: false }),
+        });
+        await provider.waitCi({});
+        return risks.at(-1)?.keys ?? [];
+      };
+
+      // #448, #458, #487: a base merge and a small fix by the agent.
+      test('7 lines in approved files, with no new risk reason, merge without a second approval', async () => {
+        const riskKeys = await riskKeysOfHead();
+        expect(riskKeys.length).toBeGreaterThan(0);
+        const { merge, merges, moves } = approvedAtA(sevenLines, {
+          approval: { riskKeys },
+          maxLines: 50,
+        });
+        expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+        expect(merges).toMatchObject([{ sha: SHA_NEW }]);
+        expect(moves).toEqual([{ kind: 'adjustment', lines: 7, files: ['src/a.ts'] }]);
+      });
+
+      test('the setting off: 7 lines wait for a person', async () => {
+        const { merge, merges } = approvedAtA(sevenLines, {
+          approval: { riskKeys: await riskKeysOfHead() },
+        });
+        const held = await merge();
+        expect(held.error).toContain('differs from the approved commit by 7 lines');
+        expect(merges).toEqual([]);
+      });
+
+      test('more lines than the factory follows wait for a person', async () => {
+        const { merge, merges } = approvedAtA(
+          compared({ lines: 852, files: [{ path: 'src/a.ts', lines: 852 }] }),
+          { approval: { riskKeys: await riskKeysOfHead() }, maxLines: 50 },
+        );
+        expect((await merge()).error).toContain('852 lines; this factory follows 50');
+        expect(merges).toEqual([]);
+      });
+
+      test('a file the approved change did not touch waits for a person', async () => {
+        const { merge, merges } = approvedAtA(
+          compared({
+            lines: 5,
+            files: [{ path: 'src/new.ts', lines: 5 }],
+            outsideFrom: ['src/new.ts'],
+          }),
+          { approval: { riskKeys: await riskKeysOfHead() }, maxLines: 50 },
+        );
+        expect((await merge()).error).toContain('src/new.ts');
+        expect(merges).toEqual([]);
+      });
+
+      test('a risk reason the approved commit did not have waits for a person', async () => {
+        // The member approved a commit whose only risk was its size.
+        const { merge, merges } = approvedAtA(sevenLines, {
+          approval: { riskKeys: ['size'] },
+          maxLines: 50,
+        });
+        expect((await merge()).error).toContain('a risk reason the approved commit did not have');
+        expect(merges).toEqual([]);
+      });
+
+      test('an approval recorded without risk keys follows only the same change', async () => {
+        const { merge, merges } = approvedAtA(sevenLines, { maxLines: 50 });
+        expect((await merge()).error).toContain('were not recorded');
+        expect(merges).toEqual([]);
+      });
+
+      // 40 lines moved the approval from A to B; the head is compared with A, not
+      // with B, so 30 more lines are 70 against a limit of 50.
+      test('the difference is measured from the commit the member approved', async () => {
+        const { merge, asked, merges } = approvedAtA(
+          compared({ lines: 70, files: [{ path: 'src/a.ts', lines: 70 }] }),
+          {
+            approval: { sha: SHA_B, carriedFrom: SHA_A, riskKeys: await riskKeysOfHead() },
+            maxLines: 50,
+          },
+        );
+        expect((await merge()).error).toContain('70 lines; this factory follows 50');
+        expect(asked).toMatchObject([{ from: SHA_A, to: SHA_NEW }]);
+        expect(merges).toEqual([]);
+      });
+    });
   });
 
   // A retry or a merge approval reruns the proof step on a head that did not

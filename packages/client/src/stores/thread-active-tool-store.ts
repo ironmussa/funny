@@ -1,3 +1,4 @@
+import type { WSToolCallData } from '@funny/shared';
 import { create } from 'zustand';
 
 import { omitThread } from './by-thread';
@@ -34,8 +35,9 @@ export function useThreadActiveTool(threadId: string): ActiveTool | undefined {
   return useThreadActiveToolStore((s) => s.byThread[threadId]);
 }
 
-/** Tool call input arrives as an object or as its JSON string. */
-export function parseToolInput(input: unknown): Record<string, unknown> {
+/** A tool call's input as an object: it arrives as an object or as its JSON string. */
+export function parseToolInput(toolCall: Pick<WSToolCallData, 'input'>): Record<string, unknown> {
+  const input = toolCall.input;
   if (typeof input === 'string') {
     try {
       const parsed = JSON.parse(input);

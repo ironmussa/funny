@@ -180,7 +180,12 @@ function answer(call: () => Promise<object>): Promise<object> {
   );
 }
 
-const handlers: Record<string, MessageHandler> = {
+/** Message type → its handler. */
+interface MessageHandlers {
+  [type: string]: MessageHandler;
+}
+
+const handlers: MessageHandlers = {
   SEND_TO_FUNNY: (msg) =>
     answer(async () => {
       const thread = await handleSendToFunny(msg.data);

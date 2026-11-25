@@ -37,6 +37,15 @@ export const factoryProjectInput = z.object({ projectId }).strict();
 export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) }).strict();
 
 /**
+ * A member's approval of a held high-risk merge. `expectedSha` is the commit
+ * the member was shown: the approval is refused when the run is held on
+ * another one (openspec factory-agent-tools).
+ */
+export const factoryApproveMergeInput = z
+  .object({ projectId, runId: z.string().min(1), expectedSha: z.string().min(7) })
+  .strict();
+
+/**
  * What a factory admits (change factory-manual-queue): `manual`, only the
  * issues sent to it; `automatic`, also the open issues carrying its label.
  */
@@ -58,6 +67,13 @@ export const MAX_SENSITIVE_PATHS = 50;
  */
 export const DEFAULT_MAX_LOW_RISK_LINES = 400;
 export const LOW_RISK_LINES_RANGE = { min: 10, max: 100_000 } as const;
+
+/**
+ * The largest adjustment a merge approval follows, in lines of the pull
+ * request's change that differ from the approved commit (openspec
+ * factory-approval-survives-integration). 0 (the default): only the same change.
+ */
+export const APPROVAL_ADJUST_LINES_RANGE = { min: 0, max: 200 } as const;
 
 /** At most this many globs a factory leaves out of a change's size. */
 export const MAX_SIZE_IGNORED_PATHS = 50;
@@ -106,8 +122,27 @@ export const factoryMergeApprovalSchema = z.object({
    * branch that settled nothing: the change the member approved is the same.
    */
   carriedFrom: z.string().optional(),
+  /** The stable keys of the risk reasons the approved commit had (`factory-risk`). */
+  riskKeys: z.array(z.string()).optional(),
+  /**
+   * Each time the approval moved to another commit (openspec
+   * factory-approval-survives-integration): `same`, the pull request's change
+   * did not differ; `adjustment`, it differed by `lines` in `files`.
+   */
+  moves: z
+    .array(
+      z.object({
+        to: z.string(),
+        at: z.string(),
+        kind: z.enum(['same', 'adjustment']),
+        lines: z.number().int().min(0),
+        files: z.array(z.string()),
+      }),
+    )
+    .optional(),
 });
 export type FactoryMergeApproval = z.infer<typeof factoryMergeApprovalSchema>;
+export type FactoryApprovalMove = NonNullable<FactoryMergeApproval['moves']>[number];
 
 /** What the factory does with an issue triage finds too large for one change. */
 export type FactoryTooBig = 'ask' | 'split';
@@ -131,6 +166,12 @@ export const saveFactorySettingsInput = z
     sizeIgnoredPaths: z
       .array(z.string().trim().min(1).max(200))
       .max(MAX_SIZE_IGNORED_PATHS)
+      .optional(),
+    approvalAdjustMaxLines: z
+      .number()
+      .int()
+      .min(APPROVAL_ADJUST_LINES_RANGE.min)
+      .max(APPROVAL_ADJUST_LINES_RANGE.max)
       .optional(),
     stageLimits: z
       .record(z.string().min(1).max(64), z.number().int().min(1).max(20))
@@ -168,6 +209,8 @@ export interface FactorySettings {
   maxLowRiskLines: number;
   /** Globs whose lines do not count toward a change's size, besides tests, Markdown and the like. */
   sizeIgnoredPaths: string[];
+  /** The largest adjustment a merge approval follows, in lines; 0: only the same change. */
+  approvalAdjustMaxLines: number;
   /** Runs inside a flow node at once, per node id; replaces the flow's own limit. */
   stageLimits: Record<string, number>;
   /** Provider / model / effort per agent step id, over the flow's own (openspec factory-flow-step-options). */
@@ -819,6 +862,13 @@ export const factoryRiskSchema = z.object({
   changedLines: z.number().int().nonnegative().optional(),
   /** The paths it changes, at most 300 (batches prefer members with disjoint paths, D11). */
   paths: z.array(z.string()).max(300).optional(),
+  /**
+   * What each reason is about, without its numbers (`size`, `sensitive:<path>`,
+   * `finding:<kind>:<path>`, `contract:<hash>`): a merge approval follows an
+   * adjustment only to a commit with no key the approved one lacked. Absent on
+   * a classification stored before the keys existed.
+   */
+  keys: z.array(z.string()).optional(),
 });
 export type FactoryRisk = z.infer<typeof factoryRiskSchema>;
 
@@ -909,6 +959,31 @@ export const factorySentinelResultSchema = z.discriminatedUnion('decision', [
 export type FactorySentinelResult = z.infer<typeof factorySentinelResultSchema>;
 
 /** A factory merge the sentinel may name. */
+export type FactoryApprovalRequestState = 'pending' | 'approved' | 'declined' | 'expired';
+
+/**
+ * An agent's request that the member approve merging a held high-risk change
+ * (openspec factory-agent-tools). It carries no text: what the member is shown
+ * comes from the run. `sha` is the commit the run was held on when the agent
+ * asked; the request expires when the run is held on another one.
+ */
+export interface FactoryApprovalRequest {
+  id: string;
+  runId: string;
+  projectId: string;
+  /** The thread whose agent asked. */
+  threadId: string;
+  sha: string;
+  state: FactoryApprovalRequestState;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** Declining one request of the caller's factory. */
+export const factoryApprovalRequestInput = z
+  .object({ projectId, requestId: z.string().min(1) })
+  .strict();
+
 export const factoryIncidentCandidateSchema = z.object({
   issueNumber: z.number().int(),
   prUrl: z.string(),

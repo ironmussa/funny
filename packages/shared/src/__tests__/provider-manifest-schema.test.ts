@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 
+import type { JsonValue } from '../json-validation.js';
 import {
   PROVIDER_MANIFEST_SCHEMA_VERSION,
   parseFunnyProviderFile,
@@ -14,7 +15,7 @@ import {
 import { ACP_MANIFESTS } from '../provider-manifests.js';
 
 /** Wrap a manifest in the on-disk envelope. */
-function asFile(manifest: unknown) {
+function asFile(manifest: JsonValue) {
   return { schemaVersion: PROVIDER_MANIFEST_SCHEMA_VERSION, manifest };
 }
 

@@ -23,6 +23,7 @@ const mocks = ((): IndicatorMocks => ({
 mock.module('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
 mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
 mock.module('@/data/factory/actions', () => ({
+  approveFactoryMerge: () => okAsync(null),
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));

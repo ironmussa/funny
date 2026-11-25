@@ -293,6 +293,7 @@ export const factorySettings = sqliteTable(
     sensitivePaths: text('sensitive_paths'),
     /** More counted lines than this make a change high risk (null: 400). */
     maxLowRiskLines: integer('max_low_risk_lines'),
+    approvalAdjustMaxLines: integer('approval_adjust_max_lines'),
     /** JSON array of globs whose lines do not count toward a change's size, besides the default list. */
     sizeIgnoredPaths: text('size_ignored_paths'),
     /** JSON object: runs inside a flow node at once, per node id. */
@@ -438,6 +439,32 @@ export const factoryIncidents = sqliteTable('factory_incidents', {
   closedAt: text('closed_at'),
   /** Who closed it: a user id, or `green` when the base branch recovered. */
   closedBy: text('closed_by'),
+});
+
+/**
+ * An agent's request that the member approve merging a held high-risk change
+ * (openspec factory-agent-tools). Bound to one run and one commit; at most one
+ * `pending` request per run (the partial unique index
+ * `factory_approval_requests_one_pending`, migration 127). The request is never
+ * what is approved: the member approves the run's commit, and that closes it.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryApprovalRequests = sqliteTable('factory_approval_requests', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  factoryId: text('factory_id').notNull(),
+  projectId: text('project_id').notNull(),
+  /** The thread whose agent asked. */
+  threadId: text('thread_id').notNull(),
+  /** The commit the run was held on when the agent asked. */
+  sha: text('sha').notNull(),
+  /** `pending` → `approved` | `declined` | `expired` (`factory-approval-requests.ts`). */
+  state: text('state').notNull().default('pending'),
+  createdAt: text('created_at').notNull(),
+  resolvedAt: text('resolved_at'),
+  /** Who declined or approved it; null when it expired. */
+  resolvedBy: text('resolved_by'),
 });
 
 /**

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { errAsync, okAsync } from 'neverthrow';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
@@ -12,12 +12,14 @@ interface FailureCardMocks {
   run: FactoryRun | null;
   thread: Pick<Thread, 'id' | 'projectId' | 'source'> | undefined;
   control: Mock<(...args: any[]) => any>;
+  approve: Mock<(...args: any[]) => any>;
 }
 
 const mocks = ((): FailureCardMocks => ({
   run: null,
   thread: { id: 't1', projectId: 'p1', source: 'factory' },
   control: vi.fn(),
+  approve: vi.fn(),
 }))();
 
 mock.module('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
@@ -25,8 +27,10 @@ mock.module('@/lib/thread-selectors', () => ({ useThreadById: () => mocks.thread
 mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => true }));
 mock.module('@/data/factory/actions', () => ({
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
+  approveFactoryMerge: (...args: unknown[]) => mocks.approve(...args),
 }));
-mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));
+const toastError = vi.fn();
+mock.module('@/lib/toast-error', () => ({ toastError }));
 mock.module('react-i18next', () => ({
   useTranslation: () => ({
     // A fallback string with its values, or `{ defaultValue, ...values }` (PRBadge's form).
@@ -68,6 +72,8 @@ beforeEach(() => {
   mocks.run = runOf();
   mocks.thread = { id: 't1', projectId: 'p1', source: 'factory' };
   mocks.control.mockImplementation(() => okAsync(runOf({ state: 'queued' })));
+  mocks.approve.mockReset();
+  mocks.approve.mockImplementation(() => okAsync(runOf({ state: 'queued' })));
 });
 
 describe('FactoryRunFailureCard', () => {
@@ -143,7 +149,25 @@ describe('FactoryRunFailureCard', () => {
       '1511 changed lines outside tests and docs (more than 400)',
     ]);
     fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
-    expect(mocks.control).toHaveBeenCalledWith('approve-merge', 'p1', 'r1');
+    // The approval names the commit the dialog showed.
+    expect(mocks.approve).toHaveBeenCalledWith('p1', 'r1', 'c2b585c51b2e');
+    expect(mocks.control).not.toHaveBeenCalled();
+  });
+
+  test('an approval refused because the commit changed says so', async () => {
+    mocks.run = runOf({
+      currentStep: 'merge',
+      failureReason: 'high risk',
+      risk: { headSha: 'c2b585c51b2e', level: 'high', reasons: [], changedLines: 3, paths: [] },
+    });
+    const conflict = { type: 'CONFLICT', message: 'held on another commit' };
+    mocks.approve.mockImplementation(() => errAsync(conflict));
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
+    fireEvent.click(screen.getByTestId('factory-run-failure-approve-merge'));
+    fireEvent.click(await screen.findByTestId('confirm-dialog-confirm'));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(conflict, 'factoryApprove'));
   });
 
   test('a run held for another reason keeps Retry and offers no approval', () => {

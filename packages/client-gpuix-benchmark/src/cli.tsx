@@ -34,10 +34,17 @@ interface AutomationTreeNode {
   children?: AutomationTreeNode[];
 }
 
+/** Rows the renderer retains and paints, and how many texts it painted. */
+interface RendererItemCounts {
+  retained: number;
+  visible: number | null;
+  paintedText: number;
+}
+
 function rendererItemCounts(renderer: {
   getAutomationTree: () => string;
   getPaintedText: () => string[];
-}): { retained: number; visible: number | null; paintedText: number } {
+}): RendererItemCounts {
   // SAFETY: getAutomationTree() is the renderer's JSON dump of its own automation tree (null
   // before the first frame); AutomationTreeNode names the node fields this benchmark reads.
   const root = JSON.parse(renderer.getAutomationTree()) as AutomationTreeNode | null;
@@ -76,7 +83,7 @@ function controller(): GpuixBenchmarkController {
   return controllerRef.current;
 }
 
-function diagnostics(): Record<string, string | number | boolean | null> {
+function diagnostics() {
   const snapshot = controller().snapshot();
   const counts = rendererItemCounts(renderer);
   return {
@@ -93,7 +100,7 @@ function diagnostics(): Record<string, string | number | boolean | null> {
     finalStateChecksum: snapshot.checksum,
     frameTimingSupported: false,
     presentationAcknowledgementSupported: false,
-  };
+  } satisfies GpuixWorkloadObservation['diagnostics'];
 }
 
 function commitMutation(metric: string, mutation: () => void): MetricSample {

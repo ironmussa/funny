@@ -668,6 +668,51 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
           }),
         };
   },
+  // The issue factory from a thread's agent (factory-agent-tools). The service
+  // takes the actor and the project from the thread's row and decides every
+  // refusal; a refusal is an answer the agent reads, not a transport error.
+  'data:factory_list_runs': async ({ runnerId, ownerId, data }) => {
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const listed = await factoryAgentTools.listRuns({
+      threadId: String(data.threadId),
+      runnerId,
+      runnerOwnerId: ownerId,
+    });
+    return listed.isOk()
+      ? { type: 'data:factory_list_runs_response', ...listed.value }
+      : {
+          type: 'data:factory_list_runs_response',
+          error: listed.error.kind,
+          message: listed.error.message,
+        };
+  },
+  'data:factory_control_run': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_control_run_response';
+    const action = data.action === 'retry' || data.action === 'stop' ? data.action : null;
+    if (!action) {
+      return { type, error: 'refused', message: 'The action must be retry or stop.' };
+    }
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const controlled = await factoryAgentTools.controlRun(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      action,
+      String(data.runId),
+    );
+    return controlled.isOk()
+      ? { type, run: controlled.value }
+      : { type, error: controlled.error.kind, message: controlled.error.message };
+  },
+  'data:factory_request_approval': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_request_approval_response';
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const asked = await factoryAgentTools.requestApproval(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      String(data.runId),
+    );
+    return asked.isOk()
+      ? { type, ...asked.value }
+      : { type, error: asked.error.kind, message: asked.error.message };
+  },
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');
     const key = await getProviderKey(ownerId, 'minimax');

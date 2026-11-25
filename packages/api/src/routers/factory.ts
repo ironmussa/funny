@@ -1,6 +1,7 @@
 import {
   factoryBlockersInput,
   factoryFlowInput,
+  factoryApprovalRequestInput,
   factoryApproveMergeInput,
   factoryProjectInput,
   factoryRunInput,
@@ -72,6 +73,25 @@ export const factoryRouter = router({
           input.projectId,
           input.runId,
           input.expectedSha,
+        ),
+      ),
+    ),
+  // What agents asked the caller to approve (openspec factory-agent-tools). A
+  // request is answered by approving the run with `approveMerge`, or declined
+  // here; there is no procedure that approves a request.
+  approvalRequests: projectProcedure('view')
+    .input(factoryProjectInput)
+    .query(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.approvalRequests(ctx.userId, input.projectId)),
+    ),
+  declineApprovalRequest: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryApprovalRequestInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(
+        await ctx.ports.factory.declineApprovalRequest(
+          ctx.userId,
+          input.projectId,
+          input.requestId,
         ),
       ),
     ),

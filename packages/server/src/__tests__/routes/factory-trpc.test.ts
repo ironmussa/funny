@@ -196,6 +196,110 @@ describe('factory over tRPC', () => {
     expect(rows.every((row) => row.userId === 'alice' && row.origin === 'user')).toBe(true);
   });
 
+  async function heldRun() {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const held = await seededRun('waiting_human');
+    await createFactoryRunsRepository().update(held.id, {
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c51b2e',
+        level: 'high',
+        reasons: ['touches a sensitive path'],
+        changedLines: 10,
+        paths: ['packages/server/src/db/migrate.ts'],
+      },
+    });
+    return held;
+  }
+
+  const fromThread = { threadId: 't-ask', runnerId: 'laptop', runnerOwnerId: 'alice' };
+
+  test("an agent's approval request is listed, declined by the owner only, and leaves the run held", async () => {
+    const { factoryAgentTools } = await import('../../trpc/ports/factory.js');
+    const { seedThread } = await import('../helpers/test-db.js');
+    const held = await heldRun();
+    seedThread(t.db, { id: 't-ask', projectId: 'p1', userId: 'alice' });
+
+    const asked = (await factoryAgentTools.requestApproval(fromThread, held.id))._unsafeUnwrap();
+    const listed = await query('alice', 'approvalRequests', { projectId: 'p1' });
+    expect(listed.body).toEqual([
+      expect.objectContaining({
+        id: asked.requestId,
+        runId: held.id,
+        threadId: 't-ask',
+        sha: 'c2b585c51b2e',
+        state: 'pending',
+      }),
+    ]);
+    // What a member sees carries no server bookkeeping.
+    expect(listed.body[0]).not.toHaveProperty('factoryId');
+
+    // An outsider sees no project; a viewer may not decline; another member has no such request.
+    const decline = { projectId: 'p1', requestId: asked.requestId };
+    expect((await query('carol', 'approvalRequests', { projectId: 'p1' })).status).toBe(404);
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'declineApprovalRequest', decline)).status).toBe(403);
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
+    await save('bob', { projectId: 'p1', enabled: false });
+    expect((await mutate('bob', 'declineApprovalRequest', decline)).status).toBe(404);
+    expect((await query('bob', 'approvalRequests', { projectId: 'p1' })).body).toEqual([]);
+
+    const declined = await mutate('alice', 'declineApprovalRequest', decline);
+    expect(declined).toMatchObject({ status: 200, body: { state: 'declined' } });
+    expect((await mutate('alice', 'declineApprovalRequest', decline)).status).toBe(409);
+    const runs = (await query('alice', 'runs', { projectId: 'p1' })).body;
+    expect(runs[0]).toMatchObject({ state: 'waiting_human', mergeApproval: null });
+  });
+
+  test('approving the run closes its pending request, and a request never approves', async () => {
+    const { factoryAgentTools } = await import('../../trpc/ports/factory.js');
+    const { seedThread } = await import('../helpers/test-db.js');
+    const held = await heldRun();
+    seedThread(t.db, { id: 't-ask', projectId: 'p1', userId: 'alice' });
+    const asked = (await factoryAgentTools.requestApproval(fromThread, held.id))._unsafeUnwrap();
+
+    // Asking changed nothing on the run.
+    const before = (await query('alice', 'runs', { projectId: 'p1' })).body[0];
+    expect(before).toMatchObject({ state: 'waiting_human', mergeApproval: null });
+
+    const approved = await mutate('alice', 'approveMerge', {
+      projectId: 'p1',
+      runId: held.id,
+      expectedSha: 'c2b585c51b2e',
+    });
+    expect(approved.status).toBe(200);
+    const after = (await query('alice', 'approvalRequests', { projectId: 'p1' })).body;
+    expect(after).toEqual([expect.objectContaining({ id: asked.requestId, state: 'approved' })]);
+  });
+
+  test("an agent's stop goes through the board's control and names the thread in the activity", async () => {
+    const { factoryAgentTools } = await import('../../trpc/ports/factory.js');
+    const { seedThread } = await import('../helpers/test-db.js');
+    const { activities } = await import('../../db/schema.js');
+    const since = new Date().toISOString();
+    const running = await seededRun('working');
+    seedThread(t.db, { id: 't-ask', projectId: 'p1', userId: 'alice' });
+
+    const stopped = await factoryAgentTools.controlRun(fromThread, 'stop', running.id);
+    expect(stopped._unsafeUnwrap()).toMatchObject({ id: running.id, state: 'stopped' });
+    // The same refusal as the board for a run that has ended.
+    const again = await factoryAgentTools.controlRun(fromThread, 'retry', running.id);
+    expect(again._unsafeUnwrapErr().kind).toBe('conflict');
+
+    let rows: Array<typeof activities.$inferSelect> = [];
+    for (let i = 0; i < 50 && rows.length < 2; i++) {
+      rows = (await t.db.select().from(activities)).filter((row) => row.startedAt >= since);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const stop = rows.find((row) => row.kind === 'factory.stop');
+    expect(stop).toMatchObject({
+      userId: 'alice',
+      threadId: 't-ask',
+      origin: 'implicit',
+      title: 'Stopped the factory run for #7 (asked by an agent)',
+    });
+  });
+
   test("another user's run is not found, and a viewer cannot control runs", async () => {
     const run = await seededRun('working');
     expect((await mutate('bob', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(404);

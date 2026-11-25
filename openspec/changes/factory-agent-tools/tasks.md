@@ -16,13 +16,13 @@
 
 ## 3. Server: guard, handlers, expiry
 
-- [ ] 3.1 Implement `factoryToolAccess(thread, action)`; verify with unit tests for sandbox, read-only, scratch, factory-started and steer-shared threads (list allowed, writes refused), each returning its reason
-- [ ] 3.2 Add `data:factory_list_runs`, `data:factory_control_run`, `data:factory_request_approval` to `DATA_SCOPE_RULES` (`refs`) and refuse them from sandbox runners; verify with new cases in `data-scope-characterization.test.ts` and `data-ownership.test.ts` (another user's thread, a sandbox runner, an unknown project)
-- [ ] 3.3 Implement the list handler (owner's runs in the thread's project, wait reason, risk, approval, request state, titles truncated and single-line); verify with tests for another member's factory (not returned), no factory, and a title containing newlines
-- [ ] 3.4 Implement the control handler through `controlled()` with `requestedBy`, re-checking `steer`, with the action typed `'retry' | 'stop'`; verify with tests for a retry (audit and activity carry the thread id), a refused retry, lost `steer`, a run of another project, and a type-level test that `'approve-merge'` is not assignable
-- [ ] 3.5 Implement the request handler (held run only, create-or-get, emit `factory:approval_request` to the factory owner); verify with tests for a held run, a run that is not held, and asking twice
-- [ ] 3.6 Close pending requests on approval and expire them on reclassification, on leaving the hold and on read; verify with tests for each path and that a message from a runner never changes `mergeApproval`
-- [ ] 3.7 Add `factory.approvalRequests` and `factory.declineApprovalRequest` (port and router, owner of the factory only); verify with port tests for decline (run stays held), a non-owner (404) and a member without `steer` (403)
+- [x] 3.1 Implement `factoryToolAccess(thread, action)`; verify with unit tests for sandbox, read-only, scratch, factory-started and steer-shared threads (list allowed, writes refused), each returning its reason
+- [x] 3.2 Add `data:factory_list_runs`, `data:factory_control_run`, `data:factory_request_approval` to `DATA_SCOPE_RULES` (`refs`) and refuse them from sandbox runners; verify with new cases in `data-scope-characterization.test.ts` and `data-ownership.test.ts` (another user's thread, a sandbox runner, an unknown project)
+- [x] 3.3 Implement the list handler (owner's runs in the thread's project, wait reason, risk, approval, request state, titles truncated and single-line); verify with tests for another member's factory (not returned), no factory, and a title containing newlines
+- [x] 3.4 Implement the control handler through `controlled()` with `requestedBy`, re-checking `steer`, with the action typed `'retry' | 'stop'`; verify with tests for a retry (audit and activity carry the thread id), a refused retry, lost `steer`, a run of another project, and a type-level test that `'approve-merge'` is not assignable
+- [x] 3.5 Implement the request handler (held run only, create-or-get, emit `factory:approval_request` to the factory owner); verify with tests for a held run, a run that is not held, and asking twice
+- [x] 3.6 Close pending requests on approval and expire them on reclassification, on leaving the hold and on read; verify with tests for each path and that a message from a runner never changes `mergeApproval`
+- [x] 3.7 Add `factory.approvalRequests` and `factory.declineApprovalRequest` (port and router, owner of the factory only); verify with port tests for decline (run stays held), a non-owner (404) and a member without `steer` (403)
 
 ## 4. Runtime: the tools
 

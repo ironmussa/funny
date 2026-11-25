@@ -47,11 +47,13 @@ Examples:
 `);
 }
 
-function parseArgs(args: string[]): {
+interface ParsedArgs {
   benchmark: string | null;
   options: Partial<BenchmarkConfig>;
   size: 'S' | 'M' | 'L';
-} {
+}
+
+function parseArgs(args: string[]): ParsedArgs {
   const options: Partial<BenchmarkConfig> = {};
   let benchmark: string | null = null;
   let size: 'S' | 'M' | 'L' = 'S';

@@ -111,14 +111,16 @@ function CheckRunDetails({
           key={item}
           variant="outline"
           size="xs"
-          className="max-w-full truncate font-mono font-normal"
+          weight="normal"
+          mono
+          className="max-w-full"
           title={item}
         >
           {item}
         </Badge>
       ))}
       {filter && (
-        <Badge variant="secondary" size="xs" className="font-mono font-normal">
+        <Badge variant="secondary" size="xs" weight="normal" mono>
           {t('checks.filter', { filter })}
         </Badge>
       )}

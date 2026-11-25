@@ -73,7 +73,12 @@ export function moveDock(
   return next;
 }
 
-export function resizeDockPair(input: DockResizeInput): Record<string, number> {
+/** Panel id → its new size, for the panels a resize changed. */
+export interface DockPanelSizes {
+  [panelId: string]: number;
+}
+
+export function resizeDockPair(input: DockResizeInput): DockPanelSizes {
   const pairSize = input.leadingSize + input.trailingSize;
   const leadingMaximum = Math.min(
     input.leading.maxSize ?? Number.POSITIVE_INFINITY,

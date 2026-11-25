@@ -15,7 +15,12 @@ export interface MermaidOptions {
 
 // ── Icons per element kind ───────────────────────────────────────
 
-const KIND_ICONS: Record<string, string> = {
+/** Element kind → the icon its label starts with. */
+interface KindIcons {
+  readonly [kind: string]: string;
+}
+
+const KIND_ICONS: KindIcons = {
   command: '📋',
   event: '⚡',
   aggregate: '🔷',

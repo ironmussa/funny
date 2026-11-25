@@ -41,13 +41,12 @@ export async function nativeJsonRequest<T>(options: {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const text = await response.text();
-  let decoded: unknown = null;
-  if (text) {
-    try {
-      decoded = JSON.parse(text);
-    } catch {
-      if (response.ok) throw new NativeApiError(response.status, 'Server returned invalid JSON');
-    }
+  // Stays undefined when an error response's body is not JSON; read as no body below.
+  let decoded: unknown;
+  try {
+    decoded = text ? JSON.parse(text) : null;
+  } catch {
+    if (response.ok) throw new NativeApiError(response.status, 'Server returned invalid JSON');
   }
   if (!response.ok) {
     const error = isObject(decoded) ? ('error' in decoded ? decoded.error : undefined) : null;

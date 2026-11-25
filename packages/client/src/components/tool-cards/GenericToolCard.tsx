@@ -150,10 +150,7 @@ export function GenericToolCard({
         )}
       </div>
       {expanded && (
-        <ToolContentArea
-          className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-        >
+        <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           {isTodo && todos ? (
             <div className="px-3 pb-2">
               <TodoList todos={todos} />

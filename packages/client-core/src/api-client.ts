@@ -129,7 +129,12 @@ function httpErrorMessage(body: Record<string, unknown>, status: number): string
   return rawError ? JSON.stringify(rawError) : `HTTP ${status}`;
 }
 
-const HTTP_STATUS_TYPES: Record<number, ApiErrorType> = {
+/** HTTP status → the error type it reports (others fall back on the status class). */
+interface HttpStatusTypes {
+  readonly [status: number]: ApiErrorType;
+}
+
+const HTTP_STATUS_TYPES: HttpStatusTypes = {
   404: 'NOT_FOUND',
   403: 'FORBIDDEN',
   409: 'CONFLICT',
@@ -153,13 +158,13 @@ function httpError(body: Record<string, unknown>, status: number, message: strin
     : { type, message };
 }
 
-function asApiError(error: unknown): ApiClientError {
-  if (isThrownApiError(error)) {
+function asApiError(cause: unknown): ApiClientError {
+  if (isThrownApiError(cause)) {
     // SAFETY: the only objects with `type` and `message` that reach this catch are the
     // ApiClientError values this client throws itself (httpError and the network branch).
-    return error as ApiClientError;
+    return cause as ApiClientError;
   }
-  return { type: 'INTERNAL', message: String(error) };
+  return { type: 'INTERNAL', message: String(cause) };
 }
 
 export function createApiClient(dependencies: ApiClientDependencies): ApiClient {

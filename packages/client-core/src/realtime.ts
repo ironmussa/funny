@@ -238,12 +238,19 @@ export function createRealtimeController(options: {
 
 const ACTIVE_THREAD_STATUSES = new Set(['setting_up', 'pending', 'running', 'waiting']);
 
+/** The sidebar lists that hold an active thread, and so need a resync. */
+export interface SidebarResyncTargets {
+  projectIds: string[];
+  scratch: boolean;
+  shared: boolean;
+}
+
 export function getSidebarResyncTargets(state: {
   threadIdsByProject: Record<string, string[]>;
   threadsById: Record<string, { status?: string } | undefined>;
   scratchThreadIds: string[];
   sharedThreadIds: string[];
-}): { projectIds: string[]; scratch: boolean; shared: boolean } {
+}): SidebarResyncTargets {
   const active = (id: string): boolean =>
     ACTIVE_THREAD_STATUSES.has(state.threadsById[id]?.status ?? '');
   return {

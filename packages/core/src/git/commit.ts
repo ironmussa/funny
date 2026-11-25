@@ -119,7 +119,7 @@ export function runHookCommand(
         }
       }
     })(),
-    (e: unknown) => processError(errorMessage(e) || 'Hook command failed', 1, ''),
+    (cause: unknown) => processError(errorMessage(cause) || 'Hook command failed', 1, ''),
   );
 }
 

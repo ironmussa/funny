@@ -143,6 +143,9 @@ const OPERATION_KINDS = [
   'activityStart',
   'activityUpdate',
   'activityReconcile',
+  'factoryListRuns',
+  'factoryControlRun',
+  'factoryRequestApproval',
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
@@ -368,6 +371,18 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     projectId: value.projectId ?? undefined,
   }),
   getGithubAppToken: threadScoped('data:get_github_app_token'),
+  factoryListRuns: threadScoped('data:factory_list_runs'),
+  factoryControlRun: (value) => ({
+    type: 'data:factory_control_run',
+    threadId: value.threadId,
+    runId: value.runId,
+    action: value.action,
+  }),
+  factoryRequestApproval: (value) => ({
+    type: 'data:factory_request_approval',
+    threadId: value.threadId,
+    runId: value.runId,
+  }),
   getProjectSecrets: threadScoped('data:get_project_secrets'),
   getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),
   updateProfile: (value, principalUserId) => ({

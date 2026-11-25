@@ -82,10 +82,7 @@ export function BashCard({
         )}
       </button>
       {expanded && command && (
-        <ToolContentArea
-          className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-        >
+        <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           <CommandOutput command={command} output={output} />
         </ToolContentArea>
       )}

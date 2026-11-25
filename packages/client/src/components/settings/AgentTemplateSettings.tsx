@@ -159,7 +159,7 @@ export function AgentTemplateSettings() {
         builtinTemplates.length === 0 && (
           <EmptyState
             fill={false}
-            className="rounded-md border border-dashed p-6"
+            surface="dashed"
             icon={Bot}
             title="No agent templates yet."
             description="Create one to define a reusable Deep Agent configuration."
@@ -302,9 +302,9 @@ function TemplateCard({
         </Button>
         {!isBuiltin && (
           <Button
-            variant="ghost"
+            variant="ghost-destructive"
             size="icon"
-            className="text-destructive size-6"
+            className="size-6"
             onClick={onDelete}
             data-testid={`agent-template-delete-${template.id}`}
             aria-label={`Delete ${template.name}`}
@@ -389,9 +389,8 @@ function TemplateEditor({
         <h4 className="text-sm font-medium">Edit Template</h4>
         <div className="flex gap-1">
           <Button
-            variant="ghost"
+            variant="ghost-destructive"
             size="sm"
-            className="text-destructive"
             onClick={onDelete}
             aria-label={`Delete ${template.name}`}
             data-testid="agent-template-editor-delete"
@@ -465,9 +464,14 @@ function CollapsibleSection({
 }) {
   return (
     <Collapsible defaultOpen={defaultOpen}>
-      <CollapsibleTrigger className="text-muted-foreground hover:bg-accent/50 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium">
-        <ChevronDown className="size-3 transition-transform [[data-state=closed]>&]:-rotate-90" />
-        {title}
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground hover:bg-accent/50 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium"
+        >
+          <ChevronDown className="size-3 transition-transform [[data-state=closed]>&]:-rotate-90" />
+          {title}
+        </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="px-2 pt-1 pb-2">{children}</div>

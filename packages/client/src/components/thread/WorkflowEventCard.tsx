@@ -174,7 +174,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
   const config = wfConfig || gConfig;
   if (!config) return null;
 
-  const Icon = config.icon;
+  const KindIcon = config.icon;
   let detail: React.ReactNode = null;
   let statusIcon: React.ReactNode = null;
 
@@ -353,7 +353,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       data-testid={`workflow-event-${event.type}`}
       className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors"
     >
-      {statusIcon || <Icon className={cn('icon-xs shrink-0 text-muted-foreground')} />}
+      {statusIcon || <KindIcon className={cn('icon-xs shrink-0 text-muted-foreground')} />}
       <span className="text-muted-foreground shrink-0 font-mono font-medium">{config.label}</span>
       {detail}
       {event.createdAt && (

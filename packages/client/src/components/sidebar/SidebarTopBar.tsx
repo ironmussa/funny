@@ -29,109 +29,112 @@ export function SidebarTopBar() {
   const { pendingCount } = useAutomationInbox();
 
   return (
-    <SidebarHeader className="group/header flex-row items-center justify-between gap-0.5 px-2 py-2">
-      <div className={HOVER_REVEAL}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              tabIndex={-1}
-              data-testid="sidebar-collapse"
-              aria-label={t('sidebar.collapse', 'Collapse sidebar')}
-              onClick={toggleSidebar}
-              className="text-muted-foreground"
-            >
-              <PanelLeftClose className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('sidebar.collapse', 'Collapse sidebar')}</TooltipContent>
-        </Tooltip>
-      </div>
-      <div className="min-w-0 flex-1">
-        <OrgSwitcher />
-      </div>
-      <div className={HOVER_REVEAL}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              tabIndex={-1}
-              data-testid="sidebar-search"
-              aria-label={t('sidebar.search', 'Search')}
-              onClick={() => navigate(buildPath('/list'))}
-            >
-              <Search className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('sidebar.search', 'Search')}</TooltipContent>
-        </Tooltip>
-      </div>
-      <AutomationInboxButton
-        className={cn('shrink-0 transition-opacity', pendingCount === 0 && HOVER_REVEAL)}
-      />
-      <div className={cn('flex items-center gap-0.5', HOVER_REVEAL)}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              tabIndex={-1}
-              data-testid="sidebar-factory"
-              aria-label={t('sidebar.factory', 'Factory queue')}
-              onClick={() => navigate(buildPath('/factory'))}
-            >
-              <Factory className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('sidebar.factory', 'Factory queue')}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              tabIndex={-1}
-              data-testid="sidebar-kanban"
-              aria-label="Kanban"
-              onClick={() => navigate(buildPath('/kanban'))}
-            >
-              <Columns3 className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Kanban</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              tabIndex={-1}
-              data-testid="sidebar-grid"
-              aria-label="Grid"
-              onClick={() => navigate(buildPath('/grid'))}
-            >
-              <LayoutGrid className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Grid</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              tabIndex={-1}
-              data-testid="sidebar-analytics"
-              aria-label={t('sidebar.analytics')}
-              onClick={() => navigate(buildPath('/analytics'))}
-            >
-              <BarChart3 className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
-        </Tooltip>
+    <SidebarHeader className="group/header">
+      <div className="flex items-center justify-between gap-0.5">
+        <div className={HOVER_REVEAL}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted"
+                size="icon-sm"
+                tabIndex={-1}
+                data-testid="sidebar-collapse"
+                aria-label={t('sidebar.collapse', 'Collapse sidebar')}
+                onClick={toggleSidebar}
+              >
+                <PanelLeftClose className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {t('sidebar.collapse', 'Collapse sidebar')}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="min-w-0 flex-1">
+          <OrgSwitcher />
+        </div>
+        <div className={HOVER_REVEAL}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted"
+                size="icon-sm"
+                tabIndex={-1}
+                data-testid="sidebar-search"
+                aria-label={t('sidebar.search', 'Search')}
+                onClick={() => navigate(buildPath('/list'))}
+              >
+                <Search className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('sidebar.search', 'Search')}</TooltipContent>
+          </Tooltip>
+        </div>
+        <div className={cn('flex shrink-0 transition-opacity', pendingCount === 0 && HOVER_REVEAL)}>
+          <AutomationInboxButton />
+        </div>
+        <div className={cn('flex items-center gap-0.5', HOVER_REVEAL)}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted"
+                size="icon-sm"
+                tabIndex={-1}
+                data-testid="sidebar-factory"
+                aria-label={t('sidebar.factory', 'Factory queue')}
+                onClick={() => navigate(buildPath('/factory'))}
+              >
+                <Factory className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('sidebar.factory', 'Factory queue')}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted"
+                size="icon-sm"
+                tabIndex={-1}
+                data-testid="sidebar-kanban"
+                aria-label="Kanban"
+                onClick={() => navigate(buildPath('/kanban'))}
+              >
+                <Columns3 className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Kanban</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted"
+                size="icon-sm"
+                tabIndex={-1}
+                data-testid="sidebar-grid"
+                aria-label="Grid"
+                onClick={() => navigate(buildPath('/grid'))}
+              >
+                <LayoutGrid className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Grid</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted"
+                size="icon-sm"
+                tabIndex={-1}
+                data-testid="sidebar-analytics"
+                aria-label={t('sidebar.analytics')}
+                onClick={() => navigate(buildPath('/analytics'))}
+              >
+                <BarChart3 className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </SidebarHeader>
   );

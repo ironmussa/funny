@@ -8,7 +8,7 @@
 
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 
-import type { GithubCallError, RepoGithub } from './repo-github.js';
+import type { GithubCallError, GithubRequestBody, RepoGithub } from './repo-github.js';
 
 /** A branch as path segments: `release/1.x` keeps its slashes. */
 const refPath = (ref: string) => ref.split('/').map(encodeURIComponent).join('/');
@@ -83,7 +83,7 @@ function graphql<T>(
   github: RepoGithub,
   repo: string,
   query: string,
-  variables: Record<string, unknown>,
+  variables: GithubRequestBody,
 ): ResultAsync<GraphqlAnswer<T>, GithubCallError> {
   return github.json<GraphqlAnswer<T>>(repo, 'POST', '/graphql', { query, variables });
 }

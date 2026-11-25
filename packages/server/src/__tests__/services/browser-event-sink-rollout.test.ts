@@ -80,7 +80,7 @@ describe('rollout-aware browser event sink', () => {
     expect(legacy.emitted.map(({ event }) => event)).toEqual(['profile:updated']);
     expect(binary.emitted.map(({ event }) => event)).toEqual([BROWSER_V1_CARRIER_EVENTS.event]);
     expect(shadow.emitted.map(({ event }) => event)).toEqual(['profile:updated']);
-    expect(decodeBrowserCarrier(binary.emitted[0]?.payload)).toMatchObject({
+    expect(decodeBrowserCarrier(binary.emitted[0]?.payload as Uint8Array)).toMatchObject({
       ok: true,
       envelope: { payload: { case: 'event' } },
     });
@@ -153,7 +153,9 @@ describe('rollout-aware browser event sink', () => {
       BROWSER_V1_CARRIER_EVENTS.event,
       BROWSER_V1_CARRIER_EVENTS.event,
     ]);
-    const outcomes = binary.emitted.map(({ payload }) => decodeBrowserCarrier(payload));
+    const outcomes = binary.emitted.map(({ payload }) =>
+      decodeBrowserCarrier(payload as Uint8Array),
+    );
     expect(outcomes).toMatchObject([
       {
         ok: true,

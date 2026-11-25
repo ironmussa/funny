@@ -123,7 +123,7 @@ export function SidebarProjectsSection({
         </Tooltip>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <SidebarContent ref={scrollRef} className="h-full px-2 contain-paint">
+        <SidebarContent ref={scrollRef} inset="x" className="h-full contain-paint">
           {!projectsInitialized && projects.length === 0 && (
             <div
               aria-hidden
@@ -132,8 +132,8 @@ export function SidebarProjectsSection({
             >
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-1.5 px-2 py-1">
-                  <Skeleton className="size-3.5 rounded" />
-                  <Skeleton className="size-3.5 rounded" />
+                  <Skeleton corners="square" className="size-3.5" />
+                  <Skeleton corners="square" className="size-3.5" />
                   <Skeleton
                     className="h-3 flex-1"
                     style={{ maxWidth: `${60 + ((i * 37) % 35)}%` }}
@@ -173,14 +173,17 @@ export function SidebarProjectsSection({
               className="mt-3"
               data-testid="sidebar-closed-projects"
             >
-              <CollapsibleTrigger
-                data-testid="sidebar-closed-projects-toggle"
-                className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold tracking-wider uppercase"
-              >
-                <ChevronRight className={cn('icon-sm', closedExpanded && 'rotate-90')} />
-                <span>
-                  {t('sidebar.closedProjects')} ({closedProjects.length})
-                </span>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="sidebar-closed-projects-toggle"
+                  className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold tracking-wider uppercase"
+                >
+                  <ChevronRight className={cn('icon-sm', closedExpanded && 'rotate-90')} />
+                  <span>
+                    {t('sidebar.closedProjects')} ({closedProjects.length})
+                  </span>
+                </button>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="mt-1 flex flex-col gap-1.5">

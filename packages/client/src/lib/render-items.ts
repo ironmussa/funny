@@ -3,7 +3,11 @@ import type { ThreadEvent } from '@funny/shared';
 import { isTodoToolName } from '@/components/tool-cards/utils';
 import type { CompactionEvent } from '@/stores/thread-store';
 
-import { isTrailingFactoryCard, type FactoryTimelineCard } from './factory-timeline';
+import {
+  factoryCardKey,
+  isTrailingFactoryCard,
+  type FactoryTimelineCard,
+} from './factory-timeline';
 import { isGitTimelineEventType } from './git-timeline-events';
 
 export type ToolItem =
@@ -147,7 +151,7 @@ export function getItemKey(item: RenderItem): string {
   if (item.type === 'thread-event') return item.event.id;
   if (item.type === 'compaction-event') return `compact-${item.event.timestamp}`;
   if (item.type === 'workflow-event-group') return `workflow-${item.events[0]?.id}`;
-  if (item.type === 'factory-card') return `factory-${item.card.kind}`;
+  if (item.type === 'factory-card') return `factory-${factoryCardKey(item.card)}`;
   return '';
 }
 

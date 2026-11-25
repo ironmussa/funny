@@ -54,7 +54,7 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
   if (!isGitTimelineEventType(event.type)) return null;
   const config = eventConfig[event.type];
 
-  const Icon = config.icon;
+  const KindIcon = config.icon;
   const output = isString(metadata.output) ? metadata.output.trim() : '';
 
   return (
@@ -68,7 +68,7 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
         <ChevronRight
           className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
-        <Icon className="icon-xs text-muted-foreground shrink-0" />
+        <KindIcon className="icon-xs text-muted-foreground shrink-0" />
         <span className="text-foreground shrink-0 font-mono font-medium">{config.label}</span>
         {metadata.message && (
           <span className="text-muted-foreground min-w-0 truncate font-mono">

@@ -191,6 +191,8 @@ export class ChromeSession extends EventEmitter {
     if (this.windowInsets || !this.client) return;
     try {
       const { bounds } = await this.client.Browser.getWindowForTarget({});
+      // SAFETY: the expression evaluates to two numbers in the page; the
+      // Array.isArray check below returns early on anything else.
       const inner = (await this.execute('[innerWidth, innerHeight]')) as [number, number];
       if (!bounds.width || !bounds.height || !Array.isArray(inner)) return;
       this.windowInsets = {
@@ -301,7 +303,7 @@ export class ChromeSession extends EventEmitter {
       const text = args.map((a: any) => a.value ?? a.description ?? '').join(' ');
       const frame = stackTrace?.callFrames?.[0];
       this.emit('console', {
-        level: type as string,
+        level: type,
         text,
         url: frame?.url,
         line: frame?.lineNumber,
@@ -342,7 +344,7 @@ export class ChromeSession extends EventEmitter {
           url: request.url,
           resourceType: type,
           startTime: timestamp * 1000,
-          requestHeaders: request.headers as Record<string, string>,
+          requestHeaders: request.headers,
           postData: request.postData,
         },
         phase: 'request' as const,
@@ -360,7 +362,7 @@ export class ChromeSession extends EventEmitter {
           resourceType: type,
           mimeType: response.mimeType,
           endTime: timestamp * 1000,
-          responseHeaders: response.headers as Record<string, string>,
+          responseHeaders: response.headers,
         },
         phase: 'response' as const,
       });
@@ -450,7 +452,7 @@ export class ChromeSession extends EventEmitter {
           status: res.failed ? 0 : 200,
           resourceType: res.type,
           mimeType: res.mimeType,
-          size: (res as any).contentSize ?? undefined,
+          size: res.contentSize ?? undefined,
           startTime: now,
           endTime: now,
           duration: 0,

@@ -84,8 +84,12 @@ const SUITE_START = /^▶ (.+)$/;
 /** The test runner's `✓ suite 12.3s`; checks' own `✓ message` lines have no time. */
 const SUITE_END = /^[✓✗] (\S+) [\d.]+s$/;
 
+/** The patterns capture only `error` or `warning`, so this maps them one to one. */
+const severityOf = (captured: string): Issue['severity'] =>
+  captured === 'warning' ? 'warning' : 'error';
+
 const located = (m: RegExpExecArray, at = 1): Issue => ({
-  severity: m[at + 3] as Issue['severity'],
+  severity: severityOf(m[at + 3]),
   file: m[at],
   line: Number(m[at + 1]),
   column: Number(m[at + 2]),
@@ -99,7 +103,7 @@ function lineIssue(line: string): Issue | null {
   const mypy = MYPY.exec(line);
   if (mypy) {
     return {
-      severity: mypy[4] as Issue['severity'],
+      severity: severityOf(mypy[4]),
       file: mypy[1],
       line: Number(mypy[2]),
       column: mypy[3] ? Number(mypy[3]) : undefined,
@@ -126,7 +130,7 @@ function lineIssue(line: string): Issue | null {
 function headIssue(line: string): Issue | null {
   if (CARGO_SUMMARY.test(line)) return null;
   const cargo = CARGO_HEAD.exec(line);
-  if (cargo) return { severity: cargo[1] as Issue['severity'], message: cargo[2] };
+  if (cargo) return { severity: severityOf(cargo[1]), message: cargo[2] };
   const oxlint = OXLINT_HEAD.exec(line);
   if (oxlint) return { severity: oxlint[1] === '⚠' ? 'warning' : 'error', message: oxlint[2] };
   const ruff = RUFF_HEAD.exec(line);
@@ -224,7 +228,7 @@ export function createStepParser(step: string): StepParser {
     const m = stylishFile ? STYLISH_ISSUE.exec(line) : null;
     if (!m) return null;
     const message = m[5] ? `${m[4]} (${m[5]})` : m[4];
-    const severity = m[3] as Issue['severity'];
+    const severity = severityOf(m[3]);
     return record({
       severity,
       file: stylishFile!,

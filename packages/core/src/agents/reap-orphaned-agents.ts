@@ -49,7 +49,7 @@ export function buildAgentChildEnv(
   extra?: NodeJS.ProcessEnv,
   ownerPid: number = process.pid,
 ): NodeJS.ProcessEnv {
-  return { ...buildChildEnv(extra), [AGENT_OWNER_ENV]: String(ownerPid) } as NodeJS.ProcessEnv;
+  return { ...buildChildEnv(extra), [AGENT_OWNER_ENV]: String(ownerPid) };
 }
 
 export interface ProcEntry {
@@ -125,7 +125,7 @@ function pidIsAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (err) {
-    return (err as NodeJS.ErrnoException)?.code === 'EPERM';
+    return err instanceof Error && 'code' in err && err.code === 'EPERM';
   }
 }
 

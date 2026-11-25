@@ -253,9 +253,12 @@ export class PiSDKProcess extends BaseAgentProcess {
             type: 'compact_boundary',
             trigger: e.reason === 'manual' ? 'manual' : 'auto',
             preTokens: e.result.tokensBefore ?? 0,
-            postTokens: 'tokensAfter' in e.result ? (e.result.tokensAfter ?? 0) : 0,
+            postTokens:
+              'tokensAfter' in e.result && isNumber(e.result.tokensAfter)
+                ? e.result.tokensAfter
+                : 0,
             sessionId: this.session?.sessionId ?? '',
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
         break;
       default:
@@ -275,7 +278,7 @@ export class PiSDKProcess extends BaseAgentProcess {
           id: this.assistantMessageId,
           content: [{ type: 'text', text: this.accumulatedText }],
         },
-      } as CLIMessage);
+      } satisfies CLIMessage);
       return;
     }
     if (e.type === 'thinking_delta' && isNonEmptyString(e.delta)) {
@@ -311,7 +314,7 @@ export class PiSDKProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private emitToolResult(
@@ -333,7 +336,7 @@ export class PiSDKProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private flushPendingThought(): void {
@@ -349,13 +352,13 @@ export class PiSDKProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id, name: 'Think', input: { content: text } }],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
     this.emit('message', {
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: id, content: text }],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private resetTurnState(): void {
@@ -433,6 +436,10 @@ function isString<T>(value: T): value is T & string {
 
 function isNonEmptyString<T>(value: T): value is T & string {
   return typeof value === 'string' && value.length > 0;
+}
+
+function isNumber<T>(value: T): value is T & number {
+  return typeof value === 'number';
 }
 
 /** Any non-null object (arrays included). */
@@ -687,6 +694,8 @@ export function piToolsFromMcp(bridge: McpToolBridge) {
     name: tool.name,
     label: tool.name,
     description: tool.description,
+    // SAFETY: pi validates `parameters` as plain JSON Schema (its TypeBox type is JSON Schema
+    // plus type-level brands), and `inputSchema` is the JSON Schema the MCP server published.
     parameters: tool.inputSchema as any,
     execute: async (
       _toolCallId: string,

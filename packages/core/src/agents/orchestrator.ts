@@ -71,10 +71,11 @@ function holdToReading<O extends { provider: AgentProvider }>(
   opts: O,
   input: Pick<StartAgentOptions, 'readOnlyRoots' | 'readOnlyHiddenPaths'>,
 ) {
+  const originalPermissionMode: PermissionMode = 'plan';
   return {
     ...opts,
     permissionMode: resolvePermissionMode(opts.provider, 'plan'),
-    originalPermissionMode: 'plan' as PermissionMode,
+    originalPermissionMode,
     allowedTools: [...READ_ONLY_AGENT_TOOLS],
     mcpServers: undefined,
     redirectChecks: false,
@@ -347,6 +348,9 @@ export class AgentOrchestrator extends EventEmitter {
   ): boolean {
     if (!prev) return false;
     // Every field of the snapshot gates reuse.
+    // SAFETY: `next` is built by snapshotProcessOptions as a plain object
+    // literal of exactly the ProcessOptionsSnapshot fields, so its own keys
+    // are keys of that type.
     return (Object.keys(next) as (keyof ProcessOptionsSnapshot)[]).every(
       (key) => prev[key] === next[key],
     );
@@ -783,7 +787,7 @@ export class AgentOrchestrator extends EventEmitter {
       dlog.debug('wireProcessHandlers message', {
         threadId,
         type: msg.type,
-        subtype: (msg as any).subtype,
+        subtype: 'subtype' in msg ? msg.subtype : undefined,
       });
       if (msg.type === 'result') {
         this.resultReceived.add(threadId);
@@ -899,7 +903,7 @@ export class AgentOrchestrator extends EventEmitter {
       dlog.debug('wireResumeHandlers message', {
         threadId,
         type: msg.type,
-        subtype: (msg as any).subtype,
+        subtype: 'subtype' in msg ? msg.subtype : undefined,
         firstMessage: !gotMessage,
       });
       if (msg.type === 'result') {
@@ -907,7 +911,7 @@ export class AgentOrchestrator extends EventEmitter {
         // error result with 0 turns — the session was recognised but the
         // working directory (or some other env) changed so it crashed right
         // away. Treat this the same as a stale session so we can retry fresh.
-        const r = msg as any;
+        const r = msg;
         if (
           r.subtype === 'error_during_execution' &&
           (r.num_turns === 0 || r.num_turns === undefined)

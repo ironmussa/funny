@@ -6,6 +6,7 @@
 
 import { WORKSPACE_CLEANUP_REASONS } from '@funny/shared/activities';
 import { validationErr, type DomainError } from '@funny/shared/errors';
+import type { JsonValue } from '@funny/shared/json-validation';
 import { DEFAULT_PROVIDER, MODEL_REGISTRY, providerModelProblem } from '@funny/shared/models';
 import { ok, err, type Result } from 'neverthrow';
 import { z } from 'zod';
@@ -718,8 +719,11 @@ export const startFactoryStepSchema = z.discriminatedUnion('kind', [
 
 // ── Helper ───────────────────────────────────────────────────────
 
+/** What a route hands to `validate`: a decoded JSON body, or a path / query value. */
+export type RequestInput = JsonValue | undefined;
+
 /** Validate request body; returns Result<T, DomainError> */
-export function validate<T>(schema: z.ZodType<T>, data: unknown): Result<T, DomainError> {
+export function validate<T>(schema: z.ZodType<T>, data: RequestInput): Result<T, DomainError> {
   const result = schema.safeParse(data);
   if (!result.success) {
     const firstIssue = result.error.issues[0];

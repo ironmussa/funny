@@ -32,8 +32,10 @@ export async function readBody<Body>(
   c: Context<HonoEnv>,
   schema: z.ZodType<Body> | undefined,
 ): Promise<Result<Body, DomainError>> {
-  // SAFETY: a route without a body schema declares Body = undefined (the default).
-  if (!schema) return ok(undefined as Body);
+  if (!schema) {
+    // SAFETY: a route without a body schema declares Body = undefined (the default).
+    return ok(undefined as Body);
+  }
   return validate(schema, await c.req.json().catch(() => ({})));
 }
 

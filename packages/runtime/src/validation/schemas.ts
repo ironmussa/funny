@@ -15,6 +15,9 @@ import { z } from 'zod';
 
 /** Build a zod enum from the keys of a MODEL_REGISTRY sub-map. */
 function registryEnum<P extends keyof typeof MODEL_REGISTRY>(provider: P) {
+  // SAFETY: the providers this is called with (claude, codex, gemini,
+  // deepagent) each list at least one model in MODEL_REGISTRY, so the key
+  // list is non-empty, as z.enum's tuple type expects.
   const keys = Object.keys(MODEL_REGISTRY[provider]) as [string, ...string[]];
   return z.enum(keys);
 }

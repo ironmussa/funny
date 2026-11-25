@@ -81,6 +81,7 @@ export function createFactoryRunsRepository(
       id: deps.newId(),
       factoryId: input.factoryId,
       issueNumber: input.issueNumber ?? NO_ISSUE,
+      issueTitle: input.issueTitle ?? null,
       state,
       currentStep: input.currentStep ?? null,
       threadIds: JSON.stringify(input.threadIds ?? []),

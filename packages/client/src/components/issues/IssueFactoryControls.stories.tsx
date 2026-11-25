@@ -17,6 +17,7 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   id: 'run',
   factoryId: 'factory',
   issueNumber: 12,
+  issueTitle: null,
   triggerName: null,
   inputs: {},
   prUrl: null,

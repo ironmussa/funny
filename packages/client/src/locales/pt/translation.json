@@ -1785,6 +1785,9 @@
       "failed": "Falhou",
       "stopped": "Parada",
       "split": "Dividido",
+      "notStarted": "Não iniciada",
+      "notStartedQueued": "Retirada da fila antes de começar: nenhum agente executou, sem branch nem pull request",
+      "notStartedStopped": "Parada antes do primeiro passo: nenhum agente executou, sem branch nem pull request",
       "tooBig": "Grande demais"
     },
     "wait": {
@@ -2023,6 +2026,7 @@
     "empty": "Nada na factory",
     "emptyDescription": "As issues enviadas à factory de um projeto aparecem aqui enquanto aguardam e executam.",
     "issueTitle": "Issue #{{number}}",
+    "issueTitleNamed": "#{{number}} {{title}}",
     "showAll": "Todas",
     "showActive": "Ativas",
     "layoutList": "Lista",

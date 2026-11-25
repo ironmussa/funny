@@ -22,7 +22,7 @@ import {
 } from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
 import { buildFactoryRun } from '@/data/factory/testing';
-import { filterFactoryRuns } from '@/lib/factory-run-labels';
+import { factoryRunFallbackTitle, filterFactoryRuns } from '@/lib/factory-run-labels';
 
 /** An i18next with no resources: every text is its fallback, with its values filled in. */
 const i18n = i18next.createInstance();
@@ -389,6 +389,20 @@ describe('board chips carry what the card used to say in lines', () => {
   });
 });
 
+describe('factoryRunFallbackTitle', () => {
+  test("a run with no thread is named by its issue's title once the run read it", () => {
+    expect(
+      factoryRunFallbackTitle(
+        t,
+        buildFactoryRun({ issueNumber: 490, issueTitle: 'Client stores' }),
+      ),
+    ).toBe('#490 Client stores');
+    expect(
+      factoryRunFallbackTitle(t, buildFactoryRun({ issueNumber: 490, issueTitle: null })),
+    ).toBe('Issue #490');
+  });
+});
+
 describe('factoryRunStateChip', () => {
   test('the states one column holds read apart', () => {
     expect(factoryRunStateChip(t, buildFactoryRun({ state: 'failed' }))).toEqual({
@@ -432,9 +446,22 @@ describe('factoryBoardStateChip', () => {
   });
 
   test('a card with no thread has a clock for its icon, so it keeps the chip', () => {
-    expect(factoryBoardStateChip(t, buildFactoryRun({ state: 'stopped' }), false)?.label).toBe(
-      'Stopped',
-    );
+    const run = buildFactoryRun({ state: 'stopped', threadIds: ['t1'] });
+    expect(factoryBoardStateChip(t, run, false)?.label).toBe('Stopped');
+  });
+
+  test('a run stopped before any agent ran says it never started, and how', () => {
+    const queued = buildFactoryRun({ state: 'stopped', threadIds: [], admittedAt: null });
+    expect(factoryBoardStateChip(t, queued, false)).toMatchObject({
+      label: 'Not started',
+      detail: expect.stringContaining('Taken out of the queue'),
+    });
+    const admitted = buildFactoryRun({
+      state: 'stopped',
+      threadIds: [],
+      admittedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(factoryBoardStateChip(t, admitted, false)?.detail).toContain('before its first step');
   });
 
   test('waiting for you is the column itself, with or without a thread', () => {

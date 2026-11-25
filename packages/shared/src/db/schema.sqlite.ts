@@ -329,6 +329,8 @@ export const factoryRuns = sqliteTable('factory_runs', {
     .references(() => factorySettings.id, { onDelete: 'cascade' }),
   /** The run's issue; `0` for a run without one (mapped to null in `factory-runs.ts`). */
   issueNumber: integer('issue_number').notNull(),
+  /** The issue's title when the run learned it (queued, or its flow read the issue); null before. */
+  issueTitle: text('issue_title'),
   prUrl: text('pr_url'),
   state: text('state').notNull().default('queued'),
   currentStep: text('current_step'),

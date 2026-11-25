@@ -44,6 +44,8 @@ export function queueOperations(newId: () => string) {
     enqueue(input: {
       factoryId: string;
       issueNumbers: number[];
+      /** The titles of those issues the caller read, by number. */
+      issueTitles?: ReadonlyMap<number, string>;
       flowName: string;
       /** `label`: an issue the watcher found by its label (automatic mode); default `manual`. */
       source?: 'manual' | 'label';
@@ -57,6 +59,7 @@ export function queueOperations(newId: () => string) {
               id: newId(),
               factoryId: input.factoryId,
               issueNumber,
+              issueTitle: input.issueTitles?.get(issueNumber) ?? null,
               state: 'requested',
               startedAt: now,
               source: input.source ?? 'manual',

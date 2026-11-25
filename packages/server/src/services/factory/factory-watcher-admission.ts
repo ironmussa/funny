@@ -444,6 +444,7 @@ async function queueLabelled(
   const queued = await runs!.enqueue({
     factoryId: factory.id,
     issueNumbers: fresh,
+    issueTitles: new Map(issues.map((issue) => [issue.number, issue.title])),
     flowName: factory.flowName,
     source: 'label',
   });

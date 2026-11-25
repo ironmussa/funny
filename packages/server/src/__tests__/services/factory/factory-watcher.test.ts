@@ -397,7 +397,12 @@ describe('factory watcher', () => {
     const runsResult = await createFactoryRunsRepository().list(factoryId);
     const runs = runsResult._unsafeUnwrap();
     expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ issueNumber: 7, state: 'working', currentStep: 'implement' });
+    expect(runs[0]).toMatchObject({
+      issueNumber: 7,
+      issueTitle: 'Fix it',
+      state: 'working',
+      currentStep: 'implement',
+    });
     expect(runs[0]!.threadIds).toEqual(['t-1']);
   });
 

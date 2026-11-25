@@ -148,8 +148,11 @@ interface HostEntry {
   graceTimer: ReturnType<typeof setTimeout> | null;
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+/** The JSON value CDP returns for a page evaluation (`returnByValue`). */
+type PageValue = Awaited<ReturnType<ChromeSession['execute']>>;
+
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 function newSessionRecord(init: {
@@ -684,11 +687,11 @@ class BrowserSessionManager {
       if (url) await chromeOf(session).navigate(url);
       await chromeOf(session)
         .execute(INSPECT_HELPERS)
-        .catch((err: unknown) => {
+        .catch((cause: unknown) => {
           log.warn('Failed to install inspect helpers', {
             namespace: NS,
             sessionId: session.sessionId,
-            error: String(err),
+            error: String(cause),
           });
         });
     } catch (err) {
@@ -770,13 +773,15 @@ class BrowserSessionManager {
       await chromeSession.connect();
       // Lock the page viewport so the screencast frame size matches the
       // coordinate space the client uses to translate clicks.
-      await chromeSession.setViewport(s.viewport.width, s.viewport.height).catch((err: unknown) => {
-        log.warn('Failed to set viewport', {
-          namespace: NS,
-          sessionId: s.sessionId,
-          error: String(err),
+      await chromeSession
+        .setViewport(s.viewport.width, s.viewport.height)
+        .catch((cause: unknown) => {
+          log.warn('Failed to set viewport', {
+            namespace: NS,
+            sessionId: s.sessionId,
+            error: String(cause),
+          });
         });
-      });
     } finally {
       // Always release the client we replaced, even when the new connect
       // throws — otherwise a failed re-attach (popup switch / tab restore)
@@ -788,11 +793,11 @@ class BrowserSessionManager {
   /** Watch a tab's page and hold its audio at the session's setting. */
   private async hookPage(s: BrowserSession, page: Page): Promise<void> {
     this.watchPage(s, page);
-    await installPageAudio(page, () => this.pageAudioMuted(page)).catch((err: unknown) => {
+    await installPageAudio(page, () => this.pageAudioMuted(page)).catch((cause: unknown) => {
       log.warn('Could not hook page audio', {
         namespace: NS,
         sessionId: s.sessionId,
-        error: errorMessage(err),
+        error: errorMessage(cause),
       });
     });
   }
@@ -939,7 +944,7 @@ class BrowserSessionManager {
     userId: string,
     sessionId: string,
     action: 'back' | 'forward' | 'reload',
-  ): Promise<unknown> {
+  ): Promise<boolean> {
     const s = this.requireOwned(userId, sessionId);
     s.lastHeartbeat = Date.now();
     if (action === 'back') return chromeOf(s).goHistory(-1);
@@ -1052,13 +1057,13 @@ class BrowserSessionManager {
   }
 
   /** Run JS in the page; returns whatever value the expression evaluates to. */
-  async execute(userId: string, sessionId: string, expression: string): Promise<unknown> {
+  async execute(userId: string, sessionId: string, expression: string): Promise<PageValue> {
     const s = this.requireOwned(userId, sessionId);
     s.lastHeartbeat = Date.now();
     return chromeOf(s).execute(expression);
   }
 
-  async inspectAt(userId: string, sessionId: string, x: number, y: number): Promise<unknown> {
+  async inspectAt(userId: string, sessionId: string, x: number, y: number): Promise<PageValue> {
     const span = startSpan('browser_session.inspect', { attributes: { kind: 'point' } });
     try {
       const result = await this.execute(
@@ -1081,7 +1086,7 @@ class BrowserSessionManager {
     y: number,
     w: number,
     h: number,
-  ): Promise<unknown> {
+  ): Promise<PageValue> {
     const span = startSpan('browser_session.inspect', { attributes: { kind: 'rect' } });
     try {
       // Sample a sparse grid inside the rect (5×5 = 25 points), dedupe by
@@ -1143,7 +1148,7 @@ class BrowserSessionManager {
     userId: string,
     sessionId: string,
     requestId: string,
-    fn: () => Promise<unknown>,
+    fn: () => Promise<PageValue>,
   ): Promise<void> {
     let result: WSBrowserSessionResultData;
     try {

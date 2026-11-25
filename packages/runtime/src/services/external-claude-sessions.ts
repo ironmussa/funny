@@ -11,7 +11,7 @@ import type {
   ExternalClaudeTranscriptToolCall,
   ImageAttachment,
 } from '@funny/shared';
-import { parseStoredJson } from '@funny/shared/json-validation';
+import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
@@ -54,6 +54,12 @@ const imageBlockSchema = z.object({
   }),
 });
 
+/** A message's content as Claude Code writes it: a string or a list of blocks, unchecked. */
+type TranscriptContent = JsonValue | undefined;
+
+/** One field of a content block, as JSON. */
+type BlockRecord = { [key: string]: JsonValue };
+
 const claudeJsonlEntrySchema = z
   .object({
     type: z.string().optional(),
@@ -69,7 +75,9 @@ const claudeJsonlEntrySchema = z
     message: z
       .object({
         role: z.enum(['user', 'assistant', 'system']).optional(),
-        content: z.unknown().optional(),
+        // The line was decoded by JSON.parse, so any value here is JSON; its
+        // blocks are read one by one with their own checks.
+        content: z.json().optional(),
       })
       .passthrough()
       .optional(),
@@ -1029,7 +1037,7 @@ function entryToTranscriptMessage(
 /** A user turn of bare tool results: fills earlier tool cards, keeping only orphans. */
 function toolResultTranscriptMessage(
   entry: z.infer<typeof claudeJsonlEntrySchema>,
-  content: unknown,
+  content: TranscriptContent,
   index: number,
   toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
 ): ExternalClaudeTranscriptMessage | null {
@@ -1054,7 +1062,7 @@ function hasVisibleContent(
 /** Attachments and authorship of a user turn, or null when the turn is not shown. */
 function userMessageParts(
   entry: z.infer<typeof claudeJsonlEntrySchema>,
-  rawContent: unknown,
+  rawContent: TranscriptContent,
   content: string,
 ): Pick<ExternalClaudeTranscriptMessage, 'images' | 'author' | 'toolCalls'> | null {
   if (!entry.isMeta) return { images: extractImages(rawContent) };
@@ -1070,7 +1078,7 @@ function withoutEmptyLists<T extends Record<string, unknown>>(parts: T): Partial
 }
 
 function extractToolCalls(
-  content: unknown,
+  content: TranscriptContent,
   entry: z.infer<typeof claudeJsonlEntrySchema>,
   index: number,
   toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
@@ -1080,7 +1088,7 @@ function extractToolCalls(
   const toolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
     if (!block || typeof block !== 'object') return;
-    const record = block as Record<string, unknown>;
+    const record = block as BlockRecord;
     if (record.type !== 'tool_use') return;
 
     const claudeToolId = typeof record.id === 'string' ? record.id : null;
@@ -1099,7 +1107,7 @@ function extractToolCalls(
 }
 
 function applyToolResults(
-  content: unknown,
+  content: TranscriptContent,
   entry: z.infer<typeof claudeJsonlEntrySchema>,
   index: number,
   toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
@@ -1109,7 +1117,7 @@ function applyToolResults(
   const orphanToolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
     if (!block || typeof block !== 'object') return;
-    const record = block as Record<string, unknown>;
+    const record = block as BlockRecord;
     if (record.type !== 'tool_result') return;
 
     const output = contentToText(record.content);
@@ -1133,12 +1141,12 @@ function applyToolResults(
   return orphanToolCalls;
 }
 
-function contentToText(content: unknown): string {
+function contentToText(content: TranscriptContent): string {
   const text =
     typeof content === 'string'
       ? content
       : !Array.isArray(content)
-        ? stringifyUnknown(content)
+        ? stringifyJson(content)
         : content
             .map((block) => blockToText(block))
             .filter(Boolean)
@@ -1147,7 +1155,7 @@ function contentToText(content: unknown): string {
   return stripClaudeInternalPromptMarkers(stripIdeOpenedFileMarkers(text));
 }
 
-function extractImages(content: unknown): ImageAttachment[] {
+function extractImages(content: TranscriptContent): ImageAttachment[] {
   if (!Array.isArray(content)) return [];
   return content.flatMap((block): ImageAttachment[] => {
     const parsed = imageBlockSchema.safeParse(block);
@@ -1155,11 +1163,11 @@ function extractImages(content: unknown): ImageAttachment[] {
   });
 }
 
-function blockToText(block: unknown): string {
+function blockToText(block: JsonValue): string {
   if (typeof block === 'string') return block;
-  if (!block || typeof block !== 'object') return stringifyUnknown(block);
+  if (!block || typeof block !== 'object') return stringifyJson(block);
 
-  const record = block as Record<string, unknown>;
+  const record = block as BlockRecord;
   const type = typeof record.type === 'string' ? record.type : null;
 
   if (type === 'text' && typeof record.text === 'string') return record.text;
@@ -1170,29 +1178,27 @@ function blockToText(block: unknown): string {
 
   if (typeof record.text === 'string') return record.text;
   if (typeof record.content === 'string') return record.content;
-  return stringifyUnknown(record);
+  return stringifyJson(record);
 }
 
-function contentLooksLikeToolResult(content: unknown): boolean {
+function contentLooksLikeToolResult(content: TranscriptContent): boolean {
   return (
     Array.isArray(content) &&
     content.length > 0 &&
     content.every(
       (block) =>
-        !!block &&
-        typeof block === 'object' &&
-        (block as Record<string, unknown>).type === 'tool_result',
+        !!block && typeof block === 'object' && (block as BlockRecord).type === 'tool_result',
     )
   );
 }
 
-function stringifyToolInput(input: unknown): string {
+function stringifyToolInput(input: TranscriptContent): string {
   if (input === null || input === undefined) return '{}';
   if (typeof input === 'string') return input;
-  return stringifyUnknown(input) || '{}';
+  return stringifyJson(input) || '{}';
 }
 
-function stringifyUnknown(value: unknown): string {
+function stringifyJson(value: TranscriptContent): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   try {

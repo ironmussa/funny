@@ -176,6 +176,12 @@ async function cookieAuth(c: Context, next: Next, cookie: string) {
   return next();
 }
 
+/** The fields of Better Auth's `get-session` response that this middleware reads. */
+interface GetSessionResponse {
+  user?: { id?: string; role?: string | null };
+  session?: { activeOrganizationId?: string | null };
+}
+
 /** Ask the central server who owns `cookie`; caches the result. Null if invalid. */
 async function validateSession(cookie: string, cacheKey: string): Promise<SessionEntry | null> {
   try {
@@ -184,12 +190,15 @@ async function validateSession(cookie: string, cacheKey: string): Promise<Sessio
       headers: { Cookie: forwardCookie },
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as any;
+    // SAFETY: the central server's Better Auth `get-session` answers this
+    // shape, or null without a session. It is not validated: a missing user
+    // id is refused below and the other fields fall back to defaults.
+    const data = (await res.json()) as GetSessionResponse | null;
     if (!data?.user?.id) return null;
     const entry: SessionEntry = {
-      userId: data.user.id as string,
-      role: (data.user.role as string) || 'user',
-      orgId: (data.session?.activeOrganizationId as string) ?? null,
+      userId: data.user.id,
+      role: data.user.role || 'user',
+      orgId: data.session?.activeOrganizationId ?? null,
       expiresAt: Date.now() + SESSION_CACHE_TTL,
     };
     sessionCache.set(cacheKey, entry);

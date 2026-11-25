@@ -113,11 +113,11 @@ function toPipelineConfig(row: any): PipelineConfig {
     userId: row.userId,
     name: row.name,
     enabled: !!row.enabled,
-    reviewModel: row.reviewModel as AgentModel,
-    fixModel: row.fixModel as AgentModel,
+    reviewModel: row.reviewModel,
+    fixModel: row.fixModel,
     maxIterations: row.maxIterations,
     precommitFixEnabled: !!row.precommitFixEnabled,
-    precommitFixModel: row.precommitFixModel as AgentModel,
+    precommitFixModel: row.precommitFixModel,
     precommitFixMaxIterations: row.precommitFixMaxIterations,
     reviewerPrompt: row.reviewerPrompt || undefined,
     correctorPrompt: row.correctorPrompt || undefined,
@@ -126,7 +126,7 @@ function toPipelineConfig(row: any): PipelineConfig {
     testEnabled: !!row.testEnabled,
     testCommand: row.testCommand ?? undefined,
     testFixEnabled: !!row.testFixEnabled,
-    testFixModel: (row.testFixModel as AgentModel) || 'sonnet',
+    testFixModel: row.testFixModel || 'sonnet',
     testFixMaxIterations: row.testFixMaxIterations ?? 3,
     testFixerPrompt: row.testFixerPrompt || undefined,
   };
@@ -377,7 +377,7 @@ export async function startPipelineRun(opts: {
   // Helpers to project the YAML scope back onto the legacy DB column shape.
   const verdictOf = (ctx: YamlPipelineContext): PipelineVerdict | undefined => {
     const raw = ctx.outputs.review?.json?.verdict;
-    return raw === 'pass' || raw === 'fail' ? (raw as PipelineVerdict) : undefined;
+    return raw === 'pass' || raw === 'fail' ? raw : undefined;
   };
   const findingsOf = (ctx: YamlPipelineContext): string | undefined => {
     const raw = ctx.outputs.review?.json?.findings;

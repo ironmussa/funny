@@ -95,9 +95,9 @@ export class RunnerEnrollmentClient {
       while: (error) => error instanceof RegistrationRetry,
       // Re-enrollment already did its slow work; retry registration immediately.
       delayMs: (retry, error) =>
-        (error as RegistrationRetry).reenrolled ? 0 : Math.min(2000 * retry, 15_000),
+        error instanceof RegistrationRetry && error.reenrolled ? 0 : Math.min(2000 * retry, 15_000),
       onRetry: (error, retry, delayMs) => {
-        if ((error as RegistrationRetry).reenrolled) return;
+        if (error instanceof RegistrationRetry && error.reenrolled) return;
         log.warn(`Registration failed, retrying in ${delayMs / 1000}s (attempt ${retry})`, {
           namespace: 'runner',
         });
@@ -125,10 +125,13 @@ export class RunnerEnrollmentClient {
     throw new RegistrationRetry(false);
   }
 
-  private async centralFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  private async centralFetch(
+    path: string,
+    options: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {},
+  ): Promise<Response> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
+      ...options.headers,
     };
     if (this.session?.token) headers.Authorization = `Bearer ${this.session.token}`;
     // Only an operator-provisioned runner holds the root secret. Enrolled
@@ -160,6 +163,9 @@ export class RunnerEnrollmentClient {
         return { session: null, authFailed: res.status === 401 || res.status === 403 };
       }
 
+      // SAFETY: unchecked; a 2xx from the server's POST /api/runners/register
+      // answers a RunnerRegisterResponse. A missing field reaches makeSession
+      // as undefined, as it always has.
       const data = (await res.json()) as RunnerRegisterResponse;
       const session = this.makeSession({
         runnerId: data.runnerId,

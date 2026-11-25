@@ -99,6 +99,8 @@ function registerHealthRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.get('/api/system/shells', (c) => {
+    // SAFETY: the specifier is the module named in the type, loaded lazily so
+    // the health route does not import the shell detector at startup.
     const { detectShells } =
       require('../services/shell-detector.js') as typeof import('../services/shell-detector.js');
     return c.json({ shells: detectShells() });
@@ -132,6 +134,8 @@ function registerExternalSessionRoutes(app: Hono<HonoEnv>): void {
 
   app.post('/api/system/claude-code/external-sessions/:sessionId/import', (c) =>
     withExternalSession(c, async ({ sessionId, userId }) => {
+      // SAFETY: only `projectId` is read, typed `unknown`, and checked with
+      // isString before use; a body that is not JSON becomes `{}`.
       const body = (await c.req.json().catch(() => ({}))) as {
         projectId?: unknown;
       };
@@ -143,7 +147,11 @@ function registerExternalSessionRoutes(app: Hono<HonoEnv>): void {
         userId,
         projectId,
       });
-      if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404);
+      if (!result.ok) {
+        // SAFETY: importExternalClaudeSession fails only with 400 (bad session
+        // id or project) or 404 (session not found or another user's).
+        return c.json({ error: result.error }, result.status as 400 | 404);
+      }
       return c.json({
         imported: result.imported,
         thread: result.thread,
@@ -457,6 +465,9 @@ function registerNativeGitBuildRoute(app: Hono<HonoEnv>): void {
     }
 
     const emitBuild = (type: NativeGitBuildEventType, data: NativeGitBuildEventData) => {
+      // SAFETY: the native-git build events are not in the shared WSEvent
+      // union; the broker forwards any event to the user's sockets unchanged,
+      // and the settings screen listens for these two types by name.
       wsBroker.emitToUser(userId, { type, threadId: '', data } as any);
     };
 
@@ -486,8 +497,8 @@ function registerNativeGitBuildRoute(app: Hono<HonoEnv>): void {
       }
     };
 
-    void streamReader(proc.stdout as ReadableStream<Uint8Array>, 'stdout');
-    void streamReader(proc.stderr as ReadableStream<Uint8Array>, 'stderr');
+    void streamReader(proc.stdout, 'stdout');
+    void streamReader(proc.stderr, 'stderr');
 
     void proc.exited.then((exitCode) => {
       nativeGitBuildInProgress = false;

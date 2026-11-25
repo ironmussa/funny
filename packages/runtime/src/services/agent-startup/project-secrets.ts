@@ -33,8 +33,13 @@ const defaultFetch: FetchProjectSecrets = async (threadId) => {
 };
 
 function isSecretValue(value: unknown): value is SecretValue {
-  const candidate = value as SecretValue | null;
-  return isString(candidate?.name) && isString(candidate?.value);
+  return (
+    isObject(value) &&
+    'name' in value &&
+    isString(value.name) &&
+    'value' in value &&
+    isString(value.value)
+  );
 }
 
 /** The thread's project secrets, or the reason they could not be read. */
@@ -89,10 +94,18 @@ export function composeAgentEnv(
 /** Applies `redact` (when there is one) to every string inside `value`, keeping its shape. */
 export function redactDeep<T>(value: T, redact: ((text: string) => string) | undefined): T {
   if (!redact) return value;
-  if (isString(value)) return redact(value) as T;
-  if (Array.isArray(value)) return value.map((item) => redactDeep(item, redact)) as T;
+  if (isString(value)) {
+    // SAFETY: a string stays a string: `redact` only replaces secret values in its text.
+    return redact(value) as T;
+  }
+  if (Array.isArray(value)) {
+    // SAFETY: an array stays an array of its elements, each rebuilt with its own shape.
+    return value.map((item) => redactDeep(item, redact)) as T;
+  }
   if (isObject(value)) {
     const entries = Object.entries(value).map(([key, item]) => [key, redactDeep(item, redact)]);
+    // SAFETY: the values redacted are agent messages and tool payloads, plain JSON objects,
+    // so rebuilding one from its own enumerable entries keeps its type.
     return Object.fromEntries(entries) as T;
   }
   return value;

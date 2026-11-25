@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import {
   discoverTestFiles,
@@ -42,7 +43,9 @@ testRoutes.get('/:projectId/specs', async (c) => {
 
   const result = await discoverTestsInFile(project.path, file);
   if ('error' in result) {
-    return c.json({ error: result.error }, result.status as any);
+    // SAFETY: discoverTestsInFile fails only with 400 (invalid file) or 500
+    // (Playwright failed or printed unparsable output).
+    return c.json({ error: result.error }, result.status as ContentfulStatusCode);
   }
   return c.json({ file, specs: result.specs, suites: result.suites, projects: result.projects });
 });
@@ -72,7 +75,9 @@ testRoutes.post('/:projectId/run', async (c) => {
   );
 
   if ('error' in result) {
-    return c.json({ error: result.error }, result.status as any);
+    // SAFETY: runTest fails only with 409 (a test is already running) or 400
+    // (invalid file).
+    return c.json({ error: result.error }, result.status as ContentfulStatusCode);
   }
 
   return c.json({ runId: result.runId });

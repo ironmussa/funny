@@ -81,8 +81,8 @@ export function normalizeToolResultContent(content: ToolResultContent): string {
  */
 export function serializeToolInput(toolName: string, input: ToolInput): string | undefined {
   if (!isObject(input)) return undefined;
-  if (toolName === 'Bash' && 'command' in input && isString((input as any).command)) {
-    return (input as any).command as string;
+  if (toolName === 'Bash' && 'command' in input && isString(input.command)) {
+    return input.command;
   }
   try {
     const s = JSON.stringify(input);

@@ -686,7 +686,10 @@ export function addSkill(identifier: string): ResultAsync<void, DomainError> {
       timeout: 60_000,
     }).then(() => {}),
     (cause: unknown) => {
-      const e = cause as any;
+      // SAFETY: execute() rejects with a ProcessExecutionError (string stdout,
+      // stderr and message); every field is read with `?.` and `||`, so any
+      // other rejection value falls through to String(e).
+      const e = cause as { stderr?: string; stdout?: string; message?: string } | null | undefined;
       const raw = stripAnsi(e?.stderr || e?.stdout || e?.message || String(e)).trim();
       const lines = raw.split('\n').filter((l: string) => l.trim());
       const errorLine = lines.find((l: string) =>

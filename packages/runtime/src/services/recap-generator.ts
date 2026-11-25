@@ -96,7 +96,7 @@ export function generateThreadRecap(request: RecapRequest): ResultAsync<RecapRes
       status: thread.status,
       waitingReason: thread.waitingReason,
       pendingPermission: thread.pendingPermission,
-      messages: upToNewest(thread.messages as RecapMessage[], request.newestMessageId),
+      messages: upToNewest(thread.messages, request.newestMessageId),
     });
     const done = (recap: string | null): RecapResult => ({
       recap,

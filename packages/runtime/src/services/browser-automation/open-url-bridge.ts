@@ -98,7 +98,7 @@ async function handleDrop(userId: string, file: string): Promise<void> {
 }
 
 async function drain(userId: string, dir: string): Promise<void> {
-  const entries = await readdir(dir).catch(() => [] as string[]);
+  const entries = await readdir(dir).catch((): string[] => []);
   await Promise.all(
     entries.filter((e) => e.endsWith('.url')).map((e) => handleDrop(userId, join(dir, e))),
   );

@@ -18,8 +18,10 @@ export function binary(value: WireBytes): Uint8Array | null {
 }
 
 export function unsigned(value: WireUnsigned): bigint | null {
+  // BigInt(null) and BigInt(undefined) throw, as the catch below would answer.
+  if (value === null || value === undefined) return null;
   try {
-    const parsed = BigInt(value as string | number | bigint);
+    const parsed = BigInt(value);
     return parsed >= 0n ? parsed : null;
   } catch {
     return null;

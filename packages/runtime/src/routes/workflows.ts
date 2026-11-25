@@ -130,6 +130,9 @@ workflowRuntimeRoutes.put('/:name', async (c) => {
   const validation = validateWorkflowYaml(parsed.data.yaml);
   if (!validation.ok || !validation.parsed) return c.json(validation, 400);
 
+  // SAFETY: validateWorkflowYaml (below) sets `parsed` only to the
+  // ParsedWorkflow that parseWorkflowYaml returned; the shared response type
+  // says `unknown` so the client need not import @funny/workflows.
   const workflow = validation.parsed as ParsedWorkflow;
   if (workflow.name !== name) {
     return c.json(

@@ -52,6 +52,8 @@ export async function augmentAllowedToolsWithRules(
       namespace: 'thread-service',
       userId,
       projectPath,
+      // SAFETY: only `.message` is read, optional-chained; it is undefined when the
+      // rule lookup throws something that is not Error-like.
       error: (err as Error)?.message,
     });
     return allowedTools;
@@ -185,13 +187,18 @@ function resolveRunDefaults(
   params: CreateAndStartThreadParams,
   project: StartProject,
 ): ResolvedRunDefaults {
-  const projectProvider = (project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider;
-  const provider = (params.provider ||
-    (params.model ? DEFAULT_PROVIDER : projectProvider)) as AgentProvider;
+  const projectProvider: AgentProvider = project.defaultProvider || DEFAULT_PROVIDER;
+  const provider: AgentProvider =
+    params.provider || (params.model ? DEFAULT_PROVIDER : projectProvider);
   const projectModel = provider === projectProvider ? project.defaultModel : undefined;
   return {
     provider,
+    // SAFETY: params.model passed agentModelSchema and projects.default_model is validated
+    // the same way on project update; ids of dynamic-catalog providers (pi, cursor, ...) are
+    // not in the AgentModel union and are passed through unchanged by resolveModelId.
     model: (params.model || projectModel || getDefaultModel(provider)) as AgentModel,
+    // SAFETY: params.permissionMode and projects.default_permission_mode are both
+    // validated with permissionModeSchema, whose values are exactly PermissionMode.
     permissionMode: (params.permissionMode ||
       project.defaultPermissionMode ||
       'autoEdit') as PermissionMode,

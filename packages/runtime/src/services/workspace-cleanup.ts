@@ -80,7 +80,7 @@ export interface WorkspaceCleanupDeps {
 
 function messageOf(cause: unknown): string {
   if (isObject(cause) && 'message' in cause) {
-    return String((cause as { message: unknown }).message);
+    return String(cause.message);
   }
   return String(cause);
 }
@@ -156,13 +156,13 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
 
   /** Stops what runs inside `dir`; each stopped thing becomes an effect. */
   async function stopProcessesUnder(dir: string, effects: ActivityEffect[]): Promise<void> {
-    const commands = await deps.stopCommandsByCwd(dir).catch((error) => {
+    const commands = await deps.stopCommandsByCwd(dir).catch((error): string[] => {
       log.warn('Failed to stop commands before removal', {
         namespace: 'workspace-cleanup',
         dir,
         error: messageOf(error),
       });
-      return [] as string[];
+      return [];
     });
     for (const command of commands) effects.push({ effect: 'command-stopped', target: command });
     for (const terminal of deps.killPtysUnderPath(dir)) {

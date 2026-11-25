@@ -469,7 +469,7 @@ function missingOperationResult(kind: string): RunnerOperationOutcome | undefine
 }
 
 function isRunnerOperationEventType(value: string): value is RunnerOperationEventType {
-  return (RUNNER_OPERATION_EVENT_TYPES as readonly string[]).includes(value);
+  return RUNNER_OPERATION_EVENT_TYPES.some((type) => type === value);
 }
 
 /** Anti-corruption layer for application operations over runner.v2 protobuf. */

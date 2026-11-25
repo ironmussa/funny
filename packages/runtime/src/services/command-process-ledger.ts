@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
+import { isObject } from '../lib/value-guards.js';
 
 const NS = 'command-ledger';
 const IS_WINDOWS = process.platform === 'win32';
@@ -170,7 +171,7 @@ export function createCommandProcessLedger(deps: LedgerDeps): CommandProcessLedg
   }
 
   async function readEntries(): Promise<{ entries: LedgerEntry[]; unreadable: string[] }> {
-    const names = await readdir(dir).catch(() => [] as string[]);
+    const names = await readdir(dir).catch((): string[] => []);
     const entries: LedgerEntry[] = [];
     const unreadable: string[] = [];
     for (const name of names.filter((n) => n.endsWith('.json'))) {
@@ -233,7 +234,9 @@ export function createCommandProcessLedger(deps: LedgerDeps): CommandProcessLedg
     forget,
     sweepOrphans: () =>
       ResultAsync.fromPromise(sweep(), (error) =>
-        internal(String((error as Error)?.message ?? error)),
+        internal(
+          String((isObject(error) && 'message' in error ? error.message : undefined) ?? error),
+        ),
       ),
   };
 }

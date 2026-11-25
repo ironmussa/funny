@@ -29,6 +29,7 @@ authRoutes.get('/status', async (c) => {
   try {
     const res = await githubApiFetch('/user', resolved.token);
     if (res.ok) {
+      // SAFETY: GitHub's `GET /user` answers the authenticated user, with `login`.
       const user = (await res.json()) as { login: string };
       return c.json({ connected: true, login: user.login, source: resolved.source });
     }
@@ -65,6 +66,8 @@ authRoutes.post('/oauth/device', async (c) => {
       return c.json({ error: `GitHub device code request failed: ${body}` }, 502);
     }
 
+    // SAFETY: GitHub's documented device-code response for a 2xx answer
+    // (checked above); the fields are passed to the client unvalidated.
     const data = (await res.json()) as {
       device_code: string;
       user_code: string;
@@ -114,6 +117,8 @@ authRoutes.post('/oauth/poll', async (c) => {
       }),
     });
 
+    // SAFETY: GitHub's documented access-token poll response; every field is
+    // optional because it answers either a token or an `error`.
     const data = (await res.json()) as {
       access_token?: string;
       token_type?: string;
@@ -170,6 +175,7 @@ authRoutes.get('/user', async (c) => {
     return c.json({ error: 'Failed to fetch GitHub user' }, 502);
   }
 
+  // SAFETY: GitHub's `GET /user` response for a 2xx answer (checked above).
   const user = (await res.json()) as { login: string; avatar_url: string; name: string | null };
   return c.json({ login: user.login, avatar_url: user.avatar_url, name: user.name });
 });

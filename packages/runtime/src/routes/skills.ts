@@ -30,6 +30,10 @@ const app = new Hono<HonoEnv>();
 
 const VALID_PHASES: ResourcePhase[] = ['settings', 'composer', 'runtime'];
 
+function isResourcePhase(value: string | undefined): value is ResourcePhase {
+  return VALID_PHASES.some((phase) => phase === value);
+}
+
 // Provider-scoped Agent Resources. Unlike `/` (legacy, Claude-shaped, returns a
 // flat Skill[]), this resolves skills, slash commands, and MCP by the EFFECTIVE
 // provider so Codex/Gemini/etc. never see Claude `.claude` resources. Built-in /
@@ -40,9 +44,7 @@ app.get('/resources', async (c) => {
   const projectId = c.req.query('projectId') || undefined;
   const model = c.req.query('model') || undefined;
   const phaseParam = c.req.query('phase');
-  const phase: ResourcePhase = VALID_PHASES.includes(phaseParam as ResourcePhase)
-    ? (phaseParam as ResourcePhase)
-    : 'composer';
+  const phase: ResourcePhase = isResourcePhase(phaseParam) ? phaseParam : 'composer';
   const projectPath = c.req.query('projectPath');
   if (projectPath) {
     const denied = await requireProjectPath(projectPath, c.get('userId'));

@@ -56,6 +56,8 @@ function actionStatus(status: GithubField): ActionStatus {
 }
 
 function conclusion(value: GithubField): CICheckConclusion {
+  // SAFETY: GitHub's run, job and step conclusions are the CICheckConclusion
+  // strings; any other string is passed through unchanged, as before.
   return isString(value) ? (value as CICheckConclusion) : null;
 }
 
@@ -184,6 +186,8 @@ actionRoutes.get('/actions/runs', async (c) => {
       ctx.token,
     );
     if (!res.ok) return upstreamFailure(c, 'runs', res.status);
+    // SAFETY: GitHub's list-workflow-runs response; both fields are optional
+    // and each run is read field by field in mapActionRun.
     const body = (await res.json()) as { total_count?: number; workflow_runs?: any[] };
     const runs = (body.workflow_runs ?? []).map(mapActionRun);
     const total = body.total_count ?? runs.length;
@@ -287,6 +291,8 @@ actionRoutes.post('/actions/rerun-failed', async (c) => {
       { method: 'POST' },
     );
     if (res.ok) return c.json({ ok: true });
+    // SAFETY: a GitHub error response carries an optional `message`; a body that
+    // is not JSON becomes `{}` and the status text is used instead.
     const body = (await res.json().catch(() => ({}))) as { message?: string };
     const message = body.message || `GitHub API error: ${res.status}`;
     // 403: the token cannot write Actions; 409: the run is still in progress.

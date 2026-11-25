@@ -8,7 +8,6 @@
 /** New-worktree threads: created in `setting_up`, the worktree and agent start in the background. */
 
 import { getCurrentBranch } from '@funny/core/git';
-import type { WSEvent } from '@funny/shared';
 
 import { log } from '../../lib/logger.js';
 import { stripInlineReferencedContent } from '../../utils/file-mentions.js';
@@ -85,15 +84,15 @@ export async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
   const thread = {
     ...baseProjectThreadRow(ctx),
     mode: params.mode,
-    runtime: (params.runtime || 'local') as 'local' | 'remote',
+    runtime: params.runtime || ('local' as const),
     status: 'setting_up' as const,
     branch: branchName,
     baseBranch: ctx.resolvedBaseBranch,
-    worktreePath: undefined as string | undefined,
+    worktreePath: undefined,
     fileCheckpointingEnabled: checkpointingFor(defaults.provider),
   };
 
-  await tm.createThread(thread as any);
+  await tm.createThread(thread);
 
   if (params.prompt) {
     // The agent gets the fully augmented prompt (with file contents inlined)
@@ -212,7 +211,7 @@ async function markWorktreeReady(
     type: 'worktree:setup_complete',
     threadId,
     data: { branch, worktreePath },
-  } as WSEvent);
+  });
   emitThreadUpdated(userId, threadId, { status: 'pending', branch, worktreePath });
 }
 

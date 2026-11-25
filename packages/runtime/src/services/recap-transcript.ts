@@ -97,14 +97,14 @@ function parseInput(raw: string): JsonValue {
 /** The pending question's text, from an `AskUserQuestion` input. */
 function questionText(input: JsonValue): string | null {
   if (!isObject(input)) return null;
-  const questions = (input as { questions?: unknown }).questions;
+  const questions = 'questions' in input ? input.questions : undefined;
   if (Array.isArray(questions)) {
     const texts = questions
-      .map((q) => (isObject(q) ? (q as { question?: unknown }).question : null))
+      .map((q) => (isObject(q) && 'question' in q ? q.question : null))
       .filter((q): q is string => isString(q) && q.length > 0);
     if (texts.length > 0) return texts.join(' / ');
   }
-  const question = (input as { question?: unknown }).question;
+  const question = 'question' in input ? input.question : undefined;
   return isString(question) ? question : null;
 }
 

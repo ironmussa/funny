@@ -403,7 +403,9 @@ async function resolveBoundingBox(
       `),
       { timeoutMs: 150, timeoutError: () => new Error('timeout') },
     );
-    if (isObject(box) && 'x' in (box as any)) {
+    if (isObject(box) && 'x' in box) {
+      // SAFETY: the script above answers null or the element's
+      // getBoundingClientRect() as { x, y, width, height } numbers.
       return box as TestActionBoundingBox;
     }
   } catch {

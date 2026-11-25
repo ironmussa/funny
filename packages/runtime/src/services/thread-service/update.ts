@@ -7,13 +7,7 @@
  */
 
 import { findWorktreeForBranch, getCurrentBranch, git, isSafeGitRefArg } from '@funny/core/git';
-import type {
-  WSEvent,
-  AgentProvider,
-  AgentModel,
-  PermissionMode,
-  ThreadStatus,
-} from '@funny/shared';
+import type { AgentModel, PermissionMode, ThreadStage, ThreadStatus } from '@funny/shared';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
 import { isThreadStatus } from '@funny/shared/thread-machine';
 import { ResultAsync } from 'neverthrow';
@@ -95,14 +89,20 @@ async function updateThreadImpl(params: UpdateThreadParams) {
   if (params.archived) {
     threadEventBus.emit('thread:stage-changed', {
       ...eventCtx,
-      fromStage: fromStage as any,
+      // SAFETY: threads.stage is only written from ThreadStage values (the create schemas,
+      // threadStageSchema updates and the stage machine), so the stored string is one.
+      fromStage: fromStage as ThreadStage,
       toStage: 'archived',
     });
   } else if (params.stage && params.stage !== fromStage) {
     threadEventBus.emit('thread:stage-changed', {
       ...eventCtx,
-      fromStage: fromStage as any,
-      toStage: params.stage as any,
+      // SAFETY: threads.stage is only written from ThreadStage values (the create schemas,
+      // threadStageSchema updates and the stage machine), so the stored string is one.
+      fromStage: fromStage as ThreadStage,
+      // SAFETY: not checked here: the stage comes from the pipeline set_stage action,
+      // which names a ThreadStage; it is forwarded unchanged, as the stored update is.
+      toStage: params.stage as ThreadStage,
     });
   }
 
@@ -162,9 +162,10 @@ async function autoStartIdleThread(
   }
   const projectPath = pathResult.value;
 
-  const needsWorktreeSetup = thread.mode === 'worktree' && !thread.worktreePath && thread.branch;
+  // The branch of a worktree thread whose worktree is not created yet (deferred setup).
+  const setupBranch = thread.mode === 'worktree' && !thread.worktreePath ? thread.branch : null;
 
-  if (needsWorktreeSetup) {
+  if (setupBranch) {
     // Deferred worktree setup: create worktree first, then start agent
     await tm.updateThread(threadId, { status: 'setting_up' });
     emitThreadUpdated(thread.userId, threadId, { status: 'setting_up', stage: 'in_progress' });
@@ -193,8 +194,8 @@ async function autoStartIdleThread(
         wsBroker.emitToUser(thread.userId, {
           type: 'worktree:setup_complete',
           threadId,
-          data: { branch: thread.branch, worktreePath: wtPath },
-        } as WSEvent);
+          data: { branch: setupBranch, worktreePath: wtPath },
+        });
         emitThreadUpdated(thread.userId, threadId, {
           status: 'pending',
           branch: thread.branch,
@@ -204,17 +205,24 @@ async function autoStartIdleThread(
         // Start agent
         const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
         const draftMsg = draftMessages[0];
+        // SAFETY: messages.images is the JSON text column written by insertMessage; the
+        // truthiness check leaves only a non-empty string.
         const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
         const started = await startAgent(
           threadId,
           await startPromptForIdleThread(threadId, thread.initialPrompt!, projectPath, wtPath),
           wtPath,
+          // SAFETY: threads.model / projects.default_model hold ids validated by
+          // agentModelSchema; ids of dynamic-catalog providers (pi, cursor, ...) are not in
+          // the AgentModel union and are passed through unchanged by resolveModelId.
           (thread.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
+          // SAFETY: threads.permission_mode is only written from permissionModeSchema-
+          // validated input, whose values are exactly the PermissionMode union.
           (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,
           draftImages,
           undefined,
           undefined,
-          (thread.provider || project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider,
+          thread.provider || project.defaultProvider || DEFAULT_PROVIDER,
           undefined,
           !!draftMsg,
         );
@@ -284,6 +292,8 @@ async function autoStartIdleThread(
 
     const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
     const draftMsg = draftMessages[0];
+    // SAFETY: messages.images is the JSON text column written by insertMessage; the
+    // truthiness check leaves only a non-empty string.
     const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
     const startPrompt = await startPromptForIdleThread(
       threadId,
@@ -295,12 +305,17 @@ async function autoStartIdleThread(
       threadId,
       startPrompt,
       cwd,
+      // SAFETY: threads.model / projects.default_model hold ids validated by
+      // agentModelSchema; ids of dynamic-catalog providers (pi, cursor, ...) are not in
+      // the AgentModel union and are passed through unchanged by resolveModelId.
       (thread.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
+      // SAFETY: threads.permission_mode is only written from permissionModeSchema-validated
+      // input, whose values are exactly the PermissionMode union.
       (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,
       draftImages,
       undefined,
       undefined,
-      (thread.provider || project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider,
+      thread.provider || project.defaultProvider || DEFAULT_PROVIDER,
       undefined,
       !!draftMsg,
     ).match(
@@ -434,7 +449,7 @@ async function convertToWorktreeImpl(
         type: 'worktree:setup_complete',
         threadId,
         data: { branch: branchName, worktreePath: wtPath },
-      } as WSEvent);
+      });
       emitThreadUpdated(userId, threadId, {
         mode: 'worktree',
         branch: branchName,

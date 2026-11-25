@@ -128,6 +128,9 @@ async function discoverResourceMetadata(serverUrl: string): Promise<string> {
   const wellKnownUrl = `${url.origin}/.well-known/oauth-protected-resource`;
   const fallbackRes = await safeFetch(wellKnownUrl);
   if (fallbackRes.ok) {
+    // SAFETY: unvalidated JSON from the MCP server's well-known endpoint. Only the
+    // optional `authorization_servers` list is read, and only its first entry is used
+    // if present; a `null` body throws here, as it always has.
     const meta = (await fallbackRes.json()) as ProtectedResourceMetadata;
     if (meta.authorization_servers?.[0]) return meta.authorization_servers[0];
   }
@@ -152,6 +155,9 @@ async function fetchAuthServerMetadata(authServerUrl: string): Promise<OAuthServ
     throw new Error(`Failed to fetch auth server metadata from ${authServerUrl}`);
   }
 
+  // SAFETY: unvalidated RFC 8414 / OIDC discovery document from the auth server
+  // that returned 2xx; the flow reads its endpoints and fails at the fetch that
+  // uses a missing one (`new URL` / fetch of undefined).
   return res.json() as Promise<OAuthServerMetadata>;
 }
 
@@ -177,6 +183,8 @@ async function registerClient(
     throw new Error(`Dynamic client registration failed: ${res.status} ${body}`);
   }
 
+  // SAFETY: unvalidated RFC 7591 registration response (2xx checked above); the flow uses its
+  // `client_id` as received, so a malformed one fails at the auth server.
   return res.json() as Promise<DynamicClientRegistration>;
 }
 
@@ -201,7 +209,12 @@ export function startOAuthFlow(
   return ResultAsync.fromPromise(
     startOAuthFlowImpl(serverName, serverUrl, projectPath, callbackBaseUrl, opts),
     (err) => {
-      if ((err as DomainError).type) return err as DomainError;
+      // SAFETY: startOAuthFlowImpl throws a DomainError (badRequest) or an Error; a
+      // truthy `type` is only present on the DomainError ones.
+      const domainError = err as DomainError;
+      if (domainError.type) return domainError;
+      // SAFETY: what remains is an Error, or a value without `message`, which `?? err`
+      // turns into text.
       return internal(String((err as Error)?.message ?? err));
     },
   );
@@ -234,6 +247,8 @@ async function startOAuthFlowImpl(
       namespace: 'mcp-oauth',
       serverName,
       serverUrl,
+      // SAFETY: `e` is what discoverResourceMetadata rejected with: an Error from
+      // fetch or its own throw; a value without `message` falls back to `e` itself.
       error: String((e as Error)?.message ?? e),
     });
   }
@@ -243,6 +258,9 @@ async function startOAuthFlowImpl(
   try {
     const resourceMeta = await safeFetch(resourceMetadataUrl);
     if (resourceMeta.ok) {
+      // SAFETY: unvalidated protected-resource metadata (2xx checked). Only the
+      // optional first `authorization_servers` entry is read, with the server origin
+      // as fallback; a non-object body throws into the catch below, as before.
       const meta = (await resourceMeta.json()) as ProtectedResourceMetadata;
       authServerUrl = meta.authorization_servers?.[0] || new URL(serverUrl).origin;
     } else {
@@ -384,6 +402,8 @@ export async function handleOAuthCallback(
       throw new Error(`Token exchange failed: ${tokenRes.status} ${errBody}`);
     }
 
+    // SAFETY: unvalidated RFC 6749 token response from the token endpoint this
+    // flow discovered (2xx checked above); the fields are stored as received.
     const tokens = (await tokenRes.json()) as TokenResponse;
 
     // Store tokens in database via service provider

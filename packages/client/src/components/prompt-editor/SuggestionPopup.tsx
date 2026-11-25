@@ -11,7 +11,7 @@ import {
   Sparkles,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -35,6 +35,35 @@ interface SuggestionPopupProps {
   query?: string;
   /** Ref to a container element — the popup will match its width and left edge */
   containerRef?: React.RefObject<HTMLElement | null>;
+}
+
+const POPUP_CLASS =
+  'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md';
+const POPUP_BASE_STYLE: React.CSSProperties = { position: 'fixed', zIndex: 50 };
+/** Width of the popup when there is no container to match (Tailwind `w-80`). */
+const POPUP_FALLBACK_WIDTH = '20rem';
+
+/**
+ * Places the popup above the container (matching its left edge and width) or,
+ * without one, above the caret. Hidden while TipTap has no caret rect.
+ */
+function positionSuggestionPopup(
+  popup: HTMLElement,
+  rect: (() => DOMRect | null) | null,
+  container: HTMLElement | null,
+) {
+  const caret = rect?.() ?? null;
+  const { style } = popup;
+  if (!caret) {
+    style.visibility = 'hidden';
+    return;
+  }
+  const containerRect = container?.getBoundingClientRect();
+  style.visibility = '';
+  style.left = `${containerRect ? containerRect.left : caret.left}px`;
+  style.width = containerRect ? `${containerRect.width}px` : POPUP_FALLBACK_WIDTH;
+  // Align the popup's bottom edge to the top of the container (or caret)
+  style.bottom = `${window.innerHeight - (containerRect ? containerRect.top : caret.top) + 4}px`;
 }
 
 /** Icon for a symbol kind */
@@ -70,24 +99,15 @@ export function SuggestionPopup({
   const { t } = useTranslation();
   const popupRef = useRef<HTMLDivElement>(null);
 
-  // Compute position synchronously to avoid flash/jump.
-  // We recalculate on every render that changes rect or items.
-  const style = useMemo<React.CSSProperties>(() => {
-    if (!rect) return { position: 'fixed', visibility: 'hidden' as const, zIndex: 50 };
-    const r = rect();
-    if (!r) return { position: 'fixed', visibility: 'hidden' as const, zIndex: 50 };
-    // If a container ref is provided, match its left edge and width
-    const container = containerRef?.current;
-    const containerRect = container?.getBoundingClientRect();
-    return {
-      position: 'fixed',
-      left: containerRect ? containerRect.left : r.left,
-      width: containerRect ? containerRect.width : undefined,
-      // Align the popup's bottom edge to the top of the container (or cursor)
-      bottom: window.innerHeight - (containerRect ? containerRect.top : r.top) + 4,
-      zIndex: 50,
-    };
-  }, [rect, containerRef]);
+  // The popup is positioned against the caret rect and the owner's container,
+  // both measured from the DOM, so it is placed in a layout effect (before
+  // paint, no flash) rather than during render. `variant` re-runs it when the
+  // loading / empty / list body is swapped.
+  const variant = loading && items.length === 0 ? 'loading' : items.length === 0 ? 'empty' : 'list';
+  useLayoutEffect(() => {
+    const popup = popupRef.current;
+    if (popup) positionSuggestionPopup(popup, rect, containerRef?.current ?? null);
+  }, [rect, containerRef, variant]);
 
   // Scroll selected into view — use scrollTop manipulation instead of
   // scrollIntoView which can scroll parent containers and cause jumps.
@@ -108,14 +128,7 @@ export function SuggestionPopup({
   if (loading && items.length === 0) {
     const loadingLabel = getSuggestionLoadingLabel(type);
     return createPortal(
-      <div
-        data-suggestion-popup
-        style={style}
-        className={cn(
-          'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-          !containerRef?.current && 'w-80',
-        )}
-      >
+      <div ref={popupRef} data-suggestion-popup style={POPUP_BASE_STYLE} className={POPUP_CLASS}>
         <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
           <Loader2 className="icon-xs animate-spin" />
           {t(loadingLabel.key, loadingLabel.fallback)}
@@ -127,14 +140,7 @@ export function SuggestionPopup({
 
   if (items.length === 0) {
     return createPortal(
-      <div
-        data-suggestion-popup
-        style={style}
-        className={cn(
-          'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-          !containerRef?.current && 'w-80',
-        )}
-      >
+      <div ref={popupRef} data-suggestion-popup style={POPUP_BASE_STYLE} className={POPUP_CLASS}>
         <div className="text-muted-foreground px-3 py-2 text-xs">
           {
             // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
@@ -153,15 +159,7 @@ export function SuggestionPopup({
   }
 
   return createPortal(
-    <div
-      ref={popupRef}
-      data-suggestion-popup
-      style={style}
-      className={cn(
-        'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-        !containerRef?.current && 'w-80',
-      )}
-    >
+    <div ref={popupRef} data-suggestion-popup style={POPUP_BASE_STYLE} className={POPUP_CLASS}>
       {items.map((item, i) => (
         <button
           type="button"

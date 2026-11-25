@@ -2126,8 +2126,7 @@
     },
     "ci": {
       "running": "CI running",
-      "rounds": "CI ×{{count}}",
-      "detail": "{{red}} red · {{conflicts}} conflicts"
+      "roundsDetail": "Round {{round}} · {{red}} red · {{conflicts}} conflicts"
     },
     "waiting": {
       "questions": "Triage asked {{count}} questions on the issue",

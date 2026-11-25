@@ -2085,8 +2085,7 @@
     },
     "ci": {
       "running": "CI em andamento",
-      "rounds": "CI ×{{count}}",
-      "detail": "{{red}} vermelhos · {{conflicts}} conflitos"
+      "roundsDetail": "Rodada {{round}} · {{red}} vermelhos · {{conflicts}} conflitos"
     },
     "waiting": {
       "questions": "A triagem fez {{count}} perguntas na issue",

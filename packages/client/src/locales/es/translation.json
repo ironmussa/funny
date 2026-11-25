@@ -2119,8 +2119,7 @@
     },
     "ci": {
       "running": "CI en curso",
-      "rounds": "CI ×{{count}}",
-      "detail": "{{red}} en rojo · {{conflicts}} conflictos"
+      "roundsDetail": "Ronda {{round}} · {{red}} en rojo · {{conflicts}} conflictos"
     },
     "waiting": {
       "questions": "Triage hizo {{count}} preguntas en el issue",

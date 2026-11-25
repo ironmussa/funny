@@ -243,6 +243,11 @@ function readInitialWidth(): number {
   return DEFAULT_WIDTH;
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** The browser panel's saved defaults. */
 interface BrowserPanelDefaults {
   defaultModel: string;
@@ -254,7 +259,7 @@ function readDefaults(): BrowserPanelDefaults {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<BrowserPanelDefaults>;
       return {
-        defaultModel: typeof parsed.defaultModel === 'string' ? parsed.defaultModel : 'sonnet',
+        defaultModel: isString(parsed.defaultModel) ? parsed.defaultModel : 'sonnet',
       };
     }
   } catch {

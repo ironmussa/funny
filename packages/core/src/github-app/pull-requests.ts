@@ -11,7 +11,7 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { retargetPullRequestsOn } from './pull-request-base.js';
-import type { GithubCallError, RepoGithub } from './repo-github.js';
+import type { GithubCallError, GithubRequestBody, RepoGithub } from './repo-github.js';
 
 /** A failed check and the end of its log (or its summary). */
 export interface FailingCheck {
@@ -495,7 +495,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     },
   };
 
-  function graphql(repo: string, query: string, variables: Record<string, unknown>) {
+  function graphql(repo: string, query: string, variables: GithubRequestBody) {
     return github.json<GraphqlAnswer>(repo, 'POST', '/graphql', { query, variables });
   }
 

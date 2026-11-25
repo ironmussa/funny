@@ -317,7 +317,13 @@ function resolvePipelineInputs(args: {
     : { ok: true, value };
 }
 
-function matchesInputType(value: unknown, type: PipelineInputDefinition['type']): boolean {
+/** A value of one of the declared pipeline input types (string, number, boolean, array, object). */
+type PipelineInputValue = string | number | boolean | object;
+
+function matchesInputType(
+  value: unknown,
+  type: PipelineInputDefinition['type'],
+): value is PipelineInputValue {
   switch (type) {
     case 'string':
       return typeof value === 'string';

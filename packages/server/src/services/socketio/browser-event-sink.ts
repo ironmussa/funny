@@ -21,6 +21,18 @@ import { BrowserV1OutboundQueue } from './browser-v1-outbound-queue.js';
 import { encodeSocketIoCarrier } from './browser-v1-wire.js';
 import { encodeSocketIoStatus } from './browser-v1-wire.js';
 
+/** How many browser sockets, and how many distinct users, are connected. */
+interface BrowserClientStats {
+  browserClients: number;
+  browserUsers: number;
+}
+
+/** What the outbound queue did with a browser.v1 event, and how deep its class's queue is. */
+interface BrowserV1Dispatch {
+  result: 'accepted' | 'coalesced' | 'dropped' | 'exhausted';
+  queueDepth: number;
+}
+
 type BrowserV1Event = NonNullable<BrowserPublication['browserV1']>;
 
 export const threadStreamRoom = (threadId: string): string => `thread:${threadId}:stream`;
@@ -179,6 +191,8 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     const userSocketIds = namespace.adapter.rooms.get(`user:${userId}`) ?? new Set<string>();
     for (const socketId of userSocketIds) {
       const socket = namespace.sockets.get(socketId);
+      // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+      // BrowserV1ConnectionState, whose assignments map traffic classes to Representation.
       const assignments = socket?.data.browserV1?.assignments as
         | { events?: Representation }
         | undefined;
@@ -202,7 +216,7 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     return userIds;
   }
 
-  stats(): { browserClients: number; browserUsers: number } {
+  stats(): BrowserClientStats {
     return {
       browserClients: this.io.of('/').sockets.size,
       browserUsers: this.connectedUserIds().length,
@@ -210,6 +224,8 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
   }
 
   private eventType(event: Record<string, unknown>): string {
+    // SAFETY: publishers (browser-events.ts and the services calling toUser) pass WS events whose
+    // `type` is the string event name; a missing one falls back to 'event'.
     return (event.type as string) || 'event';
   }
 
@@ -220,6 +236,8 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     if (this.options.selectRepresentation) {
       return this.options.selectRepresentation(socket, publication);
     }
+    // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+    // BrowserV1ConnectionState, whose assignments are keyed by traffic class.
     const state = socket.data.browserV1 as
       | { assignments?: Partial<Record<BrowserPublication['trafficClass'], Representation>> }
       | undefined;
@@ -331,10 +349,7 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     socket: Socket,
     publication: BrowserPublication,
     payload: Buffer,
-  ): {
-    result: 'accepted' | 'coalesced' | 'dropped' | 'exhausted';
-    queueDepth: number;
-  } {
+  ): BrowserV1Dispatch {
     let queue = this.outbound.get(socket);
     if (!queue) {
       queue = new BrowserV1OutboundQueue({
@@ -363,9 +378,7 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
             : BROWSER_V1_CARRIER_EVENTS.interactive,
           payload,
         );
-        const transport = socket.conn?.transport as
-          | { writable?: boolean; once?: (event: string, listener: () => void) => void }
-          | undefined;
+        const transport = socket.conn?.transport;
         if (transport?.writable !== false || !transport.once) return;
         return new Promise<void>((resolve) => {
           transport.once?.('drain', resolve);

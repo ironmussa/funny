@@ -36,7 +36,7 @@ export function SidebarFooter() {
   const openSettings = () => navigate(buildPath('/preferences/general'));
 
   return (
-    <ShadSidebarFooter className="pb-4">
+    <ShadSidebarFooter className="mb-2">
       <div className="px-1">
         <ActivityPanelButton />
       </div>
@@ -47,10 +47,10 @@ export function SidebarFooter() {
               <Button
                 variant="ghost"
                 data-testid="sidebar-user-menu"
-                className="hover:bg-sidebar-accent h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1"
+                className="hover:bg-sidebar-accent h-auto min-w-0 flex-1 justify-start px-1 py-1"
               >
                 <Avatar size="sm">
-                  <AvatarFallback className="text-xs" name={authUser.displayName || undefined}>
+                  <AvatarFallback textSize="xs" name={authUser.displayName || undefined}>
                     {authUser.displayName
                       ?.split(' ')
                       .map((n) => n[0])

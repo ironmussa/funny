@@ -47,7 +47,12 @@ export function validatePasswordStrength(password: unknown): PasswordPolicyResul
  * above on every one of them in a `before` hook. Add an endpoint here when a
  * new plugin or route can set a password.
  */
-const PASSWORD_FIELD_BY_AUTH_PATH: Record<string, string> = {
+/** The body field that carries the password, by Better Auth endpoint path. */
+interface PasswordFieldByAuthPath {
+  [path: string]: string;
+}
+
+const PASSWORD_FIELD_BY_AUTH_PATH: PasswordFieldByAuthPath = {
   '/sign-up/email': 'password',
   '/change-password': 'newPassword',
   '/reset-password': 'newPassword',
@@ -65,6 +70,8 @@ export function validateAuthRequestPassword(path: string, body: unknown): Passwo
   const field = PASSWORD_FIELD_BY_AUTH_PATH[path];
   if (!field) return { ok: true };
   const value =
+    // SAFETY: the guard admits only non-null objects, and the field is read as unknown;
+    // validatePasswordStrength checks its type, so a missing or non-string value is refused.
     body && typeof body === 'object' ? (body as Record<string, unknown>)[field] : undefined;
   if (path === '/admin/create-user' && value === undefined) return { ok: true };
   return validatePasswordStrength(value);

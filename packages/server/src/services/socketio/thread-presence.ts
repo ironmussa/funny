@@ -62,6 +62,7 @@ export function closeThreadForSocket(socket: Socket, threadId: string): bigint {
     .to(threadPresenceRoom(threadId))
     .emit(PRESENCE_LEAVE_EVENT, { threadId, clientId: socket.id });
 
+  // SAFETY: socket.data.openThreads is only ever assigned a Set<string> (the ??= in this file).
   const open = socket.data.openThreads as Set<string> | undefined;
   open?.delete(threadId);
   return advancePresenceRevision(threadId);

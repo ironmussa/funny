@@ -19,6 +19,8 @@ type PipelineRow = typeof pipelines.$inferSelect;
 type PipelineRunRow = typeof pipelineRuns.$inferSelect;
 
 export function toPipeline(row: PipelineRow): Pipeline {
+  // SAFETY: the model columns default to DEFAULT_MODEL and otherwise hold the
+  // id the pipelines create/update input accepted (an unchecked z.string()).
   return {
     id: row.id,
     projectId: row.projectId,
@@ -47,6 +49,8 @@ export function toPipeline(row: PipelineRow): Pipeline {
 }
 
 export function toPipelineRun(row: PipelineRunRow): PipelineRun {
+  // SAFETY: status / current_stage / verdict are written by the runtime's
+  // pipeline manager from its PipelineRun values; the columns are plain text.
   return {
     id: row.id,
     pipelineId: row.pipelineId,

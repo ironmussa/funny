@@ -19,13 +19,26 @@ const mocks = ((): {
   queue: FactoryQueueRun[];
   threads: Record<string, Thread>;
   settings: Partial<FactorySettings> | null;
+  requests: Record<string, { id: string; sha: string }>;
   navigate: ReturnType<typeof vi.fn>;
   control: ReturnType<typeof vi.fn>;
-} => ({ queue: [], threads: {}, settings: null, navigate: vi.fn(), control: vi.fn() }))();
+  markDone: ReturnType<typeof vi.fn>;
+} => ({
+  queue: [],
+  threads: {},
+  settings: null,
+  requests: {},
+  navigate: vi.fn(),
+  control: vi.fn(),
+  markDone: vi.fn(),
+}))();
 
 mock.module('@/data/factory/hooks', () => ({
   useFactoryQueueRuns: () => mocks.queue,
   useFactorySettings: () => mocks.settings,
+  // Only asked for a run that waits for an approval.
+  usePendingApprovalRequestOfRun: (_projectId: string, runId: string, enabled: boolean) =>
+    enabled ? (mocks.requests[runId] ?? null) : null,
 }));
 mock.module('@/lib/thread-selectors', () => ({
   useThreadById: (id: string | undefined) => (id ? mocks.threads[id] : undefined),
@@ -38,6 +51,12 @@ mock.module('@/data/projects/hooks', () => ({
   ],
 }));
 mock.module('@/data/factory/actions', () => ({
+  approveFactoryMerge: () => okAsync(null),
+  setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
+  markFactoryRunDone: (...args: unknown[]) => {
+    mocks.markDone(...args);
+    return okAsync(null);
+  },
   controlFactoryRun: (...args: unknown[]) => {
     mocks.control(...args);
     return okAsync(null);
@@ -197,6 +216,30 @@ describe('FactoryBoard', () => {
     expect(screen.queryByTestId('factory-board-progress-r1')).toBeNull();
   });
 
+  test('a held run an agent asked about says so, for the held commit only', () => {
+    const held = (id: string, headSha: string) =>
+      queueRun(id, 'waiting_human', {
+        failureReason: 'high risk',
+        risk: { headSha, level: 'high', reasons: ['big'], changedLines: 900, paths: [] },
+      });
+    mocks.requests = {
+      asked: { id: 'q1', sha: 'a'.repeat(40) },
+      // The pull request moved on after the agent asked.
+      moved: { id: 'q2', sha: 'a'.repeat(40) },
+    };
+    renderBoard([
+      held('asked', 'a'.repeat(40)),
+      held('moved', 'b'.repeat(40)),
+      held('quiet', 'c'.repeat(40)),
+    ]);
+    expect(screen.getByTestId('factory-board-agent-asked-asked').textContent).toBe(
+      'An agent asked for your approval',
+    );
+    expect(screen.queryByTestId('factory-board-agent-asked-moved')).toBeNull();
+    expect(screen.queryByTestId('factory-board-agent-asked-quiet')).toBeNull();
+    mocks.requests = {};
+  });
+
   test("a run with a thread is the thread's kanban card: its powerline with the PR, its menu, and the run's chips", async () => {
     mocks.threads['t-impl'] = buildThread({ id: 't-impl', title: '[Factory] #434 Thread recap' });
     const run = queueRun('r1', 'waiting_human', {
@@ -267,6 +310,25 @@ describe('FactoryBoard', () => {
     // No separate issue or schedule line: the title names it.
     expect(screen.queryByTestId('factory-board-issue-sched')).toBeNull();
     expect(screen.queryByTestId('factory-board-ref-sched')).toBeNull();
+  });
+
+  // The agent found nothing to change: the member agrees from the card's menu.
+  test('a run that ended with no change offers "Mark as done" next to Retry', async () => {
+    renderBoard([queueRun('r1', 'no_change', { completedAt: recent() })]);
+    const card = screen.getByTestId('factory-board-card-r1');
+    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    expect(await screen.findByTestId('factory-board-retry-r1')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('factory-board-mark-done-r1'));
+    expect(mocks.markDone).toHaveBeenCalledWith('p1', 'r1');
+    expect(mocks.control).not.toHaveBeenCalled();
+  });
+
+  test('a run that failed offers no "Mark as done"', async () => {
+    renderBoard([queueRun('r1', 'failed', { completedAt: recent() })]);
+    const card = screen.getByTestId('factory-board-card-r1');
+    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    expect(await screen.findByTestId('factory-board-retry-r1')).toBeTruthy();
+    expect(screen.queryByTestId('factory-board-mark-done-r1')).toBeNull();
   });
 
   test('a run that ended done is in the Done column', () => {

@@ -122,9 +122,13 @@ function enabledCapabilities(
       value = capability;
     } else {
       const generatedName = capability.replace(/^RUNNER_CAPABILITY_/, '');
+      // SAFETY: an unknown name indexes to undefined (or a reverse-mapped name string), which the
+      // typeof check below maps to UNSPECIFIED.
       const resolved = RunnerCapability[generatedName as keyof typeof RunnerCapability];
       value = typeof resolved === 'number' ? resolved : RunnerCapability.UNSPECIFIED;
     }
+    // SAFETY: integers that are not a supported RunnerCapability are dropped by the
+    // available.has filter below.
     return Number.isInteger(value) ? [value as RunnerCapability] : [];
   });
   return [...new Set(normalized)].filter(
@@ -169,14 +173,20 @@ function effectiveLimits(
   };
 }
 
-function duration(milliseconds: number): { seconds: string; nanos: number } {
+/** A protobuf `Duration` / `Timestamp` as JSON: whole seconds (int64 as a string) and nanoseconds. */
+interface SecondsAndNanos {
+  seconds: string;
+  nanos: number;
+}
+
+function duration(milliseconds: number): SecondsAndNanos {
   return {
     seconds: String(Math.floor(milliseconds / 1_000)),
     nanos: (milliseconds % 1_000) * 1_000_000,
   };
 }
 
-function timestamp(now = Date.now()): { seconds: string; nanos: number } {
+function timestamp(now = Date.now()): SecondsAndNanos {
   return {
     seconds: String(Math.floor(now / 1_000)),
     nanos: (now % 1_000) * 1_000_000,
@@ -207,7 +217,7 @@ function writeFailure(
   call.end();
 }
 
-function supportedRange(versions: Version[]): Record<string, number> {
+function supportedRange(versions: Version[]) {
   const ordered = [...versions].sort((a, b) => a.major - b.major || a.minor - b.minor);
   const first = ordered[0];
   const last = ordered.at(-1);
@@ -245,6 +255,9 @@ export function createControlNegotiationHandler(
 
     const handleRequest = async (raw: Record<string, unknown>): Promise<void> => {
       if (state === 'closed') return;
+      // SAFETY: raw is a ControlRequest frame decoded by proto-loader (oneofs, longs as String);
+      // ControlRequestWire keeps each oneof member optional, and the hello path checks runner and
+      // defaults the repeated fields that defaults: false leaves absent.
       const request = raw as ControlRequestWire;
       const kind = requestKind(request);
 

@@ -71,6 +71,8 @@ export function normalizeCreationRequest(
     return err({ code: 'project-required', message: 'projectId is required' });
   }
   return ok({
+    // SAFETY: projectId is truthy here, and every caller (web client, automations,
+    // factory, public API) sends it as a project id string.
     target: Object.freeze({ kind: 'project', projectId: raw.projectId as string }),
     payload: raw,
   });

@@ -221,7 +221,7 @@ describe('browser.v1 terminal interactive carrier', () => {
     const response = denied.socket.emitted.find(
       ({ event }) => event === BROWSER_V1_CARRIER_EVENTS.interactive,
     );
-    expect(decodeBrowserCarrier(response?.data)).toMatchObject({
+    expect(decodeBrowserCarrier(response?.data as Uint8Array | undefined)).toMatchObject({
       ok: true,
       envelope: {
         payload: {

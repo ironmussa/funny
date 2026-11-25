@@ -129,6 +129,7 @@ function toRunnerInfo(
 ): RunnerInfo {
   const lastHb = new Date(r.lastHeartbeatAt).getTime();
   const isStale = now - lastHb > HEARTBEAT_TIMEOUT_MS;
+  // SAFETY: runners.status is written only in this file, always 'online', 'busy' or 'offline'.
   const status = isStale ? 'offline' : (r.status as RunnerInfo['status']);
 
   return {
@@ -140,6 +141,8 @@ function toRunnerInfo(
     publicMediaUrl: r.publicMediaUrl ?? undefined,
     status,
     role: r.role === 'dedicated' ? 'dedicated' : 'general',
+    // SAFETY: runners.active_thread_ids is written only here, as '[]' or the JSON of the
+    // heartbeat's activeThreadIds array.
     activeThreadCount: (JSON.parse(r.activeThreadIds) as string[]).length,
     assignedProjectIds,
     registeredAt: r.registeredAt,
@@ -167,6 +170,11 @@ function registerResponse(
     ownerUserId: userId ?? undefined,
     forwardingKey: rootSecret ? deriveRunnerForwardingKey(rootSecret, runnerId) : undefined,
   };
+}
+
+/** Column name → the value re-registering a runner writes to it. */
+interface RunnerColumnUpdates {
+  [column: string]: any;
 }
 
 export async function registerRunner(
@@ -197,7 +205,7 @@ export async function registerRunner(
 
     // Update existing runner — mark online, refresh heartbeat.
     // Also update userId if provided (backfills runners registered without one).
-    const updateFields: Record<string, any> = {
+    const updateFields: RunnerColumnUpdates = {
       name: req.name,
       status: 'online',
       os: req.os,
@@ -610,8 +618,11 @@ export async function getPendingTasks(runnerId: string): Promise<RunnerTask[]> {
     .filter((r) => claimed.has(r.id))
     .map((r) => ({
       taskId: r.id,
+      // SAFETY: runner_tasks rows are inserted only by createRunnerTask, from its typed
+      // RunnerTask['type'] and the JSON of its RunnerTaskPayload.
       type: r.type as RunnerTask['type'],
       threadId: r.threadId,
+      // SAFETY: as above, payload is the JSON of createRunnerTask's RunnerTaskPayload.
       payload: JSON.parse(r.payload) as RunnerTaskPayload,
       createdAt: r.createdAt,
     }));

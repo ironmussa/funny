@@ -14,6 +14,10 @@ import { codeFieldLanguage } from './code-input';
 import { HighlightedCode } from './HighlightedCode';
 import { ToolContentArea } from './MobileContentPreview';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 interface Props {
   name: string;
   parsed: Record<string, any>;
@@ -146,10 +150,7 @@ export function GenericToolCard({
         )}
       </div>
       {expanded && (
-        <ToolContentArea
-          className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-        >
+        <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           {isTodo && todos ? (
             <div className="px-3 pb-2">
               <TodoList todos={todos} />
@@ -163,7 +164,7 @@ export function GenericToolCard({
                       {key}
                     </div>
                     <div className="border-border/40 bg-background/80 overflow-x-auto rounded border px-2.5 py-1.5">
-                      {name === 'WebFetch' && key === 'url' && typeof value === 'string' ? (
+                      {name === 'WebFetch' && key === 'url' && isString(value) ? (
                         <a
                           href={value}
                           target="_blank"
@@ -224,9 +225,9 @@ export function GenericToolCard({
  * for code strings, and ANSI colors for any other string.
  */
 export function ToolValue({ value, language }: { value: unknown; language?: string | null }) {
-  const isJson = typeof value !== 'string';
+  const isJson = !isString(value);
   const text = useMemo(() => {
-    if (typeof value === 'string') return value;
+    if (isString(value)) return value;
     try {
       return JSON.stringify(value, null, 2) ?? String(value);
     } catch {

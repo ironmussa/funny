@@ -49,13 +49,18 @@ const RUNNER_IMMUTABLE_THREAD_FIELDS = new Set([
   'createdAt',
 ]);
 
+/** Thread field → the value a runner asks to write to it. */
+interface ThreadFieldUpdates {
+  [field: string]: unknown;
+}
+
 function stripRunnerImmutableThreadFields(
   runnerUserId: string | null,
   threadId: string,
   updates: unknown,
-): Record<string, unknown> {
+): ThreadFieldUpdates {
   if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return {};
-  const allowed: Record<string, unknown> = {};
+  const allowed: ThreadFieldUpdates = {};
   const refused: string[] = [];
   for (const [key, value] of Object.entries(updates)) {
     if (RUNNER_IMMUTABLE_THREAD_FIELDS.has(key)) refused.push(key);
@@ -111,6 +116,8 @@ function notifyTerminalStatusPersisted(
   threadId: unknown,
   updates: unknown,
 ): void {
+  // SAFETY: `?.status` is defined for any value (a primitive yields undefined) and status
+  // stays unknown until the typeof check below.
   const status = (updates as { status?: unknown } | null)?.status;
   if (!runnerUserId || typeof threadId !== 'string') return;
   if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
@@ -198,6 +205,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
 const asRecord = (v: unknown): Record<string, unknown> =>
+  // SAFETY: the typeof check proves v is a non-null object; its fields stay unknown.
   v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 
 /**
@@ -212,6 +220,8 @@ function pickWatcherPatch(raw: unknown): WatcherPatch {
   copyIf(out, patch, 'wakeCount', isNum);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: out holds only the WatcherPatch keys copied above, each type-checked; status is
+  // checked as a string only and kept as the runner sent it for its own watcher.
   return out as WatcherPatch;
 }
 
@@ -228,6 +238,8 @@ function pickJobPatch(raw: unknown): JobPatch {
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'exitCode', isNumOrNull);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: out holds only the JobPatch keys copied above, each type-checked; status is
+  // checked as a string only and kept as the runner sent it for its own job.
   return out as JobPatch;
 }
 
@@ -238,8 +250,13 @@ function pickJobPatch(raw: unknown): JobPatch {
  */
 const OWNER_SCOPED_LIST_FALLBACK = [] as const;
 
+/** `data:*` message type → the executor that answers it. */
+interface DataMessageHandlers {
+  readonly [type: string]: DataMessageHandler;
+}
+
 /** Dispatch table: one executor per `data:*` message type. */
-const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
+const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   'data:insert_message': async ({ data }) => {
     const messageRepo = repos.messages();
     const messageId = await messageRepo.insertMessage(data.payload);
@@ -570,12 +587,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   'data:cancel_queued_message': async ({ data }) => {
     // The ownership guard already verified message → thread → runnerUserId.
     // Resolve threadId here so cancel can scope by (messageId, threadId).
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q)
       return {
         type: 'data:cancel_queued_message_response',
@@ -585,12 +602,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     return { type: 'data:cancel_queued_message_response', success };
   },
   'data:update_queued_message': async ({ data }) => {
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q) return { type: 'data:update_queued_message_response', updated: null };
     const updated = await messageQueueRepo.update(data.messageId, q.threadId, data.content);
     return { type: 'data:update_queued_message_response', updated };
@@ -667,6 +684,51 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
             secretName: resolved.error.secretName,
           }),
         };
+  },
+  // The issue factory from a thread's agent (factory-agent-tools). The service
+  // takes the actor and the project from the thread's row and decides every
+  // refusal; a refusal is an answer the agent reads, not a transport error.
+  'data:factory_list_runs': async ({ runnerId, ownerId, data }) => {
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const listed = await factoryAgentTools.listRuns({
+      threadId: String(data.threadId),
+      runnerId,
+      runnerOwnerId: ownerId,
+    });
+    return listed.isOk()
+      ? { type: 'data:factory_list_runs_response', ...listed.value }
+      : {
+          type: 'data:factory_list_runs_response',
+          error: listed.error.kind,
+          message: listed.error.message,
+        };
+  },
+  'data:factory_control_run': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_control_run_response';
+    const action = data.action === 'retry' || data.action === 'stop' ? data.action : null;
+    if (!action) {
+      return { type, error: 'refused', message: 'The action must be retry or stop.' };
+    }
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const controlled = await factoryAgentTools.controlRun(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      action,
+      String(data.runId),
+    );
+    return controlled.isOk()
+      ? { type, run: controlled.value }
+      : { type, error: controlled.error.kind, message: controlled.error.message };
+  },
+  'data:factory_request_approval': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_request_approval_response';
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const asked = await factoryAgentTools.requestApproval(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      String(data.runId),
+    );
+    return asked.isOk()
+      ? { type, ...asked.value }
+      : { type, error: asked.error.kind, message: asked.error.message };
   },
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');

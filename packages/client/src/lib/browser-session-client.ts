@@ -111,7 +111,10 @@ function answerAs<Answer>(request: Promise<BrowserSessionResult>): Promise<Answe
 
 type RealtimeFrame = Parameters<typeof sendBrowserSessionRealtime>[1];
 
-/** Builders of the frames sent without waiting for an answer, keyed by message type. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: Record<string, unknown>) => RealtimeFrame>(
   Object.entries({
     'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
@@ -124,7 +127,7 @@ const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: Record<string, unknown>) 
     'browser-session:close': (extra) => ({
       case: 'close',
       reason: String(extra.reason ?? 'user'),
-      closeId: typeof extra.closeId === 'string' ? extra.closeId : undefined,
+      closeId: isString(extra.closeId) ? extra.closeId : undefined,
     }),
   } satisfies Record<string, (extra: Record<string, unknown>) => RealtimeFrame>),
 );

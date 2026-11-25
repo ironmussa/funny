@@ -8,12 +8,21 @@ import { CommandOutput } from './CommandOutput';
 import { unwrapShellCommand } from './format-utils';
 import { ToolContentArea } from './MobileContentPreview';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** A primitive that `String()` prints as itself. */
+function isPrintablePrimitive(value: unknown): value is number | boolean | bigint {
+  return typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint';
+}
+
 /** The call's `command` as text: a string unwrapped from its shell, anything else as JSON. */
 function commandToText(parsed: { command?: unknown }): string | null {
   const command = parsed.command;
-  if (typeof command === 'string') return unwrapShellCommand(command);
+  if (isString(command)) return unwrapShellCommand(command);
   if (command == null) return null;
-  if (typeof command === 'number' || typeof command === 'boolean' || typeof command === 'bigint') {
+  if (isPrintablePrimitive(command)) {
     return String(command);
   }
 
@@ -73,10 +82,7 @@ export function BashCard({
         )}
       </button>
       {expanded && command && (
-        <ToolContentArea
-          className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-        >
+        <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           <CommandOutput command={command} output={output} />
         </ToolContentArea>
       )}

@@ -43,6 +43,10 @@ export function createBrowserEffectService(
   };
 }
 
+function isFunction(value: unknown): value is (...args: never[]) => void {
+  return typeof value === 'function';
+}
+
 export function browserEffectRuntime(
   win: Window,
   showToast: BrowserEffectRuntime['toast'],
@@ -50,7 +54,7 @@ export function browserEffectRuntime(
   return {
     toast: showToast,
     notificationPermission: () =>
-      typeof Notification === 'function' ? Notification.permission : 'unsupported',
+      isFunction(globalThis.Notification) ? Notification.permission : 'unsupported',
     notify: (title, options) => {
       new Notification(title, options);
     },

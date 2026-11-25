@@ -37,7 +37,7 @@ import type { PublicApiContext } from './trpc.js';
 const threadRepo = repos.threads();
 
 /** The body the runner's thread-creation endpoint receives: only what v1 accepts. */
-function runnerBody(input: CreateThreadInput): Record<string, unknown> {
+function runnerBody(input: CreateThreadInput) {
   const source: ThreadSource = input.client === 'chrome_extension' ? 'chrome_extension' : 'api';
   return {
     projectId: input.projectId,
@@ -124,7 +124,8 @@ export async function createPublicThread(
 
 /** Every provider and model the server's registry offers, with their defaults. */
 export function listPublicModels(): PublicModelList {
-  const providers = (Object.keys(MODEL_REGISTRY) as AgentProvider[]).map((id) => ({
+  const providerIds: AgentProvider[] = Object.keys(MODEL_REGISTRY);
+  const providers = providerIds.map((id) => ({
     id,
     name: PROVIDER_LABELS[id] ?? id,
     defaultModel: getDefaultModel(id),

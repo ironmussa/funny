@@ -87,7 +87,10 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
   relayToThreadStream(event.scope.threadId, browserEvent);
 }
 
-function decodeValue(value: any): unknown {
+/** A protobuf `Value` decoded to plain JSON (a struct as `decodeStruct` returns it). */
+type DecodedValue = null | number | string | boolean | Record<string, unknown> | DecodedValue[];
+
+function decodeValue(value: any): DecodedValue {
   if (!value || typeof value !== 'object' || typeof value.kind !== 'string') return value;
   switch (value.kind) {
     case 'nullValue':
@@ -117,6 +120,7 @@ function decodeStruct(value: any): Record<string, unknown> {
 
 function parseUnsigned(value: unknown): bigint | null {
   try {
+    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n && parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? parsed : null;
   } catch {
@@ -130,7 +134,7 @@ function requestKind(request: WireRequest): 'event' | 'gap' | undefined {
   return undefined;
 }
 
-function responseBase(epoch: bigint, scope?: EventScopeIdentity): Record<string, unknown> {
+function responseBase(epoch: bigint, scope?: EventScopeIdentity) {
   return {
     session: { sessionEpoch: epoch.toString() },
     scope: scope ?? undefined,

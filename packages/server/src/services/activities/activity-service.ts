@@ -51,6 +51,7 @@ const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string |
 function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object') return null;
+  // SAFETY: the check above made value a non-null object; its fields are only read as unknown.
   const raw = value as Record<string, unknown>;
   const ref: ActivityResultRef = {};
   for (const [field, check] of RESULT_REF_FIELDS) {
@@ -88,7 +89,7 @@ export async function startActivityFromRunner(args: {
   const title = text(payload.title, ACTIVITY_TITLE_MAX);
   if (!id) return { ok: false, error: 'activity id is invalid' };
   if (!title) return { ok: false, error: 'activity title is required' };
-  const input = parseActivityInput(kind, payload.input);
+  const input = parseActivityInput({ kind, input: payload.input });
   if (!input) return { ok: false, error: `activity kind ${kind} or its input is invalid` };
 
   const finalStatus =
@@ -104,7 +105,7 @@ export async function startActivityFromRunner(args: {
     input,
     step: text(payload.step, ACTIVITY_STEP_MAX),
     origin: isActivityOrigin(payload.origin) ? payload.origin : 'user',
-    effects: parseActivityEffects(payload.effects),
+    effects: parseActivityEffects(payload),
     startedAt: new Date().toISOString(),
   };
   if (finalStatus) {
@@ -122,6 +123,7 @@ export async function startActivityFromRunner(args: {
 }
 
 function reportedStatus(value: unknown): ActivityStatus | undefined {
+  // SAFETY: has() only compares the string; it is returned as ActivityStatus only when the set holds it.
   return typeof value === 'string' && REPORTED_STATUSES.has(value as ActivityStatus)
     ? (value as ActivityStatus)
     : undefined;
@@ -130,6 +132,7 @@ function reportedStatus(value: unknown): ActivityStatus | undefined {
 /** The fields a runner may change on its own activity; never `origin`. */
 function pickActivityPatch(raw: unknown): ActivityPatch {
   if (!raw || typeof raw !== 'object') return {};
+  // SAFETY: the check above made raw a non-null object; its fields are only read as unknown.
   const value = raw as Record<string, unknown>;
   const patch: ActivityPatch = {};
   const status = reportedStatus(value.status);
@@ -138,7 +141,7 @@ function pickActivityPatch(raw: unknown): ActivityPatch {
   if ('error' in value) patch.error = text(value.error, ACTIVITY_ERROR_MAX);
   const resultRef = resultRefOf(value.resultRef);
   if (resultRef !== undefined) patch.resultRef = resultRef;
-  if ('effects' in value) patch.effects = parseActivityEffects(value.effects);
+  if ('effects' in value) patch.effects = parseActivityEffects(value);
   if (status && isFinalActivityStatus(status)) patch.endedAt = new Date().toISOString();
   return patch;
 }

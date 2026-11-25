@@ -139,14 +139,24 @@ const VOLATILE: BrowserSessionDelivery = {
   delivery: 'volatile',
 };
 
-const POINTER_KINDS: Record<string, BrowserSessionPointerKind> = {
+/** Pointer kind name (as the runner sends it) → its protobuf enum value. */
+interface PointerKinds {
+  [kind: string]: BrowserSessionPointerKind;
+}
+
+/** Agent action name (as the runner sends it) → its protobuf enum value. */
+interface AgentActionKinds {
+  [kind: string]: BrowserSessionAgentActionKind;
+}
+
+const POINTER_KINDS: PointerKinds = {
   move: BrowserSessionPointerKind.MOVE,
   click: BrowserSessionPointerKind.CLICK,
   down: BrowserSessionPointerKind.DOWN,
   up: BrowserSessionPointerKind.UP,
 };
 
-const AGENT_ACTION_KINDS: Record<string, BrowserSessionAgentActionKind> = {
+const AGENT_ACTION_KINDS: AgentActionKinds = {
   click: BrowserSessionAgentActionKind.CLICK,
   double_click: BrowserSessionAgentActionKind.DOUBLE_CLICK,
   hover: BrowserSessionAgentActionKind.HOVER,
@@ -180,6 +190,8 @@ function agentActionValue(data: Record<string, unknown>) {
 
 function viewportOf(value: unknown): { width: number; height: number } | undefined {
   if (!value || typeof value !== 'object') return undefined;
+  // SAFETY: the guard above proves value is a non-null object; both fields stay unknown
+  // until the typeof checks below.
   const { width, height } = value as { width?: unknown; height?: unknown };
   if (typeof width !== 'number' || typeof height !== 'number') return undefined;
   return { width: Math.round(width), height: Math.round(height) };
@@ -309,6 +321,8 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
     ({ data }) =>
       sessionMapping({
         case: 'dialog',
+        // SAFETY: dialogValue returns undefined for a falsy dialog and reads its fields only
+        // through String() / stringOrUndefined, which accept a field of any value.
         value: { dialog: dialogValue(data.dialog as BrowserSessionData | null | undefined) },
       }),
   ],
@@ -390,6 +404,7 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
 ]);
 
 function eventData(event: Record<string, unknown>): BrowserSessionData {
+  // SAFETY: the typeof check proves event.data is a non-null object; its fields stay unknown.
   return event.data && typeof event.data === 'object' ? (event.data as BrowserSessionData) : {};
 }
 
@@ -431,10 +446,7 @@ function terminalPublication(
 ): import('./runner-ports.js').BrowserPublication | null {
   const type = typeof event.type === 'string' ? event.type : '';
   if (type !== 'pty:data' && type !== 'pty:exit' && type !== 'pty:error') return null;
-  const data =
-    event.data && typeof event.data === 'object'
-      ? (event.data as Record<string, unknown>)
-      : ({} as Record<string, unknown>);
+  const data = eventData(event);
   const terminalId = typeof data.ptyId === 'string' ? data.ptyId : '';
   if (!terminalId) return null;
   const payload =
@@ -521,13 +533,16 @@ export function getConnectedBrowserUserIds(): string[] {
   return socketIoBrowserEvents?.connectedUserIds() ?? [];
 }
 
+/** How many browser sockets, and how many distinct users, are connected. */
+interface RelayStats {
+  browserClients: number;
+  browserUsers: number;
+}
+
 /**
  * Get stats about connected clients.
  */
-export function getRelayStats(): {
-  browserClients: number;
-  browserUsers: number;
-} {
+export function getRelayStats(): RelayStats {
   const { browserClients, browserUsers } = socketIoBrowserEvents?.stats() ?? {
     browserClients: 0,
     browserUsers: 0,

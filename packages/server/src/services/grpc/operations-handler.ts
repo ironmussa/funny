@@ -143,6 +143,9 @@ const OPERATION_KINDS = [
   'activityStart',
   'activityUpdate',
   'activityReconcile',
+  'factoryListRuns',
+  'factoryControlRun',
+  'factoryRequestApproval',
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
@@ -178,7 +181,17 @@ function decodeStruct(value: any): Record<string, WireValue> {
   );
 }
 
-function encodeValue(value: unknown): Record<string, unknown> {
+/** A protobuf `Value` as JSON: one `*Value` field naming its kind. */
+interface EncodedValue {
+  [kind: string]: unknown;
+}
+
+/** A protobuf `Struct` as JSON: `{ fields }`. */
+interface EncodedStruct {
+  [field: string]: unknown;
+}
+
+function encodeValue(value: unknown): EncodedValue {
   if (value === null || value === undefined) return { nullValue: 0 };
   if (typeof value === 'number') return { numberValue: value };
   if (typeof value === 'string') return { stringValue: value };
@@ -187,7 +200,8 @@ function encodeValue(value: unknown): Record<string, unknown> {
   return { structValue: encodeStruct(value) };
 }
 
-function encodeStruct(value: unknown): Record<string, unknown> {
+function encodeStruct(value: unknown): EncodedStruct {
+  // SAFETY: the guard admits only non-null objects, whose own enumerable entries are the struct fields.
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   return {
     fields: Object.fromEntries(
@@ -233,7 +247,12 @@ const idPatchPayload =
   (type: string, idField: string): LegacyMapper =>
   (value) => ({ type, payload: { id: value[idField], patch: decodeStruct(value.patch) } });
 
-function legacyInsertMessage(value: any): Record<string, unknown> {
+/** A legacy `data:*` message, as the data message handlers receive it. */
+interface LegacyDataMessage {
+  [field: string]: unknown;
+}
+
+function legacyInsertMessage(value: any): LegacyDataMessage {
   return {
     type: 'data:insert_message',
     threadId: value.threadId,
@@ -368,6 +387,18 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     projectId: value.projectId ?? undefined,
   }),
   getGithubAppToken: threadScoped('data:get_github_app_token'),
+  factoryListRuns: threadScoped('data:factory_list_runs'),
+  factoryControlRun: (value) => ({
+    type: 'data:factory_control_run',
+    threadId: value.threadId,
+    runId: value.runId,
+    action: value.action,
+  }),
+  factoryRequestApproval: (value) => ({
+    type: 'data:factory_request_approval',
+    threadId: value.threadId,
+    runId: value.runId,
+  }),
   getProjectSecrets: threadScoped('data:get_project_secrets'),
   getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),
   updateProfile: (value, principalUserId) => ({
@@ -461,13 +492,23 @@ function toLegacyRequest(
   return LEGACY_MAPPERS[kind](request[kind] ?? {}, principalUserId);
 }
 
+/** An operations stream message sent back to the runner. */
+interface OperationReply {
+  [field: string]: unknown;
+}
+
+/** The `success` case of a reply: one result field naming its kind. */
+interface OperationSuccessPayload {
+  [field: string]: unknown;
+}
+
 function failure(
   epoch: bigint,
   correlationId: string,
   code: FailureCode,
   message: string,
   retryable = false,
-): Record<string, unknown> {
+): OperationReply {
   return {
     session: { sessionEpoch: epoch.toString() },
     correlationId,
@@ -475,8 +516,8 @@ function failure(
   };
 }
 
-function success(epoch: bigint, correlationId: string, result: any): Record<string, unknown> {
-  let payload: Record<string, unknown>;
+function success(epoch: bigint, correlationId: string, result: any): OperationReply {
+  let payload: OperationSuccessPayload;
   if (result?.type === 'data:get_thread_messages_response') {
     payload = {
       threadMessages: {
@@ -634,37 +675,49 @@ export function createOperationsHandler(
         );
         timer.unref();
         try {
-          const execution = persistentMutation
-            ? idempotency.execute(
-                {
-                  runnerId: context.principal.runnerId,
-                  operationKind: kind,
-                  idempotencyKey: idempotencyKey!,
-                  request: request[kind],
-                },
-                () => execute(context, { request: legacyRequest, signal: controller.signal }),
-              )
-            : execute(context, { request: legacyRequest, signal: controller.signal });
-          const result = await runAsync(() => execution, { signal: controller.signal });
-          if (closed) return;
-          if (persistentMutation && (result as any).kind === 'conflict') {
-            sendFailure(
-              FailureCode.CONFLICT,
-              'idempotency key was reused with a different request',
+          let operationResult: unknown;
+          if (persistentMutation) {
+            const execution = idempotency.execute(
+              {
+                runnerId: context.principal.runnerId,
+                operationKind: kind,
+                idempotencyKey: idempotencyKey!,
+                request: request[kind],
+              },
+              () => execute(context, { request: legacyRequest, signal: controller.signal }),
             );
-            return;
+            const result = await runAsync(() => execution, { signal: controller.signal });
+            if (closed) return;
+            if (result.kind === 'conflict') {
+              sendFailure(
+                FailureCode.CONFLICT,
+                'idempotency key was reused with a different request',
+              );
+              return;
+            }
+            if (result.kind === 'in_progress') {
+              sendFailure(FailureCode.UNAVAILABLE, 'operation outcome is not available yet', true);
+              return;
+            }
+            operationResult = result.outcome;
+          } else {
+            const execution = execute(context, {
+              request: legacyRequest,
+              signal: controller.signal,
+            });
+            operationResult = await runAsync(() => execution, { signal: controller.signal });
+            if (closed) return;
           }
-          if (persistentMutation && (result as any).kind === 'in_progress') {
-            sendFailure(FailureCode.UNAVAILABLE, 'operation outcome is not available yet', true);
-            return;
-          }
-          const operationResult = persistentMutation ? (result as any).outcome : result;
+          // SAFETY: names only the two fields read below; optional chaining yields undefined for
+          // nullish values, primitives and objects that lack them.
+          const reported = operationResult as
+            | { success?: unknown; error?: unknown }
+            | null
+            | undefined;
           if (!sessions.isActive(context.principal.runnerId, epoch)) {
             sendFailure(FailureCode.UNAVAILABLE, 'runner session was superseded', true);
-          } else if ((operationResult as any)?.success === false) {
-            const operationError = String(
-              (operationResult as any)?.error ?? 'runner operation failed',
-            );
+          } else if (reported?.success === false) {
+            const operationError = String(reported?.error ?? 'runner operation failed');
             sendFailure(
               operationError === 'Forbidden' ? FailureCode.PERMISSION_DENIED : FailureCode.INTERNAL,
               operationError === 'Forbidden' ? 'operation is not authorized' : operationError,

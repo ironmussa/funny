@@ -84,7 +84,7 @@ function defaultMerge<T>(base: T, results: T[]): T {
   // pipeline contexts are non-nullish values, and a missing property reads as undefined.
   const baseOutputs = (base as Record<string, unknown>).outputs;
   if (baseOutputs === undefined || !isObjectOrNull(baseOutputs)) return base;
-  const merged: Record<string, unknown> = { ...baseOutputs };
+  const merged = { ...baseOutputs };
   for (const r of results) {
     // SAFETY: as for `base` above: a property read whose value is checked before use.
     const ro = (r as Record<string, unknown>).outputs;

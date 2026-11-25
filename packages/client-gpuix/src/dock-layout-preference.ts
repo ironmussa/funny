@@ -15,11 +15,15 @@ const NATIVE_DOCK_PANELS: readonly DockPanelConstraints[] = [
 
 const NATIVE_DOCK_LAYOUT_VERSION = 2;
 
+function isPlainObject(value: unknown): value is object {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 export function resolveNativeDockLayout(value: string | null): DockLayoutState {
   if (!value) return normalizeDockLayout(NATIVE_DOCK_PANELS);
   try {
     const parsed: unknown = JSON.parse(value);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (!isPlainObject(parsed)) {
       return normalizeDockLayout(NATIVE_DOCK_PANELS);
     }
     const storedOrder = 'order' in parsed ? parsed.order : undefined;
@@ -36,10 +40,7 @@ export function resolveNativeDockLayout(value: string | null): DockLayoutState {
     }
     // SAFETY: normalizeDockLayout drops every size that is not a finite positive number
     // (`finitePositive`), so a non-number value read from storage never reaches the layout.
-    const sizes =
-      storedSizes && typeof storedSizes === 'object' && !Array.isArray(storedSizes)
-        ? (storedSizes as Record<string, number>)
-        : undefined;
+    const sizes = isPlainObject(storedSizes) ? (storedSizes as Record<string, number>) : undefined;
     const normalized = normalizeDockLayout(NATIVE_DOCK_PANELS, { order, sizes });
     return legacyLayout
       ? { ...normalized, order: [...normalized.order.filter((id) => id !== 'files'), 'files'] }

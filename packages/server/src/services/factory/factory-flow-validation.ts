@@ -11,7 +11,6 @@
  * each naming its step and field, for the run failure and for Validate flow.
  */
 
-import type { AgentProvider } from '@funny/shared';
 import type { FactoryFlowAgentStep, FactoryFlowProblem } from '@funny/shared/contracts/factory';
 import {
   KNOWN_PROVIDER_IDS,
@@ -148,7 +147,7 @@ function newThreadProblems(resolved: ResolvedStepOptions, isFirst: boolean): Ste
         'thread: new runs beside the implementing thread, so it must be read-only (permission_mode: plan): only the implementing thread writes to the branch',
     });
   }
-  if (!READ_ONLY_PROVIDERS.includes(resolved.provider as AgentProvider)) {
+  if (!READ_ONLY_PROVIDERS.includes(resolved.provider)) {
     problems.push({
       field: 'provider',
       message: `thread: new runs read-only, which only ${READ_ONLY_PROVIDERS.join(' and ')} can be held to; "${resolved.provider}" cannot`,

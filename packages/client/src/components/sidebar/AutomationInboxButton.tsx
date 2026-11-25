@@ -54,7 +54,7 @@ export function AutomationInboxButton({ className }: { className?: string }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant={automationInboxOpen ? 'active' : inboxCount > 0 ? 'ghost-info' : 'muted'}
           size="icon-sm"
           tabIndex={-1}
           data-testid="sidebar-automation-inbox"
@@ -62,15 +62,7 @@ export function AutomationInboxButton({ className }: { className?: string }) {
           onClick={() => {
             navigate(buildPath(automationInboxOpen ? '/' : '/inbox'));
           }}
-          className={cn(
-            'relative',
-            automationInboxOpen
-              ? 'text-foreground'
-              : inboxCount > 0
-                ? 'text-status-info'
-                : 'text-muted-foreground',
-            className,
-          )}
+          className={cn('relative', className)}
         >
           <Inbox className="icon-base" />
           {inboxCount > 0 && (

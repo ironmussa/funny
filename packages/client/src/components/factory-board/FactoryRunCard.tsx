@@ -6,8 +6,8 @@
  * server moves a run.
  */
 import type { GitStatusInfo } from '@funny/shared';
-import { implementingThreadOf } from '@funny/shared/contracts/factory';
-import { Check, Clock, MoreVertical, RotateCcw, Square } from 'lucide-react';
+import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
+import { Check, Clock, MoreVertical, RotateCcw, Sparkles, Square } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,9 +28,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LabelBadge } from '@/components/ui/label-badge';
+import { usePendingApprovalRequestOfRun } from '@/data/factory/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
-import { factoryRunFallbackTitle } from '@/lib/factory-run-labels';
+import {
+  factoryRunFallbackTitle,
+  isFactoryRunAwaitingMergeApproval,
+} from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -97,6 +101,45 @@ function withRunPullRequest(
   };
 }
 
+/**
+ * Says that an agent asked the member to approve this held run (openspec
+ * factory-agent-tools). Only a run waiting for an approval reads the requests.
+ */
+function AgentAskedMarker({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
+  const held = isFactoryRunAwaitingMergeApproval(run);
+  const request = usePendingApprovalRequestOfRun(run.projectId, run.id, held);
+  if (!held || !request || request.sha !== run.risk?.headSha) return null;
+  return (
+    <LabelBadge tone="warning" data-testid={`factory-board-agent-asked-${run.id}`}>
+      {t('factory.approvalRequest.boardMarker', 'An agent asked for your approval')}
+    </LabelBadge>
+  );
+}
+
+/**
+ * Says that a held run asks again after the member approved another commit,
+ * and how much changed since (openspec factory-merge-fewer-bounces, D2).
+ */
+function AsksAgainMarker({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
+  if (!isFactoryRunAwaitingMergeApproval(run)) return null;
+  const gap = approvalGapFor(run.mergeApproval, run.risk?.headSha);
+  if (!gap) return null;
+  return (
+    <LabelBadge tone="warning" data-testid={`factory-board-asks-again-${run.id}`}>
+      {gap.lines === null
+        ? t(
+            'factory.approvalGap.boardUnknown',
+            'Asks again: the change differs from what you approved',
+          )
+        : t('factory.approvalGap.board', 'Asks again after {{count}} lines changed', {
+            count: gap.lines,
+          })}
+    </LabelBadge>
+  );
+}
+
 /** What the factory adds under a card's title: gate chips, why it waits, what it blocks. */
 function FactoryRunCardBody({
   run,
@@ -123,6 +166,8 @@ function FactoryRunCardBody({
           {state.label}
         </LabelBadge>
         <FactoryRunGateChips run={run} />
+        <AgentAskedMarker run={run} />
+        <AsksAgainMarker run={run} />
       </div>
       {waiting && (
         <p
@@ -148,6 +193,9 @@ function FactoryRunCardBody({
 
 const ACTION_ICON: Record<FactoryRunActionId, typeof Check> = {
   'approve-merge': Check,
+  'lint-cleanup': Sparkles,
+  'lint-cleanup-off': Sparkles,
+  'mark-done': Check,
   retry: RotateCcw,
   stop: Square,
 };

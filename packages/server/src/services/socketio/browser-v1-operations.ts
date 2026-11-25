@@ -296,6 +296,8 @@ export function setupBrowserV1Operations(
         }
         const request = operationEnvelope.value;
         const requestId = request.metadata?.requestId ?? '';
+        // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+        // BrowserV1ConnectionState, of which BrowserOperationState is an optional subset.
         const negotiated = socket.data.browserV1 as BrowserOperationState | undefined;
         if (
           !negotiated ||

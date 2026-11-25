@@ -33,7 +33,12 @@
  * theirs; here a run must belong to that factory.
  */
 
-import { implementingThreadOf } from '@funny/shared/contracts/factory';
+import {
+  contractOf,
+  implementingThreadOf,
+  isBehaviorNeutralLintCleanup,
+  type FactoryRiskWaiver,
+} from '@funny/shared/contracts/factory';
 import { and, eq, inArray } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -64,6 +69,10 @@ export type FactoryRunControlError = {
   kind: 'not-found' | 'conflict' | 'storage';
   message: string;
 };
+
+/** The refusal of an approval that names another commit than the held one. */
+const HELD_COMMIT_CHANGED =
+  'The change was updated after you opened it. Reload and review the new commit.';
 
 const notFound: FactoryRunControlError = { kind: 'not-found', message: 'Run not found' };
 const storage = (error: { message: string }): FactoryRunControlError => ({
@@ -113,6 +122,20 @@ function reopenRefused(error: { message: string }): FactoryRunControlError {
   return /unique|duplicate/i.test(error.message)
     ? { kind: 'conflict', message: 'Another run of this issue is already in flight.' }
     : storage(error);
+}
+
+/**
+ * What is stored when a member says a run triage classed as a lint cleanup is
+ * not one (`on: false`), or takes that back (`on: true`). A member never marks
+ * a run as one: where triage did not class it, there is nothing to store.
+ */
+function lintCleanupWord(
+  run: FactoryRunView,
+  userId: string,
+  on: boolean,
+): FactoryRiskWaiver | null {
+  if (on || !isBehaviorNeutralLintCleanup(contractOf(run))) return null;
+  return { kind: 'not-lint-cleanup', userId, at: new Date().toISOString() };
 }
 
 /**
@@ -229,14 +252,78 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     },
 
     /**
+     * A member agrees with the agent that the issue needs no change: the run,
+     * which ended as `no_change` and stayed on the board for a person, becomes
+     * `done`. Nothing else is touched: the issue stays as it is on GitHub.
+     */
+    markDone(
+      factoryId: string,
+      runId: string,
+    ): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId).andThen((run) =>
+        runs
+          .markDone(run.id)
+          .mapErr(storage)
+          .andThen((written) =>
+            written
+              ? reread(runId)
+              : errAsync<FactoryRunView, FactoryRunControlError>({
+                  kind: 'conflict',
+                  message: 'Only a run that ended with no change can be marked as done.',
+                }),
+          ),
+      );
+    },
+
+    /**
+     * Say, as `userId`, that a run triage classed as a lint cleanup is not one
+     * (`on: false`), or take that back (`on: true`): then its size and its
+     * contract's risk hints do not make it high risk again, when the
+     * factory's own checks of the diff pass. A run held for its risk is put
+     * back in flight so the change is applied to it at once.
+     */
+    setLintCleanup(
+      userId: string,
+      factoryId: string,
+      runId: string,
+      on: boolean,
+    ): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId).andThen((run) =>
+        runs
+          .setRiskWaiver(run.id, lintCleanupWord(run, userId, on))
+          .mapErr(storage)
+          .andThen((written) =>
+            written
+              ? okAsync<undefined, FactoryRunControlError>(undefined)
+              : errAsync<undefined, FactoryRunControlError>({
+                  kind: 'conflict',
+                  message: 'The run has ended: there is nothing left to class.',
+                }),
+          )
+          .andThen(() => {
+            const held = run.state === 'waiting_human' && run.failureReason === HIGH_RISK_HOLD;
+            return on && held
+              ? reopened(run)
+              : okAsync<undefined, FactoryRunControlError>(undefined);
+          })
+          .andThen(() => {
+            wake(factoryId);
+            return reread(runId);
+          }),
+      );
+    },
+
+    /**
      * Approve merging the run's held high-risk head commit, then retry it.
-     * Refused unless the run waits for a person because of that risk. When
+     * Refused unless the run waits for a person because of that risk, and
+     * unless `expectedSha` (the commit the member was shown) is the held one. When
      * the factory has no free slot the run waits at the head of the queue.
      */
     approveMerge(
       userId: string,
       factoryId: string,
       runId: string,
+      expectedSha: string,
     ): ResultAsync<{ run: FactoryRunView; sha: string }, FactoryRunControlError> {
       return runOf(factoryId, runId).andThen((run) => {
         const sha = run.risk?.level === 'high' ? run.risk.headSha : null;
@@ -246,8 +333,21 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             message: 'Only a run waiting for your approval of a high-risk change can be approved.',
           });
         }
+        // The member approves the commit they saw, never the one that replaced it.
+        if (sha !== expectedSha) {
+          return errAsync<{ run: FactoryRunView; sha: string }, FactoryRunControlError>({
+            kind: 'conflict',
+            message: HELD_COMMIT_CHANGED,
+          });
+        }
         return runs
-          .approveMerge(run.id, { sha, userId, at: new Date().toISOString() })
+          .approveMerge(run.id, {
+            sha,
+            userId,
+            at: new Date().toISOString(),
+            // What the member accepted: an adjustment may add no risk key to these.
+            riskKeys: run.risk?.keys,
+          })
           .mapErr(storage)
           .andThen((written) =>
             written

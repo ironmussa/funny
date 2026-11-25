@@ -78,7 +78,7 @@ export interface ServerActivityDeps {
 function messageOf(error: unknown): string {
   if (typeof error === 'string') return error;
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message: unknown }).message);
+    return String(error.message);
   }
   return String(error);
 }
@@ -113,7 +113,7 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
 
   /** The validated input, or null (logged) when it does not match the kind. */
   function inputOf(spec: ServerActivitySpec): Record<string, unknown> | null {
-    const input = parseActivityInput(spec.kind, spec.input);
+    const input = parseActivityInput(spec);
     if (!input) {
       log.warn('Server activity input does not match its kind', {
         namespace: 'activities',
@@ -144,7 +144,7 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
     if (final) {
       row.status = final.ok ? 'succeeded' : 'failed';
       row.error = final.ok ? null : clip(final.error, ACTIVITY_ERROR_MAX) || 'Failed';
-      row.effects = parseActivityEffects(final.effects ?? []);
+      row.effects = parseActivityEffects({ effects: final.effects ?? [] });
       row.resultRef = final.ok ? (final.resultRef ?? null) : null;
     }
     const { inserted, capped } = await repo().insert(row);

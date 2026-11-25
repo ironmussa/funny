@@ -219,12 +219,18 @@ function newSandboxThreadRow(
   };
 }
 
+/** Field → value of a message body sent to the sandbox runner. */
+interface SandboxMessageBody {
+  [field: string]: unknown;
+}
+
 /** The first message: the prompt, the agent settings and the forwarded extras. */
-function firstMessageBody(input: SandboxThreadInput, payload: unknown): Record<string, unknown> {
-  const body: Record<string, unknown> = { content: input.prompt };
+function firstMessageBody(input: SandboxThreadInput, payload: unknown): SandboxMessageBody {
+  const body: SandboxMessageBody = { content: input.prompt };
   for (const key of ['provider', 'model', 'permissionMode', 'effort'] as const) {
     if (input[key]) body[key] = input[key];
   }
+  // SAFETY: create() calls this only after createSandboxThreadSchema (a z.object) accepted payload, so it is an object.
   const extras = payload as Record<string, unknown>;
   for (const key of FORWARDED_MESSAGE_FIELDS) {
     if (extras[key] !== undefined) body[key] = extras[key];
@@ -250,7 +256,7 @@ function retryMessageBody(
   input: z.infer<typeof retrySandboxThreadSchema>,
   initialPrompt: string | null,
   initialImages: unknown[] | null,
-): Record<string, unknown> {
+): SandboxMessageBody {
   if (!initialPrompt) return { ...input };
   return {
     ...input,

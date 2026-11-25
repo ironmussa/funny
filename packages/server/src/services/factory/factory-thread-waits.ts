@@ -190,6 +190,7 @@ export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
     (after === undefined || (thread.completedAt ?? null) !== after.completedAt);
 
   async function finished(threadId: string, thread: ThreadRecord): Promise<ThreadOutcome> {
+    // SAFETY: look() calls this only once finishedAfter held, so status is one of TERMINAL's four.
     const status = thread.status as ThreadOutcome['status'];
     return status === 'completed' ? { status, output: await readOutput(threadId) } : { status };
   }

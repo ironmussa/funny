@@ -11,6 +11,10 @@ export interface BrowserSessionRealtimeEvent {
   data: Record<string, unknown>;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function controllerName(value: BrowserSessionController): 'agent' | 'user' | undefined {
   if (value === BrowserSessionController.AGENT) return 'agent';
   if (value === BrowserSessionController.USER) return 'user';
@@ -135,7 +139,7 @@ function resultEvent(
       requestId,
       ok: result.ok === true,
       value: result.value,
-      error: typeof result.error === 'string' ? result.error : undefined,
+      error: isString(result.error) ? result.error : undefined,
     },
   };
 }

@@ -86,6 +86,7 @@ interface TunnelState {
 
 function parseUnsigned(value: unknown): bigint | null {
   try {
+    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n ? parsed : null;
   } catch {
@@ -93,7 +94,13 @@ function parseUnsigned(value: unknown): bigint | null {
   }
 }
 
-function timestamp(epochMs: number): { seconds: string; nanos: number } {
+/** A protobuf `Timestamp` as JSON: whole seconds (int64 as a string) and nanoseconds. */
+interface WireTimestamp {
+  seconds: string;
+  nanos: number;
+}
+
+function timestamp(epochMs: number): WireTimestamp {
   return {
     seconds: String(Math.floor(epochMs / 1_000)),
     nanos: (epochMs % 1_000) * 1_000_000,

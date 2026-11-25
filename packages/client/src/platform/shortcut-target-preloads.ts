@@ -21,6 +21,10 @@ const shortcutTargetPreloads: Array<() => LazyModule<unknown>> = [
 
 let scheduled = false;
 
+function isFunction(value: unknown): value is (...args: never[]) => void {
+  return typeof value === 'function';
+}
+
 /**
  * Warm the lazy targets behind Ctrl+K, Ctrl+P, Ctrl+Shift+L, and Ctrl+Shift+F
  * without competing with the initial page load. Imports run sequentially so
@@ -44,7 +48,7 @@ export function scheduleShortcutTargetPreloads() {
       })();
     };
 
-    if (typeof requestIdleCallback === 'function') {
+    if (isFunction(globalThis.requestIdleCallback)) {
       requestIdleCallback(preload, { timeout: 2_000 });
     } else {
       setTimeout(preload, 2_000);

@@ -216,32 +216,36 @@ function PermissionNotices({ status }: { status: GithubAppStatus }) {
     <>
       {missing.length > 0 && (
         <Alert data-testid="github-app-missing-permissions">
-          <AlertDescription className="space-y-1 text-xs">
-            <p>
-              The App lacks {missing.join(', ')}. The issue factory needs
-              <code className="mx-1">checks: write</code>to publish its regression proof check, and
-              never enables auto-merge without it.
-            </p>
-            <p>
-              Add it under Permissions in the App’s settings, then accept the new permission on each
-              installation.
-              {settingsLink}
-            </p>
+          <AlertDescription>
+            <div className="space-y-1 text-xs">
+              <p>
+                The App lacks {missing.join(', ')}. The issue factory needs
+                <code className="mx-1">checks: write</code>to publish its regression proof check,
+                and never enables auto-merge without it.
+              </p>
+              <p>
+                Add it under Permissions in the App’s settings, then accept the new permission on
+                each installation.
+                {settingsLink}
+              </p>
+            </div>
           </AlertDescription>
         </Alert>
       )}
       {missing.length === 0 && pending.length > 0 && (
         <Alert data-testid="github-app-pending-installations">
-          <AlertDescription className="space-y-1 text-xs">
-            <p>
-              These installations have not accepted the App’s current permissions:{' '}
-              {pending.join(', ')}. Until their owner accepts them, the issue factory cannot publish
-              its regression proof check there and never enables auto-merge.
-            </p>
-            <p>
-              The owner accepts them from the installation’s page on GitHub (Settings &gt;
-              Applications &gt; Installed GitHub Apps).
-            </p>
+          <AlertDescription>
+            <div className="space-y-1 text-xs">
+              <p>
+                These installations have not accepted the App’s current permissions:{' '}
+                {pending.join(', ')}. Until their owner accepts them, the issue factory cannot
+                publish its regression proof check there and never enables auto-merge.
+              </p>
+              <p>
+                The owner accepts them from the installation’s page on GitHub (Settings &gt;
+                Applications &gt; Installed GitHub Apps).
+              </p>
+            </div>
           </AlertDescription>
         </Alert>
       )}
@@ -387,7 +391,7 @@ function TargetCombobox({
           <ChevronsUpDown className="icon-xs ml-1 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
+      <PopoverContent padding="none" className="w-64" align="start">
         <Command>
           <CommandInput
             placeholder="Search organizations…"

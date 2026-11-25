@@ -13,7 +13,7 @@ import {
   validateProjectPathLexical,
   validateProjectRootContainment,
 } from '@funny/core/git/path-validation';
-import type { Project, FollowUpMode, ProjectUpdateFields } from '@funny/shared';
+import type { Project, ProjectUpdateFields } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
@@ -78,22 +78,32 @@ const ON_FLAGS = ['closed', 'fastMode'] as const;
 
 type FlagValue = number | boolean | null | undefined;
 
+/** Field name → value, while a row is reshaped into a `Project`. */
+interface ProjectFields {
+  [field: string]: unknown;
+}
+
+/** Column name → the value a project update writes to it. */
+interface ProjectColumnUpdates {
+  [column: string]: unknown;
+}
+
 function toProject(row: ProjectRow): Project {
-  const source = row as ProjectRow & Record<string, unknown>;
-  const project: Record<string, unknown> = { ...source };
+  const source = row;
+  const project: ProjectFields = { ...source };
   for (const field of [...OPTIONAL_FIELDS, ...ON_FLAGS, 'urls', 'followUpMode', 'redirectChecks']) {
     delete project[field];
   }
   for (const field of OPTIONAL_FIELDS) if (source[field] != null) project[field] = source[field];
   for (const flag of ON_FLAGS) if (source[flag]) project[flag] = true;
   // On by default: only an explicit off is carried.
-  const redirectChecks = source.redirectChecks as FlagValue;
+  const redirectChecks: FlagValue = source.redirectChecks;
   if (redirectChecks != null && !redirectChecks) project.redirectChecks = false;
   if (source.followUpMode && source.followUpMode !== DEFAULT_FOLLOW_UP_MODE) {
-    project.followUpMode = source.followUpMode as FollowUpMode;
+    project.followUpMode = source.followUpMode;
   }
   if (source.urls != null) {
-    const urls = parseStoredJson(z.array(z.string()), source.urls as string, 'project urls');
+    const urls = parseStoredJson(z.array(z.string()), source.urls, 'project urls');
     if (urls.ok) project.urls = urls.value;
   }
   // SAFETY: `project` is built from a DB row with optional fields
@@ -162,6 +172,7 @@ export async function listMemberProjects(
   return rows.map((r: any) => ({
     ...toProject(r.project),
     localPath: r.localPath ?? null,
+    // SAFETY: the select above projects project_members.role, a NOT NULL text column.
     memberRole: (r.role as string) ?? 'member',
   }));
 }
@@ -348,8 +359,8 @@ const UPDATABLE_FLAGS = [...ON_FLAGS, 'redirectChecks'] as const;
 function projectUpdateData(
   fields: ProjectUpdateFields,
   resolvedPath: string | undefined,
-): Record<string, unknown> {
-  const updateData: Record<string, unknown> = {};
+): ProjectColumnUpdates {
+  const updateData: ProjectColumnUpdates = {};
   for (const field of UPDATABLE_FIELDS) {
     if (fields[field] !== undefined) updateData[field] = fields[field];
   }
@@ -413,6 +424,8 @@ export async function updateProject(
   const updateData = projectUpdateData(fields, resolvedPath);
 
   await dbRun(db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)));
+  // SAFETY: project is a schema.projects row and updateData holds only its column keys in
+  // stored form (flags as 0/1, urls as JSON text), so the merge is a ProjectRow.
   return ok(toProject({ ...project, ...updateData } as ProjectRow));
 }
 
@@ -463,7 +476,7 @@ export async function getMemberLocalPath(
   projectId: string,
   userId: string,
 ): Promise<string | null> {
-  const row = await dbGet(
+  const row = await dbGet<{ localPath: string | null }>(
     db
       .select({ localPath: schema.projectMembers.localPath })
       .from(schema.projectMembers)
@@ -474,7 +487,7 @@ export async function getMemberLocalPath(
         ),
       ),
   );
-  return (row as { localPath: string | null } | undefined)?.localPath ?? null;
+  return row?.localPath ?? null;
 }
 
 export async function resolveProjectPath(

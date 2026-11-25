@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { normalize } from '@/components/ui/highlight-text';
 import type { GitStatusMaps } from '@/data/git-status/keys';
 import { statusBranchKeyForThread } from '@/data/git-status/keys';
-import { isScratch } from '@/lib/thread-variant';
+import { isFactoryThread, isScratch } from '@/lib/thread-variant';
 
 interface ThreadFilterInput {
   allThreads: Thread[];
@@ -14,6 +14,7 @@ interface ThreadFilterInput {
   gitFilter: Set<string>;
   modeFilter: Set<string>;
   typeFilter: Set<string>;
+  originFilter: Set<string>;
   statusByBranch: GitStatusMaps['statusByBranch'];
   threadToBranchKey: GitStatusMaps['threadToBranchKey'];
   projectFilter: string | null;
@@ -32,6 +33,7 @@ export function filterAndSortThreads({
   gitFilter,
   modeFilter,
   typeFilter,
+  originFilter,
   statusByBranch,
   threadToBranchKey,
   projectFilter,
@@ -84,6 +86,11 @@ export function filterAndSortThreads({
     result = result.filter((t) => typeFilter.has(isScratch(t) ? 'scratch' : 'normal'));
   }
 
+  // Origin filter (started by the issue factory vs by a person)
+  if (originFilter.size > 0) {
+    result = result.filter((t) => originFilter.has(threadOrigin(t)));
+  }
+
   // Sort by selected field and direction
   result = result.toSorted((a, b) => {
     const dateA = sortField === 'updated' ? (a.completedAt ?? a.createdAt) : a.createdAt;
@@ -110,6 +117,13 @@ export function useThreadFilterCounts(
     return counts;
   }, [allThreads]);
 
+  // Counts for the origin filter (factory vs user)
+  const originCounts = useMemo(() => {
+    const counts = { factory: 0, user: 0 };
+    for (const t of allThreads) counts[threadOrigin(t)]++;
+    return counts;
+  }, [allThreads]);
+
   // Compute counts for status filters
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -131,5 +145,10 @@ export function useThreadFilterCounts(
     return counts;
   }, [allThreads, statusByBranch, threadToBranchKey]);
 
-  return { typeCounts, statusCounts, gitCounts };
+  return { typeCounts, originCounts, statusCounts, gitCounts };
+}
+
+/** Who started a thread, as the origin filter names it. */
+function threadOrigin(thread: Thread): 'factory' | 'user' {
+  return isFactoryThread(thread) ? 'factory' : 'user';
 }

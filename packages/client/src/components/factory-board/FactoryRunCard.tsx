@@ -9,6 +9,7 @@ import type { GitStatusInfo } from '@funny/shared';
 import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
 import {
   Check,
+  Folder,
   GitPullRequestClosed,
   MoreVertical,
   RotateCcw,
@@ -53,11 +54,23 @@ import { FactoryBoardChip } from './FactoryBoardChip';
 import { FactoryRunDependencyNote } from './FactoryRunDependencyNote';
 import { FactoryRunGateChips } from './FactoryRunGateChips';
 import { FactoryRunStatus, type FactoryRunSelectionProps } from './FactoryRunStatus';
+import { factoryRunCardThreadLinks, FactoryRunThreadMenuItems } from './FactoryRunThreadLinks';
 import { type FactoryRunDependencyLookup, NO_FACTORY_RUN_DEPENDENCIES } from './run-dependencies';
 import { useFactoryRunPrState } from './run-pr-state';
 import { factoryBoardStateChip } from './run-state-chip';
 import { timeInCurrentStep } from './step-timings';
 import { FactoryRunTimeInStep } from './StepTimeBadges';
+
+/** The card's project, with the folder icon funny shows a project with. */
+function FactoryRunProject({ name }: { name: string | undefined }) {
+  if (!name) return null;
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <Folder className="icon-xs shrink-0" />
+      <span className="truncate">{name}</span>
+    </span>
+  );
+}
 
 /** The thread a card opens: the implementing one, else the run's latest. */
 export function factoryRunCardThread(
@@ -337,7 +350,7 @@ function QueuedFactoryRunCard({
       }
       footer={
         <>
-          {projectName && <span className="truncate">{projectName}</span>}
+          <FactoryRunProject name={projectName} />
           {/* A run with no thread has no git status to carry its pull request. */}
           {prNumber !== null && (
             <PRBadge
@@ -365,9 +378,21 @@ function QueuedFactoryRunCard({
   );
 }
 
+/** The run's threads, at the bottom of the card's menu under its actions; null with none. */
+function runThreadMenuItems(run: Props['run']) {
+  return factoryRunCardThreadLinks(run).length > 0 ? <FactoryRunThreadMenuItems run={run} /> : null;
+}
+
+/** The time in the step, which takes the footer's time slot in place of the card's age. */
+function runStepTime(run: Props['run'], now: Props['now']) {
+  return timeInCurrentStep(run) && run.currentStep ? (
+    <FactoryRunTimeInStep run={run} now={now} />
+  ) : undefined;
+}
+
 /**
- * A run with a thread is the thread's own kanban card (title, footer with the
- * powerline, diff, PR and time, menu) with the run's chips under the title; a run
+ * A run with a thread is the thread's own kanban card (title, footer with
+ * links to the run's threads, PR and time, menu) with the run's chips under the title; a run
  * with no thread yet (still queued) is the same card frame with the issue as
  * its title.
  */
@@ -394,11 +419,8 @@ export const FactoryRunCard = memo(function FactoryRunCard({
     prState,
   });
   const menuItems = factoryRunMenuItems(run, actions);
-  // The time in the step takes the footer's time slot, in place of the card's age.
-  const stepTime =
-    timeInCurrentStep(run) && run.currentStep ? (
-      <FactoryRunTimeInStep run={run} now={now} />
-    ) : undefined;
+  const threadItems = runThreadMenuItems(run);
+  const stepTime = runStepTime(run, now);
   const status = (
     <FactoryRunStatus
       run={run}
@@ -448,9 +470,13 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       draggable={false}
       testId={testId}
       menuItems={menuItems}
+      menuEndItems={threadItems}
       time={stepTime}
       title={factoryRunTitle(t, run, thread.title)}
       status={status}
+      // No powerline: each of the run's threads has its own worktree and diff,
+      // so the card links the threads (under its chips) instead of one branch.
+      footerLead={<FactoryRunProject name={projectName} />}
     >
       {body}
     </KanbanCard>

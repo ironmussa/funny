@@ -15,6 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 import { factoryRunStateLabel, factoryRunTitle, factoryRunRef } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
@@ -22,7 +23,6 @@ import { cn } from '@/lib/utils';
 
 import { factoryRunCardThread } from '../FactoryRunCard';
 import { FactoryRunDependencyNote } from '../FactoryRunDependencyNote';
-import { FactoryRunProgress } from '../FactoryRunProgress';
 import {
   type FactoryRunDependencyLookup,
   isFactoryRunStuck,
@@ -31,14 +31,8 @@ import {
 } from '../run-dependencies';
 import { factoryRunWaitingText } from '../run-waiting';
 import { RunTimeline } from './RunTimeline';
-import {
-  DetailSection,
-  RunReviews,
-  RunRiskCi,
-  RunThreads,
-  RunTriage,
-  ThreadLink,
-} from './sections';
+import { DetailSection, RunReviews, RunRiskCi, RunThreads, RunTriage } from './sections';
+import { factoryRunThreadLinks } from './thread-links';
 
 function RunHeader({
   run,
@@ -65,12 +59,6 @@ function RunHeader({
         </div>
       </SheetDescription>
       <div className="mr-8 flex flex-wrap items-center gap-1">
-        <ThreadLink
-          projectId={run.projectId}
-          threadId={threadId}
-          label={t('factoryRunDetail.openThread', 'Open thread')}
-          testId="factory-run-detail-open-thread"
-        />
         <FactoryRunControls
           projectId={run.projectId}
           run={run}
@@ -81,21 +69,25 @@ function RunHeader({
   );
 }
 
+/** Which flow the run follows, then its steps: how long each took, and the ones not reached. */
 function RunFlow({ run }: { run: FactoryQueueRun }) {
   const { t } = useTranslation();
-  if (run.flowSteps.length === 0) return null;
+  const hasTimings = (run.stepTimings ?? []).length > 0;
+  if (run.flowSteps.length === 0 && !hasTimings) return null;
   const source =
     run.flowSource === 'repository'
       ? t('factory.flowSource.repository', 'repository')
       : t('factory.flowSource.builtIn', 'built-in');
   return (
     <DetailSection id="flow" title={t('factoryRunDetail.flow', 'Flow')}>
-      <p>
-        {run.flowName ?? t('factory.flowUnknown', 'flow')}
-        {run.flowSource && ` · ${source}`}
-        {run.flowCommit && <span className="font-mono"> · {run.flowCommit.slice(0, 7)}</span>}
-      </p>
-      <FactoryRunProgress run={run} />
+      {run.flowSteps.length > 0 && (
+        <p>
+          {run.flowName ?? t('factory.flowUnknown', 'flow')}
+          {run.flowSource && ` · ${source}`}
+          {run.flowCommit && <span className="font-mono"> · {run.flowCommit.slice(0, 7)}</span>}
+        </p>
+      )}
+      <RunTimeline run={run} />
     </DetailSection>
   );
 }
@@ -152,6 +144,95 @@ function RunOutcome({ run, dependencies, onSelect }: { run: FactoryQueueRun } & 
   );
 }
 
+type RunDetailTab = 'flow' | 'triage' | 'proof' | 'reviews' | 'risk' | 'threads';
+
+/**
+ * The tabs a run has, in pipeline order: one per section with something to
+ * show. Triage, the proof and the reviews judge a change against an issue.
+ */
+function runDetailTabs(run: FactoryQueueRun): RunDetailTab[] {
+  const judged = run.issueNumber !== null;
+  const tabs: [RunDetailTab, boolean][] = [
+    [
+      'flow',
+      run.flowSteps.length > 0 ||
+        (run.stepTimings ?? []).length > 0 ||
+        Object.keys(run.inputs).length > 0,
+    ],
+    ['triage', judged && Boolean(run.triage)],
+    ['proof', judged && Boolean(run.regressionProof)],
+    ['reviews', judged && run.reviews.length > 0],
+    ['risk', Boolean(run.risk || run.mergeApproval) || run.metrics.ciRounds > 0],
+    ['threads', factoryRunThreadLinks(run).length > 0],
+  ];
+  return tabs.flatMap(([tab, shown]) => (shown ? [tab] : []));
+}
+
+function RunDetailTabContent({ run, tab }: { run: FactoryQueueRun; tab: RunDetailTab }) {
+  switch (tab) {
+    case 'flow':
+      return (
+        <>
+          <RunFlow run={run} />
+          <RunInputs run={run} />
+        </>
+      );
+    case 'triage':
+      return <RunTriage run={run} />;
+    case 'proof':
+      return run.regressionProof ? <RegressionProofDetails proof={run.regressionProof} /> : null;
+    case 'reviews':
+      return <RunReviews run={run} />;
+    case 'risk':
+      return <RunRiskCi run={run} />;
+    case 'threads':
+      return <RunThreads run={run} />;
+  }
+}
+
+/** One tab per section; the header and why the run stopped stay above them. */
+function RunDetailTabs({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
+  const tabs = runDetailTabs(run);
+  if (tabs.length === 0) return null;
+  const labels: Record<RunDetailTab, string> = {
+    flow: t('factoryRunDetail.flow', 'Flow'),
+    triage: t('factoryRunDetail.triageTab', 'Triage'),
+    proof: t('factoryRunDetail.proofTab', 'Proof'),
+    reviews: t('factoryRunDetail.reviewsTab', 'Reviews'),
+    risk: t('factoryRunDetail.riskTab', 'Risk · CI'),
+    threads: t('factoryRunDetail.threads', 'Agent threads'),
+  };
+  return (
+    // Keyed by run: another run opens on its first tab.
+    <Tabs key={run.id} defaultValue={tabs[0]} className="flex min-w-0 flex-col gap-3">
+      <TabsList
+        variant="underline"
+        size="sm"
+        className="w-full min-w-0 justify-start overflow-x-auto"
+        data-testid="factory-run-detail-tabs"
+      >
+        {tabs.map((tab) => (
+          <TabsTrigger
+            key={tab}
+            value={tab}
+            variant="underline"
+            size="sm"
+            data-testid={`factory-run-detail-tab-${tab}`}
+          >
+            {labels[tab]}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {tabs.map((tab) => (
+        <TabsContent key={tab} value={tab} className="mt-0">
+          <RunDetailTabContent run={run} tab={tab} />
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
 function FactoryRunDetailBody({
   run,
   projectName,
@@ -165,19 +246,7 @@ function FactoryRunDetailBody({
     <div className="flex flex-col gap-4">
       <RunHeader run={run} projectName={projectName} />
       <RunOutcome run={run} dependencies={dependencies} onSelect={onSelect} />
-      <RunFlow run={run} />
-      <RunInputs run={run} />
-      <RunTimeline run={run} />
-      {/* Triage, the proof and the reviews judge a change against an issue. */}
-      {run.issueNumber !== null && (
-        <>
-          <RunTriage run={run} />
-          {run.regressionProof && <RegressionProofDetails proof={run.regressionProof} />}
-          <RunReviews run={run} />
-        </>
-      )}
-      <RunRiskCi run={run} />
-      <RunThreads run={run} />
+      <RunDetailTabs run={run} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   type FactoryMergeApproval,
   type FactoryReviewVerdict,
   type FactoryTriage,
+  displayRiskReason,
 } from '@funny/shared/contracts/factory';
 import { ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -14,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { LabelBadge } from '@/components/ui/label-badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 import { factoryReviewPassed, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
@@ -283,7 +285,7 @@ export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
         <p data-testid="factory-run-detail-risk">
           {run.risk.level === 'high'
             ? t('factoryRunDetail.riskHigh', 'High risk: {{reasons}}', {
-                reasons: run.risk.reasons.join('; '),
+                reasons: run.risk.reasons.map(displayRiskReason).join('; '),
               })
             : t('factoryRunDetail.riskLow', 'Low risk')}
         </p>
@@ -347,14 +349,20 @@ function ThreadEntry({
     <li className="flex min-w-0 items-center gap-1.5">
       <span className="text-foreground shrink-0">{roles[role]}</span>
       <span className="truncate font-mono">{steps.join(', ')}</span>
-      <span className="ml-auto shrink-0">
-        <ThreadLink
-          projectId={projectId}
-          threadId={threadId}
-          label={thread?.title || t('factoryRunDetail.thread', 'Thread')}
-          testId={`factory-run-detail-thread-${threadId}`}
-        />
-      </span>
+      {/* Every row reads the same; the thread's title is on hover, not in the row. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="ml-auto shrink-0">
+            <ThreadLink
+              projectId={projectId}
+              threadId={threadId}
+              label={t('factoryRunDetail.thread', 'Thread')}
+              testId={`factory-run-detail-thread-${threadId}`}
+            />
+          </span>
+        </TooltipTrigger>
+        {thread?.title && <TooltipContent side="left">{thread.title}</TooltipContent>}
+      </Tooltip>
     </li>
   );
 }

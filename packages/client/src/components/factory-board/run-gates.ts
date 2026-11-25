@@ -6,6 +6,7 @@
  * skipped proof (of any commit: the detail panel says which), and CI rounds
  * that are over (their history is in the detail panel; only running CI shows).
  */
+import { displayRiskReason } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 
 import type { FactoryRun } from '@/lib/api/factory';
@@ -130,7 +131,7 @@ function riskChip(t: TFunction, run: GateRun): FactoryGateChip | null {
     ...(isFactoryRunHeldForRisk(run) && run.failureReason
       ? [factoryRunReasonText(t, run.failureReason)]
       : []),
-    ...(high ? risk.reasons : []),
+    ...(high ? risk.reasons.map(displayRiskReason) : []),
   ];
   if (lines.length > 0) chip.detail = lines.join('\n');
   return chip;

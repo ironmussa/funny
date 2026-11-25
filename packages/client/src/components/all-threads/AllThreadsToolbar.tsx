@@ -50,6 +50,9 @@ interface Props {
   typeFilter: Set<string>;
   onTypeToggle: (value: string) => void;
   typeCounts: Record<string, number>;
+  originFilter: Set<string>;
+  onOriginToggle: (value: string) => void;
+  originCounts: Record<string, number>;
   statusCounts: Record<string, number>;
   gitCounts: Record<string, number>;
   threadStatuses: ThreadStatus[];
@@ -105,6 +108,9 @@ export function AllThreadsToolbar(props: Props) {
     typeFilter,
     onTypeToggle,
     typeCounts,
+    originFilter,
+    onOriginToggle,
+    originCounts,
     statusCounts,
     gitCounts,
     threadStatuses,
@@ -199,6 +205,24 @@ export function AllThreadsToolbar(props: Props) {
         selected={typeFilter}
         onToggle={onTypeToggle}
         counts={typeCounts}
+      />
+
+      <FilterDropdown
+        testId="all-threads-origin-filter"
+        label={t('allThreads.filterOrigin', { defaultValue: 'Origin' })}
+        options={[
+          {
+            value: 'factory',
+            label: t('allThreads.originFactory', { defaultValue: 'Factory' }),
+          },
+          {
+            value: 'user',
+            label: t('allThreads.originUser', { defaultValue: 'User' }),
+          },
+        ]}
+        selected={originFilter}
+        onToggle={onOriginToggle}
+        counts={originCounts}
       />
 
       <div className="bg-border h-4 w-px" />

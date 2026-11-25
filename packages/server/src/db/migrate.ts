@@ -2553,6 +2553,22 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'size_gate_enabled', 'INTEGER');
     },
   },
+  {
+    // `done` is a terminal run state (a run without a pull request that
+    // finished: an issueless flow, a split parent, an older no-change run),
+    // but the one-run-per-issue index still counted it as in flight, so the
+    // issue of a `done` run could never be queued again: the enqueue skipped
+    // it without a word (#449). The index now leaves out every terminal state.
+    name: '134_factory_runs_issue_index_done_terminal',
+    async up() {
+      await ctx().exec(sql`DROP INDEX IF EXISTS factory_runs_one_active_per_issue`);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+        ON factory_runs (factory_id, issue_number)
+        WHERE issue_number > 0 AND state NOT IN ('merged', 'no_change', 'done', 'failed', 'stopped')
+      `);
+    },
+  },
 ];
 
 /**

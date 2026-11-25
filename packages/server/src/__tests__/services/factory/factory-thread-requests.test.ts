@@ -199,6 +199,28 @@ describe('factory thread requests', () => {
       expect((await row('t-run')).worktreePath).toBe('/srv/wt/t-run');
     });
 
+    // #449: a run ended as "no change" while its agent, still running, held
+    // 10 unpushed commits. A running thread is unchecked, and unchecked is not clean.
+    test('keepUnsaved reports a running thread as kept, without asking its runner', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t-run', { status: 'running' });
+
+      const kept = await cleanupFactoryWorktrees(ports(), 'alice', ['t-run'], undefined, {
+        keepUnsaved: true,
+      });
+
+      expect(requests.requests).toEqual([]);
+      expect(kept).toEqual([
+        {
+          threadId: 't-run',
+          worktreePath: '/srv/wt/t-run',
+          dirtyFileCount: 0,
+          unpushedCommitCount: 0,
+        },
+      ]);
+      expect((await row('t-run')).worktreePath).toBe('/srv/wt/t-run');
+    });
+
     // Issue #229: a run that ended without a pull request had 85 uncommitted
     // files in its worktree. The runner decides, and what it keeps stays recorded.
     test('keepUnsaved asks the runner to remove only an unchanged worktree', async () => {
@@ -249,6 +271,29 @@ describe('factory thread requests', () => {
       });
 
       expect(kept).toEqual([]);
+      expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
+    });
+
+    test('a triage or review thread is removed with its branch, recorded as a finished review', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t1');
+      requests.response = {
+        status: 200,
+        headers: {},
+        body: JSON.stringify({ removed: true }),
+        bodyEncoding: 'utf8',
+      };
+
+      await cleanupFactoryWorktrees(ports(), 'alice', ['t1'], undefined, {
+        keepUnsaved: true,
+        reason: 'review-finished',
+      });
+
+      expect(JSON.parse(String(requests.requests[0]!.request.body))).toMatchObject({
+        branchName: 'factory/issue-7-t1',
+        deleteBranch: true,
+        reason: 'review-finished',
+      });
       expect(await row('t1')).toMatchObject({ worktreePath: null, branch: null });
     });
 

@@ -1,5 +1,5 @@
 import type { GitSyncState, ThreadStatus } from '@funny/shared';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -76,13 +76,17 @@ export function AllThreadsView() {
     setModeFilter,
     typeFilter,
     setTypeFilter,
+    handleTypeToggle,
+    originFilter,
+    setOriginFilter,
+    handleOriginToggle,
     showArchived,
     setShowArchived,
     sortField,
     setSortField,
     sortDir,
     setSortDir,
-  } = useAllThreadsFilters(searchParams);
+  } = useAllThreadsFilters(searchParams, setSearchParams, viewMode);
 
   const buildSearchParams = (overrides?: SearchParamOverrides) =>
     buildAllThreadsSearchParams(searchParams, { projectFilter, search, caseSensitive }, overrides);
@@ -95,22 +99,6 @@ export function AllThreadsView() {
       replace: true,
     });
   };
-
-  const handleTypeToggle = useCallback(
-    (value: string) => {
-      setTypeFilter((prev) => {
-        const next = new Set(prev);
-        if (next.has(value)) next.delete(value);
-        else next.add(value);
-        const params = new URLSearchParams(searchParams);
-        if (next.size === 1 && next.has('scratch')) params.set('scratch', '1');
-        else params.delete('scratch');
-        setSearchParams(params, { replace: true });
-        return next;
-      });
-    },
-    [searchParams, setSearchParams, setTypeFilter],
-  );
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchKeyDownRef = useRef<((e: React.KeyboardEvent) => void) | null>(null);
@@ -181,6 +169,7 @@ export function AllThreadsView() {
         gitFilter,
         modeFilter,
         typeFilter,
+        originFilter,
         statusByBranch,
         threadToBranchKey,
         projectFilter,
@@ -197,6 +186,7 @@ export function AllThreadsView() {
       gitFilter,
       modeFilter,
       typeFilter,
+      originFilter,
       statusByBranch,
       threadToBranchKey,
       projectFilter,
@@ -213,13 +203,14 @@ export function AllThreadsView() {
     setGitFilter(new Set());
     setModeFilter(new Set());
     setTypeFilter(new Set());
+    setOriginFilter(new Set());
     setShowArchived(false);
     if (projectFilter) {
       setProjectFilter(null);
     }
-    const next = buildSearchParams({ project: null, search: '', cs: false });
-    delete next.scratch;
-    setSearchParams(next, { replace: true });
+    setSearchParams(buildSearchParams({ project: null, search: '', cs: false }), {
+      replace: true,
+    });
   };
 
   const handleSearchChange = (value: string) => {
@@ -241,10 +232,11 @@ export function AllThreadsView() {
     gitFilter.size > 0 ||
     modeFilter.size > 0 ||
     typeFilter.size > 0 ||
+    originFilter.size > 0 ||
     showArchived ||
     !!projectFilter;
 
-  const { typeCounts, statusCounts, gitCounts } = useThreadFilterCounts(
+  const { typeCounts, originCounts, statusCounts, gitCounts } = useThreadFilterCounts(
     allThreads,
     statusByBranch,
     threadToBranchKey,
@@ -293,6 +285,9 @@ export function AllThreadsView() {
         typeFilter={typeFilter}
         onTypeToggle={handleTypeToggle}
         typeCounts={typeCounts}
+        originFilter={originFilter}
+        onOriginToggle={handleOriginToggle}
+        originCounts={originCounts}
         statusCounts={statusCounts}
         gitCounts={gitCounts}
         threadStatuses={THREAD_STATUSES}

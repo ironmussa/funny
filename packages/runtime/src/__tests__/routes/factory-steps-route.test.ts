@@ -92,6 +92,24 @@ describe('factory steps route', () => {
     expect(mocks.startFactoryStep).not.toHaveBeenCalled();
   });
 
+  // Found on run #479: a retry had removed the worktree, and `integrate` ran
+  // in the project's own checkout, on the member's branch.
+  test('a worktree thread with no worktree recorded never runs in the project directory: 409', async () => {
+    mocks.requireThread.mockResolvedValue(
+      ok({ id: 't-1', projectId: 'p-1', mode: 'worktree', worktreePath: null }),
+    );
+    expect((await start()).status).toBe(409);
+    expect(mocks.startFactoryStep).not.toHaveBeenCalled();
+  });
+
+  test("a sandbox thread, which records no worktree, runs in its sandbox's checkout", async () => {
+    mocks.requireThread.mockResolvedValue(
+      ok({ id: 't-1', projectId: 'p-1', mode: 'worktree', worktreePath: null, runtime: 'sandbox' }),
+    );
+    expect((await start()).status).toBe(200);
+    expect(mocks.startFactoryStep.mock.calls[0]?.[1]).toBe(PROJECT_PATH);
+  });
+
   test('refuses a scratch thread, a thread without a project and an invalid body', async () => {
     mocks.requireThread.mockResolvedValueOnce(
       ok({ id: 't-1', projectId: '', mode: 'local', isScratch: true }),

@@ -18,7 +18,11 @@
  * background job or scheduled a watcher ends its turn and is woken later. A
  * `completed` thread with such a wake outstanding still counts as running
  * (`awaitsWake`), so the flow does not move on (and remove the checkout) under
- * an agent that is about to continue.
+ * an agent that is about to continue. So does one with a message it has not
+ * answered yet (`awaitsInput`): one still in the thread's queue, or a user
+ * message newer than its last finish (the queue just handed it over). A
+ * follow-up sent while the agent was running waits in that queue, and the end
+ * of the running turn is not the end of the follow-up (#449).
  *
  * The other way round, a finished agent is not always a finished turn: the
  * Claude CLI holds the turn open while a shell job it put in the background
@@ -31,11 +35,19 @@
 
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { and, desc, eq, gte, inArray } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { jobs, messages, threadEvents, threads, toolCalls, watchers } from '../../db/schema.js';
+import {
+  jobs,
+  messageQueue,
+  messages,
+  threadEvents,
+  threads,
+  toolCalls,
+  watchers,
+} from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 
@@ -111,6 +123,22 @@ function awaitsWake(
   });
 }
 
+/**
+ * Whether a finished thread has a message it has not answered: still queued,
+ * or written after its last finish. Held at most `graceMs` after that finish:
+ * a queued message starts the agent within seconds once the turn ends, so one
+ * that never does (a queue that failed to drain) does not hold the run forever.
+ */
+function awaitsInput(
+  thread: Pick<ThreadRecord, 'completedAt'>,
+  pendingInput: boolean,
+  now: number,
+  graceMs = WAKE_GRACE_MS,
+): boolean {
+  if (!pendingInput || !thread.completedAt) return false;
+  return now - Date.parse(thread.completedAt) < graceMs;
+}
+
 /** The thread's newest message, for the quiet-answer check. */
 export interface ThreadActivity {
   messageId: string;
@@ -133,6 +161,8 @@ export interface ThreadWaitsDeps {
   readThread?: (threadId: string) => Promise<ThreadRecord | null>;
   /** The thread's jobs and watchers that wake its agent; none by default in tests. */
   readWakeSources?: (threadId: string) => Promise<WakeSource[]>;
+  /** Whether the thread has a message its agent has not answered since `completedAt`. */
+  readPendingInput?: (threadId: string, completedAt: string) => Promise<boolean>;
   readOutput?: (threadId: string) => Promise<string>;
   /** The thread's newest message; read only when `quietAnswerMs` is set. */
   readActivity?: (threadId: string) => Promise<ThreadActivity | null>;
@@ -195,6 +225,27 @@ async function dbReadWakeSources(threadId: string): Promise<WakeSource[]> {
     ...jobRows.map((row) => ({ live: row.status === 'running', updatedAt: row.updatedAt })),
     ...watcherRows.map((row) => ({ live: row.status === 'pending', updatedAt: row.updatedAt })),
   ];
+}
+
+async function dbReadPendingInput(threadId: string, completedAt: string): Promise<boolean> {
+  const [queued] = await db
+    .select({ id: messageQueue.id })
+    .from(messageQueue)
+    .where(eq(messageQueue.threadId, threadId))
+    .limit(1);
+  if (queued) return true;
+  const [newer] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.threadId, threadId),
+        eq(messages.role, 'user'),
+        gt(messages.timestamp, completedAt),
+      ),
+    )
+    .limit(1);
+  return !!newer;
 }
 
 async function dbReadActivity(threadId: string): Promise<ThreadActivity | null> {
@@ -274,6 +325,7 @@ export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
   const readThread = deps.readThread ?? dbReadThread;
   const readOutput = deps.readOutput ?? dbReadOutput;
   const readWakeSources = deps.readWakeSources ?? dbReadWakeSources;
+  const readPendingInput = deps.readPendingInput ?? dbReadPendingInput;
   const readActivity = deps.readActivity ?? dbReadActivity;
   const quietAnswerMs = deps.quietAnswerMs;
   const sleep = deps.sleep ?? interruptibleSleep;
@@ -302,10 +354,12 @@ export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
     };
   }
 
-  /** A completed turn whose agent a background job or a watcher will wake. */
+  /** A completed turn whose agent a background job, a watcher or an unanswered message will wake. */
   async function wakeDue(threadId: string, thread: ThreadRecord): Promise<boolean> {
     if (thread.status !== 'completed') return false;
-    return awaitsWake(thread, await readWakeSources(threadId), now());
+    if (awaitsWake(thread, await readWakeSources(threadId), now())) return true;
+    if (!thread.completedAt) return false;
+    return awaitsInput(thread, await readPendingInput(threadId, thread.completedAt), now());
   }
 
   /**

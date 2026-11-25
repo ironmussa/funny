@@ -1,5 +1,5 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { Bot, Globe, NotebookPen } from 'lucide-react';
+import { Bot, Factory, Globe, NotebookPen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,7 +13,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAgentTemplate } from '@/data/templates/hooks';
 import { gitSyncStateConfig } from '@/lib/thread-utils';
-import { canShowPowerline, isScratch } from '@/lib/thread-variant';
+import { canShowPowerline, isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useThreadHasLiveBrowser } from '@/stores/browser-live-threads-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
@@ -30,6 +30,25 @@ function CreatedByIcon({ createdBy }: { createdBy?: string | null }) {
         <Bot className="icon-xs text-muted-foreground shrink-0" />
       </TooltipTrigger>
       <TooltipContent side="top">{t('thread.createdBy', { creator: createdBy })}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** The issue factory started this thread for one step of a run. */
+function FactoryThreadIcon({ thread }: { thread: Thread }) {
+  const { t } = useTranslation();
+  if (!isFactoryThread(thread)) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Factory
+          data-testid={`thread-item-factory-icon-${thread.id}`}
+          className="icon-xs text-muted-foreground shrink-0"
+        />
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {t('thread.factoryTooltip', { defaultValue: 'Started by the issue factory' })}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -125,6 +144,8 @@ export function ThreadItemTitleRow({
       {gitStatus && <GitStateIcons threadId={thread.id} gitStatus={gitStatus} />}
       {/* External creator icon */}
       <CreatedByIcon createdBy={thread.createdBy} />
+      {/* Issue factory thread */}
+      <FactoryThreadIcon thread={thread} />
       {/* Remote / sandbox runtime badge */}
       <RuntimeBadge thread={thread} />
       {/* Agent template badge */}

@@ -410,6 +410,87 @@ describe('integrate', () => {
     expect(git(origin, 'rev-parse', 'feature')).toBe(updated);
   });
 
+  /** `work` pushes `feature`; another clone rewrites that commit and force-pushes. The new head. */
+  function rewrittenOnOrigin(work: string): string {
+    write(work, 'b.txt', 'mine\n');
+    commit(work, 'feature work');
+    git(work, 'push', '-q', 'origin', 'feature');
+    const other = join(root, 'other');
+    git(root, 'clone', '-q', '-b', 'feature', join(root, 'origin.git'), other);
+    write(other, 'b.txt', 'mine, rewritten\n');
+    git(other, 'add', '-A');
+    git(
+      other,
+      '-c',
+      'user.name=Bot',
+      '-c',
+      'user.email=b@b',
+      'commit',
+      '-q',
+      '--amend',
+      '-m',
+      'feature work, rewritten',
+    );
+    git(other, 'push', '-q', '--force', 'origin', 'feature');
+    return git(other, 'rev-parse', 'HEAD');
+  }
+
+  // Found on issue #479: the branch was rebased and force-pushed, the checkout
+  // kept the history origin dropped, and integrate refused until someone reset it.
+  test('a branch rewritten on origin is followed when the checkout holds only what origin had', async () => {
+    const { work, origin } = repos();
+    const rewritten = rewrittenOnOrigin(work);
+
+    const result = await run(work, request());
+    expect(result).toMatchObject({
+      outcome: 'up-to-date',
+      headBefore: rewritten,
+      headAfter: rewritten,
+    });
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(rewritten);
+    expect(git(work, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('feature');
+    expect(git(origin, 'rev-parse', 'feature')).toBe(rewritten);
+  });
+
+  test('a rewritten branch is followed when another checkout already fetched the rewrite', async () => {
+    const { work } = repos();
+    const rewritten = rewrittenOnOrigin(work);
+    git(work, 'fetch', '-q', 'origin');
+
+    const result = await run(work, request());
+    expect(result).toMatchObject({ outcome: 'up-to-date', headBefore: rewritten });
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(rewritten);
+  });
+
+  test('a rewritten branch is refused while the checkout has a commit origin never had', async () => {
+    const { work, origin } = repos();
+    const rewritten = rewrittenOnOrigin(work);
+    write(work, 'e.txt', 'local only\n');
+    commit(work, 'local work');
+    const local = git(work, 'rev-parse', 'HEAD');
+
+    const result = await run(work, request());
+    expect(result).toMatchObject({ outcome: 'failed' });
+    if (result.kind !== 'integrate') return;
+    expect(result.message).toContain('diverged');
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(local);
+    expect(git(origin, 'rev-parse', 'feature')).toBe(rewritten);
+  });
+
+  test('a rewritten branch is refused while the checkout has uncommitted changes', async () => {
+    const { work } = repos();
+    rewrittenOnOrigin(work);
+    const local = git(work, 'rev-parse', 'HEAD');
+    write(work, 'b.txt', 'mine, not committed\n');
+
+    const result = await run(work, request());
+    expect(result).toMatchObject({ outcome: 'failed' });
+    if (result.kind !== 'integrate') return;
+    expect(result.message).toContain('uncommitted');
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(local);
+    expect(readFileSync(join(work, 'b.txt'), 'utf8')).toBe('mine, not committed\n');
+  });
+
   test('a failing integration check leaves the branch as it was and pushes nothing', async () => {
     const { seed, work } = repos();
     write(work, 'b.txt', 'mine\n');

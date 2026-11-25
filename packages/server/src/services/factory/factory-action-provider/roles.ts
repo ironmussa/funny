@@ -60,6 +60,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
     followUp: askAgain,
     worktreeBase,
+    releaseWorkspace: deps.releaseRoleWorkspace,
     comment: async (body) => {
       const posted = await deps.github.commentOnIssue(reader, roleScope.issueNumber, body);
       return posted.isOk() ? ok(undefined) : err(posted.error.message);
@@ -101,6 +102,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     contract: () => contractOf({ triage: triager.current() }),
     abandon: deps.abandon,
     worktreeBase,
+    releaseWorkspace: deps.releaseRoleWorkspace,
     otherPullRequests: deps.otherPullRequests,
     acquireSlot: deps.reviewSlot,
     publish: publishVerdict,

@@ -1,5 +1,5 @@
 import type { Project, Thread } from '@funny/shared';
-import { ChevronRight, FolderPlus } from 'lucide-react';
+import { ChevronRight, Factory, FolderPlus } from 'lucide-react';
 import { type RefObject, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,9 +10,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useExternalClaudeSessionsSync } from '@/hooks/use-external-claude-sessions';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { showsInSidebar } from '@/lib/thread-variant';
+import { isFactoryThread, showsInSidebar } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { useSidebarFilterStore } from '@/stores/sidebar-filter-store';
 
 import { ProjectItem } from './ProjectItem';
 
@@ -44,6 +45,34 @@ interface Props extends ProjectItemHandlers {
   scrollRef: RefObject<HTMLDivElement | null>;
 }
 
+/** The header's toggle that hides the threads the issue factory started from the sidebar. */
+function FactoryThreadsToggle() {
+  const { t } = useTranslation();
+  const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
+  const toggleHideFactoryThreads = useSidebarFilterStore((s) => s.toggleHideFactoryThreads);
+  const label = hideFactoryThreads
+    ? t('sidebar.showFactoryThreads', 'Show factory threads')
+    : t('sidebar.hideFactoryThreads', 'Hide factory threads');
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted"
+          data-testid="sidebar-toggle-factory-threads"
+          size="icon"
+          aria-pressed={hideFactoryThreads}
+          aria-label={label}
+          className={cn('size-5', hideFactoryThreads && 'text-primary bg-primary/10')}
+          onClick={toggleHideFactoryThreads}
+        >
+          <Factory className="icon-sm" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * Projects header (with "add project" button) + scrollable projects list +
  * closed-project groups. Extracted from Sidebar.tsx so it doesn't need to import
@@ -65,6 +94,7 @@ export function SidebarProjectsSection({
   // project — mounted once here, not per ProjectItem.
   useExternalClaudeSessionsSync();
   const [closedExpanded, setClosedExpanded] = useState(false);
+  const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
 
   const { onCloseProject, onReopenProject, ...sharedHandlers } = handlers;
 
@@ -82,10 +112,12 @@ export function SidebarProjectsSection({
     const result: Record<string, Thread[]> = {};
     for (const project of activeProjects) {
       const src = threadsByProject[project.id];
-      result[project.id] = (Array.isArray(src) ? src : []).filter(showsInSidebar);
+      result[project.id] = (Array.isArray(src) ? src : []).filter(
+        (thread) => showsInSidebar(thread) && !(hideFactoryThreads && isFactoryThread(thread)),
+      );
     }
     return result;
-  }, [threadsByProject, activeProjects]);
+  }, [threadsByProject, activeProjects, hideFactoryThreads]);
 
   const threadsLoadedByProject = useMemo(() => {
     const result: Record<string, boolean> = {};
@@ -106,21 +138,24 @@ export function SidebarProjectsSection({
         >
           {t('sidebar.projects')}
         </button>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              data-testid="sidebar-add-project"
-              size="icon"
-              aria-label={t('sidebar.addProject')}
-              className="size-5"
-              onClick={() => navigate(buildPath('/new'))}
-            >
-              <FolderPlus className="icon-sm" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{t('sidebar.addProject')}</TooltipContent>
-        </Tooltip>
+        <div className="flex items-center gap-0.5">
+          <FactoryThreadsToggle />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted"
+                data-testid="sidebar-add-project"
+                size="icon"
+                aria-label={t('sidebar.addProject')}
+                className="size-5"
+                onClick={() => navigate(buildPath('/new'))}
+              >
+                <FolderPlus className="icon-sm" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{t('sidebar.addProject')}</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <SidebarContent ref={scrollRef} inset="x" className="h-full contain-paint">

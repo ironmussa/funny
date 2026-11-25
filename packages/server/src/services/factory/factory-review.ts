@@ -121,6 +121,27 @@ export function launchedThread(
     : err('the runner returned no thread');
 }
 
+/**
+ * Free a read-only role's checkout once its answer is stored. Best effort: a
+ * cleanup that fails leaves the worktree to the run's own cleanup at its end,
+ * and never fails the step.
+ */
+export async function releaseRoleWorkspace(
+  release: ((threadId: string) => Promise<void>) | undefined,
+  threadId: string,
+  runId: string,
+): Promise<void> {
+  if (!release) return;
+  await release(threadId).catch((cause: unknown) => {
+    log.warn('Issue factory could not free a role thread worktree', {
+      namespace: 'factory',
+      runId,
+      threadId,
+      error: errorMessage(cause),
+    });
+  });
+}
+
 /** A commit that keeps changing under review is reviewed this many times, then the step fails. */
 const MAX_HEAD_CHANGES = 3;
 
@@ -369,6 +390,12 @@ export interface FactoryReviewerDeps {
   abandon?(threadId: string): Promise<void>;
   /** Where a worktree thread starts (the remote's default branch), or why it is unknown. */
   worktreeBase(): Promise<{ baseBranch?: string; baseFromRemote?: boolean } | { error: string }>;
+  /**
+   * Remove the role thread's worktree and branch once its answer is stored:
+   * nothing reads its checkout again (a new commit gets a new reviewer). Only
+   * an unchanged worktree is removed; the thread and its messages stay.
+   */
+  releaseWorkspace?(threadId: string): Promise<void>;
   /** The URLs of the factory's other open pull requests. */
   otherPullRequests?(): Promise<string[]>;
   /**
@@ -529,6 +556,8 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
       threadId,
       reviewedAt: new Date().toISOString(),
     });
+    // The verdict is stored: a new commit gets a new reviewer, so this checkout is done.
+    await releaseRoleWorkspace(deps.releaseWorkspace, threadId, scope.runId);
     return { kind: 'verdict', verdict };
   }
 

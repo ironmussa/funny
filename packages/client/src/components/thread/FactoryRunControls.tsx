@@ -6,7 +6,11 @@
  * project's run list, the footer indicator's popover and the failure card in
  * the thread. Renders the buttons only; the caller lays them out.
  */
-import { lintCleanupSource, lintCleanupVetoed } from '@funny/shared/contracts/factory';
+import {
+  lintCleanupSource,
+  lintCleanupVetoed,
+  displayRiskReason,
+} from '@funny/shared/contracts/factory';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -297,7 +301,7 @@ function useApproveMergeAction(projectId: string, run: FactoryRun): OfferedActio
       toastError(error, 'factoryApprove'),
     );
   const awaitsApproval = isFactoryRunAwaitingMergeApproval(run);
-  const reasons = run.risk?.reasons ?? [];
+  const reasons = (run.risk?.reasons ?? []).map(displayRiskReason);
   const dialog = awaitsApproval ? (
     <ConfirmDialog
       open={confirmingMerge}

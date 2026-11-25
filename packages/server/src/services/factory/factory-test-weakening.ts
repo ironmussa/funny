@@ -63,6 +63,11 @@ const PY_TEST_DECLARATION = /^\s*(?:async\s+)?def\s+(test_\w+)\s*\(/;
 const GO_TEST_DECLARATION = /^\s*func\s+(Test\w+)\s*\(/;
 
 const JS_SKIP = /\b(?:it|test|describe)\.(?:skip|todo|skipIf)\b|\b(?:xit|xtest|xdescribe)\s*\(/;
+/** A skip with a condition: the test still runs wherever the condition does not hold. */
+const JS_CONDITIONAL_SKIP = /\b(?:it|test)\.skipIf\b/;
+const PY_CONDITIONAL_SKIP = /@pytest\.mark\.skipif\b|@unittest\.(?:skipIf|skipUnless)\b/;
+/** A line that opens a test or a suite. */
+const JS_DECLARATION_OPENER = /\b(?:it|test|describe)(?:\.\w+)*\s*\(/;
 const JS_FOCUS = /\b(?:it|test|describe)\.only\b|\b(?:fit|fdescribe)\s*\(/;
 const PY_SKIP =
   /@pytest\.mark\.(?:skip|skipif|xfail)\b|@unittest\.(?:skip|skipIf|skipUnless|expectedFailure)\b|\bpytest\.skip\s*\(|\bself\.skipTest\s*\(/;
@@ -113,10 +118,35 @@ function removedTests(path: string, added: string[], removed: string[]): TestWea
   return gone.map((title) => ({ kind: 'test-case-removed', path, detail: short(title) }));
 }
 
-function markers(path: string, added: string[]): TestWeakeningFinding[] {
+/**
+ * Whether an added conditional skip is on a test the change itself adds, which
+ * takes no coverage away: before the change that test did not run anywhere
+ * (seen on #479 and #490, whose new lint tests skip where the linter is missing).
+ * In a new file every conditional skip is. In a file that existed, a
+ * `test.skipIf` is, as long as the diff removes no line that opened a test or
+ * a suite without a skip: putting a condition on a test that existed rewrites
+ * its opening line. Anything else (an unconditional skip, a `describe.skipIf`
+ * around tests that existed, a Python decorator, which rewrites no line) stays
+ * a finding.
+ */
+function skipsOnlyNewTests(line: string, file: PullRequestFile, removed: string[]): boolean {
+  if (file.status === 'added') {
+    return JS_CONDITIONAL_SKIP.test(line) || PY_CONDITIONAL_SKIP.test(line);
+  }
+  if (!JS_CONDITIONAL_SKIP.test(line)) return false;
+  return !removed.some((gone) => JS_DECLARATION_OPENER.test(gone) && !JS_SKIP.test(gone));
+}
+
+function markers(
+  file: PullRequestFile,
+  added: string[],
+  removed: string[],
+): TestWeakeningFinding[] {
+  const path = file.path;
   const findings: TestWeakeningFinding[] = [];
   for (const line of added) {
     if (JS_SKIP.test(line) || PY_SKIP.test(line) || GO_SKIP.test(line)) {
+      if (skipsOnlyNewTests(line, file, removed)) continue;
       findings.push({ kind: 'skip-marker', path, detail: short(line) });
     } else if (JS_FOCUS.test(line)) {
       findings.push({ kind: 'focus-marker', path, detail: short(line) });
@@ -189,7 +219,7 @@ function patchFindings(file: PullRequestFile): TestWeakeningFinding[] {
   }
   const { added, removed } = changedLines(file.patch);
   return [
-    ...(isTest ? [...removedTests(path, added, removed), ...markers(path, added)] : []),
+    ...(isTest ? [...removedTests(path, added, removed), ...markers(file, added, removed)] : []),
     ...(config ? loweredThresholds(path, added, removed) : []),
   ];
 }

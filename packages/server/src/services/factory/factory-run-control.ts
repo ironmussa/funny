@@ -184,13 +184,41 @@ async function keptOnRetry(run: FactoryRunView): Promise<string[]> {
   const first = run.threadIds[0];
   if (!first) return [];
   const [row] = await db
-    .select({ id: threads.id, worktreePath: threads.worktreePath, branch: threads.branch })
+    .select({
+      id: threads.id,
+      worktreePath: threads.worktreePath,
+      branch: threads.branch,
+      mode: threads.mode,
+      runtime: threads.runtime,
+    })
     .from(threads)
     .where(and(eq(threads.id, first), inArray(threads.status, ['completed'])));
   if (!row) return [];
-  // A thread put on another branch (the run's was held by an older worktree)
-  // is refused on every step: the retry starts a new agent on the run's branch.
-  return !row.worktreePath || row.branch === factoryRunBranch(run) ? [first] : [];
+  return keepsItsCheckout(row, factoryRunBranch(run)) ? [first] : [];
+}
+
+/**
+ * Whether a retry can go on in the implement thread's checkout.
+ *
+ * Not a thread put on another branch (the run's was held by an older
+ * worktree): it is refused on every step. Not a worktree thread whose worktree
+ * is gone (an earlier retry removed it) either: the runner would run the
+ * run's `integrate` and commands in the project's own checkout, on whatever
+ * branch the member has there (run #479 failed its `integrate` this way). The
+ * retry starts a new agent on the run's branch for both. A sandbox thread and a
+ * local-mode one have no worktree path to begin with.
+ */
+export function keepsItsCheckout(
+  thread: {
+    worktreePath: string | null;
+    branch: string | null;
+    mode: string | null;
+    runtime: string | null;
+  },
+  runBranch: string,
+): boolean {
+  if (thread.worktreePath) return thread.branch === runBranch;
+  return thread.mode !== 'worktree' || thread.runtime === 'sandbox';
 }
 
 /** Why a retry cannot start: worktrees it could not free hold the run's branch. */

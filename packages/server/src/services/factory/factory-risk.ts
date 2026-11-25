@@ -15,7 +15,11 @@
 import { createHash } from 'node:crypto';
 
 import type { PullRequestFiles } from '@funny/core/github-app';
-import { DEFAULT_MAX_LOW_RISK_LINES, type FactoryRisk } from '@funny/shared/contracts/factory';
+import {
+  contractRiskReason,
+  DEFAULT_MAX_LOW_RISK_LINES,
+  type FactoryRisk,
+} from '@funny/shared/contracts/factory';
 
 import { isTestFile, type TestWeakeningFinding } from './factory-test-weakening.js';
 
@@ -256,7 +260,7 @@ export function classifyRisk(input: RiskInput): FactoryRisk {
     ...sizeReasons(input),
     ...(input.riskHints ?? []).map((hint) => ({
       key: hintKey(hint),
-      text: `the contract names a risk: ${hint.slice(0, 200)}`,
+      text: contractRiskReason(hint),
     })),
   ];
   // What holds whatever a member said: weakened tests and sensitive paths.

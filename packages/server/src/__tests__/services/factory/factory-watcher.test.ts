@@ -1767,6 +1767,33 @@ describe('factory flow', () => {
     expect(launcher.calls).toHaveLength(0);
   });
 
+  test('a run starting for the first time checkpoints its implement thread in the journal', async () => {
+    // #449: a new run (no journal, no thread, no launch marker) took the
+    // replay path, so implement checkpointed nothing; a restart during it then
+    // re-sent the prompt as a follow-up and took the running turn's end for
+    // the step's end.
+    const factoryId = await seedInFlightRun([]);
+    const [seeded] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: finishedThreads('completed'),
+    });
+
+    await poll.ticks[0]!();
+
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    const implement = (await createWorkflowJournalRepository().load(seeded!.id))
+      ._unsafeUnwrap()
+      .filter((e) => e.nodeId === 'implement');
+    expect(implement.map((e) => e.data)).toEqual([{ phase: 'thread', threadId: run.threadIds[0] }]);
+  });
+
   test('a resumed run adopts through the journal the thread its implement step checkpointed', async () => {
     // The implement step started t-impl and checkpointed it; the server then
     // stopped before recording the thread in the run (no thread_ids, no marker).

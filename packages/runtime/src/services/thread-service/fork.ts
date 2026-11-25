@@ -24,6 +24,7 @@ import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
 import { isString } from '../../lib/value-guards.js';
 import { copyGitCheckpoint } from '../git-checkpoints.js';
+import type { RuntimeThreadInsert } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { canDoGitOps } from '../thread-context.js';
 import { threadEventBus } from '../thread-event-bus.js';
@@ -85,12 +86,13 @@ async function forkThreadImpl(params: ForkThreadParams) {
   const newThreadId = nanoid();
   const now = new Date().toISOString();
   const baseTitle = source.title || 'Conversation';
-  const newThread: Record<string, any> = {
+  const newThread: RuntimeThreadInsert = {
     id: newThreadId,
     projectId: source.projectId,
     userId: source.userId,
     title: params.title?.trim() || `Fork: ${baseTitle}`,
-    mode: source.mode,
+    // SAFETY: `threads.mode` is NOT NULL, so a stored thread always has one.
+    mode: source.mode as string,
     runtime: source.runtime ?? 'local',
     provider: source.provider,
     permissionMode: source.permissionMode,

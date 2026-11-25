@@ -74,6 +74,7 @@ export function threadStageMove(
   const to = stageForRunState(state);
   if (!to) return null;
   const allowed: readonly string[] = STAGE_FROM[to];
+  // SAFETY: allowed is STAGE_FROM[to], a list of ThreadStage values, and it includes `from`.
   return allowed.includes(from) ? { from: from as ThreadStage, to } : null;
 }
 
@@ -138,6 +139,7 @@ export function syncRunThreadStages(runId: string): ResultAsync<StageMoved[], ne
       .from(factoryRuns)
       .where(eq(factoryRuns.id, runId));
     if (!run) return [];
+    // SAFETY: factory_runs.state is written only by factory-runs.ts, always from a FactoryRunState value.
     const state = run.state as FactoryRunState;
     if (!stageForRunState(state)) return [];
     const threadIds = parseIds(run.threadIds);
@@ -174,7 +176,7 @@ export function syncRunThreadStages(runId: string): ResultAsync<StageMoved[], ne
       runId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return ResultAsync.fromSafePromise(Promise.resolve([] as StageMoved[]));
+    return ResultAsync.fromSafePromise(Promise.resolve<StageMoved[]>([]));
   });
 }
 
@@ -187,6 +189,7 @@ export function finishRoleThreadStage(threadId: string, reason: string): ResultA
   const allowed: readonly string[] = STAGE_FROM.done;
   const finish = async () => {
     const move = await moveThreadStage(threadId, (from) =>
+      // SAFETY: allowed is STAGE_FROM.done, a list of ThreadStage values, and it includes `from`.
       allowed.includes(from) ? { from: from as ThreadStage, to: 'done' } : null,
     );
     if (!move) return;

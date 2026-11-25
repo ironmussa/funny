@@ -1,4 +1,8 @@
-import type { Project, ResolvedAgentExecutionProfileResponse } from '@funny/shared';
+import type {
+  Project,
+  ResolvedAgentExecutionProfileResponse,
+  UpdateProfileRequest,
+} from '@funny/shared';
 
 import { isObject } from '../lib/value-guards.js';
 import { sendRemoteData } from './remote-data-channel.js';
@@ -92,7 +96,7 @@ class RemoteProjectIdentityClient {
   getMinimaxApiKey(userId: string): Promise<string | null> {
     return this.getProviderKey(userId, 'minimax');
   }
-  async updateProfile(userId: string, data: Record<string, any>): Promise<any> {
+  async updateProfile(userId: string, data: UpdateProfileRequest): Promise<any> {
     return (await this.request('data:update_profile', { userId, payload: data }))?.profile ?? null;
   }
   async resolveAgentExecutionProfile(

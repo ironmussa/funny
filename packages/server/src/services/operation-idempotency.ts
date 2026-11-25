@@ -142,6 +142,8 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
         'runner operation idempotency outcome',
       );
       if (!outcome.ok) throw new Error(outcome.error);
+      // SAFETY: a completed row's outcomeJson is canonicalJson of execute()'s T result,
+      // written below for this same runner / operation kind / key scope.
       return { kind: 'replayed', outcome: outcome.value as T };
     }
     if (record) return { kind: 'in_progress' };

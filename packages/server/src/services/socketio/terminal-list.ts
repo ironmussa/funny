@@ -3,10 +3,12 @@ import {
   runnerActor,
   type RunnerAccess,
 } from '../runner-access/index.js';
-import type { RunnerPresencePort, RunnerTerminalPort } from '../runner-ports.js';
+import type {
+  RunnerPresencePort,
+  RunnerTerminalPort,
+  RunnerTerminalSession,
+} from '../runner-ports.js';
 import { terminalRoutesOf } from './terminal-targets.js';
-
-type Session = Record<string, unknown>;
 
 /**
  * Adds the sessions living on the runners of the user's other terminal routes
@@ -16,7 +18,7 @@ type Session = Record<string, unknown>;
  * `withRunnerFor`; one that is unavailable adds nothing.
  */
 export async function withRoutedTerminalSessions(
-  sessions: Session[],
+  sessions: RunnerTerminalSession[],
   userId: string,
   dependencies: {
     access: RunnerAccess;
@@ -25,7 +27,7 @@ export async function withRoutedTerminalSessions(
     /** A listing asked of one named runner: only that runner's sessions. */
     onlyRunnerId?: string;
   },
-): Promise<Session[]> {
+): Promise<RunnerTerminalSession[]> {
   if (dependencies.onlyRunnerId) return sessions;
   const sink = authorizedRunnerTerminal(dependencies.terminals);
   const merged = [...sessions];

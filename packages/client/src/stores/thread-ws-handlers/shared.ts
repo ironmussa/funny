@@ -78,11 +78,11 @@ export function isHydrated(state: ThreadState, threadId: string): boolean {
  * Buffer the event when the thread is being selected but not yet hydrated.
  * Returns true when buffering happened so callers can short-circuit.
  */
-export function maybeBuffer(
+export function maybeBuffer<EventData>(
   state: ThreadState,
   threadId: string,
   type: string,
-  data: unknown,
+  data: EventData,
 ): boolean {
   if ((getUrlThreadId() ?? state.selectedThreadId) === threadId && !isHydrated(state, threadId)) {
     bufferWSEvent(threadId, type, data);

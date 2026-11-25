@@ -5,7 +5,7 @@
  * merge queue's batches (openspec factory-integration). One batch merges at a
  * time per repository; that is not a setting.
  */
-import { LOW_RISK_LINES_RANGE } from '@funny/shared/contracts/factory';
+import { APPROVAL_ADJUST_LINES_RANGE, LOW_RISK_LINES_RANGE } from '@funny/shared/contracts/factory';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { proposeQueueCi } from '@/data/factory/actions';
 import { useFactoryFlowDefinition, useFactoryReadiness } from '@/data/factory/hooks';
 import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
@@ -27,14 +28,17 @@ type MergeSettings = Pick<
   | 'autoMerge'
   | 'sensitivePaths'
   | 'maxLowRiskLines'
+  | 'approvalAdjustMaxLines'
   | 'sizeIgnoredPaths'
   | 'stageLimits'
   | 'batch'
   | 'dependencies'
   | 'tooBig'
+  | 'holdPathsAwaitingApproval'
 >;
 
 const { min: LOW_RISK_LINES_MIN, max: LOW_RISK_LINES_MAX } = LOW_RISK_LINES_RANGE;
+const { min: ADJUST_LINES_MIN, max: ADJUST_LINES_MAX } = APPROVAL_ADJUST_LINES_RANGE;
 type BatchSettings = FactorySettings['batch'];
 type Dependencies = FactorySettings['dependencies'];
 type TooBig = FactorySettings['tooBig'];
@@ -286,7 +290,8 @@ export function ProjectFactoryMergeRows({
   const { t } = useTranslation();
   const { definition } = useFactoryFlowDefinition(projectId, flowName);
   const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
-  const { maxLowRiskLines, sizeIgnoredPaths, tooBig } = settings;
+  const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
+  const { holdPathsAwaitingApproval } = settings;
 
   return (
     <>
@@ -396,6 +401,50 @@ export function ProjectFactoryMergeRows({
             const next = parsePathList(e.target.value);
             if (next.join('\n') !== sizeIgnoredPaths.join('\n')) onSave({ sizeIgnoredPaths: next });
           }}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.approvalAdjustMaxLines"
+        title={t('settings.projectFactoryApprovalAdjust', 'Adjustment an approval follows')}
+        description={t(
+          'settings.projectFactoryApprovalAdjustDesc',
+          'After you approve a high-risk change, the factory may merge a later commit that differs from it by at most this many lines, only in files you approved and with no new risk reason. It then merges lines no person read; the review still has to pass. 0: only the same change',
+        )}
+      >
+        <Input
+          key={`approval-adjust-${rowKey}`}
+          type="number"
+          min={ADJUST_LINES_MIN}
+          max={ADJUST_LINES_MAX}
+          defaultValue={approvalAdjustMaxLines}
+          className="w-[96px]"
+          data-testid="settings-factory-approval-adjust-max-lines"
+          onBlur={(e) => {
+            const next = wholeNumber(
+              e.target.value.trim() || 'x',
+              ADJUST_LINES_MIN,
+              ADJUST_LINES_MAX,
+            );
+            if (next !== null && next !== approvalAdjustMaxLines) {
+              onSave({ approvalAdjustMaxLines: next });
+            }
+          }}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.holdPathsAwaitingApproval"
+        title={t('settings.projectFactoryHoldPaths', 'Keep files while waiting for an approval')}
+        description={t(
+          'settings.projectFactoryHoldPathsDesc',
+          'While a high-risk change waits for your approval, no other run starts on the files it is expected to touch, for at most 12 hours. Later runs wait longer; approved changes meet fewer conflicts',
+        )}
+      >
+        <Switch
+          checked={holdPathsAwaitingApproval}
+          onCheckedChange={(checked) => onSave({ holdPathsAwaitingApproval: checked })}
+          data-testid="settings-factory-hold-paths-awaiting-approval"
         />
       </ProjectSettingRow>
 

@@ -54,7 +54,9 @@ export function parseTrustedProxyHops(raw: string | undefined): number {
 export const TRUSTED_PROXY_HOPS = parseTrustedProxyHops(process.env.TRUST_PROXY);
 
 export function clientIp(c: Context, trustedHops: number = TRUSTED_PROXY_HOPS): string | null {
-  const peer = (c.env as { IP?: ClientAddress | null } | undefined)?.IP?.address;
+  // c.env is Hono's untyped env; the hosts put the peer address in `IP`.
+  const env: { IP?: ClientAddress | null } | undefined = c.env;
+  const peer = env?.IP?.address;
   return callerAddress(c.req.raw.headers, peer, trustedHops);
 }
 

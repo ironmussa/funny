@@ -1,4 +1,4 @@
-import type { ActivityEffect, ActivityOrigin, ActivityResultRef } from '@funny/shared';
+import type { ActivityEffect, ActivityOrigin, ActivityResultRef, WSEvent } from '@funny/shared';
 /**
  * @domain subdomain: Activities
  * @domain subdomain-type: supporting
@@ -27,16 +27,21 @@ import type { ActivityEffect, ActivityOrigin, ActivityResultRef } from '@funny/s
  */
 import {
   ACTIVITY_EFFECTS_MAX,
+  type ACTIVITY_KINDS,
   type ActivityKind,
   recordsOnlyFailures,
 } from '@funny/shared/activities';
+import type { JsonValue } from '@funny/shared/json-validation';
 import { Effect, Schedule } from 'effect';
 import type { Result } from 'neverthrow';
+import type { z } from 'zod';
 
 import { log } from '../lib/logger.js';
-import { isObject, isString } from '../lib/value-guards.js';
 import { sendRemoteData } from './remote-data-channel.js';
 import { wsBroker } from './ws-broker.js';
+
+/** The input of one of the declared kinds, before the server parses it with the kind's schema. */
+type ActivitySpecInput = z.input<(typeof ACTIVITY_KINDS)[ActivityKind]['input']>;
 
 export interface ActivitySpec {
   /** Reuse an id the client already knows (the clone id); a new one otherwise. */
@@ -47,7 +52,7 @@ export interface ActivitySpec {
   threadId?: string | null;
   title: string;
   /** Recorded after the server strips it to the kind's declared fields. */
-  input: Record<string, unknown>;
+  input: ActivitySpecInput;
   /** Who started it (default `user`); written once, never changed. */
   origin?: ActivityOrigin;
 }
@@ -70,13 +75,51 @@ export interface ActivityHandle {
   fail(error: string): void;
 }
 
+/** The server's decoded answer to an activity report (none from a fire-and-forget reporter). */
+export type ActivityReportAnswer = JsonValue | undefined;
+
+/** `data:activity_start`: a new activity, or an instant one already finished. */
+type ActivityStartReport = {
+  id: string;
+  kind: ActivityKind;
+  projectId: string | undefined;
+  threadId: string | undefined;
+  title: string;
+  input: ActivitySpecInput;
+  origin: ActivityOrigin;
+  status?: 'succeeded' | 'failed';
+  effects?: ActivityEffect[];
+  resultRef?: ActivityResultRef;
+  error?: string;
+};
+
+/** The fields a `data:activity_update` changes. */
+type ActivityReportPatch = {
+  status?: 'succeeded' | 'failed';
+  step?: string;
+  error?: string;
+  resultRef?: ActivityResultRef;
+  effects?: ActivityEffect[];
+};
+
+/** `data:activity_update`. */
+type ActivityUpdateReport = { id: string; patch: ActivityReportPatch };
+
+/** `data:activity_reconcile`: the ids this runner still runs. */
+type ActivityReconcileReport = { liveIds: string[] };
+
+type ActivityReport = ActivityStartReport | ActivityUpdateReport | ActivityReconcileReport;
+
+/** The browser event that shows an activity's percentage. */
+type ActivityProgressEvent = Extract<WSEvent, { type: 'activity:progress' }>;
+
 export interface ActivityReporter {
-  request(eventType: string, payload: Record<string, unknown>): Promise<unknown>;
+  request(eventType: string, payload: ActivityReport): Promise<ActivityReportAnswer>;
 }
 
 export interface ActivityTrackerDeps {
   reporter?: ActivityReporter;
-  emitToUser?: (userId: string, event: Record<string, unknown>) => void;
+  emitToUser?: (userId: string, event: ActivityProgressEvent) => void;
   /** Terminal report retries (exponential from `retryBaseMs`). */
   retryTimes?: number;
   retryBaseMs?: number;
@@ -86,16 +129,21 @@ export interface ActivityTrackerDeps {
 const PROGRESS_INTERVAL_MS = 500;
 
 /** A server answer that refuses the write (scope, ownership, unknown type). */
-function isRefusal(response: unknown): boolean {
-  return isObject(response) && (response as { success?: unknown }).success === false;
+function isRefusal(response: ActivityReportAnswer): boolean {
+  return (
+    !!response &&
+    typeof response === 'object' &&
+    !Array.isArray(response) &&
+    response.success === false
+  );
 }
 
-function messageOf(error: unknown): string {
-  if (isString(error)) return error;
-  if (isObject(error) && 'message' in error) {
-    return String((error as { message: unknown }).message);
+function messageOf(cause: unknown): string {
+  if (typeof cause === 'string') return cause;
+  if (cause && typeof cause === 'object' && 'message' in cause) {
+    return String((cause as { message: unknown }).message);
   }
-  return String(error);
+  return String(cause);
 }
 
 export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
@@ -104,8 +152,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
   };
   const emitToUser =
     deps.emitToUser ??
-    ((userId: string, event: Record<string, unknown>) =>
-      wsBroker.emitToUser(userId, event as never));
+    ((userId: string, event: ActivityProgressEvent) => wsBroker.emitToUser(userId, event));
   const retryTimes = deps.retryTimes ?? 8;
   const retryBaseMs = deps.retryBaseMs ?? 1_000;
   const newId = deps.newId ?? (() => crypto.randomUUID());
@@ -115,7 +162,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
   const abort = new AbortController();
 
   /** One report; logs and swallows every failure. */
-  async function send(eventType: string, payload: Record<string, unknown>): Promise<void> {
+  async function send(eventType: string, payload: ActivityReport): Promise<void> {
     try {
       const response = await reporter.request(eventType, payload);
       if (isRefusal(response)) {
@@ -136,7 +183,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
 
   /** The terminal report: retried with backoff on transport errors, never on a refusal. */
   function sendTerminal(
-    payload: Record<string, unknown>,
+    payload: ActivityStartReport | ActivityUpdateReport,
     eventType = 'data:activity_update',
   ): Promise<void> {
     const attempt = Effect.tryPromise({
@@ -202,13 +249,13 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
     let ended = false;
 
     /** The whole effects list rides on a report when it grew since the last one. */
-    const withEffects = (patch: Record<string, unknown>) => {
+    const withEffects = (patch: ActivityReportPatch): ActivityReportPatch => {
       if (effects.length === effectsSent) return patch;
       effectsSent = effects.length;
       return { ...patch, effects: [...effects] };
     };
 
-    const end = (rawPatch: Record<string, unknown>) => {
+    const end = (rawPatch: ActivityReportPatch) => {
       if (ended) return;
       ended = true;
       // The terminal report is the one that must land: it carries the whole list.
@@ -248,7 +295,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
       },
       succeed(ref) {
         const finalRef = ref ? { ...resultRef, ...ref } : resultRef;
-        const patch: Record<string, unknown> = { status: 'succeeded' };
+        const patch: ActivityReportPatch = { status: 'succeeded' };
         if (finalRef) patch.resultRef = finalRef;
         end(patch);
       },
@@ -291,7 +338,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
    */
   function recordActivity(spec: ActivitySpec, outcome: ActivityOutcome): Promise<void> {
     if (outcome.ok && recordsOnlyFailures(spec.kind)) return Promise.resolve();
-    const payload: Record<string, unknown> = {
+    const payload: ActivityStartReport = {
       id: spec.id ?? newId(),
       kind: spec.kind,
       projectId: spec.projectId ?? undefined,

@@ -196,9 +196,7 @@ function ThreadStatusIcon({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{glyph}</TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {label}
-      </TooltipContent>
+      <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>
   );
 }
@@ -217,10 +215,10 @@ function StatusGlyph({
   testId?: string;
   activity?: string;
 }) {
-  const Icon = cfg.icon;
+  const StatusIcon = cfg.icon;
   if (!cfg.dotClassName) {
     return (
-      <Icon
+      <StatusIcon
         // oxlint-disable-next-line shadcn/require-static-classes -- the color comes from statusConfig (one entry per status)
         className={cn('icon-sm', cfg.className)}
         data-testid={testId}
@@ -230,7 +228,7 @@ function StatusGlyph({
   }
   return (
     <span className="inline-flex items-center justify-center">
-      <Icon
+      <StatusIcon
         // oxlint-disable-next-line shadcn/require-static-classes -- the color comes from statusConfig (one entry per status)
         className={cn('status-glyph-icon icon-sm', cfg.className)}
         data-testid={testId}
@@ -290,9 +288,7 @@ function ThreadActivityIcon({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{glyph}</TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {label}
-      </TooltipContent>
+      <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>
   );
 }

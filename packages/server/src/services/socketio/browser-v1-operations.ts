@@ -29,7 +29,11 @@ import {
   runnerActor,
   type RunnerAccess,
 } from '../runner-access/index.js';
-import type { RunnerPresencePort, RunnerTerminalPort } from '../runner-ports.js';
+import type {
+  RunnerPresencePort,
+  RunnerTerminalPort,
+  RunnerTerminalSession,
+} from '../runner-ports.js';
 import { canUserViewThread } from '../thread-access-check.js';
 import {
   browserV1IdempotencyStore,
@@ -141,7 +145,7 @@ async function executePtyList(
   type Listed =
     | { kind: 'aborted' }
     | { kind: 'unavailable' }
-    | { kind: 'ok'; sessions: Array<Record<string, unknown>> };
+    | { kind: 'ok'; sessions: RunnerTerminalSession[] };
   const listed = await access.withRunnerFor(
     runnerActor({ userId: principalUserId }),
     requestedRunnerId
@@ -297,6 +301,8 @@ export function setupBrowserV1Operations(
         }
         const request = operationEnvelope.value;
         const requestId = request.metadata?.requestId ?? '';
+        // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+        // BrowserV1ConnectionState, of which BrowserOperationState is an optional subset.
         const negotiated = socket.data.browserV1 as BrowserOperationState | undefined;
         if (
           !negotiated ||

@@ -1,4 +1,3 @@
-import { isString, isObject } from './value-guards.js';
 /**
  * Shared password strength policy.
  *
@@ -26,7 +25,7 @@ export interface PasswordPolicyResult {
  * accepts and the other rejects.
  */
 export function validatePasswordStrength(password: unknown): PasswordPolicyResult {
-  if (!isString(password) || password.length === 0) {
+  if (typeof password !== 'string' || password.length === 0) {
     return { ok: false, reason: 'Password is required' };
   }
   if (password.length < 10) {
@@ -41,6 +40,17 @@ export function validatePasswordStrength(password: unknown): PasswordPolicyResul
   return { ok: true };
 }
 
+/** The fields of a Better Auth request body that carry a password to set. */
+interface PasswordRequestBody {
+  password?: unknown;
+  newPassword?: unknown;
+}
+
+/** Auth path → the body field carrying its password. */
+interface PasswordFieldByAuthPath {
+  [path: string]: keyof PasswordRequestBody;
+}
+
 /**
  * Better Auth endpoints that set a password, and the body field carrying it.
  * Better Auth itself checks only its own minimum length on some of these, and
@@ -48,7 +58,7 @@ export function validatePasswordStrength(password: unknown): PasswordPolicyResul
  * above on every one of them in a `before` hook. Add an endpoint here when a
  * new plugin or route can set a password.
  */
-const PASSWORD_FIELD_BY_AUTH_PATH: Record<string, string> = {
+const PASSWORD_FIELD_BY_AUTH_PATH: PasswordFieldByAuthPath = {
   '/sign-up/email': 'password',
   '/change-password': 'newPassword',
   '/reset-password': 'newPassword',
@@ -65,7 +75,12 @@ const PASSWORD_FIELD_BY_AUTH_PATH: Record<string, string> = {
 export function validateAuthRequestPassword(path: string, body: unknown): PasswordPolicyResult {
   const field = PASSWORD_FIELD_BY_AUTH_PATH[path];
   if (!field) return { ok: true };
-  const value = isObject(body) ? (body as Record<string, unknown>)[field] : undefined;
+  const value =
+    body && typeof body === 'object'
+      ? // SAFETY: `body` is a non-null object; its password field is read as
+        // `unknown` and checked by validatePasswordStrength.
+        (body as PasswordRequestBody)[field]
+      : undefined;
   if (path === '/admin/create-user' && value === undefined) return { ok: true };
   return validatePasswordStrength(value);
 }

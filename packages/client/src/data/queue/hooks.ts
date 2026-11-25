@@ -22,14 +22,17 @@ export function useQueuedCount(threadId: string | undefined): number {
   return useQueueRow(threadId)?.count ?? 0;
 }
 
+/** What `useLoadedQueue` returns. */
+interface LoadedQueue {
+  row: QueueRow | undefined;
+  loading: boolean;
+}
+
 /**
  * The queue row, fetching the full list while it is behind the summary.
  * Every reader of the same row at the same `rev` shares one request.
  */
-export function useLoadedQueue(threadId: string | undefined): {
-  row: QueueRow | undefined;
-  loading: boolean;
-} {
+export function useLoadedQueue(threadId: string | undefined): LoadedQueue {
   const layer = useDataLayer();
   const row = useQueueRow(threadId);
   const needsLoad = queueNeedsLoad(row);

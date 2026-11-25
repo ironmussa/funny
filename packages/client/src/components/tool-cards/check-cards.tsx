@@ -21,6 +21,10 @@ import { useThreadId } from '@/stores/thread-context';
 
 import { parseMcpResult } from './mcp-tool';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 const PROGRESS_PATH = /^progressPath: (\S+)$/m;
 const COMMAND_LINE = /^\$ (.+?) {2}\(in (.+)\)$/m;
 const KINDS = new Set(['test', 'typecheck', 'lint', 'format', 'build', 'verify']);
@@ -57,8 +61,12 @@ function readCheckResult(text: string): CheckResult {
   };
 }
 
-const stringList = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+/** The files or packages the call asked to run, from its `scope` list. */
+function requestedScope(parsed: { scope?: unknown }): string[] {
+  return Array.isArray(parsed.scope)
+    ? parsed.scope.filter((item): item is string => isString(item))
+    : [];
+}
 
 /**
  * What the run covers: the command it ran once the result names it (it already
@@ -75,9 +83,9 @@ function CheckRunDetails({
   cwd: string | null;
 }) {
   const { t } = useTranslation();
-  const requested = typeof parsed.command === 'string' ? parsed.command : null;
-  const scope = stringList(parsed.scope);
-  const filter = typeof parsed.filter === 'string' ? parsed.filter : null;
+  const requested = isString(parsed.command) ? parsed.command : null;
+  const scope = requestedScope(parsed);
+  const filter = isString(parsed.filter) ? parsed.filter : null;
   const shown = command ?? requested;
 
   if (shown) {
@@ -103,14 +111,16 @@ function CheckRunDetails({
           key={item}
           variant="outline"
           size="xs"
-          className="max-w-full truncate font-mono font-normal"
+          weight="normal"
+          mono
+          className="max-w-full"
           title={item}
         >
           {item}
         </Badge>
       ))}
       {filter && (
-        <Badge variant="secondary" size="xs" className="font-mono font-normal">
+        <Badge variant="secondary" size="xs" weight="normal" mono>
           {t('checks.filter', { filter })}
         </Badge>
       )}
@@ -174,7 +184,7 @@ function useCheckRunSource(parsed: Record<string, unknown>, output: string | und
   const announced = useCheckRun(threadId, inputKey);
   const text = useMemo(() => resultText(output), [output]);
   const result = useMemo(() => readCheckResult(text), [text]);
-  const requested = typeof parsed.kind === 'string' ? parsed.kind : 'test';
+  const requested = isString(parsed.kind) ? parsed.kind : 'test';
   return {
     text,
     command: result.command,

@@ -31,7 +31,6 @@ interface ClaudeProjectSettings {
   disabledMcpjsonServers?: string[];
   /** Claude CLI's native list for disabled user-scoped servers (per project) */
   disabledMcpServers?: string[];
-  [key: string]: unknown;
 }
 
 interface ClaudeMcpServerEntry {
@@ -43,13 +42,16 @@ interface ClaudeMcpServerEntry {
   env?: Record<string, string>;
 }
 
+/**
+ * The fields of ~/.claude.json read here. The file has many more; they stay in
+ * the parsed object and are written back unchanged.
+ */
 interface ClaudeConfig {
   /** Global user-scoped MCP servers (`claude mcp add` without --scope project) */
   mcpServers?: Record<string, ClaudeMcpServerEntry>;
   /** Global disabled user-scoped MCP servers */
   disabledMcpServers?: string[];
   projects?: Record<string, ClaudeProjectSettings>;
-  [key: string]: unknown;
 }
 
 /** Plugin and Claude.ai connector servers cannot be toggled via ~/.claude.json */

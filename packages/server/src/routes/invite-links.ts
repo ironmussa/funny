@@ -117,6 +117,8 @@ async function releaseInviteSlot(linkId: string): Promise<void> {
 // Better Auth's organization plugin methods are not fully typed in the
 // inferred API surface — cast to `any` for the invitation-related calls.
 function orgApi() {
+  // SAFETY: the organization plugin is registered in lib/auth.ts, so `addMember` and
+  // the invitation methods exist on auth.api at runtime; only their types are missing.
   return auth.api as any;
 }
 
@@ -133,6 +135,8 @@ async function addUserToOrg(userId: string, orgId: string, role: string): Promis
 }
 
 function setCookiesOf(headers: Headers): string[] {
+  // SAFETY: `raw()` exists only on node-fetch style Headers; the optional calls
+  // yield undefined (then []) on a Headers without it.
   return headers.getSetCookie?.() ?? (headers as any).raw?.()?.['set-cookie'] ?? [];
 }
 
@@ -148,13 +152,19 @@ function sessionHeadersFrom(signInHeaders: Headers): Headers {
   return new Headers({ cookie });
 }
 
+/** Why switching the active organization failed: the HTTP status or the thrown message. */
+interface SetActiveOrgFailure {
+  status?: number;
+  error?: string;
+}
+
 /**
  * Best-effort: make the org the active one of the session in `headers`, and
  * return the Set-Cookie values to forward (the refreshed session cache). The
  * membership already exists, so a failure only costs the user an org switch.
  */
 async function setActiveOrg(orgId: string, headers: Headers): Promise<string[]> {
-  let failure: Record<string, unknown>;
+  let failure: SetActiveOrgFailure;
   try {
     const res: Response = await orgApi().setActiveOrganization({
       headers,
@@ -264,6 +274,8 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
   try {
     // 1. Create the user via admin API (bypasses disableSignUp)
     const email = `${body.username}@invite.local`;
+    // SAFETY: the admin plugin (lib/auth.ts) adds `createUser` to auth.api and accepts
+    // `data` for additional user fields such as `username`; its inferred types lack both.
     const createResult = await (auth.api as any).createUser({
       body: {
         email,
@@ -274,7 +286,7 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
       },
     } as any);
 
-    const user = (createResult as any)?.user;
+    const user = createResult?.user;
     if (!user) {
       await releaseInviteSlot(link.id);
       return c.json({ error: 'Failed to create account' }, 500);
@@ -386,7 +398,7 @@ async function resolveInviteManager(
 ): Promise<{ orgId: string; userId: string; role: Role } | Response> {
   const orgId = c.get('organizationId');
   if (!orgId) return c.json({ error: 'No active organization' }, 400);
-  const userId = c.get('userId') as string;
+  const userId = c.get('userId');
   const role = await authorizer.effectiveRole(userId, 'org', orgId);
   if (role === null || !roleAtLeast(role, 'admin')) {
     audit({
@@ -532,7 +544,7 @@ inviteLinkRoutes.post('/accept', async (c) => {
     const [user] = await db
       .select({ id: userTable.id })
       .from(userTable)
-      .where(eq(userTable.id, userId as string));
+      .where(eq(userTable.id, userId));
     if (!user) {
       await releaseInviteSlot(link.id);
       return c.json({ error: 'User not found' }, 404);

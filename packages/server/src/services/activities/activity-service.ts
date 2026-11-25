@@ -1,3 +1,4 @@
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { Activity, ActivityResultRef, ActivityStatus } from '@funny/shared';
 /**
  * @domain subdomain: Activities
@@ -24,7 +25,6 @@ import type { ActivityInsert, ActivityPatch } from '@funny/shared/repositories';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
-import { isObject, isString } from '../../lib/value-guards.js';
 import { relayToUser } from '../browser-events.js';
 
 const SNAPSHOT_REF = /^refs\/funny\/undo\/[A-Za-z0-9_-]{1,128}$/;
@@ -32,13 +32,13 @@ const ID_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,127}$/;
 const REPORTED_STATUSES = new Set<ActivityStatus>(['running', 'succeeded', 'failed']);
 
 function text(value: unknown, max: number): string | null {
-  if (!isString(value)) return null;
+  if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, max) : null;
 }
 
 function optionalId(value: unknown): string | null {
-  return isString(value) && ID_PATTERN.test(value) ? value : null;
+  return typeof value === 'string' && ID_PATTERN.test(value) ? value : null;
 }
 
 /** Each field a reported result may carry, and how it is checked. */
@@ -49,14 +49,26 @@ const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string |
   ['snapshot', (v) => (SNAPSHOT_REF.test(v) ? v : null)],
 ];
 
+/**
+ * A result reference as a runner reported it: its fields not yet checked. It
+ * names every `ActivityResultRef` field (the loop below indexes it by them).
+ */
+interface ReportedResultRef {
+  projectId?: unknown;
+  prUrl?: unknown;
+  snapshot?: unknown;
+}
+
 function resultRefOf(value: unknown): ActivityResultRef | null | undefined {
   if (value === undefined) return undefined;
-  if (!isObject(value)) return null;
-  const raw = value as Record<string, unknown>;
+  if (!value || typeof value !== 'object') return null;
+  // SAFETY: `value` is a non-null object; each result field is read as
+  // `unknown` and checked below before it is kept.
+  const reported = value as ReportedResultRef;
   const ref: ActivityResultRef = {};
   for (const [field, check] of RESULT_REF_FIELDS) {
-    const given = raw[field];
-    const kept = isString(given) ? check(given) : null;
+    const given = reported[field];
+    const kept = typeof given === 'string' ? check(given) : null;
     if (kept) ref[field] = kept;
   }
   return Object.keys(ref).length > 0 ? ref : null;
@@ -81,15 +93,16 @@ export type ActivityWriteResult = { ok: true; applied: boolean } | { ok: false; 
 export async function startActivityFromRunner(args: {
   runnerId: string;
   ownerId: string;
-  payload: Record<string, unknown>;
+  /** The runner's `ActivityStart.activity` Struct, decoded; checked field by field here. */
+  payload: JsonObject;
 }): Promise<ActivityWriteResult> {
   const { runnerId, ownerId, payload } = args;
   const id = optionalId(payload.id);
-  const kind = isString(payload.kind) ? payload.kind : '';
+  const kind = typeof payload.kind === 'string' ? payload.kind : '';
   const title = text(payload.title, ACTIVITY_TITLE_MAX);
   if (!id) return { ok: false, error: 'activity id is invalid' };
   if (!title) return { ok: false, error: 'activity title is required' };
-  const input = parseActivityInput(kind, payload.input);
+  const input = parseActivityInput({ kind, input: payload.input });
   if (!input) return { ok: false, error: `activity kind ${kind} or its input is invalid` };
 
   const finalStatus =
@@ -105,7 +118,7 @@ export async function startActivityFromRunner(args: {
     input,
     step: text(payload.step, ACTIVITY_STEP_MAX),
     origin: isActivityOrigin(payload.origin) ? payload.origin : 'user',
-    effects: parseActivityEffects(payload.effects),
+    effects: parseActivityEffects(payload),
     startedAt: new Date().toISOString(),
   };
   if (finalStatus) {
@@ -123,23 +136,23 @@ export async function startActivityFromRunner(args: {
 }
 
 function reportedStatus(value: unknown): ActivityStatus | undefined {
-  return isString(value) && REPORTED_STATUSES.has(value as ActivityStatus)
+  // SAFETY: has() only compares the string; it is returned as ActivityStatus only when the set holds it.
+  return typeof value === 'string' && REPORTED_STATUSES.has(value as ActivityStatus)
     ? (value as ActivityStatus)
     : undefined;
 }
 
 /** The fields a runner may change on its own activity; never `origin`. */
 function pickActivityPatch(raw: unknown): ActivityPatch {
-  if (!isObject(raw)) return {};
-  const value = raw as Record<string, unknown>;
+  if (!raw || typeof raw !== 'object') return {};
   const patch: ActivityPatch = {};
-  const status = reportedStatus(value.status);
+  const status = reportedStatus('status' in raw ? raw.status : undefined);
   if (status) patch.status = status;
-  if ('step' in value) patch.step = text(value.step, ACTIVITY_STEP_MAX);
-  if ('error' in value) patch.error = text(value.error, ACTIVITY_ERROR_MAX);
-  const resultRef = resultRefOf(value.resultRef);
+  if ('step' in raw) patch.step = text(raw.step, ACTIVITY_STEP_MAX);
+  if ('error' in raw) patch.error = text(raw.error, ACTIVITY_ERROR_MAX);
+  const resultRef = resultRefOf('resultRef' in raw ? raw.resultRef : undefined);
   if (resultRef !== undefined) patch.resultRef = resultRef;
-  if ('effects' in value) patch.effects = parseActivityEffects(value.effects);
+  if ('effects' in raw) patch.effects = parseActivityEffects(raw);
   if (status && isFinalActivityStatus(status)) patch.endedAt = new Date().toISOString();
   return patch;
 }
@@ -171,7 +184,7 @@ export async function reconcileRunnerActivities(
   liveIds: unknown,
 ): Promise<Activity[]> {
   const ids = Array.isArray(liveIds)
-    ? liveIds.filter((v): v is string => isString(v) && ID_PATTERN.test(v))
+    ? liveIds.filter((v): v is string => typeof v === 'string' && ID_PATTERN.test(v))
     : [];
   const changed = await repos.activities().reconcile(runnerId, ids);
   for (const row of changed) broadcastActivity(row);

@@ -42,6 +42,10 @@ function countOccurrences(haystack: string, needle: string, caseSensitive: boole
   return findTextSearchMatches(haystack, needle, caseSensitive).length;
 }
 
+function isPromise(value: void | Promise<void>): value is Promise<void> {
+  return !!value && typeof value.then === 'function';
+}
+
 export function ThreadSearchBar({
   threadId,
   open,
@@ -49,7 +53,7 @@ export function ThreadSearchBar({
   onNavigateToMessage,
   onClearHighlights,
   testIdPrefix = 'thread-search',
-  className = 'absolute right-4 top-0 z-30 gap-1.5 rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md',
+  className = 'absolute top-0 right-4 z-30',
 }: ThreadSearchBarProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -91,7 +95,7 @@ export function ThreadSearchBar({
   const runNavigate = useCallback(
     (messageId: string, q: string, withinIdx: number) => {
       const maybePromise = onNavigateToMessage(messageId, q, withinIdx, reportMarkCount);
-      if (maybePromise && typeof maybePromise.then === 'function') {
+      if (isPromise(maybePromise)) {
         const seq = ++navSeqRef.current;
         setLoading(true);
         maybePromise.finally(() => {
@@ -260,6 +264,9 @@ export function ThreadSearchBar({
       placeholder={t('thread.searchPlaceholder', 'Search in thread...')}
       showIcon={false}
       testIdPrefix={testIdPrefix}
+      // The find bar hanging from the top edge of the chat view; a caller's
+      // className repositions or reshapes it.
+      variant="floating"
       className={className}
     />
   );

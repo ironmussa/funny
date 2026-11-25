@@ -2,17 +2,16 @@ import { Database } from 'bun:sqlite';
 import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { parseStoredJson } from '@funny/shared/json-validation';
+import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { canonicalJson } from '@funny/shared/lib/canonical-json';
 import { z } from 'zod';
 
 import { DATA_DIR } from '../lib/data-dir.js';
-import { isBoolean, isNumber, isObject, isString } from '../lib/value-guards.js';
 
 export interface GrpcOutboxOperation {
   idempotencyKey: string;
   operationKind: string;
-  payload: unknown;
+  payload: JsonValue;
   createdAt: string;
   attemptCount: number;
   lastAttemptAt: string | null;
@@ -31,15 +30,15 @@ function assertDurableJson(
   value: unknown,
   path = 'payload',
   ancestors = new WeakSet<object>(),
-): void {
-  if (value === null || isString(value) || isBoolean(value)) {
+): asserts value is JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
     return;
   }
-  if (isNumber(value)) {
+  if (typeof value === 'number') {
     if (Number.isFinite(value)) return;
     throw new Error(`${path} must contain only finite JSON numbers`);
   }
-  if (!isObject(value)) {
+  if (typeof value !== 'object') {
     throw new Error(`${path} must contain only durable JSON values`);
   }
   if (ancestors.has(value)) throw new Error(`${path} must not contain circular references`);
@@ -55,15 +54,13 @@ function assertDurableJson(
     if (prototype !== Object.prototype && prototype !== null) {
       throw new Error(`${path} must contain only plain JSON objects`);
     }
-    for (const key of Reflect.ownKeys(value)) {
-      if (!isString(key)) {
-        if (Object.prototype.propertyIsEnumerable.call(value, key)) {
-          throw new Error(`${path} must not contain symbol keys`);
-        }
-        continue;
-      }
+    // Own enumerable string keys first, then symbols: the order of Reflect.ownKeys.
+    for (const [key, item] of Object.entries(value)) {
+      assertDurableJson(item, `${path}.${key}`, ancestors);
+    }
+    for (const key of Object.getOwnPropertySymbols(value)) {
       if (Object.prototype.propertyIsEnumerable.call(value, key)) {
-        assertDurableJson((value as Record<string, unknown>)[key], `${path}.${key}`, ancestors);
+        throw new Error(`${path} must not contain symbol keys`);
       }
     }
   }
@@ -113,7 +110,7 @@ function readRow(row: OutboxRow): { operation: GrpcOutboxOperation } | OutboxDro
 }
 
 function serialize(row: OutboxRow): GrpcOutboxOperation {
-  const payload = parseStoredJson(z.unknown(), row.payload_json, 'gRPC outbox payload');
+  const payload = parseStoredJson(z.json(), row.payload_json, 'gRPC outbox payload');
   if (!payload.ok) throw new Error(payload.error);
   return {
     idempotencyKey: row.idempotency_key,

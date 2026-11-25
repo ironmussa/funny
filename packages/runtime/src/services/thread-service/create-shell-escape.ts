@@ -10,6 +10,7 @@
 import { getCurrentBranch } from '@funny/core/git';
 import type { WSEvent, AgentModel, PermissionMode, ImageAttachment } from '@funny/shared';
 
+import type { RuntimeThreadInsert } from '../server-interfaces.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
@@ -62,7 +63,7 @@ export async function createShellEscapeProjectThread(
 }
 
 /** `!cmd` initial prompts in a scratch thread run locally and complete immediately. */
-export async function createScratchShellEscapeThread<T extends { id: string }>(
+export async function createScratchShellEscapeThread<T extends RuntimeThreadInsert>(
   thread: T,
   shellCommand: string,
   ctx: {
@@ -93,7 +94,7 @@ export async function createScratchShellEscapeThread<T extends { id: string }>(
 }
 
 async function createCompletedShellEscapeThread(args: {
-  thread: Record<string, any>;
+  thread: RuntimeThreadInsert;
   threadId: string;
   projectId: string;
   userId: string;
@@ -105,7 +106,7 @@ async function createCompletedShellEscapeThread(args: {
   permissionMode: PermissionMode;
   effort?: string;
 }) {
-  await tm.createThread(args.thread as any);
+  await tm.createThread(args.thread);
 
   const userMessageId = await tm.insertMessage({
     threadId: args.threadId,

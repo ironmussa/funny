@@ -11,6 +11,7 @@
  * Supports auto-restart with exponential backoff for managed processes.
  */
 import { execute } from '@funny/core/git';
+import type { WSCommandOutputData, WSCommandStatusData } from '@funny/shared';
 import { runAsync, scheduleRepeating } from '@funny/shared/async';
 import { internal, type DomainError } from '@funny/shared/errors';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
@@ -90,7 +91,30 @@ interface RunningCommand {
 const activeCommands = new Map<string, RunningCommand>();
 let metricsSchedule: ReturnType<typeof scheduleRepeating> | null = null;
 
-async function emitWS(type: string, data: unknown, projectId?: string) {
+/** `command:status`, with the restart fields the shared type does not list. */
+interface CommandStatusPayload extends Omit<WSCommandStatusData, 'status'> {
+  status: WSCommandStatusData['status'] | 'restarting';
+  restartCount?: number;
+  nextRestartMs?: number;
+}
+
+/** `command:output`, with the stream it came from. */
+interface CommandOutputPayload extends WSCommandOutputData {
+  channel: 'stdout' | 'stderr';
+}
+
+interface CommandMetricsPayload {
+  commandId: string;
+  projectId: string;
+  uptime: number;
+  restartCount: number;
+  memoryUsageKB: number;
+}
+
+type CommandEventType = 'command:status' | 'command:output' | 'command:metrics';
+type CommandEventPayload = CommandStatusPayload | CommandOutputPayload | CommandMetricsPayload;
+
+async function emitWS(type: CommandEventType, data: CommandEventPayload, projectId?: string) {
   const event = { type, threadId: '', data } as any;
   // Look up project userId for per-user filtering
   if (projectId) {

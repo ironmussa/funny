@@ -1,4 +1,4 @@
-import type { PendingPermissionRequest, PermissionDecision } from '@funny/shared';
+import type { Job, PendingPermissionRequest, PermissionDecision, Watcher } from '@funny/shared';
 import type { DataCreatePendingPermissionRequest } from '@funny/shared/runner-protocol';
 
 import { sendRemoteData } from './remote-data-channel.js';
@@ -28,7 +28,7 @@ class RemoteAutomationPolicyClient {
   async expirePendingPermissionRequest(requestId: string): Promise<void> {
     await this.request('data:expire_pending_permission_request', { payload: { requestId } });
   }
-  async insertWatcher(row: Record<string, any>): Promise<void> {
+  async insertWatcher(row: Watcher): Promise<void> {
     await this.request('data:watcher_insert', { payload: { threadId: row.threadId, row } });
   }
   async getWatcher(id: string) {
@@ -57,7 +57,7 @@ class RemoteAutomationPolicyClient {
   /** False when the server refused the status transition (see watcher-machine). */
   async updateWatcher(
     id: string,
-    patch: Record<string, any>,
+    patch: Partial<Watcher>,
     expect?: { expectedNextWakeAt?: number },
   ): Promise<boolean> {
     // A server from before the guard answers without `applied`: it wrote.
@@ -67,7 +67,7 @@ class RemoteAutomationPolicyClient {
   async deleteWatchersByThread(threadId: string): Promise<void> {
     await this.request('data:watcher_delete_by_thread', { payload: { threadId } });
   }
-  async insertJob(row: Record<string, any>): Promise<void> {
+  async insertJob(row: Job): Promise<void> {
     await this.request('data:job_insert', { payload: { threadId: row.threadId, row } });
   }
   async getJob(id: string) {
@@ -80,7 +80,7 @@ class RemoteAutomationPolicyClient {
     return (await this.request('data:job_list_by_user', { payload: { userId } }))?.jobs ?? [];
   }
   /** False when the server refused the status transition (see job-machine). */
-  async updateJob(id: string, patch: Record<string, any>): Promise<boolean> {
+  async updateJob(id: string, patch: Partial<Job>): Promise<boolean> {
     return (await this.request('data:job_update', { payload: { id, patch } }))?.applied !== false;
   }
   async deleteJobsByThread(threadId: string): Promise<void> {

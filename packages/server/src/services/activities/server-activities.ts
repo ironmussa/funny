@@ -28,6 +28,7 @@ import {
   ACTIVITY_ERROR_MAX,
   ACTIVITY_STEP_MAX,
   ACTIVITY_TITLE_MAX,
+  type ActivityInput,
   type ActivityKind,
   parseActivityEffects,
   parseActivityInput,
@@ -38,7 +39,6 @@ import type { Result } from 'neverthrow';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
-import { isObject, isString } from '../../lib/value-guards.js';
 import { broadcastActivitiesRemoved, broadcastActivity } from './activity-service.js';
 
 export interface ServerActivitySpec {
@@ -48,7 +48,8 @@ export interface ServerActivitySpec {
   projectId?: string | null;
   threadId?: string | null;
   title: string;
-  input: Record<string, unknown>;
+  /** The input of an activity kind (checked against `kind` before it is stored). */
+  input: ActivityInput<ActivityKind>;
   origin: ActivityOrigin;
 }
 
@@ -77,9 +78,9 @@ export interface ServerActivityDeps {
 }
 
 function messageOf(error: unknown): string {
-  if (isString(error)) return error;
-  if (isObject(error) && 'message' in error) {
-    return String((error as { message: unknown }).message);
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String(error.message);
   }
   return String(error);
 }
@@ -113,8 +114,8 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
   }
 
   /** The validated input, or null (logged) when it does not match the kind. */
-  function inputOf(spec: ServerActivitySpec): Record<string, unknown> | null {
-    const input = parseActivityInput(spec.kind, spec.input);
+  function inputOf(spec: ServerActivitySpec): Activity['input'] | null {
+    const input = parseActivityInput(spec);
     if (!input) {
       log.warn('Server activity input does not match its kind', {
         namespace: 'activities',
@@ -127,7 +128,7 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
   async function insert(
     id: string,
     spec: ServerActivitySpec,
-    input: Record<string, unknown>,
+    input: Activity['input'],
     final?: ServerActivityOutcome,
   ): Promise<void> {
     const row: ActivityInsert = {
@@ -145,7 +146,7 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
     if (final) {
       row.status = final.ok ? 'succeeded' : 'failed';
       row.error = final.ok ? null : clip(final.error, ACTIVITY_ERROR_MAX) || 'Failed';
-      row.effects = parseActivityEffects(final.effects ?? []);
+      row.effects = parseActivityEffects({ effects: final.effects ?? [] });
       row.resultRef = final.ok ? (final.resultRef ?? null) : null;
     }
     const { inserted, capped } = await repo().insert(row);

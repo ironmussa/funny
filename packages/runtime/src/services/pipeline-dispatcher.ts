@@ -23,6 +23,7 @@
 
 import { runPipeline, type PipelineDefinition, type ProgressReporter } from '@funny/pipelines';
 import type { ParsedInputDef } from '@funny/workflows';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { nanoid } from 'nanoid';
 
 import { isBoolean, isNumber, isObject, isString } from '../lib/value-guards.js';
@@ -59,8 +60,14 @@ export interface DispatchInput {
   /** Pipeline name to load. */
   pipelineName: string;
   /** Values supplied to the YAML pipeline's declared `inputs` contract. */
-  inputs?: Record<string, unknown>;
+  inputs?: PipelineInputs;
 }
+
+/** A YAML pipeline's input values by name: what its context's `inputs` holds. */
+export type PipelineInputs = YamlPipelineContext['inputs'];
+
+/** The inputs the dispatcher sets from the dispatch itself, whatever the pipeline declares. */
+type SystemInputs = Pick<DispatchInput, 'threadId' | 'projectId' | 'userId' | 'cwd' | 'prompt'>;
 
 export interface PipelineLoaderScope {
   projectId: string;
@@ -101,10 +108,13 @@ export interface ContextBuilder<C> {
   progressOf?(ctx: C): ProgressReporter;
 }
 
+/** Log attributes: scalar values only. */
+export type DispatcherLogMeta = Record<string, string | number | boolean | null | undefined>;
+
 export interface DispatcherLogger {
-  info: (msg: string, meta?: Record<string, unknown>) => void;
-  warn: (msg: string, meta?: Record<string, unknown>) => void;
-  error: (msg: string, meta?: Record<string, unknown>) => void;
+  info: (msg: string, meta?: DispatcherLogMeta) => void;
+  warn: (msg: string, meta?: DispatcherLogMeta) => void;
+  error: (msg: string, meta?: DispatcherLogMeta) => void;
 }
 
 export interface PipelineDispatcherDeps<C> {
@@ -273,7 +283,7 @@ export class PipelineDispatcher<C> {
   }
 }
 
-function systemInputs(input: DispatchInput): Record<string, unknown> {
+function systemInputs(input: DispatchInput): SystemInputs {
   return {
     threadId: input.threadId,
     projectId: input.projectId,
@@ -285,9 +295,9 @@ function systemInputs(input: DispatchInput): Record<string, unknown> {
 
 function resolvePipelineInputs(args: {
   declared: Record<string, PipelineInputDefinition>;
-  supplied: Record<string, unknown>;
-  system: Record<string, unknown>;
-}): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  supplied: PipelineInputs;
+  system: SystemInputs;
+}): { ok: true; value: PipelineInputs } | { ok: false; error: string } {
   const errors: string[] = [];
   const declaredKeys = new Set(Object.keys(args.declared));
 
@@ -297,7 +307,7 @@ function resolvePipelineInputs(args: {
     }
   }
 
-  const value: Record<string, unknown> = {};
+  const value: PipelineInputs = {};
   for (const [key, def] of Object.entries(args.declared)) {
     if (def.default !== undefined) value[key] = def.default;
   }
@@ -319,7 +329,13 @@ function resolvePipelineInputs(args: {
     : { ok: true, value };
 }
 
-function matchesInputType(value: unknown, type: PipelineInputDefinition['type']): boolean {
+/** A value of one of the declared pipeline input types (string, number, boolean, array, object). */
+type PipelineInputValue = string | number | boolean | object;
+
+function matchesInputType(
+  value: unknown,
+  type: PipelineInputDefinition['type'],
+): value is PipelineInputValue {
   switch (type) {
     case 'string':
       return isString(value);

@@ -12,6 +12,7 @@ import type { SandboxError } from '@funny/sandbox';
 
 import { log } from '../../lib/logger.js';
 import { isString } from '../../lib/value-guards.js';
+import type { BrowserEvent } from '../runner-ports.js';
 import { saveThreadEvent } from '../thread-event-repository.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
 
@@ -54,7 +55,7 @@ export function sandboxErrorEventData(
 }
 
 interface BrowserEventsPort {
-  toUser(userId: string, event: Record<string, unknown>): void;
+  toUser(userId: string, event: BrowserEvent): void;
 }
 
 /** Persist the card in the thread and show it live. Never throws. */

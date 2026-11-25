@@ -82,8 +82,14 @@ function statusStyle(status: FileStatus) {
   return STATUS_STYLE[status] ?? STATUS_STYLE.renamed;
 }
 
+/** The lines a file's change adds and deletes. */
+interface LineStats {
+  added: number;
+  deleted: number;
+}
+
 /** Submodules report the line counts of their nested repo when available. */
-function fileLineStats(f: FileDiffSummary): { added: number; deleted: number } {
+function fileLineStats(f: FileDiffSummary): LineStats {
   if (f.kind === 'submodule' && f.nestedDirty) {
     return { added: f.nestedDirty.linesAdded, deleted: f.nestedDirty.linesDeleted };
   }

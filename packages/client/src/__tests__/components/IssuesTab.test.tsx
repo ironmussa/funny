@@ -71,6 +71,9 @@ mock.module('@/data/factory/hooks', () => ({
 }));
 mock.module('@/data/factory/actions', () => ({
   sendIssuesToFactory: (...args: unknown[]) => factory.send(...args),
+  approveFactoryMerge: () => okAsync(null),
+  setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
+  markFactoryRunDone: () => ({ orTee: () => undefined }),
   controlFactoryRun: (...args: unknown[]) => factory.control(...args),
   retryFactorySettings: (...args: unknown[]) => factory.retry(...args),
 }));
@@ -299,12 +302,14 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   autoMerge: 'low_risk',
   sensitivePaths: [],
   maxLowRiskLines: 400,
+  approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
   tooBig: 'ask',
+  holdPathsAwaitingApproval: false,
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

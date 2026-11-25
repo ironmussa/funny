@@ -27,6 +27,19 @@ interface BypassQuery {
   cwd?: string;
 }
 
+/**
+ * The tool input fields the bypass reads (Write, Edit, Read, NotebookEdit, Bash),
+ * as the model sent them: each is checked for its type before use.
+ */
+interface BypassToolInput {
+  file_path?: unknown;
+  content?: unknown;
+  old_string?: unknown;
+  new_string?: unknown;
+  replace_all?: unknown;
+  command?: unknown;
+}
+
 interface BypassResult {
   output: string;
 }
@@ -35,7 +48,8 @@ const NAMESPACE = 'sensitive-path-bypass';
 
 export async function runSensitivePathBypass(query: BypassQuery): Promise<BypassResult | null> {
   const { toolName, toolInput, cwd } = query;
-  const ti = (toolInput ?? {}) as Record<string, unknown>;
+  // SAFETY: only the fields of BypassToolInput are read, and each is type-checked first.
+  const ti = (toolInput ?? {}) as BypassToolInput;
 
   if (toolName === 'Write') {
     const filePath = isString(ti.file_path) ? ti.file_path : null;

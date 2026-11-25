@@ -8,7 +8,6 @@ import type { SecretValue } from '@funny/shared/project-secrets';
 import { Result, err, ok } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
-import { isObject, isString } from '../../lib/value-guards.js';
 
 /** What the server answers to `data:get_project_secrets`. */
 export interface ProjectSecretsReply {
@@ -89,12 +88,11 @@ export function composeAgentEnv(
 /** Applies `redact` (when there is one) to every string inside `value`, keeping its shape. */
 export function redactDeep<T>(value: T, redact: ((text: string) => string) | undefined): T {
   if (!redact) return value;
-  if (isString(value)) return redact(value) as T;
+  if (typeof value === 'string') return redact(value) as T;
   if (Array.isArray(value)) return value.map((item) => redactDeep(item, redact)) as T;
-  if (isObject(value)) {
-    const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) out[key] = redactDeep(item, redact);
-    return out as T;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value).map(([key, item]) => [key, redactDeep(item, redact)]);
+    return Object.fromEntries(entries) as T;
   }
   return value;
 }

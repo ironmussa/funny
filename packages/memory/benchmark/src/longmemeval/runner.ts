@@ -4,7 +4,7 @@ import { join } from 'path';
 import { PaisleyPark } from '../../../src/index.js';
 import type { StorageConfig, AddOptions } from '../../../src/index.js';
 import { llmComplete } from '../config.js';
-import { judgeAnswer } from '../eval/judge.js';
+import { judgeAnswer, type JudgeResult } from '../eval/judge.js';
 import { chunkConversation, type ConversationTurn } from '../extract/chunker.js';
 import { extractFactsFromConversation } from '../extract/conversation-to-facts.js';
 import type { BenchmarkConfig, QuestionResult } from '../types.js';
@@ -186,7 +186,7 @@ export async function runLongMemEvalBenchmark(
       // Level 5 (abstention): check if the model correctly abstained
       const isAbstention = q.requires_abstention || q.level === 5;
 
-      let evalResult: { correct: boolean; tokensUsed: number };
+      let evalResult: JudgeResult;
 
       if (isAbstention) {
         // For abstention questions, "I don't know" is correct

@@ -28,7 +28,6 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
-import { isNonEmptyString } from '../lib/value-guards.js';
 import { stripInlineReferencedContent } from '../utils/file-mentions.js';
 import type { AgentEventRouter } from './agent-event-router.js';
 import { buildAgentEnv } from './agent-startup/agent-env.js';
@@ -39,6 +38,7 @@ import {
 import { resolveAgentTooling } from './agent-startup/agent-tooling.js';
 import { shouldForceColdPathRecovery } from './agent-startup/cold-path-guard.js';
 import { withFactoryGitEnv } from './agent-startup/factory-git.js';
+import type { AgentMcpServers } from './agent-startup/load-mcp-servers.js';
 import {
   buildBypassExecutor,
   buildPermissionRuleLookup,
@@ -89,7 +89,7 @@ interface StartRequest {
   disallowedTools?: string[];
   allowedTools?: string[];
   provider: AgentProvider;
-  mcpServers?: Record<string, any>;
+  mcpServers?: AgentMcpServers;
   skipMessageInsert?: boolean;
   effort?: string;
   steer?: boolean;
@@ -220,7 +220,7 @@ export class AgentLifecycleManager {
     disallowedTools?: string[],
     allowedTools?: string[],
     provider: AgentProvider = 'claude',
-    mcpServers?: Record<string, any>,
+    mcpServers?: AgentMcpServers,
     skipMessageInsert?: boolean,
     effort?: string,
     /** Steer the live turn (interrupt + redirect) instead of respawning.
@@ -863,8 +863,8 @@ export class AgentLifecycleManager {
   }
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (isNonEmptyString(error)) return error;
+function errorMessage(cause: unknown, fallback: string): string {
+  if (cause instanceof Error && cause.message) return cause.message;
+  if (typeof cause === 'string' && cause) return cause;
   return fallback;
 }

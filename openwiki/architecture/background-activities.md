@@ -9,7 +9,8 @@ user clears it. Openspec change: `track-background-activities`.
 Activities also record what funny does on its own (openspec `track-funny-actions`): cleaning up a
 thread's workspace (`workspace.cleanup`, `workspace.prune`), switching the user's checkout
 (`checkout.switch`), and actions the server takes: sandbox provisioning, stop, wake and destroy
-(`sandbox.*`), factory merges and auto-disable (`factory.merge`, `factory.disabled`) and agents
+(`sandbox.*`), factory merges, auto-disable and merge approvals the factory moved to another commit
+(`factory.merge`, `factory.disabled`, `factory.approval-moved`) and agents
 stopped by a runner binding change (`agents.stopped`).
 
 - **Origin** (`origin` column, written once): `user` (asked for), `implicit` (followed from

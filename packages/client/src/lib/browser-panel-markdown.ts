@@ -2,15 +2,18 @@ import type { ImageAttachment } from '@funny/shared';
 
 import type { Annotation } from '@/stores/browser-panel-store';
 
-const COLOR_NAMES: Record<string, string> = {
-  '#ef4444': 'red',
-  '#f59e0b': 'amber',
-  '#22c55e': 'green',
-  '#3b82f6': 'blue',
-  '#ffffff': 'white',
-};
+/** Annotation color names, keyed by lower-case hex color. */
+const COLOR_NAMES = new Map<string, string>(
+  Object.entries({
+    '#ef4444': 'red',
+    '#f59e0b': 'amber',
+    '#22c55e': 'green',
+    '#3b82f6': 'blue',
+    '#ffffff': 'white',
+  } satisfies Record<string, string>),
+);
 
-const colorName = (hex: string): string => COLOR_NAMES[hex.toLowerCase()] ?? hex;
+const colorName = (hex: string): string => COLOR_NAMES.get(hex.toLowerCase()) ?? hex;
 
 const TITLE_MAX = 80;
 const MD_URL_MAX = 200;

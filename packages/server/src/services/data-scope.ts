@@ -44,7 +44,23 @@ export type DataScopeRule = 'refs' | 'projectless' | 'user' | 'list';
 /** Types only a sandbox runner may send, and only about its own thread (`refs`). */
 const SANDBOX_ONLY_TYPES = new Set(['data:get_github_app_token']);
 
-export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
+/** `data:*` message type → the scope rule its data is checked against. */
+interface DataScopeRules {
+  [type: string]: DataScopeRule;
+}
+
+/**
+ * Types a sandbox runner may never send, even about its own thread: what runs
+ * in a sandbox is readable and steerable by others, so it does not control the
+ * owner's issue factory (factory-agent-tools).
+ */
+const NEVER_FROM_SANDBOX_TYPES = new Set([
+  'data:factory_list_runs',
+  'data:factory_control_run',
+  'data:factory_request_approval',
+]);
+
+export const DATA_SCOPE_RULES: DataScopeRules = {
   'data:insert_message': 'refs',
   'data:insert_tool_call': 'refs',
   'data:update_thread': 'refs',
@@ -99,6 +115,12 @@ export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:get_github_token': 'user',
   // Only a sandbox runner, for its own thread (see `assertRunnerDataScope`).
   'data:get_github_app_token': 'refs',
+  // The issue factory from a thread's agent (factory-agent-tools). `refs` ties
+  // the message to a thread this runner serves; the handler takes the actor and
+  // the project from that thread. Never from a sandbox runner.
+  'data:factory_list_runs': 'refs',
+  'data:factory_control_run': 'refs',
+  'data:factory_request_approval': 'refs',
   // The handler adds the owner check `refs` does not make (project-secrets).
   'data:get_project_secrets': 'refs',
   'data:get_minimax_api_key': 'user',
@@ -410,6 +432,9 @@ async function sandboxDataScope(
 ): Promise<DataScopeDecision> {
   if (touchesGithubSecret(type, data)) {
     return { ok: false, reason: `${type}: GitHub credentials never go to a sandbox runner` };
+  }
+  if (NEVER_FROM_SANDBOX_TYPES.has(type)) {
+    return { ok: false, reason: `${type} is not available to a sandbox runner` };
   }
   if (rule === 'projectless') {
     return { ok: false, reason: `${type} is projectless work (sandbox runner)` };

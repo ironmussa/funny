@@ -14,10 +14,9 @@
  * produce a bounded input.
  */
 
-import { parseStoredJson } from '@funny/shared/json-validation';
+import type { JsonObject } from '@bufbuild/protobuf';
+import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { z } from 'zod';
-
-import { isObject, isString } from '../lib/value-guards.js';
 
 /** A tool call as stored (`tool_calls` row): input and output are raw strings. */
 export interface RecapToolCall {
@@ -88,37 +87,38 @@ function clip(text: string, max: number): string {
 }
 
 /** A stored tool input: its JSON value, or the raw text when it is not JSON. */
-function parseInput(raw: string): unknown {
-  const parsed = parseStoredJson(z.unknown(), raw, 'tool call input');
+function parseInput(raw: string): JsonValue {
+  const parsed = parseStoredJson(z.json(), raw, 'tool call input');
   return parsed.ok ? parsed.value : raw;
 }
 
 /** The pending question's text, from an `AskUserQuestion` input. */
-function questionText(input: unknown): string | null {
-  if (!isObject(input)) return null;
+function questionText(input: JsonValue): string | null {
+  if (!input || typeof input !== 'object') return null;
   const questions = (input as { questions?: unknown }).questions;
   if (Array.isArray(questions)) {
     const texts = questions
-      .map((q) => (isObject(q) ? (q as { question?: unknown }).question : null))
-      .filter((q): q is string => isString(q) && q.length > 0);
+      .map((q) => (q && typeof q === 'object' ? (q as { question?: unknown }).question : null))
+      .filter((q): q is string => typeof q === 'string' && q.length > 0);
     if (texts.length > 0) return texts.join(' / ');
   }
   const question = (input as { question?: unknown }).question;
-  return isString(question) ? question : null;
+  return typeof question === 'string' ? question : null;
 }
 
 /** One line saying what a tool call acted on: a telling field, else its compact JSON. */
 export function summarizeToolInput(raw: string | null | undefined): string {
   if (!raw) return '';
   const input = parseInput(raw);
-  if (isString(input)) return clip(oneLine(input), TOOL_INPUT_SUMMARY_CHARS);
-  if (isObject(input) && !Array.isArray(input)) {
+  if (typeof input === 'string') return clip(oneLine(input), TOOL_INPUT_SUMMARY_CHARS);
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
     const question = questionText(input);
     if (question) return clip(oneLine(question), TOOL_INPUT_SUMMARY_CHARS);
-    const record = input as Record<string, unknown>;
+    // SAFETY: `input` is parsed JSON (parseInput) and a non-array object.
+    const fields = input as JsonObject;
     for (const key of INPUT_SUMMARY_KEYS) {
-      const value = record[key];
-      if (isString(value) && value.trim()) {
+      const value = fields[key];
+      if (typeof value === 'string' && value.trim()) {
         return clip(oneLine(value), TOOL_INPUT_SUMMARY_CHARS);
       }
     }

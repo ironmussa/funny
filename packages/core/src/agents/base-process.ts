@@ -34,6 +34,15 @@ export type ResultSubtype =
   | 'error_max_budget_usd';
 
 /**
+ * ACP `PromptResponse.usage`. Some agents write `cacheRead/WriteTokens`
+ * instead of the protocol's `cachedRead/WriteTokens`; both are read.
+ */
+type AcpPromptUsage = import('@agentclientprotocol/sdk/unstable').Usage & {
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
+};
+
+/**
  * Terminate a child process AND its entire descendant tree.
  *
  * ACP agents (and DeepAgent) spawn MCP servers as their own children, so
@@ -325,7 +334,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   }
 
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
-  protected emitAcpPromptResponseUsage(usage: unknown): void {
+  protected emitAcpPromptResponseUsage(usage: AcpPromptUsage | null | undefined): void {
     if (!usage || !isObject(usage)) return;
     const u = usage as Record<string, unknown>;
     this.emitContextUsageMessage({
@@ -448,13 +457,13 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * JSON metadata (quota violations, retry info, etc.). We extract just the
    * human-readable parts so the UI shows a clean message.
    */
-  protected extractErrorMessage(err: unknown): string {
-    if (err == null) return 'Unknown error';
-    if (isString(err)) return this.cleanErrorDetails(err);
-    if (!isObject(err)) return String(err);
+  protected extractErrorMessage(cause: unknown): string {
+    if (cause == null) return 'Unknown error';
+    if (isString(cause)) return this.cleanErrorDetails(cause);
+    if (!isObject(cause)) return String(cause);
 
-    const e = err as Record<string, unknown>;
-    const base = isString(e.message) ? e.message : String(err);
+    const e = cause as Record<string, unknown>;
+    const base = isString(e.message) ? e.message : String(cause);
 
     // ACP RequestError: { code, message, data: { details } }
     if (e.data && isObject(e.data)) {

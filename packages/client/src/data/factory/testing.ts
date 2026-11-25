@@ -11,6 +11,7 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     id: 'run-1',
     factoryId: 'f1',
     issueNumber: 1,
+    issueTitle: null,
     triggerName: null,
     inputs: {},
     prUrl: null,
@@ -35,6 +36,7 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     flowCommit: null,
     stepOptions: [],
     mergeApproval: null,
+    riskWaiver: null,
     ...overrides,
   };
 }

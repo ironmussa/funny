@@ -1,10 +1,10 @@
+import type { JsonObject } from '@bufbuild/protobuf';
 import { canonicalJson } from '@funny/shared/lib/canonical-json';
 import { isRunnerUserEventType } from '@funny/shared/runner-protocol';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { db } from '../../db/index.js';
 import { threadEvents } from '../../db/schema.js';
-import { isObject, isString } from '../../lib/value-guards.js';
 import { relayToThreadStream, relayToUser } from '../browser-events.js';
 import { canRunnerActOnThread } from '../data-scope.js';
 import {
@@ -18,15 +18,17 @@ import type {
   RunnerGrpcHandler,
 } from './runner-grpc-server.js';
 import type { RunnerGrpcSessionRegistry } from './session-registry.js';
+import { decodeStruct } from './struct-codec.js';
 import { observeRunnerGrpc } from './transport-observability.js';
 
-type WireRequest = Record<string, any> & {
+/** An `EventsRequest` as proto-loader decodes it (`Struct` payloads still in wire form). */
+interface WireRequest {
   session?: { sessionEpoch?: string | number | bigint };
   scope?: { threadId?: string; executionId?: string };
   sequence?: string | number | bigint;
   event?: {
     eventType?: string;
-    data?: unknown;
+    data?: JsonObject;
     durability?: number;
     occurredAt?: { seconds?: string | number | bigint; nanos?: number };
   };
@@ -35,21 +37,21 @@ type WireRequest = Record<string, any> & {
     earliestAvailableSequence?: string | number | bigint;
     reason?: string;
   };
-  userEvent?: { eventType?: string; data?: unknown };
-};
+  userEvent?: { eventType?: string; data?: JsonObject };
+}
 
 /** An unscoped transient event for the runner owner (`EventsRequest.user_event`). */
 export interface RunnerUserEvent {
   type: string;
   threadId: '';
-  data: Record<string, unknown>;
+  data: JsonObject;
 }
 
 export interface AcceptedAgentEvent {
   scope: EventScopeIdentity;
   sequence: bigint;
   eventType: string;
-  data: Record<string, unknown>;
+  data: JsonObject;
   durability: number;
   occurredAt?: { seconds?: string | number | bigint; nanos?: number };
 }
@@ -88,52 +90,9 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
   relayToThreadStream(event.scope.threadId, browserEvent);
 }
 
-/** A decoded protobuf `Value` or `Struct` message, as the gRPC loader hands it over. */
-type WireMessage = {
-  kind?: any;
-  fields?: any;
-  numberValue?: any;
-  stringValue?: any;
-  boolValue?: any;
-  structValue?: any;
-  listValue?: any;
-};
-
-/** A decoded protobuf message: a non-null object whose fields are read by name. */
-function isWireMessage(value: any): value is WireMessage {
-  return isObject(value);
-}
-
-function decodeValue(value: any): unknown {
-  if (!isWireMessage(value) || !isString(value.kind)) return value;
-  switch (value.kind) {
-    case 'nullValue':
-      return null;
-    case 'numberValue':
-      return value.numberValue;
-    case 'stringValue':
-      return value.stringValue;
-    case 'boolValue':
-      return value.boolValue;
-    case 'structValue':
-      return decodeStruct(value.structValue);
-    case 'listValue':
-      return (value.listValue?.values ?? []).map(decodeValue);
-    default:
-      return null;
-  }
-}
-
-function decodeStruct(value: any): Record<string, unknown> {
-  if (!isWireMessage(value)) return {};
-  if (!isWireMessage(value.fields)) return value;
-  return Object.fromEntries(
-    Object.entries(value.fields).map(([key, field]) => [key, decodeValue(field)]),
-  );
-}
-
 function parseUnsigned(value: unknown): bigint | null {
   try {
+    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n && parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? parsed : null;
   } catch {
@@ -147,7 +106,13 @@ function requestKind(request: WireRequest): 'event' | 'gap' | undefined {
   return undefined;
 }
 
-function responseBase(epoch: bigint, scope?: EventScopeIdentity): Record<string, unknown> {
+/** The envelope fields every `EventsResponse` carries. */
+interface EventsResponseBase {
+  session: { sessionEpoch: string };
+  scope: EventScopeIdentity | undefined;
+}
+
+function responseBase(epoch: bigint, scope?: EventScopeIdentity): EventsResponseBase {
   return {
     session: { sessionEpoch: epoch.toString() },
     scope: scope ?? undefined,
@@ -223,7 +188,7 @@ export function createEventsHandler(
       const type = userEvent.eventType ?? '';
       if (!userId || !isRunnerUserEventType(type)) return;
       const data = decodeStruct(userEvent.data);
-      const threadId = isString(data.threadId) ? data.threadId : '';
+      const threadId = typeof data.threadId === 'string' ? data.threadId : '';
       if (threadId && !(await userEventThreadAllowed(threadId))) return;
       publishUserEvent(userId, { type, threadId: '', data });
     };

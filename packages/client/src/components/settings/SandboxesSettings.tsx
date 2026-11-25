@@ -178,7 +178,7 @@ function ConnectionName({
         value={draft}
         maxLength={120}
         aria-label="Connection name"
-        className="h-6 max-w-[240px] text-sm"
+        className="h-6 max-w-[240px]"
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => void save()}
         onKeyDown={(e) => {
@@ -265,8 +265,8 @@ function ConnectionRow({
       </Button>
       <Button
         size="xs"
-        variant="ghost"
-        className="text-destructive h-6"
+        variant="ghost-destructive"
+        className="h-6"
         onClick={() => setConfirmOpen(true)}
         data-testid={`sandbox-connection-remove-${connection.id}`}
       >
@@ -313,7 +313,7 @@ export function SandboxesSettings() {
           <EmptyState
             padding="md"
             fill={false}
-            className="border-border/50 rounded-lg border border-dashed"
+            surface="dashed-muted"
             icon={Boxes}
             title="No sandbox providers connected yet."
             description="Add one above to run threads in their own sandbox."

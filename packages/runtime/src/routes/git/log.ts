@@ -27,6 +27,7 @@ import { type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
+import type { TelemetryAttributes } from '../../lib/telemetry.js';
 import { isString } from '../../lib/value-guards.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { resolveIdentity, resolveThreadIdentity } from '../../services/git-service.js';
@@ -119,7 +120,7 @@ export function buildLogPayload<E extends { hash: string }>(
 async function fetchUnpushedSpanned(
   c: Context<HonoEnv>,
   cwd: string,
-  attrs: Record<string, unknown>,
+  attrs: TelemetryAttributes,
 ): Promise<Set<string>> {
   const span = requestSpan(c, 'git.unpushed_hashes', attrs);
   const r = await getUnpushedHashes(cwd);
@@ -142,7 +143,7 @@ async function fetchUnpushedSpanned(
 async function fetchUnpulledSpanned(
   c: Context<HonoEnv>,
   cwd: string,
-  attrs: Record<string, unknown>,
+  attrs: TelemetryAttributes,
 ): Promise<Set<string>> {
   const span = requestSpan(c, 'git.unpulled_hashes', attrs);
   const r = await getUnpulledHashes(cwd);
@@ -267,7 +268,7 @@ async function enrichGraphRefsWithPullRequests(
   c: Context<HonoEnv>,
   cwd: string,
   entries: GitGraphLogEntry[],
-  attrs: Record<string, unknown>,
+  attrs: TelemetryAttributes,
   ghEnv: Record<string, string> | undefined,
   audience: GraphPRAudience,
 ): Promise<GitGraphLogEntry[]> {

@@ -123,9 +123,13 @@ function enabledCapabilities(
       value = capability;
     } else {
       const generatedName = capability.replace(/^RUNNER_CAPABILITY_/, '');
+      // SAFETY: an unknown name indexes to undefined (or a reverse-mapped name string), which the
+      // typeof check below maps to UNSPECIFIED.
       const resolved = RunnerCapability[generatedName as keyof typeof RunnerCapability];
       value = isNumber(resolved) ? resolved : RunnerCapability.UNSPECIFIED;
     }
+    // SAFETY: integers that are not a supported RunnerCapability are dropped by the
+    // available.has filter below.
     return Number.isInteger(value) ? [value as RunnerCapability] : [];
   });
   return [...new Set(normalized)].filter(
@@ -170,14 +174,20 @@ function effectiveLimits(
   };
 }
 
-function duration(milliseconds: number): { seconds: string; nanos: number } {
+/** A protobuf `Duration` / `Timestamp` as JSON: whole seconds (int64 as a string) and nanoseconds. */
+interface SecondsAndNanos {
+  seconds: string;
+  nanos: number;
+}
+
+function duration(milliseconds: number): SecondsAndNanos {
   return {
     seconds: String(Math.floor(milliseconds / 1_000)),
     nanos: (milliseconds % 1_000) * 1_000_000,
   };
 }
 
-function timestamp(now = Date.now()): { seconds: string; nanos: number } {
+function timestamp(now = Date.now()): SecondsAndNanos {
   return {
     seconds: String(Math.floor(now / 1_000)),
     nanos: (now % 1_000) * 1_000_000,
@@ -208,7 +218,7 @@ function writeFailure(
   call.end();
 }
 
-function supportedRange(versions: Version[]): Record<string, number> {
+function supportedRange(versions: Version[]) {
   const ordered = [...versions].sort((a, b) => a.major - b.major || a.minor - b.minor);
   const first = ordered[0];
   const last = ordered.at(-1);
@@ -244,9 +254,8 @@ export function createControlNegotiationHandler(
     call.once('error', deactivate);
     call.once('finish', deactivate);
 
-    const handleRequest = async (raw: Record<string, unknown>): Promise<void> => {
+    const handleRequest = async (request: ControlRequestWire): Promise<void> => {
       if (state === 'closed') return;
-      const request = raw as ControlRequestWire;
       const kind = requestKind(request);
 
       if (state === 'awaiting-hello') {
@@ -401,7 +410,7 @@ export function createControlNegotiationHandler(
       );
     };
 
-    call.on('data', (request: Record<string, unknown>) => {
+    call.on('data', (request: ControlRequestWire) => {
       call.pause();
       void handleRequest(request)
         .catch(() => {

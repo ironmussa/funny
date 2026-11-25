@@ -46,6 +46,8 @@ export class BrowserV1IdempotencyStore implements BrowserV1IdempotencyPort {
   }): Promise<IdempotencyResult<T>> {
     this.prune();
     const key = `${input.principalUserId}\0${input.idempotencyKey}`;
+    // SAFETY: callers reach this store through BrowserV1IdempotencyPort (T = OperationOutcome), and
+    // an entry is replayed only for a matching fingerprint, i.e. the same operation.
     const existing = this.entries.get(key) as IdempotencyEntry<T> | undefined;
     if (existing) {
       if (existing.fingerprint !== input.fingerprint) return { kind: 'conflict' };
@@ -76,7 +78,7 @@ export class BrowserV1IdempotencyStore implements BrowserV1IdempotencyPort {
       if (entry.createdAt < oldest) this.entries.delete(key);
     }
     while (this.entries.size >= this.options.maxEntries) {
-      const oldestKey = this.entries.keys().next().value as string | undefined;
+      const oldestKey: string | undefined = this.entries.keys().next().value;
       if (!oldestKey) break;
       this.entries.delete(oldestKey);
     }

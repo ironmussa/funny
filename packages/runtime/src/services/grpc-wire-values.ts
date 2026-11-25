@@ -1,9 +1,14 @@
 /** Decoders for gRPC wire values that may arrive as JSON-safe strings. */
-import { isString } from '../lib/value-guards.js';
 
-export function binary(value: unknown): Uint8Array | null {
+/** A protobuf `bytes` field: raw bytes, or base64 in the JSON form. */
+export type WireBytes = Uint8Array | string | null | undefined;
+
+/** A protobuf `uint64` field: a bigint, a number, or a decimal string in the JSON form. */
+export type WireUnsigned = bigint | number | string | null | undefined;
+
+export function binary(value: WireBytes): Uint8Array | null {
   if (value instanceof Uint8Array) return value;
-  if (!isString(value)) return null;
+  if (typeof value !== 'string') return null;
   try {
     return Buffer.from(value, 'base64');
   } catch {
@@ -11,7 +16,7 @@ export function binary(value: unknown): Uint8Array | null {
   }
 }
 
-export function unsigned(value: unknown): bigint | null {
+export function unsigned(value: WireUnsigned): bigint | null {
   try {
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n ? parsed : null;

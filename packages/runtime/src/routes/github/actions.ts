@@ -15,11 +15,11 @@ import type {
   ActionStep,
   CICheckConclusion,
 } from '@funny/shared';
+import type { JsonValue } from '@funny/shared/json-validation';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
-import { isString, isNumber } from '../../lib/value-guards.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody, parseQuery } from '../../validation/request.js';
 import { fetchAllPages, GITHUB_API, githubApiFetch, githubRepoFor } from './helpers.js';
@@ -32,9 +32,9 @@ export const actionRoutes = new Hono<HonoEnv>();
  * and answer 502 with what went wrong.
  */
 function upstreamFailure(c: Context<HonoEnv>, action: string, failure: number | Error) {
-  const detail = isNumber(failure) ? { status: failure } : { error: failure.message };
+  const detail = typeof failure === 'number' ? { status: failure } : { error: failure.message };
   log.warn('github actions request failed', { namespace: 'github-actions', action, ...detail });
-  const message = isNumber(failure) ? `GitHub API error: ${failure}` : failure.message;
+  const message = typeof failure === 'number' ? `GitHub API error: ${failure}` : failure.message;
   return c.json({ error: message }, 502);
 }
 
@@ -44,21 +44,27 @@ const JOB_LOG_TAIL_LINES = 200;
 /** Lines kept after the last `##[error]`: GitHub prints the exit code there. */
 const LINES_AFTER_ERROR = 3;
 
+/** One field of GitHub's decoded JSON; absent when GitHub left it out. */
+type GithubField = JsonValue | undefined;
+
 /** GitHub's run / job statuses, folded into the three the UI draws. */
-function actionStatus(status: unknown): ActionStatus {
+function actionStatus(status: GithubField): ActionStatus {
   if (status === 'completed') return 'completed';
   if (status === 'in_progress') return 'in_progress';
   return 'queued';
 }
 
-function conclusion(value: unknown): CICheckConclusion {
-  return isString(value) ? (value as CICheckConclusion) : null;
+function conclusion(value: GithubField): CICheckConclusion {
+  return typeof value === 'string' ? (value as CICheckConclusion) : null;
 }
 
 /** GitHub's JSON is unchecked: a field of the wrong type becomes the fallback. */
-const text = (value: unknown, fallback = ''): string => (isString(value) ? value : fallback);
-const textOrNull = (value: unknown): string | null => (isString(value) ? value : null);
-const count = (value: unknown, fallback = 0): number => (isNumber(value) ? value : fallback);
+const text = (value: GithubField, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+const textOrNull = (value: GithubField): string | null =>
+  typeof value === 'string' ? value : null;
+const count = (value: GithubField, fallback = 0): number =>
+  typeof value === 'number' ? value : fallback;
 
 /** The run's title; runs from before `display_title` existed fall back to the commit's subject. */
 function runTitle(run: any): string {

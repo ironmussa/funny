@@ -314,6 +314,8 @@ export function createRunnerGrpcWebSocketCarrier(options: RunnerGrpcWebSocketCar
 
 /** True when a Bun server WebSocket belongs to the runner carrier (vs Socket.IO). */
 function isCarrierWebSocket(ws: { data?: unknown }): ws is CarrierWebSocket {
+  // SAFETY: names only `kind`; optional chaining yields undefined for the Socket.IO sockets'
+  // data (absent or without kind), so only CarrierWebSocketData matches.
   return (ws.data as { kind?: string } | undefined)?.kind === RUNNER_GRPC_WS_KIND;
 }
 
@@ -358,5 +360,7 @@ export function routeRunnerCarrier(
 ): Promise<Response | undefined> | Response | null {
   if (new URL(req.url).pathname !== RUNNER_GRPC_WS_PATH) return null;
   if (!carrier) return new Response('Runner transport disabled', { status: 404 });
+  // SAFETY: hosts/bun/main.ts passes its Bun.Server, whose upgrade(req, { data }) is what
+  // carrier.upgrade calls; the tests pass {} only on paths that return before this line.
   return carrier.upgrade(req, server as Parameters<Carrier['upgrade']>[1], address);
 }

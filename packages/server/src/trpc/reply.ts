@@ -15,12 +15,16 @@ export async function answerJson<T>(
   status: 200 | 201 = 200,
 ): Promise<Response> {
   return (await result).match(
+    // SAFETY: every port routed through answerJson resolves to a JSON object
+    // (profile, project list, `{ token }`, `{ ok }`, ...).
     (value) => c.json(value as object, status),
     (error: ApiFailure) =>
       c.json(
         error.code === undefined
           ? { error: error.message }
           : { error: error.message, code: error.code },
+        // SAFETY: every failure() the ports build carries a 4xx / 5xx status (400-503),
+        // never 200 / 201.
         error.status as ErrorStatus,
       ),
   );

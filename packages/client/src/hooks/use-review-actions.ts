@@ -98,53 +98,20 @@ export interface UseReviewActionsResult {
   handleOpenDirectory: (relativePath: string, isFile: boolean) => Promise<void>;
 }
 
-/**
- * Mega-hook bundling every action handler in ReviewPane that mutates git
- * state, calls the API, or opens the OS editor: stage / unstage / revert /
- * discard / ignore / pull / fetch / stash-create / reset-soft / conflict
- * resolve / agent-ask / copy-path / open-directory.
- *
- * The handlers share so much (api + toast + toastError + refresh callback)
- * that bundling them removes ~6 imports from ReviewPane and condenses ~400
- * lines of repetitive try/catch/toast scaffolding into a single module.
- *
- * Final piece of the ReviewPane god-file split — see
- * .claude/plans/reviewpane-split.md.
- */
-export function useReviewActions({
+type ReviewActionsCtx = UseReviewActionsArgs & { t: ReturnType<typeof useTranslation>['t'] };
+
+/** Discard / revert / ignore (open confirm dialog; execute after) and reset-soft. */
+function useDiscardActions({
   hasGitContext,
   effectiveThreadId,
   projectModeId,
   summaries,
   checkedFiles,
-  expandedFile,
-  selectedFile,
-  baseBranch,
-  basePath,
   refresh,
-  loadDiffForFile,
-  setDiffCache,
-  setHasRebaseConflict,
   setConfirmDialog,
-  refreshStashList,
-}: UseReviewActionsArgs): UseReviewActionsResult {
-  const { t } = useTranslation();
-
-  // In-progress flags
-  const [stashInProgress, setStashInProgress] = useState(false);
+  t,
+}: ReviewActionsCtx) {
   const [resetInProgress, setResetInProgress] = useState(false);
-  const [patchStagingInProgress, setPatchStagingInProgress] = useState(false);
-
-  // Per-file line-selection state for the indeterminate checkbox in ChangesFilesPanel
-  const [fileSelectionState, setFileSelectionState] = useState<
-    Map<string, 'all' | 'partial' | 'none'>
-  >(new Map());
-  // Increment to signal ExpandedDiffView to re-select all lines
-  const [selectAllSignal, setSelectAllSignal] = useState(0);
-  // Increment to signal ExpandedDiffView to deselect all lines
-  const [deselectAllSignal, setDeselectAllSignal] = useState(0);
-
-  // ── Discard / revert / ignore (open confirm dialog; execute after) ──
 
   const handleRevertFile = useCallback(
     (path: string) => setConfirmDialog({ type: 'revert', path }),
@@ -264,7 +231,40 @@ export function useReviewActions({
     await refresh();
   }, [hasGitContext, resetInProgress, effectiveThreadId, projectModeId, refresh, t]);
 
-  // ── Staging ──
+  return {
+    resetInProgress,
+    handleRevertFile,
+    executeRevert,
+    handleDiscardAll,
+    handleDiscardFolder,
+    executeDiscardAll,
+    handleIgnoreFiles,
+    executeIgnoreFiles,
+    handleIgnore,
+    executeResetSoft,
+  };
+}
+
+/** Whole-file and line-level staging, plus the per-file line-selection signals. */
+function useStagingActions({
+  hasGitContext,
+  effectiveThreadId,
+  projectModeId,
+  summaries,
+  checkedFiles,
+  refresh,
+  t,
+}: ReviewActionsCtx) {
+  const [patchStagingInProgress, setPatchStagingInProgress] = useState(false);
+
+  // Per-file line-selection state for the indeterminate checkbox in ChangesFilesPanel
+  const [fileSelectionState, setFileSelectionState] = useState<
+    Map<string, 'all' | 'partial' | 'none'>
+  >(new Map());
+  // Increment to signal ExpandedDiffView to re-select all lines
+  const [selectAllSignal, setSelectAllSignal] = useState(0);
+  // Increment to signal ExpandedDiffView to deselect all lines
+  const [deselectAllSignal, setDeselectAllSignal] = useState(0);
 
   const handleStageFile = useCallback(
     async (path: string) => {
@@ -404,8 +404,37 @@ export function useReviewActions({
     [],
   );
 
-  // ── Conflict resolution ──
+  return {
+    patchStagingInProgress,
+    fileSelectionState,
+    setFileSelectionState,
+    selectAllSignal,
+    setSelectAllSignal,
+    deselectAllSignal,
+    setDeselectAllSignal,
+    handleStageFile,
+    handleUnstageFile,
+    handleStageSelected,
+    handleUnstageAll,
+    handleStagePatch,
+    handleSelectionStateChange,
+  };
+}
 
+/** Conflict resolution: per-block resolve, ask the agent, open in the editor. */
+function useConflictActions({
+  hasGitContext,
+  effectiveThreadId,
+  projectModeId,
+  expandedFile,
+  selectedFile,
+  baseBranch,
+  refresh,
+  loadDiffForFile,
+  setDiffCache,
+  setHasRebaseConflict,
+  t,
+}: ReviewActionsCtx) {
   const handleResolveConflict = useCallback(
     async (blockId: number, resolution: 'ours' | 'theirs' | 'both') => {
       const filePath = expandedFile || selectedFile;
@@ -482,24 +511,21 @@ export function useReviewActions({
     browseApi.openInEditor(worktreePath, editor);
   }, [effectiveThreadId]);
 
-  // ── Network: pull / fetch ──
+  return { handleResolveConflict, handleAskAgentResolve, handleOpenInEditorConflict };
+}
 
-  const {
-    pullInProgress,
-    fetchInProgress,
-    pullStrategyDialog,
-    setPullStrategyDialog,
-    handlePull,
-    handlePullStrategyChosen,
-    handleFetchOrigin,
-  } = useGitRemoteActions({
-    threadId: effectiveThreadId,
-    projectId: projectModeId,
-    hasGitContext,
-    afterChange: refresh,
-  });
-
-  // ── Stash creation (popping/dropping is in useStashState) ──
+/** Stash creation (popping/dropping is in useStashState). */
+function useStashCreateActions({
+  hasGitContext,
+  effectiveThreadId,
+  projectModeId,
+  summaries,
+  checkedFiles,
+  refresh,
+  refreshStashList,
+  t,
+}: ReviewActionsCtx) {
+  const [stashInProgress, setStashInProgress] = useState(false);
 
   const handleStash = useCallback(async () => {
     if (!hasGitContext || stashInProgress) return;
@@ -568,8 +594,11 @@ export function useReviewActions({
     t,
   ]);
 
-  // ── Filesystem ──
+  return { stashInProgress, handleStash, handleStashSelected };
+}
 
+/** Filesystem: copy a path, open its directory. */
+function useFilesystemActions({ basePath, t }: ReviewActionsCtx) {
   const handleCopyPath = useCallback(
     (path: string, relative: boolean) => {
       const text = relative ? path : basePath ? `${basePath}/${path}` : path;
@@ -602,44 +631,61 @@ export function useReviewActions({
     [basePath, t],
   );
 
-  return {
+  return { handleCopyPath, handleOpenDirectory };
+}
+
+/**
+ * Mega-hook bundling every action handler in ReviewPane that mutates git
+ * state, calls the API, or opens the OS editor: stage / unstage / revert /
+ * discard / ignore / pull / fetch / stash-create / reset-soft / conflict
+ * resolve / agent-ask / copy-path / open-directory.
+ *
+ * The handlers share so much (api + toast + toastError + refresh callback)
+ * that bundling them removes ~6 imports from ReviewPane and condenses ~400
+ * lines of repetitive try/catch/toast scaffolding into a single module.
+ *
+ * Final piece of the ReviewPane god-file split — see
+ * .claude/plans/reviewpane-split.md.
+ */
+export function useReviewActions(args: UseReviewActionsArgs): UseReviewActionsResult {
+  const { t } = useTranslation();
+  const ctx: ReviewActionsCtx = { ...args, t };
+
+  const discard = useDiscardActions(ctx);
+  const staging = useStagingActions(ctx);
+  const conflict = useConflictActions(ctx);
+
+  // ── Network: pull / fetch ──
+  const {
     pullInProgress,
     fetchInProgress,
-    stashInProgress,
-    resetInProgress,
-    patchStagingInProgress,
     pullStrategyDialog,
     setPullStrategyDialog,
-    fileSelectionState,
-    setFileSelectionState,
-    selectAllSignal,
-    setSelectAllSignal,
-    deselectAllSignal,
-    setDeselectAllSignal,
-    handleRevertFile,
-    executeRevert,
-    handleDiscardAll,
-    handleDiscardFolder,
-    executeDiscardAll,
-    handleIgnoreFiles,
-    executeIgnoreFiles,
-    handleIgnore,
-    executeResetSoft,
-    handleStageFile,
-    handleUnstageFile,
-    handleStageSelected,
-    handleUnstageAll,
-    handleStagePatch,
-    handleSelectionStateChange,
-    handleResolveConflict,
-    handleAskAgentResolve,
-    handleOpenInEditorConflict,
     handlePull,
     handlePullStrategyChosen,
     handleFetchOrigin,
-    handleStash,
-    handleStashSelected,
-    handleCopyPath,
-    handleOpenDirectory,
+  } = useGitRemoteActions({
+    threadId: args.effectiveThreadId,
+    projectId: args.projectModeId,
+    hasGitContext: args.hasGitContext,
+    afterChange: args.refresh,
+  });
+
+  const stash = useStashCreateActions(ctx);
+  const filesystem = useFilesystemActions(ctx);
+
+  return {
+    pullInProgress,
+    fetchInProgress,
+    pullStrategyDialog,
+    setPullStrategyDialog,
+    handlePull,
+    handlePullStrategyChosen,
+    handleFetchOrigin,
+    ...discard,
+    ...staging,
+    ...conflict,
+    ...stash,
+    ...filesystem,
   };
 }

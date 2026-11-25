@@ -7,14 +7,16 @@ interface Props {
   data: Record<string, number>;
 }
 
-const COLORS: Record<string, string> = {
-  backlog: '#6b7280',
-  planning: '#a78bfa',
-  in_progress: '#3b82f6',
-  review: '#f59e0b',
-  done: '#22c55e',
-  archived: '#8b5cf6',
-};
+const COLORS = new Map(
+  Object.entries({
+    backlog: '#6b7280',
+    planning: '#a78bfa',
+    in_progress: '#3b82f6',
+    review: '#f59e0b',
+    done: '#22c55e',
+    archived: '#8b5cf6',
+  }),
+);
 
 // Hoisted tooltip styles to avoid re-creating objects on every render (rerender-memo-with-default-value)
 const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
@@ -27,20 +29,22 @@ const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
 const TOOLTIP_ITEM_STYLE: React.CSSProperties = { color: 'hsl(var(--popover-foreground))' };
 const TOOLTIP_LABEL_STYLE: React.CSSProperties = { color: 'hsl(var(--popover-foreground))' };
 
-const LABEL_KEYS: Record<string, string> = {
-  backlog: 'analytics.backlog',
-  planning: 'analytics.planning',
-  in_progress: 'analytics.inProgress',
-  review: 'analytics.review',
-  done: 'analytics.done',
-  archived: 'analytics.archived',
-};
+const LABEL_KEYS = new Map(
+  Object.entries({
+    backlog: 'analytics.backlog',
+    planning: 'analytics.planning',
+    in_progress: 'analytics.inProgress',
+    review: 'analytics.review',
+    done: 'analytics.done',
+    archived: 'analytics.archived',
+  }),
+);
 
 export function StageDistributionChart({ data }: Props) {
   const { t } = useTranslation();
 
   const chartData = Object.entries(data).flatMap(([stage, value]) =>
-    value > 0 ? [{ name: t(LABEL_KEYS[stage] ?? stage), value, stage }] : [],
+    value > 0 ? [{ name: t(LABEL_KEYS.get(stage) ?? stage), value, stage }] : [],
   );
 
   if (chartData.length === 0) {
@@ -64,7 +68,7 @@ export function StageDistributionChart({ data }: Props) {
             stroke="none"
           >
             {chartData.map((entry) => (
-              <Cell key={entry.stage} fill={COLORS[entry.stage] ?? '#6b7280'} />
+              <Cell key={entry.stage} fill={COLORS.get(entry.stage) ?? '#6b7280'} />
             ))}
           </Pie>
           <Tooltip
@@ -80,7 +84,7 @@ export function StageDistributionChart({ data }: Props) {
           <div key={entry.stage} className="flex items-center gap-3">
             <div
               className="size-3 shrink-0 rounded-full"
-              style={{ backgroundColor: COLORS[entry.stage] }}
+              style={{ backgroundColor: COLORS.get(entry.stage) }}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
@@ -92,7 +96,7 @@ export function StageDistributionChart({ data }: Props) {
                   className="h-full rounded-full transition-[width,background-color]"
                   style={{
                     width: `${(entry.value / total) * 100}%`,
-                    backgroundColor: COLORS[entry.stage],
+                    backgroundColor: COLORS.get(entry.stage),
                   }}
                 />
               </div>

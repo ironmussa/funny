@@ -83,6 +83,8 @@ export function makeCreateThread(ports: CreateThreadPorts): CreateThread {
 
       // The runner's body is untyped JSON. Reading a property off `null` throws
       // here, which (like the legacy handler) surfaces as `creation-failed`.
+      // SAFETY: only id / thread.id / title / branch are read, each falsy-checked or
+      // passed on as the legacy handler did.
       const data = response.thread as any;
       const threadId = data.id || data.thread?.id;
       if (threadId && runnerId !== DEFAULT_RUNNER_ID) {

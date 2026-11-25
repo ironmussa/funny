@@ -8,15 +8,15 @@
 // Set env vars before any module imports
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-const relayCalls: Array<{ userId: string; event: Record<string, unknown> }> = [];
-const threadViewerCalls: Array<{ threadId: string; event: Record<string, unknown> }> = [];
+const relayCalls: Array<{ userId: string; event: BrowserEvent }> = [];
+const threadViewerCalls: Array<{ threadId: string; event: BrowserEvent }> = [];
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import type { BrowserEventSink } from '../../services/runner-ports.js';
+import type { BrowserEvent, BrowserEventSink } from '../../services/runner-ports.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedProject,

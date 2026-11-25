@@ -1,8 +1,8 @@
+import type { JsonObject, JsonValue } from '@bufbuild/protobuf';
 import { runAsync } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { log } from '../../lib/logger.js';
-import { isBoolean, isNumber, isObject, isString } from '../../lib/value-guards.js';
 import { handleDataMessageWithAck } from '../data-handler.js';
 import type { RunnerGrpcConfig } from './config.js';
 import {
@@ -15,10 +15,18 @@ import type {
   RunnerGrpcHandler,
 } from './runner-grpc-server.js';
 import type { RunnerGrpcSessionRegistry } from './session-registry.js';
+import { decodeStruct, encodeStruct, type WireStruct } from './struct-codec.js';
 import { observeRunnerGrpc } from './transport-observability.js';
 
-type WireValue = null | boolean | number | string | WireValue[] | { [key: string]: WireValue };
-type WireRequest = Record<string, any> & {
+type OperationKind = (typeof OPERATION_KINDS)[number];
+
+/**
+ * An `OperationsRequest` as proto-loader decodes it: the envelope fields, and
+ * the request message under its operation's field name. Each operation message
+ * is plain JSON (longs as strings, enums as numbers; operations.proto has no
+ * bytes fields), with its `google.protobuf.Struct` fields still in wire form.
+ */
+type WireRequest = {
   operation?: string;
   session?: { sessionEpoch?: string | number | bigint };
   metadata?: {
@@ -26,10 +34,56 @@ type WireRequest = Record<string, any> & {
     deadline?: { seconds?: string | number | bigint; nanos?: number };
     idempotencyKey?: string;
   };
-};
+} & { [K in OperationKind]?: JsonObject };
+
+/** A field of a legacy data request: decoded JSON, or `undefined` for an absent optional field. */
+type DataRequestValue =
+  | JsonValue
+  | undefined
+  | DataRequestValue[]
+  | { [key: string]: DataRequestValue };
+
+/** The `data:*` message an operation becomes, handed to `handleDataMessageWithAck`. */
+interface DataRequest {
+  type: string;
+  [field: string]: DataRequestValue;
+}
+
+/** `OperationSuccess`, one case of its `result` oneof. */
+type OperationSuccessWire =
+  | {
+      threadMessages: {
+        messages: WireStruct[];
+        hasMore: boolean;
+        hasMoreAfter: boolean;
+        total?: string;
+        windowStart?: string;
+        leadingUserMessage?: WireStruct;
+      };
+    }
+  | {
+      toolCall: {
+        id?: string;
+        name?: string | null;
+        input?: string | null;
+        output?: string | null;
+      };
+    }
+  | { thread: { value?: WireStruct } }
+  | { insertedRecord: { id: string } }
+  | { deletedRecords: { count: string } }
+  | { operationResponse: WireStruct };
+
+/** `OperationsResponse` as written to the stream. */
+interface OperationsResponseWire {
+  session: { sessionEpoch: string };
+  correlationId: string;
+  success?: OperationSuccessWire;
+  failure?: { code: FailureCode; message: string; retryable: boolean };
+}
 
 export interface OperationExecution {
-  request: Record<string, unknown>;
+  request: DataRequest;
   signal: AbortSignal;
 }
 
@@ -144,77 +198,17 @@ const OPERATION_KINDS = [
   'activityStart',
   'activityUpdate',
   'activityReconcile',
+  'factoryListRuns',
+  'factoryControlRun',
+  'factoryRequestApproval',
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
-  if (isString(request.operation)) return request.operation;
+  if (typeof request.operation === 'string') return request.operation;
   return OPERATION_KINDS.find((key) => request[key] !== undefined);
 }
 
-/** A decoded protobuf `Value` or `Struct` message, as the gRPC loader hands it over. */
-type WireMessage = {
-  kind?: any;
-  fields?: any;
-  numberValue?: any;
-  stringValue?: any;
-  boolValue?: any;
-  structValue?: any;
-  listValue?: any;
-};
-
-/** A decoded protobuf message: a non-null object whose fields are read by name. */
-function isWireMessage(value: any): value is WireMessage {
-  return isObject(value);
-}
-
-function decodeValue(value: any): WireValue {
-  if (!isWireMessage(value) || !isString(value.kind)) return value;
-  switch (value.kind) {
-    case 'nullValue':
-      return null;
-    case 'numberValue':
-      return value.numberValue;
-    case 'stringValue':
-      return value.stringValue;
-    case 'boolValue':
-      return value.boolValue;
-    case 'structValue':
-      return decodeStruct(value.structValue);
-    case 'listValue':
-      return (value.listValue?.values ?? []).map(decodeValue);
-    default:
-      return null;
-  }
-}
-
-function decodeStruct(value: any): Record<string, WireValue> {
-  if (!isWireMessage(value)) return {};
-  if (!isWireMessage(value.fields)) return value;
-  return Object.fromEntries(
-    Object.entries(value.fields).map(([key, field]) => [key, decodeValue(field)]),
-  );
-}
-
-function encodeValue(value: unknown): Record<string, unknown> {
-  if (value === null || value === undefined) return { nullValue: 0 };
-  if (isNumber(value)) return { numberValue: value };
-  if (isString(value)) return { stringValue: value };
-  if (isBoolean(value)) return { boolValue: value };
-  if (Array.isArray(value)) return { listValue: { values: value.map(encodeValue) } };
-  return { structValue: encodeStruct(value) };
-}
-
-function encodeStruct(value: unknown): Record<string, unknown> {
-  const record = isObject(value) ? (value as Record<string, unknown>) : {};
-  return {
-    fields: Object.fromEntries(
-      Object.entries(record).map(([key, field]) => [key, encodeValue(field)]),
-    ),
-  };
-}
-
-type OperationKind = (typeof OPERATION_KINDS)[number];
-type LegacyMapper = (value: any, principalUserId: string | null) => Record<string, unknown>;
+type LegacyMapper = (value: JsonObject, principalUserId: string | null) => DataRequest;
 
 const threadScoped =
   (type: string): LegacyMapper =>
@@ -250,7 +244,7 @@ const idPatchPayload =
   (type: string, idField: string): LegacyMapper =>
   (value) => ({ type, payload: { id: value[idField], patch: decodeStruct(value.patch) } });
 
-function legacyInsertMessage(value: any): Record<string, unknown> {
+function legacyInsertMessage(value: JsonObject): DataRequest {
   return {
     type: 'data:insert_message',
     threadId: value.threadId,
@@ -272,7 +266,7 @@ function legacyInsertMessage(value: any): Record<string, unknown> {
   };
 }
 
-function legacyMessagePageDirection(direction: unknown): 'after' | 'before' {
+function legacyMessagePageDirection(direction: JsonValue | undefined): 'after' | 'before' {
   return direction === 2 || direction === 'MESSAGE_PAGE_DIRECTION_AFTER' ? 'after' : 'before';
 }
 
@@ -385,6 +379,18 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     projectId: value.projectId ?? undefined,
   }),
   getGithubAppToken: threadScoped('data:get_github_app_token'),
+  factoryListRuns: threadScoped('data:factory_list_runs'),
+  factoryControlRun: (value) => ({
+    type: 'data:factory_control_run',
+    threadId: value.threadId,
+    runId: value.runId,
+    action: value.action,
+  }),
+  factoryRequestApproval: (value) => ({
+    type: 'data:factory_request_approval',
+    threadId: value.threadId,
+    runId: value.runId,
+  }),
   getProjectSecrets: threadScoped('data:get_project_secrets'),
   getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),
   updateProfile: (value, principalUserId) => ({
@@ -470,11 +476,10 @@ function isOperationKind(kind: string): kind is OperationKind {
 }
 
 function toLegacyRequest(
-  kind: string,
+  kind: OperationKind,
   request: WireRequest,
   principalUserId: string | null,
-): Record<string, unknown> | null {
-  if (!isOperationKind(kind)) return null;
+): DataRequest {
   return LEGACY_MAPPERS[kind](request[kind] ?? {}, principalUserId);
 }
 
@@ -484,7 +489,7 @@ function failure(
   code: FailureCode,
   message: string,
   retryable = false,
-): Record<string, unknown> {
+): OperationsResponseWire {
   return {
     session: { sessionEpoch: epoch.toString() },
     correlationId,
@@ -492,8 +497,8 @@ function failure(
   };
 }
 
-function success(epoch: bigint, correlationId: string, result: any): Record<string, unknown> {
-  let payload: Record<string, unknown>;
+function success(epoch: bigint, correlationId: string, result: any): OperationsResponseWire {
+  let payload: OperationSuccessWire;
   if (result?.type === 'data:get_thread_messages_response') {
     payload = {
       threadMessages: {
@@ -514,13 +519,13 @@ function success(epoch: bigint, correlationId: string, result: any): Record<stri
     payload = { toolCall: result.toolCall ?? {} };
   } else if (result?.type?.startsWith('data:get_thread')) {
     payload = { thread: { value: result.thread ? encodeStruct(result.thread) : undefined } };
-  } else if (isString(result?.messageId)) {
+  } else if (typeof result?.messageId === 'string') {
     payload = { insertedRecord: { id: result.messageId } };
-  } else if (isString(result?.toolCallId)) {
+  } else if (typeof result?.toolCallId === 'string') {
     payload = { insertedRecord: { id: result.toolCallId } };
-  } else if (isString(result?.commentId)) {
+  } else if (typeof result?.commentId === 'string') {
     payload = { insertedRecord: { id: result.commentId } };
-  } else if (isNumber(result?.deletedCount)) {
+  } else if (typeof result?.deletedCount === 'number') {
     payload = { deletedRecords: { count: String(result.deletedCount) } };
   } else {
     payload = { operationResponse: encodeStruct(result ?? { success: true }) };
@@ -530,7 +535,7 @@ function success(epoch: bigint, correlationId: string, result: any): Record<stri
 
 function deadlineMs(request: WireRequest): number | null {
   const deadline = request.metadata?.deadline;
-  if (isString(deadline)) {
+  if (typeof deadline === 'string') {
     const value = Date.parse(deadline);
     return Number.isFinite(value) ? value : null;
   }
@@ -616,7 +621,7 @@ export function createOperationsHandler(
           sendFailure(FailureCode.DEADLINE_EXCEEDED, 'operation deadline exceeded', true);
           return;
         }
-        const kind = operationKind;
+        const kind = operationKind && isOperationKind(operationKind) ? operationKind : undefined;
         const legacyRequest = kind
           ? toLegacyRequest(kind, request, context.principal.userId)
           : null;
@@ -628,7 +633,7 @@ export function createOperationsHandler(
         const persistentMutation = PERSISTENT_MUTATIONS.has(kind);
         if (
           persistentMutation &&
-          (!isString(idempotencyKey) || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
+          (typeof idempotencyKey !== 'string' || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
         ) {
           sendFailure(
             FailureCode.INVALID_ARGUMENT,
@@ -651,37 +656,49 @@ export function createOperationsHandler(
         );
         timer.unref();
         try {
-          const execution = persistentMutation
-            ? idempotency.execute(
-                {
-                  runnerId: context.principal.runnerId,
-                  operationKind: kind,
-                  idempotencyKey: idempotencyKey!,
-                  request: request[kind],
-                },
-                () => execute(context, { request: legacyRequest, signal: controller.signal }),
-              )
-            : execute(context, { request: legacyRequest, signal: controller.signal });
-          const result = await runAsync(() => execution, { signal: controller.signal });
-          if (closed) return;
-          if (persistentMutation && (result as any).kind === 'conflict') {
-            sendFailure(
-              FailureCode.CONFLICT,
-              'idempotency key was reused with a different request',
+          let operationResult: unknown;
+          if (persistentMutation) {
+            const execution = idempotency.execute(
+              {
+                runnerId: context.principal.runnerId,
+                operationKind: kind,
+                idempotencyKey: idempotencyKey!,
+                request: request[kind],
+              },
+              () => execute(context, { request: legacyRequest, signal: controller.signal }),
             );
-            return;
+            const result = await runAsync(() => execution, { signal: controller.signal });
+            if (closed) return;
+            if (result.kind === 'conflict') {
+              sendFailure(
+                FailureCode.CONFLICT,
+                'idempotency key was reused with a different request',
+              );
+              return;
+            }
+            if (result.kind === 'in_progress') {
+              sendFailure(FailureCode.UNAVAILABLE, 'operation outcome is not available yet', true);
+              return;
+            }
+            operationResult = result.outcome;
+          } else {
+            const execution = execute(context, {
+              request: legacyRequest,
+              signal: controller.signal,
+            });
+            operationResult = await runAsync(() => execution, { signal: controller.signal });
+            if (closed) return;
           }
-          if (persistentMutation && (result as any).kind === 'in_progress') {
-            sendFailure(FailureCode.UNAVAILABLE, 'operation outcome is not available yet', true);
-            return;
-          }
-          const operationResult = persistentMutation ? (result as any).outcome : result;
+          // SAFETY: names only the two fields read below; optional chaining yields undefined for
+          // nullish values, primitives and objects that lack them.
+          const reported = operationResult as
+            | { success?: unknown; error?: unknown }
+            | null
+            | undefined;
           if (!sessions.isActive(context.principal.runnerId, epoch)) {
             sendFailure(FailureCode.UNAVAILABLE, 'runner session was superseded', true);
-          } else if ((operationResult as any)?.success === false) {
-            const operationError = String(
-              (operationResult as any)?.error ?? 'runner operation failed',
-            );
+          } else if (reported?.success === false) {
+            const operationError = String(reported?.error ?? 'runner operation failed');
             sendFailure(
               operationError === 'Forbidden' ? FailureCode.PERMISSION_DENIED : FailureCode.INTERNAL,
               operationError === 'Forbidden' ? 'operation is not authorized' : operationError,

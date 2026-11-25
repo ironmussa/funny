@@ -10,3 +10,16 @@ export const STATE_PADDING = {
 } as const;
 
 export type StatePadding = keyof typeof STATE_PADDING;
+
+/**
+ * Surface around a placeholder: none, a settings card, or a dashed outline where
+ * the missing items would go (`dashed` pads like a card, `dashed-muted` keeps the padding).
+ */
+export const STATE_SURFACE = {
+  default: '',
+  card: 'settings-card',
+  dashed: 'rounded-md border border-dashed p-6',
+  'dashed-muted': 'rounded-lg border border-dashed border-border/50',
+} as const;
+
+export type StateSurface = keyof typeof STATE_SURFACE;

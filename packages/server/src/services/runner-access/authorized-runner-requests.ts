@@ -33,6 +33,7 @@ import type {
   RunnerResponse,
   RunnerTerminalEvent,
   RunnerTerminalPort,
+  RunnerTerminalSession,
 } from '../runner-ports.js';
 import type { RunnerActor, RunnerId } from './runner-actor.js';
 import type { OAuthCallbackRunner, RunnerFor } from './runner-for.js';
@@ -65,9 +66,14 @@ const IDENTITY_HEADERS = new Set(
   ].map((h) => h.toLowerCase()),
 );
 
+/** Header name → value, as sent to a runner. */
+interface RunnerHeaders {
+  [header: string]: string;
+}
+
 /** Drop every caller-supplied identity header (case-insensitively). */
-function stripIdentityHeaders(headers: Record<string, string> = {}): Record<string, string> {
-  const out: Record<string, string> = {};
+function stripIdentityHeaders(headers: Record<string, string> = {}): RunnerHeaders {
+  const out: RunnerHeaders = {};
   for (const [key, value] of Object.entries(headers)) {
     if (!IDENTITY_HEADERS.has(key.toLowerCase())) out[key] = value;
   }
@@ -87,12 +93,9 @@ function identityOf(actor: RunnerActor): ForwardedIdentity {
 }
 
 /** Identity headers for `identity` to `runnerId`, signed with a fresh nonce. */
-function signedIdentityHeaders(
-  runnerId: string,
-  identity: ForwardedIdentity,
-): Record<string, string> {
+function signedIdentityHeaders(runnerId: string, identity: ForwardedIdentity): RunnerHeaders {
   const secret = runnerForwardingKey(runnerId);
-  const headers: Record<string, string> = {
+  const headers: RunnerHeaders = {
     'X-Runner-Auth': secret,
     'X-Forwarded-User': identity.userId,
     'X-Forwarded-Role': identity.role ?? 'user',
@@ -211,7 +214,7 @@ class AuthorizedRunnerTerminal {
     actor: Named<A, RunnerActor>,
     runner: Named<R, RunnerId>,
     _proof: RunnerFor<A, R>,
-  ): Promise<Array<Record<string, unknown>>> {
+  ): Promise<RunnerTerminalSession[]> {
     if (!this.port) throw new Error('Runner terminal transport is not available');
     return this.port.listSessions(runner.value, actor.value.userId);
   }

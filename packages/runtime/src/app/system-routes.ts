@@ -74,7 +74,26 @@ async function withExternalSession(
   return handler({ sessionId: c.req.param('sessionId') as string, userId });
 }
 
+/** The realtime events a native-git build sends to the user who started it. */
+type NativeGitBuildEventType = 'native-git:build_status' | 'native-git:build_output';
+
+type NativeGitBuildEventData =
+  | { status: 'building' }
+  | { status: 'completed' | 'failed'; exitCode: number }
+  | { text: string; channel: string };
+
 export function registerSystemRoutes(app: Hono<HonoEnv>): void {
+  registerHealthRoutes(app);
+  registerExternalSessionRoutes(app);
+  registerModelDiscoveryRoutes(app);
+  registerProviderSetupRoutes(app);
+  registerProviderExtensionRoutes(app);
+  registerSetupStatusRoute(app);
+  registerNativeGitBuildRoute(app);
+  registerBootstrapRoute(app);
+}
+
+function registerHealthRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/health', (c) => {
     return c.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
@@ -84,7 +103,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       require('../services/shell-detector.js') as typeof import('../services/shell-detector.js');
     return c.json({ shells: detectShells() });
   });
+}
 
+function registerExternalSessionRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/system/claude-code/external-sessions', async (c) => {
     const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
@@ -140,7 +161,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       return c.json({ ok: true });
     }),
   );
+}
 
+function registerModelDiscoveryRoutes(app: Hono<HonoEnv>): void {
   // Dynamic model discovery. Pi uses its native SDK; dynamic ACP providers use
   // manifest-driven ACP probing. The `:provider` param keeps existing URLs
   // (`/api/system/pi/models`, etc.) working unchanged. Static-catalog and
@@ -201,7 +224,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   // (opencode model discovery is served by the generic `/api/system/:provider/models`
   // route above — master's separate opencode route was dropped in the merge.)
+}
 
+function registerProviderSetupRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/system/providers/:provider/setup', async (c) => {
     if (!c.get('userId')) return c.json({ error: 'Unauthorized' }, 401);
     const provider = c.req.param('provider');
@@ -237,7 +262,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     }
     return c.json(await providerSetupStatus(provider, false, profileOptions), 202);
   });
+}
 
+function registerProviderExtensionRoutes(app: Hono<HonoEnv>): void {
   // ── Provider extensions (runner-owned; provider-install-ui §2) ─────────────
   // Install / remove an ACP provider extension into THIS runner's extensions
   // dir. The server proxies `/api/*` here, so a UI install lands on the runner
@@ -345,27 +372,31 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   app.post('/api/system/providers/enable-builtin', (c) => toggleBuiltin(c, true));
   app.post('/api/system/providers/disable-builtin', (c) => toggleBuiltin(c, false));
+}
 
+function registerSetupStatusRoute(app: Hono<HonoEnv>): void {
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();
     resetBinaryCache();
     const providers = await getAvailableProviders();
 
-    const providerInfo: Record<string, any> = {};
-    for (const [name, info] of providers) {
-      providerInfo[name] = {
-        available: info.available,
-        sdkAvailable: info.sdkAvailable,
-        cliAvailable: info.cliAvailable,
-        cliPath: info.cliPath ?? null,
-        cliVersion: info.cliVersion ?? null,
-        error: info.error ?? null,
-        label: PROVIDER_LABELS[name] ?? name,
-        defaultModel: info.available ? getDefaultModel(name as any) : null,
-        models: info.available ? getProviderModels(name as any) : [],
-        modelsWithLabels: info.available ? getProviderModelsWithLabels(name as any) : [],
-      };
-    }
+    const providerInfo = Object.fromEntries(
+      Array.from(providers, ([name, info]) => [
+        name,
+        {
+          available: info.available,
+          sdkAvailable: info.sdkAvailable,
+          cliAvailable: info.cliAvailable,
+          cliPath: info.cliPath ?? null,
+          cliVersion: info.cliVersion ?? null,
+          error: info.error ?? null,
+          label: PROVIDER_LABELS[name] ?? name,
+          defaultModel: info.available ? getDefaultModel(name) : null,
+          models: info.available ? getProviderModels(name) : [],
+          modelsWithLabels: info.available ? getProviderModelsWithLabels(name) : [],
+        },
+      ]),
+    );
 
     const claude = providers.get('claude');
 
@@ -400,7 +431,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       },
     });
   });
+}
 
+function registerNativeGitBuildRoute(app: Hono<HonoEnv>): void {
   let nativeGitBuildInProgress = false;
   app.post('/api/system/build-native-git', async (c) => {
     const userId = c.get('userId');
@@ -423,7 +456,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       return c.json({ error: 'Rust toolchain not available' }, 400);
     }
 
-    const emitBuild = (type: string, data: unknown) => {
+    const emitBuild = (type: NativeGitBuildEventType, data: NativeGitBuildEventData) => {
       wsBroker.emitToUser(userId, { type, threadId: '', data } as any);
     };
 
@@ -466,7 +499,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
     return c.json({ status: 'started' });
   });
+}
 
+function registerBootstrapRoute(app: Hono<HonoEnv>): void {
   app.get('/api/bootstrap', (c) => {
     c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
     c.header('Pragma', 'no-cache');

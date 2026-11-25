@@ -336,6 +336,14 @@ describe('sending issues', () => {
     );
   });
 
+  test('a queued run keeps its issue title, so the board can name it before it has a thread', async () => {
+    const { factoryId, queue } = await setUp();
+
+    await queue.submit(factoryId, { issueNumbers: [12], flowName: 'issue-to-pr' });
+
+    expect((await runFor(factoryId, 12))?.issueTitle).toBe('Issue 12');
+  });
+
   test('a new factory starts in manual mode', async () => {
     const { factoryId } = await setUp();
     const settings = (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap();
@@ -691,9 +699,9 @@ describe('the queue', () => {
     await tick();
 
     expect(launcher.issues()).toEqual([20]);
-    // The labelled issue waits behind it, in the queue.
+    // The labelled issue waits behind it, in the queue, named by its title.
     const labelled = await runFor(factoryId, 7);
-    expect(labelled).toMatchObject({ state: 'requested', source: 'label' });
+    expect(labelled).toMatchObject({ state: 'requested', source: 'label', issueTitle: 'Labelled' });
   });
 
   test('labelled issues beyond the free slots wait in the queue, oldest first', async () => {

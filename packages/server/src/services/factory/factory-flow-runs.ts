@@ -32,6 +32,7 @@
  */
 
 import { nullReporter, runPipeline } from '@funny/pipelines';
+import { errorMessage } from '@funny/shared/errors';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { err, type Result } from 'neverthrow';
 
@@ -300,11 +301,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       let ready!: (start: FactoryRunStart) => void;
       const started = new Promise<FactoryRunStart>((resolve) => (ready = resolve));
       execute(job, controller, () => ready('started'))
-        .then(ready, (error: unknown) => {
+        .then(ready, (cause: unknown) => {
           log.error('Issue factory flow crashed', {
             namespace: 'factory',
             runId: job.run.id,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(cause),
           });
           ready('not-started');
         })

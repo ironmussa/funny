@@ -9,6 +9,7 @@
  */
 
 import type { ConcurrencyGate } from '@funny/pipelines';
+import { errorMessage } from '@funny/shared/errors';
 import { type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -148,11 +149,11 @@ export const blockedReasons = new Map<string, string | null>();
 export async function reportBlocked(factoryId: string, reason: string | null): Promise<void> {
   if (blockedReasons.has(factoryId) && blockedReasons.get(factoryId) === reason) return;
   blockedReasons.set(factoryId, reason);
-  await setFactoryBlocked(factoryId, reason).catch((error: unknown) =>
+  await setFactoryBlocked(factoryId, reason).catch((cause: unknown) =>
     log.warn('Failed to record why an issue factory is blocked', {
       namespace: 'factory',
       factoryId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(cause),
     }),
   );
 }

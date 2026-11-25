@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'path';
 
+import { isObject, isPlainObject } from '../../lib/value-guards.js';
+
 // Issue #459: packages/server/src narrows unparsed values with value guards
 // (src/lib/value-guards.ts), never with an inline `typeof` outside a
 // `value is T` guard. Run the rule on the package and require zero findings.
@@ -62,5 +64,15 @@ describe('no-runtime-typeof in packages/server', () => {
       expect(guards.isPlainObject(sample)).toBe(isObject && !Array.isArray(sample));
     }
     expect(SAMPLES.filter(guards.isNonEmptyString)).toEqual(['text']);
+  });
+
+  test('object guards keep the type the caller declared', () => {
+    // Narrowing a declared union must keep its object members (the
+    // `typeof value === 'object'` it replaces did), not widen them to `object`.
+    const row = { role: 'admin' } as { role: string } | string[] | string | null;
+    expect(isObject(row) && !Array.isArray(row) ? row.role : null).toBe('admin');
+    expect(isPlainObject(row) ? row.role : null).toBe('admin');
+    const list = ['a'] as { role: string } | string[];
+    expect(isPlainObject(list)).toBe(false);
   });
 });

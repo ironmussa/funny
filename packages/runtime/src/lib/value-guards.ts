@@ -32,11 +32,11 @@ export function isSymbol(value: unknown): value is symbol {
 }
 
 /** Any non-null object, arrays included (`typeof value === 'object' && value !== null`). */
-export function isObject(value: unknown): value is object {
+export function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
-/** A non-null object that is not an array. */
-export function isPlainObject(value: unknown): value is object {
+/** A non-null object that is not an array; the caller's array members are dropped from its type. */
+export function isPlainObject<T>(value: T): value is Exclude<T, readonly unknown[]> & object {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

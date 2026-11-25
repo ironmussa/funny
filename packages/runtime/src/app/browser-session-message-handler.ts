@@ -30,6 +30,18 @@ export type BrowserSessionCommandData =
   | WSBrowserSessionCloseData;
 
 /**
+ * The payload of the command `type` names. The command route only checks that
+ * the payload is an object, so each command reads its own fields unchecked.
+ */
+function commandData<T extends BrowserSessionCommandData>(data: BrowserSessionCommandData): T {
+  // SAFETY: callers pass `data` from the same frame as the `type` this
+  // function's caller switched on; the client sends each `browser-session:*`
+  // type with that command's payload. Fields are not validated here: a wrong
+  // field reaches the browser session manager as `undefined`, as before.
+  return data as T;
+}
+
+/**
  * Dispatches inbound WS messages typed `browser-session:*` to the manager.
  * Mirrors the shape of `handlePtyMessage` — call from the central WS handler
  * once we identify a browser-session prefix.
@@ -42,7 +54,7 @@ export function handleBrowserSessionMessage(
   log.info('WS message received', { namespace: NS, type, userId });
   switch (type) {
     case 'browser-session:open': {
-      const d = data as WSBrowserSessionOpenData;
+      const d = commandData<WSBrowserSessionOpenData>(data);
       log.info('handling open', { namespace: NS, sessionId: d.sessionId, url: d.url });
       browserSessionManager.open(userId, d.sessionId, d.url, { origin: 'panel' }).catch((err) => {
         log.error('open failed', { namespace: NS, sessionId: d.sessionId, error: String(err) });
@@ -51,7 +63,7 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:navigate': {
-      const d = data as WSBrowserSessionNavigateData;
+      const d = commandData<WSBrowserSessionNavigateData>(data);
       browserSessionManager.navigate(userId, d.sessionId, d.url).catch((err) => {
         log.warn('navigate failed', {
           namespace: NS,
@@ -63,7 +75,7 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:nav': {
-      const d = data as WSBrowserSessionNavData;
+      const d = commandData<WSBrowserSessionNavData>(data);
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
           browserSessionManager.nav(userId, d.sessionId, d.action),
@@ -80,7 +92,7 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:input': {
-      const d = data as WSBrowserSessionInputData;
+      const d = commandData<WSBrowserSessionInputData>(data);
       browserSessionManager.dispatchInput(userId, d.sessionId, d).catch(() => {
         /* swallow — input is best-effort, frame stream provides visual feedback */
       });
@@ -88,7 +100,7 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:inspect-at': {
-      const d = data as WSBrowserSessionInspectAtData;
+      const d = commandData<WSBrowserSessionInspectAtData>(data);
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
           browserSessionManager.inspectAt(userId, d.sessionId, d.x, d.y),
@@ -104,7 +116,7 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:inspect-rect': {
-      const d = data as WSBrowserSessionInspectRectData;
+      const d = commandData<WSBrowserSessionInspectRectData>(data);
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
           browserSessionManager.inspectRect(userId, d.sessionId, d.x, d.y, d.w, d.h),
@@ -114,7 +126,7 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:screenshot': {
-      const d = data as WSBrowserSessionScreenshotData;
+      const d = commandData<WSBrowserSessionScreenshotData>(data);
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
           browserSessionManager.screenshot(userId, d.sessionId),
@@ -124,7 +136,7 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:execute': {
-      const d = data as WSBrowserSessionExecuteData;
+      const d = commandData<WSBrowserSessionExecuteData>(data);
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
           browserSessionManager.execute(userId, d.sessionId, d.expression),
@@ -134,13 +146,13 @@ export function handleBrowserSessionMessage(
     }
 
     case 'browser-session:heartbeat': {
-      const d = data as WSBrowserSessionHeartbeatData;
+      const d = commandData<WSBrowserSessionHeartbeatData>(data);
       browserSessionManager.heartbeat(userId, d.sessionId);
       return true;
     }
 
     case 'browser-session:close': {
-      const d = data as WSBrowserSessionCloseData;
+      const d = commandData<WSBrowserSessionCloseData>(data);
       browserSessionManager
         .closeFromClient(userId, d.sessionId, d.reason, d.closeId)
         .catch((err) => {

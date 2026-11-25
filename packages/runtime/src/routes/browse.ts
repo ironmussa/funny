@@ -277,6 +277,11 @@ app.post('/open-directory', async (c) => {
 });
 
 // Open project in editor
+/** Editor ids the client may name, to the command that opens a directory in it. */
+interface EditorCommands {
+  readonly [editor: string]: { cmd: string; args: string[] };
+}
+
 app.post('/open-in-editor', async (c) => {
   const { path: dirPath, editor } = await c.req.json<{ path: string; editor: string }>();
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
@@ -286,7 +291,7 @@ app.post('/open-in-editor', async (c) => {
   const denied = await requireProjectPath(dirPath, userId);
   if (denied) return denied;
 
-  const editorCommands: Record<string, { cmd: string; args: string[] }> = {
+  const editorCommands: EditorCommands = {
     vscode: { cmd: 'code', args: [dirPath] },
     cursor: { cmd: 'cursor', args: [dirPath] },
     windsurf: { cmd: 'windsurf', args: [dirPath] },
@@ -348,11 +353,16 @@ function scoreCandidate(name: string, fullPath: string, lowerQuery: string): num
  * ahead of equally-scored files so the directory the user typed isn't buried
  * under its own children.
  */
+interface FileSearchResult {
+  files: BrowseItem[];
+  truncated: boolean;
+}
+
 export function searchFilesAndFolders(
   allFiles: string[],
   query: string,
   limit = FILE_SEARCH_LIMIT,
-): { files: BrowseItem[]; truncated: boolean } {
+): FileSearchResult {
   const lowerQuery = query.toLowerCase();
   const scored: Array<{ item: BrowseItem; score: number }> = [];
 

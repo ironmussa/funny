@@ -122,11 +122,24 @@ export function prStates(state: 'open' | 'closed' | 'all'): string[] | null {
   return null;
 }
 
+/** A GraphQL `orderBy` for pull requests. */
+interface PROrder {
+  field: string;
+  direction: string;
+}
+
+/** One page of pull requests in the REST shape. */
+interface PullRequestPage {
+  prs: GitHubPR[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 /**
  * The `/pulls` sort from `resolveSort` → GraphQL order. `popularity` (most
  * commented) becomes `COMMENTS`, GitHub's closest GraphQL equivalent.
  */
-export function prOrder(sort: string, direction: string): { field: string; direction: string } {
+export function prOrder(sort: string, direction: string): PROrder {
   const field =
     // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     sort === 'updated' ? 'UPDATED_AT' : sort === 'popularity' ? 'COMMENTS' : 'CREATED_AT';
@@ -186,10 +199,7 @@ function mapPullRequestNode(pr: PRNode, owner: string): GitHubPR {
   };
 }
 
-export function mapPullRequests(
-  data: PullRequestsData,
-  owner: string,
-): { prs: GitHubPR[]; hasMore: boolean; nextCursor: string | null } {
+export function mapPullRequests(data: PullRequestsData, owner: string): PullRequestPage {
   const connection = data.repository?.pullRequests;
   if (!connection) return { prs: [], hasMore: false, nextCursor: null };
   const { hasNextPage, endCursor } = connection.pageInfo;

@@ -51,7 +51,7 @@ export interface GitMutation<Target extends GitTarget, Body, Value> {
 }
 
 /** `respond` for a route that answers only `{ ok: true }`, whatever the operation returns. */
-export const okOnly = (): object => ({});
+export const okOnly = () => ({});
 
 /** The caller's checkout of the route's `:projectId`. */
 async function projectCheckout(

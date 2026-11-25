@@ -72,6 +72,12 @@ export interface FlowRunsContext {
   mergeOrder: Map<string, MergeOrder>;
   gate: ConcurrencyGate;
   waitThread: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /** The triage and review threads' wait (`waitRoleThread` of the deps). */
+  waitRoleThread: (
+    threadId: string,
+    signal: AbortSignal,
+    after?: WaitAfter,
+  ) => Promise<ThreadOutcome>;
 }
 
 /** What a run's steps are bound to; a run without an issue is titled by its trigger or flow. */
@@ -459,6 +465,7 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
     abandon: async (threadId) => deps.stopThreads?.(scope.userId, [threadId]),
     launch: (body) => deps.launch({ userId: scope.userId, body }),
     waitThread: ctx.waitThread,
+    waitRoleThread: ctx.waitRoleThread,
     continuation: continuationFor(deps, scope),
     github: deps.github,
     ...integrationDepsFor(ctx, job, scope, controller.signal),

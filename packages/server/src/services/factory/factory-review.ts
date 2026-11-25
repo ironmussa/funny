@@ -53,7 +53,7 @@ import type {
 import type { IntegrationScope } from './factory-integrate.js';
 import { issueInputs, issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import type { FactoryPullRequestRef } from './factory-pull-requests.js';
-import { readRoleResult } from './factory-role-results.js';
+import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
 import { withReviewVerdict, type UpdateRunInput } from './factory-runs.js';
 import { testWeakeningReport, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -212,6 +212,7 @@ function reviewPrompt(input: ReviewPromptInput): string {
     '',
     'How to review:',
     ...howToRead(input),
+    `- ${READ_ONLY_SHELL_RULE}`,
     '- Judge whether the change does what the issue asks, in every case the issue names, and whether it is correct: wrong logic, missing cases, races, broken callers, security problems, data loss.',
     '- Check that the regression test would fail without the fix and that no test, check or CI step was removed, skipped or weakened to make the change pass.',
     '- Report only what you verified in the code. Style and naming are at most `low`.',

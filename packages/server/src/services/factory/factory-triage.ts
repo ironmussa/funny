@@ -46,7 +46,7 @@ import type { StartedThread, StartThreadError } from '../runner-thread-launcher.
 import type { FactoryLaunchBody, IssueRunScope } from './factory-action-provider.js';
 import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
-import { readRoleResult } from './factory-role-results.js';
+import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
 import { HIGH_RISK_HOLD, type UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
@@ -244,6 +244,7 @@ function triagePrompt(input: {
     `The issue is #${input.issueNumber} of ${input.repo}${input.issueUrl ? ` (${input.issueUrl})` : ''}.`,
     issueInstruction(input.issueNumber, input.issue),
     'Then read the code it is about in the checkout.',
+    READ_ONLY_SHELL_RULE,
     // Seen in a real run: a contract without the changelog line the repository's
     // CI requires cost the implementer a CI round to find it out.
     'Also read what the repository requires of every change before it merges: its CI workflows (`.github/workflows/`), the scripts they run, and its contributing notes (`CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`). Each requirement this change must meet (a changelog line, a test next to the code, a lint or format step) is an acceptance criterion of the contract, naming the file or script that enforces it.',

@@ -222,6 +222,15 @@ integration figures), served over the `factory` tRPC group. See
    still running or a watcher pending (or one that ended in the last 2 minutes, whose wake is
    starting) still counts as running (`awaitsWake` in `factory-thread-waits.ts`), so the flow
    does not move on while the agent waits for its own tests.
+   **A written answer is not always a finished turn**: the Claude CLI does not end a turn while
+   a shell job it put in the background still runs, and in the read-only sandbox a bare `wait`
+   never returns (it also waits for the sandbox's own proxies). The triage and review threads
+   are waited on with `quietAnswerMs` (`ROLE_QUIET_ANSWER_MS`, 10 min): a `running` thread whose
+   newest message is an answer (text, no tool call) that nothing followed for that long is
+   `idle`, and `roleThreadWait` stops it and reads that answer as the role's result (metric
+   event `role_turn_unclosed`). Their prompts also carry `READ_ONLY_SHELL_RULE`
+   (`factory-role-results.ts`), as does the sentinel's, which already gives up after its own
+   timeout.
 7. **Finished outside the factory**: each tick looks at the parked runs (`waiting_human`, `failed`)
    that have a PR. If a person merged it, the run becomes `merged`; if it was closed without a
    merge, `stopped` with that reason. The write is a compare-and-set from the parked states

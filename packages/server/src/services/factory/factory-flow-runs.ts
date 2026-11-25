@@ -71,7 +71,7 @@ import {
 } from './factory-flow.js';
 import type { UpdateRunInput } from './factory-runs.js';
 import { projectAgentDefaults, type WatchedFactory } from './factory-settings.js';
-import { createThreadWaits } from './factory-thread-waits.js';
+import { createThreadWaits, ROLE_QUIET_ANSWER_MS } from './factory-thread-waits.js';
 
 export {
   admissionPriority,
@@ -88,6 +88,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   /** Each running flow's early integration (D8), for the watcher to ask when the base moves. */
   const earlyOf = new Map<string, EarlyIntegration>();
   const waitThread = deps.waitThread ?? createThreadWaits();
+  const waitRoleThread =
+    deps.waitRoleThread ??
+    deps.waitThread ??
+    createThreadWaits({ quietAnswerMs: ROLE_QUIET_ANSWER_MS });
   const journalRows = createWorkflowJournalRepository();
   /** Each run's place in a group's queue, by its id (the holder is `<runId>/<node>/<visit>`). */
   const priorities = new Map<string, number>();
@@ -128,7 +132,15 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const settlement = createRunSettlement(deps);
   const { updateInFlight, flowUnavailable, cleanUpMerged, settle, refusedWithoutIssue } =
     settlement;
-  const ctx: FlowRunsContext = { deps, updateInFlight, earlyOf, mergeOrder, gate, waitThread };
+  const ctx: FlowRunsContext = {
+    deps,
+    updateInFlight,
+    earlyOf,
+    mergeOrder,
+    gate,
+    waitThread,
+    waitRoleThread,
+  };
 
   async function execute(
     job: FactoryRunJob,

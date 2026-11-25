@@ -14,7 +14,7 @@ export interface LoadedFileDiff {
 }
 
 /** A diff viewer needs at least one hunk to produce visible rows. */
-export function hasUnifiedDiffHunk(diff: string | undefined): boolean {
+function hasUnifiedDiffHunk(diff: string | undefined): boolean {
   return !!diff && diff.split('\n').some((line) => line.startsWith('@@'));
 }
 

@@ -31,6 +31,7 @@ mock.module('@/data/factory/actions', () => ({
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
   approveFactoryMerge: (...args: unknown[]) => mocks.approve(...args),
   setFactoryRunLintCleanup: (...args: unknown[]) => mocks.lintCleanup(...args),
+  markFactoryRunDone: () => ({ orTee: () => undefined }),
 }));
 const toastError = vi.fn();
 mock.module('@/lib/toast-error', () => ({ toastError }));

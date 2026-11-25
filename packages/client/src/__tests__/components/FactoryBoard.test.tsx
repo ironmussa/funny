@@ -22,6 +22,7 @@ const mocks = ((): {
   requests: Record<string, { id: string; sha: string }>;
   navigate: ReturnType<typeof vi.fn>;
   control: ReturnType<typeof vi.fn>;
+  markDone: ReturnType<typeof vi.fn>;
 } => ({
   queue: [],
   threads: {},
@@ -29,6 +30,7 @@ const mocks = ((): {
   requests: {},
   navigate: vi.fn(),
   control: vi.fn(),
+  markDone: vi.fn(),
 }))();
 
 mock.module('@/data/factory/hooks', () => ({
@@ -51,6 +53,10 @@ mock.module('@/data/projects/hooks', () => ({
 mock.module('@/data/factory/actions', () => ({
   approveFactoryMerge: () => okAsync(null),
   setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
+  markFactoryRunDone: (...args: unknown[]) => {
+    mocks.markDone(...args);
+    return okAsync(null);
+  },
   controlFactoryRun: (...args: unknown[]) => {
     mocks.control(...args);
     return okAsync(null);
@@ -304,6 +310,25 @@ describe('FactoryBoard', () => {
     // No separate issue or schedule line: the title names it.
     expect(screen.queryByTestId('factory-board-issue-sched')).toBeNull();
     expect(screen.queryByTestId('factory-board-ref-sched')).toBeNull();
+  });
+
+  // The agent found nothing to change: the member agrees from the card's menu.
+  test('a run that ended with no change offers "Mark as done" next to Retry', async () => {
+    renderBoard([queueRun('r1', 'no_change', { completedAt: recent() })]);
+    const card = screen.getByTestId('factory-board-card-r1');
+    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    expect(await screen.findByTestId('factory-board-retry-r1')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('factory-board-mark-done-r1'));
+    expect(mocks.markDone).toHaveBeenCalledWith('p1', 'r1');
+    expect(mocks.control).not.toHaveBeenCalled();
+  });
+
+  test('a run that failed offers no "Mark as done"', async () => {
+    renderBoard([queueRun('r1', 'failed', { completedAt: recent() })]);
+    const card = screen.getByTestId('factory-board-card-r1');
+    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    expect(await screen.findByTestId('factory-board-retry-r1')).toBeTruthy();
+    expect(screen.queryByTestId('factory-board-mark-done-r1')).toBeNull();
   });
 
   test('a run that ended done is in the Done column', () => {

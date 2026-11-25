@@ -233,6 +233,27 @@ describe('factory over tRPC', () => {
     expect(unmarked).toMatchObject({ status: 200, body: { riskWaiver: null } });
   });
 
+  // The agent found nothing to change; the member agrees and clears the run.
+  test('a run that ended with no change is marked as done by a member with steer, and only that run', async () => {
+    const idle = await seededRun('no_change');
+    const input = { projectId: 'p1', runId: idle.id };
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'markRunDone', input)).status).toBe(403);
+
+    expect(await mutate('alice', 'markRunDone', input)).toMatchObject({
+      status: 200,
+      body: { state: 'done' },
+    });
+    // It is done now: marking it again changes nothing and says so.
+    expect((await mutate('alice', 'markRunDone', input)).status).toBe(409);
+
+    // A run that failed, or that waits with unsaved work, is not "nothing to change".
+    const failed = await seededRun('failed');
+    expect(
+      (await mutate('alice', 'markRunDone', { projectId: 'p1', runId: failed.id })).status,
+    ).toBe(409);
+  });
+
   test('a run that ended cannot be marked', async () => {
     const ended = await seededRun('merged');
     const marked = await mutate('alice', 'setLintCleanup', {

@@ -14,11 +14,16 @@ import { Button } from '@/components/ui/button';
 import {
   approveFactoryMerge,
   controlFactoryRun,
+  markFactoryRunDone,
   setFactoryRunLintCleanup,
 } from '@/data/factory/actions';
 import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
-import { ENDED_FACTORY_STATES, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
+import {
+  ENDED_FACTORY_STATES,
+  isFactoryRunAwaitingMergeApproval,
+  isFactoryRunNoChange,
+} from '@/lib/factory-run-labels';
 import { toastError } from '@/lib/toast-error';
 
 /** The number of a GitHub pull request URL, or null. */
@@ -39,6 +44,7 @@ export type FactoryRunActionId =
   | 'approve-merge'
   | 'lint-cleanup'
   | 'lint-cleanup-off'
+  | 'mark-done'
   | 'retry'
   | 'stop';
 
@@ -105,47 +111,38 @@ function useLintCleanupAction(
 }
 
 /**
- * What the member may do to a run now, in the order they are offered, and the
- * confirmation dialog the merge approval opens. The dialog is returned apart
- * so a menu can close without taking it along: render it outside the menu.
+ * The agent found nothing to change and the run stayed on the board for a
+ * person: the member agrees, and the run is done.
  */
-export function useFactoryRunActions(
+function useMarkDoneAction(projectId: string, run: FactoryRun): FactoryRunAction | null {
+  const { t } = useTranslation();
+  if (!isFactoryRunNoChange(run)) return null;
+  return {
+    id: 'mark-done',
+    label: t('factory.markDone', 'Mark as done'),
+    run: () =>
+      void markFactoryRunDone(projectId, run.id).orTee((error) => toastError(error, 'factory')),
+  };
+}
+
+/**
+ * The member's approval of a high-risk change the factory holds, behind a
+ * confirmation that names the commit and why it is held.
+ */
+function useApproveMergeAction(
   projectId: string,
   run: FactoryRun,
-): { actions: FactoryRunAction[]; dialog: ReactNode } {
+): { action: FactoryRunAction | null; dialog: ReactNode } {
   const { t } = useTranslation();
-  const canSteer = useCanSteerProject(projectId);
   const [confirmingMerge, setConfirmingMerge] = useState(false);
-  const control = (action: 'retry' | 'stop') =>
-    void controlFactoryRun(action, projectId, run.id).orTee((error) =>
-      toastError(error, 'factory'),
-    );
   // The commit the dialog names is the one approved: the server refuses another.
   const approve = () =>
     void approveFactoryMerge(projectId, run.id, run.risk?.headSha ?? '').orTee((error) =>
       // Its conflict has its own message: the run is held on another commit now.
       toastError(error, 'factoryApprove'),
     );
-  const lint = useLintCleanupAction(projectId, run);
-  if (!canSteer) return { actions: [], dialog: null };
-  // A high-risk change waits for the member's approval, which a retry would not give.
   const awaitsApproval = isFactoryRunAwaitingMergeApproval(run);
   const reasons = run.risk?.reasons ?? [];
-  const actions: FactoryRunAction[] = [];
-  if (awaitsApproval) {
-    actions.push({
-      id: 'approve-merge',
-      label: t('factory.approveMerge', 'Approve and merge'),
-      run: () => setConfirmingMerge(true),
-    });
-  }
-  if (lint.action) actions.push(lint.action);
-  if (RETRYABLE.has(run.state) && !awaitsApproval) {
-    actions.push({ id: 'retry', label: t('factory.retry', 'Retry'), run: () => control('retry') });
-  }
-  if (!ENDED_FACTORY_STATES.has(run.state)) {
-    actions.push({ id: 'stop', label: t('factory.stop', 'Stop'), run: () => control('stop') });
-  }
   const dialog = awaitsApproval ? (
     <ConfirmDialog
       open={confirmingMerge}
@@ -175,11 +172,49 @@ export function useFactoryRunActions(
       }}
     />
   ) : null;
+  if (!awaitsApproval) return { action: null, dialog: null };
   return {
-    actions,
+    action: {
+      id: 'approve-merge',
+      label: t('factory.approveMerge', 'Approve and merge'),
+      run: () => setConfirmingMerge(true),
+    },
+    dialog,
+  };
+}
+
+/**
+ * What the member may do to a run now, in the order they are offered, and the
+ * confirmation dialogs they open. The dialogs are returned apart so a menu can
+ * close without taking them along: render them outside the menu.
+ */
+export function useFactoryRunActions(
+  projectId: string,
+  run: FactoryRun,
+): { actions: FactoryRunAction[]; dialog: ReactNode } {
+  const { t } = useTranslation();
+  const canSteer = useCanSteerProject(projectId);
+  const control = (action: 'retry' | 'stop') =>
+    void controlFactoryRun(action, projectId, run.id).orTee((error) =>
+      toastError(error, 'factory'),
+    );
+  const approval = useApproveMergeAction(projectId, run);
+  const lint = useLintCleanupAction(projectId, run);
+  const done = useMarkDoneAction(projectId, run);
+  if (!canSteer) return { actions: [], dialog: null };
+  const offered: Array<FactoryRunAction | null> = [approval.action, lint.action, done];
+  // A high-risk change waits for the member's approval, which a retry would not give.
+  if (RETRYABLE.has(run.state) && !approval.action) {
+    offered.push({ id: 'retry', label: t('factory.retry', 'Retry'), run: () => control('retry') });
+  }
+  if (!ENDED_FACTORY_STATES.has(run.state)) {
+    offered.push({ id: 'stop', label: t('factory.stop', 'Stop'), run: () => control('stop') });
+  }
+  return {
+    actions: offered.flatMap((action) => (action ? [action] : [])),
     dialog: (
       <>
-        {dialog}
+        {approval.dialog}
         {lint.dialog}
       </>
     ),
@@ -190,6 +225,7 @@ const BUTTON_VARIANT: Record<FactoryRunActionId, 'default' | 'outline' | 'ghost'
   'approve-merge': 'default',
   'lint-cleanup': 'outline',
   'lint-cleanup-off': 'ghost',
+  'mark-done': 'outline',
   retry: 'outline',
   stop: 'ghost',
 };

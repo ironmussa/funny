@@ -195,6 +195,7 @@ const ACTION_ICON: Record<FactoryRunActionId, typeof Check> = {
   'approve-merge': Check,
   'lint-cleanup': Sparkles,
   'lint-cleanup-off': Sparkles,
+  'mark-done': Check,
   retry: RotateCcw,
   stop: Square,
 };

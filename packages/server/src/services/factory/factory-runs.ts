@@ -1415,6 +1415,22 @@ export function createFactoryRunsRepository(
       return writeLiveRun(runId, { riskWaiver: waiver ? JSON.stringify(waiver) : null });
     },
 
+    /**
+     * A member agreed there is nothing to change: the `no_change` run becomes
+     * `done`. A compare-and-set on the stored state; resolves whether it was
+     * still `no_change`.
+     */
+    markDone(runId: string): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set({ state: 'done', waitReason: null })
+          .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, 'no_change')))
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
     /** The runs parked for a member's approval of a high-risk pull request. */
     awaitingApproval(factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
       return ResultAsync.fromPromise(

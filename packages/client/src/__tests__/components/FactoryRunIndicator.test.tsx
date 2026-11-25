@@ -25,6 +25,7 @@ mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.ca
 mock.module('@/data/factory/actions', () => ({
   approveFactoryMerge: () => okAsync(null),
   setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
+  markFactoryRunDone: () => ({ orTee: () => undefined }),
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));

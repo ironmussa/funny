@@ -1921,6 +1921,7 @@
       "baseMoving": "GitHub refused the merge several times because the base branch or the pull request kept changing. Retry the run when the branch is quiet."
     },
     "approveMerge": "Approve and merge",
+    "markDone": "Mark as done",
     "lintCleanup": "Lint cleanup",
     "lintCleanupOff": "Not a lint cleanup",
     "lintCleanupTitle": "Treat this run as a lint cleanup?",

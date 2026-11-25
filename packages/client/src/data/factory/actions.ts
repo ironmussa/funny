@@ -88,6 +88,22 @@ export function approveFactoryMerge(
 }
 
 /**
+ * Mark a run that ended with no change as done: the member agrees nothing
+ * needs changing. Not optimistic: the server says whether the run was still
+ * in that state. The caller shows the error.
+ */
+export function markFactoryRunDone(
+  projectId: string,
+  runId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.markRunDone(projectId, runId).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    return run;
+  });
+}
+
+/**
  * Mark (or unmark) a run as a lint cleanup: its size and its contract's risk
  * hints then do not hold it, when the factory's own checks of the diff pass. A
  * run held for its risk goes back in flight. Not optimistic: the server says

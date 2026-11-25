@@ -466,6 +466,11 @@ export interface FactoryPort {
     expectedSha: string,
   ): PortResult<FactoryRun>;
   /**
+   * Mark a run of the caller's factory that ended with no change as done: the
+   * member agrees nothing needs changing. Refused (409) for any other run. Audited.
+   */
+  markRunDone(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
    * Mark (or unmark) a run of the caller's factory as a lint cleanup, which
    * changes how its risk is classed; a run held for its risk is retried. Audited.
    */

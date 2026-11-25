@@ -233,6 +233,30 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     },
 
     /**
+     * A member agrees with the agent that the issue needs no change: the run,
+     * which ended as `no_change` and stayed on the board for a person, becomes
+     * `done`. Nothing else is touched: the issue stays as it is on GitHub.
+     */
+    markDone(
+      factoryId: string,
+      runId: string,
+    ): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId).andThen((run) =>
+        runs
+          .markDone(run.id)
+          .mapErr(storage)
+          .andThen((written) =>
+            written
+              ? reread(runId)
+              : errAsync<FactoryRunView, FactoryRunControlError>({
+                  kind: 'conflict',
+                  message: 'Only a run that ended with no change can be marked as done.',
+                }),
+          ),
+      );
+    },
+
+    /**
      * Mark (or unmark) the run as a lint cleanup, as `userId`: its size and
      * its contract's risk hints then do not make it high risk, when the
      * factory's own checks of the diff pass. A run held for its risk is put

@@ -33,6 +33,7 @@ type AuditAction =
   | 'factory.run_retried'
   | 'factory.merge_approved'
   | 'factory.lint_cleanup_marked'
+  | 'factory.run_marked_done'
   | 'factory.approval_requested'
   | 'factory.approval_declined'
   | 'factory.agent_tool_refused'

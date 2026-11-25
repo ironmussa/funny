@@ -1914,6 +1914,7 @@
       "baseMoving": "GitHub rechazó el merge varias veces porque la rama base o el pull request no dejaban de cambiar. Reintenta la ejecución cuando la rama esté quieta."
     },
     "approveMerge": "Aprobar y hacer merge",
+    "markDone": "Marcar como hecho",
     "lintCleanup": "Limpieza de lint",
     "lintCleanupOff": "No es limpieza de lint",
     "lintCleanupTitle": "¿Tratar esta ejecución como limpieza de lint?",

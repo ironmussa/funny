@@ -401,6 +401,19 @@ function createFactoryParts(
       return controlled('approve-merge', userId, projectId, runId, { expectedSha });
     },
 
+    async markRunDone(userId, projectId, runId) {
+      return ownFactory(userId, projectId)
+        .andThen((factoryId) => control.markDone(factoryId, runId).mapErr(controlFailure))
+        .andTee((run) =>
+          audit({
+            action: 'factory.run_marked_done',
+            actorId: userId,
+            detail: `Factory run ${factoryRunLabel(run)} marked as done: no change was needed`,
+            meta: { projectId, runId, issueNumber: run.issueNumber },
+          }),
+        );
+    },
+
     async setLintCleanup(userId, projectId, runId, lintCleanup) {
       return ownFactory(userId, projectId)
         .andThen((factoryId) =>

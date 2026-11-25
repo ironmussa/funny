@@ -436,6 +436,9 @@ reads the role's prose as a decision:
   warnings were not hidden, not that the change does nothing else: tests, review and proof
   answer that. Marking a run held for its risk puts it back in flight; with no risk reason left
   it has no approval to lose when its head moves.
+  **No change.** A run that ended as `no_change` stays on the board for a person: the member can
+  retry it, or agree with the agent through "Mark as done" (`factory.markRunDone`, a
+  compare-and-set from `no_change` to `done`). The issue on GitHub is left as it is.
   **Paths.** A run that already has a pull request waits for no paths (`pathsHeld` in
   `factory-watcher.ts`, triage's `busyPaths`): it has no implementer to start, and queueing it
   behind later runs let them merge first. With the factory's `holdPathsAwaitingApproval` setting

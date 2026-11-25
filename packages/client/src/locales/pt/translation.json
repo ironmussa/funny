@@ -1880,6 +1880,7 @@
       "baseMoving": "O GitHub recusou o merge várias vezes porque a branch base ou o pull request continuavam mudando. Tente a execução de novo quando a branch estiver parada."
     },
     "approveMerge": "Aprovar e fazer merge",
+    "markDone": "Marcar como concluído",
     "lintCleanup": "Limpeza de lint",
     "lintCleanupOff": "Não é limpeza de lint",
     "lintCleanupTitle": "Tratar esta execução como limpeza de lint?",

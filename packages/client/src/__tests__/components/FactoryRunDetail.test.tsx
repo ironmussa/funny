@@ -33,6 +33,7 @@ mock.module('@/data/projects/hooks', () => ({
 mock.module('@/data/factory/actions', () => ({
   approveFactoryMerge: () => okAsync(null),
   setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
+  markFactoryRunDone: () => ({ orTee: () => undefined }),
   controlFactoryRun: () => okAsync(null),
   closeFactoryIncident: () => okAsync(null),
 }));

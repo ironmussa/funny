@@ -33,7 +33,7 @@ export function createEndpointPolicy(environment: TransportEnvironment): Endpoin
   };
 }
 
-function isString(value: unknown): value is string {
+function isString(value: string | null | undefined): value is string {
   return typeof value === 'string';
 }
 

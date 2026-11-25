@@ -152,9 +152,8 @@ function httpError(body: Record<string, unknown>, status: number, message: strin
   }
   const type = HTTP_STATUS_TYPES[status] ?? (status >= 500 ? 'INTERNAL' : 'BAD_REQUEST');
   // A server message written for the user replaces the generic per-type text.
-  const { friendlyMessage } = body;
-  return isString(friendlyMessage) && friendlyMessage.length > 0
-    ? { type, message, friendlyMessage }
+  return isString(body.friendlyMessage) && body.friendlyMessage.length > 0
+    ? { type, message, friendlyMessage: body.friendlyMessage }
     : { type, message };
 }
 

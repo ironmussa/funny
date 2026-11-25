@@ -471,8 +471,9 @@ export interface FactoryPort {
    */
   markRunDone(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /**
-   * Mark (or unmark) a run of the caller's factory as a lint cleanup, which
-   * changes how its risk is classed; a run held for its risk is retried. Audited.
+   * Say a run of the caller's factory that triage classed as a lint cleanup is
+   * not one (`false`), or take that back (`true`), which changes how its risk
+   * is classed; a run held for its risk is retried. Audited.
    */
   setLintCleanup(
     userId: string,

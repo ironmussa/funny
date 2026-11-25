@@ -80,8 +80,9 @@ export interface RiskInput {
   /** Risks the run's contract named (triage); absent for a run without a contract. */
   riskHints?: readonly string[];
   /**
-   * A member marked the run as a lint cleanup. Never an agent's answer: it
-   * lowers the risk, so it has to come from a person and be checked here.
+   * The run is a lint cleanup (`lintCleanupSource`): triage classed it and
+   * named only rules whose fix cannot change behavior, and no member said
+   * otherwise. It lowers the risk, so the diff is still checked here.
    */
   lintCleanup?: boolean;
 }

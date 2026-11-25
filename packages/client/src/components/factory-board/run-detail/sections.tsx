@@ -291,15 +291,10 @@ export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
       {lintCleanupSource(run) !== null && (
         <div className="flex flex-col gap-0.5" data-testid="factory-run-detail-lint-cleanup">
           <p>
-            {lintCleanupSource(run) === 'triage'
-              ? t(
-                  'factoryRunDetail.lintCleanupTriage',
-                  'Triage classed it as a lint cleanup: its size and its contract risks do not hold it. You can say it is not one.',
-                )
-              : t(
-                  'factoryRunDetail.lintCleanup',
-                  'A member marked it as a lint cleanup: its size and its contract risks do not hold it.',
-                )}
+            {t(
+              'factoryRunDetail.lintCleanupTriage',
+              'Triage classed it as a lint cleanup of rules that cannot change behavior: its size and its contract risks do not hold it. You can say it is not one.',
+            )}
           </p>
           {(run.risk?.waived ?? []).length > 0 && (
             <ul className="text-muted-foreground flex flex-col gap-0.5 border-l pl-2">

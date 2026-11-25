@@ -5,7 +5,7 @@
  * project's run list, the footer indicator's popover and the failure card in
  * the thread. Renders the buttons only; the caller lays them out.
  */
-import { lintCleanupSource } from '@funny/shared/contracts/factory';
+import { lintCleanupSource, lintCleanupVetoed } from '@funny/shared/contracts/factory';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -56,9 +56,9 @@ export interface FactoryRunAction {
 }
 
 /**
- * A member's statement that the run only clears lint warnings: offered once
- * the factory classed it high risk, behind a confirmation, and taken back
- * while the run lives.
+ * The member's veto of triage's lint-cleanup class: "Not a lint cleanup" on a
+ * run triage classed as one, and, behind a confirmation, taking that back.
+ * A member never classes a run as one: that comes from triage.
  */
 function useLintCleanupAction(
   projectId: string,
@@ -74,10 +74,10 @@ function useLintCleanupAction(
     <ConfirmDialog
       open={confirmingLint}
       onOpenChange={setConfirmingLint}
-      title={t('factory.lintCleanupTitle', 'Treat this run as a lint cleanup?')}
+      title={t('factory.lintCleanupTitle', 'Treat this run as a lint cleanup again?')}
       description={t(
         'factory.lintCleanupBody',
-        'Its size and the risks its contract names will no longer hold it: the factory merges it by itself once its checks, review and regression proof pass, whatever commits follow. It still waits for you if it touches a sensitive path, weakens a test, adds a lint suppression or changes the lint configuration.',
+        'Triage classed it as a lint cleanup of rules that cannot change behavior. Its size and the risks its contract names will no longer hold it: the factory merges it by itself once its checks, review and regression proof pass, whatever commits follow. It still waits for you if it touches a sensitive path, weakens a test, adds a lint suppression or changes the lint configuration.',
       )}
       confirmLabel={t('factory.lintCleanupConfirm', 'Treat as a lint cleanup')}
       cancelLabel={t('common.cancel', 'Cancel')}
@@ -100,7 +100,7 @@ function useLintCleanupAction(
       dialog: null,
     };
   }
-  if (run.risk?.level !== 'high') return { action: null, dialog: null };
+  if (!lintCleanupVetoed(run)) return { action: null, dialog: null };
   return {
     action: {
       id: 'lint-cleanup',

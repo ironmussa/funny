@@ -424,24 +424,25 @@ reads the role's prose as a decision:
   `merge` park it as `base keeps moving`. With neither moved it parks with GitHub's own message,
   which `pinnedMerge` now keeps next to the status. Seen on #450 (2026-11-25): a push to the base
   two seconds before the merge got a 405 and a run waiting for a person.
-  **Lint cleanups.** A member can mark a run as a lint cleanup (`factory.setLintCleanup`, the
-  "Lint cleanup" action on a run the factory classed high risk; `factory_runs.risk_waiver`,
-  migration 129). It is a statement by a person, sent from their session like an approval, and
-  never an agent's answer: it lowers the risk class. `classifyRisk` then sets aside the size
-  reason and the contract's risk hints (kept in the risk's `waived`), provided
-  `lintCleanupRefusals` finds, in the diff alone, no added suppression (`eslint-disable`,
-  `oxlint-disable`, `@ts-expect-error`, …), no change to a lint or type-check configuration
-  file, and no code file GitHub gave no patch for. Otherwise nothing is waived and the reason
-  says why. Weakened tests and sensitive paths hold whatever was marked. The check shows the
-  warnings were not hidden, not that the change does nothing else: tests, review and proof
-  answer that. Marking a run held for its risk puts it back in flight; with no risk reason left
-  it has no approval to lose when its head moves.
-  Triage may propose the same thing: its contract's `lintCleanup` (the prompt says when: the
-  issue asks for nothing but clearing lint or type-check warnings). `lintCleanupSource` in
-  `@funny/shared/contracts/factory` decides who is believed: a member's word first, either way
-  (`risk_waiver.kind` is `lint-cleanup` or `not-lint-cleanup`), then triage's proposal. Triage
-  is an agent that read the issue's text, so its proposal can be wrong or steered by that text;
-  the diff checks above are the same for both, and "Not a lint cleanup" overrules it.
+  **Lint cleanups.** Triage classes a run as a lint cleanup, never a member: its contract's
+  `lintCleanup` and `lintRules`, the rules the issue asks to clear as the linter names them. The
+  class holds only when every named rule is in `BEHAVIOR_NEUTRAL_LINT_RULES`
+  (`@funny/shared/contracts/factory`: `max-lines`, `max-lines-per-function`, `max-statements`,
+  `max-depth`, `max-nested-callbacks`, `sort-imports`), rules whose fix moves code without
+  changing what it does. A cleanup of a type, validation, effect or style rule is classed like any
+  change: #484 (`no-unknown-parameters`) narrowed a request schema, which its review caught. With
+  the class, `classifyRisk` sets aside the size reason and the contract's risk hints (kept in the
+  risk's `waived`), provided `lintCleanupRefusals` finds, in the diff alone, no added suppression
+  (`eslint-disable`, `oxlint-disable`, `@ts-expect-error`, …), no change to a lint or type-check
+  configuration file, and no code file GitHub gave no patch for. Otherwise nothing is waived and
+  the reason says why. Weakened tests and sensitive paths hold whatever the class. The check shows
+  the warnings were not hidden, not that the change does nothing else: tests, review and proof
+  answer that. Triage is an agent that read the issue's text, so its class can be wrong or
+  steered by that text; the rule list bounds what it can waive. A member can only veto it ("Not a
+  lint cleanup", `factory.setLintCleanup` with `false`, stored as `risk_waiver.kind`
+  `not-lint-cleanup`, migration 129) and take the veto back, which puts a run held for its risk
+  back in flight. `lintCleanupSource` decides. A run triaged before `lintRules` existed has none,
+  so it is not a lint cleanup.
   **No change.** A run that ended as `no_change` stays on the board for a person: the member can
   retry it, or agree with the agent through "Mark as done" (`factory.markRunDone`, a
   compare-and-set from `no_change` to `done`). The issue on GitHub is left as it is.

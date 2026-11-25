@@ -491,13 +491,20 @@ describe('the triage step', () => {
 
   // Triage proposes; the factory still checks the diff and a member can overrule it.
   test('triage is told when to class an issue as a lint cleanup, and its answer is kept in the contract', async () => {
-    const proposed = json({ decision: 'ready', contract: { ...CONTRACT, lintCleanup: true } });
+    const proposed = json({
+      decision: 'ready',
+      contract: { ...CONTRACT, lintCleanup: true, lintRules: ['eslint/max-lines'] },
+    });
     const { provider, bodies, stored } = triaging({ says: [proposed] });
     expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
     const prompt = String(bodies[0]?.prompt);
     expect(prompt).toContain('Set `lintCleanup` to true only when');
-    expect(prompt).toContain('"lintCleanup": false');
-    expect(stored()).toMatchObject({ decision: 'ready', contract: { lintCleanup: true } });
+    expect(prompt).toContain('"lintCleanup": false, "lintRules": []');
+    expect(prompt).toContain('list in `lintRules` every rule');
+    expect(stored()).toMatchObject({
+      decision: 'ready',
+      contract: { lintCleanup: true, lintRules: ['eslint/max-lines'] },
+    });
   });
 
   test('a run that already has its contract is not triaged again', async () => {

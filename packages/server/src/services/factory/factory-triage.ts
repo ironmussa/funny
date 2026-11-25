@@ -213,7 +213,7 @@ export function splitComment(parts: readonly string[], opened: readonly number[]
 const RESULT_FORMAT = [
   'One of these three, as a fenced json block:',
   '```json',
-  '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"], "lintCleanup": false } }',
+  '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"], "lintCleanup": false, "lintRules": [] } }',
   '```',
   '```json',
   '{ "decision": "needs_info", "questions": ["<one question the issue must answer>"] }',
@@ -250,7 +250,7 @@ function triagePrompt(input: {
     '',
     'Decide one of:',
     '- `ready`: an agent can do it without asking anyone. Write its contract: acceptance criteria someone could check against the code, the files it will probably touch (globs, at most 50), and risk hints only when the change is risky (it changes a migration, authentication, a public API, CI, or deletes data).',
-    'Set `lintCleanup` to true only when the issue asks for nothing but clearing lint or type-check warnings and must not change what the code does (for example "clear rule X in package Y"). A feature, a bug fix or a refactor that also changes behavior is false, whatever it is called. When true, the change is not held for its size, so do not add a risk hint about its size.',
+    'Set `lintCleanup` to true only when the issue asks for nothing but clearing lint or type-check warnings and must not change what the code does (for example "clear rule X in package Y"). A feature, a bug fix or a refactor that also changes behavior is false, whatever it is called. When true, list in `lintRules` every rule the issue asks to clear, as the linter names it (`eslint/max-lines`, `anti-slop/no-unknown-returns`); when the issue does not name its rules, list the ones its warnings come from. The factory does not hold a lint cleanup for its size only when every rule is one whose fix cannot change behavior (splitting long functions or files, sorting imports), so name them all and add a risk hint about the size only when one of them can change behavior.',
     '- `needs_info`: something the issue must say is missing or ambiguous, and a wrong guess would waste the work. Ask at most five short questions. Do not ask what the code already answers.',
     '- `too_big`: it is several independent changes. Propose the parts.',
     'Prefer `ready` when a reasonable decision can be made and stated.',

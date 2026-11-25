@@ -42,23 +42,22 @@ export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) })
  * another one (openspec factory-agent-tools).
  */
 /**
- * A member marking (or unmarking) one run as a lint cleanup. Like an approval,
- * only a member's own session sends it: never an agent.
+ * A member saying a run triage classed as a lint cleanup is not one
+ * (`lintCleanup: false`), or taking that back (`true`). Like an approval, only
+ * a member's own session sends it: never an agent.
  */
 export const factoryLintCleanupInput = z
   .object({ projectId, runId: z.string().min(1), lintCleanup: z.boolean() })
   .strict();
 
 /**
- * A member's statement about what a run is, which changes how its risk is
- * classed. `lint-cleanup`: the change only clears lint warnings, so its size
- * and the risk hints of its contract do not make it high risk, provided the
- * factory finds no lint suppression added and no lint configuration touched.
- * Weakened tests and sensitive paths still do.
+ * A member's word about what a run is, which changes how its risk is classed.
+ * `not-lint-cleanup`: the member overrules triage, which classed the run as a
+ * lint cleanup (`lintCleanupSource`). Only a veto: a member never marks a run
+ * as one, the category comes from triage and the rules it names.
  */
 export const factoryRiskWaiverSchema = z.object({
-  /** `not-lint-cleanup`: the member overrules triage, which proposed it as one. */
-  kind: z.enum(['lint-cleanup', 'not-lint-cleanup']),
+  kind: z.enum(['not-lint-cleanup']),
   /** Who marked it. */
   userId: z.string(),
   at: z.string(),
@@ -969,10 +968,14 @@ export const factoryContractSchema = z.object({
   riskHints: z.array(contractLine).max(10).default([]),
   /**
    * Triage read the issue as asking only to clear lint or type-check warnings,
-   * with no change in behavior. A proposal: the factory still checks the diff
+   * with no change in behavior. A proposal: it counts only when every rule in
+   * `lintRules` is one whose fix cannot change behavior
+   * (`BEHAVIOR_NEUTRAL_LINT_RULES`), the factory still checks the diff
    * (`lintCleanupRefusals`), and a member can say otherwise.
    */
   lintCleanup: z.boolean().optional(),
+  /** The lint rules the issue asks to clear, as the linter names them (`eslint/max-lines`). */
+  lintRules: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
 });
 export type FactoryContract = z.infer<typeof factoryContractSchema>;
 
@@ -1021,15 +1024,68 @@ export const contractOf = (run: { triage: FactoryTriage | null }): FactoryContra
   run.triage?.decision === 'ready' ? (run.triage.contract ?? null) : null;
 
 /**
- * Who says a run is a lint cleanup: a member's word first, either way, then
- * triage's proposal in its contract. Null when nobody does.
+ * The lint rules whose fix moves or reorders code without changing what it
+ * does: splitting a long function or file, flattening nesting, sorting
+ * imports. A cleanup of any other rule (types, validation, React effects,
+ * styles) can change behavior, so it is classed like any change: the reviewer
+ * of #484 found a validation boundary that a type rule's fix had narrowed.
+ * Names are the linter's, `plugin/rule`; a bare name is an `eslint/` rule.
+ */
+export const BEHAVIOR_NEUTRAL_LINT_RULES: readonly string[] = [
+  'eslint/max-lines',
+  'eslint/max-lines-per-function',
+  'eslint/max-statements',
+  'eslint/max-depth',
+  'eslint/max-nested-callbacks',
+  'eslint/sort-imports',
+];
+
+/** A rule as the linter may print it (`max-lines`, `eslint(max-lines)`), as `plugin/rule`. */
+export function normalizeLintRule(rule: string): string {
+  const name = rule.trim().toLowerCase();
+  const call = /^([\w@.-]+)\(([\w-]+)\)$/.exec(name);
+  if (call) return `${call[1]}/${call[2]}`;
+  return name.includes('/') ? name : `eslint/${name}`;
+}
+
+/**
+ * Triage's proposal holds: it classed the run as a lint cleanup and named
+ * only rules whose fix cannot change behavior. Naming none, or any other
+ * rule, is not a lint cleanup for the factory.
+ */
+export function isBehaviorNeutralLintCleanup(contract: FactoryContract | null): boolean {
+  if (contract?.lintCleanup !== true) return false;
+  const rules = contract.lintRules ?? [];
+  return (
+    rules.length > 0 &&
+    rules.every((rule) => BEHAVIOR_NEUTRAL_LINT_RULES.includes(normalizeLintRule(rule)))
+  );
+}
+
+/**
+ * Who classes a run as a lint cleanup: triage, when its proposal holds
+ * (`isBehaviorNeutralLintCleanup`) and no member said otherwise. Null when
+ * the run is not one.
  */
 export function lintCleanupSource(run: {
   triage: FactoryTriage | null;
   riskWaiver: FactoryRiskWaiver | null;
-}): 'member' | 'triage' | null {
-  if (run.riskWaiver) return run.riskWaiver.kind === 'lint-cleanup' ? 'member' : null;
-  return contractOf(run)?.lintCleanup === true ? 'triage' : null;
+}): 'triage' | null {
+  if (run.riskWaiver?.kind === 'not-lint-cleanup') return null;
+  return isBehaviorNeutralLintCleanup(contractOf(run)) ? 'triage' : null;
+}
+
+/**
+ * Triage classed the run as a lint cleanup and a member said it is not one:
+ * the member can take that back.
+ */
+export function lintCleanupVetoed(run: {
+  triage: FactoryTriage | null;
+  riskWaiver: FactoryRiskWaiver | null;
+}): boolean {
+  return (
+    run.riskWaiver?.kind === 'not-lint-cleanup' && isBehaviorNeutralLintCleanup(contractOf(run))
+  );
 }
 
 /**

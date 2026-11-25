@@ -36,6 +36,7 @@
 import {
   contractOf,
   implementingThreadOf,
+  isBehaviorNeutralLintCleanup,
   type FactoryRiskWaiver,
 } from '@funny/shared/contracts/factory';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -124,18 +125,17 @@ function reopenRefused(error: { message: string }): FactoryRunControlError {
 }
 
 /**
- * What is stored when a member says a run is, or is not, a lint cleanup. "Not"
- * is stored only where triage proposed it as one: there it overrules triage,
- * elsewhere there is nothing to overrule.
+ * What is stored when a member says a run triage classed as a lint cleanup is
+ * not one (`on: false`), or takes that back (`on: true`). A member never marks
+ * a run as one: where triage did not class it, there is nothing to store.
  */
 function lintCleanupWord(
   run: FactoryRunView,
   userId: string,
   on: boolean,
 ): FactoryRiskWaiver | null {
-  const at = new Date().toISOString();
-  if (on) return { kind: 'lint-cleanup', userId, at };
-  return contractOf(run)?.lintCleanup === true ? { kind: 'not-lint-cleanup', userId, at } : null;
+  if (on || !isBehaviorNeutralLintCleanup(contractOf(run))) return null;
+  return { kind: 'not-lint-cleanup', userId, at: new Date().toISOString() };
 }
 
 /**
@@ -276,10 +276,11 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     },
 
     /**
-     * Mark (or unmark) the run as a lint cleanup, as `userId`: its size and
-     * its contract's risk hints then do not make it high risk, when the
+     * Say, as `userId`, that a run triage classed as a lint cleanup is not one
+     * (`on: false`), or take that back (`on: true`): then its size and its
+     * contract's risk hints do not make it high risk again, when the
      * factory's own checks of the diff pass. A run held for its risk is put
-     * back in flight so the mark is applied to it at once.
+     * back in flight so the change is applied to it at once.
      */
     setLintCleanup(
       userId: string,

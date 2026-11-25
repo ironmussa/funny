@@ -423,7 +423,7 @@ function createFactoryParts(
           audit({
             action: 'factory.lint_cleanup_marked',
             actorId: userId,
-            detail: `Factory run ${factoryRunLabel(run)} ${lintCleanup ? 'marked' : 'unmarked'} as a lint cleanup`,
+            detail: `Factory run ${factoryRunLabel(run)} ${lintCleanup ? 'is a lint cleanup again (veto taken back)' : 'is not a lint cleanup (triage overruled)'}`,
             meta: { projectId, runId, issueNumber: run.issueNumber, lintCleanup },
           }),
         );

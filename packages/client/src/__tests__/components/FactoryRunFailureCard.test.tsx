@@ -158,8 +158,8 @@ describe('FactoryRunFailureCard', () => {
     expect(mocks.control).not.toHaveBeenCalled();
   });
 
-  // A member's statement that the change only clears lint warnings.
-  test('a high-risk run can be marked as a lint cleanup after a confirmation, and unmarked', async () => {
+  // Triage classes a lint cleanup; a member only vetoes it, and takes the veto back.
+  test('a member vetoes the lint-cleanup class triage gave, and takes it back after a confirmation', async () => {
     const held = {
       currentStep: 'merge',
       failureReason: 'high risk',
@@ -170,30 +170,52 @@ describe('FactoryRunFailureCard', () => {
         paths: [],
       },
     };
-    mocks.run = runOf(held);
+    const classed = {
+      decision: 'ready' as const,
+      at: '2026-11-25T00:00:00.000Z',
+      contract: {
+        acceptanceCriteria: ['no warnings'],
+        likelyPaths: [],
+        riskHints: [],
+        lintCleanup: true,
+        lintRules: ['eslint/max-lines'],
+      },
+    };
     mocks.lintCleanup.mockImplementation(() => okAsync(mocks.run));
-    const { unmount } = render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+
+    // Not classed by triage: a member cannot make it one.
+    mocks.run = runOf(held);
+    const first = render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
       wrapper: TooltipProvider,
     });
+    expect(screen.queryByTestId('factory-run-failure-lint-cleanup')).not.toBeInTheDocument();
     expect(screen.queryByTestId('factory-run-failure-lint-cleanup-off')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('factory-run-failure-lint-cleanup'));
-    expect(mocks.lintCleanup).not.toHaveBeenCalled();
-    expect(await screen.findByText('Treat this run as a lint cleanup?')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
-    expect(mocks.lintCleanup).toHaveBeenCalledWith('p1', 'r1', true);
-    unmount();
+    first.unmount();
 
-    // Marked: the mark can be taken back, with no confirmation.
-    mocks.run = runOf({
-      ...held,
-      riskWaiver: { kind: 'lint-cleanup', userId: 'u1', at: '2026-11-25T00:00:00.000Z' },
-    });
-    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+    // Classed by triage: the member can say it is not one, with no confirmation.
+    mocks.run = runOf({ ...held, triage: classed });
+    const second = render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
       wrapper: TooltipProvider,
     });
     expect(screen.queryByTestId('factory-run-failure-lint-cleanup')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('factory-run-failure-lint-cleanup-off'));
     expect(mocks.lintCleanup).toHaveBeenLastCalledWith('p1', 'r1', false);
+    second.unmount();
+
+    // Vetoed: taking the veto back asks first.
+    mocks.run = runOf({
+      ...held,
+      triage: classed,
+      riskWaiver: { kind: 'not-lint-cleanup', userId: 'u1', at: '2026-11-25T00:00:00.000Z' },
+    });
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
+    expect(screen.queryByTestId('factory-run-failure-lint-cleanup-off')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('factory-run-failure-lint-cleanup'));
+    expect(await screen.findByText('Treat this run as a lint cleanup again?')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
+    expect(mocks.lintCleanup).toHaveBeenLastCalledWith('p1', 'r1', true);
   });
 
   test('an approval refused because the commit changed says so', async () => {

@@ -90,9 +90,12 @@ export function useCachedAvatar(url: string | undefined | null): string | undefi
   }
 
   useEffect(() => {
-    if (!url || getFresh(url)) return;
+    if (!url) return;
     let active = true;
-    let promise = inflight.get(url);
+    // The cache may have filled between this render and its effect (another
+    // consumer's fetch for the same URL finished): pick that blob up too.
+    const fresh = getFresh(url);
+    let promise = fresh ? Promise.resolve(fresh) : inflight.get(url);
     if (!promise) {
       promise = load(url).finally(() => inflight.delete(url));
       inflight.set(url, promise);
@@ -100,7 +103,12 @@ export function useCachedAvatar(url: string | undefined | null): string | undefi
     promise.then((obj) => {
       // On success use the cached blob; on failure fall back to the direct URL
       // so the image still loads (just uncached) via the browser.
-      if (active) setState({ url, resolved: obj ?? url });
+      const next = obj ?? url;
+      if (active) {
+        setState((prev) =>
+          prev.url === url && prev.resolved === next ? prev : { url, resolved: next },
+        );
+      }
     });
     return () => {
       active = false;

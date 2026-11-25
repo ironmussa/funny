@@ -9,7 +9,6 @@ import type {
 import i18next from 'i18next';
 
 import {
-  DONE_WINDOW_MS,
   type FactoryBoardColumnId,
   factoryBoardColumn,
   layoutFactoryBoard,
@@ -66,28 +65,23 @@ describe('factoryBoardColumn', () => {
 });
 
 describe('layoutFactoryBoard', () => {
-  test('keeps only the last day of finished runs and counts the rest', () => {
+  test('keeps every finished run in Done, newest first', () => {
     const recent = buildFactoryRun({ id: 'recent', state: 'merged', completedAt: hoursAgo(2) });
     const old = buildFactoryRun({ id: 'old', state: 'merged', completedAt: hoursAgo(72) });
-    const { columns, hiddenDone } = layoutFactoryBoard([recent, old], NOW);
-    expect(columns.done.map((run) => run.id)).toEqual(['recent']);
-    expect(hiddenDone).toBe(1);
-    expect(DONE_WINDOW_MS).toBe(24 * 3600_000);
+    const columns = layoutFactoryBoard([old, recent]);
+    expect(columns.done.map((run) => run.id)).toEqual(['recent', 'old']);
   });
 
   test('orders the queue by its order, admitted runs first; other columns newest first', () => {
     const run = (id: string, overrides: Partial<FactoryRun>) =>
       buildFactoryRun({ id, completedAt: null, ...overrides });
-    const { columns } = layoutFactoryBoard(
-      [
-        run('second', { state: 'requested', queueOrder: 2, startedAt: hoursAgo(1) }),
-        run('first', { state: 'requested', queueOrder: 1, startedAt: hoursAgo(5) }),
-        run('admitted', { state: 'queued', admittedAt: hoursAgo(9) }),
-        run('older', { state: 'working', admittedAt: hoursAgo(4) }),
-        run('newer', { state: 'fixing', admittedAt: hoursAgo(1) }),
-      ],
-      NOW,
-    );
+    const columns = layoutFactoryBoard([
+      run('second', { state: 'requested', queueOrder: 2, startedAt: hoursAgo(1) }),
+      run('first', { state: 'requested', queueOrder: 1, startedAt: hoursAgo(5) }),
+      run('admitted', { state: 'queued', admittedAt: hoursAgo(9) }),
+      run('older', { state: 'working', admittedAt: hoursAgo(4) }),
+      run('newer', { state: 'fixing', admittedAt: hoursAgo(1) }),
+    ]);
     expect(columns.queue.map((r) => r.id)).toEqual(['admitted', 'first', 'second']);
     expect(columns.implementing.map((r) => r.id)).toEqual(['newer', 'older']);
   });
@@ -95,58 +89,52 @@ describe('layoutFactoryBoard', () => {
   // Issue #434: its run failed the regression proof, was stopped, and showed in
   // Done although nothing had fixed it.
   test('a run stopped after a failure waits for a person; a plain stop is done', () => {
-    const { columns } = layoutFactoryBoard(
-      [
-        buildFactoryRun({
-          id: 'failed-then-stopped',
-          issueNumber: 434,
-          state: 'stopped',
-          failureReason: 'regression_proof[regression-proof] failed',
-          completedAt: hoursAgo(1),
-        }),
-        buildFactoryRun({
-          id: 'stopped',
-          issueNumber: 435,
-          state: 'stopped',
-          failureReason: null,
-          completedAt: hoursAgo(1),
-        }),
-      ],
-      NOW,
-    );
+    const columns = layoutFactoryBoard([
+      buildFactoryRun({
+        id: 'failed-then-stopped',
+        issueNumber: 434,
+        state: 'stopped',
+        failureReason: 'regression_proof[regression-proof] failed',
+        completedAt: hoursAgo(1),
+      }),
+      buildFactoryRun({
+        id: 'stopped',
+        issueNumber: 435,
+        state: 'stopped',
+        failureReason: null,
+        completedAt: hoursAgo(1),
+      }),
+    ]);
     expect(columns.needs_person.map((run) => run.id)).toEqual(['failed-then-stopped']);
     expect(columns.done.map((run) => run.id)).toEqual(['stopped']);
   });
 
   test('an ended run a newer run of its issue replaced is done', () => {
-    const { columns } = layoutFactoryBoard(
-      [
-        buildFactoryRun({
-          id: 'first',
-          issueNumber: 434,
-          state: 'stopped',
-          failureReason: 'regression_proof[regression-proof] failed',
-          startedAt: hoursAgo(8),
-          completedAt: hoursAgo(7),
-        }),
-        buildFactoryRun({
-          id: 'earlier-failure',
-          issueNumber: 434,
-          state: 'failed',
-          failureReason: 'ci failed',
-          startedAt: hoursAgo(10),
-          completedAt: hoursAgo(9),
-        }),
-        buildFactoryRun({
-          id: 'resent',
-          issueNumber: 434,
-          state: 'working',
-          startedAt: hoursAgo(6),
-          completedAt: null,
-        }),
-      ],
-      NOW,
-    );
+    const columns = layoutFactoryBoard([
+      buildFactoryRun({
+        id: 'first',
+        issueNumber: 434,
+        state: 'stopped',
+        failureReason: 'regression_proof[regression-proof] failed',
+        startedAt: hoursAgo(8),
+        completedAt: hoursAgo(7),
+      }),
+      buildFactoryRun({
+        id: 'earlier-failure',
+        issueNumber: 434,
+        state: 'failed',
+        failureReason: 'ci failed',
+        startedAt: hoursAgo(10),
+        completedAt: hoursAgo(9),
+      }),
+      buildFactoryRun({
+        id: 'resent',
+        issueNumber: 434,
+        state: 'working',
+        startedAt: hoursAgo(6),
+        completedAt: null,
+      }),
+    ]);
     expect(columns.needs_person).toEqual([]);
     expect(columns.done.map((run) => run.id)).toEqual(['first', 'earlier-failure']);
     expect(columns.implementing.map((run) => run.id)).toEqual(['resent']);

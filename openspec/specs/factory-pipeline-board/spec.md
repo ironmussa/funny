@@ -62,14 +62,23 @@ The board SHALL NOT let a member move a run between columns. A run's column SHAL
 - **WHEN** a member tries to drag a run card to another column
 - **THEN** the card does not move and the run's state does not change
 
-### Requirement: Done shows recent runs
+### Requirement: Done shows every finished run
 
-The Done column SHALL show only runs that completed in the last 24 hours, and its header SHALL say how many older finished runs are hidden. The Done column SHALL be collapsible. Finished runs older than 24 hours SHALL remain reachable in the list layout.
+The Done column SHALL show every finished run the view lists, most recent first. The Done column SHALL be collapsible.
 
 #### Scenario: An old merged run
 
 - **WHEN** a run merged three days ago
-- **THEN** it is not in the board's Done column, the Done header counts it as hidden, and the list still shows it
+- **THEN** it is in the board's Done column, after the runs that finished since
+
+### Requirement: Columns load cards as they scroll
+
+Each column SHALL show its first 50 cards and add the next 50 when the end of its list scrolls into view, with no button to press.
+
+#### Scenario: A long Done column
+
+- **WHEN** the Done column holds 60 runs and the member scrolls to its end
+- **THEN** the column shows all 60
 
 ### Requirement: Stage limits in column headers
 

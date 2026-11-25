@@ -2105,9 +2105,7 @@
       "needsPerson": "Necesita una persona",
       "done": "Hecho"
     },
-    "doneHidden": "+{{count}} anteriores en la lista",
     "emptyColumn": "Ningún run aquí",
-    "showMore": "Mostrar {{count}} más",
     "limit": {
       "merge": "1 a la vez por repositorio",
       "stage": "Límite de la etapa \"{{node}}\"",

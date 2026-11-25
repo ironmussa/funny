@@ -12,7 +12,7 @@
 import { implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 import { Clock, Factory, PanelRight, Play } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
@@ -449,17 +449,10 @@ function useFactoryQueueFilters(
     }),
     [search, caseSensitive, states, projectIds, activeOnly, layout, update],
   );
-  // Shows, in the list, the finished runs the board's Done column hides (one write: the router does not queue them).
-  const showOlderDone = useCallback(
-    () =>
-      update({ activeOnly: false, states: new Set(['merged', 'done', 'stopped']), layout: 'list' }),
-    [update],
-  );
   return {
     filtered,
     toolbar,
     layout,
-    showOlderDone,
     singleProjectId: projectIds.size === 1 ? [...projectIds][0]! : null,
     shown: filtered?.length ?? 0,
   };
@@ -473,7 +466,6 @@ function FactoryQueueContent({
   projectNameById,
   now,
   singleProjectId,
-  onShowOlderDone,
 }: {
   runs: FactoryQueueRun[] | undefined;
   filtered: FactoryQueueRun[] | undefined;
@@ -481,7 +473,6 @@ function FactoryQueueContent({
   projectNameById: ReadonlyMap<string, string>;
   now: number;
   singleProjectId: string | null;
-  onShowOlderDone: () => void;
 }) {
   const selection = useSelectedFactoryRun(runs);
   const dependencies = useMemo(() => factoryRunDependencies(runs ?? []), [runs]);
@@ -498,7 +489,6 @@ function FactoryQueueContent({
           now={now}
           singleProjectId={singleProjectId}
           onSelect={selection.select}
-          onShowOlderDone={onShowOlderDone}
           dependencies={dependencies}
         />
       ) : (
@@ -530,8 +520,10 @@ export function FactoryQueueView() {
     [projects],
   );
   const counts = useFactoryQueueCounts(runs, projectNameById);
-  const { filtered, toolbar, layout, showOlderDone, singleProjectId, shown } =
-    useFactoryQueueFilters(runs, projectNameById);
+  const { filtered, toolbar, layout, singleProjectId, shown } = useFactoryQueueFilters(
+    runs,
+    projectNameById,
+  );
   const all = runs ?? [];
 
   return (
@@ -546,7 +538,6 @@ export function FactoryQueueView() {
         projectNameById={projectNameById}
         now={now}
         singleProjectId={singleProjectId}
-        onShowOlderDone={showOlderDone}
       />
     </div>
   );

@@ -2112,9 +2112,7 @@
       "needsPerson": "Needs a person",
       "done": "Done"
     },
-    "doneHidden": "+{{count}} older in the list",
     "emptyColumn": "No runs here",
-    "showMore": "Show {{count}} more",
     "limit": {
       "merge": "1 at a time per repository",
       "stage": "Stage limit of \"{{node}}\"",

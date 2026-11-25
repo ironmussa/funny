@@ -80,6 +80,10 @@ mock.module('react-i18next', () => ({
   }),
 }));
 
+import {
+  FACTORY_BOARD_COLUMNS,
+  type FactoryBoardColumnId,
+} from '@/components/factory-board/board-columns';
 import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
 import { factoryRunDependencies } from '@/components/factory-board/run-dependencies';
 import { FactoryQueueView } from '@/components/FactoryQueueView';
@@ -102,7 +106,6 @@ const renderBoard = (runs: FactoryQueueRun[], singleProjectId: string | null = n
           now={Date.now()}
           singleProjectId={singleProjectId}
           onSelect={mocks.navigate}
-          onShowOlderDone={vi.fn()}
         />
       </TooltipProvider>
     </MemoryRouter>,
@@ -171,7 +174,6 @@ describe('FactoryBoard', () => {
           now={Date.now()}
           singleProjectId={null}
           onSelect={mocks.navigate}
-          onShowOlderDone={vi.fn()}
           dependencies={factoryRunDependencies(runs)}
         />
       </TooltipProvider>,
@@ -344,14 +346,83 @@ describe('FactoryBoard', () => {
     ).not.toBeNull();
   });
 
-  test('old finished runs are left to the list and counted', () => {
+  test('old finished runs stay in Done, after the recent ones', () => {
     renderBoard([
-      queueRun('new', 'merged', { completedAt: recent() }),
       queueRun('old', 'merged', { completedAt: '2020-01-01T00:00:00.000Z' }),
+      queueRun('new', 'merged', { completedAt: recent() }),
     ]);
-    expect(screen.queryByTestId('factory-board-card-old')).toBeNull();
-    expect(screen.getByTestId('factory-board-done-hidden').textContent).toContain('+1');
+    const done = screen.getByTestId('factory-board-column-done');
+    const cards = within(done)
+      .getAllByTestId(/^factory-board-card-(new|old)$/)
+      .map((card) => card.dataset.testid);
+    expect(cards).toEqual(['factory-board-card-new', 'factory-board-card-old']);
+    expect(screen.queryByTestId('factory-board-done-hidden')).toBeNull();
   });
+
+  // One state per column: every column pages its cards in as it scrolls, none has a button.
+  const STATE_OF_COLUMN: Record<FactoryBoardColumnId, FactoryRun['state']> = {
+    queue: 'requested',
+    triage: 'triaging',
+    implementing: 'working',
+    pr: 'pr_open',
+    review: 'reviewing',
+    merge: 'merging',
+    needs_person: 'waiting_human',
+    done: 'merged',
+  };
+  const longColumn = (column: FactoryBoardColumnId) =>
+    Array.from({ length: 60 }, (_, i) =>
+      queueRun(`${column}-${i}`, STATE_OF_COLUMN[column], {
+        issueNumber: 1000 + i,
+        queueOrder: i,
+        completedAt: column === 'done' ? new Date(Date.now() - i * 60_000).toISOString() : null,
+      }),
+    );
+  const cardsIn = (column: FactoryBoardColumnId) =>
+    within(screen.getByTestId(`factory-board-column-${column}`)).queryAllByTestId(
+      new RegExp(`^factory-board-card-${column}-\\d+$`),
+    );
+
+  /** Sees its target in view as soon as it observes it: the end of the list was reached. */
+  class InViewObserver implements IntersectionObserver {
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly scrollMargin = '';
+    readonly thresholds: readonly number[] = [];
+    constructor(private readonly callback: IntersectionObserverCallback) {}
+    observe(target: Element) {
+      const entry: Partial<IntersectionObserverEntry> = { isIntersecting: true, target };
+      this.callback([entry as IntersectionObserverEntry], this);
+    }
+    disconnect() {}
+    unobserve() {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+
+  for (const column of FACTORY_BOARD_COLUMNS) {
+    test(`the ${column} column shows a page, then loads the rest as it scrolls`, () => {
+      // Without an IntersectionObserver the sentinel never fires: the first page only.
+      renderBoard(longColumn(column));
+      expect(cardsIn(column)).toHaveLength(50);
+      const columnEl = screen.getByTestId(`factory-board-column-${column}`);
+      expect(within(columnEl).getByTestId(`factory-board-more-${column}`)).toBeTruthy();
+      expect(within(columnEl).queryByRole('button', { name: /show .* more/i })).toBeNull();
+    });
+
+    test(`scrolling to the end of the ${column} column loads its next page`, () => {
+      const original = globalThis.IntersectionObserver;
+      globalThis.IntersectionObserver = InViewObserver;
+      try {
+        renderBoard(longColumn(column));
+        expect(cardsIn(column)).toHaveLength(60);
+        expect(screen.queryByTestId(`factory-board-more-${column}`)).toBeNull();
+      } finally {
+        globalThis.IntersectionObserver = original;
+      }
+    });
+  }
 });
 
 describe('time on the board', () => {

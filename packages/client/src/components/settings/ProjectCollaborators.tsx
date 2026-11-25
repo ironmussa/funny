@@ -69,25 +69,31 @@ export function ProjectCollaborators() {
 
   const loadMembers = useCallback(async () => {
     if (!projectId) return;
-    const result = await api.listProjectMembers(projectId);
-    if (result.isOk()) setMembers(result.value.members);
-    else log.warn('Failed to load project members');
-    setLoading(false);
+    return api.listProjectMembers(projectId).then((result) => {
+      if (result.isOk()) setMembers(result.value.members);
+      else log.warn('Failed to load project members');
+      setLoading(false);
+    });
   }, [projectId]);
 
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
 
+  // A query too short to search clears the results; a new one shows the
+  // spinner until the debounced search below answers.
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (prevQuery !== query) {
+    setPrevQuery(query);
+    if (query.trim().length < 2) setResults([]);
+    else setSearching(true);
+  }
+
   // Debounced user search.
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
+    if (q.length < 2) return;
     const seq = ++searchSeq.current;
-    setSearching(true);
     const handle = setTimeout(async () => {
       const result = await api.searchUsers(q);
       if (seq !== searchSeq.current) return; // a newer search superseded this one

@@ -149,12 +149,13 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const loadAssignments = useCallback(async () => {
-    // Fetch from the runner's projects list — reuse existing API
-    const result = await api.getMyRunners();
-    if (result.isOk()) {
-      const r = result.value.runners.find((x) => x.runnerId === runner.runnerId);
-      if (r) {
+  const loadAssignments = useCallback(
+    () =>
+      // Fetch from the runner's projects list — reuse existing API
+      api.getMyRunners().then((result) => {
+        if (!result.isOk()) return;
+        const r = result.value.runners.find((x) => x.runnerId === runner.runnerId);
+        if (!r) return;
         // Assignments are by projectId, we just have the IDs
         setAssignments(
           r.assignedProjectIds.map((pid) => ({
@@ -164,9 +165,9 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             assignedAt: '',
           })),
         );
-      }
-    }
-  }, [runner.runnerId]);
+      }),
+    [runner.runnerId],
+  );
 
   const handleDelete = async () => {
     await whilePending(setDeleting, async () => {

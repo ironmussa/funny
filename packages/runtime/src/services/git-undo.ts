@@ -26,6 +26,7 @@ import { badRequest, internal, notFound, type DomainError } from '@funny/shared/
 import { err, errAsync, ok, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 import { recordActivity as defaultRecordActivity, type ActivitySpec } from './activity-tracker.js';
 import {
   pruneDatedRefs,
@@ -41,6 +42,11 @@ const ACTIVITY_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const HEAD_LINE = /^head ([0-9a-f]{40,64})$/m;
 
 export type UndoSnapshotKind = 'worktree' | 'stash';
+
+/** A DomainError thrown by a step (`git()` throws them); anything else is wrapped as internal. */
+function isDomainError(cause: unknown): cause is DomainError {
+  return isObject(cause) && 'type' in cause && Boolean(cause.type);
+}
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -112,8 +118,8 @@ export function saveUndoSnapshot(params: {
       return { ref: ref.value };
     })(),
     (error) =>
-      (error as DomainError)?.type
-        ? (error as DomainError)
+      isDomainError(error)
+        ? error
         : internal(`Could not save an undo snapshot: ${messageOf(error)}`),
   );
 }
@@ -166,8 +172,8 @@ export function restoreUndoSnapshot(params: {
       return { ref: saved.value.ref, kind };
     })(),
     (error) =>
-      (error as DomainError)?.type
-        ? (error as DomainError)
+      isDomainError(error)
+        ? error
         : internal(`Could not restore the snapshot: ${messageOf(error)}`),
   );
 }

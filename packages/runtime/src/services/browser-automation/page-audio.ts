@@ -54,8 +54,11 @@ function audioHook(initial: boolean): void {
   };
 
   // `play` and `volumechange` do not bubble: listen in the capture phase.
-  document.addEventListener('play', (e) => holdElement(e.target as HTMLMediaElement), true);
-  document.addEventListener('volumechange', (e) => holdElement(e.target as HTMLMediaElement), true);
+  // SAFETY: `play` and `volumechange` are media events; the browser dispatches
+  // them only with an HTMLMediaElement (audio / video) as the target.
+  const mediaTarget = (e: Event) => e.target as HTMLMediaElement;
+  document.addEventListener('play', (e) => holdElement(mediaTarget(e)), true);
+  document.addEventListener('volumechange', (e) => holdElement(mediaTarget(e)), true);
 
   const NativeAudioContext = window.AudioContext;
   if (NativeAudioContext) {

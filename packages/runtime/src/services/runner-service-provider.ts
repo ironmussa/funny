@@ -166,6 +166,9 @@ function runnerProjects(): RuntimeServiceProvider['projects'] {
       const response = await remoteCreateProject(name, path, userId, orgId);
       if (response?.error) {
         return err({
+          // SAFETY: unchecked; the server's data:create_project handler sets
+          // `errorType` from the DomainError it failed with (BAD_REQUEST,
+          // CONFLICT or INTERNAL), and an absent one becomes INTERNAL here.
           type: (response.errorType as 'BAD_REQUEST' | 'CONFLICT' | 'INTERNAL') || 'INTERNAL',
           message: response.error,
         });

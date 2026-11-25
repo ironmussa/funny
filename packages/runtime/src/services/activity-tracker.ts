@@ -130,14 +130,14 @@ export interface ActivityTrackerDeps {
 const PROGRESS_INTERVAL_MS = 500;
 
 /** A server answer that refuses the write (scope, ownership, unknown type). */
-function isRefusal(response: ActivityReportAnswer): boolean {
+function isRefusal(response: ActivityReportAnswer): response is { [key: string]: JsonValue } {
   return isObject(response) && !Array.isArray(response) && response.success === false;
 }
 
 function messageOf(cause: unknown): string {
   if (isString(cause)) return cause;
   if (isObject(cause) && 'message' in cause) {
-    return String((cause as { message: unknown }).message);
+    return String(cause.message);
   }
   return String(cause);
 }
@@ -165,7 +165,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
         log.warn('Activity report refused by the server', {
           namespace: 'activities',
           eventType,
-          error: (response as { error?: unknown }).error,
+          error: response.error,
         });
       }
     } catch (error) {
@@ -196,7 +196,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
             log.warn('Activity outcome refused by the server', {
               namespace: 'activities',
               id: payload.id,
-              error: (response as { error?: unknown }).error,
+              error: response.error,
             });
           }
         }),

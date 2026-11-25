@@ -76,7 +76,7 @@ export class BunPtyBackend implements PtyBackend {
         cwd: cwd || process.cwd(),
         // pty-manager already builds `env` from buildChildEnv(); scrub again as
         // defense in depth so no caller can reintroduce runner secrets (M8).
-        env: scrubSensitiveEnv(env) as Record<string, string>,
+        env: scrubSensitiveEnv(env),
         terminal: {
           cols: cols || 80,
           rows: rows || 24,
@@ -107,7 +107,7 @@ export class BunPtyBackend implements PtyBackend {
     if (session) {
       try {
         // In terminal mode, proc.stdin is null — use proc.terminal.write() instead
-        (session.proc as any).terminal?.write(data);
+        session.proc.terminal?.write(data);
       } catch (err: any) {
         log.error('Failed to write to Bun PTY', {
           namespace: 'pty-bun',
@@ -123,7 +123,7 @@ export class BunPtyBackend implements PtyBackend {
     if (session) {
       try {
         // In terminal mode, resize is on proc.terminal
-        (session.proc as any).terminal?.resize(cols, rows);
+        session.proc.terminal?.resize(cols, rows);
       } catch (err: any) {
         log.error('Failed to resize Bun PTY', {
           namespace: 'pty-bun',

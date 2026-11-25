@@ -80,6 +80,8 @@ export function grpcMethodDefinition(
     // In-memory events may contain undefined, which protobuf JSON cannot represent.
     Buffer.from(toBinary(schema, fromJsonString(schema, JSON.stringify(value))));
   const decode = (schema: DescMessage, value: Buffer): RunnerGrpcWireMessage =>
+    // SAFETY: `schema` is a message descriptor, and toJson of a message is
+    // always a JSON object (proto3 JSON mapping), never a scalar or an array.
     toJson(schema, fromBinary(schema, value), { enumAsInteger: true }) as RunnerGrpcWireMessage;
   return {
     path: `/${RunnerTransportService.typeName}/${method.name}`,
@@ -92,12 +94,14 @@ export function grpcMethodDefinition(
   };
 }
 
-const runnerTransportDefinition = Object.fromEntries(
+const runnerTransportDefinition: grpc.ServiceDefinition = Object.fromEntries(
   RunnerTransportService.methods.map((method) => [
     method.localName,
+    // SAFETY: every RunnerTransportService rpc is bidi-streaming
+    // (protocol/runner/v2/control.proto: `stream` request and response).
     grpcMethodDefinition(method as DescMethodStreaming),
   ]),
-) as grpc.ServiceDefinition;
+);
 
 export function runnerGrpcChannelOptions(): grpc.ChannelOptions {
   return {
@@ -121,6 +125,9 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
   const { address, secure } = bridge
     ? { address: bridge.address, secure: false }
     : normalizeEndpoint(endpoint);
+  // SAFETY: makeGenericClientConstructor adds one method per definition key
+  // (the rpc local names); each bidi-streaming method takes metadata and
+  // returns a ClientDuplexStream, which RunnerGrpcDuplexStream describes.
   const client = new service(
     address,
     secure ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
@@ -286,6 +293,9 @@ export class RunnerGrpcClient {
         },
       });
     } catch (error) {
+      // SAFETY: unchecked; opening the stream (grpc-js) and encoding the hello
+      // (protobuf) throw Error instances. disconnect only reads `name` with `?.`
+      // and passes the value on to onDisconnected.
       this.disconnect(generation, error as Error);
     }
   }

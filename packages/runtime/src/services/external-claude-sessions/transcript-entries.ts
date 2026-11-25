@@ -11,7 +11,7 @@ import type {
 import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
-import { isObject, isString } from '../../lib/value-guards.js';
+import { isPlainObject, isString } from '../../lib/value-guards.js';
 
 const IDE_OPENED_FILE_RE = /<ide_opened_file>[\s\S]*?<\/ide_opened_file>/g;
 const PREVIEWABLE_ASSETS_BLOCK_RE = /\[PREVIEWABLE ASSETS\][\s\S]*?\[\/PREVIEWABLE ASSETS\]/g;
@@ -230,6 +230,8 @@ function userMessageParts(
 }
 
 function withoutEmptyLists<T extends Record<string, unknown>>(parts: T): Partial<T> {
+  // SAFETY: every entry is one of T's own keys with its own value; the filter
+  // only drops some, so the object is a subset of T.
   return Object.fromEntries(
     Object.entries(parts).filter(([, value]) => !Array.isArray(value) || value.length > 0),
   ) as Partial<T>;
@@ -245,8 +247,8 @@ function extractToolCalls(
 
   const toolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
-    if (!isObject(block)) return;
-    const record = block as BlockRecord;
+    if (!isPlainObject(block)) return;
+    const record: BlockRecord = block;
     if (record.type !== 'tool_use') return;
 
     const claudeToolId = isString(record.id) ? record.id : null;
@@ -274,8 +276,8 @@ function applyToolResults(
 
   const orphanToolCalls: ExternalClaudeTranscriptToolCall[] = [];
   content.forEach((block, blockIndex) => {
-    if (!isObject(block)) return;
-    const record = block as BlockRecord;
+    if (!isPlainObject(block)) return;
+    const record: BlockRecord = block;
     if (record.type !== 'tool_result') return;
 
     const output = contentToText(record.content);
@@ -322,9 +324,9 @@ function extractImages(content: TranscriptContent): ImageAttachment[] {
 
 function blockToText(block: JsonValue): string {
   if (isString(block)) return block;
-  if (!isObject(block)) return stringifyJson(block);
+  if (!isPlainObject(block)) return stringifyJson(block);
 
-  const record = block as BlockRecord;
+  const record: BlockRecord = block;
   const type = isString(record.type) ? record.type : null;
 
   if (type === 'text' && isString(record.text)) return record.text;
@@ -342,7 +344,7 @@ function contentLooksLikeToolResult(content: TranscriptContent): boolean {
   return (
     Array.isArray(content) &&
     content.length > 0 &&
-    content.every((block) => isObject(block) && (block as BlockRecord).type === 'tool_result')
+    content.every((block) => isPlainObject(block) && block.type === 'tool_result')
   );
 }
 

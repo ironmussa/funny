@@ -67,6 +67,8 @@ export class DaemonPtyBackend implements PtyBackend {
       cols,
       rows,
       shell,
+      // SAFETY: send() JSON-encodes the command, and JSON.stringify drops the
+      // undefined values, so the daemon receives only string values.
       env: env as Record<string, string>,
     });
   }

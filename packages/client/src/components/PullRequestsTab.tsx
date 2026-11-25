@@ -350,21 +350,29 @@ function useGitHubLogin(): string | undefined {
 
 /** Labels + assignable users for the filter dropdowns, loaded once per project. */
 function usePRFilterOptions(visible: boolean | undefined, projectId: string | null) {
-  const [filterOptions, setFilterOptions] = useState<PRFilterOptions | null>(null);
+  const [loaded, setLoaded] = useState<{
+    projectId: string;
+    options: PRFilterOptions;
+  } | null>(null);
+  // Options belong to the project they were loaded for: a new project starts with none.
+  const filterOptions = loaded && loaded.projectId === projectId ? loaded.options : null;
   const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
 
-  useEffect(() => {
-    setFilterOptions(null);
-  }, [projectId]);
+  // Show the loader each time the visible project changes; the effect below loads it.
+  const loadKey = visible && projectId ? projectId : null;
+  const [loadingForKey, setLoadingForKey] = useState<string | null>(null);
+  if (loadKey !== loadingForKey) {
+    setLoadingForKey(loadKey);
+    if (loadKey !== null) setFilterOptionsLoading(true);
+  }
 
   useEffect(() => {
     if (!visible || !projectId) return;
     const controller = new AbortController();
-    setFilterOptionsLoading(true);
     void api.githubPRFilterOptions(projectId, controller.signal).then((res) => {
       if (controller.signal.aborted) return;
       if (res.isOk()) {
-        setFilterOptions(res.value);
+        setLoaded({ projectId, options: res.value });
       } else {
         log.error('failed to load PR filter options', {
           projectId,

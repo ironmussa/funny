@@ -105,8 +105,12 @@ export function AllThreadsView() {
     return params;
   };
 
-  // Sync URL query params → local state when URL changes (e.g. browser back/forward)
-  useEffect(() => {
+  // Sync URL query params → local state when URL changes (e.g. browser back/forward).
+  // Adjusted during render (react.dev "you might not need an effect"): the state
+  // initializers above already read the first URL, so only a change is applied.
+  const [syncedSearchParams, setSyncedSearchParams] = useState(searchParams);
+  if (syncedSearchParams !== searchParams) {
+    setSyncedSearchParams(searchParams);
     // Setting the value a state already holds is a no-op, so no comparison is needed.
     setProjectFilter(searchParams.get('project') || null);
     // Restore the text search from the URL (back button from a thread,
@@ -122,7 +126,7 @@ export function AllThreadsView() {
     setShowArchived(filters.showArchived);
     setSortField(filters.sortField);
     setSortDir(filters.sortDir);
-  }, [searchParams]);
+  }
 
   // Local filter state → URL. Reads the params through a ref so a URL change
   // (handled above) never writes the previous filters back.

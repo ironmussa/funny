@@ -53,15 +53,7 @@ import { whilePending } from '@funny/shared/while-pending';
 import { useWindowSize } from '@gpuix/react';
 import type { EventPayload } from '@gpuix/react';
 import type { ReactElement } from 'react';
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-  useState,
-} from 'react';
+import { memo, useCallback, useEffect, useMemo, useSyncExternalStore, useState } from 'react';
 
 import type { NativeApplicationServices } from './application';
 import { diagnosticSurfacePosition, nativeRenderingModeLabel } from './diagnostic-mode';
@@ -1069,10 +1061,11 @@ const ThreadTranscript = memo(function ThreadTranscript({
     () => (data.hasMore ? [LOAD_OLDER_ITEM, ...renderItems] : [...renderItems]),
     [data.hasMore, renderItems],
   );
-  const followsTailRef = useRef(true);
+  // followsTail lives in state, next to the retained range it moves: render reads it.
   const [retainedState, setRetainedState] = useState(() => ({
     items,
     start: maximumWindowStart(items.length, THREAD_RETAINED_WINDOW_SIZE),
+    followsTail: true,
   }));
   let currentRetainedState = retainedState;
   if (retainedState.items !== items) {
@@ -1083,13 +1076,14 @@ const ThreadTranscript = memo(function ThreadTranscript({
     );
     currentRetainedState = {
       items,
-      start: followsTailRef.current
+      followsTail: retainedState.followsTail,
+      start: retainedState.followsTail
         ? maximumWindowStart(items.length, THREAD_RETAINED_WINDOW_SIZE)
         : clampWindowStart(shiftedStart, items.length, THREAD_RETAINED_WINDOW_SIZE),
     };
     setRetainedState(currentRetainedState);
   }
-  const effectiveWindowStart = followsTailRef.current
+  const effectiveWindowStart = currentRetainedState.followsTail
     ? maximumWindowStart(items.length, THREAD_RETAINED_WINDOW_SIZE)
     : clampWindowStart(currentRetainedState.start, items.length, THREAD_RETAINED_WINDOW_SIZE);
   const retainedItems = items.slice(
@@ -1100,9 +1094,9 @@ const ThreadTranscript = memo(function ThreadTranscript({
     (event: EventPayload) => {
       const visibleStart = Math.max(0, Math.floor(event.startIndex ?? 0));
       const visibleEnd = Math.max(visibleStart + 1, Math.ceil(event.endIndex ?? visibleStart + 1));
-      followsTailRef.current = visibleEnd >= items.length - 1;
       setRetainedState((current) => ({
         items,
+        followsTail: visibleEnd >= items.length - 1,
         start: windowStartForVisibleRange({
           currentStart: current.items === items ? current.start : effectiveWindowStart,
           itemCount: items.length,

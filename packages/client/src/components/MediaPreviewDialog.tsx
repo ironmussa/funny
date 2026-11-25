@@ -76,7 +76,9 @@ export function MediaPreviewDialog({ open, onOpenChange, filePath }: MediaPrevie
  */
 function ExpandedImage({ src, name }: { src: string; name?: string }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const pz = useBoxZoomPan();
+  // The container ref is kept apart so reading the zoom state in render is not
+  // taken for a ref read.
+  const { containerRef: zoomContainerRef, ...pz } = useBoxZoomPan();
   const zoomed = pz.scale > 1;
 
   return (
@@ -150,7 +152,7 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
       </DialogHeader>
 
       <div
-        ref={pz.containerRef}
+        ref={zoomContainerRef}
         className={cn(
           'bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none',
           zoomed ? (pz.isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default',

@@ -44,8 +44,12 @@ export function StartupCommandsSettings() {
   }, [selectedProjectId]);
 
   useEffect(() => {
-    loadCommands();
-  }, [loadCommands]);
+    if (!selectedProjectId) return;
+    void api.listCommands(selectedProjectId).then((result) => {
+      if (result.isOk()) setCommands(result.value);
+      // ignore errors
+    });
+  }, [selectedProjectId]);
 
   // Sync running state from terminal store
   const tabs = useTerminalStore((s) => s.tabs);

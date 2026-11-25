@@ -64,6 +64,28 @@ interface MonacoEditorDialogProps {
 const MONACO_WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/? \t\n';
 
 const blameLog = createClientLogger('blame');
+
+/** The search bar's matches in a Monaco model; an invalid regex matches nothing. */
+function findModelMatches(
+  model: monacoEditor.ITextModel,
+  query: string,
+  regex: boolean,
+  caseSensitive: boolean,
+  wholeWord: boolean,
+): monacoEditor.FindMatch[] {
+  try {
+    return model.findMatches(
+      query,
+      false,
+      regex,
+      caseSensitive,
+      wholeWord ? MONACO_WORD_SEPARATORS : null,
+      false,
+    );
+  } catch {
+    return [];
+  }
+}
 const EMPTY_FILE_HISTORY: FileHistoryEntry[] = [];
 
 const MonacoCodeView = lazy(() =>
@@ -270,6 +292,15 @@ export function MonacoEditorDialog({
     setSearchQuery('');
   }, []);
 
+  // Each fetch starts from an empty history, cleared in the render that opens
+  // the file (or reopens it) rather than in the fetch effect.
+  const historyFetchKey = open && filePath ? filePath : null;
+  const [prevHistoryFetchKey, setPrevHistoryFetchKey] = useState(historyFetchKey);
+  if (prevHistoryFetchKey !== historyFetchKey) {
+    setPrevHistoryFetchKey(historyFetchKey);
+    if (historyFetchKey) setFileHistoryState({ filePath: historyFetchKey, entries: [] });
+  }
+
   // Fetch blame + file history whenever the open file changes. Failures
   // (untracked file, no repo, native module unavailable) are non-fatal.
   useEffect(() => {
@@ -284,7 +315,6 @@ export function MonacoEditorDialog({
     }
     blameLog.info('blame fetch effect', { open, filePath });
     let cancelled = false;
-    setFileHistoryState({ filePath, entries: [] });
     void api.getFileBlame(filePath).then((res) => {
       if (cancelled) return;
       if (res.isOk()) {
@@ -361,20 +391,12 @@ export function MonacoEditorDialog({
   useEffect(() => {
     if (inCodeView) return;
     const container = previewContainerRef.current;
-    if (!container) {
-      matchElementsRef.current = [];
-      setMatchCount(0);
-      setCurrentMatch(-1);
-      return;
-    }
     const query = searchOpen ? debouncedQuery.trim() : '';
-    if (!query) {
-      matchElementsRef.current = [];
-      setMatchCount(0);
-      setCurrentMatch(-1);
-      return;
-    }
-    const marks = Array.from(container.querySelectorAll<HTMLElement>('mark.md-search-match'));
+    // No preview or no query: no matches.
+    const marks =
+      container && query
+        ? Array.from(container.querySelectorAll<HTMLElement>('mark.md-search-match'))
+        : [];
     matchElementsRef.current = marks;
     setMatchCount(marks.length);
     setCurrentMatch(marks.length > 0 ? 0 : -1);
@@ -401,27 +423,11 @@ export function MonacoEditorDialog({
     if (!editor || !model) return;
 
     const query = searchOpen ? debouncedQuery : '';
+    let matches: monacoEditor.FindMatch[] = [];
     if (!query) {
       monacoDecorationsRef.current?.clear();
-      monacoMatchesRef.current = [];
-      setMatchCount(0);
-      setCurrentMatch(-1);
-      return;
-    }
-
-    let matches: monacoEditor.FindMatch[] = [];
-    try {
-      matches = model.findMatches(
-        query,
-        false,
-        regex,
-        caseSensitive,
-        wholeWord ? MONACO_WORD_SEPARATORS : null,
-        false,
-      );
-    } catch {
-      // Invalid regex — treat as no matches.
-      matches = [];
+    } else {
+      matches = findModelMatches(model, query, regex, caseSensitive, wholeWord);
     }
     monacoMatchesRef.current = matches;
     setMatchCount(matches.length);

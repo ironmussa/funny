@@ -116,11 +116,8 @@ function messageListAreEqual(prev: MemoizedMessageListProps, next: MemoizedMessa
  * cache) per row.
  */
 function useMaxRowBottom() {
-  const measuredRowBottomCacheRef = useRef<Map<string, number> | null>(null);
-  if (measuredRowBottomCacheRef.current === null) {
-    measuredRowBottomCacheRef.current = new Map();
-  }
-  const measuredRowBottomCache = measuredRowBottomCacheRef.current;
+  // One cache per list instance; rows write it from their measurement callbacks.
+  const [measuredRowBottomCache] = useState(() => new Map<string, number>());
   const [measuredContentBottom, setMeasuredContentBottom] = useState(0);
   const measuredBottomRafRef = useRef<number | null>(null);
   const scheduleMeasuredContentBottom = useCallback(() => {

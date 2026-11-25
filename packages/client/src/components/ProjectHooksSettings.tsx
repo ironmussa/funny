@@ -236,8 +236,11 @@ export function ProjectHooksSettings() {
   }, [selectedProjectId]);
 
   useEffect(() => {
-    loadHooks();
-  }, [loadHooks]);
+    if (!selectedProjectId) return;
+    void api.listHooks(selectedProjectId).then((result) => {
+      if (result.isOk()) setHooks(result.value);
+    });
+  }, [selectedProjectId]);
 
   // Drag-and-drop reorder monitor
   useEffect(() => {

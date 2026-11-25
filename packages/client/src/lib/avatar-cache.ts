@@ -76,24 +76,26 @@ async function load(url: string): Promise<string | null> {
  * Returns `undefined` only while the very first fetch for an uncached URL is in
  * flight (callers show their avatar-less fallback briefly).
  */
+function freshOrUndefined(url: string | undefined | null): string | undefined {
+  return url ? (getFresh(url) ?? undefined) : undefined;
+}
+
 export function useCachedAvatar(url: string | undefined | null): string | undefined {
-  const [resolved, setResolved] = useState<string | undefined>(() =>
-    url ? (getFresh(url) ?? undefined) : undefined,
-  );
+  const [state, setState] = useState(() => ({ url, resolved: freshOrUndefined(url) }));
+  // A new URL starts from its cached blob (or nothing while the first fetch is in flight).
+  let resolved = state.resolved;
+  if (state.url !== url) {
+    resolved = freshOrUndefined(url);
+    setState({ url, resolved });
+  }
 
   useEffect(() => {
-    if (!url) {
-      setResolved(undefined);
-      return;
-    }
-    const fresh = getFresh(url);
-    if (fresh) {
-      setResolved(fresh);
-      return;
-    }
-    setResolved(undefined);
+    if (!url) return;
     let active = true;
-    let promise = inflight.get(url);
+    // The cache may have filled between this render and its effect (another
+    // consumer's fetch for the same URL finished): pick that blob up too.
+    const fresh = getFresh(url);
+    let promise = fresh ? Promise.resolve(fresh) : inflight.get(url);
     if (!promise) {
       promise = load(url).finally(() => inflight.delete(url));
       inflight.set(url, promise);
@@ -101,7 +103,12 @@ export function useCachedAvatar(url: string | undefined | null): string | undefi
     promise.then((obj) => {
       // On success use the cached blob; on failure fall back to the direct URL
       // so the image still loads (just uncached) via the browser.
-      if (active) setResolved(obj ?? url);
+      const next = obj ?? url;
+      if (active) {
+        setState((prev) =>
+          prev.url === url && prev.resolved === next ? prev : { url, resolved: next },
+        );
+      }
     });
     return () => {
       active = false;

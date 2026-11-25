@@ -1,7 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { useState } from 'react';
+import { describe, expect, test, vi } from 'vitest';
 
-import { useResettableState } from '@/hooks/use-resettable-state';
+import { useAdjustOnChange, useResettableState } from '@/hooks/use-resettable-state';
 
 describe('useResettableState', () => {
   test('keeps a set value while the keys stay the same', () => {
@@ -40,5 +41,37 @@ describe('useResettableState', () => {
     rerender({ k: 'b', init: 5 });
     expect(result.current[0]).toBe(5);
     expect(result.current[1]).toBe(setter);
+  });
+});
+
+describe('useAdjustOnChange', () => {
+  test('does not run on mount, runs once per change, in the render that sees it', () => {
+    const adjust = vi.fn();
+    const { rerender } = renderHook(({ k }) => useAdjustOnChange([k], adjust), {
+      initialProps: { k: 'a' },
+    });
+    expect(adjust).not.toHaveBeenCalled();
+    rerender({ k: 'a' });
+    expect(adjust).not.toHaveBeenCalled();
+    rerender({ k: 'b' });
+    expect(adjust).toHaveBeenCalledTimes(1);
+  });
+
+  test('state it sets is visible in the same render pass', () => {
+    const seen: string[] = [];
+    const { result, rerender } = renderHook(
+      ({ k }) => {
+        const [shown, setShown] = useState(k);
+        useAdjustOnChange([k], () => setShown(k));
+        seen.push(shown);
+        return shown;
+      },
+      { initialProps: { k: 'a' } },
+    );
+    seen.length = 0;
+    rerender({ k: 'b' });
+    // React discards the render that set state and renders again before commit.
+    expect(result.current).toBe('b');
+    expect(seen.at(-1)).toBe('b');
   });
 });

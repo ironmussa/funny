@@ -50,7 +50,9 @@ export function MarkdownImageCard({
   // Retry cleanly when the resolved source changes (e.g. signed→proxied fallback).
   const failed = failedSrc === src;
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const pz = useBoxZoomPan();
+  // The container ref is kept apart so reading the zoom state in render is not
+  // taken for a ref read.
+  const { containerRef: zoomContainerRef, ...pz } = useBoxZoomPan();
 
   const name = useMemo(() => (originalSrc ? fileNameOf(originalSrc) : ''), [originalSrc]);
 
@@ -83,7 +85,7 @@ export function MarkdownImageCard({
         </div>
       )}
       <div
-        ref={pz.containerRef}
+        ref={zoomContainerRef}
         className={cn(
           'bg-muted/20 relative flex h-[360px] items-center justify-center overflow-hidden select-none',
           zoomed ? (pz.isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default',

@@ -66,20 +66,28 @@ export function PublishRepoDialog({
   const [savingRemote, setSavingRemote] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
 
-  // Reset everything + fetch orgs when dialog opens
+  // Reset everything when the dialog opens (or its project changes while open)
+  const openKey = open ? JSON.stringify([projectId, defaultName]) : null;
+  const [resetForKey, setResetForKey] = useState<string | null>(null);
+  if (openKey !== resetForKey) {
+    setResetForKey(openKey);
+    if (openKey !== null) {
+      setTab('github');
+      setRepoName(defaultName);
+      setDescription('');
+      setIsPrivate(true);
+      setSelectedOrg('__personal__');
+      setError(null);
+      setRemoteUrl('');
+      setRemoteError(null);
+      setOrgsLoading(true);
+    }
+  }
+
+  // Fetch orgs when dialog opens
   useEffect(() => {
     if (!open) return;
-    setTab('github');
-    setRepoName(defaultName);
-    setDescription('');
-    setIsPrivate(true);
-    setSelectedOrg('__personal__');
-    setError(null);
-    setRemoteUrl('');
-    setRemoteError(null);
-
     const controller = new AbortController();
-    setOrgsLoading(true);
     api
       .projectGetGhOrgs(projectId, controller.signal)
       .then((r) => {

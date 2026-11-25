@@ -11,7 +11,7 @@ import {
   Sparkles,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -55,46 +55,54 @@ function SymbolKindIcon({ kind, className }: { kind?: string; className?: string
   }
 }
 
-interface SuggestionPopupPosition {
-  left: number;
-  bottom: number;
-  width?: number;
+/**
+ * Places the popup above the container (matching its left edge and width) or,
+ * without one, above the caret, through the CSS variables its classes read.
+ * Hidden while TipTap has no caret rect. Without a container the width falls
+ * back to 20rem (Tailwind `w-80`).
+ */
+function positionSuggestionPopup(
+  popup: HTMLElement,
+  rect: (() => DOMRect | null) | null,
+  container: HTMLElement | null,
+) {
+  const caret = rect?.() ?? null;
+  const { style } = popup;
+  if (!caret) {
+    style.visibility = 'hidden';
+    return;
+  }
+  const containerRect = container?.getBoundingClientRect();
+  style.visibility = '';
+  style.setProperty(
+    '--suggestion-popup-left',
+    `${containerRect ? containerRect.left : caret.left}px`,
+  );
+  if (containerRect) style.setProperty('--suggestion-popup-width', `${containerRect.width}px`);
+  else style.removeProperty('--suggestion-popup-width');
+  // Align the popup's bottom edge to the top of the container (or caret)
+  style.setProperty(
+    '--suggestion-popup-bottom',
+    `${window.innerHeight - (containerRect ? containerRect.top : caret.top) + 4}px`,
+  );
 }
 
 /**
- * The fixed, portalled box of the suggestion popup. `position` null keeps it
- * hidden until there is a rect to anchor it to; a measured width wins over the
- * `w-80` fallback, as the inline width did.
+ * The fixed, portalled box of the suggestion popup. Its place and width come
+ * from CSS variables that `positionSuggestionPopup` sets before paint.
  */
 function SuggestionPopupFrame({
-  position,
-  fallbackWidth,
   ref,
   children,
 }: {
-  position: SuggestionPopupPosition | null;
-  fallbackWidth: boolean;
-  ref?: React.Ref<HTMLDivElement>;
+  ref: React.Ref<HTMLDivElement>;
   children: React.ReactNode;
 }) {
-  const width = position?.width;
   return createPortal(
     <div
       ref={ref}
       data-suggestion-popup
-      style={{
-        '--suggestion-popup-left': position ? `${position.left}px` : undefined,
-        '--suggestion-popup-bottom': position ? `${position.bottom}px` : undefined,
-        '--suggestion-popup-width': width === undefined ? undefined : `${width}px`,
-      }}
-      className={cn(
-        'fixed z-50 max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
-        position
-          ? 'bottom-[var(--suggestion-popup-bottom)] left-[var(--suggestion-popup-left)]'
-          : 'invisible',
-        fallbackWidth && 'w-80',
-        width !== undefined && 'w-[var(--suggestion-popup-width)]',
-      )}
+      className="border-border bg-popover text-popover-foreground fixed bottom-[var(--suggestion-popup-bottom)] left-[var(--suggestion-popup-left)] z-50 max-h-52 w-[var(--suggestion-popup-width,20rem)] overflow-y-auto rounded-md border shadow-md"
     >
       {children}
     </div>,
@@ -117,25 +125,15 @@ export function SuggestionPopup({
   const { t } = useTranslation();
   const popupRef = useRef<HTMLDivElement>(null);
 
-  // Compute position synchronously to avoid flash/jump.
-  // We recalculate on every render that changes rect or items.
-  // `null` keeps the popup hidden until there is a rect to anchor it to.
-  const position = useMemo<SuggestionPopupPosition | null>(() => {
-    if (!rect) return null;
-    const r = rect();
-    if (!r) return null;
-    // If a container ref is provided, match its left edge and width
-    const container = containerRef?.current;
-    const containerRect = container?.getBoundingClientRect();
-    return {
-      left: containerRect ? containerRect.left : r.left,
-      width: containerRect ? containerRect.width : undefined,
-      // Align the popup's bottom edge to the top of the container (or cursor)
-      bottom: window.innerHeight - (containerRect ? containerRect.top : r.top) + 4,
-    };
-  }, [rect, containerRef]);
-  // No container to match: the popup takes the fixed w-80 width.
-  const fallbackWidth = !containerRef?.current;
+  // The popup is positioned against the caret rect and the owner's container,
+  // both measured from the DOM, so it is placed in a layout effect (before
+  // paint, no flash) rather than during render. `variant` re-runs it when the
+  // loading / empty / list body is swapped.
+  const variant = loading && items.length === 0 ? 'loading' : items.length === 0 ? 'empty' : 'list';
+  useLayoutEffect(() => {
+    const popup = popupRef.current;
+    if (popup) positionSuggestionPopup(popup, rect, containerRef?.current ?? null);
+  }, [rect, containerRef, variant]);
 
   // Scroll selected into view — use scrollTop manipulation instead of
   // scrollIntoView which can scroll parent containers and cause jumps.
@@ -156,7 +154,7 @@ export function SuggestionPopup({
   if (loading && items.length === 0) {
     const loadingLabel = getSuggestionLoadingLabel(type);
     return (
-      <SuggestionPopupFrame position={position} fallbackWidth={fallbackWidth}>
+      <SuggestionPopupFrame ref={popupRef}>
         <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
           <Loader2 className="icon-xs animate-spin" />
           {t(loadingLabel.key, loadingLabel.fallback)}
@@ -167,7 +165,7 @@ export function SuggestionPopup({
 
   if (items.length === 0) {
     return (
-      <SuggestionPopupFrame position={position} fallbackWidth={fallbackWidth}>
+      <SuggestionPopupFrame ref={popupRef}>
         <div className="text-muted-foreground px-3 py-2 text-xs">
           {
             // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
@@ -185,7 +183,7 @@ export function SuggestionPopup({
   }
 
   return (
-    <SuggestionPopupFrame ref={popupRef} position={position} fallbackWidth={fallbackWidth}>
+    <SuggestionPopupFrame ref={popupRef}>
       {items.map((item, i) => (
         <button
           type="button"

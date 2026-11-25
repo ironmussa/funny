@@ -45,13 +45,19 @@ export function TestIdOverlay() {
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const [labels, setLabels] = useState<TestIdLabel[]>([]);
 
+  // Turning the overlay off (or losing the session) drops the old labels, so a
+  // re-enabled overlay never shows stale ids.
+  const collecting = showTestIds && !!sessionId;
+  const [wasCollecting, setWasCollecting] = useState(collecting);
+  if (wasCollecting !== collecting) {
+    setWasCollecting(collecting);
+    if (!collecting) setLabels([]);
+  }
+
   // Every post-await update is guarded by cancelled, which cleanup owns.
   // react-doctor-disable-next-line no-set-state-after-await-in-effect
   useEffect(() => {
-    if (!showTestIds || !sessionId) {
-      setLabels([]);
-      return;
-    }
+    if (!showTestIds || !sessionId) return;
 
     let cancelled = false;
 

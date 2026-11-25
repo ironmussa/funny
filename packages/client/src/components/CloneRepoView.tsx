@@ -195,23 +195,26 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     }
   }, []);
 
+  // The state updates run when the status request settles, never synchronously
+  // in the effects that call this.
   const checkConnection = useCallback(async () => {
-    const result = await api.githubStatus();
-    if (result.isOk()) {
-      if (result.value.connected) {
-        setTokenSource(result.value.source ?? 'profile');
-        await loadGhUser();
-        // A retried clone goes straight to its filled form.
-        setView(retryingRef.current ? 'clone-config' : 'repos');
-        retryingRef.current = false;
+    return api.githubStatus().then(async (result) => {
+      if (result.isOk()) {
+        if (result.value.connected) {
+          setTokenSource(result.value.source ?? 'profile');
+          await loadGhUser();
+          // A retried clone goes straight to its filled form.
+          setView(retryingRef.current ? 'clone-config' : 'repos');
+          retryingRef.current = false;
+        } else {
+          setTokenSource(null);
+          setView('connect');
+        }
       } else {
-        setTokenSource(null);
-        setView('connect');
+        // API call itself failed (network error, server down, etc.)
+        setView('error');
       }
-    } else {
-      // API call itself failed (network error, server down, etc.)
-      setView('error');
-    }
+    });
   }, [loadGhUser]);
 
   // Check initial connection status
@@ -227,11 +230,11 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
   }, [generalSettingsOpen, view, checkConnection]);
 
   // Load repos with optional server-side search. `append` keeps existing
-  // results when paginating; stale responses are dropped via fetchIdRef.
+  // results when paginating; stale responses are dropped via fetchIdRef. The
+  // caller sets `loadingRepos`.
   const fetchRepos = useCallback(async (pageNum: number, searchQuery: string, append: boolean) => {
     const fetchId = ++fetchIdRef.current;
     loadingRef.current = true;
-    setLoadingRepos(true);
     log.debug('github repo search', { page: pageNum, query: searchQuery, append });
     return withCleanup(
       async () => {
@@ -291,6 +294,15 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
   }, [highlightedIndex]);
 
+  // Show the loading state in the same render that enters the repo view or
+  // changes the debounced search; the effect below fetches the first page.
+  const reposFetchKey = view === 'repos' ? debouncedSearch : null;
+  const [prevReposFetchKey, setPrevReposFetchKey] = useState(reposFetchKey);
+  if (prevReposFetchKey !== reposFetchKey) {
+    setPrevReposFetchKey(reposFetchKey);
+    if (reposFetchKey !== null) setLoadingRepos(true);
+  }
+
   // Load repos when entering repo view or the debounced search changes.
   // Always reset pagination to page 1 for a fresh result set.
   useEffect(() => {
@@ -313,6 +325,7 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
         if (loadingRef.current || !hasMore) return;
         const next = pageRef.current + 1;
         pageRef.current = next;
+        setLoadingRepos(true);
         fetchRepos(next, debouncedSearch, true);
       },
       { root, rootMargin: '0px 0px 200px 0px', threshold: 0 },

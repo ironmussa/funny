@@ -1,4 +1,3 @@
-import { SiGithub } from '@icons-pack/react-simple-icons';
 import { FolderOpen, Loader2, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,29 +5,20 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
-import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCloneRetryStore } from '@/stores/clone-retry-store';
 import { useProjectStore } from '@/stores/project-store';
 
+import { AddModeTabs, type AddMode } from './add-project/AddModeTabs';
+import { GitInitDialog } from './add-project/GitInitDialog';
 import { CloneRepoView } from './CloneRepoView';
 import { FolderPicker } from './FolderPicker';
-
-type AddMode = 'local' | 'github';
 
 export function AddProjectView() {
   const { t } = useTranslation();
@@ -140,33 +130,7 @@ export function AddProjectView() {
           </div>
         )}
 
-        {/* Tab toggle */}
-        <div className={cn('flex gap-1 rounded-lg bg-muted p-1', isCloning && 'hidden')}>
-          <button
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              mode === 'local'
-                ? 'bg-background text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-            data-testid="add-project-tab-local"
-            onClick={() => setMode('local')}
-          >
-            <FolderOpen className="icon-sm" />
-            {t('github.localFolder')}
-          </button>
-          <button
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              mode === 'github'
-                ? 'bg-background text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-            data-testid="add-project-tab-clone"
-            onClick={() => setMode('github')}
-          >
-            <SiGithub className="icon-sm" />
-            {t('github.cloneFromGithub')}
-          </button>
-        </div>
+        <AddModeTabs mode={mode} hidden={isCloning} onModeChange={setMode} />
 
         {mode === 'local' ? (
           <div className="space-y-4">
@@ -267,30 +231,12 @@ export function AddProjectView() {
         />
       )}
 
-      <Dialog open={gitInitDialogOpen} onOpenChange={setGitInitDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t('confirm.gitInitTitle', { defaultValue: 'Initialize Git Repository' })}
-            </DialogTitle>
-            <DialogDescription>
-              {t('confirm.notGitRepo', { path: newProjectPath })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              data-testid="git-init-cancel"
-              variant="outline"
-              onClick={() => setGitInitDialogOpen(false)}
-            >
-              {t('common.cancel', { defaultValue: 'Cancel' })}
-            </Button>
-            <Button data-testid="git-init-confirm" onClick={handleGitInit}>
-              {t('confirm.gitInitAction', { defaultValue: 'Initialize' })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <GitInitDialog
+        open={gitInitDialogOpen}
+        path={newProjectPath}
+        onOpenChange={setGitInitDialogOpen}
+        onConfirm={handleGitInit}
+      />
     </ScrollArea>
   );
 }

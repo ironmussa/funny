@@ -122,7 +122,14 @@ export function timeAgo(
   if (isNaN(ms)) return String(dateStr);
   const seconds = Math.floor((now - ms) / 1000);
   if (seconds < 60) return t('time.now');
-  const minutes = Math.floor(seconds / 60);
+  return elapsedMinutesLabel(Math.floor(seconds / 60), t);
+}
+
+/** A whole number of elapsed minutes as minutes, hours, days or months. */
+export function elapsedMinutesLabel(
+  minutes: number,
+  t: (key: string, opts?: any) => string,
+): string {
   if (minutes < 60) return t('time.minutes', { count: minutes });
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return t('time.hours', { count: hours });

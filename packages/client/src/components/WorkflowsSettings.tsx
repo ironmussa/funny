@@ -27,27 +27,15 @@ import {
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import {
-  AlertCircle,
-  AlertTriangle,
-  CircleDashed,
-  GitBranch,
-  Play,
-  RefreshCw,
-  Save,
-  Search,
-  Square,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, CircleDashed } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Textarea } from '@/components/ui/textarea';
 import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
-import { cn } from '@/lib/utils';
 import { whilePending } from '@/lib/while-pending';
 import { useProjectStore } from '@/stores/project-store';
 import { useActiveThreadView } from '@/stores/thread-context';
@@ -55,6 +43,8 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useWorkflowRunStore } from '@/stores/workflow-run-store';
 
 import { decorateGraph, WorkflowNodeView, type WorkflowNode } from './workflows/WorkflowNodeView';
+import { WorkflowsHeader } from './workflows/WorkflowsHeader';
+import { WorkflowsSidebar } from './workflows/WorkflowsSidebar';
 
 const nodeTypes = { workflowNode: WorkflowNodeView };
 
@@ -278,62 +268,26 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
-      <header className="border-border bg-background flex h-12 shrink-0 items-center gap-3 border-b px-4">
-        <GitBranch className="text-muted-foreground icon-base" />
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-semibold">Workflows</h1>
-          {definition?.summary.source === 'built-in' ? (
-            <p className="text-muted-foreground truncate text-xs">
-              Saving writes `.funny/workflows/{definition.summary.name}.yaml`.
-            </p>
-          ) : null}
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void refreshFromSource()}>
-          <RefreshCw className="size-4" />
-        </Button>
-        <Button size="sm" onClick={() => void saveWorkflow()} disabled={!selectedName || hasErrors}>
-          <Save className="size-4" />
-          Save
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => void runWorkflow()}
-          disabled={!selectedName || hasErrors || !selectedThreadId}
-        >
-          <Play className="size-4" />
-          Run
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => void cancelRun()}
-          disabled={!activeRunId}
-        >
-          <Square className="size-4" />
-        </Button>
-      </header>
+      <WorkflowsHeader
+        definition={definition}
+        selectedName={selectedName}
+        hasErrors={hasErrors}
+        selectedThreadId={selectedThreadId}
+        activeRunId={activeRunId}
+        refreshFromSource={refreshFromSource}
+        saveWorkflow={saveWorkflow}
+        runWorkflow={runWorkflow}
+        cancelRun={cancelRun}
+      />
 
       <div className="flex min-h-0 flex-1">
-        <aside className="border-border bg-sidebar/40 flex w-72 shrink-0 flex-col border-r">
-          <div className="border-border border-b p-3">
-            <div className="relative">
-              <Search className="text-muted-foreground pointer-events-none absolute top-2.5 left-2 size-4" />
-              <Input
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                placeholder="Filter workflows"
-                inset="icon"
-              />
-            </div>
-          </div>
-          <WorkflowList
-            summaries={summaries}
-            selectedName={selectedName}
-            filter={filter}
-            onSelect={setSelectedName}
-          />
-        </aside>
+        <WorkflowsSidebar
+          summaries={summaries}
+          selectedName={selectedName}
+          filter={filter}
+          onFilterChange={setFilter}
+          onSelect={setSelectedName}
+        />
 
         {loading ? (
           <LoadingState label="Loading workflows..." className="min-h-0 flex-1" />
@@ -372,49 +326,6 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function WorkflowList({
-  summaries,
-  selectedName,
-  filter,
-  onSelect,
-}: {
-  summaries: WorkflowSummary[];
-  selectedName: string | null;
-  filter: string;
-  onSelect: (name: string) => void;
-}) {
-  const normalized = filter.trim().toLowerCase();
-  const visible = normalized
-    ? summaries.filter((item) =>
-        `${item.name} ${item.description ?? ''}`.toLowerCase().includes(normalized),
-      )
-    : summaries;
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="text-muted-foreground px-3 py-2 text-xs font-medium uppercase">Workflows</div>
-      <div className="min-h-0 flex-1 overflow-auto p-1">
-        {visible.map((item) => (
-          <button
-            key={item.name}
-            onClick={() => onSelect(item.name)}
-            className={cn(
-              'hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm',
-              selectedName === item.name && 'bg-accent text-accent-foreground',
-            )}
-          >
-            <GitBranch className="size-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{item.name}</span>
-            <span className="text-muted-foreground text-compact">
-              {item.source === 'user' ? 'user' : 'base'}
-            </span>
-          </button>
-        ))}
       </div>
     </div>
   );

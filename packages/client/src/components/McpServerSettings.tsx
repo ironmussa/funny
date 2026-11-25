@@ -1,22 +1,13 @@
-import type { AgentProvider, McpServer, McpServerType } from '@funny/shared';
-import {
-  Trash2,
-  Plus,
-  Globe,
-  Terminal,
-  Loader2,
-  AlertCircle,
-  Download,
-  ChevronUp,
-  ShieldAlert,
-  KeyRound,
-  Check,
-  XCircle,
-  FileJson,
-} from 'lucide-react';
-import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+import type { AgentProvider } from '@funny/shared';
+import { Plus, AlertCircle, ChevronUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { AddMcpServerForm } from '@/components/mcp-server-settings/AddMcpServerForm';
+import {
+  InstalledServerCard,
+  RecommendedServerCard,
+} from '@/components/mcp-server-settings/McpServerCards';
+import { useMcpServerSettings } from '@/components/mcp-server-settings/use-mcp-servers';
 import { SettingsSection } from '@/components/settings/SettingRow';
 import {
   AlertDialog,
@@ -28,11 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import {
   Select,
@@ -41,589 +29,75 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
-import { useProjects } from '@/data/projects/hooks';
-import { api } from '@/lib/api';
-import { openClaudeSettingsInEditor } from '@/lib/claude-settings';
-import { cn } from '@/lib/utils';
-import { whilePending } from '@/lib/while-pending';
-import { useProjectStore } from '@/stores/project-store';
-
-interface RecommendedServer {
-  name: string;
-  description: string;
-  type: McpServerType;
-  url?: string;
-  command?: string;
-  args?: string[];
-}
 
 const MCP_PROVIDER_OPTIONS: Array<{ value: AgentProvider; label: string }> = [
   { value: 'claude', label: 'Claude Code' },
   { value: 'codex', label: 'Codex' },
 ];
 
-function isClaudeAiConnectorName(name: string): boolean {
-  return name.startsWith('claude.ai') || name.startsWith('claude_ai_');
-}
-
-function ClaudeSettingsEditorButton({ className }: { className?: string }) {
-  const { t } = useTranslation();
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="xs"
-      className={cn('h-6', className)}
-      data-testid="mcp-edit-claude-settings"
-      onClick={() => void openClaudeSettingsInEditor()}
-    >
-      <FileJson className="icon-xs mr-1" />
-      {t('mcp.editClaudeSettings')}
-    </Button>
-  );
-}
-
-function McpServerToggle({
-  server,
-  toggling,
-  isDisabled,
-  onToggle,
+function McpRemoveDialog({
+  name,
+  onCancel,
+  onConfirm,
 }: {
-  server: McpServer;
-  toggling: boolean;
-  isDisabled: boolean;
-  onToggle: (disabled: boolean) => void;
+  name: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
   const { t } = useTranslation();
-  const notToggleable = server.toggleable === false;
-  const isClaudeAi = isClaudeAiConnectorName(server.name);
-  const tooltipKey =
-    server.provider === 'codex'
-      ? 'mcp.externalToggleTooltipCodex'
-      : isClaudeAi
-        ? 'mcp.externalToggleTooltipClaudeAi'
-        : 'mcp.externalToggleTooltipPlugin';
-
-  const switchControl = (
-    <Switch
-      data-testid={`mcp-toggle-${server.name}`}
-      checked={!isDisabled}
-      onCheckedChange={(checked) => onToggle(!checked)}
-      disabled={toggling || notToggleable}
-    />
-  );
-
-  if (!notToggleable) return switchControl;
-
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="inline-flex cursor-not-allowed"
-          data-testid={`mcp-toggle-disabled-wrap-${server.name}`}
-        >
-          {switchControl}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="left" variant="padded" className="max-w-xs text-left">
-        <p className="leading-snug">{t(tooltipKey)}</p>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-const PROTOCOL_BADGE_VARIANT = {
-  http: 'info',
-  sse: 'warning',
-  stdio: 'success',
-} as const satisfies Record<McpServerType, 'info' | 'warning' | 'success'>;
-
-function McpProtocolBadge({ type }: { type: McpServerType }) {
-  return (
-    <Badge
-      variant={PROTOCOL_BADGE_VARIANT[type]}
-      size="xs"
-      corners="square"
-      caps
-      data-testid={`mcp-protocol-badge-${type}`}
-    >
-      {type === 'stdio' ? <Terminal className="icon-2xs" /> : <Globe className="icon-2xs" />}
-      {type}
-    </Badge>
-  );
-}
-
-function McpStatusBadge({
-  children,
-  tone,
-  testId,
-}: {
-  children: ReactNode;
-  tone: 'error' | 'muted';
-  testId?: string;
-}) {
-  if (tone === 'error') {
-    return (
-      <Badge variant="error" size="xs" corners="square" data-testid={testId}>
-        {children}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="subtle" size="xs" corners="square" data-testid={testId}>
-      {children}
-    </Badge>
-  );
-}
-
-function InstalledServerCard({
-  server,
-  onRemove,
-  removing,
-  onToggle,
-  toggling,
-  onAuthenticate,
-  authenticating,
-  onSetToken,
-  settingToken,
-}: {
-  server: McpServer;
-  onRemove: () => void;
-  removing: boolean;
-  onToggle: (disabled: boolean) => void;
-  toggling: boolean;
-  onAuthenticate?: () => void;
-  authenticating?: boolean;
-  onSetToken?: (token: string) => void;
-  settingToken?: boolean;
-}) {
-  const { t } = useTranslation();
-  const [showTokenInput, setShowTokenInput] = useState(false);
-  const [tokenValue, setTokenValue] = useState('');
-  const isDisabled = server.disabled === true;
-  const showClaudeSettingsEditor =
-    server.toggleable === false && isClaudeAiConnectorName(server.name);
-  const needsAuthActions = !isDisabled && server.status === 'needs_auth';
-
-  return (
-    <Card
-      data-testid={`mcp-installed-card-${server.name}`}
-      flat
-      tone={
-        isDisabled
-          ? 'disabled'
-          : server.status === 'needs_auth'
-            ? 'warning'
-            : server.status === 'error'
-              ? 'error'
-              : 'default'
-      }
-      className="flex flex-col"
-    >
-      <CardHeader size="sm" layout="row">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle size="sm" truncate muted={isDisabled}>
-              {server.name}
-            </CardTitle>
-            <McpProtocolBadge type={server.type} />
-            {!isDisabled && server.status === 'error' && (
-              <McpStatusBadge testId={`mcp-status-error-${server.name}`} tone="error">
-                <XCircle className="icon-2xs" />
-                {t('mcp.failed')}
-              </McpStatusBadge>
-            )}
-            {isDisabled && (
-              <McpStatusBadge testId={`mcp-status-disabled-${server.name}`} tone="muted">
-                {t('mcp.disabled')}
-              </McpStatusBadge>
-            )}
-            {server.toggleable === false && (
-              <McpStatusBadge testId={`mcp-status-managed-${server.name}`} tone="muted">
-                {t('mcp.managedExternally')}
-              </McpStatusBadge>
-            )}
-          </div>
-          <CardDescription size="sm" truncate className="mt-1">
-            {server.url || [server.command, ...(server.args || [])].join(' ')}
-          </CardDescription>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {showClaudeSettingsEditor && !needsAuthActions && <ClaudeSettingsEditorButton />}
-          <McpServerToggle
-            server={server}
-            toggling={toggling}
-            isDisabled={isDisabled}
-            onToggle={onToggle}
-          />
-          <TooltipIconButton
-            variant="muted-destructive"
-            onClick={onRemove}
-            disabled={removing}
-
-            tooltip={t('common.delete')}
+    <AlertDialog open={!!name} onOpenChange={(open) => !open && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('mcp.confirmRemoveTitle')}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t('mcp.confirmRemoveDescription', { name })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="mcp-remove-cancel">{t('mcp.cancel')}</AlertDialogCancel>
+          <AlertDialogAction
+            data-testid="mcp-remove-confirm"
+            onClick={onConfirm}
+            variant="destructive"
           >
-            {removing ? (
-              <Loader2 className="icon-sm animate-spin" />
-            ) : (
-              <Trash2 className="icon-sm" />
-            )}
-          </TooltipIconButton>
-        </div>
-      </CardHeader>
-      {needsAuthActions && (
-        <CardFooter size="sm" layout="stack">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline-warning"
-              size="xs"
-              onClick={onAuthenticate}
-              disabled={authenticating || settingToken}
-              className="h-6"
-              data-testid={`mcp-oauth-${server.name}`}
-            >
-              {authenticating ? (
-                <Loader2 className="icon-xs mr-1 animate-spin" />
-              ) : (
-                <ShieldAlert className="icon-xs mr-1" />
-              )}
-              {authenticating ? t('mcp.authenticating') : 'OAuth'}
-            </Button>
-            <Button
-              variant={showTokenInput ? 'secondary' : 'outline'}
-              size="xs"
-              onClick={() => setShowTokenInput(!showTokenInput)}
-              disabled={authenticating || settingToken}
-              className="h-6"
-              data-testid={`mcp-manual-token-${server.name}`}
-            >
-              <KeyRound className="icon-xs mr-1" />
-              {t('mcp.manualToken')}
-            </Button>
-            {showClaudeSettingsEditor && <ClaudeSettingsEditorButton />}
-          </div>
-          {showTokenInput && (
-            <div className="flex items-center gap-2">
-              <Input
-                size="xs"
-                type="password"
-                value={tokenValue}
-                onChange={(e) => setTokenValue(e.target.value)}
-                placeholder={t('mcp.tokenPlaceholder')}
-                className="flex-1"
-                data-testid={`mcp-token-input-${server.name}`}
-              />
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => {
-                  if (tokenValue && onSetToken) {
-                    onSetToken(tokenValue);
-                    setTokenValue('');
-                    setShowTokenInput(false);
-                  }
-                }}
-                disabled={!tokenValue || settingToken}
-                data-testid={`mcp-token-save-${server.name}`}
-              >
-                {settingToken ? (
-                  <Loader2 className="icon-xs animate-spin" />
-                ) : (
-                  <Check className="icon-xs" />
-                )}
-              </Button>
-            </div>
-          )}
-        </CardFooter>
-      )}
-    </Card>
-  );
-}
-
-function RecommendedServerCard({
-  server,
-  installed,
-  onInstall,
-  installing,
-}: {
-  server: RecommendedServer;
-  installed: boolean;
-  onInstall: () => void;
-  installing: boolean;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <Card data-testid={`mcp-recommended-card-${server.name}`} flat className="flex h-full flex-col">
-      <CardHeader size="sm" spacing="loose" className="flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <CardTitle size="sm">{server.name}</CardTitle>
-          <McpProtocolBadge type={server.type} />
-        </div>
-        <CardDescription size="sm" clamp>
-          {server.description}
-        </CardDescription>
-      </CardHeader>
-      <CardFooter size="sm">
-        <Button
-          variant={installed ? 'ghost' : 'outline'}
-          size="sm"
-          onClick={onInstall}
-          disabled={installed || installing}
-          className="w-full"
-          data-testid={`mcp-install-${server.name}`}
-        >
-          {installing ? (
-            <Loader2 className="icon-xs mr-1 animate-spin" />
-          ) : installed ? null : (
-            <Download className="icon-xs mr-1" />
-          )}
-          {installed ? t('mcp.installed') : installing ? t('mcp.installing') : t('mcp.install')}
-        </Button>
-      </CardFooter>
-    </Card>
+            {t('common.delete')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
 export function McpServerSettings() {
   const { t } = useTranslation();
-  const projects = useProjects();
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const [servers, setServers] = useState<McpServer[]>([]);
-  const [recommended, setRecommended] = useState<RecommendedServer[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [removingName, setRemovingName] = useState<string | null>(null);
-  const [installingName, setInstallingName] = useState<string | null>(null);
-  const [authenticatingName, setAuthenticatingName] = useState<string | null>(null);
-  const [settingTokenName, setSettingTokenName] = useState<string | null>(null);
-  const [togglingName, setTogglingName] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [confirmRemoveName, setConfirmRemoveName] = useState<string | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<AgentProvider>('claude');
-
-  // Add form state
-  const [addName, setAddName] = useState('');
-  const [addType, setAddType] = useState<McpServerType>('stdio');
-  const [addUrl, setAddUrl] = useState('');
-  const [addCommand, setAddCommand] = useState('');
-  const [addArgs, setAddArgs] = useState('');
-  const [adding, setAdding] = useState(false);
-
-  // Derive project path directly (no useEffect + setState cascade)
-  const selectedProject = (() => {
-    if (selectedProjectId) {
-      return projects.find((p) => p.id === selectedProjectId) ?? null;
-    }
-    return projects[0] ?? null;
-  })();
-  const projectPath = selectedProject?.path ?? null;
-  const projectId = selectedProject?.id;
-
-  const loadServers = useCallback(async () => {
-    if (!projectPath) return;
-    return whilePending(setLoading, async () => {
-      setError(null);
-      const result = await api.listMcpServers(projectPath, selectedProvider, projectId);
-      if (result.isOk()) {
-        setServers(result.value.servers);
-      } else {
-        setError(result.error.message);
-      }
-    });
-  }, [projectPath, projectId, selectedProvider]);
-
-  // Load servers when projectPath changes (track previous to avoid duplicate calls)
-  const prevProjectPathRef = useRef<string | null>(null);
-  useEffect(() => {
-    const loadKey = projectPath ? `${projectPath}:${selectedProvider}:${projectId ?? ''}` : null;
-    if (!projectPath || loadKey === prevProjectPathRef.current) return;
-    prevProjectPathRef.current = loadKey;
-    loadServers();
-  }, [projectPath, selectedProvider, projectId, loadServers]);
-
-  const recommendedLoadedRef = useRef(false);
-  const oauthCleanupRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => oauthCleanupRef.current?.(), []);
-  useEffect(() => {
-    if (recommendedLoadedRef.current) return;
-    recommendedLoadedRef.current = true;
-    (async () => {
-      const result = await api.getRecommendedMcpServers();
-      if (result.isOk()) {
-        // SAFETY: /mcp/recommended answers the runtime's RECOMMENDED_SERVERS, whose
-        // entries all have a name, description and type; the API typing as McpServer
-        // just omits `description`.
-        setRecommended(result.value.servers as RecommendedServer[]);
-      }
-    })();
-  }, []);
-
-  const handleRemove = (name: string) => {
-    setConfirmRemoveName(name);
-  };
-
-  const confirmRemove = async () => {
-    if (!projectPath || !confirmRemoveName) return;
-    const name = confirmRemoveName;
-    setConfirmRemoveName(null);
-    setRemovingName(name);
-    const result = await api.removeMcpServer(name, projectPath, selectedProvider, projectId);
-    if (result.isErr()) {
-      setError(result.error.message);
-    } else {
-      await loadServers();
-    }
-    setRemovingName(null);
-  };
-
-  const handleToggle = async (name: string, disabled: boolean) => {
-    if (!projectPath) return;
-    setTogglingName(name);
-    const result = await api.toggleMcpServer(
-      name,
-      projectPath,
-      disabled,
-      selectedProvider,
-      projectId,
-    );
-    if (result.isErr()) {
-      setError(result.error.message);
-    } else {
-      await loadServers();
-    }
-    setTogglingName(null);
-  };
-
-  const handleInstallRecommended = async (server: RecommendedServer) => {
-    if (!projectPath) return;
-    setInstallingName(server.name);
-    const result = await api.addMcpServer({
-      name: server.name,
-      provider: selectedProvider,
-      type: server.type,
-      url: server.url,
-      command: server.command,
-      args: server.args,
-      projectPath,
-      projectId,
-    });
-    if (result.isErr()) {
-      setError(result.error.message);
-    } else {
-      await loadServers();
-    }
-    setInstallingName(null);
-  };
-
-  const handleAddCustom = async () => {
-    if (!projectPath || !addName) return;
-    setAdding(true);
-    setError(null);
-    const data: any = {
-      name: addName,
-      provider: selectedProvider,
-      type: addType,
-      projectPath,
-      projectId,
-    };
-    if (addType === 'http' || addType === 'sse') {
-      data.url = addUrl;
-    } else {
-      data.command = addCommand;
-      data.args = addArgs.split(/\s+/).filter(Boolean);
-    }
-    const result = await api.addMcpServer(data);
-    if (result.isErr()) {
-      setError(result.error.message);
-    } else {
-      await loadServers();
-      // Reset form
-      setAddName('');
-      setAddUrl('');
-      setAddCommand('');
-      setAddArgs('');
-      setShowAddForm(false);
-    }
-    setAdding(false);
-  };
-
-  const handleAuthenticate = async (server: McpServer) => {
-    if (!projectPath) return;
-    setAuthenticatingName(server.name);
-    setError(null);
-    const result = await api.startMcpOAuth(server.name, projectPath, selectedProvider, projectId);
-    if (result.isErr()) {
-      setError(result.error.message);
-      setAuthenticatingName(null);
-      return;
-    }
-
-    const { authUrl } = result.value;
-
-    oauthCleanupRef.current?.();
-
-    const width = 600;
-    const height = 700;
-    const left = window.screenX + (window.innerWidth - width) / 2;
-    const top = window.screenY + (window.innerHeight - height) / 2;
-    const popup = window.open(
-      authUrl,
-      'mcp-oauth',
-      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
-    );
-
-    const cleanupOAuth = () => {
-      clearInterval(checkClosed);
-      window.removeEventListener('message', handleMessage);
-    };
-    const handleMessage = (event: MessageEvent) => {
-      // Validate origin to prevent cross-origin message injection
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'mcp-oauth-callback') {
-        cleanupOAuth();
-        setAuthenticatingName(null);
-        // Closing from the parent is more reliable after cross-origin OAuth navigation.
-        if (popup && !popup.closed) popup.close();
-        if (event.data.success) loadServers();
-        else setError(event.data.error || t('mcp.authFailed'));
-      }
-    };
-    window.addEventListener('message', handleMessage);
-
-    // cleanupOAuth clears this interval on completion, replacement, and component unmount.
-    // react-doctor-disable-next-line effect-needs-cleanup
-    const checkClosed = setInterval(() => {
-      if (popup && popup.closed) {
-        cleanupOAuth();
-        setAuthenticatingName(null);
-        loadServers();
-      }
-    }, 500);
-    oauthCleanupRef.current = cleanupOAuth;
-  };
-
-  const handleSetToken = async (server: McpServer, token: string) => {
-    if (!projectPath) return;
-    setSettingTokenName(server.name);
-    setError(null);
-    const result = await api.setMcpToken(
-      server.name,
-      projectPath,
-      token,
-      selectedProvider,
-      projectId,
-    );
-    if (result.isErr()) {
-      setError(result.error.message);
-    } else {
-      await loadServers();
-    }
-    setSettingTokenName(null);
-  };
+  const {
+    projectPath,
+    servers,
+    recommended,
+    loading,
+    error,
+    setError,
+    removingName,
+    installingName,
+    authenticatingName,
+    settingTokenName,
+    togglingName,
+    showAddForm,
+    setShowAddForm,
+    confirmRemoveName,
+    setConfirmRemoveName,
+    selectedProvider,
+    setSelectedProvider,
+    addForm,
+    handleRemove,
+    confirmRemove,
+    handleToggle,
+    handleInstallRecommended,
+    handleAddCustom,
+    handleAuthenticate,
+    handleSetToken,
+  } = useMcpServerSettings();
 
   const installedNames = new Set(servers.map((s) => s.name));
 
@@ -691,101 +165,7 @@ export function McpServerSettings() {
         </div>
 
         {/* Add custom server form */}
-        {showAddForm && (
-          <div className="settings-form-panel mb-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="settings-label" htmlFor="mcp-custom-name">
-                  {t('mcp.name')}
-                </label>
-                <Input
-                  id="mcp-custom-name"
-                  type="text"
-                  value={addName}
-                  onChange={(e) => setAddName(e.target.value)}
-                  placeholder="my-server"
-                  size="sm-tight"
-                />
-              </div>
-              <div>
-                <label className="settings-label" htmlFor="mcp-custom-type">
-                  {t('mcp.type')}
-                </label>
-                <Select
-                  value={addType}
-                  onValueChange={(v) => {
-                    if (v === 'stdio' || v === 'http' || v === 'sse') setAddType(v);
-                  }}
-                >
-                  <SelectTrigger id="mcp-custom-type" className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="stdio">stdio</SelectItem>
-                    <SelectItem value="http">http</SelectItem>
-                    <SelectItem value="sse">sse</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {addType === 'http' || addType === 'sse' ? (
-              <div>
-                <label className="settings-label" htmlFor="mcp-custom-url">
-                  {t('mcp.url')}
-                </label>
-                <Input
-                  id="mcp-custom-url"
-                  type="text"
-                  value={addUrl}
-                  onChange={(e) => setAddUrl(e.target.value)}
-                  placeholder="https://api.example.com/mcp"
-                  size="sm-tight"
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="settings-label" htmlFor="mcp-custom-command">
-                    {t('mcp.command')}
-                  </label>
-                  <Input
-                    id="mcp-custom-command"
-                    type="text"
-                    value={addCommand}
-                    onChange={(e) => setAddCommand(e.target.value)}
-                    placeholder="npx"
-                    size="sm-tight"
-                  />
-                </div>
-                <div>
-                  <label className="settings-label" htmlFor="mcp-custom-arguments">
-                    {t('mcp.arguments')}
-                  </label>
-                  <Input
-                    id="mcp-custom-arguments"
-                    type="text"
-                    value={addArgs}
-                    onChange={(e) => setAddArgs(e.target.value)}
-                    placeholder="-y @package/name"
-                    size="sm-tight"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleAddCustom} disabled={!addName || adding}>
-                {adding ? (
-                  <Loader2 className="icon-xs mr-1 animate-spin" />
-                ) : (
-                  <Plus className="icon-xs mr-1" />
-                )}
-                {t('mcp.addServer')}
-              </Button>
-            </div>
-          </div>
-        )}
+        {showAddForm && <AddMcpServerForm form={addForm} onAdd={handleAddCustom} />}
 
         {loading ? (
           <LoadingState
@@ -837,30 +217,11 @@ export function McpServerSettings() {
         </div>
       )}
 
-      {/* Confirm remove dialog */}
-      <AlertDialog
-        open={!!confirmRemoveName}
-        onOpenChange={(open) => !open && setConfirmRemoveName(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('mcp.confirmRemoveTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('mcp.confirmRemoveDescription', { name: confirmRemoveName })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="mcp-remove-cancel">{t('mcp.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="mcp-remove-confirm"
-              onClick={confirmRemove}
-              variant="destructive"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <McpRemoveDialog
+        name={confirmRemoveName}
+        onCancel={() => setConfirmRemoveName(null)}
+        onConfirm={confirmRemove}
+      />
     </div>
   );
 }

@@ -11,7 +11,8 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { CenterDockview } from '@/components/CenterDockview';
-import { DockviewLayout, type RightTabSpec } from '@/components/DockviewLayout';
+import type { RightTabSpec } from '@/components/dockview/types';
+import { DockviewLayout } from '@/components/DockviewLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { OverlayDialogs } from '@/components/OverlayDialogs';
 import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStateContext';

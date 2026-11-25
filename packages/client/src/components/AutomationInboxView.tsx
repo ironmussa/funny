@@ -1,24 +1,13 @@
 import type { RunTriageStatus } from '@funny/shared';
 import { includesSearchText } from '@funny/shared/lib/text-search';
-import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
+import { Inbox, Settings } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
-import { triageRun } from '@/data/automations/actions';
 import { useAutomationInbox } from '@/data/automations/hooks';
 import { loadInbox } from '@/data/automations/loaders';
 import { useProjects } from '@/data/projects/hooks';
@@ -27,6 +16,9 @@ import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
+
+import { InboxItemCard } from './automation-inbox/InboxItemCard';
+import { InboxProjectFilter } from './automation-inbox/InboxProjectFilter';
 
 export function AutomationInboxView() {
   const navigate = useNavigate();
@@ -120,7 +112,6 @@ export function AutomationInboxView() {
           Manage Automations
         </Button>
       </div>
-
       {/* Triage Status Filter Tabs */}
       <div className="border-border/40 flex items-center gap-0 border-b px-6">
         {(['all', 'pending', 'reviewed', 'dismissed'] as const).map((status) => {
@@ -157,7 +148,6 @@ export function AutomationInboxView() {
           );
         })}
       </div>
-
       {/* Search Bar */}
       <div className="border-border border-b px-6 py-2">
         <SearchBar
@@ -173,77 +163,17 @@ export function AutomationInboxView() {
           testIdPrefix="inbox-search"
         />
       </div>
-
-      {/* Project filter */}
+      {/* Project filter */}{' '}
       {projectsWithItems.length > 1 && (
-        <div className="border-border flex items-center gap-2 border-b px-6 py-2">
-          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                size="xs"
-                variant="outline"
-                role="combobox"
-                aria-expanded={filterOpen}
-                aria-controls={filterListId}
-                data-testid="inbox-project-filter"
-                weight="normal"
-                className="w-[200px] justify-between"
-              >
-                {filterProjectId
-                  ? projectsWithItems.find((p) => p.id === filterProjectId)?.name
-                  : 'All projects'}
-                <ChevronsUpDown className="icon-xs ml-2 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent padding="none" className="w-[200px]" align="start">
-              <Command>
-                <CommandInput placeholder="Search project..." textSize="xs" className="h-8" />
-                <CommandList id={filterListId}>
-                  <CommandEmpty textSize="xs">No project found.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem
-                      value="all"
-                      onSelect={() => {
-                        setFilterProjectId(null);
-                        setFilterOpen(false);
-                      }}
-                      textSize="xs"
-                    >
-                      <Check
-                        className={cn(
-                          'mr-2 icon-xs',
-                          !filterProjectId ? 'opacity-100' : 'opacity-0',
-                        )}
-                      />
-                      All projects
-                    </CommandItem>
-                    {projectsWithItems.map((p) => (
-                      <CommandItem
-                        key={p.id}
-                        value={p.name}
-                        onSelect={() => {
-                          setFilterProjectId(p.id);
-                          setFilterOpen(false);
-                        }}
-                        textSize="xs"
-                      >
-                        <Check
-                          className={cn(
-                            'mr-2 icon-xs',
-                            filterProjectId === p.id ? 'opacity-100' : 'opacity-0',
-                          )}
-                        />
-                        {p.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
+        <InboxProjectFilter
+          projectsWithItems={projectsWithItems}
+          filterProjectId={filterProjectId}
+          setFilterProjectId={setFilterProjectId}
+          filterOpen={filterOpen}
+          setFilterOpen={setFilterOpen}
+          filterListId={filterListId}
+        />
       )}
-
       {/* Content */}
       <ScrollArea className="flex-1">
         <div className="p-6">
@@ -258,97 +188,19 @@ export function AutomationInboxView() {
               {filteredInbox.map(({ run, automation, thread }) => {
                 const itemProject = projects.find((p) => p.id === thread.projectId);
                 return (
-                  <div
+                  <InboxItemCard
                     key={run.id}
-                    role="button"
-                    tabIndex={0}
-                    className={cn(
-                      'rounded-lg border bg-card p-4 space-y-3 cursor-pointer transition-colors',
-                      selectedThreadId === thread.id
-                        ? 'border-primary/50 bg-accent/30'
-                        : 'border-border/50 hover:border-border',
-                    )}
-                    onClick={() => handleSelectItem(thread.id)}
-                    onKeyDown={(event) => {
-                      if (
-                        event.target === event.currentTarget &&
-                        (event.key === 'Enter' || event.key === ' ')
-                      ) {
-                        event.preventDefault();
-                        handleSelectItem(thread.id);
-                      }
+                    run={run}
+                    automation={automation}
+                    thread={thread}
+                    itemProject={itemProject}
+                    selected={selectedThreadId === thread.id}
+                    onSelect={handleSelectItem}
+                    onViewThread={(t) => {
+                      setAutomationInboxOpen(false);
+                      goToThread(navigate, t);
                     }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{automation.name}</p>
-                        <p className="text-muted-foreground truncate text-xs">
-                          {itemProject && (
-                            <span className="font-medium">{itemProject.name} · </span>
-                          )}
-                          <ThreadTitle
-                            as="span"
-                            title={thread.title}
-                            className="text-xs"
-                            containerClassName="inline-flex max-w-full align-bottom"
-                          />
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'text-xs px-1.5 py-0.5 rounded-full',
-                            run.hasFindings
-                              ? 'bg-status-warning/10 text-status-warning/80'
-                              : 'bg-muted text-muted-foreground',
-                          )}
-                        >
-                          {run.hasFindings ? 'Has findings' : 'No findings'}
-                        </span>
-                        <span className="text-muted-foreground text-xs">
-                          {run.completedAt ? new Date(run.completedAt).toLocaleString() : ''}
-                        </span>
-                      </div>
-                    </div>
-                    {run.summary && <p className="text-muted-foreground text-xs">{run.summary}</p>}
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAutomationInboxOpen(false);
-                          goToThread(navigate, thread);
-                        }}
-                      >
-                        View Thread
-                      </Button>
-                      {run.triageStatus === 'pending' && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void triageRun(run.id, 'dismissed');
-                            }}
-                          >
-                            Dismiss
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void triageRun(run.id, 'reviewed');
-                            }}
-                          >
-                            Mark Reviewed
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                  />
                 );
               })}
             </div>

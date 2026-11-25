@@ -237,12 +237,12 @@ function patternRoot(pattern: string | null): string[] {
 }
 
 /** The pattern field of each searching tool. */
-const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
+const PATTERN_FIELD = new Map(Object.entries({ Glob: 'pattern', Grep: 'glob' }));
 
 /** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
 function targetsOf(toolName: string, input: JsonObject, cwd: string): string[] {
   if (toolName === 'Read') return [text(input, 'file_path') ?? ''];
-  const field = PATTERN_FIELD[toolName];
+  const field = PATTERN_FIELD.get(toolName);
   if (!field) return [];
   return [text(input, 'path') ?? cwd, ...patternRoot(text(input, field))];
 }

@@ -21,7 +21,7 @@ import { randomUUID } from 'crypto';
 
 import type { JsonObject } from '@funny/shared/json';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
-import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
+import { resolveSpawnCommand, type SpawnCommand } from '@funny/shared/provider-manifest';
 
 import { createDebugLogger, type DebugLogger } from '../debug.js';
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
@@ -424,7 +424,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   }
 
   /** Resolve the spawn command + args from the manifest (env override → npx → default). */
-  private resolveCommand(): { command: string; args: string[] } {
+  private resolveCommand(): SpawnCommand {
     const { command, args: baseArgs } = resolveSpawnCommand(this.manifest.spawn);
     const args = [...baseArgs];
     // gemini selects its model via the `--model` CLI arg (modelVia: 'cli-arg').

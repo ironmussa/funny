@@ -326,9 +326,12 @@ function parseTodoItemsFromArray(entries: unknown[] | undefined): ACPTodoItem[] 
   return todos;
 }
 
-export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefined): {
+/** A `TodoWrite` tool input: the checklist the client's TodoList card renders. */
+export interface TodoWriteInput {
   todos: ACPTodoItem[];
-} {
+}
+
+export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefined): TodoWriteInput {
   return { todos: parseTodoItemsFromArray(entries) };
 }
 
@@ -336,7 +339,7 @@ export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefine
  * Normalize Cursor `cursor/update_todos`, plan entries, or tool-result payloads
  * into the `{ todos: [{ content, status }] }` shape the client TodoList expects.
  */
-export function buildTodoWriteInputFromRaw(raw: JsonObject): { todos: ACPTodoItem[] } | null {
+export function buildTodoWriteInputFromRaw(raw: JsonObject): TodoWriteInput | null {
   for (const key of ['todos', 'entries', 'items'] as const) {
     const arr = raw[key];
     if (Array.isArray(arr)) {

@@ -35,6 +35,14 @@ import {
 import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
+/**
+ * SDKClaudeProcess — adapter that wraps @anthropic-ai/claude-agent-sdk query()
+ * behind the IAgentProcess EventEmitter interface.
+ *
+ * Drop-in replacement for the former ClaudeProcess (CLI subprocess).
+ * AgentRunner and AgentMessageHandler work unchanged.
+ */
+
 const dlog = createDebugLogger('sdk');
 
 const SENSITIVE_PATH_TOOLS = new Set(['Bash', 'Edit', 'Write', 'NotebookEdit', 'Read']);
@@ -56,7 +64,7 @@ function isToolInput(value: unknown): value is ToolPathFields {
   return typeof value === 'object' && value !== null;
 }
 
-/** Any object, null included (`Object.assign` skips a null source). */
+/** The effort levels the Claude SDK accepts. */
 const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([
   'low',
   'medium',
@@ -69,6 +77,7 @@ function isEffortLevel(value: string): value is EffortLevel {
   return EFFORT_LEVELS.has(value);
 }
 
+/** Any object, null included (`Object.assign` skips a null source). */
 function isObjectOrNull(value: unknown): value is object | null {
   return typeof value === 'object';
 }

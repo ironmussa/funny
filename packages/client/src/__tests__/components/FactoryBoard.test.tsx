@@ -184,9 +184,11 @@ describe('FactoryBoard', () => {
     expect(screen.getByTestId('factory-board-deps-r434-blocks').textContent).toBe(
       'Blocks #435 · then #436',
     );
-    expect(screen.getByTestId('factory-board-waiting-r434').className).toContain(
-      'text-status-warning',
-    );
+    // The parked blocker's reason is its red problem chip, not a line of its own.
+    expect(screen.queryByTestId('factory-board-waiting-r434')).toBeNull();
+    const problem = screen.getByTestId('factory-board-gate-r434-problem');
+    expect(problem.textContent).toBe('integrate failed');
+    expect(problem.dataset.tone).toBe('fail');
     // #436 waits on #435, which is only queued: no "stuck" line for it.
     expect(screen.queryByTestId('factory-board-deps-r436-stuck-behind')).toBeNull();
     fireEvent.click(screen.getByTestId('factory-board-deps-r435-issue-434'));
@@ -233,7 +235,7 @@ describe('FactoryBoard', () => {
       held('quiet', 'c'.repeat(40)),
     ]);
     expect(screen.getByTestId('factory-board-agent-asked-asked').textContent).toBe(
-      'An agent asked for your approval',
+      'Approval asked',
     );
     expect(screen.queryByTestId('factory-board-agent-asked-moved')).toBeNull();
     expect(screen.queryByTestId('factory-board-agent-asked-quiet')).toBeNull();

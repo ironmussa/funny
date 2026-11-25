@@ -47,6 +47,11 @@ function clampProgress(progress: number) {
   return Math.min(1, Math.max(0, progress));
 }
 
+/** True for a number value. */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 export function getThreadScrollProgress(
   viewport: HTMLDivElement,
   { hasPagination, loadedCount, paginationTotal, paginationWindowStart }: PaginationProgressState,
@@ -54,10 +59,10 @@ export function getThreadScrollProgress(
   const localProgress = getScrollProgress(viewport);
   if (
     !hasPagination ||
-    typeof paginationTotal !== 'number' ||
+    !isNumber(paginationTotal) ||
     paginationTotal <= 1 ||
     loadedCount <= 0 ||
-    typeof paginationWindowStart !== 'number'
+    !isNumber(paginationWindowStart)
   ) {
     return localProgress;
   }
@@ -73,10 +78,10 @@ export function getLocalScrollProgress(
 ) {
   if (
     !hasPagination ||
-    typeof paginationTotal !== 'number' ||
+    !isNumber(paginationTotal) ||
     paginationTotal <= 1 ||
     loadedCount <= 1 ||
-    typeof paginationWindowStart !== 'number'
+    !isNumber(paginationWindowStart)
   ) {
     return clampProgress(threadProgress);
   }

@@ -193,12 +193,15 @@ interface MockFetchOptions {
   error?: string;
 }
 
+function isUrlString(input: RequestInfo | URL): input is string {
+  return typeof input === 'string';
+}
+
 function installMockFetch(opts: MockFetchOptions = {}) {
   const { prs = [], hang = false, error } = opts;
 
   window.fetch = async (input: RequestInfo | URL): Promise<Response> => {
-    const url =
-      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const url = isUrlString(input) ? input : input instanceof URL ? input.toString() : input.url;
 
     const json = <Body,>(data: Body, status = 200) =>
       new Response(JSON.stringify(data), {

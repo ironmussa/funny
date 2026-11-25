@@ -380,6 +380,11 @@ function forgetThread(threadId: string): void {
   }
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export const useThreadStore = create<ThreadState>((set, get) => ({
   selectedThreadId: null,
   threadDataById: {},
@@ -1095,7 +1100,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Reconstruct compactionEvents from persisted thread events
     const persistedCompaction: CompactionEvent[] = (threadEvents ?? []).flatMap((event) => {
       if (event.type !== 'compact_boundary') return [];
-      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      const data = isString(event.data) ? JSON.parse(event.data) : event.data;
       return [
         {
           trigger: data.trigger ?? 'auto',

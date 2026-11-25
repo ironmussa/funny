@@ -61,9 +61,13 @@ const TOOL_CALL_TYPES: Record<string, MilestoneType> = {
   ExitPlanMode: 'plan',
 };
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function parseToolInput(input: string): Record<string, unknown> | null {
   try {
-    return typeof input === 'string' ? JSON.parse(input) : input;
+    return isString(input) ? JSON.parse(input) : input;
   } catch {
     return null;
   }

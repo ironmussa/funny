@@ -24,18 +24,27 @@ export function isTodoToolName(name: string): boolean {
   return n === 'todowrite' || n === 'updatetodos' || n === 'towrite';
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** Any non-null object (arrays included), read as a bag of fields. */
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
 function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
   const todos: TodoItem[] = [];
   for (const raw of arr) {
-    if (!raw || typeof raw !== 'object') continue;
-    const e = raw as Record<string, unknown>;
+    if (!isObjectRecord(raw)) continue;
+    const e = raw;
     const content =
-      (typeof e.content === 'string' && e.content) ||
+      (isString(e.content) && e.content) ||
       // Codex SDK todo_list items use `{ text, completed }`, unlike the
       // `{ content, status }` shape used by Claude and ACP providers.
-      (typeof e.text === 'string' && e.text) ||
-      (typeof e.title === 'string' && e.title) ||
-      (typeof e.description === 'string' && e.description) ||
+      (isString(e.text) && e.text) ||
+      (isString(e.title) && e.title) ||
+      (isString(e.description) && e.description) ||
       '';
     if (!content) continue;
     const status =
@@ -49,17 +58,22 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
     todos.push({
       content,
       status,
-      activeForm: typeof e.activeForm === 'string' ? e.activeForm : undefined,
+      activeForm: isString(e.activeForm) ? e.activeForm : undefined,
     });
   }
   return todos.length > 0 ? todos : null;
+}
+
+/** Tool input arrives either as JSON text or already parsed. */
+function isInputText(input: string | Record<string, unknown>): input is string {
+  return typeof input === 'string';
 }
 
 export function formatInput(
   input: string | Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
   if (!input) return {};
-  if (typeof input === 'string') {
+  if (isInputText(input)) {
     try {
       return JSON.parse(input);
     } catch {
@@ -78,8 +92,8 @@ export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
     }
   }
   const outcome = parsed.outcome;
-  if (outcome && typeof outcome === 'object') {
-    const o = outcome as Record<string, unknown>;
+  if (isObjectRecord(outcome)) {
+    const o = outcome;
     if (Array.isArray(o.todos)) {
       const normalized = normalizeTodoItems(o.todos);
       if (normalized) return normalized;
@@ -156,7 +170,7 @@ const SUMMARIES: Record<string, SummaryFn> = {
   Write: filePathSummary,
   Edit: filePathSummary,
   Bash: (parsed) =>
-    typeof parsed.command === 'string'
+    isString(parsed.command)
       ? unwrapShellCommand(parsed.command)
       : ((parsed.command as string) ?? null),
   Glob: field('pattern'),
@@ -173,9 +187,7 @@ const SUMMARIES: Record<string, SummaryFn> = {
   Think: thinkSummary,
   ProviderError: field('error'),
   ToolSearch: (parsed) =>
-    typeof parsed.query === 'string'
-      ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ')
-      : null,
+    isString(parsed.query) ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ') : null,
   Skill: field('skill'),
   TaskCreate: field('subject'),
   TaskUpdate: taskUpdateSummary,
@@ -187,7 +199,7 @@ const SUMMARIES: Record<string, SummaryFn> = {
   apply_patch: (parsed) => patchSummary(parsed),
   ApplyPatch: (parsed) => patchSummary(parsed),
   update_plan: (parsed) =>
-    typeof parsed.explanation === 'string'
+    isString(parsed.explanation)
       ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
       : null,
   Tool: (parsed) =>
@@ -226,14 +238,14 @@ export function unwrapShellCommand(command: string): string {
 /** The file(s) a patch touches: the first path, plus how many more. */
 function patchSummary(parsed: Record<string, unknown>): string | null {
   const paths: string[] = [];
-  if (typeof parsed.input === 'string') {
+  if (isString(parsed.input)) {
     for (const m of parsed.input.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)) {
       paths.push(m[1].trim());
     }
   }
   if (Array.isArray(parsed.changes)) {
     for (const change of parsed.changes) {
-      if (change && typeof change.path === 'string') paths.push(change.path);
+      if (change && isString(change.path)) paths.push(change.path);
     }
   }
   if (paths.length === 0) return null;

@@ -32,6 +32,10 @@ export interface NativeRealtimeSnapshot {
 /** A Socket.IO event's envelope fields, read before they are checked. */
 type SocketEnvelope = Record<string, unknown>;
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function isSocketEnvelope(payload: unknown): payload is SocketEnvelope {
   return typeof payload === 'object' && payload !== null;
 }
@@ -116,7 +120,7 @@ export class NativeRealtimeService {
     });
     const onAny = (type: string, payload: unknown) => {
       const envelope: SocketEnvelope = isSocketEnvelope(payload) ? payload : {};
-      const threadId = typeof envelope.threadId === 'string' ? envelope.threadId : '';
+      const threadId = isString(envelope.threadId) ? envelope.threadId : '';
       dispatcher.dispatch({ type, threadId, data: envelope.data ?? envelope });
     };
     const onConnect = () => {
@@ -125,7 +129,7 @@ export class NativeRealtimeService {
       if (this.lastOpenThreadId) socket.emit('thread:open', { threadId: this.lastOpenThreadId });
     };
     const onDisconnect = (reason: unknown) => {
-      this.update({ phase: 'disconnected', error: typeof reason === 'string' ? reason : null });
+      this.update({ phase: 'disconnected', error: isString(reason) ? reason : null });
       if (reason === 'io server disconnect') this.options.onSessionRejected();
     };
     const onError = (error: unknown) => {

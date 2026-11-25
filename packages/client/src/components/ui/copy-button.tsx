@@ -23,6 +23,11 @@ export interface CopyButtonProps extends Omit<ButtonProps, 'onClick' | 'children
   duration?: number;
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function CopyButton({
   value,
   label = 'Copy',
@@ -40,7 +45,7 @@ function CopyButton({
   const handleClick = async () => {
     let text: string;
     try {
-      text = typeof value === 'string' ? value : await value();
+      text = isString(value) ? value : await value();
     } catch {
       toast.error(t('common.copyFailed', 'Could not copy to clipboard'));
       return;

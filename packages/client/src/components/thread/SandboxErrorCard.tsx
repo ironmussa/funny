@@ -25,8 +25,13 @@ const TITLES: Record<NonNullable<SandboxErrorData['phase']>, string> = {
   github: 'GitHub is not available in this sandbox',
 };
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function parseData(data: ThreadEvent['data']): SandboxErrorData {
-  if (typeof data !== 'string') return (data ?? {}) as SandboxErrorData;
+  if (!isString(data)) return (data ?? {}) as SandboxErrorData;
   try {
     return JSON.parse(data) as SandboxErrorData;
   } catch {

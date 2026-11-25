@@ -15,6 +15,15 @@ export interface NativeSessionStore {
   clear(): void;
 }
 
+function isSessionMaterial(value: unknown): value is NativeSessionMaterial {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'cookieHeader' in value &&
+    typeof value.cookieHeader === 'string'
+  );
+}
+
 export class FileNativeSessionStore implements NativeSessionStore {
   constructor(
     private readonly filePath: string,
@@ -26,12 +35,7 @@ export class FileNativeSessionStore implements NativeSessionStore {
     if (!this.persistent) return null;
     try {
       const parsed: unknown = JSON.parse(readFileSync(this.filePath, 'utf8'));
-      if (
-        !parsed ||
-        typeof parsed !== 'object' ||
-        !('cookieHeader' in parsed) ||
-        typeof parsed.cookieHeader !== 'string'
-      ) {
+      if (!isSessionMaterial(parsed)) {
         throw new Error('Invalid persisted native session');
       }
       return { cookieHeader: parsed.cookieHeader };

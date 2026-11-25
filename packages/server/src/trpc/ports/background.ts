@@ -17,6 +17,8 @@ import { jobs, watchers } from '../../db/schema.js';
 type WatcherRow = typeof watchers.$inferSelect;
 type JobRow = typeof jobs.$inferSelect;
 
+// SAFETY: watchers.status comes from the runner's watcher row (data:watcher_insert)
+// and the WatcherStatus-typed patch in watcher-repository.ts.
 const toWatcher = (row: WatcherRow): Watcher => ({ ...row, status: row.status as WatcherStatus });
 /** Only the `Job` fields: a column added to the table does not reach the client by itself. */
 const toJob = (row: JobRow): Job => ({
@@ -29,6 +31,8 @@ const toJob = (row: JobRow): Job => ({
   pid: row.pid,
   logPath: row.logPath,
   exitPath: row.exitPath,
+  // SAFETY: jobs.status comes from the runner's job row (data:job_insert) and the
+  // JobStatus-typed patch in job-repository.ts.
   status: row.status as JobStatus,
   exitCode: row.exitCode,
   startedAt: row.startedAt,

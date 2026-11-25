@@ -35,6 +35,8 @@ function toJson(value: unknown): string | null {
 function fromJson<T>(raw: string | null): T | undefined {
   if (raw == null) return undefined;
   const parsed = parseStoredJson(z.unknown(), raw, 'agent template column');
+  // SAFETY: these columns are written only by toJson() of the matching body field or
+  // built-in template field; the value is passed on as stored, unvalidated, as before.
   return parsed.ok ? ((parsed.value ?? undefined) as T | undefined) : undefined;
 }
 
@@ -47,7 +49,11 @@ function toAgentTemplate(row: TemplateRow): AgentTemplate {
     description: row.description ?? undefined,
     icon: row.icon ?? undefined,
     color: row.color ?? undefined,
+    // SAFETY: model holds a built-in's value or the string agentTemplateBody accepted;
+    // it is passed through unchecked, as the REST route did.
     model: (row.model ?? undefined) as AgentTemplate['model'],
+    // SAFETY: system_prompt_mode holds a built-in's value, the string agentTemplateBody
+    // accepted, or the 'prepend' default; passed through unchecked, as REST did.
     systemPromptMode: row.systemPromptMode as AgentTemplate['systemPromptMode'],
     systemPrompt: row.systemPrompt ?? undefined,
     disallowedTools: fromJson(row.disallowedTools),
@@ -94,8 +100,14 @@ function templateUpdates(body: UpdateAgentTemplateBody): Record<string, unknown>
   return updates;
 }
 
+/** The columns a duplicate copies from a template; the copy sets the rest. */
+type CopiedColumns = Omit<
+  typeof agentTemplates.$inferInsert,
+  'id' | 'userId' | 'createdAt' | 'updatedAt'
+>;
+
 /** The columns a duplicate copies from a built-in template. */
-function builtinColumns(builtin: AgentTemplate): Record<string, unknown> {
+function builtinColumns(builtin: AgentTemplate): CopiedColumns {
   return {
     name: builtin.name,
     description: builtin.description ?? null,
@@ -185,7 +197,7 @@ export const agentTemplatesPort: AgentTemplatesPort = {
 
   async duplicate(userId, sourceId) {
     const builtin = BUILTIN_AGENT_TEMPLATES.find((t) => t.id === sourceId);
-    let source: Record<string, unknown>;
+    let source: CopiedColumns;
     if (builtin) {
       source = builtinColumns(builtin);
     } else {
@@ -197,7 +209,7 @@ export const agentTemplatesPort: AgentTemplatesPort = {
     const id = nanoid();
     const now = new Date().toISOString();
     await db.insert(agentTemplates).values({
-      ...(source as typeof agentTemplates.$inferInsert),
+      ...source,
       id,
       userId,
       // A copy starts private, even when duplicated from someone's shared template.

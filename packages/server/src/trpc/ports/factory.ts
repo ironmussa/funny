@@ -97,7 +97,10 @@ async function reschedule(factoryId: string, projectId: string): Promise<void> {
 
 type RunControlAction = 'stop' | 'retry' | 'approve-merge';
 
-const withoutSha = (run: FactoryRunView) => ({ run, sha: null as string | null });
+const withoutSha = (run: FactoryRunView): { run: FactoryRunView; sha: string | null } => ({
+  run,
+  sha: null,
+});
 
 /** How each run control is audited and titled in the member's activities. */
 const RUN_CONTROL: Record<

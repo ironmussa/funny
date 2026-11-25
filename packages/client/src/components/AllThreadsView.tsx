@@ -59,34 +59,9 @@ export function AllThreadsView() {
     : location.pathname === '/kanban'
       ? 'board'
       : 'list';
-  const {
-    projectFilter,
-    setProjectFilter,
-    projectFilterOpen,
-    setProjectFilterOpen,
-    search,
-    setSearch,
-    caseSensitive,
-    setCaseSensitive,
-    statusFilter,
-    setStatusFilter,
-    gitFilter,
-    setGitFilter,
-    modeFilter,
-    setModeFilter,
-    typeFilter,
-    setTypeFilter,
-    handleTypeToggle,
-    originFilter,
-    setOriginFilter,
-    handleOriginToggle,
-    showArchived,
-    setShowArchived,
-    sortField,
-    setSortField,
-    sortDir,
-    setSortDir,
-  } = useAllThreadsFilters(searchParams, setSearchParams, viewMode);
+  const filters = useAllThreadsFilters(searchParams, setSearchParams, viewMode);
+  const { projectFilter, search, caseSensitive, statusFilter, gitFilter, modeFilter } = filters;
+  const { typeFilter, originFilter, showArchived, sortField, sortDir } = filters;
 
   const buildSearchParams = (overrides?: SearchParamOverrides) =>
     buildAllThreadsSearchParams(searchParams, { projectFilter, search, caseSensitive }, overrides);
@@ -94,7 +69,7 @@ export function AllThreadsView() {
   const filteredProject = projectFilter ? projects.find((p) => p.id === projectFilter) : null;
 
   const handleProjectFilterChange = (projectId: string | null) => {
-    setProjectFilter(projectId);
+    filters.setProjectFilter(projectId);
     setSearchParams(buildSearchParams({ project: projectId }), {
       replace: true,
     });
@@ -198,15 +173,15 @@ export function AllThreadsView() {
   );
 
   const resetFilters = () => {
-    setSearch('');
-    setStatusFilter(new Set());
-    setGitFilter(new Set());
-    setModeFilter(new Set());
-    setTypeFilter(new Set());
-    setOriginFilter(new Set());
-    setShowArchived(false);
+    filters.setSearch('');
+    filters.setStatusFilter(new Set());
+    filters.setGitFilter(new Set());
+    filters.setModeFilter(new Set());
+    filters.setTypeFilter(new Set());
+    filters.setOriginFilter(new Set());
+    filters.setShowArchived(false);
     if (projectFilter) {
-      setProjectFilter(null);
+      filters.setProjectFilter(null);
     }
     setSearchParams(buildSearchParams({ project: null, search: '', cs: false }), {
       replace: true,
@@ -214,14 +189,14 @@ export function AllThreadsView() {
   };
 
   const handleSearchChange = (value: string) => {
-    setSearch(value);
+    filters.setSearch(value);
     // Mirror the query into the URL (replace — no history churn per keystroke)
     // so leaving the view and coming back restores the search.
     setSearchParams(buildSearchParams({ search: value }), { replace: true });
   };
 
   const handleCaseSensitiveChange = (value: boolean) => {
-    setCaseSensitive(value);
+    filters.setCaseSensitive(value);
     setSearchParams(buildSearchParams({ cs: value }), { replace: true });
   };
 
@@ -273,31 +248,31 @@ export function AllThreadsView() {
         projects={projects}
         projectFilter={projectFilter}
         filteredProjectName={filteredProject?.name}
-        projectFilterOpen={projectFilterOpen}
-        setProjectFilterOpen={setProjectFilterOpen}
+        projectFilterOpen={filters.projectFilterOpen}
+        setProjectFilterOpen={filters.setProjectFilterOpen}
         onProjectFilterChange={handleProjectFilterChange}
         statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
+        setStatusFilter={filters.setStatusFilter}
         gitFilter={gitFilter}
-        setGitFilter={setGitFilter}
+        setGitFilter={filters.setGitFilter}
         modeFilter={modeFilter}
-        setModeFilter={setModeFilter}
+        setModeFilter={filters.setModeFilter}
         typeFilter={typeFilter}
-        onTypeToggle={handleTypeToggle}
+        onTypeToggle={filters.handleTypeToggle}
         typeCounts={typeCounts}
         originFilter={originFilter}
-        onOriginToggle={handleOriginToggle}
+        onOriginToggle={filters.handleOriginToggle}
         originCounts={originCounts}
         statusCounts={statusCounts}
         gitCounts={gitCounts}
         threadStatuses={THREAD_STATUSES}
         gitStates={GIT_STATES}
         sortField={sortField}
-        setSortField={setSortField}
+        setSortField={filters.setSortField}
         sortDir={sortDir}
-        setSortDir={setSortDir}
+        setSortDir={filters.setSortDir}
         showArchived={showArchived}
-        setShowArchived={setShowArchived}
+        setShowArchived={filters.setShowArchived}
         hasActiveFilters={hasActiveFilters}
         onResetFilters={resetFilters}
       />

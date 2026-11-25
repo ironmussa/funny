@@ -30,8 +30,13 @@ export function hasAssistantContentAfterLastUser(
     .some((message) => message.role === 'assistant' && !!message.content?.trim());
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function resultTextToAssistantMessage(data: any): string | null {
-  if (typeof data?.result !== 'string') return null;
+  if (!isString(data?.result)) return null;
   const result = data.result.trim();
   return result.length > 0 ? result : null;
 }

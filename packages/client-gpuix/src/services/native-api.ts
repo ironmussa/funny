@@ -1,5 +1,17 @@
 import { createEndpointPolicy, type ClientPlatform } from '@funny/client-core';
 
+function isObject(value: unknown): value is object {
+  return value !== null && typeof value === 'object';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function hasStringMessage(value: unknown): value is { message: string } {
+  return isObject(value) && 'message' in value && isString(value.message);
+}
+
 export class NativeApiError extends Error {
   constructor(
     readonly status: number,
@@ -37,21 +49,12 @@ export async function nativeJsonRequest<T>(options: {
     if (response.ok) throw new NativeApiError(response.status, 'Server returned invalid JSON');
   }
   if (!response.ok) {
-    const error =
-      decoded && typeof decoded === 'object'
-        ? 'error' in decoded
-          ? decoded.error
-          : undefined
-        : null;
-    const message =
-      typeof error === 'string'
-        ? error
-        : error &&
-            typeof error === 'object' &&
-            'message' in error &&
-            typeof error.message === 'string'
-          ? error.message
-          : `HTTP ${response.status}`;
+    const error = isObject(decoded) ? ('error' in decoded ? decoded.error : undefined) : null;
+    const message = isString(error)
+      ? error
+      : hasStringMessage(error)
+        ? error.message
+        : `HTTP ${response.status}`;
     throw new NativeApiError(response.status, message);
   }
   // SAFETY: `T` is the response shape the caller declares for this endpoint; like the web

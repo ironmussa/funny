@@ -10,18 +10,27 @@ type ToolItemLike =
   | { type: 'toolcall-group'; calls: ToolCallLike[] }
   | { type: 'toolcall-run'; items: ToolItemLike[] };
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** Any non-null object (arrays included), read as a record of unknown fields. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
 /** The tool call's input as an object: parsed when it arrived as JSON text. */
 function inputRecord(toolCall: ToolCallLike): Record<string, unknown> | null {
   const input = toolCall.input;
-  if (typeof input === 'string') {
+  if (isString(input)) {
     try {
-      const parsed = JSON.parse(input);
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+      const parsed: unknown = JSON.parse(input);
+      return isRecord(parsed) ? parsed : null;
     } catch {
       return null;
     }
   }
-  return input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
+  return isRecord(input) ? input : null;
 }
 
 function matchesPath(toolPath: string, summaryPath: string): boolean {
@@ -84,7 +93,7 @@ function addDiff(
 ): void {
   const oldValue = edit?.old_string;
   const newValue = edit?.new_string;
-  if (typeof oldValue !== 'string' || typeof newValue !== 'string') return;
+  if (!isString(oldValue) || !isString(newValue)) return;
   if (oldValue === newValue) return;
   const list = diffs.get(key) ?? [];
   list.push(computeUnifiedDiff(key, oldValue, newValue));
@@ -99,7 +108,7 @@ function collectFromToolCall(
   const input = inputRecord(toolCall);
   if (!input) return;
   const toolPath = input?.file_path;
-  if (typeof toolPath !== 'string') return;
+  if (!isString(toolPath)) return;
   const key = fileKeyForToolPath(toolPath, files);
   if (!key) return;
 
@@ -110,13 +119,13 @@ function collectFromToolCall(
 
   if (toolCall.name === 'MultiEdit' && Array.isArray(input.edits)) {
     for (const edit of input.edits) {
-      const record = edit && typeof edit === 'object' ? (edit as Record<string, unknown>) : null;
+      const record = isRecord(edit) ? edit : null;
       addDiff(diffs, key, record);
     }
     return;
   }
 
-  if (toolCall.name === 'Write' && typeof input.content === 'string') {
+  if (toolCall.name === 'Write' && isString(input.content)) {
     addDiff(diffs, key, { old_string: '', new_string: input.content });
   }
 }
@@ -145,7 +154,7 @@ export function buildToolCallDiffFallbacks(
 ): Map<string, string> {
   const diffs = new Map<string, string[]>();
   for (const item of items) {
-    if (!item || typeof item !== 'object') continue;
+    if (!isRecord(item)) continue;
     const record = item as { type?: unknown };
     if (
       record.type !== 'toolcall' &&

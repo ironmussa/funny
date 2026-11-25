@@ -22,10 +22,14 @@ const SESSION_SOURCES = new Set([
   'sandbox-connections',
 ]);
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function shouldResync(query: Query): boolean {
   if (query.getObserversCount() > 0) return true;
   const root = query.queryKey[0];
-  return typeof root === 'string' && SESSION_SOURCES.has(root) && query.state.data !== undefined;
+  return isString(root) && SESSION_SOURCES.has(root) && query.state.data !== undefined;
 }
 
 /**

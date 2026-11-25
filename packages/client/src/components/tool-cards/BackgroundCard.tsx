@@ -10,6 +10,14 @@ import { ToolContentArea } from './MobileContentPreview';
 
 const JOB_STATUSES = new Set(['running', 'exited', 'failed', 'killed', 'cancelled']);
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 /** The job fields a background tool call reports; any of them may be missing. */
 interface BackgroundJobInput {
   command?: unknown;
@@ -21,7 +29,7 @@ interface BackgroundJobInput {
 
 /** A non-blank string. */
 function isText(value: unknown): value is string {
-  return typeof value === 'string' && value.trim() !== '';
+  return isString(value) && value.trim() !== '';
 }
 
 /** The job fields the card shows, each null when the call did not report it. */
@@ -32,7 +40,7 @@ function jobFields(parsed: BackgroundJobInput) {
     cwd: isText(parsed.cwd) ? parsed.cwd : null,
     summary: (isText(parsed.label) ? parsed.label : null) ?? command,
     status: isText(parsed.status) ? parsed.status : null,
-    exitCode: typeof parsed.exitCode === 'number' ? parsed.exitCode : null,
+    exitCode: isNumber(parsed.exitCode) ? parsed.exitCode : null,
   };
 }
 

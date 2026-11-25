@@ -184,7 +184,7 @@ export function PlanReviewDialog({
     (value: string | undefined) => setEditState({ sourcePlan: plan, value: value || '' }),
     [plan],
   );
-  const canRespond = typeof onRespond === 'function';
+  const canRespond = onRespond != null;
   const hasEditedPlan = activePlan.trim() !== plan.trim();
   const sections = useMemo(() => parsePlanSections(activePlan), [activePlan]);
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].level > 0);

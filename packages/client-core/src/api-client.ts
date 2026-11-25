@@ -87,6 +87,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isThrownApiError(value: unknown): value is { type: unknown; message: unknown } {
+  return value !== null && typeof value === 'object' && 'type' in value && 'message' in value;
+}
+
 function parseBody(text: string): Record<string, unknown> {
   if (!text) return {};
   try {
@@ -103,17 +115,17 @@ function parseBody(text: string): Record<string, unknown> {
  */
 function flattenTrpcError(body: Record<string, unknown>): Record<string, unknown> {
   const error = body.error;
-  if (!isRecord(error) || typeof error.message !== 'string') return body;
+  if (!isRecord(error) || !isString(error.message)) return body;
   const { data } = error;
-  if (!isRecord(data) || typeof data.httpStatus !== 'number') return body;
-  return typeof error.friendlyMessage === 'string'
+  if (!isRecord(data) || !isNumber(data.httpStatus)) return body;
+  return isString(error.friendlyMessage)
     ? { error: error.message, friendlyMessage: error.friendlyMessage }
     : { error: error.message };
 }
 
 function httpErrorMessage(body: Record<string, unknown>, status: number): string {
   const rawError = body.error;
-  if (typeof rawError === 'string' && rawError.length > 0) return rawError;
+  if (isString(rawError) && rawError.length > 0) return rawError;
   return rawError ? JSON.stringify(rawError) : `HTTP ${status}`;
 }
 
@@ -134,20 +146,19 @@ function httpError(body: Record<string, unknown>, status: number, message: strin
     return {
       type: 'PROCESS_ERROR',
       message,
-      exitCode: typeof body.exitCode === 'number' ? body.exitCode : undefined,
-      stderr: typeof body.stderr === 'string' ? body.stderr : undefined,
+      exitCode: isNumber(body.exitCode) ? body.exitCode : undefined,
+      stderr: isString(body.stderr) ? body.stderr : undefined,
     };
   }
   const type = HTTP_STATUS_TYPES[status] ?? (status >= 500 ? 'INTERNAL' : 'BAD_REQUEST');
   // A server message written for the user replaces the generic per-type text.
-  const { friendlyMessage } = body;
-  return typeof friendlyMessage === 'string' && friendlyMessage.length > 0
-    ? { type, message, friendlyMessage }
+  return isString(body.friendlyMessage) && body.friendlyMessage.length > 0
+    ? { type, message, friendlyMessage: body.friendlyMessage }
     : { type, message };
 }
 
 function asApiError(cause: unknown): ApiClientError {
-  if (cause && typeof cause === 'object' && 'type' in cause && 'message' in cause) {
+  if (isThrownApiError(cause)) {
     // SAFETY: the only objects with `type` and `message` that reach this catch are the
     // ApiClientError values this client throws itself (httpError and the network branch).
     return cause as ApiClientError;

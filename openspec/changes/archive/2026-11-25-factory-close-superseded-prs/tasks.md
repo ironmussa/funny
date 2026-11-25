@@ -17,4 +17,4 @@
 
 - [x] 3.1 Document it in `openwiki/architecture/issue-factory.md`
 - [x] 3.2 Run `bun run lint`, `bun run typecheck` and the factory test suites
-- [ ] 3.3 E2E on test-funny: stop a run after its pull request opens, send the issue again, let the new run merge, and check the old pull request is closed with the comment and a `factory.close-pr` activity of origin `system`
+- [ ] 3.3 (deferred, not run at archive time) E2E on test-funny: stop a run after its pull request opens, send the issue again, let the new run merge, and check the old pull request is closed with the comment and a `factory.close-pr` activity of origin `system`

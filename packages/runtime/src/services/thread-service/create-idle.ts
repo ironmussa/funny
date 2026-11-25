@@ -145,10 +145,10 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     model: 'sonnet' as const,
     source: params.source || 'web',
     status: 'idle' as const,
-    stage: (params.stage || 'backlog') as 'backlog' | 'planning',
+    stage: params.stage || ('backlog' as const),
     branch,
     baseBranch,
-    worktreePath: undefined as string | undefined,
+    worktreePath: undefined,
     initialPrompt: prompt,
     designId: params.designId,
     agentTemplateId: params.agentTemplateId,
@@ -161,7 +161,7 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     updatedAt: new Date().toISOString(),
   };
 
-  await tm.createThread(thread as any);
+  await tm.createThread(thread);
 
   if (prompt) {
     await tm.insertMessage({

@@ -8,7 +8,7 @@
 /** `!cmd` initial prompts: run the command locally and store an already-completed thread. */
 
 import { getCurrentBranch } from '@funny/core/git';
-import type { WSEvent, AgentModel, PermissionMode, ImageAttachment } from '@funny/shared';
+import type { AgentModel, PermissionMode, ImageAttachment } from '@funny/shared';
 
 import type { RuntimeThreadInsert } from '../server-interfaces.js';
 import { threadEventBus } from '../thread-event-bus.js';
@@ -41,7 +41,7 @@ export async function createShellEscapeProjectThread(
     status: 'completed' as const,
     branch: currentBranch,
     baseBranch: ctx.resolvedBaseBranch || currentBranch,
-    worktreePath: undefined as string | undefined,
+    worktreePath: undefined,
     fileCheckpointingEnabled: 0,
   };
 
@@ -148,7 +148,7 @@ async function createCompletedShellEscapeThread(args: {
     type: 'agent:message',
     threadId: args.threadId,
     data: { messageId: userMessageId, role: 'user', content: args.prompt },
-  } as WSEvent);
+  });
   wsBroker.emitToUser(args.userId, {
     type: 'agent:tool_call',
     threadId: args.threadId,
@@ -159,10 +159,10 @@ async function createCompletedShellEscapeThread(args: {
       input: toolInput,
       author: 'shell',
     },
-  } as WSEvent);
+  });
   wsBroker.emitToUser(args.userId, {
     type: 'agent:tool_output',
     threadId: args.threadId,
     data: { toolCallId, output },
-  } as WSEvent);
+  });
 }

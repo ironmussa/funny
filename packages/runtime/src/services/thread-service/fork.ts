@@ -163,6 +163,8 @@ async function forkThreadImpl(params: ForkThreadParams) {
           namespace: 'thread-fork',
           threadId: source.id,
           messageId: m.id,
+          // SAFETY: only `.message` is read, optional-chained; it is undefined when the
+          // copy rejects with something that is not Error-like.
           error: (err as Error)?.message,
         });
         return false;

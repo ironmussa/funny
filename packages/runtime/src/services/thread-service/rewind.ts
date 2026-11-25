@@ -214,6 +214,8 @@ async function rewindCodeImpl(params: RewindCodeParams): Promise<RewindCodeResul
       deletedMessageCount,
     };
   } catch (err) {
+    // SAFETY: only `.message` is read, optional-chained; for a throw that is not
+    // Error-like it is undefined and the span ends with 'unknown'.
     span.end('error', (err as Error)?.message ?? 'unknown');
     throw err;
   }
@@ -276,6 +278,8 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
 
     return { thread: newThread, rewind: rewindResult };
   } catch (err) {
+    // SAFETY: only `.message` is read, optional-chained; for a throw that is not
+    // Error-like it is undefined and the span ends with 'unknown'.
     span.end('error', (err as Error)?.message ?? 'unknown');
     throw err;
   }
